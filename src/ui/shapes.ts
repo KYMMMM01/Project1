@@ -1,6 +1,6 @@
 import { FillGradient, type Container, type Graphics } from 'pixi.js';
 import { game } from '@/core/game';
-import { clamp, mixColor } from '@/core/math';
+import { clamp } from '@/core/math';
 import { Color } from './theme';
 import { rgba, shade } from './colors';
 
@@ -79,6 +79,11 @@ export function glowGradient(color: number, centerAlpha = 1): FillGradient {
   return g;
 }
 
+/** Soft round glow (selected tab, legendary aura). */
+export function drawGlow(g: Graphics, cx: number, cy: number, r: number, color: number, alpha = 0.8): void {
+  g.circle(cx, cy, r).fill(glowGradient(color, alpha));
+}
+
 /* ------------------------------------------------------------------ caching */
 
 /** Texture density for baked UI: matches device pixels per design px with a little supersampling. */
@@ -146,11 +151,8 @@ export interface BevelOpts {
   shadow?: ShadowOpts | false;
 }
 
-/**
- * The signature chunky shape: soft shadow, dark lip slab, thick outline, a light-to-dark bevel rim,
- * a gradient face and a glossy highlight. (x, y, w, h) is the FACE rectangle; the lip extends below.
- */
-export function drawBevelRect(
+/** Shadow and lip slab: the part of a bevel button that stays put while its face is pressed down. */
+export function drawBevelBase(
   g: Graphics,
   x: number,
   y: number,
@@ -160,20 +162,34 @@ export function drawBevelRect(
 ): void {
   const r = Math.min(o.radius, w / 2, h / 2);
   const ow = o.outlineWidth ?? 5;
-  const outline = o.outline ?? Color.outline;
   const lipDepth = o.lip?.depth ?? 0;
-
   if (o.shadow !== false) {
-    drawShadow(g, x, y + lipDepth, w, h, r, { ...o.shadow, offsetY: (o.shadow?.offsetY ?? 6) });
+    drawShadow(g, x, y + lipDepth, w, h, r, { alpha: 0.38, spread: 12, ...o.shadow, offsetY: o.shadow?.offsetY ?? 6 });
   }
   if (o.lip) {
     g.roundRect(x, y + lipDepth, w, h, r)
       .fill(o.lip.color)
-      .stroke({ width: ow, color: outline, alignment: 1, join: 'round' });
+      .stroke({ width: ow, color: o.outline ?? Color.outline, alignment: 1, join: 'round' });
   }
+}
+
+/**
+ * The signature chunky face: thick outline, a light-to-dark bevel rim, a gradient body and a glossy
+ * highlight over the upper half. (x, y, w, h) is the face rectangle.
+ */
+export function drawBevelFace(
+  g: Graphics,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  o: BevelOpts,
+): void {
+  const r = Math.min(o.radius, w / 2, h / 2);
+  const ow = o.outlineWidth ?? 5;
   g.roundRect(x, y, w, h, r)
     .fill(vGradient(o.rimTop, o.rimBottom))
-    .stroke({ width: ow, color: outline, alignment: 1, join: 'round' });
+    .stroke({ width: ow, color: o.outline ?? Color.outline, alignment: 1, join: 'round' });
 
   const rim = o.rim ?? 3;
   const ins = ow + rim;
@@ -185,9 +201,23 @@ export function drawBevelRect(
 
   const gloss = o.gloss ?? 0.3;
   if (gloss > 0) {
-    const gh = ih * 0.46;
-    g.roundRect(x + ins + 3, y + ins + 2, iw - 6, gh, Math.max(2, ir - 2)).fill(glossGradient(gloss, gloss * 0.12));
+    g.roundRect(x + ins + 3, y + ins + 2, iw - 6, ih * 0.46, Math.max(2, ir - 2)).fill(
+      glossGradient(gloss, gloss * 0.12),
+    );
   }
+}
+
+/** Base + face in one Graphics, for chunky shapes that do not animate (card plates, static buttons). */
+export function drawBevelRect(
+  g: Graphics,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  o: BevelOpts,
+): void {
+  drawBevelBase(g, x, y, w, h, o);
+  drawBevelFace(g, x, y, w, h, o);
 }
 
 export interface PillOpts {
@@ -238,7 +268,7 @@ export function drawPill(
 
 export type PanelVariant = 'default' | 'light' | 'inset' | 'gold';
 
-export interface PanelColors {
+export interface PanelPalette {
   top: number;
   bottom: number;
   rim: number;
@@ -248,7 +278,7 @@ export interface PanelColors {
   textDim: number;
 }
 
-export const PanelColors: Record<PanelVariant, PanelColors> = {
+export const PanelColors: Record<PanelVariant, PanelPalette> = {
   default: { top: 0x4f3d99, bottom: 0x33256b, rim: 0x7b68c8, outline: 0x140a2e, text: 0xffffff, textDim: 0xcabfee },
   light: { top: 0xfffaf0, bottom: 0xf1dcb4, rim: 0xffffff, outline: 0x3a2150, text: 0x3a2150, textDim: 0x7d6794 },
   inset: { top: 0x1a1034, bottom: 0x26194a, rim: 0x5a49a0, outline: 0x0e0720, text: 0xffffff, textDim: 0xb9add6 },
@@ -371,9 +401,4 @@ export function drawRibbon(
     .stroke({ width: ow, color: Color.outline, alignment: 1, join: 'round' });
   g.roundRect(x + ow + 3, y + ow + 2, w - (ow + 3) * 2, (h - ow * 2) * 0.46, 10).fill(glossGradient(0.32, 0.04));
   g.roundRect(x + ow, y + h - ow - 7, w - ow * 2, 4, 2).fill({ color: shade(c.face, -0.25), alpha: 0.55 });
-}
-
-/** Mid-tone of a palette: handy for tinting tails/lips derived from a single base colour. */
-export function midTone(a: number, b: number): number {
-  return mixColor(a, b, 0.5);
 }

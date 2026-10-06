@@ -129,6 +129,12 @@ export function popCurve(t: number, from: number, peak: number, to: number, spli
   return peak + (to - peak) * Ease.quadOut((t - split) / (1 - split));
 }
 
+/** easeOutBack with a tunable overshoot: s=1.70158 overshoots ~10%, 2.5 ~19%, 3.0 ~25% (guide 2.0.2). */
+export function backOutS(t: number, s: number): number {
+  const u = t - 1;
+  return 1 + (s + 1) * u * u * u + s * u * u;
+}
+
 /** Damped spring A·e^(-k·t)·cos(2π·f·t); the guide's "juice_up" wobble. */
 export function springWobble(t: number, amp: number, freq: number, decay: number): number {
   return amp * Math.exp(-decay * t) * Math.cos(Math.PI * 2 * freq * t);

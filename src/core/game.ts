@@ -49,7 +49,10 @@ export class Game {
   visible = true;
 
   shakeEnabled = true;
+  /** User setting: 1 full, 0.35 reduced motion, 0 off. Multiplies every shake offset. */
+  shakeScale = 1;
   private trauma = 0;
+  private shakeTarget: Container | null = null;
   private shakeSeed = Math.random() * 1000;
 
   private updaters: UpdateFn[] = [];
@@ -115,11 +118,22 @@ export class Game {
 
   /**
    * Add screen-shake "trauma" in [0,1]. Offset scales with trauma squared, so small hits barely
-   * register while stacked big hits get violent, and it always decays smoothly.
+   * register while stacked big hits get violent, and it always decays smoothly. Rough guide:
+   * 0.25 crit / elite death, 0.4 merge / epic, 0.6 legendary / wave clear, 0.8 boss, 1.0 mythic.
    */
   shake(amount: number): void {
-    if (!this.shakeEnabled) return;
+    if (!this.shakeEnabled || this.shakeScale <= 0) return;
     this.trauma = clamp(this.trauma + amount, 0, 1);
+  }
+
+  /**
+   * Redirect shake offsets to `target` (a container whose resting position is 0,0), or back to
+   * the whole scene with null. The battle scene points this at its playfield so the HUD, which
+   * must stay readable, never moves.
+   */
+  setShakeTarget(target: Container | null): void {
+    (this.shakeTarget ?? this.shakeLayer).position.set(0, 0);
+    this.shakeTarget = target;
   }
 
   /**
@@ -150,17 +164,19 @@ export class Game {
     uiTweens.update(dt);
     for (const fn of this.updaters.slice()) fn(dt);
 
+    const target = this.shakeTarget ?? this.shakeLayer;
     if (this.trauma > 0) {
-      const s = this.trauma * this.trauma;
+      const s = this.trauma * this.trauma * this.shakeScale;
       const t = this.time * 38 + this.shakeSeed;
       // Two detuned sines per axis: cheap, smooth, and non-repeating enough to read as noise.
       const nx = Math.sin(t * 1.13) * 0.6 + Math.sin(t * 2.71 + 1.3) * 0.4;
       const ny = Math.sin(t * 1.37 + 4.1) * 0.6 + Math.sin(t * 2.29 + 0.7) * 0.4;
-      const max = 22;
-      this.shakeLayer.position.set(nx * max * s, ny * max * s);
-      this.trauma = Math.max(0, this.trauma - dt * 1.9);
-    } else if (this.shakeLayer.x !== 0 || this.shakeLayer.y !== 0) {
-      this.shakeLayer.position.set(0, 0);
+      // 18 px is the ceiling for a phone-sized portrait screen; full trauma fades in about 0.65 s.
+      const max = 18;
+      target.position.set(nx * max * s, ny * max * s);
+      this.trauma = Math.max(0, this.trauma - dt * 1.55);
+    } else if (target.x !== 0 || target.y !== 0) {
+      target.position.set(0, 0);
     }
   }
 

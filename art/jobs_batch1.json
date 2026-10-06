@@ -1,0 +1,378 @@
+[
+ {
+  "name": "unit_w_paw",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a white cat with a determined smile wearing oversized red boxing gloves, one paw punching forward.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_w_sword",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: an orange tabby cat with a happy open-mouth smile and one tiny fang, a simple red bandana scarf, holding one small chunky wooden sword raised.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_w_viking",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a fluffy brown Maine Coon cat with a small horned viking helmet and a round wooden shield on its back, holding a chunky one-handed axe, tough grin.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_w_samurai",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a black-and-white tuxedo cat in simple red samurai armour with a small crested helmet, holding a katana in a ready stance, calm serious eyes.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_w_tiger",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a majestic orange cat with bold black tiger stripes, wearing a golden general's helmet with a red tassel and a flowing red cape, holding a big crescent-blade glaive, proud fierce grin, a few small golden sparkles inside the outline.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_r_sling",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a grey tabby kitten wearing a backwards blue cap, pulling back a wooden slingshot, playful tongue-out smile.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_r_archer",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a cream Siamese cat with a green Robin Hood hood and a feather, drawing a small wooden bow, focused one-eye-closed aim.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_r_ninja",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a black cat in a dark blue ninja outfit with a long red scarf, only the big yellow eyes visible, holding a metal throwing star.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_r_gunner",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a calico cat with a brown cowboy hat and a sheriff star badge, holding a toy cork pop-gun, cool confident smirk.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_r_star",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: an elegant white cat with a starry midnight-blue hooded cloak and a tiny star tiara, drawing a glowing golden crescent-moon bow, serene confident look, a few tiny stars inside the outline.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_m_snow",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a fluffy light-grey kitten with blue earmuffs and a striped scarf, holding a big snowball above its head, cheerful grin.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_m_fire",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a ginger cat with a pointy red wizard hat and a short wand tipped with a small cartoon flame, excited sparkling eyes.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_m_storm",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a blue-grey Russian Blue cat with a yellow raincoat hood, holding a staff topped with a little lightning bolt, mischievous smile, two tiny sparks.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_m_frost",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: an elegant fluffy white Persian cat with an ice-crystal crown and a pale blue royal cape, holding a snowflake sceptre, cool gentle smile.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_m_cosmo",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a deep purple cat whose fur is patterned like a starry galaxy, wearing a round glass astronaut helmet, floating with tiny ringed planets orbiting around it, wide amazed eyes.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_t_bell",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a small calico kitten with a very big golden bell on a red collar, ringing a little jingle bell in one paw, joyful closed-eye smile.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_t_chef",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a chubby grey-and-white cat with a tall white chef hat and a small apron, holding a frying pan with a whole fish on it, proud smile.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_t_bard",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a brown tabby cat with a green feathered minstrel hat, strumming a tiny lute, singing with a happy open mouth, one music note next to it.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_t_alch",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a black-and-orange tortoiseshell cat with round brass goggles on its forehead and a little lab coat, holding a round flask of bubbling green potion, clever grin.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "unit_t_lucky",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed small (about 90 px tall)\nSubject: a maneki-neko lucky cat: plump white cat with red inner ears, a red collar with a gold bell, one paw raised in the beckoning gesture and the other holding a big oval gold coin, golden accents, blissful smile, a few small golden sparkles inside the outline.\nStyle: exactly the style of the reference image: bold vector sticker illustration like a top casual mobile game, thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple large shapes that read instantly at thumbnail size.\nProportions: super-deformed chibi, HUGE round head (2-heads-tall), tiny body, short stubby limbs, big round glossy eyes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/unit_style.png"
+  ]
+ },
+ {
+  "name": "enemy_cucumber",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a mischievous living cucumber monster: chubby green cucumber with stubby legs and arms, angry cartoon eyes with thick eyebrows, sneaky toothy grin, a few bumps on its skin.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_dust",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living dust bunny monster: a round grey fluffy ball of dust and lint with tiny stick legs, small annoyed eyes and a few stray hairs sticking out.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_drop",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living water droplet monster: a shiny blue teardrop of water with little running legs, cheeky wide grin, a tiny splash behind it.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_roomba",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a robot vacuum cleaner monster: a flat round disc-shaped robot vacuum with a metal bumper, angry red LED eyes on top, small wheels and two tiny side brushes like arms, sturdy armoured look.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_tangerine",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living tangerine monster: a round bright orange citrus fruit with a green leaf on top, smug half-closed eyes, short legs, crossed little arms, a faint ring of sparkling citrus mist around it.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_balloon",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living red party balloon monster: a round red balloon with a goofy puffed-cheek face, a knotted bottom and a curly string trailing like a tail, tiny feet.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_clock",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living alarm clock monster: a round twin-bell alarm clock ringing hard with motion lines, wide startled-angry eyes on the dial, short metal legs, small hammer between the bells.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_pill",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living medicine bottle monster: a small white pill bottle with a green cap and a blank green label, smug sneaky face, little arms holding one capsule, short legs.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_cone",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living pet cone collar monster: a translucent white plastic cone-of-shame walking upside-down on stubby legs, grumpy eyes peeking from inside the cone.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_flea",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a tiny cartoon flea monster: a small brown round bug with big springy back legs mid-jump, bulging cheeky eyes and a little grin.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_spray",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living spray bottle monster: a blue plastic trigger spray bottle with an evil grin, squinting eyes, spraying a small puff of water mist from its nozzle, stubby legs.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "enemy_firecracker",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living firecracker monster: a red cylindrical firecracker with a sparking lit fuse on top, crazy wide excited eyes, zig-zag grin, tiny legs.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "boss_cucumber",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game boss enemy sprite (displayed about 150 px tall)\nSubject: a giant king cucumber boss monster: a huge fat cucumber wearing a small golden crown and a tattered green cape, furious thick eyebrows, big jagged grin, clenched fists, imposing stance.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "boss_vacuum",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game boss enemy sprite (displayed about 150 px tall)\nSubject: a giant upright vacuum cleaner boss monster: a big red-and-grey upright vacuum with a glowing angry visor for eyes, a flexible hose arm ending in a wide sucking nozzle, dust swirling into it, heavy wheels, menacing but funny.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "boss_blender",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game boss enemy sprite (displayed about 150 px tall)\nSubject: a giant kitchen blender boss monster: a chunky blender with an angry face on its base, a glass jar full of swirling orange smoothie with spinning blades, lid rattling, power-cord tail whipping, wild eyes.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "boss_bath",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game boss enemy sprite (displayed about 150 px tall)\nSubject: a giant bathtub boss monster: a white clawfoot bathtub overflowing with foamy bubbles, a shower-head neck rising like a snake with a grumpy face, a rubber duck floating on top, water sloshing over the rim, stubby clawed feet.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "boss_cloud",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game boss enemy sprite (displayed about 150 px tall)\nSubject: a giant thundercloud boss monster: a big dark purple-grey storm cloud with a furious glowing-eyed face, crackling yellow lightning bolts shooting from underneath, small rain streaks.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "boss_needle",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game boss enemy sprite (displayed about 150 px tall)\nSubject: a giant cartoon syringe boss monster: a big friendly-looking but mischievous toy syringe character wearing a round doctor's head mirror, half-filled with glowing green liquid, cartoon gloved hands, a smug know-it-all smile.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "bg_livingroom",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game battlefield background, portrait 9:16\nScene: straight top-down bird's-eye view of a cosy living-room floor at golden hour: warm honey-coloured wooden planks. Along the outer edges only: the corner of a teal sofa, a potted monstera, a cat scratching post, a yarn ball, a toy mouse, a cat food bowl, warm window-light patches.\nLayout: the whole central area (about 80% of the width and the middle 70% of the height) is EMPTY plain floor with nothing on it, because game pieces are drawn there. All props stay tucked against the four outer edges and corners and are partly cut off by the frame.\nStyle: 2D cartoon mobile game art, clean shapes, soft cel shading, warm inviting colours, slightly muted and low-contrast so that characters placed on top stand out, no heavy outlines on the floor.\nConstraints: no characters, no animals, no people, no text, no UI, no watermark."
+ },
+ {
+  "name": "bg_kitchen",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game battlefield background, portrait 9:16\nScene: straight top-down bird's-eye view of a bright kitchen floor: cream and mint checkerboard tiles. Along the outer edges only: the bottom of white cabinets, a red fridge corner, a small trash bin, a spilled cereal bowl, a fallen wooden spoon, a floor mat by the sink.\nLayout: the whole central area (about 80% of the width and the middle 70% of the height) is EMPTY plain floor with nothing on it, because game pieces are drawn there. All props stay tucked against the four outer edges and corners and are partly cut off by the frame.\nStyle: 2D cartoon mobile game art, clean shapes, soft cel shading, warm inviting colours, slightly muted and low-contrast so that characters placed on top stand out, no heavy outlines on the floor.\nConstraints: no characters, no animals, no people, no text, no UI, no watermark."
+ },
+ {
+  "name": "bg_bathroom",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game battlefield background, portrait 9:16\nScene: straight top-down bird's-eye view of a clean bathroom floor: small pale-blue hexagon tiles, slightly wet and shiny. Along the outer edges only: the side of a white bathtub, a fluffy bath mat, a rubber duck, a laundry basket, soap bubbles, a towel dropped on the floor.\nLayout: the whole central area (about 80% of the width and the middle 70% of the height) is EMPTY plain floor with nothing on it, because game pieces are drawn there. All props stay tucked against the four outer edges and corners and are partly cut off by the frame.\nStyle: 2D cartoon mobile game art, clean shapes, soft cel shading, warm inviting colours, slightly muted and low-contrast so that characters placed on top stand out, no heavy outlines on the floor.\nConstraints: no characters, no animals, no people, no text, no UI, no watermark."
+ },
+ {
+  "name": "bg_garden",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game battlefield background, portrait 9:16\nScene: straight top-down bird's-eye view of a sunny backyard lawn: soft green grass with a few daisies and stepping stones. Along the outer edges only: a wooden fence, a flower bed, a garden hose, a watering can, a doghouse corner, scattered autumn leaves.\nLayout: the whole central area (about 80% of the width and the middle 70% of the height) is EMPTY plain floor with nothing on it, because game pieces are drawn there. All props stay tucked against the four outer edges and corners and are partly cut off by the frame.\nStyle: 2D cartoon mobile game art, clean shapes, soft cel shading, warm inviting colours, slightly muted and low-contrast so that characters placed on top stand out, no heavy outlines on the floor.\nConstraints: no characters, no animals, no people, no text, no UI, no watermark."
+ },
+ {
+  "name": "bg_vet",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game battlefield background, portrait 9:16\nScene: straight top-down bird's-eye view of a pet clinic floor: clean light-teal vinyl with a subtle paw-print pattern. Along the outer edges only: the legs of an exam table, a pet carrier, a weighing scale, a cabinet with jars, a waiting-room chair, a potted plant.\nLayout: the whole central area (about 80% of the width and the middle 70% of the height) is EMPTY plain floor with nothing on it, because game pieces are drawn there. All props stay tucked against the four outer edges and corners and are partly cut off by the frame.\nStyle: 2D cartoon mobile game art, clean shapes, soft cel shading, warm inviting colours, slightly muted and low-contrast so that characters placed on top stand out, no heavy outlines on the floor.\nConstraints: no characters, no animals, no people, no text, no UI, no watermark."
+ },
+ {
+  "name": "ui_rug_livingroom",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game board mat, seen exactly from above\nSubject: a rectangular soft cream rug with a simple teal border and very subtle tone-on-tone woven pattern, short tassels on the two short edges, landscape orientation with width to height ratio 6 to 5, perfectly straight and axis-aligned, filling most of the frame.\nStyle: 2D cartoon mobile game art, soft cel shading, calm low-contrast surface (game characters stand on it, so the pattern must stay very quiet), thin soft dark outline.\nBackground: genuinely transparent background (alpha) around the mat.\nConstraints: single object, no shadow, no text, no characters, no watermark."
+ },
+ {
+  "name": "ui_rug_kitchen",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game board mat, seen exactly from above\nSubject: a rectangular woven straw kitchen mat in warm beige with a thin red stripe border, very subtle weave texture, landscape orientation with width to height ratio 6 to 5, perfectly straight and axis-aligned, filling most of the frame.\nStyle: 2D cartoon mobile game art, soft cel shading, calm low-contrast surface (game characters stand on it, so the pattern must stay very quiet), thin soft dark outline.\nBackground: genuinely transparent background (alpha) around the mat.\nConstraints: single object, no shadow, no text, no characters, no watermark."
+ },
+ {
+  "name": "ui_rug_bathroom",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game board mat, seen exactly from above\nSubject: a rectangular fluffy bath mat in soft lavender with a slightly darker plain border, very subtle fluffy texture, landscape orientation with width to height ratio 6 to 5, perfectly straight and axis-aligned, filling most of the frame.\nStyle: 2D cartoon mobile game art, soft cel shading, calm low-contrast surface (game characters stand on it, so the pattern must stay very quiet), thin soft dark outline.\nBackground: genuinely transparent background (alpha) around the mat.\nConstraints: single object, no shadow, no text, no characters, no watermark."
+ },
+ {
+  "name": "ui_rug_garden",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game board mat, seen exactly from above\nSubject: a rectangular red-and-white gingham picnic blanket with soft low-contrast checks, slightly wrinkled edges, landscape orientation with width to height ratio 6 to 5, perfectly straight and axis-aligned, filling most of the frame.\nStyle: 2D cartoon mobile game art, soft cel shading, calm low-contrast surface (game characters stand on it, so the pattern must stay very quiet), thin soft dark outline.\nBackground: genuinely transparent background (alpha) around the mat.\nConstraints: single object, no shadow, no text, no characters, no watermark."
+ },
+ {
+  "name": "ui_rug_vet",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game board mat, seen exactly from above\nSubject: a rectangular smooth rubber exam mat in pale mint green with a thin darker green border and rounded corners, very subtle texture, landscape orientation with width to height ratio 6 to 5, perfectly straight and axis-aligned, filling most of the frame.\nStyle: 2D cartoon mobile game art, soft cel shading, calm low-contrast surface (game characters stand on it, so the pattern must stay very quiet), thin soft dark outline.\nBackground: genuinely transparent background (alpha) around the mat.\nConstraints: single object, no shadow, no text, no characters, no watermark."
+ },
+ {
+  "name": "icon_fish",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a small shiny blue-silver fish treat (whole little sardine) with a cute round eye.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_clover",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a lucky four-leaf clover, bright green with heart-shaped leaves and a tiny sparkle.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_gold",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a thick gold coin embossed with a cat paw print.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_gem",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a faceted pink-magenta gemstone shaped like a cat head with pointy ears.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_chest_wood",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a small wooden treasure chest with iron bands and a paw-print lock, closed.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_chest_silver",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a silver treasure chest with blue gem inlay and a paw-print lock, closed, slightly glowing.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_chest_gold",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: an ornate golden treasure chest with red gems and cat-ear shaped lid corners, closed, radiating a soft glow.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_card",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a single collectible trading card seen at a slight angle, purple back with a golden cat paw emblem.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_capsule",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a round gachapon capsule toy, top half translucent pink and bottom half white, with a tiny star inside.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ },
+ {
+  "name": "icon_xp",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a glowing blue star badge with a small upward arrow shape embossed.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "ref": [
+   "art/ref/enemy_style.png"
+  ]
+ }
+]

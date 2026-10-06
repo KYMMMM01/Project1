@@ -7,3 +7,6 @@ Thumbs.db
 .claude/settings.local.json
 art/raw/_tmp/
 coverage/
+art/*.log
+art/tests/_*.png
+.shots/
