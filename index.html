@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#1b1233" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Lucky Paws — 냥이 수비대. 뽑고, 합치고, 지켜라!" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <title>Lucky Paws — 냥이 수비대</title>
+    <style>
+      @font-face {
+        font-family: 'GameLatin';
+        src: url('./fonts/game-latin.woff2') format('woff2');
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'GameKR';
+        src: url('./fonts/game-kr.woff2') format('woff2');
+        font-display: block;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #120b24;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: none;
+        font-family: 'GameLatin', 'GameKR', system-ui, sans-serif;
+      }
+      body {
+        background:
+          radial-gradient(120% 80% at 50% 0%, #3a2470 0%, rgba(58, 36, 112, 0) 60%),
+          radial-gradient(90% 60% at 50% 100%, #5a2a6e 0%, rgba(90, 42, 110, 0) 65%), #120b24;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #stage canvas {
+        display: block;
+        box-shadow: 0 0 80px rgba(0, 0, 0, 0.55);
+      }
+      /* Instant splash: pure CSS so something friendly is on screen before any JS runs. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        color: #fff;
+        transition: opacity 0.35s ease;
+        pointer-events: none;
+        z-index: 5;
+      }
+      #boot.hide {
+        opacity: 0;
+      }
+      #boot .paw {
+        width: 92px;
+        height: 92px;
+        animation: bootBounce 0.9s cubic-bezier(0.3, 0.6, 0.4, 1) infinite alternate;
+        filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.25));
+      }
+      #boot .bar {
+        width: 220px;
+        height: 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
+        overflow: hidden;
+        box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25);
+      }
+      #boot .bar > i {
+        display: block;
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #ffe27a 0%, #ffab2e 100%);
+        transition: width 0.2s ease;
+      }
+      #boot .msg {
+        font-size: 16px;
+        letter-spacing: 0.5px;
+        opacity: 0.8;
+      }
+      @keyframes bootBounce {
+        from {
+          transform: translateY(0) scale(1.04, 0.96);
+        }
+        to {
+          transform: translateY(-22px) scale(0.97, 1.03);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot .paw {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="boot">
+      <svg class="paw" viewBox="0 0 100 100" aria-hidden="true">
+        <g fill="#ffcf5c" stroke="#3a1f5c" stroke-width="5" stroke-linejoin="round">
+          <ellipse cx="50" cy="66" rx="24" ry="20" />
+          <ellipse cx="20" cy="42" rx="10" ry="13" />
+          <ellipse cx="40" cy="24" rx="10" ry="13" />
+          <ellipse cx="62" cy="24" rx="10" ry="13" />
+          <ellipse cx="81" cy="42" rx="10" ry="13" />
+        </g>
+      </svg>
+      <div class="bar"><i id="boot-bar"></i></div>
+      <div class="msg" id="boot-msg">Loading…</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
