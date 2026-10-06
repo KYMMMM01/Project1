@@ -303,7 +303,7 @@ export class ParticleSystem {
     layer.live.push(p);
     layer.container.particleChildren.push(p.render);
     this.emitted++;
-    if (p.age >= 0) this.pose(p);
+    if (p.age >= 0) this.pose(p, 0);
     else p.render.color = 0;
   }
 
@@ -439,7 +439,7 @@ export class ParticleSystem {
           p.y += p.vy * dt;
         }
         p.rot += p.spin * dt;
-        this.pose(p);
+        this.pose(p, dt);
       }
       live[w] = p;
       kids[w] = p.render;
@@ -450,7 +450,7 @@ export class ParticleSystem {
   }
 
   /** Write the particle's current state into its Pixi render object. */
-  private pose(p: Fp): void {
+  private pose(p: Fp, dt: number): void {
     const t = p.age / p.life;
     const r = p.render;
     const e = p.sizeEase(t);
@@ -460,8 +460,17 @@ export class ParticleSystem {
     if (p.homing) {
       const h = p.homeEase(t);
       const bulge = p.swirl * Math.sin(Math.PI * h);
-      r.x = p.hx0 + (p.hx1 - p.hx0) * h + p.hpx * bulge;
-      r.y = p.hy0 + (p.hy1 - p.hy0) * h + p.hpy * bulge;
+      const nx = p.hx0 + (p.hx1 - p.hx0) * h + p.hpx * bulge;
+      const ny = p.hy0 + (p.hy1 - p.hy0) * h + p.hpy * bulge;
+      // Homing particles have no integrated velocity; derive it so streaks can face their motion.
+      if (dt > 0) {
+        p.vx = (nx - p.x) / dt;
+        p.vy = (ny - p.y) / dt;
+      }
+      p.x = nx;
+      p.y = ny;
+      r.x = nx;
+      r.y = ny;
     } else {
       r.x = p.x;
       r.y = p.y;
@@ -632,7 +641,7 @@ export class ParticleSystem {
     layer.live.push(p);
     layer.container.particleChildren.push(r);
     this.emitted++;
-    if (p.age >= 0) this.pose(p);
+    if (p.age >= 0) this.pose(p, 0);
     else r.color = 0;
   }
 }

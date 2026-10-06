@@ -7,39 +7,42 @@ import { Inst, type MusicTrackId } from './scores';
 import { midiToHz } from './theory';
 import type { Synth } from './synth';
 
-/** Seconds a voice keeps sounding after its note starts, release included (for the voice budget). */
-export function voiceLength(inst: number, durSec: number): number {
+/**
+ * Seconds a voice keeps sounding after its note starts, release included (for the voice budget).
+ * Must track the envelopes below: an over-long estimate sheds notes that were never really overlapping.
+ */
+export function voiceLength(track: MusicTrackId, inst: number, durSec: number): number {
   switch (inst) {
     case Inst.kick:
-      return 0.32;
+      return 0.3;
     case Inst.snare:
-      return 0.26;
+      return 0.22;
     case Inst.hat:
-      return 0.07;
+      return 0.06;
     case Inst.openHat:
-      return 0.26;
+      return 0.24;
     case Inst.shaker:
       return 0.1;
     case Inst.tom:
-      return 0.36;
+      return 0.32;
     case Inst.crash:
-      return 1.0;
+      return 0.95;
     case Inst.rim:
-      return 0.1;
+      return 0.08;
     case Inst.bass:
-      return durSec + 0.12;
+      return durSec + (track === 'home' ? 0.12 : 0.08);
     case Inst.chord:
-      return durSec + 0.35;
+      return durSec + 0.32;
     case Inst.pad:
-      return durSec + 0.6;
+      return durSec + (track === 'battle' ? 0.32 : 0.57);
     case Inst.arp:
-      return durSec + 0.14;
+      return durSec + (track === 'home' ? 0.14 : 0.08);
     case Inst.lead:
-      return durSec + 0.4;
+      return durSec + (track === 'home' ? 0.37 : 0.12);
     case Inst.lead2:
-      return durSec + 0.3;
+      return durSec + 0.12;
     default:
-      return durSec + 0.3;
+      return durSec + 0.14;
   }
 }
 

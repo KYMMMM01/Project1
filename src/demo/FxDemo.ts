@@ -100,9 +100,12 @@ export default class FxDemo extends Scene {
   private dangerStep = 0;
   private freezeStep = 0;
   private letterboxOn = false;
+  private manual = false;
 
   constructor() {
     super();
+    // The gallery shows full-strength effects; the Reduced button flips the OS-derived default.
+    setFxSettings({ reducedMotion: false });
     this.fx = new Fx(this, this.tweens);
     this.hitStop = createHitStop([this.spinTw], { cooldown: 0 });
     this.entries = this.makeEntries();
@@ -120,14 +123,43 @@ export default class FxDemo extends Scene {
       page: (n: number) => this.showPage(n),
       settings: (patch: Record<string, unknown>) => setFxSettings(patch),
       clear: () => this.fx.clear(),
+      chrome: (on: boolean) => {
+        this.pagesLayer.visible = on;
+        this.hud.visible = on;
+      },
+      manual: (on: boolean) => this.setManual(on),
+      advance: (sec: number) => this.advance(sec),
       fx: this.fx,
+      screen: screenFx,
+      freeze: this.hitStop.freeze,
     });
   }
 
   override update(dt: number): void {
+    if (this.manual) return;
+    this.stepAll(dt);
+  }
+
+  private stepAll(dt: number): void {
     this.fx.update(dt);
     this.spinTw.update(dt);
     this.spinner.rotation += 3 * dt * this.spinTw.timeScale;
+  }
+
+  /** Deterministic stepping for screenshots: stop the clock, then advance it by hand. */
+  private setManual(on: boolean): void {
+    this.manual = on;
+    this.tweens.timeScale = on ? 0 : 1;
+  }
+
+  private advance(seconds: number): void {
+    const step = 1 / 60;
+    this.tweens.timeScale = 1;
+    for (let t = 0; t < seconds - 1e-6; t += step) {
+      this.tweens.update(step);
+      this.stepAll(step);
+    }
+    this.tweens.timeScale = this.manual ? 0 : 1;
   }
 
   override resize(): void {
@@ -144,18 +176,19 @@ export default class FxDemo extends Scene {
 
   private buildHud(): void {
     this.title.position.set(game.w / 2, 40);
-    this.pageLabel.position.set(game.w / 2, game.h - 112);
+    this.pageLabel.position.set(game.w / 2, game.h - 126);
     this.settingsLabel.position.set(game.w / 2, game.h - 30);
 
-    const prev = this.button('<', 70, 0);
-    const next = this.button('>', game.w - 70, 0);
+    const prev = this.button('<', 260, game.h - 126);
+    const next = this.button('>', game.w - 260, game.h - 126);
     prev.on('pointerdown', () => this.showPage(this.page - 1));
     next.on('pointerdown', () => this.showPage(this.page + 1));
-    prev.name = 'prev';
-    next.name = 'next';
+    prev.label = 'prev';
+    next.label = 'next';
 
     const mk = (text: string, x: number, fn: () => void): Container => {
-      const b = this.button(text, x, 0, 126, 54, 22);
+      const b = this.button(text, x, game.h - 76, 126, 54, 22);
+      b.label = 'toolbar';
       b.on('pointerdown', fn);
       return b;
     };
@@ -191,6 +224,7 @@ export default class FxDemo extends Scene {
     this.spinner.anchor.set(0.5);
     this.spinner.tint = 0xffd23f;
     this.spinner.scale.set(0.9);
+    this.spinner.position.set(60, 40);
     this.hud.addChild(this.spinner);
     this.refreshSettingsLabel();
   }
@@ -250,11 +284,10 @@ export default class FxDemo extends Scene {
       (this.pageContainers[page] as Container).addChild(view);
       this.cells.push(cell);
     });
-    this.hud.children.forEach((c) => {
-      if (c.name === 'prev' || c.name === 'next') c.y = h / 2;
-    });
-    this.pageLabel.position.set(w / 2, h - 112);
+    for (const c of this.hud.children) if (c.label === 'prev' || c.label === 'next') c.y = h - 126;
+    this.pageLabel.position.set(w / 2, h - 126);
     this.settingsLabel.position.set(w / 2, h - 30);
+    for (const c of this.hud.children) if (c.label === 'toolbar') c.y = h - 76;
     this.showPage(Math.min(this.page, pages - 1));
   }
 

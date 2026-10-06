@@ -55,6 +55,13 @@ export class Game {
   private shakeTarget: Container | null = null;
   private shakeSeed = Math.random() * 1000;
 
+  /**
+   * Whether tab visibility pauses the game. Hosts that deliver their own pause/resume signals and
+   * forbid the Page Visibility API (YouTube Playables) set this to false and drive
+   * setExternalPause() instead.
+   */
+  pauseOnHidden = true;
+
   private updaters: UpdateFn[] = [];
   private gotFirstInput = false;
   private externalPause = 0;
@@ -150,7 +157,8 @@ export class Game {
   }
 
   private refreshVisibility(): void {
-    const visible = document.visibilityState === 'visible' && this.externalPause === 0;
+    const tabVisible = !this.pauseOnHidden || document.visibilityState === 'visible';
+    const visible = tabVisible && this.externalPause === 0;
     if (visible === this.visible) return;
     this.visible = visible;
     if (visible) this.app.ticker.start();

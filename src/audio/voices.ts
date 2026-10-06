@@ -31,7 +31,7 @@ export class VoiceLimiter {
 
   constructor(
     private readonly rules: readonly VoiceRule[],
-    private readonly globalCap = GLOBAL_VOICE_CAP,
+    globalCap = GLOBAL_VOICE_CAP,
   ) {
     this.ends = rules.map((r) => new Float64Array(Math.max(1, r.maxVoices)));
     this.lastStart = new Float64Array(rules.length).fill(-1e9);

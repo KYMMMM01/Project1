@@ -177,18 +177,22 @@ export class Fx {
     const aimed = o.angle !== undefined;
     this.burst(
       {
-        tex: 'spark', prio: 0, count: 7, life: [0.14, 0.26], speed: [280, 560],
+        tex: 'spark', prio: 0, count: 7, life: [0.16, 0.28], speed: [300, 600],
         dir: aimed ? (o.angle as number) + PI : 'out', spread: aimed ? 0.85 : PI,
-        drag: 5.5, alignVel: true, stretch: 0.0024, size: [22, 36], sizeEnd: [7, 9],
+        drag: 5, alignVel: true, stretch: 0.0026, size: [30, 48], sizeEnd: [9, 12],
         colors: [W, hi, c], fadeIn: 0, fadeOut: 0.55,
       },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'starburst', prio: 0, count: 1, life: 0.11, size: [46, 58], sizeEnd: [24, 30],
+        tex: 'starburst', prio: 0, count: 1, life: 0.12, size: [62, 76], sizeEnd: [34, 40],
         rot: [0, TAU], colors: [W, hi], fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut,
       },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'glow', prio: 0, count: 1, life: 0.14, size: 54, sizeEnd: 92, colors: [W, c], alpha: 0.85, fadeIn: 0, fadeOut: 0.85, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.burst(
@@ -205,7 +209,7 @@ export class Fx {
     this.burst(
       {
         tex: 'star', prio: 2, count: 1, life: 0.3, size: 26, sizeEnd: 112, rot: [-0.3, 0.3], spin: [-1.4, 1.4],
-        colors: [W, hi, deep], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.6,
+        colors: [W, hi, c], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.45,
       },
       x, y, m,
     );
@@ -240,14 +244,14 @@ export class Fx {
     // Three claw marks: a long centre stroke flanked by two shorter ones, each a hair later.
     const marks: ReadonlyArray<readonly [number, number, number]> = [
       [0, 1, 0],
-      [-30 * s, 0.82, 0.025],
-      [30 * s, 0.82, 0.05],
+      [-46 * s, 0.78, 0.025],
+      [46 * s, 0.78, 0.05],
     ];
     for (const [off, k, delay] of marks) {
       this.burst(
         {
           tex: 'slash', prio: 1, count: 1, life: 0.26, delay,
-          size: 62 * k, sizeEnd: 78 * k, sizeY: 126 * k, sizeYEnd: 152 * k,
+          size: 40 * k, sizeEnd: 52 * k, sizeY: 150 * k, sizeYEnd: 176 * k,
           rot: ang, spin: 0.9, sizeEase: Ease.expoOut, colors: [W, tint, c], fadeIn: 0.05, fadeOut: 0.62,
         },
         x + px * off, y + py * off, { scale: s },
@@ -288,19 +292,19 @@ export class Fx {
     const hot = lighten(c, 0.65);
     const m: BurstMods = { scale: s };
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.26, size: 60, sizeEnd: 250, colors: [W, hot, c], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
+      { tex: 'glow', prio: 2, count: 1, life: 0.26, size: 50, sizeEnd: 210, colors: [W, hot, c], alpha: 0.85, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
       x, y, m,
     );
     this.burst(
-      { tex: 'starburst', prio: 2, count: 1, life: 0.18, size: 90, sizeEnd: 230, rot: [0, TAU], colors: [W, hot], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.6 },
+      { tex: 'starburst', prio: 2, count: 1, life: 0.18, size: 90, sizeEnd: 220, rot: [0, TAU], colors: [W, hot], alpha: 0.9, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.6 },
       x, y, m,
     );
-    this.shockwave(x, y, { color: hot, radius: 170, scale: s });
+    this.shockwave(x, y, { color: hot, radius: 135, scale: s });
     // Fire: additive puffs that cool from white-yellow through orange to dark red.
     this.burst(
       {
         tex: 'smoke', prio: 2, count: 7, life: [0.32, 0.55], shape: { type: 'circle', r: 22 }, speed: [40, 150], drag: 3,
-        size: [60, 88], sizeEnd: [110, 150], rot: [0, TAU], spin: [-1, 1], colors: [hot, c, darken(c, 0.7)], alpha: 0.9, fadeIn: 0.05, fadeOut: 0.6,
+        size: [60, 88], sizeEnd: [110, 150], rot: [0, TAU], spin: [-1, 1], colors: [lighten(c, 0.4), c, darken(c, 0.7)], alpha: 0.85, fadeIn: 0.05, fadeOut: 0.6,
       },
       x, y, m,
     );
@@ -393,8 +397,8 @@ export class Fx {
     );
     this.burst(
       {
-        tex: 'dot', prio: 2, count: 10, life: [0.12, 0.18], shape: { type: 'ring', r: 90, width: 40 }, size: [7, 11], sizeEnd: 3,
-        colors: [W, hi], fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: -26, ease: Ease.cubicIn },
+        tex: 'spark', prio: 2, count: 12, life: [0.13, 0.18], shape: { type: 'ring', r: 105, width: 40 }, size: [34, 54], sizeEnd: [12, 18],
+        alignVel: true, stretch: 0.0006, colors: [W, hi], fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: -26, ease: Ease.cubicIn },
       },
       x, y, m,
     );
@@ -637,7 +641,7 @@ export class Fx {
         x, y + 30 - i * 40, m,
       );
     }
-    this.pillar(x, y + 40, c, hi, o.scale ?? 1, 80, 300, 0.7);
+    this.pillar(x, y + 40, c, c, o.scale ?? 1, 90, 320, 0.7);
     this.burst(
       {
         tex: 'plus', prio: 2, count: 8, life: [0.8, 1.2], delay: [0, 0.3], shape: { type: 'rect', w: 130, h: 30 }, speed: [70, 150], dir: -PI / 2,
@@ -721,7 +725,7 @@ export class Fx {
     const smoke = this.ps.emit(
       {
         tex: 'smoke', blend: 'normal', prio: 1, life: [0.9, 1.5], shape: { type: 'circle', r: 46 }, speed: [8, 30], gravity: -14, drag: 0.5,
-        size: [48, 70], sizeEnd: [96, 130], rot: [0, TAU], spin: [-0.5, 0.5], colors: [lighten(c, 0.2), c, darken(c, 0.6)], alpha: 0.5,
+        size: [48, 70], sizeEnd: [96, 130], rot: [0, TAU], spin: [-0.5, 0.5], colors: [lighten(c, 0.2), c, darken(c, 0.6)], alpha: 0.4,
         fadeIn: 0.25, fadeOut: 0.5,
       },
       x, y, 13, { duration: dur, mods: m },
@@ -815,7 +819,7 @@ export class Fx {
     this.burst(
       {
         tex: 'plus', prio: 1, count: 5, life: [0.8, 1.15], delay: [0, 0.25], shape: { type: 'circle', r: 30 }, speed: [60, 120], dir: -PI / 2,
-        spread: 0.3, drag: 0.5, size: [18, 28], sizeEnd: [12, 18], colors: [W, hi, c], fadeIn: 0.15, fadeOut: 0.5,
+        spread: 0.3, drag: 0.5, size: [22, 32], sizeEnd: [14, 20], colors: [hi, c, c], fadeIn: 0.15, fadeOut: 0.5,
       },
       x, y, m,
     );
@@ -837,27 +841,33 @@ export class Fx {
     const hi = lighten(c, 0.6);
     const r = (o.radius ?? 56) * (o.scale ?? 1);
     const oy = o.offsetY ?? 0;
-    const handles = [];
+    const handles = [
+      // Steady soft glow under the pulses so the aura reads even between rings.
+      this.ps.emit(
+        {
+          tex: 'glow', prio: 0, life: 0.9, size: r * 1.7, sizeEnd: r * 2.1, colors: [hi, c], alpha: 0.32, fadeIn: 0.4, fadeOut: 0.5,
+        },
+        0, 0, 2.4, { follow: target, offsetY: oy },
+      ),
+      this.ps.emit(
+        {
+          tex: 'sparkle', prio: 0, life: [0.8, 1.3], shape: { type: 'circle', r: r * 0.75 }, speed: [26, 60], dir: -PI / 2, spread: 0.5, drag: 0.3,
+          size: [14, 24], sizeEnd: [4, 8], spin: [-2, 2], rot: [0, TAU], colors: [W, hi, c], fadeIn: 0.25, fadeOut: 0.5,
+        },
+        0, 0, 9, { follow: target, offsetY: oy },
+      ),
+    ];
     if (!fxSettings.reducedMotion) {
       handles.push(
         this.ps.emit(
           {
             tex: 'ring', prio: 0, life: 0.95, size: r * 0.9, sizeEnd: r * 2.5, sizeY: r * 0.9 * 0.8, sizeYEnd: r * 2.5 * 0.8,
-            sizeEase: Ease.cubicOut, colors: [hi, c], alpha: 0.6, fadeIn: 0.05, fadeOut: 0.75,
+            sizeEase: Ease.cubicOut, colors: [hi, c], alpha: 0.85, fadeIn: 0.05, fadeOut: 0.75,
           },
-          0, 0, 1.15, { follow: target, offsetY: oy },
+          0, 0, 1.3, { follow: target, offsetY: oy },
         ),
       );
     }
-    handles.push(
-      this.ps.emit(
-        {
-          tex: 'sparkle', prio: 0, life: [0.8, 1.3], shape: { type: 'circle', r: r * 0.7 }, speed: [24, 56], dir: -PI / 2, spread: 0.5, drag: 0.3,
-          size: [10, 18], sizeEnd: [3, 6], spin: [-2, 2], rot: [0, TAU], colors: [W, hi, c], fadeIn: 0.25, fadeOut: 0.5,
-        },
-        0, 0, 6, { follow: target, offsetY: oy },
-      ),
-    );
     return new EmitterGroup(handles);
   }
 
@@ -867,8 +877,8 @@ export class Fx {
     for (const dir of [0, PI]) {
       this.burst(
         {
-          tex: 'smoke', blend: 'normal', prio: 0, count: 3, life: [0.32, 0.5], speed: [50, 130], dir, spread: 0.3, drag: 3.6, gravity: -24,
-          size: [16, 24], sizeEnd: [38, 54], rot: [0, TAU], spin: [-1.5, 1.5], colors: [lighten(c, 0.2), c], alpha: 0.55, fadeIn: 0.08, fadeOut: 0.65,
+          tex: 'smoke', blend: 'normal', prio: 0, count: 3, life: [0.38, 0.58], speed: [60, 150], dir, spread: 0.3, drag: 3.4, gravity: -28,
+          size: [26, 36], sizeEnd: [58, 84], rot: [0, TAU], spin: [-1.5, 1.5], colors: [lighten(c, 0.2), c], alpha: 0.6, fadeIn: 0.08, fadeOut: 0.65,
         },
         x, y, m,
       );
@@ -893,6 +903,13 @@ export class Fx {
       {
         tex: 'sparkle', prio: 2, count: 12, life: [0.26, 0.34], delay: [0, d * 0.8], shape: { type: 'ring', r: r * 0.85, width: r * 0.3 }, size: [16, 26], sizeEnd: [5, 9],
         spin: [-5, 5], rot: [0, TAU], colors: [W, hi], fadeIn: 0.1, fadeOut: 0.15, converge: { swirl: -40, ease: Ease.cubicIn },
+      },
+      x, y, m,
+    );
+    this.burst(
+      {
+        tex: 'spark', prio: 2, count: 18, life: [0.3, 0.42], delay: [0, d * 0.75], shape: { type: 'ring', r: r * 1.05, width: r * 0.3 }, size: [44, 70], sizeEnd: [14, 22],
+        alignVel: true, stretch: 0.0006, colors: [hi, W], fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: 34, ease: Ease.cubicIn },
       },
       x, y, m,
     );
@@ -946,7 +963,7 @@ export class Fx {
     const c = o.color ?? 0xfff0b0;
     const e = this.ps.emit(
       {
-        tex: 'sparkle', prio: 0, life: [1.3, 2.4], shape: { type: 'rect', w, h }, speed: 0, size: [4, 6], sizeEnd: [16, 26], sizeEase: Ease.arc,
+        tex: 'sparkle', prio: 0, life: [1.3, 2.4], shape: { type: 'rect', w, h }, speed: 0, size: [6, 10], sizeEnd: [24, 38], sizeEase: Ease.arc,
         spin: [-0.6, 0.6], rot: [0, TAU], colors: [W, c], fadeIn: 0.3, fadeOut: 0.35,
       },
       x, y, o.rate ?? 5,

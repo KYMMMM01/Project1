@@ -10,7 +10,7 @@ The file-name prefix selects the treatment:
     fx_*      trim, fit inside 256 px
     ui_*      trim, fit inside 512 px
     logo_*    trim, fit inside 640 px wide
-    bg_*      centre-crop to 9:20 and scale to 720x1600, opaque WebP
+    bg_*      scale to 720 px wide keeping the full picture, opaque WebP
     keyart_*  scale to 1080 px wide, opaque WebP
 
 Sizes are ~2x the on-screen size at the 720-wide design resolution, i.e. crisp on a DPR-2 phone.
@@ -81,21 +81,14 @@ def process_sprite(src: Path, dst: Path, max_side: int) -> str:
 
 
 def process_bg(src: Path, dst: Path) -> str:
+    # Keep the whole picture: the props that give each room its character sit at the edges. The
+    # battle scene centres it on the playfield and the HUD panels cover whatever height is missing.
     im = Image.open(src).convert("RGB")
-    tw, th = 720, 1600
-    target = tw / th
     w, h = im.size
-    if w / h > target:
-        nw = round(h * target)
-        x0 = (w - nw) // 2
-        im = im.crop((x0, 0, x0 + nw, h))
-    else:
-        nh = round(w / target)
-        y0 = (h - nh) // 2
-        im = im.crop((0, y0, w, y0 + nh))
-    im = im.resize((tw, th), Image.LANCZOS)
+    th = round(h * 720 / w)
+    im = im.resize((720, th), Image.LANCZOS)
     im.save(dst, "WEBP", quality=86, method=6)
-    return f"{tw}x{th}"
+    return f"720x{th}"
 
 
 def process_keyart(src: Path, dst: Path) -> str:

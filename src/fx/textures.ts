@@ -239,7 +239,7 @@ const CELLS: Cell[] = [
     ay: 0.5,
     paint: (x, y) => {
       const r = len(x, y);
-      return Math.pow(smooth(30, 58, r), 1.7) * (1 - smooth(58, 63.5, r));
+      return Math.pow(smooth(40, 58.5, r), 1.5) * (1 - smooth(58.5, 63.5, r));
     },
   },
   {
@@ -251,8 +251,8 @@ const CELLS: Cell[] = [
     paint: (x, y) => {
       const u = (x + 64) / 128;
       const head = 0.9;
-      const hh = u < head ? 7 * Math.pow(u / head, 1.1) : 7 * Math.sqrt(Math.max(0, 1 - ((u - head) / (1 - head)) ** 2));
-      const across = Math.exp(-((y / (hh + 0.6)) ** 2) * 1.7);
+      const hh = u < head ? 9.5 * Math.pow(u / head, 1.05) : 9.5 * Math.sqrt(Math.max(0, 1 - ((u - head) / (1 - head)) ** 2));
+      const across = Math.exp(-((y / (hh + 0.6)) ** 2) * 1.5);
       return clamp01(across * (0.08 + 0.92 * Math.pow(u, 1.5)) * smooth(0, 0.05, u) * (1 - smooth(0.97, 1, u)));
     },
   },
@@ -283,10 +283,10 @@ const CELLS: Cell[] = [
       const v = y / 64;
       const r = len(u, v);
       const n = fbm(u * 1.7 + 11, v * 1.7 + 5, 7);
-      const edge = 0.46 + n * 0.5;
-      const body = 1 - smooth(edge - 0.3, edge + 0.04, r);
-      const mottle = 0.78 + 0.22 * fbm(u * 3.1 + 2, v * 3.1 + 9, 3);
-      return clamp01(body * mottle) * (1 - smooth(0.86, 1, r));
+      const edge = 0.5 + n * 0.42;
+      const body = Math.pow(1 - smooth(edge - 0.5, edge + 0.02, r), 1.25);
+      const mottle = 0.82 + 0.18 * fbm(u * 3.1 + 2, v * 3.1 + 9, 3);
+      return clamp01(body * mottle * 0.92) * (1 - smooth(0.84, 1, r));
     },
   },
   { id: 'shard', w: 64, h: 64, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, SHARD) - 0.6) },
@@ -372,8 +372,8 @@ const CELLS: Cell[] = [
     paint: (x, y) => {
       const u = x / 32;
       const t = (y + 128) / 256;
-      const core = Math.exp(-((u * 2.4) ** 2));
-      const soft = 0.5 * Math.exp(-((u * 1.15) ** 2));
+      const core = Math.exp(-((u * 1.9) ** 2));
+      const soft = 0.55 * Math.exp(-((u * 0.9) ** 2));
       return clamp01(Math.max(core, soft) * Math.pow(t, 0.85) * (1 - smooth(0.965, 1, t)));
     },
   },

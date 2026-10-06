@@ -154,7 +154,7 @@ export class ScrollAxis {
   /** Change the scrollable length, keeping the position valid. */
   setMax(max: number): void {
     this.max = Math.max(0, max);
-    if (!this.dragging && this.overscroll === 0) this.pos = clamp(this.pos, 0, this.max);
+    if (!this.dragging) this.pos = clamp(this.pos, 0, this.max);
   }
 
   /** Advance inertia / spring-back. Returns true while there is still motion to animate. */

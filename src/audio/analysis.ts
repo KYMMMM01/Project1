@@ -18,6 +18,8 @@ export interface SoundStats {
   clipped: boolean;
   /** Energy-weighted mean frequency, a "brightness" proxy. */
   centroidHz: number;
+  /** Centroid of the energy above 300 Hz only, so sub-bass weight cannot mask how bright the body is. */
+  brightHz: number;
   /** Share of spectral energy below 200 Hz ("weight"). */
   lowFrac: number;
   /** Share of spectral energy above 4 kHz ("sparkle"). */
@@ -135,7 +137,7 @@ export function spectrum(
   sampleRate: number,
   start: number,
   end: number,
-): { centroidHz: number; lowFrac: number; highFrac: number } {
+): { centroidHz: number; brightHz: number; lowFrac: number; highFrac: number } {
   const re = new Float64Array(FFT_SIZE);
   const im = new Float64Array(FFT_SIZE);
   const bins = FFT_SIZE / 2;
@@ -160,6 +162,8 @@ export function spectrum(
   let weighted = 0;
   let low = 0;
   let high = 0;
+  let upper = 0;
+  let upperWeighted = 0;
   for (let k = 1; k < bins; k++) {
     const p = power[k] as number;
     const fHz = k * binHz;
@@ -167,12 +171,21 @@ export function spectrum(
     weighted += p * fHz;
     if (fHz < 200) low += p;
     if (fHz > 4000) high += p;
+    if (fHz >= 300) {
+      upper += p;
+      upperWeighted += p * fHz;
+    }
   }
-  if (total <= 0) return { centroidHz: 0, lowFrac: 0, highFrac: 0 };
-  return { centroidHz: weighted / total, lowFrac: low / total, highFrac: high / total };
+  if (total <= 0) return { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0 };
+  return {
+    centroidHz: weighted / total,
+    brightHz: upper > 0 ? upperWeighted / upper : 0,
+    lowFrac: low / total,
+    highFrac: high / total,
+  };
 }
 
-export function analyse(ch: readonly Float32Array[], sampleRate: number): SoundStats {
+export function analyse(ch: readonly Float32Array[], sampleRate: number, spectral = true): SoundStats {
   const peak = peakOf(ch);
   const len = (ch[0] as Float32Array).length;
   const silent = peak < SILENT_PEAK;
@@ -192,7 +205,7 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number): SoundS
   }
   const n = region * ch.length;
   const window = Math.max(region, LOUD_WINDOW * sampleRate) * ch.length;
-  const spec = silent ? { centroidHz: 0, lowFrac: 0, highFrac: 0 } : spectrum(ch, sampleRate, start, end);
+  const spec = silent || !spectral ? { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0 } : spectrum(ch, sampleRate, start, end);
 
   const first = ch.reduce((m, c) => Math.max(m, Math.abs(c[0] as number)), 0);
   const last = ch.reduce((m, c) => Math.max(m, Math.abs(c[len - 1] as number)), 0);

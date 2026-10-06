@@ -7,7 +7,7 @@ export const ICON_NAMES = [
   'close', 'back', 'settings', 'sound_on', 'sound_off', 'music', 'lock', 'check', 'plus', 'minus',
   'play', 'pause', 'fast_forward', 'info', 'question', 'home', 'cards', 'shop', 'trophy', 'mission',
   'gift', 'star', 'crown', 'paw', 'heart', 'clock', 'ad', 'coin', 'gem', 'energy',
-  'arrow_up', 'swords', 'shield', 'reroll', 'sell', 'skull', 'chest', 'fish', 'lucky_clover', 'dice',
+  'arrow_up', 'swords', 'shield', 'reroll', 'sell', 'skull', 'chest', 'fish', 'lucky_clover', 'dice', 'warning',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -32,36 +32,38 @@ class Pen {
   private ox = 0;
   private oy = 0;
   private rot = 0;
+  private sc = 1;
 
   constructor(
     readonly g: Graphics,
     readonly u: number,
   ) {}
 
-  /** Move/rotate the local frame (sword, tilted card). Pass nothing to reset. */
-  at(x = 0, y = 0, rot = 0): this {
+  /** Move/rotate/scale the local frame (sword, tilted card). Pass nothing to reset. */
+  at(x = 0, y = 0, rot = 0, scale = 1): this {
     this.ox = x;
     this.oy = y;
     this.rot = rot;
+    this.sc = scale;
     this.cos = Math.cos(rot);
     this.sin = Math.sin(rot);
     return this;
   }
 
   private tx(x: number, y: number): number {
-    return (x * this.cos - y * this.sin + this.ox) * this.u;
+    return ((x * this.cos - y * this.sin) * this.sc + this.ox) * this.u;
   }
 
   private ty(x: number, y: number): number {
-    return (x * this.sin + y * this.cos + this.oy) * this.u;
+    return ((x * this.sin + y * this.cos) * this.sc + this.oy) * this.u;
   }
 
   private get framed(): boolean {
-    return this.rot !== 0;
+    return this.rot !== 0 || this.sc !== 1;
   }
 
   circle(x: number, y: number, r: number): this {
-    this.g.circle(this.tx(x, y), this.ty(x, y), r * this.u);
+    this.g.circle(this.tx(x, y), this.ty(x, y), r * this.sc * this.u);
     return this;
   }
 
@@ -112,7 +114,7 @@ class Pen {
       const d2y = (py[q] as number) - (py[i] as number);
       const l1 = Math.hypot(d1x, d1y);
       const l2 = Math.hypot(d2x, d2y);
-      const rr = Math.min(r * this.u, l1 / 2, l2 / 2);
+      const rr = Math.min(r * this.sc * this.u, l1 / 2, l2 / 2);
       const ax = (px[i] as number) + (d1x / l1) * rr;
       const ay = (py[i] as number) + (d1y / l1) * rr;
       const bx = (px[i] as number) + (d2x / l2) * rr;
@@ -176,7 +178,7 @@ class Pen {
   /** Arc around (cx, cy); starts a new sub-path at the arc start. */
   arc(cx: number, cy: number, r: number, a0: number, a1: number): this {
     this.g.moveTo(this.tx(cx + Math.cos(a0) * r, cy + Math.sin(a0) * r), this.ty(cx + Math.cos(a0) * r, cy + Math.sin(a0) * r));
-    this.g.arc(this.tx(cx, cy), this.ty(cx, cy), r * this.u, a0 + this.rot, a1 + this.rot);
+    this.g.arc(this.tx(cx, cy), this.ty(cx, cy), r * this.sc * this.u, a0 + this.rot, a1 + this.rot);
     return this;
   }
 
@@ -287,7 +289,7 @@ function speaker(k: Ink, c: number): void {
 
 function sword(k: Ink, rot: number, blade: number): void {
   const p = k.pen;
-  p.at(0, 0, rot);
+  p.at(0, 0, rot, 1.22);
   k.solid(tone(blade), (q) => q.rpoly([0, -47, 8, -37, 8, 10, -8, 10, -8, -37], 2.5));
   k.detail(WHITE, (q) => q.rrect(-3.5, -36, 3, 40, 1.5), 0.6);
   k.solid([0xffe27a, 0xd98a0a], (q) => q.rrect(-18, 7, 36, 10, 4));
@@ -451,7 +453,6 @@ const ICONS: Record<IconName, IconDef> = {
       k.solid([0xfff6dc, 0xf0cf94], (p) => p.rrect(-29, -8, 58, 48, 7));
       k.solid(tone(c), (p) => p.rpoly([-44, -3, 0, -42, 44, -3], 7));
       k.solid([0xb86b30, 0x7a3e16], (p) => p.rrect(-9, 14, 18, 26, 4));
-      gloss(k, (p) => p.rrect(-30, -22, 24, 6, 3));
     },
   },
   cards: {
@@ -710,7 +711,7 @@ const ICONS: Record<IconName, IconDef> = {
   lucky_clover: {
     color: 0x4cd964,
     draw: (k, c) => {
-      k.line(0x2f9e44, 7, (p) => p.m(2, 4).c(6, 18, 10, 28, 16, 40));
+      k.line(0x2f9e44, 9, (p) => p.m(1, 6).c(4, 20, 2, 32, -8, 42));
       for (const a of [-PI / 4, PI / 4, (3 * PI) / 4, (5 * PI) / 4]) {
         k.pen.at(0, 0, a);
         k.solid([shade(c, 0.35), shade(c, -0.12)], leafPath);
@@ -722,6 +723,17 @@ const ICONS: Record<IconName, IconDef> = {
       k.pen.at(0, 0, -PI / 4);
       gloss(k, (p) => p.ellipse(-8, -27, 5, 3, -0.4));
       k.pen.at();
+    },
+  },
+  warning: {
+    color: 0xffc83a,
+    draw: (k, c) => {
+      k.solid(tone(c), (p) => p.rpoly([0, -40, 42, 34, -42, 34], 9));
+      gloss(k, (p) => p.rpoly([0, -28, 9, -12, -9, -12], 3));
+      k.detail(Color.outline, (p) => {
+        p.rrect(-4.5, -9, 9, 26, 4.5);
+        p.circle(0, 25, 5);
+      });
     },
   },
   dice: {

@@ -48,8 +48,8 @@ export function ensureNumberFonts(): void {
         end: { x: 0, y: 1 },
         colorStops: [
           { offset: 0, color: 0xfff6b0 },
-          { offset: 0.42, color: 0xffd23a },
-          { offset: 1, color: 0xff7d18 },
+          { offset: 0.45, color: 0xffd23a },
+          { offset: 1, color: 0xff8a1e },
         ],
         textureSpace: 'local',
       }),

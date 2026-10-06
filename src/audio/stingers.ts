@@ -57,11 +57,11 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
       const rv = s.reverb(0.9, 0.3, 0.4);
       const filter = { t: 'lowpass' as const, f: 1400 };
       const vib = { rate: 5, cents: 25, delay: 0.15 };
-      s.tone({ w: 'triangle', f: hz('E4'), at: 0, dur: 0.42, v: 1, a: 0.02, s: 0.8, r: 0.08, vib, filter, send: { bus: rv, amt: 0.4 } });
-      s.tone({ w: 'triangle', f: hz('D4'), at: 0.4, dur: 0.42, v: 1, a: 0.02, s: 0.8, r: 0.08, vib, filter, send: { bus: rv, amt: 0.4 } });
-      s.tone({ w: 'triangle', f: hz('B3'), at: 0.8, dur: 1.2, v: 1, a: 0.02, s: 0.35, r: 0.4, vib, filter, send: { bus: rv, amt: 0.4 } });
-      s.tone({ f: 110, at: 0, dur: 1.9, v: 0.22, a: 0.3, s: 0.6, r: 0.6 });
-      ['E3', 'G3', 'B3'].forEach((n, k) => {
+      s.tone({ w: 'triangle', f: hz('E5'), at: 0, dur: 0.42, v: 1, a: 0.02, s: 0.8, r: 0.08, vib, filter, send: { bus: rv, amt: 0.4 } });
+      s.tone({ w: 'triangle', f: hz('D5'), at: 0.4, dur: 0.42, v: 1, a: 0.02, s: 0.8, r: 0.08, vib, filter, send: { bus: rv, amt: 0.4 } });
+      s.tone({ w: 'triangle', f: hz('B4'), at: 0.8, dur: 1.2, v: 1, a: 0.02, s: 0.35, r: 0.4, vib, filter, send: { bus: rv, amt: 0.4 } });
+      s.tone({ f: 165, at: 0, dur: 1.9, v: 0.22, a: 0.3, s: 0.6, r: 0.6 });
+      ['E4', 'G4', 'B4'].forEach((n, k) => {
         s.tone({ w: 'triangle', f: hz(n), at: 0.1, dur: 1.8, v: 0.15, a: 0.25, s: 0.6, r: 0.6, filter: { t: 'lowpass', f: 900 }, pan: (k - 1) * 0.4 });
       });
       s.noise({ kind: 'pink', at: 0.8, dur: 0.9, v: 0.08, a: 0.1, s: 0.3, filter: { t: 'lowpass', f: 1500, f2: 300, sw: 0.9 } });
@@ -77,16 +77,16 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
       // Dread then impact: a sub that sinks, a swelling D-minor/tritone saw pad, a rising noise
       // riser and cold bell hits; at 1.0 s a saturated blast, sub thump and a brass D-minor stab.
       const rv = s.reverb(1.0, 0.3, 0.4);
-      s.tone({ f: 60, f2: 28, sw: 1.0, dur: 1.3, v: 0.9, a: 0.2, s: 0.5 });
+      s.tone({ f: 60, f2: 28, sw: 1.0, dur: 1.3, v: 0.5, a: 0.2, s: 0.5, sat: 0.4 });
       ['D2', 'A2', 'F3', 'G#2'].forEach((n, k) => {
         s.tone({ w: 'sawtooth', f: hz(n), at: 0, dur: 1.15, v: 0.2, a: 0.8, s: 1, r: 0.15, uni: [-10, 10], filter: { t: 'lowpass', f: 400, f2: 1400, sw: 1.0 }, pan: (k - 1.5) * 0.3 });
       });
       whoosh(s, 200, 3000, 0, 1.0, 0.7, 2, 0.9);
-      s.noise({ kind: 'brown', at: 0, dur: 2.0, v: 0.5, a: 0.3, s: 0.3, filter: { t: 'lowpass', f: 200 } });
+      s.noise({ kind: 'brown', at: 0, dur: 2.0, v: 0.3, a: 0.3, s: 0.3, filter: { t: 'lowpass', f: 260 } });
       bell(s, hz('D4'), 0.5, 0.7, 0.3, { bus: rv, amt: 0.5 });
       bell(s, hz('G#4'), 0.78, 0.6, 0.3, { bus: rv, amt: 0.5 });
       s.noise({ at: 1.0, dur: 0.6, v: 0.9, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 5000, f2: 300, sw: 0.5 } });
-      thump(s, 80, 30, 1.0, 0.9, 1.3, 0.5);
+      thump(s, 80, 30, 1.0, 0.9, 0.9, 0.5, 0.5);
       ['D3', 'F3', 'A3', 'D4'].forEach((n, k) => {
         s.tone({ w: 'sawtooth', f: hz(n), at: 1.02, dur: 0.95, v: 0.3, a: 0.02, s: 0.5, r: 0.45, uni: [-9, 9], filter: { t: 'lowpass', f: 1800, f2: 700, sw: 0.7 }, pan: (k - 1.5) * 0.3, send: { bus: rv, amt: 0.35 } });
       });
@@ -105,7 +105,7 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
       const e = s.echo(0.11, 0.45, 0.32, 8000);
       whoosh(s, 300, 6000, 0, 0.5, 0.9, 2, 0.9);
       s.tone({ w: 'sawtooth', f: 110, f2: 440, sw: 0.5, dur: 0.55, v: 0.3, a: 0.15, filter: { t: 'lowpass', f: 400, f2: 5000, sw: 0.5 } });
-      thump(s, 70, 30, 0.5, 0.8, 1.5, 0.5);
+      thump(s, 70, 30, 0.5, 0.8, 1.1, 0.5, 0.5);
       s.noise({ at: 0.5, dur: 0.5, v: 0.85, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 5000, f2: 300, sw: 0.5 } });
       bell(s, hz('G6'), 0.5, 1.0, 0.5, { bus: rv, amt: 0.5 });
       ['C3', 'G3', 'C4'].forEach((n, k) => {

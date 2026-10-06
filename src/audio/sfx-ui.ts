@@ -27,8 +27,8 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
     ms: [40, 120],
     build(s) {
       // Lower and slightly slower than click: the same gesture "going back".
-      thump(s, 520, 290, 0, 0.095, 1, 0.06);
-      s.tone({ w: 'triangle', f: 260, f2: 150, sw: 0.06, dur: 0.085, v: 0.32 });
+      thump(s, 660, 370, 0, 0.095, 1, 0.06);
+      s.tone({ w: 'triangle', f: 330, f2: 190, sw: 0.06, dur: 0.085, v: 0.32 });
       tick(s, 0, 1500, 0.01, 0.2, 0.7);
     },
   },
@@ -76,11 +76,12 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
     len: 0.16,
     ms: [80, 125],
     build(s) {
-      // Two dull buzzes: square + detuned saw through a low lowpass. Soft attack, no sharp harmonics.
-      for (const at of [0, 0.07]) {
-        const filter = { t: 'lowpass' as const, f: 520, q: 0.7 };
-        s.tone({ w: 'square', f: 112, at, dur: 0.052, v: 0.5, a: 0.005, s: 0.6, r: 0.014, filter });
-        s.tone({ w: 'sawtooth', f: 118, at, dur: 0.052, v: 0.3, a: 0.005, s: 0.6, r: 0.014, filter });
+      // Two dull buzzes: square + detuned saw (a ~9 Hz beat) through a low lowpass. The fundamental
+      // sits at 155 Hz so its 2nd/3rd harmonics still reach a phone speaker; soft attack, nothing sharp.
+      for (const at of [0, 0.06]) {
+        const filter = { t: 'lowpass' as const, f: 700, q: 0.7 };
+        s.tone({ w: 'square', f: 155, at, dur: 0.048, v: 0.5, a: 0.005, s: 0.6, r: 0.014, filter });
+        s.tone({ w: 'sawtooth', f: 164, at, dur: 0.048, v: 0.3, a: 0.005, s: 0.6, r: 0.014, filter });
       }
     },
   },
@@ -193,13 +194,14 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
   summon_common: {
     cat: 'reward',
     trim: -2,
-    len: 0.26,
-    ms: [90, 220],
+    len: 0.3,
+    ms: [100, 220],
     build(s) {
-      // A short soft pop: pitch-drop body, an upward "plop" blip, and a tiny lowpassed air puff.
-      thump(s, 420, 190, 0, 0.11, 1, 0.07);
-      s.tone({ f: 840, f2: 1250, sw: 0.04, at: 0.012, dur: 0.075, v: 0.3 });
-      s.noise({ dur: 0.05, v: 0.22, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200 } });
+      // A short soft pop: pitch-drop body, an upward "plop" blip, a faint chime tail and a lowpassed air puff.
+      thump(s, 460, 200, 0, 0.14, 1, 0.08);
+      s.tone({ f: 840, f2: 1250, sw: 0.05, at: 0.012, dur: 0.095, v: 0.3 });
+      s.tone({ f: hz('E6'), at: 0.05, dur: 0.07, v: 0.12 });
+      s.noise({ dur: 0.07, v: 0.22, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200 } });
     },
   },
   summon_rare: {
@@ -213,6 +215,7 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
       whoosh(s, 700, 3200, 0, 0.1, 0.32, 1.2, 0.8);
       thump(s, 460, 200, 0.01, 0.12, 1, 0.07);
       bell(s, hz('E6'), 0.06, 0.32, 0.7, { bus: e, amt: 0.5 });
+      sparkles(s, 0.12, 2, 0.08, [hz('E7'), hz('A6')], 0.12, 0.1, { bus: e, amt: 0.4 });
     },
   },
   summon_epic: {
@@ -228,12 +231,13 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
       s.noise({ at: 0.2, dur: 0.1, v: 0.35, s: 0.01, filter: { t: 'lowpass', f: 3500, f2: 500, sw: 0.1 } });
       bell(s, hz('E6'), 0.21, 0.45, 0.85, { bus: e, amt: 0.5 });
       bell(s, hz('A6'), 0.3, 0.45, 0.75, { bus: e, amt: 0.5 });
-      sparkles(s, 0.32, 6, 0.3, [hz('E7'), hz('A7'), hz('B7'), hz('C7')], 0.2, 0.14, { bus: e, amt: 0.4 });
+      sparkles(s, 0.32, 6, 0.3, [hz('E7'), hz('A7'), hz('B7'), hz('C7')], 0.22, 0.14, { bus: e, amt: 0.4 });
+      s.noise({ at: 0.3, dur: 0.25, v: 0.07, a: 0.02, s: 0.05, filter: { t: 'highpass', f: 7000 } });
     },
   },
   summon_legendary: {
     cat: 'big',
-    trim: -4,
+    trim: -1,
     len: 1.7,
     ms: [800, 1450],
     stereo: true,
@@ -244,19 +248,20 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
       const e = s.echo(0.09, 0.4, 0.3, 7000);
       whoosh(s, 300, 5200, 0, 0.38, 0.8, 2.2, 0.9);
       s.tone({ w: 'sawtooth', f: 140, f2: 620, sw: 0.38, dur: 0.4, v: 0.2, a: 0.1, filter: { t: 'lowpass', f: 600, f2: 3500, sw: 0.38 } });
-      thump(s, 110, 42, 0.38, 0.5, 1.2, 0.3);
-      s.noise({ at: 0.38, dur: 0.28, v: 0.45, s: 0.01, filter: { t: 'lowpass', f: 5200, f2: 420, sw: 0.25 } });
+      thump(s, 110, 42, 0.38, 0.5, 0.9, 0.3, 0.5);
+      s.noise({ at: 0.38, dur: 0.28, v: 0.55, s: 0.01, filter: { t: 'lowpass', f: 5200, f2: 420, sw: 0.25 } });
       ['C5', 'E5', 'G5', 'C6'].forEach((n, k) => {
         const at = 0.38 + k * 0.065;
         chime(s, hz(n), at, 0.5, 0.65, { bus: rv, amt: 0.6 });
         s.tone({ w: 'sawtooth', f: hz(n), at: at + 0.02, dur: 0.6, v: 0.09, a: 0.03, uni: [-9, 9], filter: { t: 'lowpass', f: 2600 }, pan: k % 2 ? 0.35 : -0.35 });
       });
-      sparkles(s, 0.55, 9, 0.5, [hz('C7'), hz('E7'), hz('G7'), hz('B6'), hz('D7')], 0.2, 0.18, { bus: e, amt: 0.5 });
+      sparkles(s, 0.55, 9, 0.5, [hz('C7'), hz('E7'), hz('G7'), hz('B6'), hz('D7'), hz('C8')], 0.24, 0.18, { bus: e, amt: 0.5 });
+      s.noise({ at: 0.45, dur: 0.6, v: 0.09, a: 0.05, s: 0.05, trem: { rate: 18, depth: 0.8 }, filter: { t: 'highpass', f: 7500 } });
     },
   },
   summon_mythic: {
     cat: 'big',
-    trim: 0,
+    trim: 1,
     len: 2.5,
     ms: [1300, 2000],
     stereo: true,
@@ -268,17 +273,18 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
       whoosh(s, 250, 7500, 0, 0.65, 0.95, 2.8, 0.92);
       s.tone({ w: 'sawtooth', f: 110, f2: 880, sw: 0.62, dur: 0.66, v: 0.26, a: 0.2, uni: [-12, 12], filter: { t: 'lowpass', f: 500, f2: 6000, sw: 0.62 } });
       s.tone({ f: 440, f2: 1760, sw: 0.62, lin: true, dur: 0.66, v: 0.18, a: 0.3 });
-      thump(s, 90, 30, 0.62, 0.8, 1.4, 0.5);
-      s.noise({ at: 0.62, dur: 0.5, v: 0.8, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 7000, f2: 250, sw: 0.5 } });
+      thump(s, 90, 30, 0.62, 0.8, 1.0, 0.5, 0.5);
+      s.noise({ at: 0.62, dur: 0.5, v: 0.9, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 7000, f2: 250, sw: 0.5 } });
       bell(s, hz('G6'), 0.62, 0.9, 0.45, { bus: rv, amt: 0.5 });
       ['C5', 'E5', 'G5', 'B5', 'D6'].forEach((n, k) => {
         const at = 0.66 + k * 0.06;
         s.tone({ w: 'sawtooth', f: hz(n), at, dur: 1.1, v: 0.085, a: 0.04, uni: [-10, 10], filter: { t: 'lowpass', f: 3500, f2: 6500, sw: 0.5 }, pan: (k - 2) * 0.3, send: { bus: rv, amt: 0.5 } });
         chime(s, hz(n) * 2, at, 0.8, 0.5, { bus: e, amt: 0.5 });
       });
-      ['C7', 'E7', 'G7', 'B7', 'D8', 'E7', 'G7', 'C8'].forEach((n, k) => {
-        s.tone({ f: hz(n), at: 0.75 + k * 0.05, dur: 0.5, v: 0.22, a: 0.003, trem: { rate: 12, depth: 0.5 }, pan: k % 2 ? 0.5 : -0.5, send: { bus: e, amt: 0.6 } });
+      ['C7', 'E7', 'G7', 'B7', 'D8', 'E7', 'G7', 'C8', 'E8'].forEach((n, k) => {
+        s.tone({ f: hz(n), at: 0.75 + k * 0.05, dur: 0.5, v: 0.25, a: 0.003, trem: { rate: 12, depth: 0.5 }, pan: k % 2 ? 0.5 : -0.5, send: { bus: e, amt: 0.6 } });
       });
+      s.noise({ at: 0.62, dur: 1.1, v: 0.1, a: 0.08, s: 0.05, trem: { rate: 16, depth: 0.8 }, filter: { t: 'highpass', f: 8000 } });
     },
   },
 
@@ -347,9 +353,9 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
     ms: [60, 125],
     build(s) {
       // Soft thud on a felt board: sine drop + lowpassed puff + a faint tick.
-      thump(s, 240, 110, 0, 0.1, 1, 0.05);
-      s.noise({ dur: 0.04, v: 0.25, a: 0.002, s: 0.01, filter: { t: 'lowpass', f: 900 } });
-      tick(s, 0, 1100, 0.01, 0.2, 1);
+      thump(s, 340, 160, 0, 0.1, 1, 0.05, 0.3);
+      s.noise({ dur: 0.04, v: 0.3, a: 0.002, s: 0.01, filter: { t: 'lowpass', f: 1400 } });
+      tick(s, 0, 1600, 0.01, 0.3, 1);
     },
   },
   pickup: {

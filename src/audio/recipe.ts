@@ -64,8 +64,9 @@ export function blip(s: Synth, f: number, at: number, dur: number, v = 1, f2?: n
 }
 
 /** Sine drop: the body of thumps, pops and taps. */
-export function thump(s: Synth, f0: number, f1: number, at: number, dur: number, v = 1, sw = dur * 0.4): void {
-  s.tone({ f: f0, f2: f1, sw, at, dur, v, a: 0.002, s: 0.004, r: Math.min(0.03, dur * 0.3) });
+export function thump(s: Synth, f0: number, f1: number, at: number, dur: number, v = 1, sw = dur * 0.4, sat = 0): void {
+  // `sat` adds odd harmonics so the low drop stays audible on phone speakers that cannot reproduce it.
+  s.tone({ f: f0, f2: f1, sw, at, dur, v, a: 0.002, s: 0.004, r: Math.min(0.03, dur * 0.3), sat: sat || undefined });
 }
 
 /** Band-passed noise sweep with a smooth swell: whooshes, risers, swishes. */

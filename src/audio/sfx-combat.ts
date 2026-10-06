@@ -31,9 +31,9 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     build(s, v) {
       // Sine chirp with vibrato = a "pew" that sparkles; an octave-up copy feeds a short echo.
       const p = v.j(0.05);
-      const e = s.echo(0.05, 0.35, 0.3, 5500);
-      s.tone({ f: 640 * p, f2: 1500 * p, sw: 0.1, dur: 0.15, v: 1, vib: { rate: 26, cents: 40 }, send: { bus: e, amt: 0.5 } });
-      s.tone({ f: 1280 * p, f2: 3000 * p, sw: 0.1, dur: 0.12, v: 0.2, vib: { rate: 26, cents: 40 } });
+      const e = s.echo(0.045, 0.25, 0.25, 5500);
+      s.tone({ f: 640 * p, f2: 1500 * p, sw: 0.09, dur: 0.13, v: 1, vib: { rate: 26, cents: 40 }, send: { bus: e, amt: 0.5 } });
+      s.tone({ f: 1280 * p, f2: 3000 * p, sw: 0.09, dur: 0.1, v: 0.2, vib: { rate: 26, cents: 40 } });
     },
   },
   shoot_cannon: {
@@ -44,12 +44,13 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     variants: 3,
     rate: 0.04,
     build(s, v) {
-      // Thump: sine drop for the barrel, brown-ish lowpassed burst for the blast, a triangle sub.
+      // Thump: a saturated sine drop for the barrel (harmonics keep it audible on phone speakers),
+      // a mid "boom" triangle, and a lowpassed burst for the blast.
       const p = v.j(0.05);
-      thump(s, 170 * p, 52, 0, 0.17, 1, 0.1);
-      s.tone({ w: 'triangle', f: 95 * p, f2: 45, sw: 0.14, dur: 0.2, v: 0.5 });
-      s.noise({ dur: 0.09, v: 0.6, a: 0.002, s: 0.003, filter: { t: 'lowpass', f: 1100, f2: 300, sw: 0.08 } });
-      tick(s, 0, 1800, 0.006, 0.25, 1);
+      thump(s, 230 * p, 58, 0, 0.17, 0.8, 0.1, 0.6);
+      s.tone({ w: 'triangle', f: 150 * p, f2: 70, sw: 0.1, dur: 0.15, v: 0.55 });
+      s.noise({ dur: 0.1, v: 0.95, a: 0.002, s: 0.003, filter: { t: 'lowpass', f: 1500, f2: 350, sw: 0.09 } });
+      tick(s, 0, 2200, 0.007, 0.35, 1);
     },
   },
   shoot_ice: {
@@ -120,8 +121,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     build(s, v) {
       // Must be pleasant at 15+/s: very short, band limited (no sub, no air), low level.
       const p = v.j(0.08);
-      thump(s, 330 * p, 170 * p, 0, 0.06, 1, 0.035);
-      s.noise({ dur: 0.022, v: 0.55, a: 0.001, s: 0.003, filter: { t: 'bandpass', f: 1900 * p, q: 1.1 } });
+      thump(s, 520 * p, 260 * p, 0, 0.07, 1, 0.04);
+      s.noise({ dur: 0.024, v: 0.7, a: 0.001, s: 0.003, filter: { t: 'bandpass', f: 2200 * p, q: 1.1 } });
     },
   },
   hit_heavy: {
@@ -135,10 +136,10 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     build(s, v) {
       // Weight: low sine drop + triangle body, a mid noise slap and a click for definition.
       const p = v.j(0.06);
-      thump(s, 220 * p, 62, 0, 0.16, 1, 0.09);
-      s.tone({ w: 'triangle', f: 140 * p, f2: 80, sw: 0.1, dur: 0.13, v: 0.5 });
-      s.noise({ dur: 0.09, v: 0.7, a: 0.001, s: 0.003, filter: { t: 'lowpass', f: 2400, f2: 500, sw: 0.08 } });
-      tick(s, 0, 1500, 0.01, 0.5, 1);
+      thump(s, 260 * p, 70, 0, 0.16, 0.85, 0.09, 0.5);
+      s.tone({ w: 'triangle', f: 190 * p, f2: 100, sw: 0.1, dur: 0.13, v: 0.6 });
+      s.noise({ dur: 0.09, v: 1.0, a: 0.001, s: 0.003, filter: { t: 'lowpass', f: 2800, f2: 600, sw: 0.08 } });
+      tick(s, 0, 1700, 0.01, 0.6, 1);
     },
   },
   crit: {
@@ -245,9 +246,9 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     build(s, v) {
       // A cute "poof": noise puff + a sine that falls 380 -> 110 Hz, with a small upper pop.
       const p = v.j(0.1);
-      s.noise({ dur: 0.1, v: 0.8, a: 0.003, s: 0.01, filter: { t: 'bandpass', f: 1200 * p, q: 1.2 } });
-      thump(s, 380 * p, 110 * p, 0, 0.22, 1, 0.14);
-      s.tone({ f: 760 * p, f2: 300 * p, sw: 0.1, dur: 0.15, v: 0.25 });
+      s.noise({ dur: 0.1, v: 0.8, a: 0.003, s: 0.01, filter: { t: 'bandpass', f: 1500 * p, q: 1.2 } });
+      thump(s, 520 * p, 160 * p, 0, 0.22, 1, 0.14);
+      s.tone({ f: 900 * p, f2: 400 * p, sw: 0.1, dur: 0.15, v: 0.3 });
     },
   },
   boss_warning: {
@@ -263,7 +264,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
         const t = c * 0.37;
         s.tone({ w: 'sawtooth', f: hz('C5'), at: t, dur: 0.19, v: 0.5, a: 0.012, s: 0.9, r: 0.03, uni: [7], filter });
         s.tone({ w: 'sawtooth', f: hz('G4'), at: t + 0.18, dur: 0.19, v: 0.5, a: 0.012, s: 0.9, r: 0.03, uni: [7], filter });
-        s.tone({ f: 55, at: t, dur: 0.36, v: 0.9, a: 0.012, s: 0.7, r: 0.1 });
+        s.tone({ f: 55, at: t, dur: 0.36, v: 0.4, a: 0.012, s: 0.7, r: 0.1 });
       }
     },
   },
@@ -277,11 +278,11 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
       // heard through parallel formant filters that glide like a vowel (ah -> oh), over a breath
       // of noise and an opening sub thump.
       const base = { w: 'sawtooth' as const, f: 95, f2: 52, sw: 1.1, dur: 1.3, a: 0.08, s: 0.7, r: 0.35, uni: [-14, 14, 25], sat: 0.6, trem: { rate: 34, depth: 0.55 } };
-      s.tone({ ...base, v: 0.9, filter: { t: 'lowpass', f: 320 } });
-      s.tone({ ...base, v: 0.7, filter: { t: 'bandpass', f: 450, f2: 800, sw: 0.55, q: 4 } });
-      s.tone({ ...base, v: 0.45, filter: { t: 'bandpass', f: 1100, f2: 1800, sw: 0.55, q: 5 } });
+      s.tone({ ...base, v: 0.6, filter: { t: 'lowpass', f: 320 } });
+      s.tone({ ...base, v: 0.9, filter: { t: 'bandpass', f: 450, f2: 800, sw: 0.55, q: 4 } });
+      s.tone({ ...base, v: 0.65, filter: { t: 'bandpass', f: 1100, f2: 1800, sw: 0.55, q: 5 } });
       s.noise({ at: 0.05, dur: 1.15, v: 0.22, a: 0.1, s: 0.3, filter: { t: 'bandpass', f: 800, f2: 420, sw: 1.0, q: 1 }, trem: { rate: 22, depth: 0.6 } });
-      thump(s, 70, 38, 0, 0.5, 0.9, 0.3);
+      thump(s, 70, 38, 0, 0.5, 0.5, 0.3, 0.4);
     },
   },
   boss_die: {
@@ -294,10 +295,10 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
       // A collapsing explosion: a huge falling-low-pass blast with a sub, three smaller secondary
       // blasts, a saw that sinks from 420 to 38 Hz through a closing filter, and a debris crackle.
       s.noise({ dur: 1.3, v: 1, a: 0.005, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 7000, f2: 110, sw: 1.0, q: 0.8 } });
-      s.tone({ f: 85, f2: 28, sw: 0.9, dur: 1.2, v: 1.2, a: 0.004 });
+      s.tone({ f: 85, f2: 28, sw: 0.9, dur: 1.2, v: 0.8, a: 0.004, sat: 0.4 });
       [0.22, 0.45, 0.7].forEach((t, k) => {
-        s.noise({ at: t, dur: 0.35, v: 0.6 - k * 0.1, a: 0.003, s: 0.01, pan: k % 2 ? 0.5 : -0.5, filter: { t: 'lowpass', f: 4000, f2: 200, sw: 0.3 } });
-        thump(s, 140, 45, t, 0.3, 0.6 - k * 0.1, 0.2);
+        s.noise({ at: t, dur: 0.35, v: 0.8 - k * 0.1, a: 0.003, s: 0.01, pan: k % 2 ? 0.5 : -0.5, filter: { t: 'lowpass', f: 4500, f2: 250, sw: 0.3 } });
+        thump(s, 180, 55, t, 0.3, 0.5 - k * 0.08, 0.2, 0.4);
       });
       s.tone({ w: 'sawtooth', f: 420, f2: 38, sw: 1.5, dur: 1.65, v: 0.3, a: 0.05, sat: 0.3, filter: { t: 'lowpass', f: 3000, f2: 150, sw: 1.5 } });
       s.noise({ at: 0.1, dur: 1.5, v: 0.15, a: 0.05, s: 0.02, trem: { rate: 22, depth: 0.9 }, filter: { t: 'bandpass', f: 3000, q: 0.8 } });
@@ -393,7 +394,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
       // A rattling box: five wooden knocks (band-passed noise + low sine), alternating, plus a faint coin jingle.
       [0, 0.07, 0.15, 0.22, 0.3].forEach((t, k) => {
         s.noise({ at: t, dur: 0.04, v: 0.8, a: 0.001, s: 0.005, filter: { t: 'bandpass', f: 700 + (k % 2) * 400, q: 4 } });
-        thump(s, 200 - (k % 2) * 40, 140, t, 0.055, 0.45, 0.03);
+        thump(s, 260 - (k % 2) * 50, 160, t, 0.055, 0.3, 0.03);
       });
       s.noise({ at: 0.05, dur: 0.3, v: 0.08, a: 0.04, s: 0.1, trem: { rate: 26, depth: 1 }, filter: { t: 'highpass', f: 5500 } });
     },
@@ -435,8 +436,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     ms: [40, 80],
     build(s) {
       // Tiny wooden tick: a short high sine drop and a tight band-passed click.
-      s.tone({ f: 1750, f2: 1350, sw: 0.015, dur: 0.045, v: 0.8, a: 0.001, s: 0.005 });
-      tick(s, 0, 2600, 0.008, 0.7, 3);
+      s.tone({ f: 1750, f2: 1350, sw: 0.02, dur: 0.06, v: 0.8, a: 0.001, s: 0.005 });
+      tick(s, 0, 2600, 0.01, 0.7, 3);
     },
   },
   reel_stop: {
@@ -446,9 +447,9 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     ms: [70, 150],
     build(s) {
       // Thunk: sine drop, a triangle wood knock and a dull lowpassed noise slap.
-      thump(s, 150, 65, 0, 0.1, 1, 0.06);
-      s.tone({ w: 'triangle', f: 420, f2: 300, sw: 0.03, dur: 0.045, v: 0.5 });
-      s.noise({ dur: 0.03, v: 0.4, a: 0.001, s: 0.005, filter: { t: 'lowpass', f: 650 } });
+      thump(s, 240, 100, 0, 0.12, 0.9, 0.06, 0.4);
+      s.tone({ w: 'triangle', f: 480, f2: 330, sw: 0.03, dur: 0.055, v: 0.55 });
+      s.noise({ dur: 0.035, v: 0.5, a: 0.001, s: 0.005, filter: { t: 'lowpass', f: 900 } });
     },
   },
   jackpot: {

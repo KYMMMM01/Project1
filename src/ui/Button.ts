@@ -1,7 +1,7 @@
 import { Container, Graphics, Rectangle, type DestroyOptions, type Text } from 'pixi.js';
 import { audio, type SfxId } from '@/audio';
 import { haptic, type HapticId } from '@/core/haptics';
-import { lerp } from '@/core/math';
+import { lerp, mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Badge, type BadgeValue } from './Badge';
 import { desaturate, shade } from './colors';
@@ -38,7 +38,8 @@ export interface ButtonOpts {
 
 /** Disabled look: the same structure with the colour drained and the contrast pulled in. */
 function mutedPalette(p: ButtonPalette): ButtonPalette {
-  const f = (c: number) => shade(desaturate(c, 0.9), -0.05);
+  // Fully grey, nudged toward the theme's violet so a locked button still sits in the same colour world.
+  const f = (c: number) => shade(mixColor(desaturate(c, 1), 0x7a6fa8, 0.3), -0.04);
   return {
     top: f(p.top),
     base: f(p.base),
@@ -117,7 +118,7 @@ export class Button extends Container implements Pressable {
     this.iconColor = opts.iconColor;
     this.fontSize = Math.max(20, opts.fontSize ?? Math.round(Math.max(24, Math.min(48, h * 0.38))));
     this.radius = opts.radius === 'pill' ? h / 2 : (opts.radius ?? Math.min(h * 0.3, 36));
-    this.lip = Math.round(Math.min(12, Math.max(6, h * 0.1)));
+    this.lip = Math.round(Math.min(15, Math.max(7, h * 0.13)));
     this.outlineW = h >= 90 ? 5 : 4;
     this.pressDrop = Math.round(this.lip * 0.75);
     this.isEnabled = opts.enabled ?? true;
@@ -185,7 +186,7 @@ export class Button extends Container implements Pressable {
     this.isBusy = v;
     if (v) {
       this.cancelPress();
-      this.content.alpha = 0.16;
+      this.content.alpha = 0;
       if (!this.spinner) {
         this.spinner = new LoadingSpinner({ size: Math.min(this.boxH - this.lip - 18, 64) });
         this.spinner.position.y = -2;

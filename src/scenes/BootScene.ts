@@ -45,7 +45,7 @@ export class BootScene extends Scene {
       .fill(Color.panel)
       .stroke({ width: 8, color: Color.outline });
     g.position.set(game.w / 2, game.h / 2);
-    const title = label('Lucky Paws', { size: 72, color: Color.primary });
+    const title = label('냥이 수비대', { size: 72, color: Color.primary });
     title.position.set(game.w / 2, game.h / 2 - 20);
     const sub = label('엔진 준비 완료', { size: 30 });
     sub.position.set(game.w / 2, game.h / 2 + 46);
