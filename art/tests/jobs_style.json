@@ -1,0 +1,14 @@
+[
+  {
+    "name": "style_b_chibi",
+    "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed very small (about 80 px tall)\nSubject: a super-deformed chibi cat swordsman standing upright: orange tabby, HUGE round head (head is half of the total height, 2-heads-tall proportions), tiny body, short stubby limbs, big sparkling eyes, small confident smile, a simple red bandana scarf, holding one small chunky wooden sword raised. Very few details: no armour plates, no belts, no tiny ornaments.\nStyle: 2D cartoon mobile game art, extra-thick uniform dark-brown outline, simple large shapes, flat cel shading with one soft shadow tone and one highlight, vibrant saturated colours, clean silhouette that reads instantly at thumbnail size.\nComposition: full body, front 3/4 view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no watermark, no border."
+  },
+  {
+    "name": "style_c_sticker",
+    "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed very small (about 80 px tall)\nSubject: a super-deformed chibi cat swordsman standing upright: orange tabby, HUGE round head (2-heads-tall proportions), tiny body, short stubby limbs, big round glossy eyes, happy open-mouth smile with one tiny fang, a simple red bandana scarf, holding one small chunky wooden sword raised.\nStyle: bold vector sticker illustration like a top casual mobile game: thick dark outline, then a clean white sticker border around the whole silhouette, flat bright colours with a single soft gradient per shape, glossy highlight on the head, extremely simple shapes.\nComposition: full body, front view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no watermark."
+  },
+  {
+    "name": "style_d_plush",
+    "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite that will be displayed very small (about 80 px tall)\nSubject: a super-deformed chibi cat swordsman standing upright: orange tabby, HUGE round head (2-heads-tall proportions), tiny round body, short stubby limbs, big shiny eyes, small confident smile, a simple red bandana scarf, holding one small chunky wooden sword raised.\nStyle: soft 3D-like rendered cartoon in the look of a premium casual mobile game (rounded toy-like forms, smooth soft shading, rim light, subtle glossy highlights), with a thick dark outline around the silhouette so it stays readable on any background, saturated warm colours.\nComposition: full body, front 3/4 view facing slightly right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no watermark, no border."
+  }
+]

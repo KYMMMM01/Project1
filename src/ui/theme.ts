@@ -57,3 +57,93 @@ export const Rarity: Record<RarityId, RarityStyle> = {
 export function rarityIndex(r: RarityId): number {
   return RARITY_ORDER.indexOf(r);
 }
+
+/** Smallest font size any component may use (design px); below this text is unreadable on a phone. */
+export const MIN_FONT = 20;
+
+/** Touch-target sizes (design px): absolute minimum, comfortable default, primary call-to-action height. */
+export const Hit = { min: 88, comfy: 96, cta: 120 } as const;
+
+export type ButtonStyleId = 'primary' | 'success' | 'info' | 'danger' | 'neutral' | 'purple';
+
+/** Every colour a chunky button needs, hand-tuned so the six styles share one lightness structure. */
+export interface ButtonPalette {
+  /** Face gradient: highlight edge, body, deep edge. */
+  top: number;
+  base: number;
+  bottom: number;
+  /** Bevel rim between the outline and the face (light on top, dark at the bottom). */
+  rimTop: number;
+  rimBottom: number;
+  /** The darker slab the face sits on — what makes the button look physical. */
+  lip: number;
+  /** Outline for text drawn on the button. */
+  textStroke: number;
+  glow: number;
+}
+
+export const ButtonPalettes: Record<ButtonStyleId, ButtonPalette> = {
+  primary: {
+    top: 0xffe27a,
+    base: 0xffb629,
+    bottom: 0xff9410,
+    rimTop: 0xfff6c4,
+    rimBottom: 0xe8780a,
+    lip: 0xbf5a05,
+    textStroke: 0x8a3a00,
+    glow: 0xffd45e,
+  },
+  success: {
+    top: 0xa6f58a,
+    base: 0x4cd964,
+    bottom: 0x28b048,
+    rimTop: 0xdcffcb,
+    rimBottom: 0x1c8d3a,
+    lip: 0x157030,
+    textStroke: 0x0d4a1e,
+    glow: 0x8cff8a,
+  },
+  info: {
+    top: 0x9fd5ff,
+    base: 0x4da6ff,
+    bottom: 0x2a80ea,
+    rimTop: 0xd9eeff,
+    rimBottom: 0x1c5cbd,
+    lip: 0x153f94,
+    textStroke: 0x0c2a66,
+    glow: 0x7cc0ff,
+  },
+  danger: {
+    top: 0xff9ea6,
+    base: 0xff4d5e,
+    bottom: 0xe02a46,
+    rimTop: 0xffd6da,
+    rimBottom: 0xb41d38,
+    lip: 0x8a1230,
+    textStroke: 0x560a1e,
+    glow: 0xff7a88,
+  },
+  neutral: {
+    top: 0xb7acdf,
+    base: 0x8678b8,
+    bottom: 0x6a5d9c,
+    rimTop: 0xdcd4f5,
+    rimBottom: 0x52467f,
+    lip: 0x3b3166,
+    textStroke: 0x231a45,
+    glow: 0xb9add6,
+  },
+  purple: {
+    top: 0xd5acff,
+    base: 0xa767ff,
+    bottom: 0x8345ea,
+    rimTop: 0xeedcff,
+    rimBottom: 0x6a2fd0,
+    lip: 0x4d1fa5,
+    textStroke: 0x2d0f66,
+    glow: 0xc98cff,
+  },
+};
+
+/** Z-order inside game.popupLayer / game.overlayLayer is by add order; these are the shared fades. */
+export const Dim = { backdrop: 0x0b0618, backdropAlpha: 0.66 } as const;

@@ -1,5 +1,5 @@
 import { Text, type TextStyleOptions } from 'pixi.js';
-import { Color, FONT_FAMILY } from './theme';
+import { Color, FONT_FAMILY, MIN_FONT } from './theme';
 
 export interface LabelOpts {
   size?: number;
@@ -63,4 +63,24 @@ export function label(text: string | number, o: LabelOpts = {}): Text {
 export function fitWidth(tx: Text, maxWidth: number, baseScale = 1): void {
   tx.scale.set(baseScale);
   if (tx.width > maxWidth) tx.scale.set((baseScale * maxWidth) / tx.width);
+}
+
+/**
+ * Like fitWidth, but never shrinks the glyphs below `minScale` (or below MIN_FONT): a label that is
+ * still too wide at that floor is cut with an ellipsis instead of becoming unreadable.
+ */
+export function fitLabel(tx: Text, maxWidth: number, baseSize: number, minScale = 0.7): void {
+  const floor = Math.min(1, Math.max(minScale, MIN_FONT / baseSize));
+  fitWidth(tx, maxWidth);
+  if (tx.scale.x >= floor) return;
+  tx.scale.set(floor);
+  const full = tx.text;
+  for (let n = full.length - 1; n > 0 && tx.width > maxWidth; n--) {
+    tx.text = full.slice(0, n).trimEnd() + '…';
+  }
+}
+
+/** label() for UI components: the size is floored at MIN_FONT so no component can ship unreadable text. */
+export function uiLabel(text: string | number, o: LabelOpts = {}): Text {
+  return label(text, { ...o, size: Math.max(MIN_FONT, o.size ?? 28) });
 }

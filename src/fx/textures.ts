@@ -1,0 +1,570 @@
+import { CanvasSource, Rectangle, Texture } from 'pixi.js';
+import { putTex } from '@/core/assets';
+
+/**
+ * One procedural atlas for every particle shape, so each blend layer is a single draw call.
+ * Shapes are evaluated per pixel from signed-distance functions: perfectly anti-aliased, soft where
+ * glow is wanted, white on transparent so a particle's colour comes purely from its tint. The atlas
+ * is painted at 2x and registered with resolution 2, so a cell's size in the table below is already
+ * in design px.
+ */
+export const FX_TEX_IDS = [
+  'glow',
+  'dot',
+  'ring',
+  'ringThick',
+  'spark',
+  'sparkle',
+  'star',
+  'smoke',
+  'shard',
+  'confetti',
+  'paw',
+  'heart',
+  'plus',
+  'droplet',
+  'crystal',
+  'wedge',
+  'pillar',
+  'slash',
+  'bolt',
+  'starburst',
+  'coin',
+] as const;
+
+export type FxTexId = (typeof FX_TEX_IDS)[number];
+
+export interface FxTexture {
+  id: FxTexId;
+  texture: Texture;
+  /** Size in design px. */
+  w: number;
+  h: number;
+  /** Natural anchor: where the shape's origin sits (0..1). */
+  ax: number;
+  ay: number;
+}
+
+const RES = 2;
+const PAD = 4;
+const ATLAS_W = 1024;
+
+type Painter = (x: number, y: number) => number;
+
+interface Cell {
+  id: FxTexId;
+  w: number;
+  h: number;
+  ax: number;
+  ay: number;
+  paint: Painter;
+  /** Optional grey level 0..1 (default 1 = white) for shapes that need internal shading. */
+  shade?: Painter;
+}
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+const smooth = (e0: number, e1: number, x: number): number => {
+  const t = clamp01((x - e0) / (e1 - e0));
+  return t * t * (3 - 2 * t);
+};
+/** Signed distance in atlas px -> coverage; 1 px wide anti-aliasing. */
+const aa = (d: number): number => clamp01(0.5 - d);
+const len = Math.hypot;
+
+function sdSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): { d: number; t: number } {
+  const pax = px - ax;
+  const pay = py - ay;
+  const bax = bx - ax;
+  const bay = by - ay;
+  const t = clamp01((pax * bax + pay * bay) / (bax * bax + bay * bay));
+  segOut.d = len(pax - bax * t, pay - bay * t);
+  segOut.t = t;
+  return segOut;
+}
+const segOut = { d: 0, t: 0 };
+
+/** Signed distance to a polygon given as flat x,y pairs (negative inside). */
+function sdPoly(px: number, py: number, v: readonly number[]): number {
+  const n = v.length / 2;
+  let d = (px - v[0]!) * (px - v[0]!) + (py - v[1]!) * (py - v[1]!);
+  let s = 1;
+  for (let i = 0, j = n - 1; i < n; j = i, i++) {
+    const vix = v[2 * i]!;
+    const viy = v[2 * i + 1]!;
+    const vjx = v[2 * j]!;
+    const vjy = v[2 * j + 1]!;
+    const ex = vjx - vix;
+    const ey = vjy - viy;
+    const wx = px - vix;
+    const wy = py - viy;
+    const t = clamp01((wx * ex + wy * ey) / (ex * ex + ey * ey));
+    const bx = wx - ex * t;
+    const by = wy - ey * t;
+    d = Math.min(d, bx * bx + by * by);
+    const c1 = py >= viy;
+    const c2 = py < vjy;
+    const c3 = ex * wy > ey * wx;
+    if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) s = -s;
+  }
+  return s * Math.sqrt(d);
+}
+
+function sdBox(px: number, py: number, hx: number, hy: number): number {
+  const dx = Math.abs(px) - hx;
+  const dy = Math.abs(py) - hy;
+  return len(Math.max(dx, 0), Math.max(dy, 0)) + Math.min(Math.max(dx, dy), 0);
+}
+
+/** Approximate signed distance to an axis-aligned ellipse (good enough for AA edges). */
+function sdEllipse(px: number, py: number, rx: number, ry: number): number {
+  return (len(px / rx, py / ry) - 1) * Math.min(rx, ry);
+}
+
+function hash(ix: number, iy: number, seed: number): number {
+  let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function vnoise(x: number, y: number, seed: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const a = hash(ix, iy, seed);
+  const b = hash(ix + 1, iy, seed);
+  const c = hash(ix, iy + 1, seed);
+  const d = hash(ix + 1, iy + 1, seed);
+  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+}
+
+function fbm(x: number, y: number, seed: number): number {
+  return (vnoise(x, y, seed) * 0.5 + vnoise(x * 2, y * 2, seed + 1) * 0.3 + vnoise(x * 4, y * 4, seed + 2) * 0.2);
+}
+
+/** iq's heart distance (unit heart, tip at the origin, +y up). */
+function sdHeart(px: number, py: number): number {
+  const x = Math.abs(px);
+  const y = py;
+  if (y + x > 1) {
+    return len(x - 0.25, y - 0.75) - Math.SQRT2 / 4;
+  }
+  const a = len(x, y - 1);
+  const m = 0.5 * Math.max(x + y, 0);
+  const b = len(x - m, y - m);
+  return Math.min(a, b) * Math.sign(x - y);
+}
+
+function star5(outer: number, inner: number): number[] {
+  const v: number[] = [];
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : inner;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    v.push(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  return v;
+}
+
+const STAR = star5(52, 22);
+const SHARD = [-21, -15, 29, -1, -9, 22];
+
+interface Toe {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+  rot: number;
+}
+const TOES: Toe[] = [
+  { x: -33, y: -8, rx: 9, ry: 13, rot: -0.5 },
+  { x: -12, y: -27, rx: 9.5, ry: 13.5, rot: -0.15 },
+  { x: 12, y: -27, rx: 9.5, ry: 13.5, rot: 0.15 },
+  { x: 33, y: -8, rx: 9, ry: 13, rot: 0.5 },
+];
+
+const ARM_COUNT = 6;
+const CRYSTAL_ARM = 50;
+
+function sdCrystal(px: number, py: number): number {
+  let best = len(px, py) - 8; // central hub
+  for (let i = 0; i < ARM_COUNT; i++) {
+    const a = (i * Math.PI * 2) / ARM_COUNT - Math.PI / 2;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const s = sdSegment(px, py, 0, 0, ca * CRYSTAL_ARM, sa * CRYSTAL_ARM);
+    best = Math.min(best, s.d - (4.2 - 3.1 * s.t));
+    // Two barbs per arm at 55% of its length, swept back 60 degrees.
+    const bx = ca * CRYSTAL_ARM * 0.55;
+    const by = sa * CRYSTAL_ARM * 0.55;
+    for (let k = -1; k <= 1; k += 2) {
+      const ba = a + k * 1.0;
+      const b = sdSegment(px, py, bx, by, bx + Math.cos(ba) * 17, by + Math.sin(ba) * 17);
+      best = Math.min(best, b.d - (2.6 - 2.0 * b.t));
+    }
+  }
+  return best;
+}
+
+const CELLS: Cell[] = [
+  {
+    id: 'glow',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const r = len(x, y) / 64;
+      return clamp01(Math.exp(-r * r * 3.4) * 1.08) * (1 - smooth(0.72, 1, r));
+    },
+  },
+  { id: 'dot', w: 48, h: 48, ax: 0.5, ay: 0.5, paint: (x, y) => aa(len(x, y) - 21) },
+  {
+    id: 'ring',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const r = len(x, y);
+      return Math.max(aa(Math.abs(r - 55) - 2.4), 0.26 * Math.exp(-(((r - 55) / 7) ** 2))) * (1 - smooth(60, 64, r));
+    },
+  },
+  {
+    id: 'ringThick',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const r = len(x, y);
+      return Math.pow(smooth(30, 58, r), 1.7) * (1 - smooth(58, 63.5, r));
+    },
+  },
+  {
+    id: 'spark',
+    w: 128,
+    h: 32,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const u = (x + 64) / 128;
+      const head = 0.9;
+      const hh = u < head ? 7 * Math.pow(u / head, 1.1) : 7 * Math.sqrt(Math.max(0, 1 - ((u - head) / (1 - head)) ** 2));
+      const across = Math.exp(-((y / (hh + 0.6)) ** 2) * 1.7);
+      return clamp01(across * (0.08 + 0.92 * Math.pow(u, 1.5)) * smooth(0, 0.05, u) * (1 - smooth(0.97, 1, u)));
+    },
+  },
+  {
+    id: 'sparkle',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const u = x / 64;
+      const v = y / 64;
+      const s = Math.sqrt(Math.abs(u)) + Math.sqrt(Math.abs(v));
+      const star = 1 - smooth(0.72, 1.0, s);
+      const glow = 0.9 * Math.exp(-((len(u, v) * 3.6) ** 2));
+      return clamp01(Math.max(star, glow));
+    },
+  },
+  { id: 'star', w: 112, h: 112, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y + 2, STAR) - 4) },
+  {
+    id: 'smoke',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const u = x / 64;
+      const v = y / 64;
+      const r = len(u, v);
+      const n = fbm(u * 1.7 + 11, v * 1.7 + 5, 7);
+      const edge = 0.46 + n * 0.5;
+      const body = 1 - smooth(edge - 0.3, edge + 0.04, r);
+      const mottle = 0.78 + 0.22 * fbm(u * 3.1 + 2, v * 3.1 + 9, 3);
+      return clamp01(body * mottle) * (1 - smooth(0.86, 1, r));
+    },
+  },
+  { id: 'shard', w: 64, h: 64, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, SHARD) - 0.6) },
+  { id: 'confetti', w: 40, h: 24, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdBox(x, y, 15, 7) - 2) },
+  {
+    id: 'paw',
+    w: 112,
+    h: 112,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      // Main pad: a rounded trefoil made from three overlapping ellipses.
+      let d = Math.min(
+        sdEllipse(x, y - 14, 25, 20),
+        sdEllipse(x + 15, y - 8, 15, 15),
+        sdEllipse(x - 15, y - 8, 15, 15),
+      );
+      for (const t of TOES) {
+        const c = Math.cos(t.rot);
+        const s = Math.sin(t.rot);
+        const lx = (x - t.x) * c + (y - t.y) * s;
+        const ly = -(x - t.x) * s + (y - t.y) * c;
+        d = Math.min(d, sdEllipse(lx, ly, t.rx, t.ry));
+      }
+      return aa(d);
+    },
+  },
+  {
+    id: 'heart',
+    w: 112,
+    h: 112,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => aa(sdHeart(x / 80, (46 - y) / 80) * 80),
+  },
+  {
+    id: 'plus',
+    w: 96,
+    h: 96,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => aa(Math.min(sdBox(x, y, 31, 7) - 5, sdBox(x, y, 7, 31) - 5)),
+  },
+  {
+    id: 'droplet',
+    w: 56,
+    h: 80,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const cy = 14;
+      const r = 20;
+      const tipY = -37;
+      const dist = cy - tipY;
+      const tx = r * Math.sqrt(1 - (r / dist) ** 2);
+      const ty = cy - (r * r) / dist;
+      const circle = len(x, y - cy) - r;
+      const cone = sdPoly(x, y, [0, tipY, tx, ty, -tx, ty]);
+      return aa(Math.min(circle, cone));
+    },
+  },
+  { id: 'crystal', w: 112, h: 112, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdCrystal(x, y)) },
+  {
+    id: 'wedge',
+    w: 256,
+    h: 64,
+    ax: 0,
+    ay: 0.5,
+    paint: (x, y) => {
+      const u = (x + 128) / 256;
+      const v = Math.abs(y) / 32;
+      const hw = 0.04 + 0.96 * u;
+      const across = 1 - smooth(hw * 0.3, hw, v);
+      return clamp01(across * Math.pow(1 - u, 1.15) * smooth(0, 0.04, u));
+    },
+  },
+  {
+    id: 'pillar',
+    w: 64,
+    h: 256,
+    ax: 0.5,
+    ay: 0.94,
+    paint: (x, y) => {
+      const u = x / 32;
+      const t = (y + 128) / 256;
+      const core = Math.exp(-((u * 2.4) ** 2));
+      const soft = 0.5 * Math.exp(-((u * 1.15) ** 2));
+      return clamp01(Math.max(core, soft) * Math.pow(t, 0.85) * (1 - smooth(0.965, 1, t)));
+    },
+  },
+  {
+    id: 'slash',
+    w: 160,
+    h: 160,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const px = x - 4;
+      const dA = len(px + 20, y) - 68;
+      const dB = len(px + 62, y) - 68;
+      const d = Math.max(dA, -dB);
+      return clamp01(Math.max(aa(d), d > 0 ? 0.3 * Math.exp(-d / 5) : 0));
+    },
+  },
+  {
+    id: 'bolt',
+    w: 64,
+    h: 16,
+    ax: 0,
+    ay: 0.5,
+    paint: (x, y) => {
+      const core = Math.exp(-((y / 1.5) ** 2));
+      const glow = 0.4 * Math.exp(-((y / 4.6) ** 2));
+      return clamp01(core + glow) * (1 - smooth(22, 31.5, Math.abs(x)));
+    },
+  },
+  {
+    id: 'starburst',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const r = len(x, y) / 64;
+      const th = Math.atan2(y, x);
+      const s2 = Math.sin(2 * th);
+      const reach = 1 - 0.4 * s2 * s2;
+      const spikes = Math.pow(Math.abs(Math.cos(4 * th)), 20) * Math.pow(clamp01(1 - r / reach), 1.5);
+      const core = Math.exp(-((r * 4.4) ** 2)) + 0.22 * Math.exp(-r * r * 7);
+      return clamp01(spikes + core) * (1 - smooth(0.88, 1, r));
+    },
+  },
+  {
+    id: 'coin',
+    w: 64,
+    h: 64,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => aa(len(x, y) - 28),
+    shade: (x, y) => {
+      const r = len(x, y);
+      const rim = smooth(20, 23.5, r);
+      const inner = 0.2 * Math.exp(-(((r - 12.5) / 2.2) ** 2));
+      const hi = 0.35 * smooth(0.55, 1, 1 - len(x + 11, y + 11) / 17);
+      return clamp01(0.74 + 0.26 * rim + inner + hi);
+    },
+  },
+];
+
+interface Packed {
+  cell: Cell;
+  x: number;
+  y: number;
+}
+
+function pack(): { items: Packed[]; height: number } {
+  const order = CELLS.slice().sort((a, b) => b.h - a.h || b.w - a.w);
+  const items: Packed[] = [];
+  let x = PAD;
+  let y = PAD;
+  let rowH = 0;
+  for (const cell of order) {
+    if (x + cell.w + PAD > ATLAS_W) {
+      x = PAD;
+      y += rowH + PAD;
+      rowH = 0;
+    }
+    items.push({ cell, x, y });
+    x += cell.w + PAD;
+    rowH = Math.max(rowH, cell.h);
+  }
+  let height = 256;
+  while (height < y + rowH + PAD) height *= 2;
+  return { items, height };
+}
+
+let atlas: Record<FxTexId, FxTexture> | null = null;
+let vignette: Texture | null = null;
+let atlasSource: CanvasSource | null = null;
+
+function paintAtlas(): Record<FxTexId, FxTexture> {
+  const { items, height } = pack();
+  const canvas = document.createElement('canvas');
+  canvas.width = ATLAS_W;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('fx: 2D canvas unavailable');
+  const img = ctx.createImageData(ATLAS_W, height);
+  const data = img.data;
+  for (const { cell, x: ox, y: oy } of items) {
+    const hw = cell.w / 2;
+    const hh = cell.h / 2;
+    for (let j = 0; j < cell.h; j++) {
+      for (let i = 0; i < cell.w; i++) {
+        const lx = i + 0.5 - hw;
+        const ly = j + 0.5 - hh;
+        const a = cell.paint(lx, ly);
+        if (a <= 0) continue;
+        const k = ((oy + j) * ATLAS_W + ox + i) * 4;
+        const g = cell.shade ? Math.round(cell.shade(lx, ly) * 255) : 255;
+        data[k] = g;
+        data[k + 1] = g;
+        data[k + 2] = g;
+        data[k + 3] = Math.round(clamp01(a) * 255);
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const source = new CanvasSource({ resource: canvas, resolution: RES, autoGarbageCollect: false });
+  atlasSource = source;
+  const out = {} as Record<FxTexId, FxTexture>;
+  for (const { cell, x, y } of items) {
+    const w = cell.w / RES;
+    const h = cell.h / RES;
+    const texture = new Texture({
+      source,
+      frame: new Rectangle(x / RES, y / RES, w, h),
+      label: `fx_${cell.id}`,
+    });
+    out[cell.id] = { id: cell.id, texture, w, h, ax: cell.ax, ay: cell.ay };
+    putTex(`fx_${cell.id}`, texture);
+  }
+  return out;
+}
+
+function paintVignette(): Texture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('fx: 2D canvas unavailable');
+  const img = ctx.createImageData(size, size);
+  for (let j = 0; j < size; j++) {
+    for (let i = 0; i < size; i++) {
+      const u = ((i + 0.5) / size) * 2 - 1;
+      const v = ((j + 0.5) / size) * 2 - 1;
+      // Superellipse distance: reads as a rounded-rectangle frame once stretched to the screen.
+      const d = Math.pow(Math.pow(Math.abs(u), 3) + Math.pow(Math.abs(v), 3), 1 / 3);
+      const a = Math.pow(smooth(0.42, 1.12, d), 1.25);
+      const k = (j * size + i) * 4;
+      img.data[k] = 255;
+      img.data[k + 1] = 255;
+      img.data[k + 2] = 255;
+      img.data[k + 3] = Math.round(clamp01(a) * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return new Texture({ source: new CanvasSource({ resource: canvas, autoGarbageCollect: false }), label: 'fx_vignette' });
+}
+
+/** Paint and upload the atlas. Idempotent and cheap after the first call (one-off ~20 ms). */
+export function ensureFxTextures(): void {
+  if (atlas) return;
+  atlas = paintAtlas();
+  vignette = paintVignette();
+  putTex('fx_vignette', vignette);
+}
+
+export function fxTex(id: FxTexId): FxTexture {
+  ensureFxTextures();
+  return (atlas as Record<FxTexId, FxTexture>)[id];
+}
+
+/** Plain Texture handle for a shape (use with Sprite / any Pixi API). */
+export function fxTexture(id: FxTexId): Texture {
+  return fxTex(id).texture;
+}
+
+/** Large soft frame vignette (transparent centre, opaque rim). Stretch it over the screen. */
+export function fxVignette(): Texture {
+  ensureFxTextures();
+  return vignette as Texture;
+}
+
+/** The shared atlas source; every particle texture must come from it to stay in one batch. */
+export function fxAtlasSource(): CanvasSource {
+  ensureFxTextures();
+  return atlasSource as CanvasSource;
+}

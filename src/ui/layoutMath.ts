@@ -1,0 +1,194 @@
+/**
+ * Pure layout maths (no Pixi) behind hstack / vstack / grid and the safe-area anchors. A `Box` is the
+ * nominal footprint of an item in its OWN local space: components are origin-centred, so a 200x100
+ * button reports { x: -100, y: -50, w: 200, h: 100 } and the layout shifts its position accordingly.
+ */
+export type Align = 'start' | 'center' | 'end';
+export type Justify = 'start' | 'center' | 'end' | 'space-between' | 'space-around';
+
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface Point2 {
+  x: number;
+  y: number;
+}
+
+export interface StackResult {
+  /** Item origin positions, in input order. */
+  positions: Point2[];
+  /** Overall extent of the laid-out content. */
+  w: number;
+  h: number;
+}
+
+function alignOffset(align: Align, free: number): number {
+  return align === 'start' ? 0 : align === 'center' ? free / 2 : free;
+}
+
+/**
+ * Lay boxes out along one axis starting at (0,0). `align` positions each item on the cross axis
+ * inside the tallest/widest item (or `crossSize` when given). `mainSize` plus `justify` spread the
+ * items over a fixed main-axis extent instead of packing them by `gap`.
+ */
+export function stackLayout(
+  boxes: readonly Box[],
+  axis: 'x' | 'y',
+  gap: number,
+  align: Align = 'center',
+  crossSize?: number,
+  mainSize?: number,
+  justify: Justify = 'start',
+): StackResult {
+  const horizontal = axis === 'x';
+  const n = boxes.length;
+  let mainTotal = 0;
+  let crossMax = 0;
+  for (const b of boxes) {
+    mainTotal += horizontal ? b.w : b.h;
+    crossMax = Math.max(crossMax, horizontal ? b.h : b.w);
+  }
+  const cross = crossSize ?? crossMax;
+
+  let gapActual = gap;
+  let cursor = 0;
+  const packed = mainTotal + gap * Math.max(0, n - 1);
+  if (mainSize !== undefined && n > 0) {
+    const free = mainSize - mainTotal;
+    switch (justify) {
+      case 'start':
+        break;
+      case 'center':
+        cursor = (mainSize - packed) / 2;
+        break;
+      case 'end':
+        cursor = mainSize - packed;
+        break;
+      case 'space-between':
+        gapActual = n > 1 ? free / (n - 1) : 0;
+        cursor = n > 1 ? 0 : free / 2;
+        break;
+      case 'space-around':
+        gapActual = free / n;
+        cursor = gapActual / 2;
+        break;
+    }
+  }
+
+  const positions: Point2[] = [];
+  for (const b of boxes) {
+    const main = horizontal ? b.w : b.h;
+    const own = horizontal ? b.h : b.w;
+    const crossPos = alignOffset(align, cross - own);
+    if (horizontal) positions.push({ x: cursor - b.x, y: crossPos - b.y });
+    else positions.push({ x: crossPos - b.x, y: cursor - b.y });
+    cursor += main + gapActual;
+  }
+  const mainExtent = mainSize ?? packed;
+  return horizontal ? { positions, w: mainExtent, h: cross } : { positions, w: cross, h: mainExtent };
+}
+
+export interface GridResult {
+  positions: Point2[];
+  w: number;
+  h: number;
+  rows: number;
+  cellW: number;
+  cellH: number;
+}
+
+/** Row-major grid. Cell size defaults to the largest item; items are aligned inside their cell. */
+export function gridLayout(
+  boxes: readonly Box[],
+  cols: number,
+  gapX: number,
+  gapY: number,
+  alignX: Align = 'center',
+  alignY: Align = 'center',
+  cellW?: number,
+  cellH?: number,
+): GridResult {
+  const c = Math.max(1, Math.floor(cols));
+  let maxW = 0;
+  let maxH = 0;
+  for (const b of boxes) {
+    maxW = Math.max(maxW, b.w);
+    maxH = Math.max(maxH, b.h);
+  }
+  const cw = cellW ?? maxW;
+  const ch = cellH ?? maxH;
+  const rows = Math.ceil(boxes.length / c);
+  const positions: Point2[] = [];
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i] as Box;
+    const col = i % c;
+    const row = Math.floor(i / c);
+    const cx = col * (cw + gapX) + alignOffset(alignX, cw - b.w) - b.x;
+    const cy = row * (ch + gapY) + alignOffset(alignY, ch - b.h) - b.y;
+    positions.push({ x: cx, y: cy });
+  }
+  const usedCols = Math.min(c, boxes.length);
+  return {
+    positions,
+    w: usedCols > 0 ? usedCols * cw + (usedCols - 1) * gapX : 0,
+    h: rows > 0 ? rows * ch + (rows - 1) * gapY : 0,
+    rows,
+    cellW: cw,
+    cellH: ch,
+  };
+}
+
+export interface SafeRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** The area a HUD may use: the design rect minus notch / home-indicator insets and a margin. */
+export function safeRect(
+  w: number,
+  h: number,
+  safeTop: number,
+  safeBottom: number,
+  margin = 0,
+): SafeRect {
+  return {
+    x: margin,
+    y: safeTop + margin,
+    w: Math.max(0, w - margin * 2),
+    h: Math.max(0, h - safeTop - safeBottom - margin * 2),
+  };
+}
+
+export type Anchor =
+  | 'top-left'
+  | 'top'
+  | 'top-right'
+  | 'left'
+  | 'center'
+  | 'right'
+  | 'bottom-left'
+  | 'bottom'
+  | 'bottom-right';
+
+/** Where to put the origin of a box so that its nominal footprint hugs `anchor` inside `area`. */
+export function anchorPosition(
+  area: SafeRect,
+  box: Box,
+  anchor: Anchor,
+  offsetX = 0,
+  offsetY = 0,
+): Point2 {
+  const left = anchor.endsWith('left') || anchor === 'left';
+  const right = anchor.endsWith('right') || anchor === 'right';
+  const top = anchor.startsWith('top');
+  const bottom = anchor.startsWith('bottom');
+  const px = left ? area.x : right ? area.x + area.w - box.w : area.x + (area.w - box.w) / 2;
+  const py = top ? area.y : bottom ? area.y + area.h - box.h : area.y + (area.h - box.h) / 2;
+  return { x: px - box.x + offsetX, y: py - box.y + offsetY };
+}

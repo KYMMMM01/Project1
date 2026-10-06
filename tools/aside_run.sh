@@ -14,6 +14,17 @@ SRC="${1:?script file or inline js}"
 OUT="${2:-${SHOT_DIR:-./.shots}}"
 PORT="${GAME_PORT:-5173}"
 if [ -f "$SRC" ]; then BODY="$(cat "$SRC")"; else BODY="$SRC"; fi
+
+# One capture at a time: a tab that loses focus stops animating (the game pauses when hidden), so
+# two concurrent runs would photograph each other's frozen frames. mkdir is an atomic lock.
+LOCK="${TMPDIR:-/tmp}/lucky-paws-aside.lock"
+for _ in $(seq 1 240); do
+  if mkdir "$LOCK" 2>/dev/null; then break; fi
+  # A lock older than 4 minutes belongs to a run that died; steal it.
+  if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +4 2>/dev/null)" ]; then rmdir "$LOCK" 2>/dev/null; fi
+  sleep 1
+done
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 PRELUDE="
 const G = { page: null, dir: (typeof pwd === 'function' ? pwd() : pwd) };
 async function openGame(query = '') { G.page = await openTab('http://127.0.0.1:${PORT}/' + query); for (let i = 0; i < 40; i++) { const ok = await G.page.evaluate(() => document.getElementById('boot')?.classList.contains('hide')); if (ok) break; await sleep(250); } await sleep(300); return G.page; }

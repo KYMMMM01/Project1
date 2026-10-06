@@ -1,0 +1,212 @@
+/**
+ * Offline signal analysis on plain Float32Array channels: the loudness normaliser uses it when
+ * baking a sound, and the machine-checkable quality report uses it to prove no sound is silent,
+ * clipped, clicky or DC-shifted. Pure functions, no WebAudio.
+ */
+
+export interface SoundStats {
+  durationMs: number;
+  peak: number;
+  /** RMS over the audible region. */
+  rms: number;
+  /** RMS with short sounds integrated over 200 ms, which is how loudness is actually perceived. */
+  loudRms: number;
+  dcOffset: number;
+  startsAtZero: boolean;
+  endsNearZero: boolean;
+  silent: boolean;
+  clipped: boolean;
+  /** Energy-weighted mean frequency, a "brightness" proxy. */
+  centroidHz: number;
+  /** Share of spectral energy below 200 Hz ("weight"). */
+  lowFrac: number;
+  /** Share of spectral energy above 4 kHz ("sparkle"). */
+  highFrac: number;
+}
+
+export const SILENT_PEAK = 0.01;
+export const CLIP_PEAK = 0.99;
+export const ZERO_EDGE = 0.01;
+export const END_EDGE = 0.005;
+/** Loudness integration window in seconds. */
+const LOUD_WINDOW = 0.2;
+
+export function peakOf(ch: readonly Float32Array[]): number {
+  let p = 0;
+  for (const c of ch) {
+    for (let i = 0; i < c.length; i++) {
+      const a = Math.abs(c[i] as number);
+      if (a > p) p = a;
+    }
+  }
+  return p;
+}
+
+/** Index one past the last sample whose magnitude exceeds `threshold` (0 when nothing does). */
+export function audibleEnd(ch: readonly Float32Array[], threshold: number): number {
+  let end = 0;
+  for (const c of ch) {
+    for (let i = c.length - 1; i >= end; i--) {
+      if (Math.abs(c[i] as number) > threshold) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  return end;
+}
+
+function audibleStart(ch: readonly Float32Array[], threshold: number, end: number): number {
+  let start = end;
+  for (const c of ch) {
+    for (let i = 0; i < start; i++) {
+      if (Math.abs(c[i] as number) > threshold) {
+        start = i;
+        break;
+      }
+    }
+  }
+  return start;
+}
+
+/**
+ * Gain that brings a sound to its category target: limited by peak for transient sounds and by
+ * loudness for sustained ones, whichever is quieter, so a click and a pad land at the same level.
+ */
+export function normalisationGain(peak: number, loudRms: number, target: { peak: number; rms: number }): number {
+  if (peak < 1e-6) return 1;
+  const byPeak = target.peak / peak;
+  const byRms = loudRms > 1e-7 ? target.rms / loudRms : Infinity;
+  return Math.min(byPeak, byRms);
+}
+
+const twiddles = new Map<number, { cos: Float64Array; sin: Float64Array }>();
+
+/** In-place iterative radix-2 FFT. `re`/`im` length must be a power of two. */
+export function fft(re: Float64Array, im: Float64Array): void {
+  const n = re.length;
+  let tw = twiddles.get(n);
+  if (!tw) {
+    tw = { cos: new Float64Array(n / 2), sin: new Float64Array(n / 2) };
+    for (let i = 0; i < n / 2; i++) {
+      tw.cos[i] = Math.cos((2 * Math.PI * i) / n);
+      tw.sin[i] = -Math.sin((2 * Math.PI * i) / n);
+    }
+    twiddles.set(n, tw);
+  }
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      const tr = re[i] as number;
+      re[i] = re[j] as number;
+      re[j] = tr;
+      const ti = im[i] as number;
+      im[i] = im[j] as number;
+      im[j] = ti;
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const half = len >> 1;
+    const step = n / len;
+    for (let i = 0; i < n; i += len) {
+      for (let k = 0; k < half; k++) {
+        const wr = tw.cos[k * step] as number;
+        const wi = tw.sin[k * step] as number;
+        const a = i + k;
+        const b = a + half;
+        const xr = (re[b] as number) * wr - (im[b] as number) * wi;
+        const xi = (re[b] as number) * wi + (im[b] as number) * wr;
+        re[b] = (re[a] as number) - xr;
+        im[b] = (im[a] as number) - xi;
+        re[a] = (re[a] as number) + xr;
+        im[a] = (im[a] as number) + xi;
+      }
+    }
+  }
+}
+
+const FFT_SIZE = 2048;
+
+/** Spectral centroid and low/high energy shares over the audible region, Hann-windowed frames. */
+export function spectrum(
+  ch: readonly Float32Array[],
+  sampleRate: number,
+  start: number,
+  end: number,
+): { centroidHz: number; lowFrac: number; highFrac: number } {
+  const re = new Float64Array(FFT_SIZE);
+  const im = new Float64Array(FFT_SIZE);
+  const bins = FFT_SIZE / 2;
+  const binHz = sampleRate / FFT_SIZE;
+  const power = new Float64Array(bins);
+  const hop = FFT_SIZE / 2;
+  const frames = Math.max(1, Math.ceil((end - start) / hop));
+  for (let f = 0; f < frames; f++) {
+    const o = start + f * hop;
+    for (let i = 0; i < FFT_SIZE; i++) {
+      const idx = o + i;
+      let s = 0;
+      if (idx < end) for (const c of ch) s += c[idx] as number;
+      const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (FFT_SIZE - 1));
+      re[i] = (s / ch.length) * w;
+      im[i] = 0;
+    }
+    fft(re, im);
+    for (let k = 1; k < bins; k++) power[k] = (power[k] as number) + (re[k] as number) ** 2 + (im[k] as number) ** 2;
+  }
+  let total = 0;
+  let weighted = 0;
+  let low = 0;
+  let high = 0;
+  for (let k = 1; k < bins; k++) {
+    const p = power[k] as number;
+    const fHz = k * binHz;
+    total += p;
+    weighted += p * fHz;
+    if (fHz < 200) low += p;
+    if (fHz > 4000) high += p;
+  }
+  if (total <= 0) return { centroidHz: 0, lowFrac: 0, highFrac: 0 };
+  return { centroidHz: weighted / total, lowFrac: low / total, highFrac: high / total };
+}
+
+export function analyse(ch: readonly Float32Array[], sampleRate: number): SoundStats {
+  const peak = peakOf(ch);
+  const len = (ch[0] as Float32Array).length;
+  const silent = peak < SILENT_PEAK;
+  const threshold = Math.max(1e-5, peak * 0.003);
+  const end = audibleEnd(ch, threshold);
+  const start = audibleStart(ch, threshold, end);
+  const region = Math.max(1, end - start);
+
+  let sumSq = 0;
+  let sum = 0;
+  for (const c of ch) {
+    for (let i = start; i < end; i++) {
+      const x = c[i] as number;
+      sumSq += x * x;
+      sum += x;
+    }
+  }
+  const n = region * ch.length;
+  const window = Math.max(region, LOUD_WINDOW * sampleRate) * ch.length;
+  const spec = silent ? { centroidHz: 0, lowFrac: 0, highFrac: 0 } : spectrum(ch, sampleRate, start, end);
+
+  const first = ch.reduce((m, c) => Math.max(m, Math.abs(c[0] as number)), 0);
+  const last = ch.reduce((m, c) => Math.max(m, Math.abs(c[len - 1] as number)), 0);
+
+  return {
+    durationMs: (end / sampleRate) * 1000,
+    peak,
+    rms: Math.sqrt(sumSq / n),
+    loudRms: Math.sqrt(sumSq / window),
+    dcOffset: sum / n,
+    startsAtZero: first < ZERO_EDGE,
+    endsNearZero: last < END_EDGE,
+    silent,
+    clipped: peak > CLIP_PEAK,
+    ...spec,
+  };
+}

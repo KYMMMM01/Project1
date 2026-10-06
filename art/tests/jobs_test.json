@@ -1,0 +1,11 @@
+[
+  {
+    "name": "test_enemy_cucumber",
+    "ref": ["art/tests/style_test_knight.png"],
+    "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a mischievous living cucumber monster: a chubby green cucumber with stubby little legs and arms, angry cartoon eyes with thick eyebrows, a sneaky toothy grin, a few bumps on its skin, walking menacingly.\nStyle: same 2D cartoon mobile game art as the reference: bold clean dark outline, cel shading with soft gradients, vibrant saturated colours, glossy highlights. Simple chunky shapes that stay readable when shown very small (about 90 px tall).\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character only, no text, no watermark, no border."
+  },
+  {
+    "name": "test_bg_livingroom",
+    "prompt": "Use case: stylized-concept\nAsset type: mobile game battlefield background, portrait 9:16\nScene: top-down (bird's-eye, camera looking straight down with a very slight tilt) view of a cosy living-room floor at golden hour. In the centre is a large rectangular soft cream-and-teal rug taking about 60% of the width, with a subtle woven pattern and tasselled short edges. Around the rug runs a clear warm wooden plank floor forming a continuous rectangular walkway (a loop path) of even width on all four sides. Outside the walkway at the far edges: glimpses of a sofa edge, a potted plant, a cat scratching post, a toy mouse, a yarn ball, a food bowl, warm sunlight patches from a window.\nStyle: 2D cartoon mobile game art, clean shapes, soft cel shading, warm vibrant colours, slightly desaturated so characters placed on top stand out, no heavy outlines on the floor.\nComposition: perfectly symmetrical layout, rug centred, walkway unobstructed and empty, nothing overlapping the rug or the walkway.\nConstraints: no characters, no animals, no text, no UI, no watermark."
+  }
+]
