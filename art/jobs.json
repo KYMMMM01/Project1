@@ -203,8 +203,8 @@
   ]
  },
  {
-  "name": "enemy_flea",
-  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a tiny cartoon flea monster: a small brown round bug with big springy back legs mid-jump, bulging cheeky eyes and a little grin.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
+  "name": "enemy_dryer",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite\nSubject: a living hair dryer monster: a chunky pink hair dryer with an angry puffed-cheek face on its body, blowing a visible swirl of hot air from its nozzle, a power cord whipping behind like a tail, stubby legs.\nStyle: the same 2D cartoon mobile game art as the reference image: bold clean dark outline (NO white sticker border), cel shading with soft gradients, vibrant saturated colours, glossy highlights, simple chunky shapes that stay readable when shown very small (about 70 px tall). Mischievous cartoon villain mood: funny, never scary or gross.\nComposition: full body, 3/4 view walking toward the right, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: single character, no text, no letters, no watermark, nothing cropped.",
   "ref": [
    "art/ref/enemy_style.png"
   ]
@@ -383,8 +383,8 @@
   ]
  },
  {
-  "name": "relic_laser_pointer",
-  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a small silver laser pointer pen emitting a red dot beam.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "name": "relic_glitter_ball",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a translucent bouncy cat toy ball filled with colourful glitter and tiny stars.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
   "ref": [
    "art/ref/enemy_style.png"
   ]
@@ -460,8 +460,8 @@
   ]
  },
  {
-  "name": "relic_piggy_bank",
-  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a pink ceramic piggy bank with a coin slot.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "name": "relic_batteries",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: two cartoon AA batteries side by side, one yellow and one blue, with a small lightning bolt symbol and no lettering.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
   "ref": [
    "art/ref/enemy_style.png"
   ]
@@ -488,8 +488,8 @@
   ]
  },
  {
-  "name": "relic_clover_pot",
-  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a terracotta flower pot growing bright four-leaf clovers.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "name": "relic_purr_pillow",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a plump round pink cushion with a sleeping cat face embroidered on it and little vibration lines around it.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
   "ref": [
    "art/ref/enemy_style.png"
   ]
@@ -544,8 +544,8 @@
   ]
  },
  {
-  "name": "relic_maneki_bank",
-  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a golden maneki-neko lucky cat coin bank with one paw raised.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
+  "name": "relic_sunny_spot",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game item icon\nSubject: a warm glowing patch of golden sunlight in the shape of a window pane with a small smiling sun above it.\nStyle: glossy 2D cartoon mobile game item icon, bold dark outline, cel shading with soft gradients and a bright highlight, saturated colours, chunky simple shape readable at 64 px, slight 3/4 tilt.\nComposition: single object, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha).\nConstraints: no text, no letters, no numbers, no watermark, no frame, nothing cropped.",
   "ref": [
    "art/ref/enemy_style.png"
   ]

@@ -67,6 +67,19 @@ export const SFX_IDS = [
   'reel_stop',
   'jackpot',
   'gamble_fail',
+  // v1.0 battle verbs
+  'laser_on',
+  'laser_off',
+  'molt',
+  'purr',
+  'awaken',
+  'call_wave',
+  'sunbeam',
+  'hazard_warn',
+  'splash',
+  'zap',
+  'weaken',
+  'shield_break',
 ] as const;
 
 export type SfxId = (typeof SFX_IDS)[number];

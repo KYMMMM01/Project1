@@ -53,7 +53,7 @@ export const MYTHIC_UNIT_IDS: readonly UnitId[] = (Object.keys(UNIT_GRID) as Cla
 
 export const RELIC_RARITY: Record<RelicId, Exclude<RarityId, 'mythic'>> = {
   yarn_ball: 'common',
-  laser_pointer: 'common',
+  glitter_ball: 'common',
   cardboard_box: 'common',
   bell_collar: 'common',
   fishing_rod: 'common',
@@ -64,11 +64,11 @@ export const RELIC_RARITY: Record<RelicId, Exclude<RarityId, 'mythic'>> = {
   kneading_cushion: 'rare',
   cat_tunnel: 'rare',
   heating_pad: 'rare',
-  piggy_bank: 'rare',
+  batteries: 'rare',
   snack_stick: 'rare',
   tuna_cans: 'rare',
   window_perch: 'rare',
-  clover_pot: 'epic',
+  purr_pillow: 'epic',
   silvervine: 'epic',
   auto_feeder: 'epic',
   glass_marble: 'epic',
@@ -76,7 +76,7 @@ export const RELIC_RARITY: Record<RelicId, Exclude<RarityId, 'mythic'>> = {
   twin_bells: 'epic',
   lucky_coin: 'epic',
   sardine_crate: 'epic',
-  maneki_bank: 'legendary',
+  sunny_spot: 'legendary',
   nine_lives: 'legendary',
   shooting_star: 'legendary',
   golden_catnip: 'legendary',
@@ -95,16 +95,15 @@ export interface ChapterInfo {
   rug: string;
   /** Boss of waves 10/20/30. */
   boss: EnemyId;
-  /** Mythic awakening unlocked by the first normal-difficulty clear, if any. */
-  unlocksMythic: UnitId | null;
 }
 
 export const CHAPTERS: readonly ChapterInfo[] = [
-  { id: 1, key: 'livingroom', nameKey: 'chapter.1.name', background: 'bg_livingroom', rug: 'ui_rug_livingroom', boss: 'boss_vacuum', unlocksMythic: 'w_tiger' },
-  { id: 2, key: 'kitchen', nameKey: 'chapter.2.name', background: 'bg_kitchen', rug: 'ui_rug_kitchen', boss: 'boss_blender', unlocksMythic: 'm_cosmo' },
-  { id: 3, key: 'bathroom', nameKey: 'chapter.3.name', background: 'bg_bathroom', rug: 'ui_rug_bathroom', boss: 'boss_bath', unlocksMythic: 'r_star' },
-  { id: 4, key: 'garden', nameKey: 'chapter.4.name', background: 'bg_garden', rug: 'ui_rug_garden', boss: 'boss_cloud', unlocksMythic: 't_lucky' },
-  { id: 5, key: 'vet', nameKey: 'chapter.5.name', background: 'bg_vet', rug: 'ui_rug_vet', boss: 'boss_needle', unlocksMythic: null },
+  { id: 1, key: 'livingroom', nameKey: 'chapter.1.name', background: 'bg_livingroom', rug: 'ui_rug_livingroom', boss: 'boss_vacuum' },
+  { id: 2, key: 'kitchen', nameKey: 'chapter.2.name', background: 'bg_kitchen', rug: 'ui_rug_kitchen', boss: 'boss_blender' },
+  { id: 3, key: 'bathroom', nameKey: 'chapter.3.name', background: 'bg_bathroom', rug: 'ui_rug_bathroom', boss: 'boss_bath' },
+  { id: 4, key: 'garden', nameKey: 'chapter.4.name', background: 'bg_garden', rug: 'ui_rug_garden', boss: 'boss_cloud' },
+  { id: 5, key: 'vet', nameKey: 'chapter.5.name', background: 'bg_vet', rug: 'ui_rug_vet', boss: 'boss_needle' },
 ];
 
-export const DIFFICULTY_KEYS = ['difficulty.normal', 'difficulty.hard', 'difficulty.nightmare'] as const;
+/** Highest difficulty stake per chapter (0 = base rules, each step adds one rule; see the battle spec). */
+export const MAX_STAKE = 5;
