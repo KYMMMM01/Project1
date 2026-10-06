@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { Fail, UnitId } from '@/game/api';
+import { CLASS_IDS, UNIT_IDS, type ClassId, type Fail, type UnitId } from '@/game/api';
 import { CELL_COUNT } from '@/game/geometry';
 import {
   AWAKEN_COST, CLASS_UPGRADE_COSTS, MOLT_LIMIT, SELL_FISH, SELL_PURR, SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, TICK,
 } from '@/game/data/balance';
-import { unitRarityIndex } from '@/game/data/roster';
+import { UNIT_GRID, mergeResultOf, unitClass, unitRarityIndex } from '@/game/data/roster';
 import { unitSpec } from '@/game/data/units';
 import { gainRelic } from '@/game/sim/flow';
 import { advance, newSim, put, quietWave, record, rich } from './simHelpers';
+
+/** Position of the merge stream in `Streams.states()` (summon, pick, merge, toy, sun, wave, combat). */
+const MERGE_STREAM = 2;
 
 function freeCell(sim: ReturnType<typeof newSim>): number {
   return sim.units.findIndex((u) => u === null);
@@ -341,57 +344,107 @@ describe('board commands', () => {
     expect(sim.drop(3, 8)).toBeNull();
     expect(sim.units[3]).toBeNull();
     const result = sim.units[8]!;
-    expect(unitRarityIndex(result.id)).toBe(1);
+    expect(result.id).toBe('w_sword');
     expect(result.charge).toBe(0.5);
     expect(merges).toEqual([{ consumed: [a, b], result, cell: 8, fromCell: 3, jumped: false }]);
     expect(sim.getStats().merges).toBe(1);
   });
 
-  it('draws the merge class from its own stream: the j-th result does not depend on timing', () => {
-    const a = newSim({ seed: 21 });
-    const b = newSim({ seed: 21 });
-    const ra: string[] = [];
-    const rb: string[] = [];
-    a.events.on('merge', (m) => ra.push(m.result.id[0] as string));
-    b.events.on('merge', (m) => rb.push(m.result.id[0] as string));
-    const ids: UnitId[] = ['w_paw', 'w_sword', 'w_viking'];
-    ids.forEach((id, i) => {
-      put(a, i * 2, id);
-      put(a, i * 2 + 1, id);
-    });
-    rich(a);
-    for (let i = 0; i < 3; i++) a.drop(i * 2, i * 2 + 1);
-    rich(b);
-    advance(b, 5);
-    b.upgradeClass('mage');
-    b.upgradeSummon();
-    b.summon();
-    ids.forEach((id, i) => {
-      put(b, 10 + i * 2, id);
-      put(b, 11 + i * 2, id);
-    });
-    for (let i = 0; i < 3; i++) {
-      b.drop(10 + i * 2, 11 + i * 2);
-      advance(b, 0.5);
+  it('lists every class as a fixed line: a merge makes the next rarity of the same class', () => {
+    const lines: Record<string, UnitId[]> = {
+      warrior: ['w_paw', 'w_sword', 'w_viking', 'w_samurai', 'w_tiger'],
+      ranger: ['r_sling', 'r_archer', 'r_ninja', 'r_gunner', 'r_star'],
+      mage: ['m_snow', 'm_fire', 'm_storm', 'm_frost', 'm_cosmo'],
+      trickster: ['t_bell', 't_chef', 't_bard', 't_alch', 't_lucky'],
+    };
+    for (const [classId, line] of Object.entries(lines)) {
+      expect(UNIT_GRID[classId as ClassId]).toEqual(line);
+      line.forEach((id, r) => {
+        expect(mergeResultOf(id)).toBe(r <= 2 ? line[r + 1] : null);
+      });
     }
-    expect(ra).toHaveLength(3);
-    expect(rb).toEqual(ra);
+  });
+
+  it('merges every common, rare and epic of every class into mergeResultOf, whatever the seed', () => {
+    for (const id of UNIT_IDS) {
+      const expected = mergeResultOf(id);
+      if (expected === null) continue;
+      for (const seed of [1, 2, 3, 4, 5, 6]) {
+        const sim = newSim({ seed });
+        put(sim, 4, id);
+        put(sim, 9, id);
+        expect(sim.dropAction(4, 9)).toBe('merge');
+        expect(sim.drop(4, 9)).toBeNull();
+        expect(sim.units[9]!.id).toBe(expected);
+        expect(sim.units.filter(Boolean)).toHaveLength(1);
+      }
+    }
+  });
+
+  it('draws one number from the merge stream per merge and touches no other stream', () => {
+    const sim = newSim({ seed: 21 });
+    const merged = (): number[] => {
+      const before = sim.rng.states();
+      put(sim, 0, 'w_paw');
+      put(sim, 1, 'w_paw');
+      sim.drop(0, 1);
+      sim.sell(1);
+      const after = sim.rng.states();
+      return after.flatMap((v, i) => (v !== before[i] ? [i] : []));
+    };
+    expect(merged()).toEqual([MERGE_STREAM]);
+    expect(merged()).toEqual([MERGE_STREAM]);
+    expect(sim.getStats().merges).toBe(2);
   });
 
   it('never merges legendary or mythic cats and never leaves the legendary tier by merging', () => {
-    const sim = newSim();
-    put(sim, 0, 'm_frost');
-    put(sim, 1, 'm_frost');
-    expect(sim.drop(0, 1)).toBeNull();
-    expect(sim.units[0]!.id).toBe('m_frost');
-    expect(sim.units[1]!.id).toBe('m_frost');
+    for (const classId of CLASS_IDS) {
+      for (const r of [3, 4]) {
+        const sim = newSim();
+        const id = UNIT_GRID[classId][r] as UnitId;
+        put(sim, 0, id);
+        put(sim, 1, id);
+        expect(mergeResultOf(id)).toBeNull();
+        expect(sim.dropAction(0, 1)).toBe('swap');
+        expect(sim.drop(0, 1)).toBeNull();
+        expect(sim.units[0]!.id).toBe(id);
+        expect(sim.units[1]!.id).toBe(id);
+        expect(sim.getStats().merges).toBe(0);
+      }
+    }
     for (let seed = 1; seed < 30; seed++) {
       const s = newSim({ seed });
+      s.fx.jumpChance = 1;
       put(s, 0, 'r_ninja');
       put(s, 1, 'r_ninja');
       s.drop(0, 1);
-      expect(unitRarityIndex(s.units[1]!.id)).toBe(3);
+      expect(s.units[1]!.id).toBe('r_gunner');
     }
+  });
+
+  it('keeps the banned class out of summons, picks and molts, and merging never brings it in', () => {
+    const sim = newSim({ mode: 'daily', modifiers: ['no_rangers'], seed: 9 });
+    rich(sim, 1e9, 50);
+    const seen = new Set<UnitId>();
+    sim.events.on('summon', (e) => seen.add(e.unit.id));
+    sim.events.on('merge', (e) => seen.add(e.result.id));
+    sim.events.on('molt', (e) => seen.add(e.result.id));
+    for (let round = 0; round < 60; round++) {
+      for (let i = 0; i < 4; i++) {
+        sim.summon();
+        if (sim.pending) sim.pickSummon(round % 3);
+      }
+      for (let c = 0; c < CELL_COUNT; c++) {
+        const u = sim.units[c];
+        if (u && c % 3 === 0) expect(sim.molt(c, 'ranger')).toBe('not_available');
+      }
+      for (let a = 0; a < CELL_COUNT; a++) {
+        for (let b = a + 1; b < CELL_COUNT; b++) if (sim.dropAction(a, b) === 'merge') sim.drop(a, b);
+      }
+      for (let c = 0; c < CELL_COUNT; c++) if (sim.units[c] && c % 2 === 0) sim.sell(c);
+    }
+    expect(seen.size).toBeGreaterThan(8);
+    expect([...seen].filter((id) => unitClass(id) === 'ranger')).toEqual([]);
   });
 
   it('sells for the listed fish and purr', () => {

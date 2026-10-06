@@ -1,18 +1,19 @@
 import { Container, Graphics, Rectangle, type DestroyOptions, type Text } from 'pixi.js';
 import { audio, type SfxId } from '@/audio';
 import { haptic, type HapticId } from '@/core/haptics';
-import { lerp, mixColor } from '@/core/math';
+import { clamp, lerp, mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Badge, type BadgeValue } from './Badge';
-import { desaturate, shade } from './colors';
+import { desaturate } from './colors';
 import { LoadingSpinner } from './Decor';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { motion, shakeX, TweenBag } from './motion';
+import { drawPaperFace, drawPaperShadow, paperSeed, tapeStrip, type PaperOpts } from './paper';
 import { clearActivePress, inScrollHost, setActivePress, type Pressable } from './press';
-import { drawBevelBase, drawBevelFace, glossGradient, refreshCache, type BevelOpts } from './shapes';
+import { refreshCache } from './shapes';
 import { fitLabel, uiLabel } from './text';
-import { ButtonPalettes, Color, Hit, type ButtonPalette, type ButtonStyleId } from './theme';
+import { ButtonPalettes, Color, Hit, type ButtonPalette, type ButtonStyleId, type TapeName } from './theme';
 
 export interface ButtonOpts {
   label?: string;
@@ -28,6 +29,8 @@ export interface ButtonOpts {
   /** Corner radius; 'pill' makes a capsule (a circle when width == height). */
   radius?: number | 'pill';
   badge?: BadgeValue;
+  /** Stick a strip of washi tape across the top edge: for the one main call-to-action on a screen. */
+  tape?: TapeName;
   /** Fire on pointerdown instead of pointerup: gameplay buttons (summon) that must feel instant. */
   fireOnDown?: boolean;
   enabled?: boolean;
@@ -42,32 +45,26 @@ export interface ButtonOpts {
   haptic?: HapticId | false;
 }
 
-/** Disabled look: the same structure with the colour drained and the contrast pulled in. */
+/** Disabled look: kraft paper with the colour drained and the ink softened. */
 function mutedPalette(p: ButtonPalette): ButtonPalette {
-  // Fully grey, nudged toward the theme's violet so a locked button still sits in the same colour world.
-  const f = (c: number) => shade(mixColor(desaturate(c, 1), 0x7a6fa8, 0.3), -0.04);
-  return {
-    top: f(p.top),
-    base: f(p.base),
-    bottom: f(p.bottom),
-    rimTop: f(p.rimTop),
-    rimBottom: f(p.rimBottom),
-    lip: f(p.lip),
-    textStroke: 0x35304d,
-    glow: f(p.glow),
-  };
+  const f = (c: number) => mixColor(desaturate(c, 0.9), 0xc9b697, 0.5);
+  return { base: f(p.base), top: f(p.top), bottom: f(p.bottom), lip: f(p.lip), ink: 0x9a846e, textStroke: Color.outline };
 }
 
+/** Press depth, spring and wobble, in design px / radians. */
+const PRESS_SCALE = 0.97;
+const WOBBLE = 0.028;
+
 /**
- * The workhorse chunky button. Origin = centre of the face; the lip hangs below it. Pressing drops
- * the face onto the lip and scales it to 0.97 on the very frame of pointerdown (no tween), and
- * releasing springs back with an overshoot. Disabled buttons stay hit-testable so a tap can explain
- * *why* they are disabled (onDisabledTap).
+ * The workhorse paper button. Origin = centre of the face; the flat shadow hangs below it. Pressing
+ * moves the paper onto its shadow and scales it to 0.97 on the very frame of pointerdown (no tween),
+ * and releasing springs back with a small overshoot and a degree or two of wobble. Disabled buttons
+ * stay hit-testable so a tap can explain *why* they are disabled (onDisabledTap).
  */
 export class Button extends Container implements Pressable {
-  /** Nominal footprint (face plus lip) in local space, for the layout helpers. */
+  /** Nominal footprint (face plus shadow) in local space, for the layout helpers. */
   readonly uiBox: Box;
-  /** Face width / face + lip height. */
+  /** Face width / face + shadow height. */
   readonly boxW: number;
   readonly boxH: number;
 
@@ -75,9 +72,10 @@ export class Button extends Container implements Pressable {
   /** Pulse / shake target; the press animation lives one level deeper on `face`. */
   protected readonly body = new Container();
   protected readonly face = new Container();
-  private readonly baseG = new Graphics();
+  private readonly shadowG = new Graphics();
   private readonly faceG = new Graphics();
   private readonly content = new Container();
+  private readonly attention = {};
 
   private labelT: Text | null = null;
   private subT: Text | null = null;
@@ -86,8 +84,6 @@ export class Button extends Container implements Pressable {
   private badgeView: Badge | null = null;
   private lockBadge: Container | null = null;
   private spinner: LoadingSpinner | null = null;
-  private shineHost: Container | null = null;
-  private shineBand: Graphics | null = null;
 
   private styleId: ButtonStyleId;
   private labelText: string;
@@ -98,8 +94,8 @@ export class Button extends Container implements Pressable {
   private readonly fontSize: number;
   private readonly radius: number;
   private readonly lip: number;
-  private readonly outlineW: number;
   private readonly pressDrop: number;
+  private readonly seed = paperSeed();
 
   private isEnabled: boolean;
   private isBusy = false;
@@ -112,6 +108,8 @@ export class Button extends Container implements Pressable {
   private disabledFn: (() => void) | null = null;
   private pulsing = false;
   private sfxDeferred = false;
+  /** Alternates the side of the release wobble, so repeated taps do not rock the same way. */
+  private wobbleDir = 1;
 
   constructor(opts: ButtonOpts = {}) {
     super();
@@ -126,8 +124,7 @@ export class Button extends Container implements Pressable {
     this.iconColor = opts.iconColor;
     this.fontSize = Math.max(20, opts.fontSize ?? Math.round(Math.max(24, Math.min(48, h * 0.38))));
     this.radius = opts.radius === 'pill' ? h / 2 : (opts.radius ?? Math.min(h * 0.3, 36));
-    this.lip = Math.round(Math.min(15, Math.max(7, h * 0.13)));
-    this.outlineW = h >= 90 ? 5 : 4;
+    this.lip = Math.round(clamp(h * 0.06, 4, 6));
     this.pressDrop = Math.round(this.lip * 0.75);
     this.isEnabled = opts.enabled ?? true;
     this.fireOnDown = opts.fireOnDown ?? false;
@@ -138,12 +135,24 @@ export class Button extends Container implements Pressable {
     this.uiBox = { x: -w / 2, y: -h / 2, w, h: h + this.lip };
 
     this.face.addChild(this.faceG, this.content);
-    this.body.addChild(this.baseG, this.face);
+    this.body.addChild(this.shadowG, this.face);
     this.addChild(this.body);
 
     this.redraw();
     this.buildContent();
     this.setBadge(opts.badge);
+    if (opts.tape) {
+      const tape = tapeStrip({
+        name: opts.tape,
+        w: Math.min(92, Math.max(56, w * 0.34)),
+        h: 26,
+        angle: ((this.seed % 7) - 3) * 1.4,
+        pattern: this.seed % 2 === 0 ? 'dots' : 'gingham',
+        seed: this.seed,
+      });
+      tape.position.set(((this.seed >> 3) % 5) * 6 - 12, -h / 2 + 2);
+      this.face.addChild(tape);
+    }
 
     // Hit area is at least 88x88 however small the artwork is.
     const hw = Math.max(w, Hit.min);
@@ -279,46 +288,17 @@ export class Button extends Container implements Pressable {
     return this;
   }
 
-  /** A glossy diagonal highlight sweeps across the face once (call every few seconds on a CTA). */
+  /** Attention wiggle: the paper rocks a couple of degrees and settles (call every few seconds on a CTA). */
   shine(): this {
-    if (motion.reduced || this.shineHost?.visible) return this;
-    const faceW = this.boxW;
-    const faceH = this.boxH - this.lip;
-    if (!this.shineHost || !this.shineBand) {
-      const host = new Container();
-      const mask = new Graphics();
-      const inset = this.outlineW + 2;
-      mask
-        .roundRect(-faceW / 2 + inset, -faceH / 2 + inset, faceW - inset * 2, faceH - inset * 2, Math.max(2, this.radius - inset))
-        .fill(0xffffff);
-      const band = new Graphics();
-      const bw = faceH * 0.42;
-      const skew = faceH * 0.5;
-      band
-        .poly([-bw / 2 + skew / 2, -faceH / 2, bw / 2 + skew / 2, -faceH / 2, bw / 2 - skew / 2, faceH / 2, -bw / 2 - skew / 2, faceH / 2])
-        .fill(glossGradient(0.5, 0.5));
-      band
-        .poly([bw * 0.8 + skew / 2, -faceH / 2, bw * 1.0 + skew / 2, -faceH / 2, bw * 1.0 - skew / 2, faceH / 2, bw * 0.8 - skew / 2, faceH / 2])
-        .fill({ color: 0xffffff, alpha: 0.38 });
-      host.addChild(mask, band);
-      host.mask = mask;
-      this.face.addChildAt(host, 1);
-      this.shineHost = host;
-      this.shineBand = band;
-    }
-    const host = this.shineHost;
-    const band = this.shineBand;
-    host.visible = true;
-    const from = -faceW / 2 - faceH;
-    const to = faceW / 2 + faceH;
-    this.bag.runKeyed(host, {
-      duration: 0.55,
-      ease: Ease.cubicInOut,
+    if (motion.reduced || this.pressed) return this;
+    this.bag.runKeyed(this.attention, {
+      duration: 0.6,
+      ease: Ease.linear,
       onUpdate: (k) => {
-        band.x = lerp(from, to, k);
+        this.face.rotation = Math.sin(k * Math.PI * 4) * 0.035 * (1 - k);
       },
       onComplete: () => {
-        host.visible = false;
+        this.face.rotation = 0;
       },
     });
     return this;
@@ -347,31 +327,17 @@ export class Button extends Container implements Pressable {
     return this.isEnabled ? p : mutedPalette(p);
   }
 
-  private bevel(): BevelOpts {
-    const p = this.palette;
-    return {
-      radius: this.radius,
-      top: p.top,
-      base: p.base,
-      bottom: p.bottom,
-      rimTop: p.rimTop,
-      rimBottom: p.rimBottom,
-      outlineWidth: this.outlineW,
-      lip: { depth: this.lip, color: p.lip },
-      gloss: this.isEnabled ? 0.3 : 0.16,
-    };
-  }
-
   private redraw(): void {
     const w = this.boxW;
     const h = this.boxH - this.lip;
-    const o = this.bevel();
-    this.baseG.clear();
+    const p = this.palette;
+    const piece: PaperOpts = { w, h, radius: this.radius, fill: p.base, edge: p.lip, seed: this.seed };
+    this.shadowG.clear();
     this.faceG.clear();
-    drawBevelBase(this.baseG, -w / 2, -h / 2, w, h, o);
-    drawBevelFace(this.faceG, -w / 2, -h / 2, w, h, o);
+    drawPaperShadow(this.shadowG, -w / 2, -h / 2, { ...piece, shadow: this.lip });
+    drawPaperFace(this.faceG, -w / 2, -h / 2, piece);
     // Many buttons on screen at once: baked, each is one textured quad instead of a dozen vector batches.
-    refreshCache(this.baseG);
+    refreshCache(this.shadowG);
     refreshCache(this.faceG);
   }
 
@@ -384,8 +350,7 @@ export class Button extends Container implements Pressable {
     const w = this.boxW;
     const h = this.boxH - this.lip;
     const fs = this.fontSize;
-    const textColor = this.isEnabled ? 0xffffff : 0xded9ec;
-    const stroke = this.palette.textStroke;
+    const ink = this.palette.ink;
     const hasLabel = this.labelText !== '';
     const hasSub = this.subText !== '';
     const padX = 18 + this.radius * 0.35;
@@ -395,11 +360,12 @@ export class Button extends Container implements Pressable {
     if (!this.isEnabled && (this.disabledMark ?? (hasLabel ? 'lock' : 'none')) === 'lock') {
       const sz = Math.round(Math.max(26, Math.min(40, h * 0.36)));
       const plate = new Graphics();
-      plate.circle(0, 0, sz * 0.68).fill(0x2a1f4a).stroke({ width: 3, color: Color.outline, alignment: 1 });
+      plate.circle(0, 3, sz * 0.66).fill({ color: Color.shadow, alpha: 0.22 });
+      plate.circle(0, 0, sz * 0.66).fill(Color.paper).stroke({ width: 2, color: Color.kraftDark, alpha: 0.7, alignment: 0 });
       const badge = new Container();
-      badge.addChild(plate, drawIcon('lock', sz));
+      badge.addChild(plate, drawIcon('lock', sz * 0.92));
       badge.position.set(-w / 2 + sz * 0.45 + 6, -h / 2 + sz * 0.4 + 2);
-      this.body.addChild(badge);
+      this.face.addChild(badge);
       this.lockBadge = badge;
     }
 
@@ -412,14 +378,14 @@ export class Button extends Container implements Pressable {
     }
     const gap = hasLabel && this.iconG ? 10 : 0;
     if (hasLabel) {
-      this.labelT = uiLabel(this.labelText, { size: fs, color: textColor, stroke, strokeWidth: Math.max(4, Math.round(fs * 0.17)) });
+      this.labelT = uiLabel(this.labelText, { size: fs, color: ink });
       fitLabel(this.labelT, w - padX * 2 - iconSize - gap, fs);
       this.content.addChild(this.labelT);
     }
     const subFs = Math.max(20, Math.round(fs * 0.58));
     let subIconSize = 0;
     if (hasSub) {
-      this.subT = uiLabel(this.subText, { size: subFs, color: textColor, stroke, strokeWidth: Math.max(3, Math.round(subFs * 0.17)) });
+      this.subT = uiLabel(this.subText, { size: subFs, color: ink });
       fitLabel(this.subT, w - padX * 2 - subFs * 1.4, subFs);
       this.content.addChild(this.subT);
       if (this.subIconName) {
@@ -474,10 +440,13 @@ export class Button extends Container implements Pressable {
     this.pressed = true;
     setActivePress(this);
     this.bag.killKeyed(this.face);
+    this.bag.killKeyed(this.attention);
     // The visual change happens on this very frame: no tween, so the press feels instant.
     this.face.y = this.pressDrop;
-    this.face.scale.set(0.97);
-    this.face.tint = 0xe9e3f7;
+    this.face.rotation = 0;
+    this.face.scale.set(PRESS_SCALE);
+    this.face.tint = 0xece0d0;
+    this.shadowG.alpha = 0.55;
     if (this.hapticId) haptic(this.hapticId);
     // Inside a scroll list the click waits for the tap to be confirmed, so a drag stays silent.
     this.sfxDeferred = inScrollHost(this);
@@ -499,33 +468,39 @@ export class Button extends Container implements Pressable {
     const y0 = face.y;
     const s0 = face.scale.x;
     face.tint = 0xffffff;
+    this.shadowG.alpha = 1;
     if (motion.reduced || y0 === 0) {
       face.y = 0;
+      face.rotation = 0;
       face.scale.set(1);
       return;
     }
+    const wob = bounce ? WOBBLE * this.wobbleDir : 0;
+    if (bounce) this.wobbleDir = -this.wobbleDir;
     this.bag.runKeyed(face, {
-      duration: bounce ? 0.16 : 0.1,
+      duration: bounce ? 0.28 : 0.1,
       ease: Ease.linear,
       onUpdate: (k) => {
         if (!bounce) {
           const e = Ease.quadOut(k);
           face.y = lerp(y0, 0, e);
           face.scale.set(lerp(s0, 1, e));
-        } else if (k < 0.45) {
-          // spring up past rest, overshooting scale a little...
-          const e = Ease.quadOut(k / 0.45);
-          face.y = lerp(y0, -2, e);
-          face.scale.set(lerp(s0, 1.06, e));
+        } else if (k < 0.36) {
+          // The paper pops up past rest, a touch bigger...
+          const e = Ease.quadOut(k / 0.36);
+          face.y = lerp(y0, -1.5, e);
+          face.scale.set(lerp(s0, 1.035, e));
         } else {
-          // ...then settle
-          const e = Ease.sineInOut((k - 0.45) / 0.55);
-          face.y = lerp(-2, 0, e);
-          face.scale.set(lerp(1.06, 1, e));
+          // ...then lies back down.
+          const e = Ease.sineInOut((k - 0.36) / 0.64);
+          face.y = lerp(-1.5, 0, e);
+          face.scale.set(lerp(1.035, 1, e));
         }
+        face.rotation = wob * Math.sin(k * Math.PI * 3) * (1 - k);
       },
       onComplete: () => {
         face.y = 0;
+        face.rotation = 0;
         face.scale.set(1);
       },
     });

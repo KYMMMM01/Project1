@@ -8,9 +8,10 @@ import { Badge, type BadgeValue } from './Badge';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { backOut, motion, shakeX, TweenBag } from './motion';
-import { cacheStatic, drawGlow, drawShadow, glossGradient, refreshCache, vGradient } from './shapes';
+import { drawPaper, paperSeed, tapeStrip } from './paper';
+import { cacheStatic, refreshCache } from './shapes';
 import { fitLabel, uiLabel } from './text';
-import { ButtonPalettes, Color, Hit } from './theme';
+import { Color, Hit, type TapeName } from './theme';
 
 export interface TabDef {
   id: string;
@@ -32,18 +33,24 @@ export interface TabBarOpts {
 const BAR_H = 128;
 const ICON = 58;
 const LABEL_Y = 102;
-const DIM = 0xb9add6;
-const GOLD = 0xffd54a;
+/** Where the kraft strip's torn top edge sits (the selected tab pokes up through it). */
+const STRIP_TOP = 22;
+/** Unselected labels: the soft ink, a notch darker so it stays readable on kraft. */
+const DIM = 0x6b4d38;
+const TAPES: readonly TapeName[] = ['sky', 'yellow', 'pink', 'green'];
 
 class Tab extends Container {
   readonly iconWrap = new Container();
-  readonly plateOn = new Graphics();
+  /** Hero tab: the cream round button that is always there. */
   readonly plateOff = new Graphics();
+  /** Hero tab: the coral round button that fades in when selected. */
+  readonly plateOn = new Container();
+  /** Other tabs: the cream paper tab that slides up when selected (redrawn for the cell width). */
+  readonly paper = new Container();
   readonly icon: Graphics;
   readonly text: Text;
   readonly lockIcon: Graphics;
   readonly badge = new Badge({ size: 24 });
-  readonly indicator = new Graphics();
   readonly featured: boolean;
   /** 0..1 selection amount; may overshoot while bouncing. */
   sel = 0;
@@ -52,48 +59,65 @@ class Tab extends Container {
   constructor(
     readonly def: TabDef,
     featured: boolean,
+    readonly index: number,
   ) {
     super();
     this.featured = featured;
     this.icon = drawIcon(def.icon, ICON);
     this.lockIcon = drawIcon('lock', 28);
-    this.text = uiLabel(def.label, { size: 24, color: 0xffffff, strokeWidth: 4, shadow: false });
+    // White glyphs, tinted to ink: the label colour follows the selection amount without a redraw.
+    this.text = uiLabel(def.label, { size: 24, color: 0xffffff });
     this.text.tint = DIM;
-    this.indicator.roundRect(-20, -4, 40, 8, 4).fill(vGradient(0xffe27a, 0xff9f1c));
-    this.indicator.alpha = 0;
 
     const r = featured ? 54 : 46;
-    this.plateOff.circle(0, 4, r).fill({ color: 0x07030f, alpha: 0.3 });
-    this.plateOff.circle(0, 0, r).fill(vGradient(0x6a5aa8, 0x40318a)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    this.plateOff.ellipse(-r * 0.15, -r * 0.5, r * 0.62, r * 0.28).fill(glossGradient(0.35, 0.04));
-    const pal = ButtonPalettes.primary;
-    drawGlow(this.plateOn, 0, 0, r * 1.7, pal.glow, 0.7);
-    this.plateOn.circle(0, 4, r).fill({ color: 0x07030f, alpha: 0.3 });
-    this.plateOn.circle(0, 0, r).fill(vGradient(pal.rimTop, pal.rimBottom)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    this.plateOn.circle(0, 0, r - 8).fill(vGradient(pal.top, pal.bottom));
-    this.plateOn.ellipse(-r * 0.12, -r * 0.5, r * 0.58, r * 0.26).fill(glossGradient(0.5, 0.05));
-    cacheStatic(this.plateOn);
-    cacheStatic(this.plateOff);
+    if (featured) {
+      const seed = paperSeed();
+      drawPaper(this.plateOff, -r, -r, { w: r * 2, h: r * 2, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed });
+      const on = new Graphics();
+      drawPaper(on, -r, -r, { w: r * 2, h: r * 2, kind: 'circle', fill: Color.coral, edge: Color.coralDark, shadow: 5, grain: false, seed });
+      const t = tapeStrip({ name: TAPES[index % TAPES.length] as TapeName, w: 58, h: 20, angle: -24, pattern: 'dots', seed });
+      t.position.set(-r * 0.5, -r * 0.88);
+      this.plateOn.addChild(on, t);
+      cacheStatic(this.plateOn);
+      cacheStatic(this.plateOff);
+    }
     this.plateOn.alpha = 0;
     this.plateOff.visible = featured;
+    this.paper.alpha = 0;
 
     this.iconWrap.addChild(this.plateOff, this.plateOn, this.icon);
     this.lockIcon.position.set(ICON * 0.3, ICON * 0.3);
     this.lockIcon.visible = !!def.locked;
     this.iconWrap.addChild(this.lockIcon);
-    this.addChild(this.iconWrap, this.text, this.indicator, this.badge);
+    this.addChild(this.paper, this.iconWrap, this.text, this.badge);
+  }
+
+  /** (Re)draw the cream tab that sticks up behind a selected, non-hero tab. */
+  redrawPaper(cell: number, barH: number): void {
+    if (this.featured) return;
+    for (const c of this.paper.removeChildren()) c.destroy({ children: true });
+    const g = new Graphics();
+    const w = cell - 16;
+    const h = barH - STRIP_TOP + 30;
+    drawPaper(g, -w / 2, -STRIP_TOP - 8, { w, h, radius: 22, fill: Color.paperLight, edge: Color.kraftDark, shadow: 4, grain: false, seed: paperSeed() });
+    const tape = tapeStrip({ name: TAPES[this.index % TAPES.length] as TapeName, w: 62, h: 22, angle: this.index % 2 === 0 ? -3 : 3, pattern: 'gingham', seed: this.index + 11 });
+    tape.position.set(0, -STRIP_TOP - 6);
+    this.paper.addChild(g, tape);
+    refreshCache(this.paper);
   }
 }
 
 /**
- * Bottom navigation. Origin = top-left of the bar; layout(w, h) pins it to the screen bottom and
- * grows it by game.safeBottom so the home indicator never covers a tab. The selected tab rises and
- * bounces, gains a glowing plate and a gold label; the hero tab is always a raised round button.
+ * Bottom navigation: a kraft strip with a torn top edge. Origin = top-left of the bar; layout(w, h)
+ * pins it to the screen bottom and grows it by game.safeBottom so the home indicator never covers a
+ * tab. The selected tab is a cream paper tab that sticks up through the tear, held by a piece of
+ * tape, and its icon rises and bounces; the hero tab is always a raised round paper button.
  */
 export class TabBar extends Container {
   private readonly tabs: Tab[] = [];
   private readonly bg = new Graphics();
   private readonly bag = new TweenBag();
+  private readonly seed = paperSeed();
   private selected = '';
   private w = 720;
   private selectFn: ((id: string, prev: string) => void) | null = null;
@@ -107,7 +131,7 @@ export class TabBar extends Container {
     const featured = opts.featured ?? (n % 2 === 1 && n >= 3 ? (n - 1) / 2 : -1);
     this.addChild(this.bg);
     opts.tabs.forEach((def, i) => {
-      const tab = new Tab({ ...def }, i === featured);
+      const tab = new Tab({ ...def }, i === featured, i);
       tab.badge.set(def.badge, false);
       tab.eventMode = 'static';
       tab.cursor = 'pointer';
@@ -197,11 +221,8 @@ export class TabBar extends Container {
     const barH = this.barHeight;
     this.position.set(0, h - barH);
     this.bg.clear();
-    drawShadow(this.bg, 0, 0, w, barH, 0, { alpha: 0.4, spread: 18, offsetY: -8 });
-    this.bg.rect(0, 0, w, barH).fill(vGradient(0x3a2a78, 0x1b1238));
-    this.bg.rect(0, 0, w, 6).fill(Color.outline);
-    this.bg.rect(0, 6, w, 3).fill({ color: 0x8f7bd8, alpha: 0.7 });
-    this.bg.rect(0, 9, w, 18).fill(glossGradient(0.1, 0));
+    // A kraft strip with a torn top edge, cut wider than the screen so its wobbling sides stay off it.
+    drawPaper(this.bg, -14, STRIP_TOP, { w: w + 28, h: barH - STRIP_TOP + 14, radius: 0, fill: Color.kraft, torn: 'top', shadow: -5, seed: this.seed });
     refreshCache(this.bg);
     const cell = w / this.tabs.length;
     this.tabs.forEach((t, i) => {
@@ -209,7 +230,7 @@ export class TabBar extends Container {
       t.iconWrap.x = 0;
       t.text.position.set(0, LABEL_Y);
       fitLabel(t.text, cell - 12, 24);
-      t.indicator.position.set(0, LABEL_Y + 22);
+      t.redrawPaper(cell, barH);
       t.badge.position.set(ICON * 0.5 + 6, 34);
       t.hitArea = new Rectangle(-cell / 2, t.featured ? -34 : -4, cell, barH + (t.featured ? 34 : 4));
       this.apply(t);
@@ -254,12 +275,11 @@ export class TabBar extends Container {
     t.iconWrap.y = baseY - e * (t.featured ? 8 : 22);
     const pressed = t === this.pressedTab ? 0.9 : 1;
     t.iconWrap.scale.set((1 + e * (t.featured ? 0.1 : 0.22)) * pressed);
-    t.plateOn.alpha = Math.max(0, Math.min(1, e));
-    t.plateOff.visible = t.featured || e > 0.02;
-    if (!t.featured) t.plateOff.alpha = Math.max(0, Math.min(1, e));
-    t.text.tint = mixColor(DIM, GOLD, Math.max(0, Math.min(1, e)));
-    t.indicator.alpha = Math.max(0, Math.min(1, e));
-    t.indicator.scale.x = 0.4 + 0.6 * Math.max(0, Math.min(1, e));
+    const k = Math.max(0, Math.min(1, e));
+    t.plateOn.alpha = k;
+    t.paper.alpha = k;
+    t.paper.y = (1 - k) * 18;
+    t.text.tint = mixColor(DIM, Color.ink, k);
     t.icon.alpha = t.def.locked ? 0.55 : 1;
     t.badge.y = baseY - 22 - e * 22;
   }
@@ -309,12 +329,12 @@ export interface SegmentTabsOpts {
   selected?: string;
 }
 
-/** Sub-tabs in a recessed track with a highlight pill that slides to the selection. Origin = centre. */
+/** Sub-tabs on a kraft strip with a cream paper piece (and a bit of tape) that slides to the selection. Origin = centre. */
 export class SegmentTabs extends Container {
   readonly uiBox: Box;
   private readonly defs: readonly SegmentDef[];
   private readonly labels: Text[] = [];
-  private readonly hi = new Graphics();
+  private readonly hi = new Container();
   private readonly bag = new TweenBag();
   private readonly cellW: number;
   private selected: string;
@@ -331,20 +351,21 @@ export class SegmentTabs extends Container {
     this.uiBox = { x: -w / 2, y: -h / 2, w, h: h + 6 };
 
     const track = new Graphics();
-    track.roundRect(-w / 2, -h / 2 + 4, w, h, h / 2).fill({ color: 0x07030f, alpha: 0.3 });
-    track.roundRect(-w / 2, -h / 2, w, h, h / 2).fill(vGradient(0x1a1034, 0x2a1d52)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    track.roundRect(-w / 2 + 8, -h / 2 + 7, w - 16, h * 0.26, h * 0.13).fill({ color: 0x000000, alpha: 0.3 });
-    const pal = ButtonPalettes.primary;
+    drawPaper(track, -w / 2, -h / 2, { w, h, kind: 'pill', fill: Color.kraft, edge: Color.kraftDark, shadow: 4, grain: false, seed: paperSeed() });
     const ph = h - 14;
-    this.hi.roundRect(-this.cellW / 2, -ph / 2, this.cellW, ph, ph / 2).fill(vGradient(pal.top, pal.bottom)).stroke({ width: 4, color: Color.outline, alignment: 1 });
-    this.hi.roundRect(-this.cellW / 2 + 8, -ph / 2 + 5, this.cellW - 16, ph * 0.38, ph * 0.19).fill(glossGradient(0.5, 0.06));
+    const piece = new Graphics();
+    drawPaper(piece, -this.cellW / 2, -ph / 2, { w: this.cellW, h: ph, kind: 'pill', fill: Color.paperLight, edge: Color.kraftDark, shadow: 3, grain: false, seed: paperSeed() });
+    this.hi.addChild(piece);
+    const tape = tapeStrip({ name: 'sky', w: 40, h: 16, angle: -18, pattern: 'dots', seed: 5 });
+    tape.position.set(-this.cellW / 2 + 22, -ph / 2 + 1);
+    this.hi.addChild(tape);
     cacheStatic(track);
     cacheStatic(this.hi);
     this.addChild(track, this.hi);
 
     opts.tabs.forEach((d, i) => {
       const cx = this.cellX(i);
-      const t = uiLabel(d.label, { size: 30, strokeWidth: 5, shadow: false });
+      const t = uiLabel(d.label, { size: 30, color: 0xffffff });
       fitLabel(t, this.cellW - 24, 30);
       t.position.set(cx, -1);
       this.labels.push(t);
@@ -430,7 +451,7 @@ export class SegmentTabs extends Container {
       const t = this.labels[i];
       if (!t) return;
       t.scale.set(Math.min(1, (this.cellW - 24) / Math.max(1, t.width / t.scale.x)));
-      t.tint = d.id === this.selected ? 0xffffff : 0xb9add6;
+      t.tint = d.id === this.selected ? Color.ink : DIM;
     });
   }
 }

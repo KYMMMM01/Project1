@@ -1,7 +1,8 @@
 import { Graphics } from 'pixi.js';
+import { mixColor } from '@/core/math';
 import { Color } from './theme';
-import { shade } from './colors';
-import { cacheStatic, vGradient } from './shapes';
+import { luma, shade } from './colors';
+import { cacheStatic } from './shapes';
 
 export const ICON_NAMES = [
   'close', 'back', 'settings', 'sound_on', 'sound_off', 'music', 'lock', 'check', 'plus', 'minus',
@@ -17,11 +18,6 @@ export type IconName = (typeof ICON_NAMES)[number];
 type Fill = number | readonly [top: number, bottom: number];
 
 const PI = Math.PI;
-
-/** Two-tone ramp for a flat colour: lit top, slightly deeper (and a touch violet) bottom. */
-function tone(c: number): readonly [number, number] {
-  return [shade(c, 0.28), shade(c, -0.2)];
-}
 
 /**
  * Drawing context for one icon. Icons are authored in a 100-unit box centred on the origin and the
@@ -190,8 +186,62 @@ class Pen {
   }
 }
 
-function fillOf(f: Fill): number | ReturnType<typeof vGradient> {
-  return typeof f === 'number' ? f : vGradient(f[0], f[1]);
+/** Hot candy hues the old kit used, and what they become in paper: blue to teal, purple to muted violet, and so on. */
+const REMAP = new Map<number, number>([
+  [0x4da6ff, Color.teal],
+  [0x2a82ec, Color.tealDark],
+  [0x7cd4ff, 0x8fd3e6],
+  [0x4ee3ff, Color.gem],
+  [0xa767ff, Color.violet],
+  [0x2b1b5e, 0x5b4333],
+  [0x432a8c, 0x6e5440],
+  [0x4a3a80, 0x6e5440],
+  [0x6a5d9c, 0x8a6a50],
+  [0x7d6aa8, 0x9c7a56],
+  [0x9a86b6, 0xb08f6a],
+  [0x8f9bbb, 0xb8a58c],
+  [0x9aa6c0, 0xb8a58c],
+  [0xd5dded, 0xcdbb9f],
+  [0xd7deef, 0xe0d2b8],
+  [0xe4eafa, 0xf1e8d4],
+  [0xe9eefb, 0xf1e8d4],
+  [0xe4defa, 0xf1e8d4],
+  [0xddd5f0, 0xe6dcc6],
+  [0xf2f6ff, 0xf6efe0],
+  [0xf3eefc, 0xf6efe0],
+  [0x2a1746, Color.ink],
+  [0xff4d5e, Color.berry],
+  [0xe0243f, Color.berryDark],
+  [0xd02a50, Color.berryDark],
+  [0xe0304a, Color.berryDark],
+  [0xff7a8a, 0xe88a98],
+  [0xff6b8a, 0xe88a98],
+  [0xff8a96, 0xe88a98],
+  [0xff5a78, 0xe56a7c],
+  [0xff4d6a, 0xe85a6e],
+  [0xff6fae, 0xe9809b],
+  [0xff3b4a, 0xe8574f],
+  [0xff6b4a, Color.coral],
+  [0xff7a55, Color.coral],
+  [0x4cd964, Color.leaf],
+  [0x7dff6b, Color.energy],
+  [0x38c957, Color.leafDark],
+  [0x1f9d3e, Color.leafDark],
+  [0x2f9e44, Color.leafDark],
+  [0x7aea8a, 0xa9d68c],
+  [0xffffff, Color.paperLight],
+]);
+
+/** Candy colour to matte paper colour: known hot hues are re-mapped, light colours are pulled a little toward warm brown. */
+function matte(c: number): number {
+  const m = REMAP.get(c);
+  if (m !== undefined) return m;
+  return luma(c) < 90 ? c : mixColor(c, 0xb09878, 0.1);
+}
+
+/** Matte icons are flat: a two-tone ramp becomes its middle colour. */
+function fillOf(f: Fill): number {
+  return matte(typeof f === 'number' ? f : mixColor(f[0], f[1], 0.5));
 }
 
 /** Painter: every shape is an outlined solid (silhouette pass, then fill pass) so overlapping parts merge cleanly. */
@@ -221,25 +271,19 @@ class Ink {
   /** Fill only, drawn on top of solids (highlights, glyph marks). */
   detail(fill: Fill, build: (p: Pen) => void, alpha = 1): this {
     build(this.pen);
-    const f = fillOf(fill);
-    if (typeof f === 'number') this.g.fill({ color: f, alpha });
-    else this.g.fill(f);
+    this.g.fill({ color: fillOf(fill), alpha });
     return this;
   }
 
-  /** Outlined stroked path. `hi` adds a lighter core line that gives round strokes a tube-like sheen. */
-  line(color: number, width: number, build: (p: Pen) => void, opts: { outline?: boolean; hi?: boolean } = {}): this {
+  /** Outlined stroked path. */
+  line(color: number, width: number, build: (p: Pen) => void, opts: { outline?: boolean } = {}): this {
     const u = this.pen.u;
     if (opts.outline !== false) {
       build(this.pen);
       this.g.stroke({ width: width * u + this.ow * 2, color: this.outline, join: 'round', cap: 'round' });
     }
     build(this.pen);
-    this.g.stroke({ width: width * u, color, join: 'round', cap: 'round' });
-    if (opts.hi) {
-      build(this.pen);
-      this.g.stroke({ width: Math.max(1, width * u * 0.3), color: shade(color, 0.6), alpha: 0.75, join: 'round', cap: 'round' });
-    }
+    this.g.stroke({ width: width * u, color: matte(color), join: 'round', cap: 'round' });
     return this;
   }
 
@@ -255,7 +299,7 @@ class Ink {
     this.g.fill(this.outline).stroke({ width: this.ow * 2, color: this.outline, join: 'round', cap: 'round' });
     paths(this.pen);
     const f = fillOf(fill);
-    this.g.stroke(typeof f === 'number' ? { width: width * u, color: f, join: 'round', cap: 'round' } : { width: width * u, fill: f, join: 'round', cap: 'round' });
+    this.g.stroke({ width: width * u, color: f, join: 'round', cap: 'round' });
     shapes(this.pen);
     this.g.fill(f);
     return this;
@@ -264,7 +308,7 @@ class Ink {
   /** Thin stroked path without outline. */
   stroke(color: number, width: number, build: (p: Pen) => void, alpha = 1): this {
     build(this.pen);
-    this.g.stroke({ width: width * this.pen.u, color, alpha, join: 'round', cap: 'round' });
+    this.g.stroke({ width: width * this.pen.u, color: matte(color), alpha, join: 'round', cap: 'round' });
     return this;
   }
 }
@@ -279,11 +323,6 @@ interface IconDef {
 
 const WHITE = 0xffffff;
 const GOLD: Fill = [0xffe48a, 0xf2a41c];
-const SHEEN = 0.55;
-
-function gloss(k: Ink, build: (p: Pen) => void): void {
-  k.detail(WHITE, build, SHEEN);
-}
 
 function shieldPath(p: Pen, s: number): void {
   p.m(-34 * s, -34 * s)
@@ -352,20 +391,18 @@ function chevrons(n: number): IconDraw {
           p.m(x - 11, -29).l(x + 11, 0).l(x - 11, 29);
         }
       },
-      { hi: true },
     );
   };
 }
 
 function speaker(k: Ink, c: number): void {
-  k.solid(tone(c), (p) => p.rpoly([-40, -12, -26, -12, -6, -30, -6, 30, -26, 12, -40, 12], 4));
+  k.solid(c, (p) => p.rpoly([-40, -12, -26, -12, -6, -30, -6, 30, -26, 12, -40, 12], 4));
 }
 
 function sword(k: Ink, rot: number, blade: number): void {
   const p = k.pen;
   p.at(0, 0, rot, 1.22);
-  k.solid(tone(blade), (q) => q.rpoly([0, -47, 8, -37, 8, 10, -8, 10, -8, -37], 2.5));
-  k.detail(WHITE, (q) => q.rrect(-3.5, -36, 3, 40, 1.5), 0.6);
+  k.solid(blade, (q) => q.rpoly([0, -47, 8, -37, 8, 10, -8, 10, -8, -37], 2.5));
   k.solid([0xffe27a, 0xd98a0a], (q) => q.rrect(-18, 7, 36, 10, 4));
   k.solid([0xb06a32, 0x6e3a14], (q) => q.rrect(-4.5, 15, 9, 18, 3));
   k.solid([0xffe27a, 0xd98a0a], (q) => q.circle(0, 36, 6.5));
@@ -377,7 +414,7 @@ function reroll(k: Ink, c: number): void {
   const arcs = [-3.0, -3.0 + PI];
   const span = 2.55;
   k.merged(
-    tone(c),
+    c,
     11,
     (p) => {
       for (const a0 of arcs) p.arc(0, 0, r, a0, a0 + span);
@@ -399,19 +436,19 @@ function reroll(k: Ink, c: number): void {
 
 const ICONS: Record<IconName, IconDef> = {
   close: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) =>
-      k.solid(tone(c), (p) => {
+      k.solid(c, (p) => {
         p.bar(-22, -22, 22, 22, 18);
         p.bar(22, -22, -22, 22, 18);
       }),
   },
   back: {
-    color: WHITE,
-    draw: (k, c) => k.solid(tone(c), (p) => p.rpoly([-36, 0, -6, -32, -6, -15, 36, -15, 36, 15, -6, 15, -6, 32], 5)),
+    color: Color.ink,
+    draw: (k, c) => k.solid(c, (p) => p.rpoly([-36, 0, -6, -32, -6, -15, 36, -15, 36, 15, -6, 15, -6, 32], 5)),
   },
   settings: {
-    color: 0xe4eafa,
+    color: Color.ink,
     draw: (k, c) => {
       const pts: number[] = [];
       for (let i = 0; i < 8; i++) {
@@ -424,13 +461,12 @@ const ICONS: Record<IconName, IconDef> = {
           Math.cos(d(15)) * 31, Math.sin(d(15)) * 31,
         );
       }
-      k.solid(tone(c), (p) => p.rpoly(pts, 3.2));
-      k.solid(Color.outline, (p) => p.circle(0, 0, 14));
-      k.detail(0x4a3a80, (p) => p.circle(0, 0, 9));
+      k.solid(c, (p) => p.rpoly(pts, 3.2));
+      k.solid(Color.paperLight, (p) => p.circle(0, 0, 13));
     },
   },
   sound_on: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) => {
       speaker(k, c);
       k.line(c, 8, (p) => p.arc(-6, 0, 21, -0.75, 0.75));
@@ -438,7 +474,7 @@ const ICONS: Record<IconName, IconDef> = {
     },
   },
   sound_off: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) => {
       speaker(k, c);
       k.solid([0xff8a96, 0xe0304a], (p) => {
@@ -448,9 +484,9 @@ const ICONS: Record<IconName, IconDef> = {
     },
   },
   music: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) =>
-      k.solid(tone(c), (p) => {
+      k.solid(c, (p) => {
         p.ellipse(-19, 27, 13, 10, -0.35);
         p.ellipse(25, 17, 13, 10, -0.35);
         p.rrect(-9, -30, 9, 58, 2);
@@ -461,9 +497,8 @@ const ICONS: Record<IconName, IconDef> = {
   lock: {
     color: 0xffc83a,
     draw: (k, c) => {
-      k.line(0xd5dded, 11, (p) => p.m(-15, 6).l(-15, -12).arc(0, -12, 15, PI, 2 * PI).l(15, 6), { hi: true });
-      k.solid(tone(c), (p) => p.rrect(-28, -3, 56, 45, 10));
-      gloss(k, (p) => p.rrect(-22, 2, 44, 9, 4.5));
+      k.line(0xd5dded, 11, (p) => p.m(-15, 6).l(-15, -12).arc(0, -12, 15, PI, 2 * PI).l(15, 6));
+      k.solid(c, (p) => p.rrect(-28, -3, 56, 45, 10));
       k.detail(Color.outline, (p) => {
         p.circle(0, 16, 6.5);
         p.rrect(-3.6, 18, 7.2, 13, 3);
@@ -471,49 +506,47 @@ const ICONS: Record<IconName, IconDef> = {
     },
   },
   check: {
-    color: WHITE,
-    draw: (k, c) => k.line(c, 17, (p) => p.m(-27, 2).l(-9, 21).l(28, -21), { hi: true }),
+    color: Color.ink,
+    draw: (k, c) => k.line(c, 17, (p) => p.m(-27, 2).l(-9, 21).l(28, -21)),
   },
   plus: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) =>
-      k.solid(tone(c), (p) => {
+      k.solid(c, (p) => {
         p.bar(-25, 0, 25, 0, 17);
         p.bar(0, -25, 0, 25, 17);
       }),
   },
   minus: {
-    color: WHITE,
-    draw: (k, c) => k.solid(tone(c), (p) => p.bar(-25, 0, 25, 0, 17)),
+    color: Color.ink,
+    draw: (k, c) => k.solid(c, (p) => p.bar(-25, 0, 25, 0, 17)),
   },
   play: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rpoly([-20, -34, -20, 34, 36, 0], 7));
-      gloss(k, (p) => p.rpoly([-14, -22, -14, -4, 8, -14], 2));
+      k.solid(c, (p) => p.rpoly([-20, -34, -20, 34, 36, 0], 7));
     },
   },
   pause: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) =>
-      k.solid(tone(c), (p) => {
+      k.solid(c, (p) => {
         p.rrect(-29, -32, 21, 64, 7);
         p.rrect(8, -32, 21, 64, 7);
       }),
   },
   fast_forward: {
-    color: WHITE,
+    color: Color.ink,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rpoly([-40, -28, -40, 28, -2, 0], 5));
-      k.solid(tone(c), (p) => p.rpoly([-4, -28, -4, 28, 36, 0], 5));
+      k.solid(c, (p) => p.rpoly([-40, -28, -40, 28, -2, 0], 5));
+      k.solid(c, (p) => p.rpoly([-4, -28, -4, 28, 36, 0], 5));
     },
   },
   info: {
     color: 0x4da6ff,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.circle(0, 0, 41));
-      gloss(k, (p) => p.ellipse(-10, -24, 20, 8, -0.3));
-      k.detail(WHITE, (p) => {
+      k.solid(c, (p) => p.circle(0, 0, 41));
+      k.detail(Color.ink, (p) => {
         p.circle(0, -19, 7);
         p.rrect(-6, -7, 12, 30, 4);
       });
@@ -522,17 +555,16 @@ const ICONS: Record<IconName, IconDef> = {
   question: {
     color: 0xa767ff,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.circle(0, 0, 41));
-      gloss(k, (p) => p.ellipse(-10, -24, 20, 8, -0.3));
-      k.line(WHITE, 11, (p) => p.m(-13, -14).c(-13, -32, 15, -32, 15, -15).c(15, -4, 0, -4, 0, 9), { outline: false });
-      k.detail(WHITE, (p) => p.circle(0, 26, 6.5));
+      k.solid(c, (p) => p.circle(0, 0, 41));
+      k.line(Color.ink, 11, (p) => p.m(-13, -14).c(-13, -32, 15, -32, 15, -15).c(15, -4, 0, -4, 0, 9), { outline: false });
+      k.detail(Color.ink, (p) => p.circle(0, 26, 6.5));
     },
   },
   home: {
     color: 0xff6b4a,
     draw: (k, c) => {
       k.solid([0xfff6dc, 0xf0cf94], (p) => p.rrect(-29, -8, 58, 48, 7));
-      k.solid(tone(c), (p) => p.rpoly([-44, -3, 0, -42, 44, -3], 7));
+      k.solid(c, (p) => p.rpoly([-44, -3, 0, -42, 44, -3], 7));
       k.solid([0xb86b30, 0x7a3e16], (p) => p.rrect(-9, 14, 18, 26, 4));
     },
   },
@@ -540,7 +572,7 @@ const ICONS: Record<IconName, IconDef> = {
     color: 0x4da6ff,
     draw: (k, c) => {
       k.pen.at(-9, 3, -0.26);
-      k.solid(tone(c), (p) => p.rrect(-25, -35, 50, 70, 8));
+      k.solid(c, (p) => p.rrect(-25, -35, 50, 70, 8));
       k.pen.at(10, 0, 0.2);
       k.solid([0xffffff, 0xddd5f0], (p) => p.rrect(-25, -35, 50, 70, 8));
       k.detail([0xffd25a, 0xf0a21e], (p) => p.star(0, 0, 15, 7, 5, 1.5));
@@ -551,29 +583,27 @@ const ICONS: Record<IconName, IconDef> = {
     color: 0xff7a55,
     draw: (k, c) => {
       k.line(0xfff0e0, 8, (p) => p.m(-14, 0).l(-14, -14).arc(0, -14, 14, PI, 2 * PI).l(14, 0));
-      k.solid(tone(c), (p) => p.rrect(-33, -12, 66, 54, 11));
-      gloss(k, (p) => p.rrect(-27, -7, 54, 9, 4.5));
+      k.solid(c, (p) => p.rrect(-33, -12, 66, 54, 11));
       k.detail(WHITE, (p) => p.star(0, 18, 13, 6, 5, 1.5));
     },
   },
   trophy: {
     color: 0xffcd3a,
     draw: (k, c) => {
-      k.line(0xf0a81f, 8, (p) => p.m(-27, -26).c(-50, -26, -48, 4, -22, 6), { hi: true });
-      k.line(0xf0a81f, 8, (p) => p.m(27, -26).c(50, -26, 48, 4, 22, 6), { hi: true });
+      k.line(0xf0a81f, 8, (p) => p.m(-27, -26).c(-50, -26, -48, 4, -22, 6));
+      k.line(0xf0a81f, 8, (p) => p.m(27, -26).c(50, -26, 48, 4, 22, 6));
       k.solid([0xffd25a, 0xd98a0a], (p) => p.rrect(-7, 2, 14, 18, 3));
       k.solid([0xffd25a, 0xc97a08], (p) => p.rrect(-23, 18, 46, 15, 5));
-      k.solid(tone(c), (p) =>
+      k.solid(c, (p) =>
         p.m(-30, -38).l(30, -38).c(30, -12, 18, 8, 0, 8).c(-18, 8, -30, -12, -30, -38).close(),
       );
-      gloss(k, (p) => p.rrect(-23, -33, 9, 22, 4));
       k.detail(WHITE, (p) => p.star(4, -19, 10, 4.6, 5, 1), 0.92);
     },
   },
   mission: {
     color: 0xfff1d0,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rrect(-29, -37, 58, 79, 9));
+      k.solid(c, (p) => p.rrect(-29, -37, 58, 79, 9));
       k.solid([0xd7deef, 0x8f9bbb], (p) => p.rrect(-15, -46, 30, 17, 6));
       for (const y of [-14, 5, 24]) {
         k.line(0x38c957, 6, (p) => p.m(-21, y).l(-16, y + 5).l(-8, y - 6), { outline: false });
@@ -584,8 +614,8 @@ const ICONS: Record<IconName, IconDef> = {
   gift: {
     color: 0xff5a78,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rrect(-30, 0, 60, 41, 7));
-      k.solid(tone(shade(c, 0.1)), (p) => p.rrect(-37, -20, 74, 24, 7));
+      k.solid(c, (p) => p.rrect(-30, 0, 60, 41, 7));
+      k.solid(shade(c, 0.1), (p) => p.rrect(-37, -20, 74, 24, 7));
       k.solid([0xffe58a, 0xf5a81c], (p) => p.rrect(-8, -20, 16, 61, 3));
       k.solid([0xffe58a, 0xf5a81c], (p) => {
         p.ellipse(-15, -29, 14, 9, -0.5);
@@ -597,14 +627,13 @@ const ICONS: Record<IconName, IconDef> = {
   star: {
     color: 0xffd23f,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.star(0, 3, 44, 20, 5, 6));
-      gloss(k, (p) => p.ellipse(-13, -10, 8, 4.2, -0.8));
+      k.solid(c, (p) => p.star(0, 3, 44, 20, 5, 6));
     },
   },
   crown: {
     color: 0xffc93a,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rpoly([-38, 24, -43, -22, -20, -5, 0, -36, 20, -5, 43, -22, 38, 24], 5));
+      k.solid(c, (p) => p.rpoly([-38, 24, -43, -22, -20, -5, 0, -36, 20, -5, 43, -22, 38, 24], 5));
       k.solid([0xffd25a, 0xd98a0a], (p) => p.rrect(-38, 14, 76, 20, 6));
       k.solid(WHITE, (p) => {
         p.circle(-43, -24, 6);
@@ -621,21 +650,19 @@ const ICONS: Record<IconName, IconDef> = {
   paw: {
     color: 0xffc94a,
     draw: (k, c) => {
-      k.solid(tone(c), pawShape);
-      gloss(k, (p) => p.ellipse(-9, 8, 9, 5, -0.5));
+      k.solid(c, pawShape);
     },
   },
   heart: {
     color: 0xff4d6a,
     draw: (k, c) => {
-      k.solid(tone(c), heartPath);
-      gloss(k, (p) => p.ellipse(-23, -19, 9, 5, -0.75));
+      k.solid(c, heartPath);
     },
   },
   clock: {
     color: 0x4da6ff,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.circle(0, 0, 41));
+      k.solid(c, (p) => p.circle(0, 0, 41));
       k.solid([0xffffff, 0xe4defa], (p) => p.circle(0, 0, 30));
       k.detail(0x7d6aa8, (p) => {
         p.circle(0, -22, 2.6);
@@ -651,11 +678,10 @@ const ICONS: Record<IconName, IconDef> = {
   ad: {
     color: 0xa767ff,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rrect(-43, -34, 86, 60, 13));
+      k.solid(c, (p) => p.rrect(-43, -34, 86, 60, 13));
       k.solid([0x2b1b5e, 0x432a8c], (p) => p.rrect(-35, -27, 70, 45, 8));
-      k.solid(tone(c), (p) => p.rrect(-20, 28, 40, 9, 4));
+      k.solid(c, (p) => p.rrect(-20, 28, 40, 9, 4));
       k.detail(WHITE, (p) => p.rpoly([-9, -17, -9, 8, 15, -4.5], 3));
-      gloss(k, (p) => p.rrect(-33, -25, 30, 5, 2.5));
     },
   },
   coin: {
@@ -676,7 +702,7 @@ const ICONS: Record<IconName, IconDef> = {
   gem: {
     color: 0x4ee3ff,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rpoly([-36, -12, -19, -34, 19, -34, 36, -12, 0, 40], 5));
+      k.solid(c, (p) => p.rpoly([-36, -12, -19, -34, 19, -34, 36, -12, 0, 40], 5));
       k.detail(WHITE, (p) => p.poly([-19, -34, 19, -34, 11, -12, -11, -12]), 0.42);
       k.detail(WHITE, (p) => p.poly([-36, -12, -19, -34, -11, -12]), 0.22);
       k.detail(0x000000, (p) => p.poly([36, -12, 19, -34, 11, -12]), 0.08);
@@ -688,15 +714,13 @@ const ICONS: Record<IconName, IconDef> = {
   energy: {
     color: 0x7dff6b,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rpoly([9, -44, -28, 6, -5, 6, -13, 44, 28, -12, 4, -12], 4));
-      gloss(k, (p) => p.poly([5, -34, -13, -4, -3, -4, 2, -22]));
+      k.solid(c, (p) => p.rpoly([9, -44, -28, 6, -5, 6, -13, 44, 28, -12, 4, -12], 4));
     },
   },
   arrow_up: {
     color: 0x4cd964,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rpoly([0, -42, 34, -6, 16, -6, 16, 38, -16, 38, -16, -6, -34, -6], 6));
-      gloss(k, (p) => p.rrect(-10, -4, 6, 36, 3));
+      k.solid(c, (p) => p.rpoly([0, -42, 34, -6, 16, -6, 16, 38, -16, 38, -16, -6, -34, -6], 6));
     },
   },
   swords: {
@@ -709,20 +733,18 @@ const ICONS: Record<IconName, IconDef> = {
   shield: {
     color: 0x4da6ff,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => shieldPath(p, 1));
+      k.solid(c, (p) => shieldPath(p, 1));
       k.detail([shade(c, 0.3), shade(c, -0.1)], (p) => shieldPath(p, 0.78));
       k.detail([0xffe27a, 0xf0a21e], (p) => p.star(0, -2, 17, 8, 5, 2));
-      gloss(k, (p) => p.rrect(-26, -28, 8, 26, 4));
     },
   },
-  reroll: { color: WHITE, draw: reroll },
+  reroll: { color: Color.ink, draw: reroll },
   sell: {
     color: 0x4cd964,
     draw: (k, c) => {
       k.pen.at(-4, -2, -0.5);
-      k.solid(tone(c), (p) => p.rpoly([-30, -17, 12, -17, 36, 0, 12, 17, -30, 17], 7));
+      k.solid(c, (p) => p.rpoly([-30, -17, 12, -17, 36, 0, 12, 17, -30, 17], 7));
       k.detail(Color.outline, (p) => p.circle(-16, 0, 6.5));
-      gloss(k, (p) => p.rrect(-4, -12, 20, 5, 2.5));
       k.pen.at();
       k.solid([0xffe48a, 0xf2a41c], (p) => p.circle(24, 26, 15));
       k.detail(0xd98a0a, (p) => p.circle(24, 26, 8));
@@ -731,7 +753,7 @@ const ICONS: Record<IconName, IconDef> = {
   skull: {
     color: 0xf3eefc,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => {
+      k.solid(c, (p) => {
         p.ellipse(0, -7, 35, 32);
         p.rrect(-20, 12, 40, 28, 9);
       });
@@ -750,29 +772,27 @@ const ICONS: Record<IconName, IconDef> = {
   chest: {
     color: 0xc47a3a,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rrect(-42, -2, 84, 42, 7));
+      k.solid(c, (p) => p.rrect(-42, -2, 84, 42, 7));
       k.detail(0x000000, (p) => p.rect(-42, 17, 84, 3), 0.18);
-      k.solid(tone(shade(c, 0.12)), (p) => p.m(-42, -2).l(-42, -14).c(-42, -40, 42, -40, 42, -14).l(42, -2).close());
+      k.solid(shade(c, 0.12), (p) => p.m(-42, -2).l(-42, -14).c(-42, -40, 42, -40, 42, -14).l(42, -2).close());
       k.solid(GOLD, (p) => p.rrect(-10, -34, 20, 74, 4));
       k.solid(GOLD, (p) => p.rrect(-14, -7, 28, 25, 6));
       k.detail(Color.outline, (p) => {
         p.circle(0, 5, 3.6);
         p.rrect(-2, 6, 4, 8, 1.5);
       });
-      gloss(k, (p) => p.rrect(-34, -24, 16, 6, 3));
     },
   },
   fish: {
     color: 0xff8a5c,
     draw: (k, c) => {
-      k.solid(tone(shade(c, -0.05)), (p) => p.rpoly([20, 0, 45, -20, 40, 0, 45, 20], 5));
-      k.solid(tone(shade(c, -0.05)), (p) => p.rpoly([-8, -15, 6, -32, 15, -14], 4));
-      k.solid(tone(c), (p) => p.ellipse(-4, 0, 32, 21));
+      k.solid(shade(c, -0.05), (p) => p.rpoly([20, 0, 45, -20, 40, 0, 45, 20], 5));
+      k.solid(shade(c, -0.05), (p) => p.rpoly([-8, -15, 6, -32, 15, -14], 4));
+      k.solid(c, (p) => p.ellipse(-4, 0, 32, 21));
       k.detail(WHITE, (p) => p.ellipse(-6, 9, 22, 8), 0.4);
       k.stroke(Color.outline, 3.2, (p) => p.arc(-4, 0, 17, -0.8, 0.8), 0.45);
       k.solid(WHITE, (p) => p.circle(-20, -5, 6.8));
       k.detail(Color.outline, (p) => p.circle(-19, -5, 3.4));
-      gloss(k, (p) => p.ellipse(-8, -13, 12, 3.6, -0.15));
     },
   },
   lucky_clover: {
@@ -788,15 +808,13 @@ const ICONS: Record<IconName, IconDef> = {
         k.stroke(shade(c, -0.35), 2.6, (p) => p.m(0, -6).l(0, -28), 0.7);
       }
       k.pen.at(0, 0, -PI / 4);
-      gloss(k, (p) => p.ellipse(-8, -27, 5, 3, -0.4));
       k.pen.at();
     },
   },
   warning: {
     color: 0xffc83a,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rpoly([0, -40, 42, 34, -42, 34], 9));
-      gloss(k, (p) => p.rpoly([0, -28, 9, -12, -9, -12], 3));
+      k.solid(c, (p) => p.rpoly([0, -40, 42, 34, -42, 34], 9));
       k.detail(Color.outline, (p) => {
         p.rrect(-4.5, -9, 9, 26, 4.5);
         p.circle(0, 25, 5);
@@ -806,8 +824,7 @@ const ICONS: Record<IconName, IconDef> = {
   purr: {
     color: 0xff6fae,
     draw: (k, c) => {
-      k.solid(tone(c), heartPath);
-      gloss(k, (p) => p.ellipse(-24, -20, 8, 4.4, -0.75));
+      k.solid(c, heartPath);
       k.pen.at(0, 3, 0, 0.4);
       k.detail([0xffffff, 0xffd9ea], pawShape, 0.96);
       k.pen.at();
@@ -826,10 +843,8 @@ const ICONS: Record<IconName, IconDef> = {
           p.m(-48, 0).l(-32, 0);
           p.m(32, 0).l(48, 0);
         },
-        { hi: true },
       );
       k.solid([shade(c, 0.4), shade(c, -0.12)], (p) => p.circle(0, 0, 13));
-      gloss(k, (p) => p.ellipse(-4, -5, 4.6, 2.8, -0.5));
     },
   },
   sun: {
@@ -841,7 +856,6 @@ const ICONS: Record<IconName, IconDef> = {
       }
       k.pen.at();
       k.solid([shade(c, 0.4), shade(c, -0.12)], (p) => p.circle(0, 0, 26));
-      gloss(k, (p) => p.ellipse(-9, -11, 10, 5, -0.6));
     },
   },
   molt: {
@@ -860,7 +874,6 @@ const ICONS: Record<IconName, IconDef> = {
             else p.l(Math.cos(a) * r, Math.sin(a) * r);
           }
         },
-        { hi: true },
       );
       for (const [x, y, rot] of [[33, -27, 0.75], [-35, -6, -0.95], [8, 38, 2.5]] as const) {
         k.solid([shade(c, 0.4), shade(c, -0.08)], (p) => p.ellipse(x, y, 5.5, 11, rot));
@@ -877,7 +890,6 @@ const ICONS: Record<IconName, IconDef> = {
       k.solid([shade(c, 0.4), shade(c, -0.18)], (p) => p.rpoly([-46, -9, -24, -9, 6, -31, 6, 31, -24, 9, -46, 9], 5));
       k.solid([shade(c, -0.05), shade(c, -0.35)], (p) => p.ellipse(6, 0, 9, 31));
       k.detail(Color.outline, (p) => p.ellipse(6, 0, 4.5, 24), 0.55);
-      gloss(k, (p) => p.rrect(-38, -5, 28, 4, 2));
     },
   },
   class_warrior: {
@@ -890,7 +902,7 @@ const ICONS: Record<IconName, IconDef> = {
   class_ranger: {
     color: 0xc98a4a,
     draw: (k, c) => {
-      k.line(c, 10, (p) => p.m(10, -45).c(-38, -30, -38, 30, 10, 45), { hi: true });
+      k.line(c, 10, (p) => p.m(10, -45).c(-38, -30, -38, 30, 10, 45));
       k.line(0xfff3d6, 3.4, (p) => p.m(10, -45).l(10, 45), { outline: false });
       k.line(0xe8d3a2, 6, (p) => p.m(-26, 0).l(34, 0));
       k.solid([0xf2f6ff, 0x9aa6c0], (p) => p.rpoly([32, -11, 53, 0, 32, 11], 2.5));
@@ -903,10 +915,9 @@ const ICONS: Record<IconName, IconDef> = {
   class_mage: {
     color: 0xa767ff,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.bar(-32, 38, 6, 0, 12));
+      k.solid(c, (p) => p.bar(-32, 38, 6, 0, 12));
       k.solid([0xffe27a, 0xd98a0a], (p) => p.bar(-36, 42, -28, 34, 14));
       k.solid([0xffe27a, 0xf0a21e], (p) => p.star(20, -22, 28, 13, 5, 3));
-      gloss(k, (p) => p.ellipse(13, -31, 6, 3.2, -0.7));
       k.detail(WHITE, (p) => p.star(-14, -30, 10, 3.5, 4, 1), 0.95);
       k.detail(WHITE, (p) => p.star(40, 20, 8, 3, 4, 1), 0.95);
     },
@@ -920,7 +931,6 @@ const ICONS: Record<IconName, IconDef> = {
       });
       k.solid([0xff7a8a, 0xe0243f], (p) => p.circle(0, -33, 6));
       k.solid([shade(c, 0.45), shade(c, -0.14)], (p) => p.circle(0, 9, 32));
-      gloss(k, (p) => p.ellipse(-12, -6, 9, 5, -0.7));
       k.detail(Color.outline, (p) => p.rrect(-27, 14, 54, 5, 2.5), 0.5);
       k.detail(Color.outline, (p) => {
         p.circle(0, 28, 4.6);
@@ -935,7 +945,6 @@ const ICONS: Record<IconName, IconDef> = {
       k.detail([shade(c, 0.2), shade(c, -0.15)], (p) => p.circle(0, 0, 33));
       k.detail(WHITE, (p) => p.circle(0, 0, 23));
       k.detail([shade(c, 0.2), shade(c, -0.15)], (p) => p.circle(0, 0, 13));
-      gloss(k, (p) => p.ellipse(-15, -27, 11, 4.2, -0.6));
     },
   },
   sweep: {
@@ -953,17 +962,16 @@ const ICONS: Record<IconName, IconDef> = {
     color: 0xffc83a,
     draw: (k, c) => {
       k.pen.at(0, 0, -0.16);
-      k.solid(tone(c), (p) => p.rpoly(ticketPoints(), 2.5));
+      k.solid(c, (p) => p.rpoly(ticketPoints(), 2.5));
       for (let y = -20; y < 22; y += 10) k.stroke(Color.outline, 3, (p) => p.m(-17, y).l(-17, y + 5), 0.55);
       k.detail(WHITE, (p) => p.star(13, 0, 17, 8, 5, 2));
-      gloss(k, (p) => p.rrect(-38, -23, 14, 4, 2));
       k.pen.at();
     },
   },
   calendar: {
     color: 0xfff6dc,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => p.rrect(-39, -32, 78, 76, 11));
+      k.solid(c, (p) => p.rrect(-39, -32, 78, 76, 11));
       k.solid([0xff7a8a, 0xe0243f], (p) => p.rpoly([-39, -32, 39, -32, 39, -9, -39, -9], 9));
       k.solid([0xe4eafa, 0x8f9bbb], (p) => {
         p.rrect(-24, -42, 9, 20, 4);
@@ -982,8 +990,8 @@ const ICONS: Record<IconName, IconDef> = {
   wardrobe: {
     color: 0xc98a4a,
     draw: (k, c) => {
-      k.line(0xd5dded, 7, (p) => p.m(0, -7).l(0, -17).c(0, -41, 24, -41, 24, -26).c(24, -19, 17, -16, 10, -16), { hi: true });
-      k.line(c, 10, (p) => p.m(-43, 22).l(0, -6).l(43, 22).close(), { hi: true });
+      k.line(0xd5dded, 7, (p) => p.m(0, -7).l(0, -17).c(0, -41, 24, -41, 24, -26).c(24, -19, 17, -16, 10, -16));
+      k.line(c, 10, (p) => p.m(-43, 22).l(0, -6).l(43, 22).close());
       k.detail([0xffe27a, 0xf0a21e], (p) => p.star(0, 12, 11, 5, 5, 1.5));
     },
   },
@@ -994,32 +1002,30 @@ const ICONS: Record<IconName, IconDef> = {
         p.m(-26, 0).l(26, -28);
         p.m(-26, 0).l(26, 28);
       });
-      k.solid(tone(c), (p) => {
+      k.solid(c, (p) => {
         p.circle(-26, 0, 16);
         p.circle(26, -28, 16);
         p.circle(26, 28, 16);
       });
-      gloss(k, (p) => p.ellipse(-30, -6, 6, 3, -0.7));
     },
   },
   code: {
     color: 0xffc93a,
     draw: (k, c) => {
       k.pen.at(0, 0, -PI / 4, 1.1);
-      k.solid(tone(c), (p) => {
+      k.solid(c, (p) => {
         p.circle(0, -28, 18);
         p.rrect(-5, -16, 10, 62, 3);
         p.rrect(5, 21, 13, 8, 2);
         p.rrect(5, 34, 10, 8, 2);
       });
       k.detail(Color.outline, (p) => p.circle(0, -28, 8));
-      gloss(k, (p) => p.ellipse(-8, -37, 5, 3, -0.5));
       k.pen.at();
     },
   },
-  speed_1: { color: 0xfff3d6, draw: chevrons(1) },
-  speed_2: { color: 0xffe27a, draw: chevrons(2) },
-  speed_3: { color: 0xffb629, draw: chevrons(3) },
+  speed_1: { color: Color.ink, draw: chevrons(1) },
+  speed_2: { color: Color.ink, draw: chevrons(2) },
+  speed_3: { color: Color.ink, draw: chevrons(3) },
   eye: {
     color: 0x4da6ff,
     draw: (k, c) => {
@@ -1033,7 +1039,7 @@ const ICONS: Record<IconName, IconDef> = {
     color: WHITE,
     draw: (k, c) => {
       k.pen.at(0, 0, -0.22);
-      k.solid(tone(c), (p) => p.rrect(-31, -31, 62, 62, 13));
+      k.solid(c, (p) => p.rrect(-31, -31, 62, 62, 13));
       k.detail(0x6a5d9c, (p) => p.rrect(-27, 20, 54, 7, 3.5), 0.22);
       k.detail([0xff7a8a, 0xe0243f], (p) => {
         p.circle(-15, -15, 6.5);
@@ -1048,7 +1054,7 @@ const ICONS: Record<IconName, IconDef> = {
 };
 
 export interface IconOpts {
-  /** Outline colour (default: the shared dark purple). */
+  /** Outline colour (default: the ink brown). */
   outline?: number;
   /** Bake the vector drawing into a texture (default true): icons are static and numerous. */
   cache?: boolean;
@@ -1062,7 +1068,7 @@ export function drawIcon(name: IconName, size: number, color?: number, opts: Ico
   const g = new Graphics();
   const def = ICONS[name];
   const ink = new Ink(g, size, opts.outline ?? Color.outline);
-  def.draw(ink, color ?? def.color);
+  def.draw(ink, color ?? matte(def.color));
   if (opts.cache ?? true) cacheStatic(g);
   return g;
 }

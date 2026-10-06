@@ -132,8 +132,9 @@ export const ENDLESS_GROWTH = 1.14;
 /**
  * Chapters 1..5. Tuned so the recommended unit level clears each chapter at the same rate: the unit
  * levels (+10% damage per level) carry most of the growth, the chapters add rules instead.
+ * Rules v1.2 scaled every value by about 1.05: merges keep their class, so a planned ladder is stronger.
  */
-export const CHAPTER_HP_MULT: readonly number[] = [1.0, 1.08, 1.15, 1.37, 1.4];
+export const CHAPTER_HP_MULT: readonly number[] = [1.05, 1.13, 1.21, 1.44, 1.47];
 /** Unit level each chapter is balanced for (chapter 5 is balanced for 5..6; 6 is used). */
 export const RECOMMENDED_LEVEL: readonly number[] = [1, 2, 3, 4, 6];
 export const TUTORIAL_HP_MULT = 0.7;

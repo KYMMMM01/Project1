@@ -25,12 +25,14 @@ describe('placement table mirrors docs/기획서_GDD.md section 8.2', () => {
       relic_reroll: { perRun: 1 },
       result_double: { perRun: 1 },
       snack_box: { daily: 3 },
-      daily_treat: { daily: 3 },
-      free_chest: { daily: 4 },
-      patrol_double: { daily: 3 },
-      shop_refresh: { daily: 2 },
+      daily_treat: { daily: 3, home: true },
+      free_chest: { daily: 4, home: true },
+      patrol_double: { daily: 3, home: true },
+      shop_refresh: { daily: 2, home: true },
+      sweep_ticket: { daily: 2, home: true }, // not a GDD 8.2 row: docs/명세_메타.md section 8
     });
     expect([...AD_PLACEMENT_IDS].sort()).toEqual(Object.keys(AD_PLACEMENTS).sort());
+    expect(isPlacement('sweep_ticket')).toBe(true); // the meta layer's PLACEMENTS.ticket
     expect(isPlacement('revive')).toBe(true);
     expect(isPlacement('double_reward')).toBe(false); // the old id is gone
     expect(isPlacement('toString')).toBe(false);
@@ -179,6 +181,30 @@ describe('AdLimiter: global rewarded rules', () => {
     // clock moved back: the stored time is re-anchored, the wait is one normal gap
     expect(l.gapMs(t0 - 5_000_000)).toBe(90_000);
     expect(l.gapMs(t0 - 5_000_000 + 91_000)).toBe(0);
+  });
+
+  it('home and shop placements neither spend nor wait on the per-run offer budget', () => {
+    const l = new AdLimiter(createMemoryPersistence());
+    // no run is in progress: the player is on the home screen taking one offer after another
+    for (const [i, id] of ['daily_treat', 'free_chest', 'patrol_double'].entries()) {
+      expect(l.verdict(id, t0 + i * 100_000, true)).toBe('ok');
+      l.noteAdShown(t0 + i * 100_000, 'rewarded', id);
+    }
+    expect(l.offersLeft()).toBe(2);
+    // a run's own offers still spend it, and an exhausted run budget does not block the home ones
+    l.beginRun();
+    l.noteAdShown(t0 + 400_000, 'rewarded', 'revive');
+    l.noteAdShown(t0 + 500_000, 'rewarded', 'result_double');
+    expect(l.offersLeft()).toBe(0);
+    expect(l.verdict('relic_reroll', t0 + 600_000, true)).toBe('offer_cap');
+    expect(l.verdict('snack_box', t0 + 600_000, true)).toBe('offer_cap'); // result screen: part of the run
+    for (const id of ['daily_treat', 'free_chest', 'patrol_double', 'shop_refresh', 'sweep_ticket']) {
+      expect(l.verdict(id, t0 + 600_000, true), id).toBe('ok');
+    }
+    // an offer with no placement named is counted, as before
+    l.beginRun();
+    l.noteAdShown(t0 + 700_000, 'rewarded');
+    expect(l.offersLeft()).toBe(1);
   });
 
   it('checks the placement caps before the global ones', () => {

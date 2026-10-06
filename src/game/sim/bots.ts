@@ -6,10 +6,11 @@
  *             ring; picks toys and three-pick cats at random
  *   merge   - merges any pair as soon as it can, awakens a guardian when the rules allow, upgrades its
  *             biggest class once the board is crowded, stands warriors on the outer ring, picks toys by score
- *   synergy - everything merge does plus: keeps the focus class's higher types as a ladder (merging
- *             commons, rares and other classes freely), molts toward a full ladder while keeping the purr
- *             of one awakening, stands strong cats on sunbeams, aims the laser at the boss or the oldest
- *             enemy, and takes the early-call bonus when the field is empty
+ *   synergy - everything merge does plus: builds one class line on purpose (a merge never changes class):
+ *             keeps one cat of each rarity of its focus class for the distinct-type synergy, merges the
+ *             surplus pairs and every other class, molts off-class cats into the rungs it lacks while
+ *             keeping the purr of one awakening, stands strong cats on sunbeams, aims the laser at the boss
+ *             or the oldest enemy, and takes the early-call bonus when the field is empty
  */
 import { CLASS_IDS, type BattleApi, type ClassId, type RelicId, type UnitId, type UnitState } from '../api';
 import { CELL_COUNT, isEdgeCell } from '../geometry';
@@ -193,38 +194,43 @@ function mergeBot(seed: number): Bot {
 
 interface Census {
   count: Record<string, number>;
-  /** Which rarity slots (0..3) of each class are filled. */
+  /** Which rarity slots (0..4) of each class are filled. */
   has: boolean[][];
-  distinct: number[];
+  /** Common-equivalents per class (1, 2, 4, 8, 16 by rarity): a merge keeps it, so it measures how far a line has come. */
+  weight: number[];
 }
 
 function census(b: BattleApi): Census {
   const count: Record<string, number> = {};
   const has = CLASS_IDS.map(() => [false, false, false, false, false]);
+  const weight = CLASS_IDS.map(() => 0);
   for (const u of units(b)) {
+    const ci = CLASS_IDS.indexOf(unitClass(u.id));
+    const r = unitRarityIndex(u.id);
     count[u.id] = (count[u.id] ?? 0) + 1;
-    (has[CLASS_IDS.indexOf(unitClass(u.id))] as boolean[])[unitRarityIndex(u.id)] = true;
+    (has[ci] as boolean[])[r] = true;
+    weight[ci] = (weight[ci] as number) + (1 << r);
   }
-  const distinct = has.map((row) => row.filter(Boolean).length);
-  return { count, has, distinct };
+  return { count, has, weight };
 }
 
-function focusClass(c: Census): number {
-  let best = 0;
-  for (let i = 1; i < CLASS_IDS.length; i++) {
-    if ((c.distinct[i] as number) > (c.distinct[best] as number)) best = i;
-  }
-  return best;
+/**
+ * The class line the bot builds: the heaviest one, changed only when another class is twice as heavy, so a
+ * single lucky summon does not make it hop between lines (a merge never changes class, a molt costs purr).
+ */
+function pickFocus(c: Census, current: number): number {
+  let best = current;
+  for (let i = 0; i < CLASS_IDS.length; i++) if ((c.weight[i] as number) > (c.weight[best] as number)) best = i;
+  return (c.weight[best] as number) >= 2 * (c.weight[current] as number) ? best : current;
 }
 
-/** Cell of the weakest unit that is a surplus copy (or the weakest of all when `any`). */
-function weakestSurplus(b: BattleApi, c: Census, any: boolean): number {
+/** Cell of the weakest surplus copy (a unit the board holds at least twice). */
+function weakestSurplus(b: BattleApi, c: Census): number {
   let cell = -1;
   let low = Infinity;
   for (let i = 0; i < CELL_COUNT; i++) {
     const u = b.units[i];
-    if (!u) continue;
-    if (!any && (c.count[u.id] as number) < 2) continue;
+    if (!u || (c.count[u.id] as number) < 2) continue;
     const v = nominalDps(u) * (1 + unitRarityIndex(u.id) * 2);
     if (v < low) {
       low = v;
@@ -234,11 +240,50 @@ function weakestSurplus(b: BattleApi, c: Census, any: boolean): number {
   return cell;
 }
 
-/** Purr the synergy bot never molts away: one awakening. */
-const AWAKEN_RESERVE = 12;
+/** Empty cells at or below which every pair merges: the board needs room more than it needs a ladder rung. */
+const CROWDED = 3;
+
+/**
+ * Whether the ladder bot merges this pair. A merge keeps the class, so a focus pair climbs the line: it
+ * only costs a rung when the next one is taken already (two copies of a rarity become the next rarity and leave
+ * none behind), so it waits for a third copy, an empty next rung or a crowded board. Other classes merge freely
+ * (their cats are molt stock).
+ */
+function ladderAllows(b: BattleApi, focus: ClassId, id: UnitId, count: number): boolean {
+  if (unitClass(id) !== focus || count >= 3 || emptyCount(b) <= CROWDED) return true;
+  return !b.classOwned(focus)[unitRarityIndex(id) + 1];
+}
+
+/**
+ * Molts one off-class cat into the focus line's highest missing rung. A legendary rung is worth a purr whatever
+ * the awakening needs (the line cannot rebuild one for a long time, and the awakening needs one); the lower rungs
+ * refill from summons and merges, so they only get the purr the awakening does not need. Low rarities also
+ * need a surplus copy as the donor.
+ */
+function moltIntoLadder(b: BattleApi, c: Census, focus: ClassId): void {
+  const f = CLASS_IDS.indexOf(focus);
+  for (let r = 3; r >= 0; r--) {
+    if (r < 3 && b.purr <= b.awakenCost()) break;
+    if ((c.has[f] as boolean[])[r]) continue;
+    let donor = -1;
+    let donorCount = 0;
+    for (let i = 0; i < CELL_COUNT; i++) {
+      const u = b.units[i];
+      if (!u || unitRarityIndex(u.id) !== r || unitClass(u.id) === focus) continue;
+      const n = c.count[u.id] as number;
+      if (r < 2 && n < 2) continue;
+      if (n > donorCount) {
+        donor = i;
+        donorCount = n;
+      }
+    }
+    if (donor >= 0 && b.molt(donor, focus) === null) return;
+  }
+}
 
 function synergyBot(seed: number): Bot {
   const rng = new Rng(seed);
+  let focusIndex = 0;
   return {
     policy: 'synergy',
     act(b) {
@@ -249,53 +294,22 @@ function synergyBot(seed: number): Bot {
           break;
         }
       }
-      let c = census(b);
-      // Commons and rares are cheap to rebuild, so they merge freely, and so does anything outside the
-      // focus class; the focus class's higher types stay as ladder pieces until a third copy shows up or the
-      // board is getting crowded.
-      const focus = CLASS_IDS[focusClass(c)] as ClassId;
-      for (let i = 0; i < 4; i++) {
-        if (!mergeAny(b, (id, n) => n >= 3 || unitRarityIndex(id) <= 1 || unitClass(id) !== focus || emptyCount(b) <= 3)) break;
-      }
-      c = census(b);
+      focusIndex = pickFocus(census(b), focusIndex);
+      const focus = CLASS_IDS[focusIndex] as ClassId;
+      for (let i = 0; i < 4; i++) if (!mergeAny(b, (id, n) => ladderAllows(b, focus, id, n))) break;
 
-      // Molting: always keep the purr a guardian costs. First bring a legendary into a class that can
-      // awaken it, then fill the focus class's ladder with surplus copies.
-      if (b.purr > AWAKEN_RESERVE && b.moltsLeft() > 0) {
-        const f = focusClass(c);
-        const target = CLASS_IDS[f] as ClassId;
-        if ((c.distinct[f] as number) >= 3 && !c.has[f]?.[3]) {
-          for (let i = 0; i < CELL_COUNT; i++) {
-            const u = b.units[i];
-            if (u && unitRarityIndex(u.id) === 3 && unitClass(u.id) !== target && b.molt(i, target) === null) break;
-          }
-        }
-        c = census(b);
-        for (let r = 3; r >= 0 && b.purr > AWAKEN_RESERVE && (c.distinct[f] as number) < 4; r--) {
-          if ((c.has[f] as boolean[])[r]) continue;
-          for (let i = 0; i < CELL_COUNT; i++) {
-            const u = b.units[i];
-            if (!u || unitRarityIndex(u.id) !== r || (c.count[u.id] as number) < 2 || unitClass(u.id) === target) continue;
-            if (b.molt(i, target) === null) {
-              c = census(b);
-              r = 4;
-            }
-            break;
-          }
-        }
-      }
+      if (b.moltsLeft() > 0) moltIntoLadder(b, census(b), focus);
 
       warriorsToTheEdge(b);
       // Stand the strongest cats on sunbeams (warriors keep to the edge, where they can reach).
       swapIntoSun(b);
 
       // Money: upgrades once the board is established, summons otherwise.
-      const strong = classOf(b);
       for (let guard = 0; guard < 3; guard++) {
         const board = 20 - emptyCount(b);
-        const upCost = b.classUpgradeCost(strong);
-        if (board >= 9 && upCost > 0 && b.fish >= upCost && b.classUpgradeLevel(strong) < Math.floor(board / 3)) {
-          b.upgradeClass(strong);
+        const upCost = b.classUpgradeCost(focus);
+        if (board >= 9 && upCost > 0 && b.fish >= upCost && b.classUpgradeLevel(focus) < Math.floor(board / 3)) {
+          b.upgradeClass(focus);
           continue;
         }
         const gradeCost = b.summonGradeCost();
@@ -304,12 +318,11 @@ function synergyBot(seed: number): Bot {
           continue;
         }
         if (emptyCount(b) === 0 && b.fish >= b.summonCost()) {
-          c = census(b);
-          const cell = weakestSurplus(b, c, false);
+          const cell = weakestSurplus(b, census(b));
           if (cell >= 0 && unitRarityIndex((b.units[cell] as UnitState).id) === 0) b.sell(cell);
         }
         if (b.summon() !== null) break;
-        for (let i = 0; i < 3 && mergeAny(b, (id, n) => n >= 3 || unitRarityIndex(id) <= 1 || emptyCount(b) <= 1); i++);
+        for (let i = 0; i < 3 && mergeAny(b, (id, n) => ladderAllows(b, focus, id, n)); i++);
       }
 
       // Laser on the boss, or on the oldest enemy when the field is busy.
@@ -329,14 +342,16 @@ function synergyBot(seed: number): Bot {
       const p = b.pending;
       if (!p) return;
       if (p.kind === 'summon') {
+        // A cat of the focus line that fills an empty rung is worth most; otherwise the higher rarity wins.
         const c = census(b);
+        const f = focusIndex;
         let best = 0;
         let bestScore = -1;
         for (let i = 0; i < p.options.length; i++) {
           const id = p.options[i] as UnitId;
           const ci = CLASS_IDS.indexOf(unitClass(id));
-          const fills = !(c.has[ci] as boolean[])[unitRarityIndex(id)];
-          const score = (fills ? 100 : 0) + unitRarityIndex(id) * 10 + (c.distinct[ci] as number) * 3 + rng.next();
+          const r = unitRarityIndex(id);
+          const score = r * 10 + (ci === f ? 25 + (!(c.has[ci] as boolean[])[r] ? 40 : 0) : 0) + rng.next();
           if (score > bestScore) {
             bestScore = score;
             best = i;
@@ -348,11 +363,6 @@ function synergyBot(seed: number): Bot {
       }
     },
   };
-}
-
-function classOf(b: BattleApi): ClassId {
-  const c = census(b);
-  return CLASS_IDS[focusClass(c)] as ClassId;
 }
 
 function oldest(b: BattleApi): { x: number; y: number } | null {

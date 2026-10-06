@@ -189,6 +189,25 @@ describe('AdService: placement caps, run reset, date rollover', () => {
     expect(t.ads.status('daily_treat').dailyLeft).toBe(3);
   });
 
+  it("sweep_ticket (the meta layer's ticket ad) is a known placement: it plays, twice a day, and the pass does not skip it", async () => {
+    const t = makeAds();
+    expect(t.ads.status('sweep_ticket')).toMatchObject({ canOffer: true, reason: 'ok', dailyLeft: 2, perRunLeft: Infinity });
+    expect(await t.ads.showRewarded('sweep_ticket')).toBe('rewarded');
+    expect(t.fake.log).toContain('show:rewarded:sweep_ticket');
+    t.clock.advance(GAP);
+    expect(await t.ads.showRewarded('sweep_ticket')).toBe('rewarded');
+    t.clock.advance(GAP);
+    expect(t.ads.status('sweep_ticket')).toMatchObject({ canOffer: false, reason: 'daily_cap', dailyLeft: 0 });
+    expect(await t.ads.showRewarded('sweep_ticket')).toBe('capped');
+    expect(t.fake.log.filter((l) => l === 'show:rewarded:sweep_ticket')).toHaveLength(2);
+    expect(t.ads.counters.daily.sweep_ticket).toBe(2);
+    // an owner still watches the ad: the pass sells tickets (+3 a day) elsewhere, not this placement
+    const owner = makeAds();
+    owner.ads.setAdFree(true);
+    expect(await owner.ads.showRewarded('sweep_ticket')).toBe('rewarded');
+    expect(owner.fake.log).toContain('show:rewarded:sweep_ticket');
+  });
+
   it('daily caps reset on the next local date', async () => {
     const t = makeAds();
     for (let i = 0; i < 2; i++) await watch(t, 'shop_refresh');
@@ -271,6 +290,32 @@ describe('AdService: global rules (GDD 8.2)', () => {
     expect(t.ads.canOffer('result_double')).toBe(true);
     // the dismissed revive was never counted as a reward
     expect(t.ads.counters.daily.revive).toBeUndefined();
+  });
+
+  it('home offers made between runs never use up the per-run offer budget', async () => {
+    const t = makeAds(); // runsBegun 2, no run in progress: the player is on the home screen
+    for (const p of ['daily_treat', 'free_chest', 'patrol_double']) {
+      expect(t.ads.canOffer(p), p).toBe(true);
+      expect(await t.ads.showRewarded(p)).toBe('rewarded');
+      t.clock.advance(GAP);
+    }
+    // three offers taken, the budget is untouched: the next ones are limited only by their own daily caps
+    expect(t.ads.status('shop_refresh')).toMatchObject({ canOffer: true, reason: 'ok' });
+    expect(t.ads.status('patrol_double')).toMatchObject({ canOffer: true, reason: 'ok', dailyLeft: 2 });
+  });
+
+  it('a run still stops after 2 offers, and the home offers stay open next to an exhausted run', async () => {
+    const t = makeAds();
+    t.ads.beginRun();
+    expect(await t.ads.showRewarded('revive')).toBe('rewarded');
+    t.clock.advance(GAP);
+    expect(await t.ads.showRewarded('result_double')).toBe('rewarded');
+    t.clock.advance(GAP);
+    expect(t.ads.status('relic_reroll')).toMatchObject({ canOffer: false, reason: 'offer_cap' });
+    expect(t.ads.status('free_chest')).toMatchObject({ canOffer: true, reason: 'ok' });
+    expect(await t.ads.showRewarded('free_chest')).toBe('rewarded');
+    t.clock.advance(GAP);
+    expect(t.ads.status('relic_reroll')).toMatchObject({ canOffer: false, reason: 'offer_cap' }); // the home ad did not reopen it
   });
 
   it('at most 12 rewarded ads a day; the next local date resets it', async () => {

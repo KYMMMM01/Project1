@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { addStrings, setLang } from '@/core/i18n';
-import { chamferPoints, flamePoints, roundedPolyPath, wingPoints } from '@/ui/cardShapes';
 import { scaffoldLayout } from '@/ui/layoutMath';
 import { formatOdds, oddsBarWidth, oddsTotal } from '@/ui/oddsMath';
 import { rarityName } from '@/ui/rarity';
-import { RARITY_ORDER } from '@/ui/theme';
+import { ButtonPalettes, Color, Dim, Rarity, RARITY_ORDER, rarityIndex } from '@/ui/theme';
+import { luma } from '@/ui/colors';
 
 describe('formatOdds', () => {
   it('trims to at most two decimals without trailing zeros', () => {
@@ -66,66 +66,57 @@ describe('scaffoldLayout', () => {
   });
 });
 
-describe('card silhouettes', () => {
-  it('chamfers the four corners', () => {
-    const p = chamferPoints(0, 0, 100, 200, 10);
-    expect(p).toHaveLength(16);
-    expect(p.slice(0, 4)).toEqual([10, 0, 90, 0]);
-    for (let i = 0; i < p.length; i += 2) {
-      expect(p[i]).toBeGreaterThanOrEqual(0);
-      expect(p[i]).toBeLessThanOrEqual(100);
-      expect(p[i + 1]).toBeGreaterThanOrEqual(0);
-      expect(p[i + 1]).toBeLessThanOrEqual(200);
+/** WCAG relative luminance of a 0xRRGGBB colour. */
+function relLuma(c: number): number {
+  const ch = (v: number): number => {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * ch((c >> 16) & 0xff) + 0.7152 * ch((c >> 8) & 0xff) + 0.0722 * ch(c & 0xff);
+}
+
+function contrast(a: number, b: number): number {
+  const [hi, lo] = relLuma(a) > relLuma(b) ? [a, b] : [b, a];
+  return (relLuma(hi) + 0.05) / (relLuma(lo) + 0.05);
+}
+
+describe('paper theme', () => {
+  it('ink is dark and reads on every paper surface', () => {
+    expect(luma(Color.ink)).toBeLessThan(70);
+    for (const paper of [Color.paper, Color.paperLight, Color.paperDim, Color.kraft]) {
+      expect(contrast(Color.ink, paper)).toBeGreaterThan(4.5);
+    }
+    // Soft ink is the secondary text on cream sheets.
+    expect(contrast(Color.inkSoft, Color.paper)).toBeGreaterThan(4.5);
+  });
+
+  it('every button palette carries an ink that reads on its paper', () => {
+    for (const [id, p] of Object.entries(ButtonPalettes)) {
+      expect(contrast(p.ink, p.base), id).toBeGreaterThan(3.5);
     }
   });
 
-  it('flame outline crests above the top edge and reaches out on both sides', () => {
-    const p = flamePoints(0, 0, 100, 200, 10, 8);
-    let minX = Infinity;
-    let maxX = -Infinity;
-    const crest: number[] = [];
-    for (let i = 0; i < p.length; i += 2) {
-      minX = Math.min(minX, p[i] as number);
-      maxX = Math.max(maxX, p[i] as number);
-      if ((p[i + 1] as number) < 0) crest.push(p[i + 1] as number);
-    }
-    expect(minX).toBe(-8);
-    expect(maxX).toBe(108);
-    expect(crest).toHaveLength(3);
-    // The middle tip is the tallest.
-    expect(Math.min(...crest)).toBe(-12);
-    expect(crest[1]).toBe(-12);
+  it('legacy tokens keep their names but are now light surfaces with dark text', () => {
+    expect(luma(Color.panel)).toBeGreaterThan(220);
+    expect(luma(Color.panelDark)).toBeGreaterThan(200);
+    expect(Color.text).toBe(Color.ink);
+    expect(Color.textDim).toBe(Color.inkSoft);
+    expect(Color.outline).toBe(Color.ink);
   });
 
-  it('mirrors a wing from the left edge to the right', () => {
-    const r = wingPoints(1, 100, 80, 12, 1);
-    const l = wingPoints(-1, 0, 80, 12, 1);
-    expect(r).toHaveLength(14);
-    for (let i = 0; i < r.length; i += 2) {
-      expect((r[i] as number) - 100).toBeCloseTo(-(l[i] as number), 9);
-      expect(r[i + 1]).toBe(l[i + 1]);
-    }
+  it('the dim behind popups is a warm brown, not black or purple', () => {
+    const r = (Dim.backdrop >> 16) & 0xff;
+    const b = Dim.backdrop & 0xff;
+    expect(r).toBeGreaterThan(b);
+    expect(Dim.backdropAlpha).toBeGreaterThanOrEqual(0.55);
+    expect(Dim.backdropAlpha).toBeLessThanOrEqual(0.6);
   });
 
-  it('rounds each corner with one curve and closes the path', () => {
-    const calls: string[] = [];
-    const g = {
-      moveTo: () => calls.push('m'),
-      lineTo: () => calls.push('l'),
-      quadraticCurveTo: () => calls.push('q'),
-      closePath: () => calls.push('c'),
-    };
-    roundedPolyPath(g as never, [0, 0, 10, 0, 10, 10, 0, 10], 3);
-    expect(calls.filter((c) => c === 'q')).toHaveLength(4);
-    expect(calls[0]).toBe('m');
-    expect(calls[calls.length - 1]).toBe('c');
-  });
-
-  it('copes with a degenerate (zero-length) edge', () => {
-    const g = { moveTo: vi.fn(), lineTo: vi.fn(), quadraticCurveTo: vi.fn(), closePath: vi.fn() };
-    expect(() => roundedPolyPath(g as never, [0, 0, 0, 0, 10, 10], 4)).not.toThrow();
-    const all = [...g.moveTo.mock.calls, ...g.lineTo.mock.calls, ...g.quadraticCurveTo.mock.calls];
-    for (const c of all) for (const v of c) expect(Number.isFinite(v)).toBe(true);
+  it('the five rarity hues are all different and readable as marks on cream', () => {
+    const colors = RARITY_ORDER.map((id) => Rarity[id].color);
+    expect(new Set(colors).size).toBe(5);
+    for (const id of RARITY_ORDER) expect(contrast(Rarity[id].dark, Color.paper), id).toBeGreaterThan(2.5);
+    expect(rarityIndex('mythic')).toBe(4);
   });
 });
 

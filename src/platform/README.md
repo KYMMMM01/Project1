@@ -37,8 +37,10 @@ await initPlatform();             // never rejects: adapter init is capped at 5 
 ```
 
 `initPlatform()` also installs the platform storage into `core/save`, sets `game.pauseOnHidden` from
-`capabilities.usesPageVisibility`, wires platform pause/resume (and the platform's mute switch: YouTube
-audio setting, CrazyGames `muteAudio`) to `game.setExternalPause` / `audio.setMuted`, re-attaches ad
+`capabilities.usesPageVisibility`, wires pause/resume to `game.setExternalPause` / `audio.setMuted` and to `platform.lifecycle.onPause/onResume`
+(the adapter's own signal, and on every platform with `usesPageVisibility` the page being hidden or shown:
+`lifecycle.ts`; the game resumes when the last reason lets go), wires the platform's mute switch (YouTube
+audio setting, CrazyGames `muteAudio`), re-attaches ad
 counters and the IAP ledger from platform storage, preloads ads and starts the purchase restore.
 
 Right after boot the meta layer sets its two handlers (the restore waits for them):
@@ -96,7 +98,10 @@ analytics.track('run_start', { mode: 'classic' })   // event names: docs/명세_
 ### Ad rules (GDD 8.2, all in `adPolicy.ts`)
 
 Placements and caps: `pre_run_snack`, `revive`, `relic_reroll`, `result_double` once per run;
-`snack_box` 3, `daily_treat` 3, `free_chest` 4, `patrol_double` 3, `shop_refresh` 2 per local day.
+`snack_box` 3, `daily_treat` 3, `free_chest` 4, `patrol_double` 3, `shop_refresh` 2, `sweep_ticket` 2 per local day
+(`sweep_ticket` is the sweep-ticket ad of docs/명세_메타.md section 8, not a GDD 8.2 row). The home and shop
+placements (`daily_treat`, `free_chest`, `patrol_double`, `shop_refresh`, `sweep_ticket`: `home: true`) sit outside any
+run: the 2-per-run budget below neither counts nor blocks them.
 Global: no offer in the first run, 90 s between any two ads, at most 2 ads put in front of the player per
 run (watched or dismissed), at most 12 completed rewarded ads a day.
 The ad-free Butler Pass pays out `result_double`, `free_chest` and `patrol_double` without an ad (the
@@ -158,7 +163,8 @@ ledger and reload: the boot restore must grant the completed orders again).
 ## Rules the code keeps (research C-7)
 
 No `eval` / `new Function` in this folder; the only external request is the vendor SDK script of the
-platform being built (never in dev / itch); storage calls never throw and always settle; every ad,
+platform being built (never in dev / itch); storage calls never throw and always settle (a key whose read failed is not
+written over: see `safeStorage`); every ad,
 purchase and boot step has a watchdog or timeout; rewards come only from the SDK's completion signal;
 YouTube never touches the Page Visibility API (`capabilities.usesPageVisibility = false`).
 
@@ -167,6 +173,6 @@ YouTube never touches the Page Visibility API (`capabilities.usesPageVisibility 
 `types.ts` contracts, `adPolicy.ts` limits and interstitial policy (pure), `adService.ts`, `iapService.ts`,
 `pricing.ts` (catalogue price rules), `leaderboard.ts`, `modal.ts` (one pause+mute+input-block gate shared
 by ads and purchases), `inputShield.ts`, `analytics.ts`, `storage.ts`, `registry.ts` (singletons), `boot.ts`
-(`initPlatform`), `resolve.ts` (build-time switch), `runtime.ts`, `bridges.ts` (Toss / Capacitor typed
+(`initPlatform`), `lifecycle.ts` (pause/resume wiring), `resolve.ts` (build-time switch), `runtime.ts`, `bridges.ts` (Toss / Capacitor typed
 bridges), `sdkLoader.ts`, `fallback.ts`, `adapters/*`.
 Tests: `tests/platform*.test.ts` (node, no DOM).

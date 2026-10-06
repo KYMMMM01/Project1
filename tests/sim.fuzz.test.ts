@@ -6,6 +6,7 @@ import { MODIFIER_IDS } from '@/game/data/modifiers';
 import { BASE_UNIT_IDS } from '@/game/data/roster';
 import { TICK } from '@/game/data/balance';
 import { createBattle } from '@/game/sim/create';
+import { createBot } from '@/game/sim/bots';
 import { playRun } from '@/game/sim/runner';
 import { initOf, newSim, put, record } from './simHelpers';
 
@@ -196,6 +197,50 @@ describe('determinism', () => {
     expect(play(s)).not.toBe(play(other));
   });
 
+  it('replays a recorded command list to the same board, money and merges', () => {
+    const commands = new Set<string | symbol>([
+      'summon', 'pickSummon', 'drop', 'sell', 'molt', 'awaken', 'upgradeClass', 'upgradeSummon', 'setLaser', 'callNextWave',
+      'pickRelic', 'rerollRelics', 'revive',
+    ]);
+    const init = initOf({ seed: 4242 });
+    const log: { tick: number; name: string; args: unknown[] }[] = [];
+    const live = createBattle(init);
+    let tick = 0;
+    const recorder = new Proxy<BattleApi>(live, {
+      get(target, prop) {
+        const value: unknown = Reflect.get(target, prop, target);
+        if (typeof value !== 'function') return value;
+        const method = value as (...args: unknown[]) => unknown;
+        if (!commands.has(prop)) return method.bind(target);
+        return (...args: unknown[]) => {
+          log.push({ tick, name: String(prop), args });
+          return method.apply(target, args);
+        };
+      },
+    });
+    const bot = createBot('merge', 5);
+    for (; tick < 60 * 200 && live.phase !== 'won' && live.phase !== 'lost'; tick++) {
+      if (live.phase === 'choice') bot.choose(recorder);
+      else if (tick % 15 === 0) bot.act(recorder);
+      live.step(TICK);
+    }
+    expect(live.getStats().merges).toBeGreaterThan(5);
+    expect(log.filter((c) => c.name === 'drop').length).toBeGreaterThan(5);
+
+    const copy = createBattle(init);
+    let next = 0;
+    for (let t = 0; t < tick; t++) {
+      for (; next < log.length && (log[next] as { tick: number }).tick === t; next++) {
+        const c = log[next] as { name: string; args: unknown[] };
+        Reflect.apply(copy[c.name as keyof BattleApi] as (...args: unknown[]) => unknown, copy, c.args);
+      }
+      copy.step(TICK);
+    }
+    expect(next).toBe(log.length);
+    expect(copy.units.map((u) => u?.id ?? null)).toEqual(live.units.map((u) => u?.id ?? null));
+    expect(fingerprint(copy)).toBe(fingerprint(live));
+  });
+
   it('gives the same run through bots and the runner', () => {
     const init = initOf({ seed: 99 });
     const a = playRun(init, 'synergy');
@@ -206,18 +251,16 @@ describe('determinism', () => {
 
 describe('stream independence', () => {
   /** Summons `count` times, selling each unit; `noise` sprinkles other commands at other times. */
-  function summons(seed: number, noise: boolean, count: number): { units: UnitId[]; offers: UnitId[][]; merges: string[] } {
+  function summons(seed: number, noise: boolean, count: number): { units: UnitId[]; offers: UnitId[][] } {
     const sim = newSim({ seed });
     sim.fish = 1_000_000;
     sim.purr = 50;
     const units: UnitId[] = [];
     const offers: UnitId[][] = [];
-    const merges: string[] = [];
     sim.events.on('summon', (e) => {
       if (e.source === 'button' || e.source === 'choice') units.push(e.unit.id);
     });
     sim.events.on('summonOffer', (e) => offers.push(e.options));
-    sim.events.on('merge', (e) => merges.push(e.result.id[0] as string));
     const noiseRng = new Rng(seed + 5);
     for (let n = 0; n < count; n++) {
       if (noise) {
@@ -236,7 +279,7 @@ describe('stream independence', () => {
       }
       for (let c = 0; c < CELL_COUNT; c++) if (sim.units[c]) sim.sell(c);
     }
-    return { units, offers, merges };
+    return { units, offers };
   }
 
   it('keeps the n-th summon result and the k-th three-pick whatever else the player does', () => {
@@ -254,7 +297,7 @@ describe('stream independence', () => {
     const run = (extra: boolean): string[] => {
       const sim = newSim({ seed: 8 });
       const out: string[] = [];
-      sim.events.on('merge', (e) => out.push(e.result.id[0] as string));
+      sim.events.on('merge', (e) => out.push(e.result.id));
       sim.fish = 1e6;
       for (let j = 0; j < 12; j++) {
         if (extra) {
@@ -264,6 +307,7 @@ describe('stream independence', () => {
           if (sim.pending) sim.pickSummon(0);
         }
         for (let c = 0; c < CELL_COUNT; c++) if (sim.units[c]) sim.sell(c);
+        sim.fx.jumpChance = 0.5;
         put(sim, 0, 'w_paw');
         put(sim, 1, 'w_paw');
         sim.drop(0, 1);
@@ -272,6 +316,7 @@ describe('stream independence', () => {
     };
     const quiet = run(false);
     expect(quiet).toHaveLength(12);
+    expect(new Set(quiet)).toEqual(new Set(['w_sword', 'w_viking']));
     expect(run(true)).toEqual(quiet);
   });
 });

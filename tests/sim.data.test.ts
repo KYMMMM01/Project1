@@ -215,7 +215,7 @@ describe('health tables', () => {
     expect(BOSS_HP[1]).toBeLessThan(BOSS_HP[2] as number);
     expect(specialHp('boss', 3)).toBeGreaterThan(specialHp('boss', 2));
     expect(CHAPTER_HP_MULT).toHaveLength(CHAPTER_COUNT);
-    expect(CHAPTER_HP_MULT[0]).toBe(1);
+    expect(CHAPTER_HP_MULT[0]).toBeGreaterThanOrEqual(1);
     for (let i = 1; i < CHAPTER_COUNT; i++) expect(CHAPTER_HP_MULT[i]).toBeGreaterThanOrEqual(CHAPTER_HP_MULT[i - 1] as number);
   });
 

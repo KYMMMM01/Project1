@@ -4,17 +4,18 @@ import { game } from '@/core/game';
 import { Ease } from '@/core/tween';
 import { drawIcon, type IconName } from './icons';
 import { backOut, motion, TweenBag } from './motion';
-import { cacheStatic, drawPill } from './shapes';
+import { drawPaper, paperSeed, tapeStrip } from './paper';
+import { cacheStatic } from './shapes';
 import { uiLabel } from './text';
-import { ButtonPalettes, Color, type ButtonStyleId } from './theme';
+import { ButtonPalettes, Color, type ButtonStyleId, type TapeName } from './theme';
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
-const KIND: Record<ToastKind, { style: ButtonStyleId; icon: IconName }> = {
-  info: { style: 'info', icon: 'info' },
-  success: { style: 'success', icon: 'check' },
-  warning: { style: 'primary', icon: 'warning' },
-  error: { style: 'danger', icon: 'close' },
+const KIND: Record<ToastKind, { style: ButtonStyleId; icon: IconName; tape: TapeName }> = {
+  info: { style: 'info', icon: 'info', tape: 'sky' },
+  success: { style: 'success', icon: 'check', tape: 'green' },
+  warning: { style: 'mustard', icon: 'warning', tape: 'yellow' },
+  error: { style: 'danger', icon: 'close', tape: 'pink' },
 };
 
 interface Pending {
@@ -38,29 +39,23 @@ function capLines(label: Text): void {
 function buildToast(text: string, kind: ToastKind): { view: Container; label: Text } {
   const k = KIND[kind];
   const pal = ButtonPalettes[k.style];
-  const label = uiLabel(text, { size: 30, stroke: pal.textStroke, strokeWidth: 6, wrap: 520, lineHeight: LINE_H, shadow: false });
+  const label = uiLabel(text, { size: 30, wrap: 520, lineHeight: LINE_H });
   capLines(label);
   const h = Math.max(88, label.height + 40);
   const w = Math.min(680, Math.max(380, label.width + 150));
+  const seed = paperSeed();
   const art = new Container();
   const g = new Graphics();
-  drawPill(g, -w / 2, -h / 2, w, h, {
-    top: pal.top,
-    bottom: pal.bottom,
-    outline: Color.outline,
-    outlineWidth: 5,
-    gloss: 0.3,
-    shadow: { alpha: 0.4, spread: 12, offsetY: 8 },
-  });
-  // Icon medallion on the left end
-  const med = new Graphics();
-  med.circle(-w / 2 + 52, 0, 31).fill({ color: pal.lip, alpha: 0.55 });
-  med.circle(-w / 2 + 52, 0, 31).stroke({ width: 3, color: Color.outline, alpha: 0.6 });
+  // A cream strip with the kind's colour on a round paper medallion and one piece of tape.
+  drawPaper(g, -w / 2, -h / 2, { w, h, radius: 28, fill: Color.paperLight, seed, grain: false });
+  drawPaper(g, -w / 2 + 20, -34, { w: 68, h: 68, kind: 'circle', fill: pal.base, edge: pal.lip, seed: seed + 1, shadow: 3, grain: false });
   const icon = drawIcon(k.icon, 40);
-  icon.position.set(-w / 2 + 52, 0);
-  art.addChild(g, med, icon);
+  icon.position.set(-w / 2 + 54, 0);
+  const tape = tapeStrip({ name: k.tape, w: 70, h: 24, angle: 4, pattern: 'dots', seed });
+  tape.position.set(w / 2 - 74, -h / 2 + 1);
+  art.addChild(g, icon, tape);
   cacheStatic(art);
-  label.position.set(24, 0);
+  label.position.set(34, 0);
   const view = new Container();
   view.addChild(art, label);
   return { view, label };

@@ -3,7 +3,7 @@ import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { clamp } from '@/core/math';
 import { backOut, motion, TweenBag } from './motion';
-import { drawShadow, vGradient } from './shapes';
+import { drawSpeechBubble, paperSeed } from './paper';
 import { uiLabel } from './text';
 import { Color } from './theme';
 
@@ -44,15 +44,8 @@ class TooltipManager {
     const botRight = game.overlayLayer.toLocal(new Point(b.x + b.width, b.y + b.height));
     const cx = (topLeft.x + botRight.x) / 2;
 
-    const title = content.title ? uiLabel(content.title, { size: 30, color: 0xffd54a, strokeWidth: 5, shadow: false }) : null;
-    const body = uiLabel(content.text, {
-      size: 26,
-      wrap: MAX_W - PAD * 2,
-      lineHeight: 34,
-      stroke: Color.outline,
-      strokeWidth: 4,
-      shadow: false,
-    });
+    const title = content.title ? uiLabel(content.title, { size: 30, color: Color.coralDark }) : null;
+    const body = uiLabel(content.text, { size: 26, wrap: MAX_W - PAD * 2, lineHeight: 34 });
     const w = Math.min(MAX_W, Math.max(title?.width ?? 0, body.width) + PAD * 2);
     const h = PAD * 2 + body.height + (title ? title.height + 4 : 0);
 
@@ -63,20 +56,12 @@ class TooltipManager {
     // Local frame: origin at the arrow tip so the pop animation grows out of the target.
     const bodyY = above ? -ARROW - h : ARROW;
     const g = new Graphics();
-    drawShadow(g, -arrowX, bodyY, w, h, 26, { alpha: 0.4, spread: 10, offsetY: 6 });
-    const dir = above ? -1 : 1;
-    // The arrow's base sits on the body edge (3 px under it so no gap shows) and its tip on the target.
-    const base = dir * ARROW;
-    const a = ARROW * 0.9;
-    g.roundRect(-arrowX, bodyY, w, h, 26)
-      .fill(vGradient(0x35286f, 0x241a4a))
-      .stroke({ width: 5, color: Color.outline, alignment: 1 });
-    g.roundRect(-arrowX + 6, bodyY + 6, w - 12, h - 12, 20).stroke({ width: 2, color: 0x8f7bd8, alpha: 0.5, alignment: 1 });
-    g.poly([-a, base + dir * 3, 0, 0, a, base + dir * 3])
-      .fill(vGradient(0x2d2060, 0x241a4a))
-      .stroke({ width: 5, color: Color.outline, join: 'round' });
-    // Paint over the body outline where the arrow joins it so the two read as one shape.
-    g.rect(-a + 3, dir < 0 ? base - 3 : base - 6, a * 2 - 6, 9).fill(0x2a1f58);
+    // Cream paper, a hand-drawn brown line and a small tail whose tip is the local origin.
+    drawSpeechBubble(g, -arrowX, bodyY, w, h, {
+      radius: 26,
+      seed: paperSeed(),
+      tail: { side: above ? 'bottom' : 'top', x: arrowX, len: ARROW, half: 13 },
+    });
 
     const bubble = new Container();
     bubble.addChild(g);

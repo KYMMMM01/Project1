@@ -1,87 +1,131 @@
-# Handoff: ui (UI kit)
+# Handoff: ui (UI kit), paper scrapbook restyle
 
-Date 2026-10-06. Module: `src/ui/**`, gallery `src/demo/UiDemo.ts` (`?demo=ui&page=0..7`), tests `tests/ui.test.ts` and `tests/ui.components.test.ts`.
-Everything is drawn in code (PixiJS v8 Graphics + Text); no image files. Import from the barrel: `import { Button, popups, toast, ... } from '@/ui'` (or the file paths below). Construct UI after BootScene has loaded the fonts: `numberText()` bakes its glyph atlas on first use.
+Date 2026-10-06. Module: `src/ui/**`, gallery `src/demo/UiDemo.ts` (`?demo=ui&page=0..11`), CSS splash in `index.html`, tests `tests/ui.test.ts`, `tests/ui.components.test.ts`, `tests/ui.paper.test.ts`.
+Everything is still drawn in code (PixiJS v8 Graphics + Text); no image files. Import from the barrel: `import { Button, Panel, paperShape, tapeStrip, ... } from '@/ui'`. Construct UI after BootScene has loaded the fonts.
 
-## What exists
+## The look
 
-| File | Exports |
+"A sunny home by day", shape language "paper scrapbook" (the approved mock is `art/style2/uistyle_paper.png`, option C). Everything is cut paper lying on a warm wooden floor.
+
+- **Matte and flat.** No gloss, no glass highlights, no plastic gradients, no glow halos, no thick dark outline on panels or buttons.
+- **Cut edges.** Every piece is a rounded rectangle whose edge wobbles by 1 to 2.1 px along a few slow waves, deterministic per shape (seeded, so nothing shimmers between frames, resizes or reloads). A side can be *torn* instead: short irregular teeth with a pale fibre line.
+- **Layering.** Depth is a flat warm-brown shadow (about 22 % alpha, 0 / +5 px, no blur) and an optional thin darker line just inside the cut. Sheets of 40 000 px² or more get a very quiet paper grain (one 128 px canvas texture, created once, tiled by a `FillPattern`).
+- **Tape and dashes.** Washi tape (dots, gingham, stripes, plain; pink, sky, yellow, green) marks the selected or recommended piece and holds sheets down, one piece per card at most. A teal dashed "cut here" line runs inside big sheets and between rows.
+- **Text.** Dark ink (`Color.ink`) straight on the paper: no stroke, no shadow. Only text on artwork or on the dark dim is light, and then it carries a brown stroke (`onArt`).
+- **The one drawn line** is the speech bubble / tooltip outline (2.5 px ink, wobbly, with a tail).
+
+## Tokens (`theme.ts`)
+
+Every old token name is still there with its new meaning, so nothing breaks; new code should prefer the semantic names.
+
+| Token | Value | Use |
+|---|---|---|
+| `ink` | `0x4a3222` | text and glyphs on paper; also `outline`, `text` |
+| `inkSoft` | `0x7d5e45` | secondary text on cream (AA); also `textDim` |
+| `inkDeep` | `0x3b2418` | labels on coloured craft paper (coral, berry, teal); also `textDark` |
+| `onArt` | `0xfffaf0` | light text, only on artwork or the dim, always with a brown stroke |
+| `paper` / `paperLight` / `paperDim` | `fbf3e2` / `fffaee` / `edddbb` | cream sheet / card lying on a sheet / nested well; legacy `panel`, `panelLight`, `panelDark` |
+| `kraft` / `kraftDark` / `track` | `d9b88a` / `b48f62` / `d3bb94` | secondary strips and bases / their edge / the strip bars and sliders are painted into |
+| `wood` / `woodDark` | `c48f50` / `a06a33` | the floor; legacy scene backgrounds `bg`, `bgDeep` |
+| `shadow` | `0x6a4527` | the flat shadow colour (drawn at about 22 % alpha) |
+| `coral` / `teal` / `mustard` / `leaf` / `berry` / `violet` (+ `...Dark`) | `f0796b` `5fb9c4` `f0bc43` `7dba5c` `d96579` `9c84c0` | craft papers; legacy `primary`, `info`, `gold`, `success`, `danger`, `purple` (+ `...Dark`) |
+| `neutral` / `neutralDark` | `d9b88a` / `a88457` | kraft |
+| `gem`, `energy` | `6ccbe0`, `9ccb5e` | currency colours |
+| `Dim` | `0x3a2514` at 0.58 | popup dim: warm brown, never black or purple |
+| `TapeColors` | pink `f3a9ba`, sky `9acbea`, yellow `f5d36a`, green `a6d48b` | washi tape body and its printed mark |
+| `Rarity` | common `c9bba3`, rare `4fa3c7`, epic `9c7fc2`, legendary `e8a23a`, mythic `df5c6f` (+ `dark`, `light`, `glow`) | five matte hues readable on cream; `RARITY_GOLD` `eab84a` is the mythic accent |
+| `ButtonPalettes` | `primary` coral, `success` leaf, `info` teal, `danger` berry, `neutral` cream, `purple` violet, **new** `mustard`, **new** `kraft` | each has `base`, `top`, `bottom` (a hair either side of base), `lip` (darker edge tone), `ink`, `textStroke` |
+
+`ButtonPalette` lost `rimTop`, `rimBottom` and `glow` (nothing outside `src/ui` read them). `PanelColors` is now `{ fill, edge, text, textDim }`. `PanelVariant` gained `'kraft'`. `ButtonStyleId` gained `'mustard' | 'kraft'`. `PALETTE_PREVIEWS`, `applyPalettePreview` and the `?theme=` hack are gone.
+
+## Paper primitives (`paper.ts`, geometry in `paperMath.ts`)
+
+All exported from `@/ui`. Geometry is generated once per size/seed and cached (`cachedPaperPath`, dash runs, tape outlines); nothing is rebuilt per frame.
+
+| Export | One-line usage |
 |---|---|
-| `theme.ts`, `text.ts` | unchanged exports (`Color`, `Rarity`, `RARITY_ORDER`, `Hit`, `ButtonPalettes`, `label`, `uiLabel`, `fitLabel`, ...). Added `textResolution()`: every `label()` now rasterises at device-pixels-per-design-px (capped at 2) instead of Pixi's automatic density |
-| `shapes.ts`, `colors.ts` | `drawPanel / drawPill / drawBevelRect / drawBevelBase / drawBevelFace / drawRibbon / drawShadow / drawGlow`, shared cached gradients, `cacheStatic / refreshCache`, colour helpers |
-| `icons.ts` | `drawIcon(name, size, color?)`, `ICON_NAMES` (61 icons). New: purr, laser, sun, molt, wave_call, class_warrior, class_ranger, class_mage, class_trickster, target, sweep, ticket, calendar, wardrobe, share, code, speed_1/2/3, eye (warning already existed) |
-| `Button.ts`, `IconButton.ts` | `Button`, `IconButton` |
-| `Panel.ts`, `Popup.ts`, `dialogs.ts`, `RewardPopup.ts` | `Panel`, `Popup`, `popups`, `confirmDialog`, `alertDialog`, `RewardPopup`, `showRewards` |
-| `Toast.ts`, `Tooltip.ts` | `toast`, `clearToasts`, `tooltip`, `attachTooltip`, `HOLD_DELAY` |
-| `ProgressBar.ts`, `Decor.ts`, `Badge.ts`, `Tag.ts`, `controls.ts`, `TabBar.ts`, `ScrollView.ts`, `CurrencyPill.ts` | `ProgressBar`, `CooldownRing`, `Divider`, `Stars`, `LoadingSpinner`, `Badge`, `Tag`, `Toggle`, `Slider`, `Stepper`, `TabBar`, `SegmentTabs`, `ScrollView`, `CurrencyPill`, `TopBar` |
-| `CardFrame.ts`, `cardShapes.ts` | `CardFrame` (frame silhouette now varies by rarity) and its pure geometry |
-| **new** `RarityPips.ts`, `ClassChip.ts`, `OddsTable.ts` + `oddsMath.ts`, `ScreenScaffold.ts`, `rarity.ts`, `prefs.ts` | see below |
-| `layout.ts` + `layoutMath.ts`, `scrollPhysics.ts`, `countUp.ts`, `numbers.ts`, `motion.ts`, `press.ts` | layout helpers, scroll maths, count-up maths, `numberText`, `motion.reduced` + `TweenBag`, press registry |
+| `paperShape(opts)` -> `PaperPiece` | `host.addChild(paperShape({ w: 300, h: 100, kind: 'pill', fill: Color.paper }))`: a Container (origin = centre) with `.shadowG` and `.faceG`. `kind` is `'rect' | 'pill' | 'circle'`; also `radius`, `seed`, `torn`, `shadow`, `grain`, `wobble`, `edge`, `edgeWidth`, `edgeAlpha`, `alpha`. |
+| `drawPaper(g, x, y, opts)` | Shadow + face into a Graphics you own; (x, y) is the top-left of the piece. `drawPaperShadow` and `drawPaperFace` draw the halves separately (a button presses its face onto a shadow that stays). |
+| `paperSeed()` | A fresh wobble seed; take one per component in its constructor and reuse it on every redraw. Without a `seed` the shape is cut from its size, so equal sizes cut equal. |
+| `tapeStrip({ name, pattern, w, h, angle })` -> Graphics | A strip of washi tape, origin = centre, zig-zag ends, slight tilt. `name`: `pink|sky|yellow|green`; `pattern`: `dots|gingham|stripes|plain`. |
+| `drawDashedRect(g, x, y, w, h, { radius, color, width, dash, gap })` | The teal "cut here" line round a rounded rectangle (hand-drawn wobble, cached dash runs). |
+| `drawDashedLine(g, x0, y0, x1, y1, opts)` | A dashed rule, also hand-drawn. |
+| `new PaperLabel({ text, size, paper, torn, tape })` | A torn paper label that sizes itself to its text (`setText`, `setMaxWidth`); `paper` is a `ButtonStyleId` or a raw colour; `torn: 'ends' | 'bottom' | 'none'`. |
+| `drawPaintFill(g, x, y, w, h, color)` | A brush-painted bar: round left cap, uneven leading edge (for one-off drawings; bars that animate use `paintTexture`). |
+| `paintTexture(color, h)` (in `shapes.ts`) | The same painted fill baked into a texture for a 9-slice (`leftWidth = rightWidth = h / 2`); what `ProgressBar` and `Slider` use. |
+| `drawSpeechBubble(g, x, y, w, h, { tail, radius })` | Cream paper with a hand-drawn brown outline and a tail (`tail: { side: 'top' | 'bottom', x, len, half }`). |
+| `drawFloor(g, w, h)` | The wooden floor (planks, grain streaks): use it for a scene background. |
+| `edgeTone(fill)` | The paper's own darker rim colour. |
 
-## Consumer API (additions and changes)
+`paperMath.ts` (pure, unit-tested in `tests/ui.paper.test.ts`): `hash32`, `makeRng`, `paperPath`, `cachedPaperPath`, `wobbleAmp`, `tornMask`, `bubblePath`, `dashRuns`, `tapeOutline`, `clipPolyX`, `paintPath`.
+
+## Components (names, options and behaviour unchanged unless listed)
+
+- **Button / IconButton**: a paper cut-out with a flat shadow. Pressing moves the paper 3 to 4 px onto its shadow, scales it to 0.97 and tints it a shade darker on the pointerdown frame; release springs back with a 1.035 overshoot and 1.6 degrees of wobble (alternating sides). Disabled = desaturated kraft with soft ink plus the corner padlock. New: `tape?: TapeName` strip across the top (one main CTA per screen). `shine()` is now an attention wiggle (the paper rocks and settles); there is no glossy sweep any more. Icon buttons default to cream.
+- **Panel / Popup / dialogs / RewardPopup**: a cream sheet with grain; the title sits on a torn coloured `PaperLabel` straddling the top edge; `ribbon` picks its colour. New `Panel` options: `torn` (sides) and `tape` (top centre; with a title it is stuck across the label's corner). The close button is a round kraft IconButton. Dialogs and the reward popup tear their bottom edge and carry tape. Reward tiles are photo frames (cream border, rarity-coloured mat) with the amount on a teal strip.
+- **TabBar**: a kraft strip with a torn top edge; the selected tab is a cream paper tab that slides up through the tear, held by tape; the hero tab is a raised paper circle (coral when selected). **SegmentTabs**: kraft strip with a cream paper piece (and a bit of tape) that slides.
+- **ProgressBar**: kraft track, painted flat fill with an uneven leading edge, label in ink. The `shine` option is gone. **CooldownRing**: kraft ring, painted arc. Colours: gold = mustard, green = leaf, red = coral-red, blue = teal, purple = violet, cyan = sky.
+- **CurrencyPill**: a teal torn strip with the icon over its left end, number in dark ink. **Badge**: coral dot on a cream ring. **Tag**: flat coloured paper (pill, flag, burst). **Toast**: a cream strip with a coloured paper medallion and one piece of tape. **Tooltip**: speech bubble.
+- **CardFrame**: a paper photo frame (cream border, mat in the rarity colour). Ornaments pile up with the tier so rarity never relies on colour: rare = dashed inner line, epic = + photo-corner mounts, legendary = + tape, mythic = + gold accents and a star sticker; the five pips and the optional `colorAssist` name stay. **RarityPips**, **ClassChip** (tier = border colour/width; tier 3 adds a dashed inner line; selected = teal dashed line + tape; tier-up sends out a ring instead of a glow), **OddsTable** (cream well, dashed row separators, painted bars), **Toggle / Slider / Stepper**, **Divider** (teal dashed line), **Stars**, **LoadingSpinner** (ink dots), **ScrollView** indicator (soft ink).
+- **ScreenScaffold**: wooden floor backdrop, a kraft header strip torn along its lower edge with the title on a cream `PaperLabel`, a kraft action bar torn along its top edge.
+- **Icons** (`icons.ts`): shapes untouched. Fills are flat (two-tone ramps collapse to their middle), the glossy sheen and tube highlights are gone, the generic glyphs (close, back, check, plus, minus, play, pause, fast forward, speakers, music, gear, speed, reroll, info, question) are ink, and the hot candy hues are re-mapped (blue -> teal, purple -> violet, red -> berry, white -> cream). Outlines are the ink brown.
+- **Text** (`text.ts`): `label` / `uiLabel` default to ink, no stroke, no shadow. New `LabelOpts.onArt` and `artLabel()`: light fill with a brown stroke, for text on artwork. `numberText(size, color = ink, text, onArt = false)`: the atlas is bare white (tinted), `onArt` bakes the stroke in.
+- **Retired but kept so old call sites compile**: `glossGradient` returns a fully transparent gradient; `drawPill`'s `gloss`, `rim`, `outlineWidth` and `drawShadow`'s `spread` are accepted and ignored; `drawGlow` is unchanged but is for light over artwork only. **Removed**: `drawBevelRect/Base/Face`, `BevelOpts`, `drawRibbon`, `RibbonColors`, `cardShapes.ts` (wing, flame and chamfer silhouettes).
+
+## MIGRATION (for the engineers fixing call sites outside `src/ui`)
+
+| Old habit | New |
+|---|---|
+| White text on a panel (`uiLabel(t, { color: 0xffffff })`, `Color.text`, `Color.white` as text) | Default ink: `uiLabel(t)`. Pass nothing, or `Color.ink`. Secondary text: `Color.inkSoft` (or `Color.textDim`, same value). |
+| Text with a dark stroke + shadow (`stroke: Color.outline, strokeWidth: 5`) | Drop both. Only keep a stroke when the text sits directly on artwork or the dim: `artLabel(t, { size })` or `uiLabel(t, { onArt: true })`. |
+| `Color.textDim` as a light grey-lilac on a dark panel | It is now soft brown: right on cream, wrong on the dim. On the dim use `Color.onArt`. |
+| `numberText(34, 0xffffff, ...)` | `numberText(34, Color.ink, ...)` (the default); on artwork `numberText(34, Color.onArt, '', true)`. |
+| Dark purple fills (`vGradient(Color.panelLight, Color.panelDark)`, `Color.bgDeep` plates, `0x1b1036`...) | A paper piece: `paperShape(...)`, `drawPaper(g, x, y, { w, h, fill: Color.paper })`, or a kit `Panel`. Nested area: `Color.paperDim`. A scene background: `drawFloor(g, w, h)`. |
+| `.stroke({ width: 5, color: Color.outline, alignment: 1 })` round a plate | Remove the outline; the shape has a flat shadow and a thin rim instead. |
+| `glossGradient`, glossy ellipses, `drawGlow` on a panel or button | Delete the highlight. Keep `drawGlow` only for light over artwork (a chest burst, rays). |
+| `drawBevelRect`, `drawRibbon` | `drawPaper` / `PaperLabel`. |
+| White icons on dark buttons | Icons are ink on paper already; leave `drawIcon(name, size)` without a colour. |
+| A selected / recommended marker (gold glow, white ring) | One piece of tape: `tapeStrip({ name: 'sky' })` on the corner, or a dashed teal line round the piece (`drawDashedRect`). |
+| Section divider (engraved groove) | `Divider` (dashed teal) or `drawDashedLine`. |
+| A dark vignette behind popups | `Dim` is warm brown at 0.58; use `Dim.backdrop`, never `0x000000` or purple. |
+| Rarity colours | `Rarity[r].color` is the mat / bar colour, `.dark` the edge or a mark on cream, `.light` a pale tint. `.glow` is for effects over artwork only. |
+| `style: 'purple'` for a quiet secondary button | `purple` is now a muted violet craft paper (special / premium). The quiet secondary is `neutral` (cream); use `kraft` for a close or back action. |
+
+**Text on artwork**: `artLabel('x12', { size: 28 })`, or sit it on a torn label: `new PaperLabel({ text: '준비해요', size: 28, paper: Color.paper })`.
+
+**A custom paper piece** (HUD plate, field sheet, home card):
 
 ```ts
-// Themed rarity words come from i18n keys rarity.common ... rarity.mythic. Never type them in components.
-rarityName(r: RarityId): string                      // '@/ui/rarity'
-uiPrefs.colorAssist: boolean                         // '@/ui/prefs' - set before building cards; spells the rarity out on CardFrame
-
-new RarityPips({ owned?: boolean[5], size?: 16, gap? })   // origin = row centre, .uiBox
-  .set(owned: readonly boolean[], animate = true)    // lit pips pop; dim = hollow socket, top rarity pip is a star
-  .owned / .count
-
-new ClassChip({ icon: IconName, owned?: boolean[5], tier?: 0..3, accent?, tierSfx? = 'upgrade' | false, onTap? })  // 168 x 76, origin = centre
-  .setTier(n, animate = true)                        // a rise punches the chip, flares a glow, pops the new step, plays tierSfx
-  .setOwned(flags, animate = true) .setSelected(v) .onTap(fn | null)
-  // pressed state on the pointerdown frame; a hold >= HOLD_DELAY (the tooltip delay) is not a tap; tier 0..3 restyles the border (plain / bronze / silver / gold)
-
-new OddsTable({ width = 600, rows: OddsRow[], footnote?, framed = true })   // origin = TOP-LEFT, .tableHeight, .uiBox
-  OddsRow = { value: 0..1; rarity?: RarityId; label?: string; color?: number }  // label defaults to rarityName(rarity)
-  .setRows(rows, animate = false)  .setFootnote(text | undefined)
-formatOdds(p): string  oddsBarWidth(p, trackW, minPx = 8)  oddsTotal(values)       // '@/ui/oddsMath' (pure)
-
-new ScreenScaffold({ title, onBack?, scroll = true, actionBarHeight = 0, padding = 24, titleHeight = 104, backdrop = true })
-  .content            // add body widgets here; origin = top-left of the padded body (the ScrollView's content when scroll = true)
-  .actionBar          // add buttons here; (0, 0) = middle of the bar above the home-indicator inset
-  .scroller           // ScrollView | null,  .bodyRect, .contentWidth, .viewportHeight
-  .addTitleAction(item)  .setTitle(text)  .onBack(fn)  .back()  .refresh()  .show(animate) / .hide(animate): Promise<void>
-  ScreenScaffold.handleBack(): boolean    // topmost visible scaffold goes back; Escape is wired already, call it after popups.handleBack() for the browser back gesture
-  // relayouts itself on game 'resize'; header/footer reach under the notch / home indicator, content stays inside them
+const g = new Graphics();
+drawPaper(g, -w / 2, -h / 2, { w, h, radius: 28, fill: Color.paper, seed: paperSeed() });   // shadow + face
+drawDashedRect(g, -w / 2 + 14, -h / 2 + 14, w - 28, h - 28, { radius: 18 });                // optional cut line
+container.addChild(g, tapeStrip({ name: 'sky', pattern: 'dots' }));                          // one piece of tape
+cacheStatic(container);                                                                       // bake once
 ```
-
-Changed behaviour you may notice:
-
-- **Button**: labelled buttons hang a padlock on their corner while disabled, so "locked" is never colour-only (`disabledMark: 'none'` skips it, e.g. when the price already explains the state; icon-only buttons default to 'none'). Press also tints the face; release overshoot is 160 ms / 1.06. `startPulse()` now stops after 5 beats by default (guide U-04), `{ times: -1 }` loops until `stopPulse()`.
-- **Badge**: counts above 9 read `9+` (guide 3.5); default dot is 22 px.
-- **CurrencyPill / RewardPopup / countUp**: numbers use `fmt()` from `@/core/format` (ko: 1.2만 / 3.4억, en: 12.3K). `numberText` carries 만 억 조. `CurrencyPill` ticks (`tickSfx`, default `reel_tick`, <= 20/s, rising a step per tick, only for rolls of 25+).
-- **RewardPopup**: `onChoose(choice, tiles)` fires once, on the frame of dismissal (button, Escape, Back), with each tile's Pixi-global centre, so the caller can start `fx.flyTo` from the tiles.
-- **Popup**: subclasses still build in `body`; `shell` is the animated wrapper. `setContentSize(w, h)` lets a popup shrink to fit a short screen or a long message (dialogs and RewardPopup do).
-- **TabBar**: label 24 px, `onReselect(fn)` for "tap the active tab to scroll to top".
-- **CardFrame**: silhouette per rarity (plain, double line, chamfered corners + jewels, wings + crown, flame crest + star), pips via `RarityPips`, `uiBox` includes the ornaments that overhang the plate. NEW tag is a capsule on small cards (no longer covers the level badge).
-- **Toast**: capped at two lines; a repeat of the toast that is already leaving is queued instead of extending it.
-- **Stars.setEarned** is safe to call while an earlier call is still animating.
+Take one `paperSeed()` when you construct a component and pass it on every redraw; a different seed gives a different wobble.
 
 ## Verified
 
-- `npx tsc --noEmit` filtered to `src/ui`, `src/demo/UiDemo.ts`, `tests/ui*` prints nothing. (The only errors in the tree right now are in `src/view/director/banners.ts`, not mine.)
-- `npx vitest run tests/ui`: 2 files, 53 tests green. New: `formatOdds`, `oddsBarWidth`, `oddsTotal`, `scaffoldLayout`, card silhouette geometry (`chamferPoints`, `flamePoints`, `wingPoints`, `roundedPolyPath`, incl. zero-length edges), `rarityName` fallback, locale-aware count-up text (ko and en). The old K/M test now runs per language.
-- Gallery in the Aside browser, `PAGE_ERRORS []` on every run: all 8 pages (`?demo=ui&page=0..7`), pressed button (face on the lip, tinted), disabled tap (toast + corner padlock), confirm dialog, backdrop-tap close, RewardPopup (count-up, rays), a long toast (cut to two lines), scrolled list (inertia, indicator), tab bar, hold tooltip, full-screen scaffold (header, scroll, action bar, back button, then again with `safeTop = 48 / safeBottom = 34` and a `resize` event), cards in all rarities and three sizes, colour-assist cards, class chips for tiers 0..3, odds table, ko and en wrapped labels.
-- **The Aside browser reports `prefers-reduced-motion: reduce`**, so `motion.reduced` is true there by default and every loop, pop and glint is skipped. I ran each interactive check in that mode and again with `window.__dbg.ui.motion.reduced = false` (set before building the page). Sampled numbers with motion on: ClassChip tier-up body scale 1 -> 1.138 -> 1 in 0.35 s, glow alpha 0.76 -> 0 over 0.6 s, new bar 0.2 -> 1.2 -> 1; mythic RarityPips pop 0.79 -> 1.23 -> 1 with the ring shown for 0.4 s; legendary glint and mythic border cycle running on the cards; CTA pulse; rewards sunburst.
-- Escape ordering (motion on): an alert over a ScreenScaffold, first Escape closes the popup only, second goes back; a second `scaffold()` call while open is ignored; 12 toasts in a row and a RewardPopup dismissed with Escape end with the UI tween count back at its baseline and no warnings.
-- Leaks: cycling all 8 demo pages three times with reduced motion leaves a single live UI tween (the busy spinner on page 0); with motion on, two full cycles give identical live-tween counts per page (3, 0, 3, 9, 0, 0, 0, 0 for pages 0..7), so nothing accumulates. Texture memory after visiting every page is 60 MB (525 pooled `cacheAsTexture` targets; Pixi's `TexturePool` keeps returned targets for reuse).
-- Defects found and fixed while doing this: `ScrollView.destroy` scheduled a re-measure of itself through its own `childRemoved` handler, which threw inside `Tweener.update` on the next frame (and, because `Tweener.update` compacts its list as it goes, left phantom tweens behind); the tooltip arrow pointed the wrong way; `Stars.setEarned` could leave stars invisible when called twice quickly; `RewardPopup` destroyed a per-popup gradient texture still bound in a batch (Pixi warning on every close); the NEW tag covered the level badge on small cards; `RarityPips` showed both the lit and the hollow pip until the first `set`; NaN into `ProgressBar.setValue` / `Slider.setValue` / `CooldownRing.setProgress` / `CurrencyPill.setAmount` is now treated as 0.
-- Hunted and found fine: no `any` / `ts-ignore` / TODO in the module; no allocation in per-frame update paths (count-up skips frames whose integer did not change); every component's `destroy()` kills its tweens and listeners (`TweenBag`, press registry, `stage.off`, `game.onUpdate` unsubscribers, window key listeners); Graphics are never used as parents (a Pixi deprecation warning in one new component was fixed).
+- `npx tsc --noEmit` filtered to `src/ui`, `src/demo/UiDemo.ts`, `tests/ui*`, prints nothing.
+- `npx vitest run tests/ui`: 3 files green. New `tests/ui.paper.test.ts` (seeded determinism, wobble stays inside its box and inside 1 to 2.1 px, torn sides and fibre lines, bubble tail splice, dash runs, tape zig-zag, slab clipping, painted-fill silhouette) and a `paper theme` block in `tests/ui.components.test.ts` (contrast of ink on every paper, ink on every button palette, legacy token mapping, warm dim, five distinct rarity hues). The card-silhouette tests went with `cardShapes.ts`.
+- Aside browser, `PAGE_ERRORS` is `[]` on every run: all 12 gallery pages at 720 x 1280 and again at 720 x 1600 (page 0, 9, 11), pressed button (held pointerdown), disabled state, confirm and delete dialogs, reward popup, toast, tooltip, full-screen scaffold, selected tab, and the smoke boots `?scene=home`, `?scene=home&tab=cats`, `?scene=battle&chapter=1&seed=7&sandbox=1&runs=5` (the kit renders correctly inside them; their own hard-coded purple rug is not mine). The splash was inspected by un-hiding `#boot` on a loaded page.
+- `npx vitest run`: 55 files, everything green except the known `tests/screens.shell.layout.test.ts` "xp ring fraction".
+
+## Screenshots to open
+
+Aside output in the session scratchpad, `shots/final/p0..p11` is the last full pass of the gallery (`?demo=ui&page=0..11`): `p0` palettes and CTA, `p1` states (normal / pressed / disabled / busy / badge) and icon buttons, `p2` panels and popup buttons, `p3` currency pills, bars, rings, toggles, slider, stepper, stars, `p4` paper shapes, washi tape, dashed lines, torn labels, `p5` speech bubbles, tags, badges, divider, `p6` card frames in all five rarities, `p7` all 61 icons, `p8` scroll list, `p9` tab bar and segmented control, `p10` class chips, pips and odds table, **`p11` the approved battle mock rebuilt from kit parts only: hold it next to `art/style2/uistyle_paper.png`**. Also `shots/ui/`: `confirm`, `danger`, `rewards`, `toast`, `tooltip`, `scaffold` (popups, toast, speech-bubble tooltip, full-screen scaffold), `tabs_cards` (selected tab), `splash` (the CSS boot card), `tall_0`, `tall_9`, `tall_11` (720 x 1600), and `shots/smoke/` (`home`, `home_cats`, `battle`: the real game around the kit).
 
 ## Known gaps
 
-- Digits are not tabular: `numberText` uses the proportional Lilita One digits, so a rolling counter jitters by a pixel or two (it stays centred).
-- There is no global text-size setting yet (guide 3.8 S/M/L); every label uses the size its component asks for.
-- Tooltips are not repositioned on resize (they hide on the next press).
-- Popups are not cleared on scene change: call `popups.closeAll()` (and `clearToasts()`) when leaving a scene.
-- The Hangul font subset `public/fonts/game-kr.woff2` is stale: strings such as 꼬마 / 동네 / 골목대장 fall back to the system font in the gallery (visible as thin glyphs between the chunky ones). `npm run font` fixes it; it is outside my paths.
-- No inline rewarded-ad card component: compose `Panel` + `Button({ icon: 'ad' })` inside a `ScreenScaffold` (the gallery's "Full screen" button shows one).
+- Screens outside `src/ui` still hard-code the old colours and white strokes, so they look half-converted until their owners follow the migration table (expected). The Aside tab in this environment renders at about 1.5 fps (the audio demo does the same), so game-clock animations (tooltip hold, reward count-up, toast timing) run at roughly 0.15x speed there; I drove those states directly (`tooltip.show`, `__dbg.ui.*`) and held the pointer down for seconds. Other engineers' Vite reloads also reset the page mid-run now and then.
+- The wood floor is flat planks with a few grain streaks; the mock's sunlit window shadows are artwork, not kit.
+- Fonts: the Hangul subset `public/fonts/game-kr.woff2` is still stale (see REQUESTS).
+- Paper grain only on pieces of 40 000 px² or more (or with `grain: true`); it is a 128 px tile and can show repetition on a very large sheet.
+- Reduced motion: the Aside browser reports it, so the press spring, tape and tab slides were checked statically; the tweens are the same code paths as before.
 
 ## REQUESTS
 
 1. Run `npm run font` (rebuilds `public/fonts/*.woff2` from every string in `src/`): the Korean subset predates the current strings.
-2. `src/core/tween.ts` `Tweener.update`: a throwing callback leaves the list half-compacted (earlier survivors are duplicated), so one bad callback keeps stepping some tweens twice per frame from then on. A `try/finally` around the loop that applies the compaction would make it self-healing. Not needed by the UI once its own throw was fixed.
-3. Type errors outside my paths (not mine): `src/view/director/banners.ts(68,22)` and `(281,32)`, TS6138 unused properties `size` and `stage`.
+2. `src/core/tween.ts` `Tweener.update`: a throwing callback leaves the list half-compacted; a `try/finally` around the loop that applies the compaction would make it self-healing.
+3. Screens that read `ButtonPalettes[x].rimTop/rimBottom/glow` (none found in the tree today) must switch to `base/lip/ink`.
+4. Owners of `src/screens/**` and `src/view/hud/**`: apply the MIGRATION table above; the biggest wins are text colours and stroke options, then the `vGradient(Color.panelLight, Color.panelDark)` plates.

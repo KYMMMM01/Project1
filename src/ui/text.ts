@@ -15,12 +15,18 @@ export function textResolution(): number {
 
 export interface LabelOpts {
   size?: number;
+  /** Text colour. Default: ink (or the light on-art colour when `onArt` is set). */
   color?: number;
-  /** Outline colour, or false for none. Default: dark outline (the standard game-UI look). */
+  /** Outline colour, or false for none. Default none: ink sits directly on paper. */
   stroke?: number | false;
   strokeWidth?: number;
-  /** Hard drop shadow under the glyphs. Default true when stroked. */
+  /** Hard drop shadow under the glyphs. Default false. */
   shadow?: boolean;
+  /**
+   * Text that sits directly on artwork or on a dark dim: light, with a brown stroke so it stays
+   * readable on any picture. Everything that sits on paper uses the default dark ink instead.
+   */
+  onArt?: boolean;
   align?: 'left' | 'center' | 'right';
   /** Wrap width in design px; enables word wrap. */
   wrap?: number;
@@ -33,16 +39,17 @@ export interface LabelOpts {
 
 export function labelStyle(o: LabelOpts = {}): TextStyleOptions {
   const size = o.size ?? 28;
-  const stroke = o.stroke === undefined ? Color.outline : o.stroke;
-  const strokeWidth = o.strokeWidth ?? Math.max(3, Math.round(size * 0.16));
-  const shadow = o.shadow ?? stroke !== false;
+  const onArt = o.onArt ?? false;
+  const stroke = o.stroke === undefined ? (onArt ? Color.outline : false) : o.stroke;
+  const strokeWidth = o.strokeWidth ?? Math.max(4, Math.round(size * 0.17));
+  const shadow = o.shadow ?? false;
   const style: TextStyleOptions = {
     fontFamily: FONT_FAMILY,
     fontSize: size,
-    fill: o.color ?? Color.text,
+    fill: o.color ?? (onArt ? Color.onArt : Color.ink),
     align: o.align ?? 'center',
     letterSpacing: o.letterSpacing ?? 0,
-    padding: Math.ceil(strokeWidth + 4),
+    padding: Math.ceil((stroke === false ? 0 : strokeWidth) + 4 + (shadow ? 4 : 0)),
   };
   if (stroke !== false) style.stroke = { color: stroke, width: strokeWidth, join: 'round' };
   if (shadow) {
@@ -64,11 +71,16 @@ export function labelStyle(o: LabelOpts = {}): TextStyleOptions {
   return style;
 }
 
-/** Standard outlined game text. Prefer this over constructing Text directly so the look stays uniform. */
+/** Standard game text: dark ink, no outline, no shadow. Prefer this over constructing Text directly so the look stays uniform. */
 export function label(text: string | number, o: LabelOpts = {}): Text {
   const tx = new Text({ text: String(text), style: labelStyle(o), resolution: textResolution() });
   tx.anchor.set(o.anchorX ?? 0.5, o.anchorY ?? 0.5);
   return tx;
+}
+
+/** label() for text on artwork: light fill with a brown stroke. */
+export function artLabel(text: string | number, o: LabelOpts = {}): Text {
+  return label(text, { ...o, onArt: true });
 }
 
 /** Shrink `tx` uniformly until it fits `maxWidth` (never grows). Call after changing its text. */

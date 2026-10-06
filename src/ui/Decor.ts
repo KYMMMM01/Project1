@@ -5,7 +5,7 @@ import { TAU } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { drawIcon } from './icons';
 import { backOut, motion, TweenBag } from './motion';
-import { gradient } from './shapes';
+import { drawDashedLine } from './paper';
 import { uiLabel } from './text';
 import { Color } from './theme';
 import type { Box } from './layoutMath';
@@ -26,7 +26,7 @@ export class LoadingSpinner extends Container {
   constructor(opts: SpinnerOpts = {}) {
     super();
     const size = opts.size ?? 64;
-    const color = opts.color ?? 0xffffff;
+    const color = opts.color ?? Color.ink;
     const dots = 12;
     const g = new Graphics();
     const R = size * 0.36;
@@ -34,7 +34,6 @@ export class LoadingSpinner extends Container {
       const t = i / (dots - 1);
       const a = (i / dots) * TAU - Math.PI / 2;
       const r = size * (0.055 + 0.055 * t);
-      g.circle(Math.cos(a) * R, Math.sin(a) * R, r + 1.5).fill({ color: Color.outline, alpha: 0.5 * (0.25 + t * 0.75) });
       g.circle(Math.cos(a) * R, Math.sin(a) * R, r).fill({ color, alpha: 0.2 + 0.8 * t });
     }
     this.ring.addChild(g);
@@ -60,38 +59,30 @@ export class LoadingSpinner extends Container {
 
 export interface DividerOpts {
   width: number;
-  /** Optional text in the middle. Without it a small diamond ornament is drawn. */
+  /** Optional text in the middle. Without it the dashed line runs unbroken. */
   label?: string;
+  /** Colour of the dashes (default teal). */
   color?: number;
 }
 
-/** Engraved horizontal rule: a dark groove with a light lip beneath it. */
+/** A teal dashed "cut here" line, optionally interrupted by a small caption. */
 export class Divider extends Container {
   readonly uiBox: Box;
 
   constructor(opts: DividerOpts) {
     super();
     const w = opts.width;
-    const tint = opts.color ?? 0x000000;
     const g = new Graphics();
-    let gap = 22;
-    let text: ReturnType<typeof uiLabel> | null = null;
-    if (opts.label) {
-      text = uiLabel(opts.label, { size: 24, color: 0xcabfee, stroke: Color.outline, strokeWidth: 4 });
-      gap = text.width / 2 + 18;
-    }
+    const dash = { color: opts.color ?? Color.teal, width: 3.5, dash: 14, gap: 10 };
     const half = w / 2;
-    for (const side of [-1, 1]) {
-      const x0 = side < 0 ? -half : gap;
-      const x1 = side < 0 ? -gap : half;
-      // Fade towards the outer end so the rule feels like it dissolves into the panel.
-      g.roundRect(x0, -2, x1 - x0, 4, 2).fill({ color: tint, alpha: 0.4 });
-      g.roundRect(x0, 2, x1 - x0, 2, 1).fill({ color: 0xffffff, alpha: 0.12 });
-    }
-    if (text) {
+    if (opts.label) {
+      const text = uiLabel(opts.label, { size: 24, color: Color.inkSoft });
+      const gap = text.width / 2 + 18;
+      drawDashedLine(g, -half, 0, -gap, 0, dash);
+      drawDashedLine(g, gap, 0, half, 0, dash);
       this.addChild(g, text);
     } else {
-      g.poly([0, -9, 9, 0, 0, 9, -9, 0]).fill(gradient([[0, 0xffe27a], [1, 0xf0a21e]])).stroke({ width: 3, color: Color.outline, join: 'round' });
+      drawDashedLine(g, -half, 0, half, 0, dash);
       this.addChild(g);
     }
     this.uiBox = { x: -half, y: -12, w, h: 24 };
@@ -129,13 +120,13 @@ export class Stars extends Container {
       const holder = new Container();
       holder.position.set(off * spacing, count === 3 ? (big > 1 ? -size * 0.14 : size * 0.1) : 0);
       holder.rotation = count === 3 ? off * 0.2 : 0;
-      const empty = drawIcon('star', size * big, 0x3b2c6e);
-      empty.alpha = 0.9;
+      const empty = drawIcon('star', size * big, Color.kraft);
+      empty.alpha = 0.85;
       const full = new Container();
       full.addChild(drawIcon('star', size * big));
       full.visible = false;
       const ring = new Graphics();
-      ring.circle(0, 0, size * 0.42 * big).stroke({ width: 6, color: 0xfff2b0 });
+      ring.circle(0, 0, size * 0.42 * big).stroke({ width: 6, color: Color.mustard });
       ring.visible = false;
       holder.addChild(empty, full, ring);
       this.addChild(holder);

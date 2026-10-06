@@ -2,6 +2,7 @@ export * from './theme';
 export * from './text';
 export * from './colors';
 export * from './shapes';
+export * from './paper';
 export * from './icons';
 export * from './motion';
 export * from './numbers';

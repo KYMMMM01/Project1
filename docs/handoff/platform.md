@@ -132,8 +132,8 @@ from the DOM from outside and had no Escape/Tab handling or recipe timings.
   `Capacitor.Plugins.<Name>` exposes plugins (else `registerCapacitorPlugins`). EEA consent (UMP) is not handled.
 - Restore re-grants a consumable too when the ledger lacks its order (as specified: "anything missing"); a player who kept the gems
   on another device gets them again. `ctx.source === 'restore'` lets the grant handler decide per product.
-- If the platform storage fails to read at boot (hung SDK) the ad counters/ledger start empty for that session; the ledger of a
-  later successful read is not merged back (only matters on YouTube-like cloud storage, which sells nothing).
+- If the platform storage fails to read at boot (hung SDK) the ad counters/ledger start empty for that session and are not merged
+  back; since 2026-10-06 they, like the profile, are no longer written over the stored data (see "2026-10-06 review fixes").
 - Screenshot of the interstitial card itself was not captured in this session (Aside screenshots took 5-10 s, the card lasts 3 s);
   its state was verified by flags and it shares the rewarded card's layout.
 - Korean glyphs in the dev overlay partly fall back to the system font: the GameKR subset does not contain every glyph of the new
@@ -154,3 +154,44 @@ from the DOM from outside and had no Escape/Tab handling or recipe timings.
    catalogue product and assert `iap.registerProducts(...)` returns `[]` in a test; a settings button for `iap.restorePurchases()`;
    `attachLedger` / `attachPersistence` onto the profile; UI should show an offer 600 ms after a defeat (research 03 U-11), show the
    reward first and always offer the gem alternative.
+
+## 2026-10-06 review fixes
+
+Five confirmed defects, each with a test that fails on the old code (`tests/platform.*.test.ts`).
+
+- **A failed read was "no data"** (`storage.ts`, `adapters/yt.ts`). `SaveStore.load()` read null, built the default profile and the
+  first save wrote it over the intact one (Toss Storage, Preferences, YouTube `loadData` failing or past the 8 s timeout).
+  `safeStorage` now remembers keys whose read failed and keeps every write to them in memory (readable for the session, never
+  sent) until a read shows the slot empty, or until a later `get` hands the caller what is stored (held writes are then dropped).
+  The same protects the ad counters and the IAP ledger. YouTube's raw `get` now throws while `loadData` has not succeeded instead
+  of answering null. Consequence: after a failed launch read the session runs on defaults and its progress is not persisted; the
+  next launch has the intact save. A way for the game to retry the load or tell the player needs `core/save` (see OPEN below).
+  Tests: `platform.core` ("a read that failed is not no data", 5), `platform.adapters` (YouTube).
+- **No pause/resume on Page Visibility platforms** (new `lifecycle.ts`, `boot.ts`). Toss, CrazyGames, Poki, itch and dev have no
+  own signal, so `profile.flush()`, `profile.resume()` (clock re-anchor) and `iap.recoverPending()` never ran. `wireLifecycle`
+  moved out of `boot.ts`: where `capabilities.usesPageVisibility` is true, `visibilitychange` / `pagehide` / `pageshow` now
+  pause, mute and emit `lifecycleSignals` too. The adapter's own signal and the page are two holders; the game resumes when the
+  last one lets go and each transition is emitted once. A page already hidden at boot counts. YouTube stays on its SDK signals
+  only. Tests: `platform.lifecycle` (new file, includes the `platform.lifecycle.onPause/onResume` chain the meta layer uses).
+- **`sweep_ticket` was not a placement** (`adPolicy.ts`). Added to `AD_PLACEMENT_IDS` / `AD_PLACEMENTS` with
+  `{ daily: 2, home: true }` (cap from docs/명세_메타.md section 8; the pass does not skip it, GDD 8.3).
+  Tests: `platform.adPolicy` (table), `platform.adService` (plays, 2 a day, owner still watches).
+- **Home ads spent the per-run offer budget** (`adPolicy.ts`, `adService.ts`). New `PlacementRule.home` flag on `daily_treat`,
+  `free_chest`, `patrol_double`, `shop_refresh`, `sweep_ticket` (GDD 8.2 "홈" / "일일 상점"): they neither count toward nor wait
+  on the 2-per-run budget (`noteAdShown` takes the placement; `verdict` skips `offer_cap` for them). `snack_box` (result screen)
+  still counts. The 90 s gap and the 12 a day still apply to them. Tests: `platform.adPolicy`, `platform.adService`.
+- **localStorage backend ignored its own fallback** (`storage.ts`). `get` now reads the in-memory copy of a write localStorage
+  refused before localStorage, a later successful write drops the copy, and the first refused write logs one warning.
+  Test: `platform.core`.
+
+Verification: `npx tsc --noEmit` prints nothing for `src/` and `tests/`; `npx vitest run tests/platform` -> 10 files, 238 tests pass
+(12 of the new ones fail against the old sources). Not checked in a browser: the Page Visibility wiring is covered with a fake
+page and stubbed `document` / `window` only.
+
+OPEN (outside my paths; none blocks shipping):
+
+- `core/save.ts`: `SaveStore.load()` cannot tell "no save" from "could not read", so after a failed read the session starts from
+  defaults and cannot recover without a restart. A retry or a "progress could not be loaded" notice would need the store to ask
+  the backend again.
+- docs/명세_메타.md section 8 ("sweep_ticket(플랫폼 표에 아직 없음)"), the comment on `PLACEMENTS` in `src/meta/data/economy.ts` and
+  the title of the test in `tests/meta.rules.test.ts` still say the platform lacks the row; it exists now.

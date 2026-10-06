@@ -1,4 +1,4 @@
-import { Container, Graphics, Point, Rectangle, type DestroyOptions, type FederatedPointerEvent, type Text } from 'pixi.js';
+import { Container, Graphics, NineSliceSprite, Point, Rectangle, type DestroyOptions, type FederatedPointerEvent, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
@@ -8,7 +8,8 @@ import { drawIcon } from './icons';
 import { IconButton } from './IconButton';
 import type { Box } from './layoutMath';
 import { backOut, motion, TweenBag } from './motion';
-import { cacheStatic, glossGradient, vGradient } from './shapes';
+import { drawPaper, drawPaperFace, paperSeed } from './paper';
+import { cacheStatic, paintTexture } from './shapes';
 import { uiLabel } from './text';
 import { Color, Hit } from './theme';
 
@@ -42,21 +43,14 @@ export class Toggle extends Container {
     this.state = opts.value ?? false;
     this.changeFn = opts.onChange ?? null;
 
+    const seed = paperSeed();
     const off = new Graphics();
-    off.roundRect(-TW / 2, -TH / 2 + 4, TW, TH, TH / 2).fill({ color: 0x07030f, alpha: 0.35 });
-    off
-      .roundRect(-TW / 2, -TH / 2, TW, TH, TH / 2)
-      .fill(vGradient(0x4a3f73, 0x6a5d9c))
-      .stroke({ width: 5, color: Color.outline, alignment: 1 });
-    off.roundRect(-TW / 2 + 6, -TH / 2 + 6, TW - 12, TH * 0.3, TH * 0.15).fill({ color: 0x000000, alpha: 0.28 });
-    this.onLayer.roundRect(-TW / 2, -TH / 2, TW, TH, TH / 2).fill(vGradient(0x8cf59a, 0x2fbf50)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    this.onLayer.roundRect(-TW / 2 + 8, -TH / 2 + 7, TW - 16, TH * 0.3, TH * 0.15).fill(glossGradient(0.45, 0.05));
+    drawPaper(off, -TW / 2, -TH / 2, { w: TW, h: TH, kind: 'pill', fill: Color.track, edge: Color.kraftDark, shadow: 4, grain: false, seed });
+    drawPaperFace(this.onLayer, -TW / 2, -TH / 2, { w: TW, h: TH, kind: 'pill', fill: Color.leaf, edge: Color.leafDark, grain: false, seed });
 
     const k = new Graphics();
-    k.circle(0, 4, 26).fill({ color: 0x07030f, alpha: 0.3 });
-    k.circle(0, 0, 26).fill(vGradient(0xffffff, 0xd9d0f0)).stroke({ width: 4, color: Color.outline, alignment: 1 });
-    k.ellipse(-4, -9, 13, 6).fill(glossGradient(0.6, 0.1));
-    this.check = drawIcon('check', 24, 0x2fbf50);
+    drawPaper(k, -26, -26, { w: 52, h: 52, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 1 });
+    this.check = drawIcon('check', 24, Color.leafDark);
     this.check.position.y = 1;
     this.knob.addChild(k, this.check);
     cacheStatic(off);
@@ -174,7 +168,7 @@ const tmpPoint = new Point();
 export class Slider extends Container {
   readonly uiBox: Box;
   private readonly trackW: number;
-  private readonly fill = new Graphics();
+  private readonly fill: NineSliceSprite;
   private readonly knob = new Container();
   private readonly bag = new TweenBag();
   private readonly step: number;
@@ -194,18 +188,16 @@ export class Slider extends Container {
     this.commitFn = opts.onCommit ?? null;
     this.uiBox = { x: -w / 2, y: -Hit.comfy / 2, w, h: Hit.comfy };
 
+    const seed = paperSeed();
     const track = new Graphics();
-    track.roundRect(-this.trackW / 2, -14 + 3, this.trackW, 28, 14).fill({ color: 0x07030f, alpha: 0.3 });
-    track
-      .roundRect(-this.trackW / 2, -14, this.trackW, 28, 14)
-      .fill(vGradient(0x1b1036, 0x2d1f5c))
-      .stroke({ width: 5, color: Color.outline, alignment: 1 });
-    track.roundRect(-this.trackW / 2 + 5, -9, this.trackW - 10, 8, 4).fill({ color: 0x000000, alpha: 0.3 });
+    drawPaper(track, -this.trackW / 2, -14, { w: this.trackW, h: 28, kind: 'pill', fill: Color.track, edge: Color.kraftDark, shadow: 3, grain: false, seed });
+    this.fill = new NineSliceSprite({ texture: paintTexture(Color.mustard, 18), leftWidth: 9, rightWidth: 9, topHeight: 2, bottomHeight: 2 });
+    this.fill.height = 18;
+    this.fill.position.set(-this.trackW / 2 + 5, -9);
 
     const k = new Graphics();
-    k.circle(0, 5, 28).fill({ color: 0x07030f, alpha: 0.32 });
-    k.circle(0, 0, 28).fill(vGradient(0xffeb9a, 0xffa820)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    k.ellipse(-4, -11, 14, 7).fill(glossGradient(0.65, 0.1));
+    drawPaper(k, -28, -28, { w: 56, h: 56, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, shadow: 4, grain: false, seed: seed + 1 });
+    k.circle(0, 0, 8).fill(Color.mustard);
     cacheStatic(track);
     cacheStatic(k);
     this.knob.addChild(k);
@@ -303,12 +295,9 @@ export class Slider extends Container {
   private render(): void {
     const x = -this.trackW / 2 + this.val * this.trackW;
     this.knob.x = x;
-    this.fill.clear();
-    const w = Math.max(0, x + this.trackW / 2);
-    if (w > 4) {
-      this.fill.roundRect(-this.trackW / 2 + 5, -9, Math.max(w - 5, 10), 18, 9).fill(vGradient(0xffe27a, 0xff9f1c));
-      this.fill.roundRect(-this.trackW / 2 + 9, -7, Math.max(w - 13, 6), 6, 3).fill(glossGradient(0.55, 0.1));
-    }
+    const w = x + this.trackW / 2 - 5;
+    this.fill.visible = w > 4;
+    this.fill.width = Math.max(w, 18);
   }
 
   override destroy(options?: DestroyOptions): void {
@@ -362,7 +351,7 @@ export class Stepper extends Container {
     this.uiBox = { x: -w / 2, y: -44, w, h: 88 };
 
     const well = new Graphics();
-    well.roundRect(-w / 2 + 50, -28, w - 100, 56, 28).fill(vGradient(0x1b1036, 0x2d1f5c)).stroke({ width: 4, color: Color.outline, alignment: 1 });
+    drawPaperFace(well, -w / 2 + 50, -28, { w: w - 100, h: 56, kind: 'pill', fill: Color.paperDim, edge: Color.kraftDark, grain: false, seed: paperSeed() });
     this.valueT = uiLabel(this.format(this.val), { size: 36 });
     this.minus = new IconButton({ icon: 'minus', style: 'danger', size: 72, fireOnDown: true });
     this.plus = new IconButton({ icon: 'plus', style: 'success', size: 72, fireOnDown: true });

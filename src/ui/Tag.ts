@@ -1,8 +1,10 @@
 import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
-import { Color, ButtonPalettes, type ButtonStyleId } from './theme';
+import { ButtonPalettes, Color, type ButtonStyleId } from './theme';
 import type { Box } from './layoutMath';
 import { motion, popIn, TweenBag } from './motion';
-import { drawPill, glossGradient, refreshCache, vGradient } from './shapes';
+import { makeRng } from './paperMath';
+import { drawPaper, paperSeed } from './paper';
+import { refreshCache } from './shapes';
 import { fitLabel, uiLabel } from './text';
 
 export type TagShape = 'flag' | 'pill' | 'burst';
@@ -28,6 +30,7 @@ export class Tag extends Container {
   private readonly style: ButtonStyleId;
   private readonly shape: TagShape;
   private readonly fontSize: number;
+  private readonly seed = paperSeed();
 
   constructor(opts: TagOpts) {
     super();
@@ -44,12 +47,7 @@ export class Tag extends Container {
     const pal = ButtonPalettes[this.style];
     this.textT?.destroy();
     this.g.clear();
-    const t = uiLabel(text, {
-      size: this.fontSize,
-      stroke: pal.textStroke,
-      strokeWidth: Math.max(4, Math.round(this.fontSize * 0.2)),
-      shadow: false,
-    });
+    const t = uiLabel(text, { size: this.fontSize, color: pal.ink });
     this.textT = t;
     const tw = t.width;
     const th = this.fontSize * 1.1;
@@ -57,36 +55,29 @@ export class Tag extends Container {
     if (this.shape === 'pill') {
       const w = Math.max(th + 28, tw + 34);
       const h = th + 16;
-      drawPill(this.g, -w / 2, -h / 2, w, h, {
-        top: pal.top,
-        bottom: pal.bottom,
-        outline: Color.outline,
-        outlineWidth: 4,
-        shadow: { alpha: 0.3, spread: 6, offsetY: 4 },
-      });
+      drawPaper(this.g, -w / 2, -h / 2, { w, h, kind: 'pill', fill: pal.base, edge: pal.lip, seed: this.seed, shadow: 4, grain: false });
       this.setBox(w, h);
     } else if (this.shape === 'flag') {
       const w = tw + 52;
       const h = th + 22;
       const n = 14;
-      this.g
-        .poly([-w / 2, -h / 2, w / 2, -h / 2, w / 2 - n, 0, w / 2, h / 2, -w / 2, h / 2])
-        .fill(vGradient(pal.top, pal.bottom))
-        .stroke({ width: 5, color: Color.outline, join: 'round' });
-      this.g.poly([-w / 2 + 5, -h / 2 + 4, w / 2 - 5, -h / 2 + 4, w / 2 - n - 4, -h / 2 + h * 0.42, -w / 2 + 5, -h / 2 + h * 0.42]).fill(glossGradient(0.34, 0.05));
+      const flag = [-w / 2, -h / 2, w / 2, -h / 2, w / 2 - n, 0, w / 2, h / 2, -w / 2, h / 2];
+      this.g.poly(flag.map((v, i) => (i % 2 === 1 ? v + 4 : v))).fill({ color: Color.shadow, alpha: 0.22 });
+      this.g.poly(flag).fill(pal.base).stroke({ width: 2, color: pal.lip, alpha: 0.6, alignment: 0, join: 'round' });
       t.position.x = -n / 2;
       this.setBox(w + 6, h + 6);
     } else {
       const r = Math.max(46, tw / 2 + 20);
+      const rnd = makeRng(this.seed);
       const pts: number[] = [];
       const spikes = 14;
       for (let i = 0; i < spikes * 2; i++) {
         const a = (i * Math.PI) / spikes - Math.PI / 2;
-        const rr = i % 2 === 0 ? r : r * 0.84;
+        const rr = (i % 2 === 0 ? r : r * 0.84) + (rnd() - 0.5) * 3;
         pts.push(Math.cos(a) * rr, Math.sin(a) * rr);
       }
-      this.g.poly(pts).fill(vGradient(pal.top, pal.bottom)).stroke({ width: 5, color: Color.outline, join: 'round' });
-      this.g.circle(0, 0, r * 0.7).stroke({ width: 3, color: 0xffffff, alpha: 0.3 });
+      this.g.poly(pts.map((v, i) => (i % 2 === 1 ? v + 4 : v))).fill({ color: Color.shadow, alpha: 0.22 });
+      this.g.poly(pts).fill(pal.base).stroke({ width: 2, color: pal.lip, alpha: 0.6, alignment: 0, join: 'round' });
       this.setBox(r * 2 + 6, r * 2 + 6);
     }
     fitLabel(t, this.uiBox.w - 26, this.fontSize);

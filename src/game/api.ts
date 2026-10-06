@@ -363,7 +363,7 @@ export type Fail =
   | 'already_used'
   | 'nothing_to_do';
 
-/** What dropping the unit from `from` onto `to` would do. */
+/** What dropping the unit from `from` onto `to` would do: `merge` = onto an identical common, rare or epic cat. */
 export type DropAction = 'move' | 'swap' | 'merge' | 'none';
 
 // ───────────────────────────── events ─────────────────────────────
@@ -388,7 +388,10 @@ export interface BattleEvents {
   summonOffer: { options: UnitId[] };
   move: { unit: UnitState; from: number; to: number };
   swap: { a: UnitState; b: UnitState };
-  /** `consumed` were removed; `result` now stands in `cell`. `jumped` = skipped a rarity (snack stick). */
+  /**
+   * Two identical cats merged: `consumed` were removed and `result` now stands in `cell`. The result is always the
+   * next rarity of the SAME class (`mergeResultOf`); `jumped` = it skipped a rarity (snack stick, still the same class).
+   */
   merge: { consumed: [UnitState, UnitState]; result: UnitState; cell: number; fromCell: number; jumped: boolean };
   /** A unit changed class at the same rarity. */
   molt: { from: UnitState; result: UnitState; cell: number };
@@ -513,10 +516,15 @@ export interface BattleApi {
   // ── commands: return null on success, a reason on refusal ──
   summon(): Fail | null;
   pickSummon(index: number): Fail | null;
-  /** Drag-drop or tap-tap: moves, swaps or merges depending on what is in `to` (see dropAction). */
+  /**
+   * Drag-drop or tap-tap: moves, swaps or merges depending on what is in `to` (see dropAction). A merge joins two
+   * identical cats (same class and rarity, common to epic) into one of the next rarity of the same class: every
+   * class is a fixed line (warrior: paw, sword, viking, samurai, and the mythic by awakening). Only the snack stick
+   * adds chance (a jump of two rarities); to change a cat's class, molt it.
+   */
   drop(from: number, to: number): Fail | null;
   sell(cell: number): Fail | null;
-  /** Change the unit in `cell` to the same rarity of another class (costs purr, limited per run). */
+  /** Change the unit in `cell` to the same rarity of another class (costs purr, limited per run): the only way to switch class lines. */
   molt(cell: number, classId: ClassId): Fail | null;
   awaken(cell: number): Fail | null;
   upgradeClass(classId: ClassId): Fail | null;
@@ -535,6 +543,7 @@ export interface BattleApi {
   abandon(): void;
 
   // ── queries for HUD and popups ──
+  /** What `drop(from, to)` would do. For a `merge`, the cat it makes is `mergeResultOf(units[from].id)` (data/roster). */
   dropAction(from: number, to: number): DropAction;
   summonCost(): number;
   /** Odds of the NEXT summon by rarity (common..legendary), after grade, relics and soft pity. */

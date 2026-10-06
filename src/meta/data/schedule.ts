@@ -111,10 +111,11 @@ export interface CupTier {
   reward: Bundle;
 }
 
+/** The best week scores 7 x DAILY_WAVES = 112; the tiers sit at 29% / 61% / 89% of it. */
 export const CUP_TIERS: readonly CupTier[] = [
-  { min: 40, reward: { chests: { wooden: 1 } } },
-  { min: 85, reward: { chests: { silver: 1 } } },
-  { min: 125, reward: { chests: { gold: 1 }, gems: 50 } },
+  { min: 32, reward: { chests: { wooden: 1 } } },
+  { min: 68, reward: { chests: { silver: 1 } } },
+  { min: 100, reward: { chests: { gold: 1 }, gems: 50 } },
 ];
 
 export interface EndlessTier {
@@ -130,7 +131,8 @@ export const ENDLESS_TIERS: readonly EndlessTier[] = [
 
 // ───────────────────────────── daily challenge ─────────────────────────────
 
-export const DAILY_WAVES = 20;
+/** The battle's own length: the cup tiers and the daily card must never promise more waves than the sim plays. */
+export { DAILY_WAVES } from '@/game/data/balance';
 export const DAILY_UNIT_LEVEL = 5;
 /** Bump when the simulation or the modifier list changes: yesterday's code must not mean a new game. */
 export const DAILY_RULESET = 1;

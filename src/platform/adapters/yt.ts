@@ -115,8 +115,10 @@ function createBlobBackend(): { backend: PlatformStorage; flush: () => Promise<v
 
   const raw = {
     async get(key: string): Promise<string | null> {
-      await load();
+      const ok = await load();
       if (unsaved.has(key)) return unsaved.get(key) ?? null;
+      // "Not loaded" is not "no data": a null here would make the game start from defaults over the cloud save.
+      if (!ok) throw new Error('loadData failed');
       return data[key] ?? null;
     },
     async set(key: string, value: string): Promise<void> {

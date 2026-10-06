@@ -1,7 +1,8 @@
 /**
  * initPlatform(): the one boot call. Resolves the build's adapter, initialises it (5 s timeout, then a
  * safe no-ads adapter so the game ALWAYS starts), installs its storage into core/save, wires lifecycle
- * pause/resume and the system mute signal to the game, and returns the services.
+ * pause/resume (the adapter's own signal and the page being hidden) and the system mute signal to the
+ * game, and returns the services.
  */
 import { game } from '@/core/game';
 import { debugExpose } from '@/core/debug';
@@ -11,6 +12,7 @@ import { normalizeCounters, type AdCounters } from './adPolicy';
 import { createFallbackAdapter } from './fallback';
 import { normalizeLedger, type IapLedger } from './iapService';
 import { setInputShield } from './inputShield';
+import { domPageSource, wireLifecycle } from './lifecycle';
 import type { Pauser } from './modal';
 import { resolveAdapter, PLATFORM_ID } from './resolve';
 import { preparePlatformRuntime } from './runtime';
@@ -112,7 +114,13 @@ async function doInit(): Promise<PlatformServices> {
 
   // Visibility: YouTube forbids the Page Visibility API and delivers its own pause/resume instead.
   game.pauseOnHidden = adapter.capabilities.usesPageVisibility;
-  wireLifecycle(adapter);
+  wireLifecycle(adapter, {
+    pauser: realPauser,
+    signals: lifecycleSignals,
+    // Anything paid while we were away (a purchase sheet that outlived its watchdog).
+    onResumed: () => void iap.recoverPending(),
+    page: domPageSource(),
+  });
   wireSystemAudio(adapter);
 
   // Counters and the order ledger live in platform storage until the meta layer attaches the profile.
@@ -131,28 +139,6 @@ async function doInit(): Promise<PlatformServices> {
 
   debugExpose('analytics', analytics.debugApi());
   return { platform, ads, iap, analytics };
-}
-
-function wireLifecycle(adapter: PlatformAdapter): void {
-  let paused = false;
-  const onPause = (): void => {
-    if (paused) return;
-    paused = true;
-    realPauser.setPaused(true);
-    realPauser.setMuted(true);
-    lifecycleSignals.pause.emit();
-  };
-  const onResume = (): void => {
-    if (!paused) return;
-    paused = false;
-    realPauser.setMuted(false);
-    realPauser.setPaused(false);
-    lifecycleSignals.resume.emit();
-    // Anything paid while we were away (a purchase sheet that outlived its watchdog).
-    void iap.recoverPending();
-  };
-  safe(() => adapter.lifecycle.onPause(onPause));
-  safe(() => adapter.lifecycle.onResume(onResume));
 }
 
 function wireSystemAudio(adapter: PlatformAdapter): void {

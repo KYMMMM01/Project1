@@ -1,18 +1,22 @@
-import { Container, Graphics, Rectangle, type Text } from 'pixi.js';
+import { Container, Graphics, Rectangle } from 'pixi.js';
 import { IconButton } from './IconButton';
 import type { Box } from './layoutMath';
-import { drawPanel, drawRibbon, PanelColors, refreshCache, type PanelVariant, type RibbonColors } from './shapes';
-import { fitLabel, uiLabel } from './text';
-import { ButtonPalettes, type ButtonStyleId } from './theme';
+import { PaperLabel, paperSeed, tapeStrip, type TornSides } from './paper';
+import { drawPanel, PanelColors, refreshCache, type PanelVariant } from './shapes';
+import type { ButtonStyleId, TapeName } from './theme';
 
 export interface PanelOpts {
   width: number;
   height: number;
   variant?: PanelVariant;
-  /** Title shown on a ribbon straddling the top edge. */
+  /** Title shown on a torn paper label straddling the top edge. */
   title?: string;
-  /** Ribbon colour. Default 'primary' (orange). */
+  /** Colour of the title label. Default 'primary' (coral). */
   ribbon?: ButtonStyleId;
+  /** Sides torn instead of cut (a popup sheet usually tears its bottom edge). */
+  torn?: TornSides;
+  /** Washi tape: across the top of the sheet, or, with a title, across the corner of the title label. Off by default: one piece per card at most. */
+  tape?: TapeName | false;
   /** Adds a round close button on the top-right corner; it calls this handler. */
   onClose?: () => void;
   radius?: number;
@@ -22,7 +26,7 @@ export interface PanelOpts {
   blockInput?: boolean;
 }
 
-const RIBBON_H = 78;
+const RIBBON_H = 84;
 
 /**
  * Container panel. Origin = centre of the body. Put content in `content`, whose origin is the
@@ -39,8 +43,11 @@ export class Panel extends Container {
 
   private readonly art = new Container();
   private readonly artG = new Graphics();
-  private ribbonG: Graphics | null = null;
-  private titleT: Text | null = null;
+  private titleLabel: PaperLabel | null = null;
+  private readonly seed = paperSeed();
+  private readonly torn: TornSides;
+  private tape: TapeName | undefined;
+  private readonly closeGap: number;
   private readonly cacheArt: boolean;
   private readonly ribbonStyle: ButtonStyleId;
   private readonly radius: number | undefined;
@@ -53,6 +60,8 @@ export class Panel extends Container {
     this.cacheArt = opts.cache ?? true;
     this.ribbonStyle = opts.ribbon ?? 'primary';
     this.radius = opts.radius;
+    this.torn = opts.torn;
+    this.closeGap = opts.onClose ? 130 : -40;
     const w = this.panelW;
     const h = this.panelH;
     this.uiBox = { x: -w / 2, y: -h / 2 - (opts.title ? RIBBON_H / 2 : 0), w, h: h + (opts.title ? RIBBON_H / 2 : 0) };
@@ -61,11 +70,13 @@ export class Panel extends Container {
     this.addChild(this.art, this.content);
     this.content.position.set(-w / 2, -h / 2);
     this.drawBody();
+    this.tape = opts.tape || undefined;
     if (opts.title) this.setTitle(opts.title);
+    else if (this.tape) this.addTape(this.tape);
 
     if (opts.onClose) {
-      const btn = new IconButton({ icon: 'close', style: 'danger', size: 72, shape: 'round' });
-      btn.position.set(w / 2 - 26, -h / 2 + 26);
+      const btn = new IconButton({ icon: 'close', style: 'kraft', size: 72, shape: 'round' });
+      btn.position.set(w / 2 - 22, -h / 2 + 22);
       btn.onTap(opts.onClose);
       this.addChild(btn);
       this.closeButton = btn;
@@ -91,27 +102,35 @@ export class Panel extends Container {
   }
 
   setTitle(text: string): void {
-    const pal = ButtonPalettes[this.ribbonStyle];
-    const colors: RibbonColors = { face: pal.base, faceTop: pal.top, tail: pal.rimBottom, tailDark: pal.lip };
-    if (!this.ribbonG) {
-      this.ribbonG = new Graphics();
-      this.art.addChild(this.ribbonG);
+    if (this.titleLabel) {
+      this.titleLabel.setText(text);
+    } else {
+      this.titleLabel = new PaperLabel({
+        text,
+        size: 40,
+        paper: this.ribbonStyle,
+        padX: 44,
+        minWidth: Math.min(300, this.panelW * 0.55),
+        maxWidth: this.panelW - this.closeGap,
+        tape: this.tape,
+        seed: this.seed + 3,
+      });
+      this.titleLabel.position.set(0, -this.panelH / 2 - 6);
+      this.art.addChild(this.titleLabel);
     }
-    this.titleT?.destroy();
-    const t = uiLabel(text, { size: 40, stroke: pal.textStroke, strokeWidth: 7 });
-    this.titleT = t;
-    const rw = Math.min(this.panelW + 40, Math.max(300, t.width + 120));
-    fitLabel(t, rw - 60, 40);
-    this.ribbonG.clear();
-    drawRibbon(this.ribbonG, -rw / 2, -this.panelH / 2 - RIBBON_H / 2 - 10, rw, RIBBON_H, colors);
-    t.position.set(0, -this.panelH / 2 - 10 - 3);
-    this.art.addChild(t);
+    this.refreshCache();
+  }
+
+  private addTape(name: TapeName): void {
+    const tape = tapeStrip({ name, w: 118, h: 30, angle: -2, pattern: 'gingham', seed: this.seed });
+    tape.position.set(0, -this.panelH / 2 + 4);
+    this.art.addChild(tape);
     this.refreshCache();
   }
 
   private drawBody(): void {
     this.artG.clear();
-    drawPanel(this.artG, -this.panelW / 2, -this.panelH / 2, this.panelW, this.panelH, this.variant, { radius: this.radius });
+    drawPanel(this.artG, -this.panelW / 2, -this.panelH / 2, this.panelW, this.panelH, this.variant, { radius: this.radius, torn: this.torn, seed: this.seed });
     this.refreshCache();
   }
 
@@ -119,5 +138,4 @@ export class Panel extends Container {
     if (!this.cacheArt) return;
     refreshCache(this.art);
   }
-
 }

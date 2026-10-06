@@ -14,6 +14,11 @@ import {
 import { patrolCapMs, patrolRate, patrolStatus } from '@/meta/patrol';
 import { SessionClock, nextLastSeen } from '@/meta/time';
 import { FakeClock, at, createTestProfile, type TestRig } from '@/meta/testing';
+import { createProfile } from '@/meta/profile';
+import { createProfileStore } from '@/meta/profileData';
+import { setStorageBackend } from '@/core/save';
+import { createMemoryBackend } from '@/platform/storage';
+import { makeAds } from './platformHelpers';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -167,6 +172,23 @@ describe('the clock guard', () => {
       expect(sc.frozen).toBe(true);
       expect(sc.now()).toBe(at(2026, 10, 6) + HOUR);
     }
+  });
+
+  it('takes the wall clock as the new baseline when the app re-anchors, except after a rollback', () => {
+    const clock = new FakeClock(at(2026, 10, 6));
+    const sc = new SessionClock(clock, 0);
+    clock.setWall(clock.wall() + 9 * HOUR);
+    expect(sc.frozen).toBe(true);
+    sc.anchor(0);
+    expect(sc.frozen).toBe(false);
+    expect(sc.now()).toBe(at(2026, 10, 6) + 9 * HOUR);
+    clock.advance(HOUR);
+    expect(sc.now()).toBe(at(2026, 10, 6) + 10 * HOUR);
+
+    clock.setWall(clock.wall() - 2 * DAY);
+    expect(sc.frozen).toBe(true);
+    sc.anchor(at(2026, 10, 6) + 10 * HOUR);
+    expect(sc.frozen).toBe(true);
   });
 
   it('ignores small drift', () => {
@@ -376,6 +398,33 @@ describe('moving the clock earns nothing', () => {
     expect(profile.patrolView().ms).toBe(3 * HOUR);
   });
 
+  it('a sleep that a timer notices before resume() is lifted by resume()', async () => {
+    const { profile, clock } = await rigWithRuns();
+    clock.setWall(clock.wall() + 20 * HOUR);
+    profile.refresh();
+    expect(profile.frozen).toBe(true);
+    expect(await profile.claimPatrol(false)).toEqual({ ok: false, error: 'clock_frozen' });
+    expect(profile.data.day.date).toBe('2026-10-06');
+
+    profile.resume();
+    expect(profile.frozen).toBe(false);
+    expect(profile.data.day.date).toBe('2026-10-07');
+    expect((await profile.claimPatrol(false)).ok).toBe(true);
+    expect(profile.claimCalendar().ok).toBe(true);
+  });
+
+  it('resume() does not lift a rollback that was noticed as a jump', async () => {
+    const { profile, clock } = await rigWithRuns();
+    clock.advance(HOUR);
+    profile.refresh();
+    clock.setWall(clock.wall() - 2 * DAY);
+    profile.refresh();
+    expect(profile.frozen).toBe(true);
+    profile.resume();
+    expect(profile.frozen).toBe(true);
+    expect(profile.claimCalendar()).toEqual({ ok: false, error: 'clock_frozen' });
+  });
+
   it('a rolled-back date does not give back the daily limits', async () => {
     const { profile, clock, ads } = await rigWithRuns();
     for (let i = 0; i < 3; i++) await profile.claimSnackChest();
@@ -486,6 +535,21 @@ describe('missions, treat, shop, tickets in the profile', () => {
     expect(profile.buyTicket()).toEqual({ ok: true, value: 7 });
     d.tickets = 0;
     expect(profile.sweep(1, 0)).toEqual({ ok: false, error: 'not_enough_tickets' });
+  });
+
+  it('pays the sweep-ticket ad through the real AdService, which must know the placement', async () => {
+    setStorageBackend(createMemoryBackend());
+    const { ads, fake } = makeAds();
+    const clock = new FakeClock(at(2026, 10, 6, 9));
+    const seed = (): number => 7;
+    const profile = createProfile({
+      store: createProfileStore(() => clock.wall(), seed), clock, seed, ads, analytics: { track: () => undefined },
+    });
+    await profile.load();
+    const before = profile.data.tickets;
+    expect(await profile.watchTicketAd()).toEqual({ ok: true, value: before + 2 });
+    expect(fake.log).toContain('show:rewarded:sweep_ticket');
+    expect(profile.data.day.ticketAds).toBe(1);
   });
 
   it('tiers: the weekly cup and the endless record pay once per tier', async () => {

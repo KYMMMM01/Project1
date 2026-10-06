@@ -1,55 +1,25 @@
 import { Container, Graphics, MeshSimple, NineSliceSprite, Texture, type DestroyOptions, type Text } from 'pixi.js';
-import { game } from '@/core/game';
 import { clamp01, lerp, TAU } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { motion, TweenBag } from './motion';
-import { bakeResolution, cacheStatic, gradient, glossGradient, vGradient } from './shapes';
+import { drawPaper, paperSeed } from './paper';
+import { cacheStatic, paintTexture } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { Color } from './theme';
 
 export type BarColor = 'gold' | 'green' | 'red' | 'blue' | 'purple' | 'cyan';
 
-interface BarPalette {
-  top: number;
-  bottom: number;
-}
-
-const BAR_COLORS: Record<BarColor, BarPalette> = {
-  gold: { top: 0xffe27a, bottom: 0xff9f1c },
-  green: { top: 0xa6f58a, bottom: 0x2fbf50 },
-  red: { top: 0xff9aa2, bottom: 0xe02a46 },
-  blue: { top: 0x9fd5ff, bottom: 0x2a80ea },
-  purple: { top: 0xd5acff, bottom: 0x8345ea },
-  cyan: { top: 0xaaf4ff, bottom: 0x1ec0e6 },
+/** Flat craft-paper paints, one per bar colour. */
+const BAR_COLORS: Record<BarColor, number> = {
+  gold: Color.mustard,
+  green: 0x84c063,
+  red: 0xe8675a,
+  blue: Color.teal,
+  purple: Color.violet,
+  cyan: 0x7ccbe0,
 };
-
-const texCache = new Map<string, Texture>();
-
-/**
- * A pill baked once into a texture (gradient + gloss) and stretched by a 9-slice: the caps keep their
- * roundness at any fill width, and resizing a NineSliceSprite rewrites its vertices in place, so a
- * bar can animate every frame without redrawing a Graphics.
- */
-function pillTexture(top: number, bottom: number, h: number, glossy: boolean): Texture {
-  const key = `${top}:${bottom}:${h}:${glossy}`;
-  let tex = texCache.get(key);
-  if (tex) return tex;
-  const w = Math.max(h * 3, 24);
-  const c = new Container();
-  const g = new Graphics();
-  g.roundRect(0, 0, w, h, h / 2).fill(vGradient(top, bottom));
-  if (glossy) {
-    g.roundRect(h * 0.18, h * 0.1, w - h * 0.36, h * 0.4, h * 0.2).fill(glossGradient(0.5, 0.06));
-    g.roundRect(h * 0.3, h * 0.78, w - h * 0.6, h * 0.1, h * 0.05).fill({ color: 0x000000, alpha: 0.12 });
-  }
-  c.addChild(g);
-  tex = game.app.renderer.generateTexture({ target: c, resolution: Math.max(2, bakeResolution()), antialias: true });
-  c.destroy({ children: true });
-  texCache.set(key, tex);
-  return tex;
-}
 
 export interface ProgressBarOpts {
   width: number;
@@ -62,17 +32,16 @@ export interface ProgressBarOpts {
   format?: (value: number) => string;
   /** Evenly spaced divider notches (e.g. 5 for a five-segment bar). */
   ticks?: number;
-  /** A soft highlight that glides across the fill every couple of seconds. */
-  shine?: boolean;
-  /** Trailing white bar that catches up after damage (boss HP). */
+  /** Trailing pale bar that catches up after damage (boss HP). */
   ghost?: boolean;
   /** Round icon sitting on the left end of the bar. */
   icon?: IconName;
 }
 
 /**
- * Chunky capsule bar. Origin = centre. setValue() tweens the fill; with `ghost`, a pale trailing bar
- * waits 0.4 s after a drop and then drains to the new value, so damage is readable at a glance.
+ * Paper bar: a darker kraft strip with a brush-painted fill. Origin = centre. setValue() tweens the
+ * fill; with `ghost`, a cream trailing bar waits 0.4 s after a drop and then drains to the new value,
+ * so damage is readable at a glance.
  */
 export class ProgressBar extends Container {
   readonly uiBox: Box;
@@ -86,10 +55,8 @@ export class ProgressBar extends Container {
   private readonly fill: NineSliceSprite;
   private readonly ghostBar: NineSliceSprite | null;
   private readonly bag = new TweenBag();
-  private readonly fx = new TweenBag();
   private readonly format: ((v: number) => string) | undefined;
   private labelT: Text | null = null;
-  private shineMask: Graphics | null = null;
 
   private shown = 0;
   private target = 0;
@@ -106,7 +73,7 @@ export class ProgressBar extends Container {
     this.format = opts.format;
     this.colorKey = opts.color ?? 'gold';
     this.ticks = opts.ticks ?? 0;
-    const pad = 5;
+    const pad = 4;
     this.innerH = h - pad * 2;
     this.innerW = w - pad * 2;
     this.left = -w / 2 + pad;
@@ -114,12 +81,7 @@ export class ProgressBar extends Container {
     this.uiBox = { x: -w / 2, y: -h / 2, w, h };
 
     const trough = new Graphics();
-    trough.roundRect(-w / 2, -h / 2 + 3, w, h, h / 2).fill({ color: 0x07030f, alpha: 0.32 });
-    trough
-      .roundRect(-w / 2, -h / 2, w, h, h / 2)
-      .fill(vGradient(0x1b1036, 0x2d1f5c))
-      .stroke({ width: pad, color: Color.outline, alignment: 1 });
-    trough.roundRect(-w / 2 + pad, -h / 2 + pad, w - pad * 2, h * 0.28, h * 0.14).fill({ color: 0x000000, alpha: 0.35 });
+    drawPaper(trough, -w / 2, -h / 2, { w, h, kind: 'pill', fill: Color.track, edge: Color.kraftDark, shadow: 3, grain: false, seed: paperSeed() });
     cacheStatic(trough);
     this.addChild(trough);
 
@@ -137,23 +99,19 @@ export class ProgressBar extends Container {
     };
 
     if (opts.ghost) {
-      this.ghostBar = slice(pillTexture(0xffffff, 0xffd9de, this.innerH, false));
-      this.ghostBar.alpha = 0.9;
+      this.ghostBar = slice(paintTexture(0xfff3d6, this.innerH));
       this.addChild(this.ghostBar);
     } else {
       this.ghostBar = null;
     }
-    const pal = BAR_COLORS[this.colorKey];
-    this.fill = slice(pillTexture(pal.top, pal.bottom, this.innerH, true));
+    this.fill = slice(paintTexture(BAR_COLORS[this.colorKey], this.innerH));
     this.addChild(this.fill);
 
-    if (opts.shine) this.buildShine();
     if (this.ticks > 1) {
       const t = new Graphics();
       for (let i = 1; i < this.ticks; i++) {
         const x = this.left + (this.innerW * i) / this.ticks;
-        t.roundRect(x - 2, -this.innerH / 2 + 2, 4, this.innerH - 4, 2).fill({ color: Color.outline, alpha: 0.55 });
-        t.roundRect(x + 2, -this.innerH / 2 + 3, 2, this.innerH - 6, 1).fill({ color: 0xffffff, alpha: 0.15 });
+        t.roundRect(x - 1.5, -this.innerH / 2 + 3, 3, this.innerH - 6, 1.5).fill({ color: Color.ink, alpha: 0.3 });
       }
       this.addChild(t);
     }
@@ -163,7 +121,7 @@ export class ProgressBar extends Container {
       this.addChild(ic);
     }
     if (opts.label !== undefined || opts.format) {
-      this.labelT = uiLabel(opts.label ?? '', { size: Math.max(20, Math.round(h * 0.56)), strokeWidth: 4, shadow: false });
+      this.labelT = uiLabel(opts.label ?? '', { size: Math.max(20, Math.round(h * 0.56)) });
       this.addChild(this.labelT);
     }
     this.apply(opts.value ?? 0);
@@ -176,13 +134,12 @@ export class ProgressBar extends Container {
   setColor(color: BarColor): void {
     if (color === this.colorKey) return;
     this.colorKey = color;
-    const pal = BAR_COLORS[color];
-    this.fill.texture = pillTexture(pal.top, pal.bottom, this.innerH, true);
+    this.fill.texture = paintTexture(BAR_COLORS[color], this.innerH);
   }
 
   setLabel(text: string): void {
     if (!this.labelT) {
-      this.labelT = uiLabel(text, { size: Math.max(20, Math.round(this.barH * 0.56)), strokeWidth: 4, shadow: false });
+      this.labelT = uiLabel(text, { size: Math.max(20, Math.round(this.barH * 0.56)) });
       this.addChild(this.labelT);
     }
     this.labelT.text = text;
@@ -251,9 +208,6 @@ export class ProgressBar extends Container {
     const w = this.widthFor(v);
     this.fill.visible = w > 0;
     this.fill.width = Math.max(w, 1);
-    if (this.shineMask) {
-      this.shineMask.scale.x = Math.max(0, w - this.innerH);
-    }
   }
 
   private setGhost(v: number): void {
@@ -264,44 +218,8 @@ export class ProgressBar extends Container {
     this.ghostBar.width = Math.max(w, 1);
   }
 
-  private buildShine(): void {
-    const h = this.innerH;
-    const band = new Graphics();
-    const bw = h * 1.4;
-    band.poly([-bw / 2 + h * 0.3, -h / 2, bw / 2 + h * 0.3, -h / 2, bw / 2 - h * 0.3, h / 2, -bw / 2 - h * 0.3, h / 2]).fill(
-      gradient(
-        [
-          [0, 'rgba(255,255,255,0)'],
-          [0.5, 'rgba(255,255,255,0.55)'],
-          [1, 'rgba(255,255,255,0)'],
-        ],
-        true,
-      ),
-    );
-    const mask = new Graphics();
-    mask.rect(0, -h / 2 + 3, 1, h - 6).fill(0xffffff);
-    mask.position.x = this.left + h / 2;
-    band.mask = mask;
-    this.addChild(band, mask);
-    this.shineMask = mask;
-    if (motion.reduced) return;
-    const travel = this.innerW;
-    this.fx.runKeyed(band, {
-      duration: 2.6,
-      ease: Ease.linear,
-      repeat: -1,
-      onUpdate: (k) => {
-        // A 0.9 s glide followed by a pause.
-        const t = Math.min(1, k * (2.6 / 0.9));
-        band.x = this.left + h / 2 + (travel + bw) * Ease.cubicInOut(t) - bw / 2;
-        band.alpha = t >= 1 ? 0 : 1;
-      },
-    });
-  }
-
   override destroy(options?: DestroyOptions): void {
     this.bag.killAll();
-    this.fx.killAll();
     super.destroy(options);
   }
 }
@@ -335,13 +253,12 @@ export class CooldownRing extends Container {
     this.rOuter = r;
     this.rInner = r - th;
     this.uiBox = { x: -r - 4, y: -r - 4, w: r * 2 + 8, h: r * 2 + 8 };
-    const color = opts.color ?? 0xffb629;
+    const color = opts.color ?? Color.coral;
 
     const track = new Graphics();
-    track.circle(0, 0, r + 4).fill(Color.outline);
-    track.circle(0, 0, r).fill(opts.trackColor ?? 0x2d1f5c);
-    track.circle(0, 0, r - th).fill(Color.outline);
-    track.circle(0, 0, r - th - 3).fill(0x241748);
+    track.circle(0, 4, r).fill({ color: Color.shadow, alpha: 0.22 });
+    track.circle(0, 0, r).fill(opts.trackColor ?? Color.track).stroke({ width: 2, color: Color.kraftDark, alpha: 0.6, alignment: 0 });
+    track.circle(0, 0, r - th).fill(Color.paper).stroke({ width: 2, color: Color.kraftDark, alpha: 0.5, alignment: 1 });
     cacheStatic(track);
     this.addChild(track);
 
@@ -374,7 +291,7 @@ export class CooldownRing extends Container {
 
   setLabel(text: string): void {
     if (!this.labelT) {
-      this.labelT = uiLabel(text, { size: Math.max(20, Math.round(this.rInner * 0.8)), strokeWidth: 5 });
+      this.labelT = uiLabel(text, { size: Math.max(20, Math.round(this.rInner * 0.8)) });
       this.addChild(this.labelT);
     }
     this.labelT.text = text;

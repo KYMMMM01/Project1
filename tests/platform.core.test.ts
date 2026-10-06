@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SaveStore, getStorageBackend, setStorageBackend, type StorageBackend } from '@/core/save';
 import { ANALYTICS_EVENTS, Analytics } from '@/platform/analytics';
 import {
   createLocalStorageBackend,
@@ -16,6 +17,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('Analytics', () => {
@@ -136,6 +138,35 @@ describe('storage never throws and always settles', () => {
     await expect(b.get('a')).resolves.toBeNull();
   });
 
+  it('the localStorage backend reads back a write localStorage refused, and uses localStorage again once it accepts', async () => {
+    const disk = new Map([['k', 'old']]);
+    let full = true;
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => disk.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          if (full) throw new Error('QuotaExceededError');
+          disk.set(k, v);
+        },
+        removeItem: (k: string) => void disk.delete(k),
+      },
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const b = createLocalStorageBackend();
+    await b.set('k', 'new');
+    await b.set('j', 'x');
+    await expect(b.get('k')).resolves.toBe('new'); // not the stale 'old'
+    await expect(b.get('j')).resolves.toBe('x'); // not null
+    expect(disk.get('k')).toBe('old');
+    expect(warn).toHaveBeenCalledOnce(); // flagged once, not per write
+    full = false;
+    await b.set('k', 'newer');
+    expect(disk.get('k')).toBe('newer');
+    await expect(b.get('k')).resolves.toBe('newer'); // the stashed 'new' no longer shadows localStorage
+    await b.remove('k');
+    await expect(b.get('k')).resolves.toBeNull();
+  });
+
   it('counts UTF-8 bytes', () => {
     expect(utf8Length('abc')).toBe(3);
     expect(utf8Length('가')).toBe(3);
@@ -184,6 +215,104 @@ describe('storage never throws and always settles', () => {
   it('settleWithin never rejects', async () => {
     await expect(settleWithin(Promise.reject(new Error('x')), 10, 'fb')).resolves.toBe('fb');
     await expect(settleWithin(Promise.resolve('ok'), 10, 'fb')).resolves.toBe('ok');
+  });
+});
+
+describe('a read that failed is not "no data"', () => {
+  const envelope = (gems: number): string => JSON.stringify({ v: 1, t: 0, data: { gems } });
+  const gemsOnDisk = (disk: Map<string, string>): unknown => (JSON.parse(disk.get('save') ?? 'null') as { data?: { gems?: number } } | null)?.data?.gems;
+
+  /** A disk whose first read fails (rejects or never answers); every later call works. */
+  function flakyDisk(initial: Record<string, string>, firstRead: 'rejects' | 'hangs') {
+    const disk = new Map(Object.entries(initial));
+    let reads = 0;
+    const backend: StorageBackend = {
+      get: (key) => {
+        reads += 1;
+        if (reads > 1) return Promise.resolve(disk.get(key) ?? null);
+        return firstRead === 'rejects' ? Promise.reject(new Error('Storage unavailable')) : new Promise<string | null>(() => undefined);
+      },
+      set: async (key, value) => {
+        disk.set(key, value);
+      },
+      remove: async (key) => {
+        disk.delete(key);
+      },
+    };
+    return { disk, backend };
+  }
+
+  const newStore = () => new SaveStore({ key: 'save', version: 1, defaults: () => ({ gems: 0 }) });
+  let previous: StorageBackend;
+  beforeEach(() => {
+    previous = getStorageBackend();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => setStorageBackend(previous));
+
+  it.each(['rejects', 'hangs'] as const)('a first read that %s never lets the default profile replace the stored one', async (mode) => {
+    const { disk, backend } = flakyDisk({ save: envelope(5000) }, mode);
+    setStorageBackend(safeStorage(backend, { maxBytes: 1_000_000 }));
+    const store = newStore();
+    const loading = store.load();
+    await vi.advanceTimersByTimeAsync(8000);
+    await loading;
+    expect(store.data.gems).toBe(0); // the session starts from defaults ...
+    for (const gems of [10, 20]) {
+      store.data.gems = gems;
+      store.save();
+      await store.flush();
+    }
+    expect(gemsOnDisk(disk)).toBe(5000); // ... but the save on the platform is untouched
+  });
+
+  it('writes go through once a read shows the slot is really empty', async () => {
+    const { disk, backend } = flakyDisk({}, 'rejects');
+    setStorageBackend(safeStorage(backend, { maxBytes: 1_000_000 }));
+    const store = newStore();
+    await store.load();
+    store.data.gems = 7;
+    store.save();
+    await store.flush();
+    expect(gemsOnDisk(disk)).toBe(7);
+  });
+
+  it('writes go through once the caller has been handed what is stored', async () => {
+    const { disk, backend } = flakyDisk({ save: envelope(5000) }, 'rejects');
+    const s = safeStorage(backend, { maxBytes: 1_000_000 });
+    await expect(s.get('save')).resolves.toBeNull(); // the failed read
+    await s.set('save', envelope(1)); // held: the caller never saw the 5000
+    expect(gemsOnDisk(disk)).toBe(5000);
+    await expect(s.get('save')).resolves.toBe(envelope(5000)); // the retry succeeds and the caller sees it
+    await s.set('save', envelope(5001));
+    expect(gemsOnDisk(disk)).toBe(5001);
+    await expect(s.get('save')).resolves.toBe(envelope(5001)); // and the held write did not come back
+  });
+
+  it('keeps held writes readable for the session while the read keeps failing, and a removal still removes', async () => {
+    const raw: StorageBackend = {
+      get: () => Promise.reject(new Error('down')),
+      set: async () => undefined,
+      remove: async () => undefined,
+    };
+    const s = safeStorage(raw, { maxBytes: 1_000_000 });
+    await expect(s.get('k')).resolves.toBeNull();
+    await s.set('k', 'mine');
+    await expect(s.get('k')).resolves.toBe('mine');
+    await s.remove('k');
+    await expect(s.get('k')).resolves.toBeNull();
+  });
+
+  it('the ad counters and the order ledger are protected the same way', async () => {
+    const { disk, backend } = flakyDisk({ ledger: JSON.stringify({ n: 3 }) }, 'rejects');
+    const p = createStoragePersistence(safeStorage(backend, { maxBytes: 1_000_000 }), 'ledger', (x) => ({
+      n: (x as { n?: number } | undefined)?.n ?? 0,
+    }));
+    await p.hydrate();
+    expect(p.load()).toEqual({ n: 0 });
+    p.save({ n: 1 });
+    await p.flush();
+    expect(JSON.parse(disk.get('ledger') ?? '{}')).toEqual({ n: 3 });
   });
 });
 

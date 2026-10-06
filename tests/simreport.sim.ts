@@ -18,11 +18,11 @@ const POLICIES: BotPolicy[] = ['random', 'merge', 'synergy'];
 function row(label: string, s: BatchSummary): (string | number)[] {
   return [
     label, pct(s.winRate), s.meanWave.toFixed(1), s.firstLegendary.toFixed(1), s.firstMythic.toFixed(1), pct(s.mythicRate),
-    pct(s.cautionRate), s.surplus.toFixed(2), pct(s.bossRatio), s.lengthWin.toFixed(1), s.simMs.toFixed(0),
+    pct(s.cautionRate), s.surplus.toFixed(2), pct(s.bossRatio), s.lengthWin.toFixed(1), s.merges.toFixed(0), s.molts.toFixed(2), s.simMs.toFixed(0),
   ];
 }
 
-const HEAD = ['case', 'win', 'wave', '1stLeg', '1stMyth', 'myth%', 'caution', 'surplus', 'boss%', 'min', 'ms'];
+const HEAD = ['case', 'win', 'wave', '1stLeg', '1stMyth', 'myth%', 'caution', 'surplus', 'boss%', 'min', 'merges', 'molts', 'ms'];
 
 function wanted(section: string): boolean {
   return ONLY === '' || ONLY === section;

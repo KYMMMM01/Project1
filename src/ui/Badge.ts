@@ -1,8 +1,9 @@
 import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { backOut, motion, TweenBag } from './motion';
-import { glossGradient, vGradient } from './shapes';
+import { drawPaper, drawPaperFace, paperSeed } from './paper';
 import { uiLabel } from './text';
+import { Color } from './theme';
 import type { Box } from './layoutMath';
 
 /** `true` = plain dot, a number = count (0 hides it), `undefined`/`false` = hidden. */
@@ -17,7 +18,7 @@ export interface BadgeOpts {
 }
 
 /**
- * Red notification dot / counter. Origin is the centre of the dot. Pops in with an overshoot and
+ * Notification dot / counter: coral paper on a cream ring. Origin is the centre of the dot. Pops in with an overshoot and
  * shrinks away when cleared; it never relies on colour alone because the count is printed on it.
  */
 export class Badge extends Container {
@@ -29,6 +30,7 @@ export class Badge extends Container {
   private readonly maxCount: number;
   private readonly size: number;
   private current: BadgeValue = undefined;
+  private readonly seed = paperSeed();
 
   constructor(opts: BadgeOpts = {}) {
     super();
@@ -108,24 +110,22 @@ export class Badge extends Container {
     let h = d;
     if (typeof value === 'number') {
       const str = value > this.maxCount ? `${this.maxCount}+` : String(value);
-      this.text = uiLabel(str, { size: 22, stroke: 0x6e0b22, strokeWidth: 4, shadow: false });
+      this.text = uiLabel(str, { size: 22, color: Color.inkDeep });
       h = Math.round(d * 1.4);
       w = Math.max(h, Math.ceil(this.text.width) + 18);
     }
-    const r = h / 2;
-    // dark outer outline -> white ring -> red body: readable on any background
-    this.ring.roundRect(-w / 2 - 5, -h / 2 - 5, w + 10, h + 10, r + 5).fill(0x2a0a1a);
-    this.ring.roundRect(-w / 2 - 2.5, -h / 2 - 2.5, w + 5, h + 5, r + 2.5).fill(0xffffff);
-    this.bg.roundRect(-w / 2, -h / 2, w, h, r).fill(vGradient(0xff7d8a, 0xe0243f));
-    this.bg.roundRect(-w / 2 + 3, -h / 2 + 2, w - 6, h * 0.42, r * 0.7).fill(glossGradient(0.5, 0.08));
+    const kind = w === h ? 'circle' : 'pill';
+    // cream ring (so the dot reads on any paper) -> coral body
+    drawPaper(this.ring, -w / 2 - 4, -h / 2 - 4, { w: w + 8, h: h + 8, kind, fill: Color.paper, edge: false, shadow: 3, grain: false, seed: this.seed, wobble: 0.5 });
+    drawPaperFace(this.bg, -w / 2, -h / 2, { w, h, kind, fill: Color.coral, edge: Color.coralDark, grain: false, seed: this.seed + 1, wobble: 0.6 });
     if (this.text) {
       this.text.position.set(0, 1);
       this.addChild(this.text);
     }
-    this.uiBox.x = -w / 2 - 5;
-    this.uiBox.y = -h / 2 - 5;
-    this.uiBox.w = w + 10;
-    this.uiBox.h = h + 10;
+    this.uiBox.x = -w / 2 - 4;
+    this.uiBox.y = -h / 2 - 4;
+    this.uiBox.w = w + 8;
+    this.uiBox.h = h + 11;
   }
 
   override destroy(options?: DestroyOptions): void {

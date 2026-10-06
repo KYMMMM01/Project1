@@ -7,7 +7,7 @@ import {
   SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, SUN_SPEED,
 } from '../data/balance';
 import { synergyTier, tierForDistinct } from '../data/classes';
-import { RARITIES, UNIT_GRID, levelSourceOf, mythicOf, unitRarityIndex } from '../data/roster';
+import { RARITIES, UNIT_GRID, levelSourceOf, mergeResultOf, mythicOf, unitRarityIndex } from '../data/roster';
 import type { PerkSpec, SynergyTier } from '../data/types';
 import { unitSpec } from '../data/units';
 import { addFish, addPurr } from './economy';
@@ -407,11 +407,12 @@ export function cmdDrop(s: Sim, from: number, to: number): Fail | null {
     return null;
   }
 
-  const uClass = s.rng.merge.next();
+  // The result is the next rarity of the same class. The merge stream only decides the snack stick's jump and
+  // is always drawn, so the j-th merge's roll does not depend on whether the relic is held.
   const uJump = s.rng.merge.next();
   const jumped = (s.fx.jumpChance ?? 0) > 0 && uJump < (s.fx.jumpChance as number) && a.rarityIndex <= 1;
-  const rarity = Math.min(3, a.rarityIndex + (jumped ? 2 : 1));
-  const id = UNIT_GRID[classFrom(s, uClass)][rarity] as UnitId;
+  const next = mergeResultOf(a.id) as UnitId;
+  const id = jumped ? (mergeResultOf(next) as UnitId) : next;
   a.removed = true;
   other.removed = true;
   s.units[from] = null;

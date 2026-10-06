@@ -122,7 +122,7 @@ export const OFFERS = {
 } as const;
 export type OfferId = keyof typeof OFFERS;
 
-/** AdService placement ids of the offers the meta layer sells without a gem alternative. `sweep_ticket` has no platform row yet. */
+/** AdService placement ids of the offers the meta layer sells without a gem alternative. Each must be a row of the platform's AD_PLACEMENTS (tests/meta.rules.test.ts checks). */
 export const PLACEMENTS = {
   treat: 'daily_treat',
   snackChest: 'snack_box',

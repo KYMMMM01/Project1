@@ -3,8 +3,11 @@ import type { BattleInit, BattleSnapshot, RelicId, UnitId } from '../api';
 import { CELL_COUNT } from '../geometry';
 import type { Sim } from './sim';
 
-/** Bump when the rules change in a way that makes an old save meaningless. */
-export const SIM_VERSION = 1;
+/**
+ * Bump when the rules change in a way that makes an old save meaningless.
+ * 2: a merge keeps the class (rules v1.2), so the merge stream no longer holds a class roll per merge.
+ */
+export const SIM_VERSION = 2;
 
 export interface SnapData {
   init: BattleInit;

@@ -3,8 +3,7 @@ import { TAU } from '@/core/math';
 import { Ease } from '@/core/tween';
 import type { Box } from './layoutMath';
 import { backOut, motion, TweenBag } from './motion';
-import { glossGradient, vGradient } from './shapes';
-import { Color, RARITY_ORDER, Rarity } from './theme';
+import { Color, RARITY_GOLD, RARITY_ORDER, Rarity } from './theme';
 
 export interface RarityPipsOpts {
   /** Which rarities are lit, in rarity order (common ... mythic). Missing entries count as dim. */
@@ -40,7 +39,7 @@ function pipPath(g: Graphics, i: number, r: number): void {
 }
 
 /**
- * Five pips, one per rarity in that rarity's colour. A pip is either lit (solid, glossy) or dim (a
+ * Five pips, one per rarity in that rarity's matte colour. A pip is either lit (a solid dot) or dim (a
  * hollow socket), so "which rarities do I own" never depends on colour alone: position says which
  * rarity, filled-versus-hollow says whether it is owned. Lit pips pop when they turn on.
  * Origin = centre of the row.
@@ -64,15 +63,15 @@ export class RarityPips extends Container {
 
       const dim = new Graphics();
       pipPath(dim, i, size / 2);
-      dim.fill({ color: 0x1a1034, alpha: 0.85 }).stroke({ width: ow * 0.75, color: rar.dark, alpha: 0.6, join: 'round' });
+      dim.fill({ color: Color.paperDim, alpha: 0.9 }).stroke({ width: ow * 0.75, color: Color.kraftDark, alpha: 0.75, join: 'round' });
 
       const lit = new Graphics();
       pipPath(lit, i, size / 2);
-      lit.fill(vGradient(rar.light, rar.color)).stroke({ width: ow, color: Color.outline, alignment: 1, join: 'round' });
-      if (i < COUNT - 1) lit.ellipse(-size * 0.14, -size * 0.2, size * 0.22, size * 0.12).fill(glossGradient(0.75, 0.2));
+      // The top rarity is the berry star with a small gold edge; the rest are flat dots with a deeper rim.
+      lit.fill(rar.color).stroke({ width: ow, color: i === COUNT - 1 ? RARITY_GOLD : rar.dark, alignment: 0.5, join: 'round' });
 
       const ring = new Graphics();
-      ring.circle(0, 0, size * 0.62).stroke({ width: Math.max(2, size * 0.18), color: rar.light });
+      ring.circle(0, 0, size * 0.62).stroke({ width: Math.max(2, size * 0.18), color: rar.color });
       ring.visible = false;
 
       holder.addChild(dim, lit, ring);

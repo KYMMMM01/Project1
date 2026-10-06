@@ -4,13 +4,14 @@ import { BASE_UNIT_IDS, unitRarity } from '@/game/data/roster';
 import { getLang, setLang, t } from '@/core/i18n';
 import { validateCatalogue } from '@/platform/pricing';
 import { isPlacement } from '@/platform/adPolicy';
+import { newSim } from './simHelpers';
 import '@/meta/strings';
 import {
   CARD_BASE, CHAPTER_MULT, OFFERS, PLACEMENTS, SNACKS, TRAINING_MAX,
 } from '@/meta/data/economy';
 import { COSMETICS, IAP_SPECS, iapProductDefs } from '@/meta/data/catalog';
 import {
-  CALENDAR, CALENDAR_DAYS, DAILY_MISSIONS, DAILY_MODIFIERS, FEATURES, PASS_TIERS, WEEKLY_MISSIONS,
+  CALENDAR, CALENDAR_DAYS, CUP_TIERS, DAILY_MISSIONS, DAILY_MODIFIERS, FEATURES, PASS_TIERS, WEEKLY_MISSIONS,
   passFreeReward, passPremiumReward,
 } from '@/meta/data/schedule';
 import { cupScore, dailyCode, dailySetup, hashString, parseDailyCode } from '@/meta/daily';
@@ -268,8 +269,8 @@ describe('catalogue', () => {
     expect(fx.filter((c) => c.source.type === 'gems' && c.source.price === 300)).toHaveLength(3);
   });
 
-  it('uses ad placements the platform knows (sweep_ticket is the one it may still lack)', () => {
-    const known = [...Object.values(OFFERS).map((o) => o.ad), PLACEMENTS.treat, PLACEMENTS.snackChest, PLACEMENTS.shopRefresh, PLACEMENTS.patrolDouble];
+  it('uses ad placements the platform knows', () => {
+    const known = [...Object.values(OFFERS).map((o) => o.ad), ...Object.values(PLACEMENTS)];
     for (const id of known) expect(isPlacement(id), id).toBe(true);
     expect(Object.fromEntries(Object.entries(OFFERS).map(([k, o]) => [k, o.gems]))).toEqual({
       revive: 30, result_double: 20, chest_skip: 20, relic_reroll: 10, start_snack: 15,
@@ -316,7 +317,7 @@ describe('dates and the daily challenge', () => {
     expect(a).toEqual(dailySetup('2026-11-07'));
     expect(a.seed).toBe(hashString('D-20261107-r1'));
     expect(a.code).toBe('D-20261107-r1');
-    expect(a.waves).toBe(20);
+    expect(a.waves).toBe(newSim({ mode: 'daily' }).totalWaves);
     expect(a.modifiers).toHaveLength(1);
     expect(DAILY_MODIFIERS).toContain(a.modifiers[0]);
     const seeds = new Set(Array.from({ length: 30 }, (_, i) => dailySetup(addDays('2026-11-01', i)).seed));
@@ -328,6 +329,14 @@ describe('dates and the daily challenge', () => {
     const days = { '2026-10-05': 12, '2026-10-06': 15, '2026-10-11': 8, '2026-10-12': 20, '2026-09-30': 99 };
     expect(cupScore(days, '2026-10-05')).toBe(35);
     expect(cupScore(days, '2026-10-12')).toBe(20);
+  });
+
+  it('puts every cup tier within reach of a week of full-length daily challenges', () => {
+    const best = 7 * newSim({ mode: 'daily' }).totalWaves;
+    const mins = CUP_TIERS.map((c) => c.min);
+    expect([...mins].sort((x, y) => x - y)).toEqual(mins);
+    expect(Math.max(...mins)).toBeLessThanOrEqual(best);
+    expect(Math.max(...mins) / best).toBeGreaterThan(0.85);
   });
 });
 

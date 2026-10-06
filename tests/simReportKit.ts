@@ -27,6 +27,9 @@ export interface BatchSummary {
   surplus: number;
   bossRatio: number;
   lengthWin: number;
+  /** Mean molts and merges per run. */
+  molts: number;
+  merges: number;
   simMs: number;
   results: RunResult[];
 }
@@ -50,6 +53,8 @@ export function batch(runs: number, policy: BotPolicy, make: (seed: number) => B
     surplus: median(surplus),
     bossRatio: median(results.flatMap((r) => r.bossRatios)),
     lengthWin: median(wins.map((r) => r.time / 60)),
+    molts: results.reduce((a, r) => a + r.stats.molts, 0) / runs,
+    merges: results.reduce((a, r) => a + r.stats.merges, 0) / runs,
     simMs: results.reduce((a, r) => a + r.simMs, 0) / runs,
     results,
   };

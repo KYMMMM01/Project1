@@ -5,6 +5,7 @@ import { Ease } from '@/core/tween';
 import { TweenBag } from './motion';
 import { cancelActivePress, type ScrollHost } from './press';
 import { DRAG_THRESHOLD, ScrollAxis, VelocityTracker } from './scrollPhysics';
+import { Color } from './theme';
 
 export interface ScrollViewOpts {
   width: number;
@@ -80,7 +81,7 @@ export class ScrollView extends Container implements ScrollHost {
     this.clip.mask = this.maskG;
     if (opts.indicator ?? true) {
       this.indicator = new Graphics();
-      this.indicator.roundRect(0, 0, 6, 100, 3).fill({ color: 0xffffff, alpha: 0.5 });
+      this.indicator.roundRect(0, 0, 6, 100, 3).fill({ color: Color.inkSoft, alpha: 0.55 });
       this.indicator.alpha = 0;
       this.addChild(this.indicator);
     } else {

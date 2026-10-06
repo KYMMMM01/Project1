@@ -33,6 +33,15 @@ export function unitOf(classId: ClassId, rarity: RarityId): UnitId {
   return UNIT_GRID[classId][RARITIES.indexOf(rarity)] as UnitId;
 }
 
+/**
+ * What two copies of `id` merge into: the next rarity of the same class (a class is one fixed five-step
+ * line). Null for legendaries and mythics, which never merge; a legendary awakens instead (`mythicOf`).
+ */
+export function mergeResultOf(id: UnitId): UnitId | null {
+  const rarity = unitRarityIndex(id);
+  return rarity <= 2 ? (UNIT_GRID[unitClass(id)][rarity + 1] as UnitId) : null;
+}
+
 /** The mythic a legendary awakens into (same class), or null for non-legendaries. */
 export function mythicOf(id: UnitId): UnitId | null {
   return unitRarityIndex(id) === 3 ? UNIT_GRID[unitClass(id)][4] : null;

@@ -474,6 +474,22 @@ describe('YouTube Playables', () => {
     expect(blob.more).toBe('z');
   });
 
+  it('a loadData that failed reads as an error, not as "no data": the default profile never replaces the cloud save', async () => {
+    const t = sdk();
+    const cloud = JSON.stringify({ save: '{"gems":5000}' });
+    t.s.game.loadData.mockRejectedValueOnce(new Error('offline')).mockImplementation(async () => cloud);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const a = createYt();
+    await a.init();
+    await expect(a.storage.get('save')).resolves.toBeNull(); // the game starts over on defaults ...
+    await a.storage.set('save', '{"gems":0}'); // ... and saves them (this retries loadData, which now works)
+    t.handlers.pause.forEach((f) => f());
+    await vi.advanceTimersByTimeAsync(500);
+    for (const blob of t.saves) expect(JSON.parse(blob)).toEqual({ save: '{"gems":5000}' });
+    await expect(a.storage.get('save')).resolves.toBe('{"gems":5000}');
+    warn.mockRestore();
+  });
+
   it('calls firstFrameReady and gameReady once each, and submits integer scores', async () => {
     const t = sdk();
     const a = createYt();

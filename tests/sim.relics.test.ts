@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { RELIC_IDS, type RelicId } from '@/game/api';
+import { RELIC_IDS, type RelicId, type UnitId } from '@/game/api';
 import { hpIndex } from '@/game/data/balance';
 import { RELIC_FX_KEYS, relicSpec } from '@/game/data/relics';
 import { unitRarityIndex } from '@/game/data/roster';
@@ -216,21 +216,20 @@ describe('behaviour relics', () => {
     expect(sim.paidSummons).toBe(0);
   });
 
-  it('snack stick: a merge may jump two rarities, never past legendary', () => {
+  it('snack stick: a merge may jump two rarities, always in the same class and never past legendary', () => {
     const sim = newSim();
     gainRelic(sim, 'snack_stick');
     sim.fx.jumpChance = 1;
     const merges = record(sim, 'merge');
-    put(sim, 0, 'w_paw');
-    put(sim, 1, 'w_paw');
-    put(sim, 2, 'w_sword');
-    put(sim, 3, 'w_sword');
-    put(sim, 4, 'w_viking');
-    put(sim, 5, 'w_viking');
-    sim.drop(0, 1);
-    sim.drop(2, 3);
-    sim.drop(4, 5);
-    expect(merges.map((m) => [m.jumped, unitRarityIndex(m.result.id)])).toEqual([[true, 2], [true, 3], [false, 3]]);
+    const pairs: UnitId[] = ['w_paw', 'w_sword', 'w_viking', 'r_sling', 'm_fire', 't_bard'];
+    pairs.forEach((id, i) => {
+      put(sim, i * 2, id);
+      put(sim, i * 2 + 1, id);
+    });
+    pairs.forEach((_, i) => sim.drop(i * 2, i * 2 + 1));
+    expect(merges.map((m) => [m.jumped, m.result.id])).toEqual([
+      [true, 'w_viking'], [true, 'w_samurai'], [false, 'w_samurai'], [true, 'r_ninja'], [true, 'm_frost'], [false, 't_alch'],
+    ]);
   });
 
   it('heating pad: slows 30% stronger and slowed enemies take 15% more', () => {

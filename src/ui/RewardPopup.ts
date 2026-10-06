@@ -10,7 +10,8 @@ import { motion, popIn, TweenBag } from './motion';
 import { numberText } from './numbers';
 import { Panel } from './Panel';
 import { Popup, popups } from './Popup';
-import { drawGlow, drawPill, glossGradient, vGradient } from './shapes';
+import { drawPaper, paperSeed } from './paper';
+import { drawGlow } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { Color, Rarity, type RarityId } from './theme';
 
@@ -71,9 +72,9 @@ function rayGradient(r: number): FillGradient {
       outerCenter: { x: 0, y: 0 },
       outerRadius: key,
       colorStops: [
-        { offset: 0, color: 'rgba(255,226,122,0.85)' },
-        { offset: 0.55, color: 'rgba(255,200,90,0.35)' },
-        { offset: 1, color: 'rgba(255,190,80,0)' },
+        { offset: 0, color: 'rgba(255,226,140,0.7)' },
+        { offset: 0.55, color: 'rgba(255,204,110,0.3)' },
+        { offset: 1, color: 'rgba(255,196,100,0)' },
       ],
       textureSpace: 'global',
     });
@@ -115,7 +116,7 @@ export class RewardPopup extends Popup<RewardChoice> {
     const gridH = rows * tileH + (rows - 1) * 6;
     const head = opts.subtitle ? 128 : 100;
     const h = head + gridH + 36 + 112 + 50;
-    const panel = new Panel({ width: PANEL_W, height: h, title: opts.title, ribbon: 'primary' });
+    const panel = new Panel({ width: PANEL_W, height: h, title: opts.title, ribbon: 'primary', torn: 'bottom', tape: 'pink' });
 
     // Slowly turning sunburst behind the panel makes the screen feel like an event.
     this.drawRays(Math.max(PANEL_W, h) * 0.62);
@@ -124,7 +125,7 @@ export class RewardPopup extends Popup<RewardChoice> {
     this.setContentSize(PANEL_W + 80, h + 90);
 
     if (opts.subtitle) {
-      const sub = uiLabel(opts.subtitle, { size: 28, color: 0xcabfee, stroke: Color.outline, strokeWidth: 5, shadow: false });
+      const sub = uiLabel(opts.subtitle, { size: 28, color: Color.inkSoft });
       fitLabel(sub, PANEL_W - 80, 28);
       sub.position.set(PANEL_W / 2, 92);
       panel.content.addChild(sub);
@@ -195,9 +196,9 @@ export class RewardPopup extends Popup<RewardChoice> {
       const a1 = a0 + (TAU / rays) * 0.42;
       g.poly([0, 0, Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r]).fill(fill);
     }
-    drawGlow(g, 0, 0, r * 0.5, 0xffd45e, 0.5);
+    drawGlow(g, 0, 0, r * 0.5, 0xffd45e, 0.4);
     g.blendMode = 'add';
-    g.alpha = 0.55;
+    g.alpha = 0.5;
     if (motion.reduced) return;
     this.bag.run({
       duration: 32,
@@ -213,14 +214,10 @@ export class RewardPopup extends Popup<RewardChoice> {
     const tile = new Container();
     const rar = Rarity[r.rarity ?? 'common'];
     const plate = new Graphics();
-    plate.roundRect(-TILE / 2, -TILE / 2 + 5, TILE, TILE, 28).fill({ color: 0x07030f, alpha: 0.35 });
-    plate
-      .roundRect(-TILE / 2, -TILE / 2, TILE, TILE, 28)
-      .fill(vGradient(rar.light, rar.color))
-      .stroke({ width: 5, color: Color.outline, alignment: 1 });
-    plate.roundRect(-TILE / 2 + 9, -TILE / 2 + 9, TILE - 18, TILE - 18, 20).fill(vGradient(0x2b1d52, 0x1b1036));
-    drawGlow(plate, 0, -4, TILE * 0.46, rar.glow, 0.55);
-    plate.roundRect(-TILE / 2 + 12, -TILE / 2 + 11, TILE - 24, 34, 16).fill(glossGradient(0.16, 0));
+    // A photo frame: cream border round a mat in the rarity's colour.
+    const seed = paperSeed();
+    drawPaper(plate, -TILE / 2, -TILE / 2, { w: TILE, h: TILE, radius: 26, fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed });
+    drawPaper(plate, -TILE / 2 + 11, -TILE / 2 + 11, { w: TILE - 22, h: TILE - 22, radius: 18, fill: rar.light, edge: rar.dark, shadow: false, grain: false, seed: seed + 1 });
     tile.addChild(plate);
 
     if (r.texture) {
@@ -237,13 +234,13 @@ export class RewardPopup extends Popup<RewardChoice> {
     }
 
     const pill = new Graphics();
-    drawPill(pill, -52, TILE / 2 - 30, 104, 44, { top: 0x4a3a80, bottom: 0x2a1d52, gloss: 0.2, shadow: false });
+    drawPaper(pill, -54, TILE / 2 - 30, { w: 108, h: 44, kind: 'pill', fill: Color.teal, edge: Color.tealDark, shadow: 3, grain: false, seed: seed + 2 });
     tile.addChild(pill);
-    const amount = numberText(34, 0xffffff, 'x0');
+    const amount = numberText(34, Color.inkDeep, 'x0');
     amount.position.set(0, TILE / 2 - 8);
     tile.addChild(amount);
     if (r.label) {
-      const name = uiLabel(r.label, { size: 24, color: 0xe5defa, stroke: Color.outline, strokeWidth: 4, shadow: false });
+      const name = uiLabel(r.label, { size: 24, color: Color.ink });
       fitLabel(name, TILE + GAP - 4, 24);
       name.position.set(0, TILE / 2 + 44);
       tile.addChild(name);

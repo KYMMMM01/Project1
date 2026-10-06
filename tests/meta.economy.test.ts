@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { RunStats } from '@/game/api';
 import { Rng } from '@/core/rng';
 import { CHAPTER_WAVES } from '@/meta/data/economy';
+import { DAILY_WAVES } from '@/meta/data/schedule';
 import { canPlayStake, sweepPayout } from '@/meta/rewards';
 import { createTestProfile, at } from '@/meta/testing';
 import type { Profile } from '@/meta/profile';
@@ -35,14 +36,20 @@ function winChance(profile: Profile, chapter: number, stake: number): number {
   return 1 / (1 + Math.exp(-(power(profile) - recommended(chapter, stake)) / 0.7));
 }
 
+/**
+ * Waves per "boss or elite" kill. The sim counts boss waves only (8, 16, 24); the "보스·정예" missions
+ * mean every 4th wave (elites 4, 12, 20 too): set this to 4 once docs/handoff/meta.md request #4 lands.
+ */
+const WAVES_PER_BOSS_KILL = 8;
+
 function synthStats(profile: Profile, mode: RunStats['mode'], chapter: number, stake: number, rng: Rng): RunStats {
   const p = mode === 'daily' ? 0.35 : winChance(profile, chapter, stake);
-  const total = mode === 'daily' ? 20 : CHAPTER_WAVES;
+  const total = mode === 'daily' ? DAILY_WAVES : CHAPTER_WAVES;
   const victory = rng.chance(p);
   const waves = victory ? total : Math.max(1, Math.min(total - 1, Math.round(total * (0.25 + 0.55 * p) * rng.range(0.8, 1.15))));
   return {
     mode, chapter, stake, seed: rng.int(1, 1e9), victory, wavesCleared: waves, totalWaves: total, kills: waves * 12,
-    bossesKilled: Math.floor(waves / 6) + (victory ? 1 : 0), summons: waves * 2, merges: Math.round(waves * 1.1), molts: 0,
+    bossesKilled: Math.floor(waves / WAVES_PER_BOSS_KILL), summons: waves * 2, merges: Math.round(waves * 1.1), molts: 0,
     awakenings: 0, relics: Array.from({ length: Math.min(8, Math.floor(waves / 3) + 1) }, () => 'yarn_ball' as const),
     bestRarity: 'epic', peakEnemies: 20, duration: waves * 20, revived: false, summonLuck: 0.5, damageByUnit: {},
   };

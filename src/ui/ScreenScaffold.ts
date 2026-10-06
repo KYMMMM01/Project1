@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, type DestroyOptions, type Text } from 'pixi.js';
+import { Container, Graphics, Rectangle, type DestroyOptions } from 'pixi.js';
 import { game } from '@/core/game';
 import { Ease } from '@/core/tween';
 import { IconButton } from './IconButton';
@@ -7,8 +7,8 @@ import { scaffoldLayout, type SafeRect } from './layoutMath';
 import { motion, TweenBag } from './motion';
 import { popups } from './Popup';
 import { ScrollView } from './ScrollView';
-import { drawShadow, glossGradient, refreshCache, vGradient } from './shapes';
-import { fitLabel, uiLabel } from './text';
+import { drawFloor, drawPaper, PaperLabel, paperSeed } from './paper';
+import { refreshCache } from './shapes';
 import { Color } from './theme';
 
 export interface ScreenScaffoldOpts {
@@ -73,7 +73,8 @@ export class ScreenScaffold extends Container {
   private readonly actionG = new Graphics();
   private readonly titleLayer = new Container();
   private readonly main = new Container();
-  private readonly titleT: Text;
+  private readonly titleLabel: PaperLabel;
+  private readonly seed = paperSeed();
   private readonly backBtn: IconButton | null;
   private readonly actionsRight: Container[] = [];
   private readonly padding: number;
@@ -109,8 +110,8 @@ export class ScreenScaffold extends Container {
     }
     this.main.addChild(this.actionG, this.actionBar);
 
-    this.titleT = uiLabel(opts.title, { size: 44, strokeWidth: 7 });
-    this.titleLayer.addChild(this.titleG, this.titleT);
+    this.titleLabel = new PaperLabel({ text: opts.title, size: 40, paper: Color.paperLight, padX: 40, padY: 10, seed: this.seed + 5 });
+    this.titleLayer.addChild(this.titleG, this.titleLabel);
     if (this.backFn) {
       this.backBtn = new IconButton({ icon: 'back', style: 'neutral', size: BACK_SIZE });
       this.backBtn.onTap(() => this.back());
@@ -148,7 +149,7 @@ export class ScreenScaffold extends Container {
   }
 
   setTitle(text: string): void {
-    this.titleT.text = text;
+    this.titleLabel.setText(text);
     this.layoutTitle();
   }
 
@@ -257,17 +258,14 @@ export class ScreenScaffold extends Container {
 
     this.bgG.clear();
     if (this.backdrop) {
-      this.bgG.rect(0, 0, w, h).fill(vGradient(0x33206a, 0x150d2c));
+      drawFloor(this.bgG, w, h);
       this.bgG.hitArea = new Rectangle(0, 0, w, h);
     }
 
     const tb = r.titleBar;
     this.titleG.clear();
-    drawShadow(this.titleG, 0, 0, tb.w, tb.h, 0, { alpha: 0.45, spread: 16, offsetY: 8 });
-    this.titleG.rect(0, 0, tb.w, tb.h).fill(vGradient(0x4a3896, 0x2a1d59));
-    this.titleG.rect(0, tb.h - 8, tb.w, 8).fill({ color: Color.outline, alpha: 0.9 });
-    this.titleG.rect(0, tb.h - 11, tb.w, 3).fill({ color: 0x8f7bd8, alpha: 0.6 });
-    this.titleG.rect(0, 0, tb.w, tb.h * 0.45).fill(glossGradient(0.1, 0));
+    // A kraft strip across the top, torn along its lower edge; cut wider than the screen so its wobble stays off it.
+    drawPaper(this.titleG, -14, -14, { w: tb.w + 28, h: tb.h + 14, radius: 0, fill: Color.kraft, torn: 'bottom', shadow: 6, seed: this.seed });
     this.layoutTitle();
 
     const ab = r.actionBar;
@@ -275,10 +273,7 @@ export class ScreenScaffold extends Container {
     this.actionG.visible = ab !== null;
     this.actionBar.visible = ab !== null;
     if (ab) {
-      drawShadow(this.actionG, ab.x, ab.y, ab.w, ab.h, 0, { alpha: 0.45, spread: 16, offsetY: -8 });
-      this.actionG.rect(ab.x, ab.y, ab.w, ab.h).fill(vGradient(0x3a2a78, 0x1b1238));
-      this.actionG.rect(ab.x, ab.y, ab.w, 6).fill(Color.outline);
-      this.actionG.rect(ab.x, ab.y + 6, ab.w, 3).fill({ color: 0x8f7bd8, alpha: 0.7 });
+      drawPaper(this.actionG, ab.x - 14, ab.y, { w: ab.w + 28, h: ab.h + 14, radius: 0, fill: Color.kraft, torn: 'top', shadow: -5, seed: this.seed + 1 });
       this.actionBar.position.set(w / 2, ab.y + this.actionH / 2 + 4);
     }
 
@@ -310,7 +305,7 @@ export class ScreenScaffold extends Container {
     }
     // The title stays centred when it fits, otherwise it slides to the free span between the controls.
     const free = Math.min(tb.w / 2 - left, right - tb.w / 2) * 2;
-    fitLabel(this.titleT, Math.max(120, free - 24), 44);
-    this.titleT.position.set(tb.w / 2, cy);
+    this.titleLabel.setMaxWidth(Math.max(160, free - 24));
+    this.titleLabel.position.set(tb.w / 2, cy);
   }
 }

@@ -3,7 +3,7 @@ import { Button } from './Button';
 import { Panel } from './Panel';
 import { Popup, popups } from './Popup';
 import { uiLabel } from './text';
-import { Color, type ButtonStyleId } from './theme';
+import type { ButtonStyleId } from './theme';
 
 interface DialogButton {
   label: string;
@@ -22,7 +22,7 @@ interface DialogSpec {
 
 const W = 620;
 
-/** Message + one or two buttons on a ribbon-titled panel. The building block of confirm/alert. */
+/** Message + one or two buttons on a paper sheet with a title label. The building block of confirm/alert. */
 class DialogPopup extends Popup<boolean> {
   constructor(spec: DialogSpec) {
     super({
@@ -30,19 +30,11 @@ class DialogPopup extends Popup<boolean> {
       backdropClose: spec.backdropClose,
       priority: spec.priority,
     });
-    const msg: Text = uiLabel(spec.message, {
-      size: 32,
-      wrap: W - 110,
-      lineHeight: 44,
-      color: 0xffffff,
-      stroke: Color.outline,
-      strokeWidth: 5,
-      shadow: false,
-    });
+    const msg: Text = uiLabel(spec.message, { size: 32, wrap: W - 110, lineHeight: 44 });
     const top = 92;
     const btnH = 104;
     const h = top + msg.height + 44 + btnH + 52;
-    const panel = new Panel({ width: W, height: h, title: spec.title });
+    const panel = new Panel({ width: W, height: h, title: spec.title, torn: 'bottom', tape: 'sky' });
     msg.position.set(W / 2, top + msg.height / 2);
     panel.content.addChild(msg);
 
@@ -56,7 +48,7 @@ class DialogPopup extends Popup<boolean> {
       panel.content.addChild(btn);
     });
     this.body.addChild(panel);
-    // Ribbon tails reach 36 px past the panel on each side and the ribbon rises above it.
+    // The title label rises above the sheet and the tape pokes out of its top-left corner.
     this.setContentSize(W + 80, h + 90);
   }
 }

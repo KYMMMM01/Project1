@@ -9,7 +9,8 @@ import { IconButton } from './IconButton';
 import type { Box } from './layoutMath';
 import { motion, punch, shakeX, TweenBag } from './motion';
 import { numberText } from './numbers';
-import { drawPill, refreshCache } from './shapes';
+import { drawPaper, paperSeed } from './paper';
+import { refreshCache } from './shapes';
 import { Color } from './theme';
 
 export interface CurrencyPillOpts {
@@ -31,9 +32,9 @@ const TICK_GAP = 0.05;
 const TICK_MAX_STEP = 8;
 
 /**
- * HUD currency chip: coin-like icon, rolling number, optional "+" shop button. Origin = centre.
+ * HUD currency chip: a teal paper strip with the icon over its left end, a rolling number and an optional "+" shop button. Origin = centre.
  * setAmount() counts up (0.4-0.8 s, ease-out) and punches the icon; shakeInsufficient() flashes it
- * red when a purchase is short.
+ * coral when a purchase is short.
  */
 export class CurrencyPill extends Container {
   readonly uiBox: Box;
@@ -49,6 +50,7 @@ export class CurrencyPill extends Container {
   private tickStep = 0;
   private tickAt = 0;
   private fitArea = { x0: 0, x1: 0 };
+  private readonly seed = paperSeed();
 
   constructor(opts: CurrencyPillOpts) {
     super();
@@ -58,7 +60,7 @@ export class CurrencyPill extends Container {
     this.uiBox = { x: -this.w / 2 - 8, y: -H / 2 - 4, w: this.w + 8, h: H + 14 };
 
     this.iconHolder.addChild(drawIcon(opts.icon, 66, opts.iconColor));
-    this.num = numberText(34, 0xffffff, formatCount(this.current));
+    this.num = numberText(34, Color.inkDeep, formatCount(this.current));
     this.view.addChild(this.bgG, this.num, this.iconHolder);
     this.addChild(this.view);
 
@@ -139,7 +141,7 @@ export class CurrencyPill extends Container {
       duration: 0.3,
       ease: Ease.linear,
       onUpdate: (k) => {
-        this.view.tint = mixColor(0xff6070, 0xffffff, k);
+        this.view.tint = mixColor(0xf08a7a, 0xffffff, k);
       },
       onComplete: () => {
         this.view.tint = 0xffffff;
@@ -163,15 +165,8 @@ export class CurrencyPill extends Container {
   private relayout(): void {
     const w = this.w;
     this.bgG.clear();
-    drawPill(this.bgG, -w / 2, -H / 2, w, H, {
-      top: 0x45357f,
-      bottom: 0x261a4d,
-      outline: Color.outline,
-      outlineWidth: 5,
-      gloss: 0.16,
-      rim: 0x8f7bd8,
-      shadow: { alpha: 0.35, spread: 8, offsetY: 5 },
-    });
+    // A teal strip of craft paper, torn off at the right end; the icon sits over its left end.
+    drawPaper(this.bgG, -w / 2, -H / 2, { w, h: H, radius: 14, fill: Color.teal, edge: Color.tealDark, torn: 'right', seed: this.seed, grain: false });
     refreshCache(this.bgG);
     this.iconHolder.position.set(-w / 2 + 12, -1);
     const plusW = this.plusBtn ? 62 : 14;

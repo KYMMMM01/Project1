@@ -60,7 +60,7 @@ export abstract class Popup<R = void> extends Container {
   }
 
   /**
-   * Declare the footprint of the popup's artwork (centred on the body origin, ribbons and tails
+   * Declare the footprint of the popup's artwork (centred on the body origin, title label and tape
    * included) so layout() can shrink it to fit a short screen or a long message.
    */
   protected setContentSize(w: number, h: number): void {

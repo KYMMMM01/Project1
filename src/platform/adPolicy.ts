@@ -13,6 +13,11 @@ export interface PlacementRule {
   daily?: number;
   /** Minimum seconds between two rewards on this placement. */
   cooldownSec?: number;
+  /**
+   * Offered on the home or a shop screen, between runs (GDD 8.2 "홈", "일일 상점"): the per-run offer
+   * budget (GLOBAL_AD_RULES.maxOffersPerRun) neither limits nor counts it.
+   */
+  home?: boolean;
 }
 
 export const AD_PLACEMENT_IDS = [
@@ -25,21 +30,26 @@ export const AD_PLACEMENT_IDS = [
   'free_chest',
   'patrol_double',
   'shop_refresh',
+  'sweep_ticket',
 ] as const;
 
 export type AdPlacementId = (typeof AD_PLACEMENT_IDS)[number];
 
-/** GDD 8.2 "제한" column. Cells without a limit are simply absent. */
+/**
+ * GDD 8.2 "제한" column. Cells without a limit are simply absent. `sweep_ticket` (the sweep-ticket ad on the
+ * stage card, twice a day) is not a GDD 8.2 row: its cap comes from docs/명세_메타.md section 8.
+ */
 export const AD_PLACEMENTS: Readonly<Record<AdPlacementId, Readonly<PlacementRule>>> = {
   pre_run_snack: { perRun: 1 },
   revive: { perRun: 1 },
   relic_reroll: { perRun: 1 },
   result_double: { perRun: 1 },
   snack_box: { daily: 3 },
-  daily_treat: { daily: 3 },
-  free_chest: { daily: 4 },
-  patrol_double: { daily: 3 },
-  shop_refresh: { daily: 2 },
+  daily_treat: { daily: 3, home: true },
+  free_chest: { daily: 4, home: true },
+  patrol_double: { daily: 3, home: true },
+  shop_refresh: { daily: 2, home: true },
+  sweep_ticket: { daily: 2, home: true },
 };
 
 /**
@@ -66,7 +76,7 @@ export const REWARDED_RULES = {
 export const GLOBAL_AD_RULES = {
   /** Minimum gap between any two ads, rewarded or interstitial. */
   minGapMs: 90_000,
-  /** Rewarded ads put in front of the player in one run (watched or dismissed). */
+  /** Rewarded ads put in front of the player in one run (watched or dismissed; home and shop offers are not part of a run). */
   maxOffersPerRun: 2,
   /** Rewarded ads completed per local day. */
   maxRewardedPerDay: 12,
@@ -269,6 +279,11 @@ export class AdLimiter {
     return Math.max(0, sec * 1000 - Math.max(0, now - last));
   }
 
+  /** The placement spends the per-run offer budget (every placement except the home and shop ones). */
+  private countsAsRunOffer(id: string): boolean {
+    return this.rules[id]?.home !== true;
+  }
+
   /** Rewarded ads that may still be put in front of the player in this run. */
   offersLeft(): number {
     return Math.max(0, GLOBAL_AD_RULES.maxOffersPerRun - this.runOffers);
@@ -305,7 +320,7 @@ export class AdLimiter {
     if (this.dailyLeft(id, now) <= 0) return 'daily_cap';
     if (this.cooldownMs(id, now) > 0) return 'cooldown';
     if (!needsAd) return 'ok';
-    if (this.offersLeft() <= 0) return 'offer_cap';
+    if (this.countsAsRunOffer(id) && this.offersLeft() <= 0) return 'offer_cap';
     if (this.adsLeftToday(now) <= 0) return 'day_cap';
     if (this.gapMs(now) > 0) return 'gap';
     return 'ok';
@@ -322,10 +337,13 @@ export class AdLimiter {
     this.save();
   }
 
-  /** An ad was put in front of the player (spacing for every kind, the per-run offer budget for rewarded). */
-  noteAdShown(now: number, kind: 'rewarded' | 'interstitial'): void {
+  /**
+   * An ad was put in front of the player: spacing for every kind, the per-run offer budget for a rewarded
+   * one (unless its `placement` is a home or shop offer, which sits outside any run).
+   */
+  noteAdShown(now: number, kind: 'rewarded' | 'interstitial', placement = ''): void {
     this.counters.lastAnyAdAt = now;
-    if (kind === 'rewarded') this.runOffers += 1;
+    if (kind === 'rewarded' && this.countsAsRunOffer(placement)) this.runOffers += 1;
     this.save();
   }
 

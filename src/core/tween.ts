@@ -219,11 +219,17 @@ export class Tweener {
       this.adding.length = 0;
     }
     let w = 0;
-    for (let i = 0; i < this.list.length; i++) {
-      const tw = this.list[i] as Tween;
-      if (tw.step(step)) this.list[w++] = tw;
+    let i = 0;
+    try {
+      for (; i < this.list.length; i++) {
+        const tw = this.list[i] as Tween;
+        if (tw.step(step)) this.list[w++] = tw;
+      }
+    } finally {
+      // A callback that throws drops only its own tween; the ones behind it stay queued for the next frame.
+      for (i++; i < this.list.length; i++) this.list[w++] = this.list[i] as Tween;
+      this.list.length = w;
     }
-    this.list.length = w;
   }
 
   private add(tw: Tween): Tween {

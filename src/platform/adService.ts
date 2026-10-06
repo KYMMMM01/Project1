@@ -263,7 +263,7 @@ export class AdService {
     }
 
     const result = await this.runAd('rewarded', placement);
-    if (result.shown) this.limiter.noteAdShown(this.now(), 'rewarded');
+    if (result.shown) this.limiter.noteAdShown(this.now(), 'rewarded', placement);
     this.safePreload('rewarded');
 
     if (result.shown && result.rewarded === true) {

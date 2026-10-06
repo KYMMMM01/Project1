@@ -59,7 +59,10 @@ export interface ClockSource {
  * the monotonic clock; a disagreement freezes the session as well and `now()` keeps following the
  * monotonic extrapolation, so a forward jump is never written into `lastSeenAt`. A jump made while
  * the app is closed cannot be told from a long absence, which is why every time-based reward is also
- * capped (patrol hours, one stored chest, one calendar box per date).
+ * capped (patrol hours, one stored chest, one calendar box per date). The same goes for a jump that
+ * `now()` noticed before the app was told it had been in the background: a device sleep pauses the
+ * monotonic clock, and a timer can fire ahead of the resume signal, so `anchor()` takes the wall
+ * clock as the new baseline and lifts that freeze. A rollback stays frozen.
  */
 export class SessionClock {
   private anchorWall = 0;
@@ -75,6 +78,7 @@ export class SessionClock {
   anchor(lastSeenAt: number): void {
     this.anchorWall = this.src.wall();
     this.anchorMono = this.src.mono();
+    this.jumped = false;
     if (this.anchorWall < lastSeenAt - ROLLBACK_SLACK_MS) this.rolledBack = true;
   }
 

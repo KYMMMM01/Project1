@@ -1,35 +1,79 @@
-/** Visual tokens shared by every screen. Colours are 0xRRGGBB. */
+/**
+ * Visual tokens shared by every screen. Colours are 0xRRGGBB.
+ *
+ * The kit draws a sunny home by day made of cut paper lying on a wooden floor: cream sheets, kraft
+ * strips, coloured craft paper, washi tape. Matte and flat; depth comes from layering and a flat
+ * warm-brown shadow, never from gloss, glow or a dark outline. Every token from the earlier
+ * "candy" kit is still here with its new meaning, so existing call sites keep compiling.
+ */
 export const FONT_FAMILY = ['GameLatin', 'GameKR', 'system-ui', 'sans-serif'];
 
 export const Color = {
-  // surfaces
-  bgDeep: 0x120b24,
-  bg: 0x1b1233,
-  panel: 0x2b1d52,
-  panelLight: 0x3b2a6b,
-  panelDark: 0x1e143d,
-  outline: 0x140a2e,
-  // text
-  text: 0xffffff,
-  textDim: 0xb9add6,
-  textDark: 0x2a1746,
-  // brand / actions
-  primary: 0xffb629,
-  primaryDark: 0xd97a00,
-  success: 0x4cd964,
-  successDark: 0x1f9d3e,
-  info: 0x4da6ff,
-  infoDark: 0x1f6fd0,
-  danger: 0xff4d5e,
-  dangerDark: 0xb81f3a,
-  purple: 0xa767ff,
-  purpleDark: 0x6a2fd0,
-  neutral: 0x7b6ea6,
-  neutralDark: 0x4a3f73,
+  // ── paper world (use these in new code) ──
+  /** Body text and glyphs on paper. */
+  ink: 0x4a3222,
+  /** Secondary text on cream paper (AA on `paper`). */
+  inkSoft: 0x7d5e45,
+  /** Darker ink for labels that sit on coloured craft paper (coral, berry, teal). */
+  inkDeep: 0x3b2418,
+  /** Light text. Only for text that sits directly on artwork or a dark dim; always with a brown stroke. */
+  onArt: 0xfffaf0,
+  /** Cream sheets and cards. */
+  paper: 0xfbf3e2,
+  /** Brighter ivory, for a card lying on a `paper` sheet. */
+  paperLight: 0xfffaee,
+  /** Darker cream for nested areas (wells, inactive rows). */
+  paperDim: 0xedddbb,
+  /** Kraft paper: secondary strips, tracks, bases. */
+  kraft: 0xd9b88a,
+  kraftDark: 0xb48f62,
+  /** Track colour: the darker kraft strip that bars and sliders are painted into. */
+  track: 0xd3bb94,
+  /** The wooden floor behind every sheet. */
+  wood: 0xc48f50,
+  woodDark: 0xa06a33,
+  /** Colour of the flat shadow under a piece of paper (drawn at about 22 % alpha). */
+  shadow: 0x6a4527,
+  coral: 0xf0796b,
+  coralDark: 0xc4544a,
+  teal: 0x5fb9c4,
+  tealDark: 0x3e9aa6,
+  mustard: 0xf0bc43,
+  mustardDark: 0xc48f1f,
+  leaf: 0x7dba5c,
+  leafDark: 0x4f8f3a,
+  berry: 0xd96579,
+  berryDark: 0xa83f56,
+  violet: 0x9c84c0,
+  violetDark: 0x6f5a96,
+  // ── legacy names, re-valued ──
+  /** Scene backgrounds: the floor. */
+  bgDeep: 0xa87440,
+  bg: 0xc99a5c,
+  panel: 0xfbf3e2,
+  panelLight: 0xfffaee,
+  panelDark: 0xedddbb,
+  /** Stroke for light text on artwork and for hand-inked lines: the ink brown. */
+  outline: 0x4a3222,
+  text: 0x4a3222,
+  textDim: 0x7d5e45,
+  textDark: 0x3b2418,
+  primary: 0xf0796b,
+  primaryDark: 0xc4544a,
+  success: 0x7dba5c,
+  successDark: 0x4f8f3a,
+  info: 0x5fb9c4,
+  infoDark: 0x3e9aa6,
+  danger: 0xd96579,
+  dangerDark: 0xa83f56,
+  purple: 0x9c84c0,
+  purpleDark: 0x6f5a96,
+  neutral: 0xd9b88a,
+  neutralDark: 0xa88457,
   // currencies
-  gold: 0xffd23f,
-  gem: 0x4ee3ff,
-  energy: 0x7dff6b,
+  gold: 0xf0bc43,
+  gem: 0x6ccbe0,
+  energy: 0x9ccb5e,
   white: 0xffffff,
   black: 0x000000,
 } as const;
@@ -39,20 +83,26 @@ export type RarityId = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic';
 export const RARITY_ORDER: readonly RarityId[] = ['common', 'rare', 'epic', 'legendary', 'mythic'];
 
 export interface RarityStyle {
+  /** The matte hue: the card's inner mat, bars, pips. */
   color: number;
+  /** Deeper tone for edges and small marks that must read on cream. */
   dark: number;
   light: number;
+  /** Tint for light effects over artwork (burst rays, particles). Never used on a kit component. */
   glow: number;
 }
 
-/** The palette players already know from the genre: grey < blue < purple < gold < red/pink. */
+/** Five matte hues that stay apart on cream paper: beige < teal-blue < violet < mustard-orange < berry-coral. */
 export const Rarity: Record<RarityId, RarityStyle> = {
-  common: { color: 0xb7c2d0, dark: 0x6b7686, light: 0xe6ecf2, glow: 0xdfe8f0 },
-  rare: { color: 0x4da6ff, dark: 0x1f5fc0, light: 0xa9d6ff, glow: 0x7cc0ff },
-  epic: { color: 0xb26bff, dark: 0x6a2fc8, light: 0xdcb8ff, glow: 0xc98cff },
-  legendary: { color: 0xffb629, dark: 0xc46c00, light: 0xffe08a, glow: 0xffd45e },
-  mythic: { color: 0xff4d7a, dark: 0xb0164a, light: 0xffa6c0, glow: 0xff7fa0 },
+  common: { color: 0xc9bba3, dark: 0x8f7f66, light: 0xe6dcc9, glow: 0xe6dcc9 },
+  rare: { color: 0x4fa3c7, dark: 0x2f7a9c, light: 0xa8d6e8, glow: 0x8ccbe3 },
+  epic: { color: 0x9c7fc2, dark: 0x6c5392, light: 0xcdbce3, glow: 0xb79bdb },
+  legendary: { color: 0xe8a23a, dark: 0xb36f14, light: 0xf6d18a, glow: 0xf3c262 },
+  mythic: { color: 0xdf5c6f, dark: 0xa23248, light: 0xf3a3ae, glow: 0xf08a99 },
 };
+
+/** The small gold accent on mythic cards. */
+export const RARITY_GOLD = 0xeab84a;
 
 export function rarityIndex(r: RarityId): number {
   return RARITY_ORDER.indexOf(r);
@@ -64,171 +114,53 @@ export const MIN_FONT = 20;
 /** Touch-target sizes (design px): absolute minimum, comfortable default, primary call-to-action height. */
 export const Hit = { min: 88, comfy: 96, cta: 120 } as const;
 
-export type ButtonStyleId = 'primary' | 'success' | 'info' | 'danger' | 'neutral' | 'purple';
+export type ButtonStyleId = 'primary' | 'success' | 'info' | 'danger' | 'neutral' | 'purple' | 'mustard' | 'kraft';
 
-/** Every colour a chunky button needs, hand-tuned so the six styles share one lightness structure. */
+/** Every colour a paper button needs. */
 export interface ButtonPalette {
-  /** Face gradient: highlight edge, body, deep edge. */
-  top: number;
+  /** The paper. */
   base: number;
+  /** Fibre tones a hair lighter and darker than `base`: only used where a call site still fills a vertical gradient. */
+  top: number;
   bottom: number;
-  /** Bevel rim between the outline and the face (light on top, dark at the bottom). */
-  rimTop: number;
-  rimBottom: number;
-  /** The darker slab the face sits on — what makes the button look physical. */
+  /** Darker paper tone: the thin edge line just inside the cut, and the disabled/pressed shade. */
   lip: number;
-  /** Outline for text drawn on the button. */
+  /** Label colour on this paper. */
+  ink: number;
+  /** Stroke for light text that sits on this colour over artwork. */
   textStroke: number;
-  glow: number;
 }
 
-export const ButtonPalettes: Record<ButtonStyleId, ButtonPalette> = {
-  primary: {
-    top: 0xffe27a,
-    base: 0xffb629,
-    bottom: 0xff9410,
-    rimTop: 0xfff6c4,
-    rimBottom: 0xe8780a,
-    lip: 0xbf5a05,
-    textStroke: 0x8a3a00,
-    glow: 0xffd45e,
-  },
-  success: {
-    top: 0xa6f58a,
-    base: 0x4cd964,
-    bottom: 0x28b048,
-    rimTop: 0xdcffcb,
-    rimBottom: 0x1c8d3a,
-    lip: 0x157030,
-    textStroke: 0x0d4a1e,
-    glow: 0x8cff8a,
-  },
-  info: {
-    top: 0x9fd5ff,
-    base: 0x4da6ff,
-    bottom: 0x2a80ea,
-    rimTop: 0xd9eeff,
-    rimBottom: 0x1c5cbd,
-    lip: 0x153f94,
-    textStroke: 0x0c2a66,
-    glow: 0x7cc0ff,
-  },
-  danger: {
-    top: 0xff9ea6,
-    base: 0xff4d5e,
-    bottom: 0xe02a46,
-    rimTop: 0xffd6da,
-    rimBottom: 0xb41d38,
-    lip: 0x8a1230,
-    textStroke: 0x560a1e,
-    glow: 0xff7a88,
-  },
-  neutral: {
-    top: 0xb7acdf,
-    base: 0x8678b8,
-    bottom: 0x6a5d9c,
-    rimTop: 0xdcd4f5,
-    rimBottom: 0x52467f,
-    lip: 0x3b3166,
-    textStroke: 0x231a45,
-    glow: 0xb9add6,
-  },
-  purple: {
-    top: 0xd5acff,
-    base: 0xa767ff,
-    bottom: 0x8345ea,
-    rimTop: 0xeedcff,
-    rimBottom: 0x6a2fd0,
-    lip: 0x4d1fa5,
-    textStroke: 0x2d0f66,
-    glow: 0xc98cff,
-  },
-};
-
-/** Z-order inside game.popupLayer / game.overlayLayer is by add order; these are the shared fades. */
-export const Dim = { backdrop: 0x0b0618, backdropAlpha: 0.66 } as const;
-
-// ───────────────────────── palette previews (QA) ─────────────────────────
-// `?theme=<name>` swaps the colour tokens before any UI is built, so alternative looks can be
-// reviewed on the real screens. Only token values change; nothing else reads this.
-
-type Tokens = Record<keyof typeof Color, number>;
-
-function mixHex(a: number, b: number, t: number): number {
-  const ch = (s: number) => Math.round(((a >> s) & 0xff) + (((b >> s) & 0xff) - ((a >> s) & 0xff)) * t);
-  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
-}
-
-/** Derive a full chunky-button palette from one base colour (same lightness structure as the hand-tuned ones). */
-function buttonFrom(base: number): ButtonPalette {
-  return {
-    top: mixHex(base, 0xffffff, 0.38),
-    base,
-    bottom: mixHex(base, 0x000000, 0.1),
-    rimTop: mixHex(base, 0xffffff, 0.72),
-    rimBottom: mixHex(base, 0x000000, 0.22),
-    lip: mixHex(base, 0x000000, 0.38),
-    textStroke: mixHex(base, 0x000000, 0.62),
-    glow: mixHex(base, 0xffffff, 0.3),
+function paperTones(base: number, lip: number, ink: number): ButtonPalette {
+  const ch = (c: number, s: number, k: number) => {
+    const v = ((c >> s) & 0xff) + k;
+    return Math.max(0, Math.min(255, v));
   };
+  const lift = (c: number, k: number) => (ch(c, 16, k) << 16) | (ch(c, 8, k) << 8) | ch(c, 0, k);
+  return { base, top: lift(base, 8), bottom: lift(base, -10), lip, ink, textStroke: Color.outline };
 }
 
-interface PalettePreview {
-  tokens: Partial<Tokens>;
-  /** Base colour per button style; unspecified styles keep their tuned palette. */
-  buttons: Partial<Record<ButtonStyleId, number>>;
-  backdrop: number;
-}
-
-export const PALETTE_PREVIEWS: Record<string, PalettePreview> = {
-  // Sunny home: cream panels, wood-brown outlines, coral call-to-action, teal secondary.
-  day: {
-    tokens: {
-      bgDeep: 0xcdb48a, bg: 0xe9d6b0, panel: 0xfff1d6, panelLight: 0xfffaf0, panelDark: 0xe6d2ab, outline: 0x4a2c1a,
-      textDim: 0x9a7b5f, textDark: 0x4a2c1a,
-      primary: 0xff8347, primaryDark: 0xd9541e, info: 0x2bb8b0, infoDark: 0x16857f, success: 0x6cc24a, successDark: 0x3f8f25,
-      danger: 0xe9524a, dangerDark: 0xa82b25, purple: 0xc0739a, purpleDark: 0x8a4368, neutral: 0xbba383, neutralDark: 0x86704f,
-      gold: 0xffc93c, gem: 0x3fc7e8,
-    },
-    buttons: { primary: 0xff8347, info: 0x2bb8b0, success: 0x6cc24a, danger: 0xe9524a, purple: 0xc0739a, neutral: 0xbba383 },
-    backdrop: 0x2a1a10,
-  },
-  // Deep teal: dark like today but sea-green instead of purple, coral call-to-action.
-  teal: {
-    tokens: {
-      bgDeep: 0x0b1f2a, bg: 0x10303f, panel: 0x16465a, panelLight: 0x1f5d75, panelDark: 0x0f3344, outline: 0x06161f,
-      textDim: 0x9cc9d6, textDark: 0x0f3344,
-      primary: 0xff7a59, primaryDark: 0xd94f2e, info: 0x4cc9f0, infoDark: 0x1f8fb8, purple: 0x54c6a9, purpleDark: 0x26917a,
-      neutral: 0x6f95a3, neutralDark: 0x41616d,
-    },
-    buttons: { primary: 0xff7a59, info: 0x4cc9f0, purple: 0x54c6a9, neutral: 0x6f95a3 },
-    backdrop: 0x04121a,
-  },
-  // Houseplant green: deep leaf-green panels, butter-yellow call-to-action, terracotta accents.
-  leaf: {
-    tokens: {
-      bgDeep: 0x14261b, bg: 0x1d3626, panel: 0x2a4d36, panelLight: 0x3a6648, panelDark: 0x1e3a29, outline: 0x0c1a11,
-      textDim: 0xb7d6bf, textDark: 0x1e3a29,
-      primary: 0xffd166, primaryDark: 0xd9a020, info: 0x6bc5d2, infoDark: 0x3a8f9c, purple: 0xe07a5f, purpleDark: 0xb0503a,
-      neutral: 0x7fa089, neutralDark: 0x4f6b58,
-    },
-    buttons: { primary: 0xffc94d, info: 0x6bc5d2, purple: 0xe07a5f, neutral: 0x7fa089 },
-    backdrop: 0x08130c,
-  },
+/** Coral is the main action; teal informs; cream is the quiet secondary; berry warns. */
+export const ButtonPalettes: Record<ButtonStyleId, ButtonPalette> = {
+  primary: paperTones(Color.coral, 0xd25f52, Color.inkDeep),
+  success: paperTones(Color.leaf, 0x5f9944, Color.inkDeep),
+  info: paperTones(Color.teal, 0x3e9aa6, Color.inkDeep),
+  danger: paperTones(Color.berry, 0xb24a60, Color.inkDeep),
+  neutral: paperTones(0xf6ead0, 0xd6c096, Color.ink),
+  purple: paperTones(Color.violet, 0x7c649f, Color.inkDeep),
+  mustard: paperTones(Color.mustard, 0xcf9a28, Color.inkDeep),
+  kraft: paperTones(Color.kraft, 0xb48f62, Color.ink),
 };
 
-export function applyPalettePreview(name: string): boolean {
-  const p = PALETTE_PREVIEWS[name];
-  if (!p) return false;
-  Object.assign(Color as unknown as Tokens, p.tokens);
-  for (const id of Object.keys(p.buttons) as ButtonStyleId[]) {
-    ButtonPalettes[id] = buttonFrom(p.buttons[id] as number);
-  }
-  (Dim as { backdrop: number }).backdrop = p.backdrop;
-  return true;
-}
+export type TapeName = 'pink' | 'sky' | 'yellow' | 'green';
 
-if (typeof location !== 'undefined') {
-  const requested = new URLSearchParams(location.search).get('theme');
-  if (requested) applyPalettePreview(requested);
-}
+/** Washi tape: the translucent body and the colour its pattern is printed in. */
+export const TapeColors: Record<TapeName, { base: number; mark: number }> = {
+  pink: { base: 0xf3a9ba, mark: 0xfff0f3 },
+  sky: { base: 0x9acbea, mark: 0xeaf6ff },
+  yellow: { base: 0xf5d36a, mark: 0xfff6cf },
+  green: { base: 0xa6d48b, mark: 0xf0fbe8 },
+};
+
+/** Z-order inside game.popupLayer / game.overlayLayer is by add order; this is the shared dim: warm brown, never black. */
+export const Dim = { backdrop: 0x3a2514, backdropAlpha: 0.58 } as const;

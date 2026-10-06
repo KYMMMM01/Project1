@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RelicId } from '@/game/api';
+import { createBot } from '@/game/sim/bots';
 import { createBattle } from '@/game/sim/create';
-import { CHAPTER_HP_MULT } from '@/game/data/balance';
+import { SIM_VERSION } from '@/game/sim/snapshot';
+import { CHAPTER_HP_MULT, TICK } from '@/game/data/balance';
 import { COUNTER_RELICS } from '@/game/data/relics';
 import { STAKE_STEPS } from '@/game/data/stakes';
 import { RELIC_RARITY } from '@/game/data/roster';
@@ -579,6 +581,54 @@ describe('snapshots', () => {
     expect({ ...JSON.parse(copy.snapshot()!.data), time: 0 }).toEqual({ ...JSON.parse(snap.data), time: 0 });
   });
 
+  it('refuses a save from before merges kept their class (version 1), so a fresh run starts instead', () => {
+    expect(SIM_VERSION).toBeGreaterThan(1);
+    const sim = played();
+    const snap = sim.snapshot()!;
+    const old = { simVersion: 1, wave: snap.wave, data: snap.data };
+    expect(createBattle(initOf(), old)).toBeNull();
+    // The scene's fallback: `createBattle(init, snapshot) ?? createBattle(init)`.
+    const fresh = createBattle(initOf(), old) ?? createBattle(initOf());
+    expect(fresh.wave).toBe(0);
+    expect(fresh.phase).toBe('prep');
+  });
+
+  it('resumes in the middle of a run: same board and counters, and the merge stream carries on where it stopped', () => {
+    const init = initOf({ seed: 84 });
+    const sim = createBattle(init) as Sim;
+    const bot = createBot('merge', 3);
+    for (let tick = 0; sim.wave < 7 && tick < 60 * 400; tick++) {
+      if (sim.phase === 'choice') bot.choose(sim);
+      else if (tick % 15 === 0) bot.act(sim);
+      sim.step(TICK);
+    }
+    const snap = sim.snapshot()!;
+    expect(snap.wave).toBe(7);
+    const saved = JSON.parse(snap.data) as { units: (string | 0)[]; stats: { merges: number }; rng: number[] };
+    expect(saved.stats.merges).toBeGreaterThan(3);
+    const copy = createBattle(init, snap) as Sim;
+    expect(copy.units.map((u) => u?.id ?? 0)).toEqual(saved.units);
+    expect(copy.getStats().merges).toBe(saved.stats.merges);
+    expect(copy.rng.states()).toEqual(saved.rng);
+
+    // The original has run on since the save only by that one tick; both now make the same j-th, j+1-th, ... merges.
+    const jumps = (s: Sim): string[] => {
+      const out: string[] = [];
+      s.events.on('merge', (e) => out.push(e.result.id));
+      for (let j = 0; j < 14; j++) {
+        for (let c = 0; c < s.units.length; c++) if (s.units[c]) s.sell(c);
+        s.fx.jumpChance = 0.5;
+        put(s, 0, 'm_snow');
+        put(s, 1, 'm_snow');
+        s.drop(0, 1);
+      }
+      return out;
+    };
+    const resumed = jumps(copy);
+    expect(new Set(resumed)).toEqual(new Set(['m_fire', 'm_storm']));
+    expect(jumps(sim)).toEqual(resumed);
+  });
+
   it('restores relics and their effects', () => {
     const sim = newSim();
     gainRelic(sim, 'yarn_ball');
@@ -594,6 +644,8 @@ describe('snapshots', () => {
     const sim = played();
     const snap = sim.snapshot()!;
     expect(createBattle(initOf(), { ...snap, simVersion: snap.simVersion + 1 })).toBeNull();
+    expect(createBattle(initOf(), { ...snap, simVersion: 1 })).toBeNull();
+    expect(createBattle(initOf(), { simVersion: 1, wave: 3, data: '{}' })).toBeNull();
     expect(createBattle(initOf({ seed: 1 }), snap)).toBeNull();
     expect(createBattle(initOf({ chapter: 2 }), snap)).toBeNull();
     expect(createBattle(initOf(), { ...snap, data: '{oops' })).toBeNull();

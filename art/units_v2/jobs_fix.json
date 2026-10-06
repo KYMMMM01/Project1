@@ -1,0 +1,18 @@
+[
+ {
+  "name": "unit_r_gunner",
+  "ref": [
+   "art/units_v2/unit_r_gunner.png"
+  ],
+  "ref_note": "Image 1 is an approved character of our game. Redraw it keeping EVERYTHING the same (pose, expression, the cork pop-gun rifle, the brass monocle, the bandolier, the green mantle with gold edge, the green feather, colours of the outfit) except the cat itself, as described below.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite shown small (about 90 px)\nChange: the cat becomes an American Shorthair: sturdy, a round face with full cheeks, medium ears with rounded tips (not oversized), short silver-grey coat with only a FEW bold dark swirling tabby STRIPES on the forehead, cheeks, legs and tail. There must be NO spots, NO dots and NO speckles anywhere on the fur: large calm areas of plain silver-grey between the stripes.\nKeep the rendering exactly: thick dark-brown outline, white sticker border, MATTE flat colours, no gloss, no glow, dot eyes with eyebrows. Full body, same pose, same facing, centred, generous padding, genuinely transparent background (alpha) outside the white sticker border. Single character, no text, no watermark, nothing cropped."
+ },
+ {
+  "name": "unit_w_tiger",
+  "ref": [
+   "art/units_v2/unit_w_tiger.png"
+  ],
+  "ref_note": "Image 1 is an approved character of our game. Redraw it keeping EVERYTHING the same (pose, expression, the golden armour and helmet with red plume, the polearm, the red cape, the banner, the halo, all colours) except the fur pattern, as described below.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game unit sprite shown small (about 90 px)\nChange: the golden-orange fur shows only a FEW bold dark tiger STRIPES (on the forehead, cheeks, arms, legs and tail). Remove every spot, rosette, dot and speckle from the fur and from the banner: the banner becomes plain tiger-striped too. Large calm areas of plain orange between the stripes.\nKeep the rendering exactly: thick dark-brown outline, white sticker border, MATTE flat colours, no gloss, no glow, dot eyes with eyebrows. Full body, same pose, same facing, centred, generous padding, genuinely transparent background (alpha) outside the white sticker border. Single character, no text, no watermark, nothing cropped."
+ }
+]

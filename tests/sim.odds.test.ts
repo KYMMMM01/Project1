@@ -150,11 +150,14 @@ describe('the battle\'s own summons follow summonOdds()', () => {
     }
   });
 
-  it('draws the merge class uniformly', () => {
+  it('rolls the snack stick jump at its chance and never changes the class of a merge', () => {
     const sim = newSim({ seed: 17 });
-    const seen = [0, 0, 0, 0];
+    sim.fx.jumpChance = 0.12;
+    const seen = [0, 0];
+    let otherClass = 0;
     sim.events.on('merge', (e) => {
-      seen[CLASS_IDS.indexOf(unitClass(e.result.id))]!++;
+      seen[e.jumped ? 1 : 0]!++;
+      if (unitClass(e.result.id) !== 'warrior') otherClass++;
     });
     for (let i = 0; i < 20_000; i++) {
       put(sim, 0, 'w_paw');
@@ -162,7 +165,8 @@ describe('the battle\'s own summons follow summonOdds()', () => {
       sim.drop(0, 1);
       sim.sell(1);
     }
-    expect(seen.reduce((a, v) => a + v, 0)).toBe(20_000);
-    expect(chiSquare(seen, [0.25, 0.25, 0.25, 0.25]).p).toBeGreaterThan(ALPHA);
+    expect(seen[0]! + seen[1]!).toBe(20_000);
+    expect(otherClass).toBe(0);
+    expect(chiSquare(seen, [0.88, 0.12]).p).toBeGreaterThan(ALPHA);
   });
 });

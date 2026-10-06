@@ -1,11 +1,11 @@
 import { Container, Graphics, type DestroyOptions } from 'pixi.js';
-import { lighten } from '@/core/math';
 import { Ease } from '@/core/tween';
 import type { Box } from './layoutMath';
 import { motion, TweenBag } from './motion';
 import { formatOdds, oddsBarWidth } from './oddsMath';
 import { rarityName } from './rarity';
-import { cacheStatic, drawPanel, refreshCache, vGradient } from './shapes';
+import { drawDashedLine, drawPaintFill, drawPaper, paperSeed } from './paper';
+import { cacheStatic, drawPanel, refreshCache } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { Color, Rarity, type RarityId } from './theme';
 
@@ -34,7 +34,6 @@ const PAD = 22;
 const LABEL_W = 176;
 const PCT_W = 118;
 const BAR_H = 22;
-const DEFAULT_BAR = 0x7b6ea6;
 
 /**
  * "What can I get, and how likely is it": rows of label + percentage bar + percentage text, with an
@@ -52,6 +51,7 @@ export class OddsTable extends Container {
   private footnoteText: string | undefined;
   private rows: readonly OddsRow[] = [];
   private totalH = 0;
+  private readonly seed = paperSeed();
 
   constructor(opts: OddsTableOpts = {}) {
     super();
@@ -81,31 +81,22 @@ export class OddsTable extends Container {
     rows.forEach((row, i) => {
       const cy = y + ROW_H / 2;
       const rar = row.rarity ? Rarity[row.rarity] : null;
-      const label = uiLabel(row.label ?? (row.rarity ? rarityName(row.rarity) : ''), {
-        size: 28,
-        anchorX: 0,
-        strokeWidth: 4,
-        shadow: false,
-      });
+      const label = uiLabel(row.label ?? (row.rarity ? rarityName(row.rarity) : ''), { size: 28, anchorX: 0 });
       fitLabel(label, LABEL_W - 12, 28);
       label.position.set(PAD, cy);
 
       const track = new Graphics();
-      track.roundRect(trackX, cy - BAR_H / 2, trackW, BAR_H, BAR_H / 2).fill(vGradient(0x120a26, 0x241846)).stroke({ width: 3, color: Color.outline, alignment: 1 });
+      drawPaper(track, trackX, cy - BAR_H / 2, { w: trackW, h: BAR_H, kind: 'pill', fill: Color.track, edge: Color.kraftDark, shadow: false, grain: false, seed: this.seed + i });
       cacheStatic(track);
 
       const fill = new Container();
       const w = oddsBarWidth(row.value, trackW - 6, BAR_H);
-      const body = row.color ?? rar?.color ?? DEFAULT_BAR;
       const fg = new Graphics();
-      if (w > 0) {
-        fg.roundRect(0, 0, w, BAR_H - 6, (BAR_H - 6) / 2).fill(vGradient(rar?.light ?? lighten(body, 0.4), body));
-        fg.roundRect(4, 2, Math.max(2, w - 8), (BAR_H - 6) * 0.38, 3).fill({ color: 0xffffff, alpha: 0.35 });
-      }
+      if (w > 0) drawPaintFill(fg, 0, 0, w, BAR_H - 6, row.color ?? rar?.color ?? Color.teal, this.seed + i);
       fill.addChild(fg);
       fill.position.set(trackX + 3, cy - (BAR_H - 6) / 2);
 
-      const pct = uiLabel(formatOdds(row.value), { size: 30, anchorX: 1, strokeWidth: 4, shadow: false });
+      const pct = uiLabel(formatOdds(row.value), { size: 30, anchorX: 1 });
       fitLabel(pct, PCT_W - 8, 30);
       pct.position.set(this.tableW - PAD, cy);
 
@@ -130,8 +121,7 @@ export class OddsTable extends Container {
     if (this.footnoteText) {
       const t = uiLabel(this.footnoteText, {
         size: 24,
-        color: 0xcabfee,
-        stroke: false,
+        color: Color.inkSoft,
         wrap: this.tableW - PAD * 2,
         lineHeight: 32,
         align: 'left',
@@ -162,7 +152,11 @@ export class OddsTable extends Container {
     this.wellG.clear();
     this.well.visible = this.framed;
     if (!this.framed) return;
-    drawPanel(this.wellG, 0, 0, this.tableW, this.totalH, 'inset', { radius: 28 });
+    drawPanel(this.wellG, 0, 0, this.tableW, this.totalH, 'inset', { radius: 28, seed: this.seed });
+    for (let i = 1; i < this.rows.length; i++) {
+      const y = PAD + ROW_H * i;
+      drawDashedLine(this.wellG, PAD, y, this.tableW - PAD, y, { color: Color.kraftDark, alpha: 0.45, width: 2.5, dash: 10, gap: 8 });
+    }
     refreshCache(this.well);
   }
 }

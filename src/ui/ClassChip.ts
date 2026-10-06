@@ -2,14 +2,15 @@ import { Container, Graphics, Rectangle, type DestroyOptions } from 'pixi.js';
 import { audio, type SfxId } from '@/audio';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
-import { lerp } from '@/core/math';
+import { lerp, mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { backOut, motion, TweenBag } from './motion';
 import { bindPress, inScrollHost, type PressBinding } from './press';
 import { RarityPips } from './RarityPips';
-import { cacheStatic, drawGlow, drawPill, glossGradient, refreshCache, vGradient } from './shapes';
+import { drawDashedRect, drawPaper, paperSeed, tapeStrip } from './paper';
+import { cacheStatic, refreshCache } from './shapes';
 import { HOLD_DELAY } from './Tooltip';
 import { Color, Hit } from './theme';
 
@@ -25,7 +26,7 @@ export interface ClassChipOpts {
   owned?: readonly boolean[];
   /** Synergy tier reached, 0..3. */
   tier?: number;
-  /** Colour of the lit tier steps and the tier-up glow (default: the brand gold). */
+  /** Colour of the lit tier steps and the tier-up ring (default: mustard). */
   accent?: number;
   /** Sound for a tier-up; false for silence (the caller plays its own). */
   tierSfx?: SfxId | false;
@@ -33,17 +34,17 @@ export interface ClassChipOpts {
 }
 
 interface TierLook {
-  outline: number;
+  edge: number;
   width: number;
-  rim: number;
+  alpha: number;
 }
 
-/** Border per synergy tier: plain dark, bronze, silver, gold. */
+/** Border per synergy tier: plain kraft line, then a bronze, a silver and a mustard paper border. */
 const TIER_LOOK: readonly TierLook[] = [
-  { outline: Color.outline, width: 5, rim: 0x8f7bd8 },
-  { outline: 0x9a5a1c, width: 6, rim: 0xe9a35a },
-  { outline: 0xb4c0d6, width: 6, rim: 0xffffff },
-  { outline: 0xffd23f, width: 7, rim: 0xfff3b0 },
+  { edge: Color.kraftDark, width: 2, alpha: 0.5 },
+  { edge: 0xb8845a, width: 4, alpha: 0.95 },
+  { edge: 0x9ea8b4, width: 4, alpha: 0.95 },
+  { edge: Color.mustardDark, width: 5, alpha: 1 },
 ];
 
 const BAR_W = 17;
@@ -53,9 +54,9 @@ const BAR_BASE = 31;
 const RIGHT_CX = 38;
 
 /**
- * Compact class badge: class glyph on a medallion, the five rarity pips, and a three-step synergy
+ * Compact class badge: class glyph on a paper medallion, the five rarity pips, and a three-step synergy
  * marker (rising bars, so the tier is readable without colour). A tier-up punches the chip and
- * flares a glow; a press dips and darkens it on the pointerdown frame. Origin = centre, about 168 x 76.
+ * sends out a ring; a press dips and darkens it on the pointerdown frame. Origin = centre, about 168 x 76.
  */
 export class ClassChip extends Container {
   readonly uiBox: Box = { x: -CLASS_CHIP_W / 2, y: -CLASS_CHIP_H / 2, w: CLASS_CHIP_W, h: CLASS_CHIP_H + 4 };
@@ -66,7 +67,9 @@ export class ClassChip extends Container {
   private readonly body = new Container();
   private readonly plate = new Container();
   private readonly plateG = new Graphics();
-  private readonly glow = new Graphics();
+  private readonly ring = new Graphics();
+  private readonly seed = paperSeed();
+  private selTape: Graphics | null = null;
   private readonly bars: { g: Container; lit: Graphics; dim: Graphics }[] = [];
   private readonly press: PressBinding;
   private readonly accent: number;
@@ -79,7 +82,7 @@ export class ClassChip extends Container {
 
   constructor(opts: ClassChipOpts) {
     super();
-    this.accent = opts.accent ?? Color.primary;
+    this.accent = opts.accent ?? Color.mustard;
     this.tierSfx = opts.tierSfx === undefined ? 'upgrade' : opts.tierSfx;
     this.tierValue = Math.max(0, Math.min(CLASS_TIERS, Math.floor(opts.tier ?? 0)));
     this.tapFn = opts.onTap ?? null;
@@ -90,17 +93,14 @@ export class ClassChip extends Container {
     // Medallion: the glyph sits on a round well so every class reads at the same weight.
     const med = new Graphics();
     const mx = -CLASS_CHIP_W / 2 + 42;
-    med.circle(mx, 3, 31).fill({ color: 0x07030f, alpha: 0.35 });
-    med.circle(mx, 0, 31).fill(vGradient(0x6a56b6, 0x34256b)).stroke({ width: 4, color: Color.outline, alignment: 1 });
-    med.ellipse(mx - 4, -17, 17, 7).fill(glossGradient(0.3, 0.02));
+    drawPaper(med, mx - 31, -31, { w: 62, h: 62, kind: 'circle', fill: mixColor(this.accent, 0xffffff, 0.55), edge: Color.kraftDark, shadow: 3, grain: false, seed: this.seed + 1 });
     cacheStatic(med);
     const icon = drawIcon(opts.icon, 46);
     icon.position.set(mx, 0);
 
-    this.glow.position.set(mx, 0);
-    drawGlow(this.glow, 0, 0, 78, this.accent, 0.95);
-    this.glow.blendMode = 'add';
-    this.glow.alpha = 0;
+    this.ring.position.set(mx, 0);
+    this.ring.circle(0, 0, 40).stroke({ width: 6, color: this.accent });
+    this.ring.alpha = 0;
 
     this.pips = new RarityPips({ owned: opts.owned, size: 13, gap: 5 });
     this.pips.position.set(RIGHT_CX, -22);
@@ -111,17 +111,14 @@ export class ClassChip extends Container {
       const g = new Container();
       g.position.set(barsX + i * (BAR_W + BAR_GAP), BAR_BASE);
       const dim = new Graphics();
-      dim.roundRect(0, -h, BAR_W, h, 4).fill({ color: 0x1a1034, alpha: 0.85 }).stroke({ width: 2.5, color: 0x5a49a0, alpha: 0.7 });
+      dim.roundRect(0, -h, BAR_W, h, 4).fill({ color: Color.paperDim, alpha: 0.9 }).stroke({ width: 2.5, color: Color.kraftDark, alpha: 0.6 });
       const lit = new Graphics();
-      lit.roundRect(0, -h, BAR_W, h, 4)
-        .fill(vGradient(0xffe27a, this.accent))
-        .stroke({ width: 3, color: Color.outline, alignment: 1 });
-      lit.roundRect(3, -h + 2.5, BAR_W - 6, Math.max(3, h * 0.35), 2).fill(glossGradient(0.6, 0.1));
+      lit.roundRect(0, -h, BAR_W, h, 4).fill(this.accent).stroke({ width: 2.5, color: Color.mustardDark, alpha: 0.7, alignment: 0 });
       g.addChild(dim, lit);
       this.bars.push({ g, lit, dim });
     }
 
-    this.body.addChild(this.plate, this.glow, med, icon, this.pips);
+    this.body.addChild(this.plate, this.ring, med, icon, this.pips);
     for (const b of this.bars) this.body.addChild(b.g);
     this.addChild(this.body);
     this.paintTier(this.tierValue, -1);
@@ -135,7 +132,7 @@ export class ClassChip extends Container {
         this.bag.killKeyed(this.body);
         this.body.y = 3;
         this.body.scale.set(0.95);
-        this.body.tint = 0xcfc6ea;
+        this.body.tint = 0xece0d0;
         haptic('tap');
         this.downAt = game.time;
         this.deferSfx = inScrollHost(this);
@@ -180,7 +177,7 @@ export class ClassChip extends Container {
   }
 
   /**
-   * Move to synergy tier `n` (0..3). A rise celebrates: a scale punch, a glow flare and the new step
+   * Move to synergy tier `n` (0..3). A rise celebrates: a scale punch, an expanding ring and the new step
    * popping in. Falling or an unanimated change just repaints.
    */
   setTier(n: number, animate = true): void {
@@ -206,26 +203,23 @@ export class ClassChip extends Container {
   private drawPlate(): void {
     const g = this.plateG;
     g.clear();
+    this.selTape?.destroy();
+    this.selTape = null;
     const tier = this.tierValue;
     const w = CLASS_CHIP_W;
     const h = CLASS_CHIP_H;
     const look = TIER_LOOK[tier] as TierLook;
-    // Each synergy step restyles the border (thickness and metal), not just its colour.
-    drawPill(g, -w / 2, -h / 2, w, h, {
-      top: tier >= CLASS_TIERS ? 0x5a3f8f : 0x45357f,
-      bottom: tier >= CLASS_TIERS ? 0x3a2468 : 0x261a4d,
-      outline: look.outline,
-      outlineWidth: look.width,
-      radius: 26,
-      gloss: 0.16,
-      rim: look.rim,
-      shadow: { alpha: 0.35, spread: 8, offsetY: 5 },
-    });
+    // Each synergy step restyles the border (thickness and colour), not just its colour.
+    drawPaper(g, -w / 2, -h / 2, { w, h, radius: 26, fill: Color.paperLight, edge: look.edge, edgeWidth: look.width, edgeAlpha: look.alpha, shadow: 5, grain: false, seed: this.seed });
     if (tier >= CLASS_TIERS) {
-      g.roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 30).stroke({ width: 3, color: this.accent, alpha: 0.75 });
+      drawDashedRect(g, -w / 2 + 7, -h / 2 + 7, w - 14, h - 14, { radius: 20, color: this.accent, width: 2.5, dash: 9, gap: 7, seed: this.seed + 2 });
     }
     if (this.selectedFlag) {
-      g.roundRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 29).stroke({ width: 4, color: 0xffffff, alpha: 0.9 });
+      drawDashedRect(g, -w / 2 - 6, -h / 2 - 6, w + 12, h + 12, { radius: 32, color: Color.teal, width: 3.5, seed: this.seed + 3 });
+      const tape = tapeStrip({ name: 'sky', w: 46, h: 18, angle: -22, pattern: 'dots', seed: this.seed });
+      tape.position.set(-w / 2 + 22, -h / 2 + 2);
+      this.plate.addChild(tape);
+      this.selTape = tape;
     }
     refreshCache(this.plate);
   }
@@ -263,15 +257,15 @@ export class ClassChip extends Container {
       onUpdate: (k) => this.body.scale.set(1 + 0.16 * Math.sin(Math.min(1, k * 1.1) * Math.PI) * (1 - 0.3 * k)),
       onComplete: () => this.body.scale.set(1),
     });
-    this.bag.runKeyed(this.glow, {
-      duration: 0.7,
+    this.bag.runKeyed(this.ring, {
+      duration: 0.6,
       ease: Ease.cubicOut,
       onUpdate: (k) => {
-        this.glow.alpha = 0.95 * (1 - k);
-        this.glow.scale.set(lerp(0.6, 1.5, k));
+        this.ring.alpha = 0.9 * (1 - k);
+        this.ring.scale.set(lerp(0.8, 1.9, k));
       },
       onComplete: () => {
-        this.glow.alpha = 0;
+        this.ring.alpha = 0;
       },
     });
   }
