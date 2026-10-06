@@ -3,6 +3,7 @@
  * are inherited (core.ts -> economy.ts -> routines.ts). Pure rules are in the sibling modules.
  */
 import type { BattleInit, BattleMode, BattleSnapshot, DailyModifierId, RunStats } from '@/game/api';
+import { waveKindOf } from '@/game/data/waves';
 import { randomSeed } from '@/core/rng';
 import { mergeLedgers, normalizeLedger, type GrantSource } from '@/platform/iapService';
 import { encodeBackup, decodeBackup } from './backup';
@@ -11,11 +12,11 @@ import { GEM_PASS_DAYS, iapSpec } from './data/catalog';
 import { PIGGY_PER_RUN, SNACK_FISH, SNACK_PURR, type SnackId } from './data/economy';
 import { cupScore, dailySetup } from './daily';
 import type { PayVia } from './economy';
-import { addPassXp } from './pass';
+import { addPassXp, seasonOf } from './pass';
 import { createProfileStore, sanitizeProfile } from './profileData';
 import { canPlayStake, chaptersCleared, computeRunPayout, sweepPayout } from './rewards';
 import { RoutineProfile } from './routines';
-import type { ClockSource } from './time';
+import { dateKey, type ClockSource } from './time';
 import { accountProgress, buildLoadout } from './units';
 import {
   fail,
@@ -71,6 +72,19 @@ function interruptedStats(init: BattleInit, wavesCleared: number): RunStats {
   };
 }
 
+/** Whether a refunded season order was holding the stored season's premium row: one of that season, with no other paid order of it left. */
+function closesPremiumRow(refunded: AppliedOrder, orders: Record<string, AppliedOrder>, stored: number): boolean {
+  const season = seasonOf(dateKey(refunded.t));
+  if (season !== stored) return false;
+  return !Object.values(orders).some((o) => !o.revoked && iapSpec(o.p)?.grant === 'season' && seasonOf(dateKey(o.t)) === season);
+}
+
+/** True when the ledger holds Butler Pass orders and every one was refunded: the flag must not come back from another device. */
+function butlerRefunded(orders: Record<string, AppliedOrder>): boolean {
+  const passes = Object.values(orders).filter((o) => iapSpec(o.p)?.grant === 'butler');
+  return passes.length > 0 && passes.every((o) => o.revoked);
+}
+
 function previewOf(data: ProfileData, savedAt: number): BackupPreview {
   return {
     gold: data.gold,
@@ -79,6 +93,16 @@ function previewOf(data: ProfileData, savedAt: number): BackupPreview {
     chaptersCleared: chaptersCleared(data.cleared),
     savedAt,
   };
+}
+
+/**
+ * The "boss and elite" missions count both. The simulation reports bosses only, but a cleared elite
+ * wave always ended with its elite dead (running out of time loses the run instead).
+ */
+function bossAndEliteKills(stats: RunStats): number {
+  let elites = 0;
+  for (let w = 1; w <= stats.wavesCleared; w++) if (waveKindOf(w) === 'elite') elites++;
+  return stats.bossesKilled + elites;
 }
 
 export class Profile extends RoutineProfile {
@@ -175,6 +199,7 @@ export class Profile extends RoutineProfile {
    * same, but the ad policy does not count it as a completed run.
    */
   async finishRun(stats: RunStats, opts: { abandoned?: boolean } = {}): Promise<Result<RunReward>> {
+    this.refresh(); // a run that ends after midnight belongs to the new day, week and season
     const d = this.data;
     const date = this.today();
     const payout = computeRunPayout(stats, { cleared: d.cleared, dailyAlreadyCleared: d.day.challengeCleared });
@@ -208,7 +233,7 @@ export class Profile extends RoutineProfile {
     d.pass = addPassXp(d.pass, payout.xp);
     if (stats.mode !== 'tutorial') this.addPiggy(PIGGY_PER_RUN);
     this.advanceMissionMetrics({
-      runs: 1, wins: stats.victory ? 1 : 0, merges: stats.merges, bosses: stats.bossesKilled, relics: stats.relics.length,
+      runs: 1, wins: stats.victory ? 1 : 0, merges: stats.merges, bosses: bossAndEliteKills(stats), relics: stats.relics.length,
     });
 
     const reward: RunReward = {
@@ -235,6 +260,7 @@ export class Profile extends RoutineProfile {
     if (!last || last.doubled) return fail('already_claimed');
     const paid = await this.pay('result_double', via);
     if (!paid.ok) return paid;
+    this.refresh();
     const d = this.data;
     if (!d.lastRun || d.lastRun.doubled) return fail('already_claimed');
     d.lastRun.doubled = true;
@@ -248,6 +274,7 @@ export class Profile extends RoutineProfile {
   /** Use a ticket on a chapter and stake that is already cleared: 60% of a win's gold and XP. Missions need real play, so a sweep counts for none. */
   sweep(chapter: number, stake: number): Result<SweepResult> {
     if (!this.featureUnlocked('sweep')) return fail('locked');
+    this.refresh();
     const d = this.data;
     if (stake < 0 || stake >= (d.cleared[chapter - 1] ?? 0)) return fail('not_cleared');
     if (d.pending) return fail('run_active');
@@ -286,6 +313,7 @@ export class Profile extends RoutineProfile {
     if (d.orders[orderId]) return;
     const spec = iapSpec(productId);
     if (!spec) throw new Error('unknown product ' + productId);
+    this.refresh(); // the pass row and the other slices it writes must be today's, or the next rollover wipes them
     const now = this.now();
     if (source === 'restore' && spec.type === 'consumable') {
       d.orders[orderId] = { p: productId, t: now, revoked: false, gems: 0, gold: 0, chests: {} };
@@ -303,7 +331,8 @@ export class Profile extends RoutineProfile {
         else d.pass.premium = true;
         break;
       case 'gem_pass':
-        d.gemPass.until = Math.max(now, d.gemPass.until) + GEM_PASS_DAYS * DAY_MS;
+        // gemPassView() judges the pass from the last trusted moment while the clock is frozen: count from there too.
+        d.gemPass.until = Math.max(this.frozen ? d.time.lastSeenAt : now, d.gemPass.until) + GEM_PASS_DAYS * DAY_MS;
         break;
       case 'piggy':
         bundle.gems = d.piggy.gems;
@@ -335,6 +364,14 @@ export class Profile extends RoutineProfile {
       await this.flush();
       return;
     }
+    this.takeBack(o);
+    this.commit();
+    await this.flush();
+  }
+
+  /** Mark an order refunded and take back what it gave. The caller saves. */
+  private takeBack(o: AppliedOrder): void {
+    const d = this.data;
     o.revoked = true;
     const spec = iapSpec(o.p);
     switch (spec?.grant) {
@@ -342,7 +379,7 @@ export class Profile extends RoutineProfile {
         d.owned.butler = false;
         break;
       case 'season':
-        d.pass.premium = false;
+        if (closesPremiumRow(o, d.orders, d.pass.season)) d.pass.premium = false;
         break;
       case 'gem_pass':
         d.gemPass.until = d.gemPass.until - GEM_PASS_DAYS * DAY_MS > this.now() ? d.gemPass.until - GEM_PASS_DAYS * DAY_MS : 0;
@@ -362,8 +399,6 @@ export class Profile extends RoutineProfile {
       d.cosmetics.owned = d.cosmetics.owned.filter((c) => c !== id);
       if (d.cosmetics.rug === id) d.cosmetics.rug = 'rug_default';
     }
-    this.commit();
-    await this.flush();
   }
 
   // ───────────────────────────── backup code ─────────────────────────────
@@ -389,7 +424,9 @@ export class Profile extends RoutineProfile {
 
   /**
    * Replace this profile with a code's. Orders and the purchase ledger of both devices are merged so
-   * a replayed order is never granted twice; ownership of the Butler Pass is kept if either has it.
+   * a replayed order is never granted twice, and a refund never comes back: an order this device took
+   * back is taken back from the code's copy too. Ownership of the Butler Pass is kept if either has
+   * it, unless every Butler Pass order in the merged ledger was refunded.
    */
   async importCode(code: string): Promise<Result<BackupPreview>> {
     const r = await this.readCode(code);
@@ -397,11 +434,13 @@ export class Profile extends RoutineProfile {
     const cur = this.data;
     const next = r.value.data;
     next.pending = null;
+    const refunded = Object.entries(next.orders).filter(([id, o]) => !o.revoked && cur.orders[id]?.revoked === true).map(([, o]) => o);
     next.orders = { ...cur.orders, ...next.orders };
     next.iapLedger = mergeLedgers(normalizeLedger(cur.iapLedger), normalizeLedger(next.iapLedger));
-    next.owned.butler = next.owned.butler || cur.owned.butler;
     next.time.lastSeenAt = Math.max(next.time.lastSeenAt, cur.time.lastSeenAt);
     this.deps.store.data = next;
+    for (const o of refunded) this.takeBack(o);
+    next.owned.butler = (next.owned.butler || cur.owned.butler) && !butlerRefunded(next.orders);
     this.clock.observe(next.time.lastSeenAt);
     this.refresh();
     await this.flush();

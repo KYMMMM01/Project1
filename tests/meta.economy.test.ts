@@ -37,8 +37,8 @@ function winChance(profile: Profile, chapter: number, stake: number): number {
 }
 
 /**
- * Waves per "boss or elite" kill. The sim counts boss waves only (8, 16, 24); the "보스·정예" missions
- * mean every 4th wave (elites 4, 12, 20 too): set this to 4 once docs/handoff/meta.md request #4 lands.
+ * Waves per boss kill, as the sim reports them (boss waves 8, 16, 24). The profile adds the cleared
+ * elite waves (4, 12, 20) itself when it feeds the "보스·정예" missions.
  */
 const WAVES_PER_BOSS_KILL = 8;
 
