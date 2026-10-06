@@ -162,9 +162,10 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   sheet.addChild(lines);
   const luck = luckLine(stats.summonLuck);
   const luckT = uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 26, wrap: W - 80, lineHeight: 34 });
-  luckT.position.set(W / 2, listY + cells.length * ROW_H + 52);
+  // The luck line may wrap to two lines in English: it is centred in the gap between the list and the seed line.
+  luckT.position.set(W / 2, listY + cells.length * ROW_H + 42);
   const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.inkSoft });
-  seedT.position.set(W / 2, SHEET_H - 40);
+  seedT.position.set(W / 2, SHEET_H - 34);
   sheet.addChild(luckT, seedT);
   c.addChild(sheet);
   y += SHEET_H + 32;

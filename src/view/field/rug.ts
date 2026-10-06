@@ -2,10 +2,11 @@ import { Container, Graphics } from 'pixi.js';
 import { cacheStatic, drawDashedRect, drawPaperFace, drawPaperShadow, paperSeed, tapeStrip } from '@/ui';
 import { makeRng } from '@/ui/paperMath';
 import { BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT, CELL_H, CELL_W, COLS } from '@/game/geometry';
+import { SHEET_PAD } from '../layout';
 import { cellPaper, type RugSkin } from './rugSkins';
 
 /** Margin of the sheet around the 5 x 4 cells. */
-export const RUG_PAD = 14;
+export const RUG_PAD = SHEET_PAD;
 export const RUG_X = BOARD_X - RUG_PAD;
 export const RUG_Y = BOARD_Y - RUG_PAD;
 export const RUG_W = BOARD_W + 2 * RUG_PAD;

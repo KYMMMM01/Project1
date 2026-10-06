@@ -13,7 +13,7 @@ import type { ContentArea, Shell, TabScreen } from '../contract';
 import { services } from '../contract';
 import { payout } from '../system/kit/claimFx';
 import { partsOf } from '../system/kit/parts';
-import { lockedCard } from '../system/kit/widgets';
+import { lockedNote } from '../system/kit/sheets';
 import { DailySection } from './DailySection';
 import { missionBadges } from './model';
 import type { MissionActions, Section } from './sections';
@@ -71,7 +71,7 @@ export class MissionsTab implements TabScreen {
     this.signature = sig;
     this.teardown();
     if (!profile.featureUnlocked('missions')) {
-      this.lock = lockedCard(this.area.w - SIDE * 2, featureHint('missions'));
+      this.lock = lockedNote(this.area.w - SIDE * 2, featureHint('missions'));
       this.view.addChild(this.lock);
       this.layout();
       return;

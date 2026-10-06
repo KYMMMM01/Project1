@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FIELD_H, FIELD_W } from '@/game/geometry';
-import { BOTTOM_PANEL_H, TOP_HUD_H, backgroundPlacement, computeBattleLayout } from '@/view/layout';
+import { BOARD_Y, FIELD_H, FIELD_W } from '@/game/geometry';
+import { BANNER_CAPTION_H, BANNER_TOP_H, BOTTOM_PANEL_H, SHEET_PAD, TOP_HUD_H, backgroundPlacement, bannerSlots, computeBattleLayout } from '@/view/layout';
 
 describe('battle layout', () => {
   it('sits the field nearly flush on the shortest design height', () => {
@@ -61,5 +61,45 @@ describe('background placement', () => {
     expect(p.gapBottom).toBeGreaterThan(0);
     expect(Math.abs(p.y + 1287 / 2 - (l.fieldY + FIELD_H / 2))).toBeLessThanOrEqual(1);
     expect(p.gapTop + p.gapBottom + 1287).toBe(1600);
+  });
+});
+
+describe('routine banner slots', () => {
+  const rows = (h: number, safeTop = 0, safeBottom = 0): { l: ReturnType<typeof computeBattleLayout>; s: ReturnType<typeof bannerSlots> } => {
+    const l = computeBattleLayout(720, h, safeTop, safeBottom);
+    return { l, s: bannerSlots(l) };
+  };
+  /** Top and bottom edge of the two rows. */
+  const extent = (s: ReturnType<typeof bannerSlots>): { top: number; bottom: number } => ({
+    top: s.topY - (BANNER_TOP_H * s.scale) / 2,
+    bottom: s.captionY + (BANNER_CAPTION_H * s.scale) / 2,
+  });
+
+  it('puts both rows between the top HUD and the sheet on a 1280 screen, shrunk to fit', () => {
+    const { l, s } = rows(1280);
+    const e = extent(s);
+    expect(e.top).toBeGreaterThanOrEqual(l.safeTop + l.topH);
+    expect(e.bottom).toBeLessThanOrEqual(l.fieldY + BOARD_Y - SHEET_PAD);
+    expect(s.scale).toBeGreaterThanOrEqual(0.8);
+    expect(s.scale).toBeLessThan(1);
+    expect(s.captionY).toBeGreaterThan(s.topY);
+  });
+
+  it('keeps the nominal size and hugs the sheet when the band is tall', () => {
+    const { l, s } = rows(1600);
+    const e = extent(s);
+    expect(s.scale).toBe(1);
+    expect(e.top).toBeGreaterThan(l.safeTop + l.topH);
+    expect(l.fieldY + BOARD_Y - SHEET_PAD - e.bottom).toBeLessThan(12);
+  });
+
+  it('spills only into the sheet margin when the insets squeeze the band, and shrinks further rather than reach a cell', () => {
+    const tight = rows(1280, 40, 20);
+    expect(tight.s.scale).toBeGreaterThanOrEqual(0.6);
+    expect(extent(tight.s).top).toBeGreaterThanOrEqual(tight.l.safeTop + tight.l.topH);
+    expect(extent(tight.s).bottom).toBeLessThanOrEqual(tight.l.fieldY + BOARD_Y);
+    const squeezed = rows(1280, 60, 40);
+    expect(squeezed.s.scale).toBe(0.6);
+    expect(extent(squeezed.s).top).toBeGreaterThanOrEqual(squeezed.l.safeTop + squeezed.l.topH);
   });
 });

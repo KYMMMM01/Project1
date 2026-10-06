@@ -59,3 +59,11 @@ Not verified: the banner's reduced-motion variants (fade instead of move) and th
 ## REQUESTS
 
 none
+
+## 2026-10-07 polish
+
+**Routine banners no longer cover the board.** The wave label (`top` lane) and every caption (`caption` lane: synergy, toy gained, enrage, boss ability, hazard, elite defeated) live in the free band between the top HUD and the board's sheet. `bannerSlots(layout)` (`src/view/layout.ts`, pure, tested in `tests/view.field.layout.test.ts`) puts the two rows flush against the sheet (8 px clear of its tape), wave label above caption. The band is 88 px on 1280 (rows at scale 0.92: label 52 px, caption 40 px, text 31 / 24 px), 252 px on 1600 (scale 1); below scale 0.8 the rows spill into the sheet's 14 px margin, and they shrink to 0.6 at most to stay off the first cell. A row drops 8 px with a small pop and tilt instead of travelling 100 px; reduced motion fades in place. Holds: synergy and toy captions 1.1 -> 0.9 s. "Elite defeated" moved from the big centre ribbon to the caption lane (three per run). Only these take the centre: boss and elite warning ribbon, boss defeated, act clear, nine lives, victory (plus the overflow countdown and the awakening cut-in, unchanged). Proof at 1280 Korean and English and at 1600: `b2_stack_ko/en/ko_tall`, `b2_ability_*`, `b2_call_*`, `b2_alert_*`, `b2_act_*`, `b2_rescued_*`, `sheet_b2_en.png`, `sheet_b2_tall.png`.
+
+**Missing haptics added** (`growth.ts`): sell (light), move and swap (tap), class and summon-grade upgrade (light). Their sounds already existed.
+
+Verified under both motion settings, see hud.md ("Aside reports prefers-reduced-motion").

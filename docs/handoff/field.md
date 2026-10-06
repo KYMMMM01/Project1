@@ -42,13 +42,21 @@ Removed because the restyle left them unused: `perimeterDashes` (stitching), the
 
 ## Known gaps
 
-- The sell zone is the HUD's panel: a dragged cat disappears behind it (the field layer sits under the HUD), only the sell tag shows. Unchanged behaviour, noted for the HUD owner.
-- The `blocked` cell look (berry tint, no-entry sticker) was checked in code and in the art bake, but not captured with a real blocked target (a hazard-wet cell) in the browser.
-- Zone looks of the three zone casters (blizzard, black hole, potion cloud) were seen only as the green potion discs in `crowd1`; blizzard and black hole are covered by the unit tests only.
-- Enemy status stickers were seen (slow, burn); freeze, poison and rage share the same code path and were not individually captured.
+- (2026-10-07: a lifted cat is drawn above the sell strip now, see the polish section.)
+- (2026-10-07: the `blocked` look was captured by forcing `dropAction` to `'none'`; see the polish section.)
+- (2026-10-07: blizzard, black hole and potion cloud were captured, see the polish section.)
+- (2026-10-07: every status sticker was captured, see the polish section.)
 - No leak point exists in the rules (see Walkway), so only the entrance carries a sign.
 - Touch input on a real phone was not tested.
 
 ## REQUESTS
 
 None. For other parts: the shop's `fxPreview` (`src/screens/shop/blocksStyle.ts`) still draws the old dark gradient and `drawGlow`; its rug preview uses `buildRug` and picks up the new mats without a change.
+
+## 2026-10-07 polish
+
+**A lifted cat stays visible over the sell strip.** The strip is HUD paper (layer `hud`) and the playfield layers are below it, so a cat dragged past the field edge went under the strip and only its sell tag showed. `createField` now adds a field-space container `field-lift` to `layers.overlay` (the layer above the HUD; added before the director's banner host, so banners stay on top; `context.ts` untouched) and `UnitViews.seat` moves a view there while `liftsAboveHud(dragging, selling, y)` (new, pure, `policy.ts`, tested) is true: while held, while being sold (the 0.22 s shrink plays above the strip instead of behind it) and while it springs home from below `FIELD_H - 24`. Everything else stays in `units`. The lift is repositioned in `resize`. It is not shaken with the board. Proof: `shots/polish/c1_sell_hold_ko.png` (the viking cat above the berry strip, price tag above it), `c1_sell_exit_ko` (mid-sale); lift children 1 while held and 0 after the sale.
+
+**Verified after the restyle (browser, `PAGE_ERRORS []`):** enemy status stickers, one per enemy (freeze, slow, burn, poison, rage, shield bar with its sky segment, stun star, focus ring) in `c2_status_zones_b.png`; the weaken swirl on a cat, the blizzard disc, the black-hole spiral, the potion cloud, a wet puddle with its berry dashed outline and drop sticker, and the "cannot act" sticker on cats standing on wet and zap cells in `c2_zones_hazards.png`. The status tints are faint on a green cucumber (a multiply tint); the stickers carry the meaning, so nothing was changed. The `blocked` drop-target look was forced with `battle.dropAction = () => 'none'` while dragging (`c3_crop.png`: soft berry tint on the empty cells, berry dashed outline and no-entry sticker under the pointer). It cannot occur with the current rules (`dropActionOf` returns `'none'` only for a bad source cell), so it stays as the total mapping of `DropAction` and was not removed.
+
+Known gaps now: touch input on a real phone, as before.

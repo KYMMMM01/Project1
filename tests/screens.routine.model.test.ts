@@ -3,11 +3,12 @@ import '@/screens/missions/strings';
 import '@/screens/pass/strings';
 import { fmtDuration } from '@/core/format';
 import { at, createTestProfile, type TestRig } from '@/meta/testing';
-import { metricIcon, missionBadges, tierFill, tierMarks } from '@/screens/missions/model';
+import { missionBadges, tierFill, tierMarks, weekDays } from '@/screens/missions/model';
 import {
   focusTier, passBadgeCount, passClaimable, PASS_ROW_GAP, PASS_ROW_H, retroactiveCount, scrollTargetFor, seasonNameKey, xpFill,
 } from '@/screens/pass/model';
-import { currencyOnly, currencyTotals, flightCount, partsOf, textureKey } from '@/screens/system/kit/parts';
+import { calendarCellState, isBigDay } from '@/screens/system/calendarModel';
+import { currencyOnly, currencyTotals, flightCount, partsOf, stickerTilt, textureKey } from '@/screens/system/kit/parts';
 import { countdownText, daysUntil, msUntilNextMidnight, msUntilNextMonday } from '@/screens/system/kit/time';
 import { qualityPatch, savedAtText } from '@/screens/system/settingsModel';
 
@@ -111,13 +112,28 @@ describe('missions model', () => {
     expect(missionBadges(profile).weekly).toBe(0);
   });
 
-  it('gives every mission metric an icon and clamps the tier fill', () => {
-    for (const m of ['runs', 'merges', 'bosses', 'relics', 'wins', 'dailyChests', 'unknown']) expect(metricIcon(m)).toBeTruthy();
+  it('clamps the tier fill and places the tier marks along the bar', () => {
     expect(tierFill(30, 40)).toBe(0.75);
     expect(tierFill(99, 40)).toBe(1);
     expect(tierFill(-3, 40)).toBe(0);
     expect(tierFill(5, 0)).toBe(0);
     expect(tierMarks([40, 85, 125])).toEqual([40 / 125, 85 / 125, 1]);
+  });
+});
+
+describe('cup week', () => {
+  it('lists the seven days from Monday with the best wave of each', () => {
+    const days = weekDays('2026-10-05', { '2026-10-05': 31, '2026-10-07': 44, '2026-09-30': 99 }, '2026-10-07');
+    expect(days.map((d) => d.key)).toEqual(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']);
+    expect(days.map((d) => d.best)).toEqual([31, 0, 44, 0, 0, 0, 0]);
+    expect(days.map((d) => d.today)).toEqual([false, false, true, false, false, false, false]);
+    expect(days.map((d) => d.future)).toEqual([false, false, false, true, true, true, true]);
+  });
+
+  it('crosses a month boundary', () => {
+    const days = weekDays('2026-10-26', {}, '2026-10-26');
+    expect(days[6]?.key).toBe('2026-11-01');
+    expect(days.filter((d) => d.future)).toHaveLength(6);
   });
 });
 
@@ -189,5 +205,27 @@ describe('settings model', () => {
     expect(savedAtText(0)).toBe('');
     expect(savedAtText(Number.NaN)).toBe('');
     expect(savedAtText(at(2026, 3, 9, 7, 5))).toBe('2026-03-09 07:05');
+  });
+});
+
+describe('calendar look', () => {
+  it('stamps the days up to the stamp, circles the next one only when it can be claimed', () => {
+    const view = { stamp: 3, next: 4, canClaim: true };
+    expect([1, 3, 4, 5].map((d) => calendarCellState(d, view))).toEqual(['claimed', 'claimed', 'today', 'upcoming']);
+    expect(calendarCellState(4, { stamp: 3, next: 4, canClaim: false })).toBe('upcoming');
+  });
+
+  it('gives days 7, 14, 21 and 28 the big stickers', () => {
+    expect([...Array(28).keys()].map((i) => i + 1).filter(isBigDay)).toEqual([7, 14, 21, 28]);
+  });
+});
+
+describe('stickers', () => {
+  it('tilts a little either side of straight, whatever the number', () => {
+    for (const n of [-9, -1, 0, 1, 6, 7, 1_000_003]) {
+      expect(Math.abs(stickerTilt(n))).toBeLessThanOrEqual(0.05);
+    }
+    expect(stickerTilt(3)).toBe(0);
+    expect(stickerTilt(-4)).toBe(stickerTilt(3));
   });
 });

@@ -3,8 +3,8 @@ import type { PassView } from '@/meta/routines';
 import type { Profile } from '@/meta/profile';
 import { SEASON_NAME_COUNT } from './strings';
 
-export const PASS_ROW_H = 168;
-export const PASS_ROW_GAP = 12;
+export const PASS_ROW_H = 152;
+export const PASS_ROW_GAP = 10;
 
 /** Cells (free and premium) whose reward can be taken right now. */
 export function passClaimable(view: PassView): number {

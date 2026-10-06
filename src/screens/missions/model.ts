@@ -1,26 +1,6 @@
-/** Pure counting and mapping for the missions tab: what is claimable, and which icon a mission wears. */
+/** Pure counting and mapping for the missions tab: what is claimable, bar fills and the days of the cup week. */
 import type { Profile } from '@/meta/profile';
-import type { IconName } from '@/ui/icons';
-
-/** The metrics a mission can count, mapped to the icon on its medallion. */
-export function metricIcon(metric: string): IconName {
-  switch (metric) {
-    case 'runs':
-      return 'swords';
-    case 'merges':
-      return 'arrow_up';
-    case 'bosses':
-      return 'skull';
-    case 'relics':
-      return 'gift';
-    case 'wins':
-      return 'trophy';
-    case 'dailyChests':
-      return 'chest';
-    default:
-      return 'star';
-  }
-}
+import { addDays } from '@/meta/time';
 
 export interface MissionBadges {
   daily: number;
@@ -49,4 +29,22 @@ export function tierFill(cur: number, need: number): number {
 export function tierMarks(needs: readonly number[]): number[] {
   const top = Math.max(1, ...needs);
   return needs.map((n) => n / top);
+}
+
+export interface WeekDay {
+  /** 0 = Monday. */
+  index: number;
+  key: string;
+  /** Best daily-challenge wave of that day, 0 when none was played. */
+  best: number;
+  today: boolean;
+  future: boolean;
+}
+
+/** The seven days of the cup week (its Monday is `week`) with the best wave of each. */
+export function weekDays(week: string, days: Readonly<Record<string, number>>, today: string): WeekDay[] {
+  return Array.from({ length: 7 }, (_, index) => {
+    const key = addDays(week, index);
+    return { index, key, best: days[key] ?? 0, today: key === today, future: key > today };
+  });
 }

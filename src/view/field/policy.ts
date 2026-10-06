@@ -26,6 +26,17 @@ export function isSellZone(y: number): boolean {
   return y > FIELD_H;
 }
 
+/** A cat whose feet are this close to the field's bottom edge (or below it) is shown over the HUD. */
+export const LIFT_EDGE = 24;
+
+/**
+ * Whether a cat is drawn on the field-space layer above the HUD instead of in the playfield: while it is held, while it
+ * is being sold and while it springs back from below the field, so the sell strip never hides the sticker.
+ */
+export function liftsAboveHud(dragging: boolean, selling: boolean, y: number): boolean {
+  return dragging || selling || y > FIELD_H - LIFT_EDGE;
+}
+
 /** Distance from a point to the centre line of the enemy loop (a rounded rectangle). */
 export function pathDistance(x: number, y: number): number {
   const cx = (PATH_LEFT + PATH_RIGHT) / 2;

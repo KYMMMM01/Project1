@@ -1,17 +1,19 @@
 import { Container, Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
+import { mixColor } from '@/core/math';
 import { profile } from '@/meta';
 import { TICKET_AD_AMOUNT } from '@/meta/data/economy';
 import type { CosmeticRow } from '@/meta/economy';
 import { buildRug, RUG_H, RUG_W } from '@/view/field/rug';
 import { rugSkin } from '@/view/field/rugSkins';
 import { themeOf } from '@/view/director/palette';
-import { Color, drawGlow, drawIcon, uiLabel, fitLabel, vGradient } from '@/ui';
+import { cacheStatic, Color, drawIcon, fitLabel, paperSeed, paperShape, PaperLabel, tapeStrip, uiLabel } from '@/ui';
 import { currencyArt } from './art';
-import { actionButton, card, currencyButton, GAP, sectionHeader, SIDE, type Block, type BlockBuild, type BlockEnv } from './blockKit';
+import { actionButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
+import { drawCoupon, PriceTag } from './paperBits';
 import { cosmeticStatus } from './shopLogic';
 
-const CARD_H = 330;
+const CARD_H = 336;
 const PREVIEW_H = 170;
 const COLS = 2;
 
@@ -28,51 +30,75 @@ export function disposeRugPreviews(): void {
   rugCache.clear();
 }
 
+/** The paperDim well a swatch sits in. */
+function well(w: number): Container {
+  const c = new Container();
+  const piece = paperShape({ w, h: PREVIEW_H, radius: 18, fill: Color.paperDim, edge: Color.kraftDark, edgeAlpha: 0.5, shadow: false, grain: false, seed: paperSeed() });
+  piece.position.set(w / 2, PREVIEW_H / 2);
+  c.addChild(piece);
+  return c;
+}
+
+/** The real mat, small, lying in its well. */
 function rugPreview(id: string, w: number): Container {
   let rug = rugCache.get(id);
   if (!rug) {
     rug = buildRug(rugSkin(id));
     rugCache.set(id, rug);
   }
-  const holder = new Container();
+  const holder = well(w);
   rug.parent?.removeChild(rug);
-  const k = Math.min((w - 40) / RUG_W, (PREVIEW_H - 24) / RUG_H);
+  const k = Math.min((w - 30) / RUG_W, (PREVIEW_H - 26) / RUG_H);
   rug.scale.set(k);
   rug.position.set((w - RUG_W * k) / 2, (PREVIEW_H - RUG_H * k) / 2);
   holder.addChild(rug);
   return holder;
 }
 
+/** A burst of the effect's own paper bits round a paw sticker; tapping it plays the real effect. */
 function fxPreview(id: string, w: number, env: BlockEnv): Container {
   const theme = themeOf(id);
-  const holder = new Container();
-  const g = new Graphics();
-  g.roundRect(0, 0, w, PREVIEW_H, 20).fill(vGradient(Color.panelLight, Color.bgDeep));
-  drawGlow(g, w / 2, PREVIEW_H / 2, 70, theme.colors[0] ?? Color.white, 0.4);
-  holder.addChild(g);
-  const star = drawIcon('paw', 76, theme.colors[1] ?? theme.colors[0]);
-  star.position.set(w / 2, PREVIEW_H / 2 - 6);
-  holder.addChild(star);
-  const play = drawIcon('play', 44);
-  play.position.set(w - 40, PREVIEW_H - 38);
-  holder.addChild(play);
+  const holder = well(w);
+  const bits = new Graphics();
+  const colors = theme.colors.length > 0 ? theme.colors : [Color.coral, Color.mustard];
+  for (let i = 0; i < 16; i++) {
+    const a = i * 2.4;
+    const r = 44 + (i % 4) * 11 + i * 1.6;
+    const x = w / 2 + Math.cos(a) * r * 1.35;
+    const y = PREVIEW_H / 2 + Math.sin(a) * r * 0.78;
+    const s = 5 + (i % 3) * 2.5;
+    const col = colors[i % colors.length] as number;
+    if (i % 2 === 0) bits.circle(x, y, s).fill(col);
+    else bits.poly([x, y - s * 1.3, x + s, y, x, y + s * 1.3, x - s, y]).fill(col);
+  }
+  cacheStatic(bits);
+  const paw = drawIcon('paw', 70, colors[0]);
+  paw.position.set(w / 2, PREVIEW_H / 2 - 4);
+  const play = drawIcon('play', 40);
+  play.position.set(w - 34, PREVIEW_H - 32);
+  holder.addChild(bits, paw, play);
   holder.eventMode = 'static';
   holder.cursor = 'pointer';
   holder.on('pointertap', () => env.actions.previewFx(id, holder));
   return holder;
 }
 
-function cosmeticCard(root: Container, x: number, y: number, w: number, row: CosmeticRow, env: BlockEnv): void {
-  const c = card(root, x, y, w, CARD_H, row.equipped ? 'gold' : 'default');
-  const pv = row.kind === 'rug' ? rugPreview(row.id, w) : fxPreview(row.id, w, env);
-  pv.position.set(0, 14);
+function cosmeticCard(inner: Container, x: number, y: number, w: number, row: CosmeticRow, env: BlockEnv): void {
+  const c = subCard(inner, x, y, w, CARD_H, row.equipped ? mixColor(Color.paperLight, Color.mustard, 0.22) : Color.paperLight);
+  const pv = row.kind === 'rug' ? rugPreview(row.id, w - 24) : fxPreview(row.id, w - 24, env);
+  pv.position.set(12, 12);
   c.addChild(pv);
-  const name = uiLabel(t('meta.cos.' + row.id), { size: 28, strokeWidth: 5, shadow: false });
+  if (row.equipped) {
+    const tape = tapeStrip({ name: 'yellow', w: 84, h: 28, angle: -22, pattern: 'dots' });
+    tape.position.set(26, 14);
+    c.addChild(tape);
+  }
+  const name = uiLabel(t('meta.cos.' + row.id), { size: 28 });
   fitLabel(name, w - 28, 28);
   name.position.set(w / 2, PREVIEW_H + 44);
   c.addChild(name);
   const st = cosmeticStatus(row);
-  const by = CARD_H - 56;
+  const by = CARD_H - 54;
   const bw = w - 28;
   switch (st.kind) {
     case 'equipped': {
@@ -89,17 +115,18 @@ function cosmeticCard(root: Container, x: number, y: number, w: number, row: Cos
       break;
     }
     case 'buy': {
-      const b = actionButton({ label: String(st.gems), icon: 'gem', width: bw, fontSize: 32 }, () => env.actions.buyCosmetic(row.id));
-      b.position.set(w / 2, by);
-      c.addChild(b);
+      const tag = new PriceTag({ width: bw, style: 'primary', currency: 'gems', amount: st.gems, fontSize: 32 });
+      tag.onTap(() => env.actions.buyCosmetic(row.id));
+      tag.position.set(w / 2, by);
+      c.addChild(tag);
       break;
     }
     case 'chapter':
     case 'reward': {
       const lock = drawIcon('lock', 34);
-      lock.position.set(28, by);
+      lock.position.set(30, by);
       const tx = uiLabel(st.kind === 'chapter' ? t('shop.cos.chapter', { n: st.chapter }) : t('shop.cos.reward'), {
-        size: 24, color: Color.textDim, strokeWidth: 4, shadow: false, anchorX: 0, wrap: w - 80, lineHeight: 28,
+        size: 24, color: Color.inkSoft, anchorX: 0, wrap: w - 90, lineHeight: 28, align: 'left',
       });
       tx.position.set(56, by);
       c.addChild(lock, tx);
@@ -116,21 +143,23 @@ export const cosmeticsBlock: Block = {
     return [profile.featureUnlocked('cosmetics'), c.owned.join(','), c.rug, c.fx].join('|');
   },
   build(root, env): BlockBuild {
-    const w = env.w - SIDE * 2;
-    let y = sectionHeader(root, 0, 'wardrobe', t('shop.sec.cosmetics'));
+    const pageW = env.w - SIDE * 2;
+    const w = pageW - PAD * 2;
+    const inner = new Container();
     const gap = 14;
     const cw = (w - gap * (COLS - 1)) / COLS;
     const rows = profile.cosmetics();
+    let y = 4;
     for (const kind of ['rug', 'fx'] as const) {
-      const sub = uiLabel(t(kind === 'rug' ? 'shop.cos.rugs' : 'shop.cos.fx'), { size: 32, color: Color.primary, strokeWidth: 5, anchorX: 0 });
-      sub.position.set(SIDE + 8, y + 20);
-      root.addChild(sub);
-      y += 52;
+      const sub = new PaperLabel({ text: t(kind === 'rug' ? 'shop.cos.rugs' : 'shop.cos.fx'), size: 30, paper: 'kraft', minWidth: 150 });
+      sub.position.set(PAD + sub.uiBox.w / 2, y + 28);
+      inner.addChild(sub);
+      y += 66;
       const list = rows.filter((r) => r.kind === kind);
-      list.forEach((row, i) => cosmeticCard(root, SIDE + (i % COLS) * (cw + gap), y + Math.floor(i / COLS) * (CARD_H + gap), cw, row, env));
-      y += Math.ceil(list.length / COLS) * (CARD_H + gap) + 8;
+      list.forEach((row, i) => cosmeticCard(inner, PAD + (i % COLS) * (cw + gap), y + Math.floor(i / COLS) * (CARD_H + gap), cw, row, env));
+      y += Math.ceil(list.length / COLS) * (CARD_H + gap) + 6;
     }
-    return { height: y + GAP };
+    return { height: mountPage(root, 0, pageW, inner, y - gap, { title: t('shop.sec.cosmetics'), ribbon: 'success', tape: 'green' }) + GAP };
   },
 };
 
@@ -142,30 +171,40 @@ export const ticketsBlock: Block = {
     return [v.count, v.stock, v.adsLeft].join('|');
   },
   build(root, env): BlockBuild {
-    const w = env.w - SIDE * 2;
+    const pageW = env.w - SIDE * 2;
+    const w = pageW - PAD * 2;
     const v = profile.ticketView();
-    let y = sectionHeader(root, 0, 'ticket', t('shop.sec.tickets'), t('shop.tickets.sub'));
-    const h = 270;
-    const c = card(root, SIDE, y, w, h);
+    const inner = new Container();
+    const sub = uiLabel(t('shop.tickets.sub'), { size: 26, color: Color.inkSoft, anchorX: 0, anchorY: 0, wrap: w, lineHeight: 32, align: 'left' });
+    sub.position.set(PAD + 8, 0);
+    inner.addChild(sub);
+    const y = sub.height + 16;
+    const h = 276;
+    const c = new Container();
+    const g = new Graphics();
+    drawCoupon(g, w, h, { axis: 'x', at: 190, r: 14 }, mixColor(Color.paperLight, Color.mustard, 0.2));
+    c.addChild(g);
+    c.position.set(PAD, y);
+    inner.addChild(c);
     const art = currencyArt('tickets', 130);
-    art.position.set(100, 100);
-    c.addChild(art);
-    const have = uiLabel(t('shop.tickets.have', { n: v.count, stock: v.stock }), { size: 40, strokeWidth: 7, anchorX: 0 });
-    have.position.set(200, 60);
-    fitLabel(have, w - 224, 40);
-    c.addChild(have);
-    const bw = (w - 28 - 14) / 2;
-    const buy = currencyButton(t('shop.tickets.buy'), v.gemPrice, 'gems', bw, () => env.actions.buyTicket(), 'neutral');
-    buy.position.set(14 + bw / 2, h - 66);
+    art.position.set(95, h / 2);
+    const x0 = 214;
+    const have = uiLabel(t('shop.tickets.have', { n: v.count, stock: v.stock }), { size: 40, anchorX: 0 });
+    fitLabel(have, w - x0 - 24, 40);
+    have.position.set(x0, 56);
+    c.addChild(art, have);
+    const bw = w - x0 - 22;
+    const buy = new PriceTag({ width: bw, style: 'primary', currency: 'gems', amount: v.gemPrice, label: t('shop.tickets.buy') });
+    buy.onTap(() => env.actions.buyTicket());
+    buy.position.set(x0 + bw / 2, 128);
     const ad = actionButton(
       { label: t('shop.tickets.ad', { n: TICKET_AD_AMOUNT }), icon: 'ad', width: bw, style: 'info', sublabel: t('shop.tickets.adLeft', { n: v.adsLeft }), fontSize: 26 },
       () => env.actions.ticketAd(),
     );
     ad.setEnabled(v.adsLeft > 0);
     ad.onDisabledTap(() => env.actions.ticketAd());
-    ad.position.set(14 + bw + 14 + bw / 2, h - 66);
+    ad.position.set(x0 + bw / 2, h - 60);
     c.addChild(buy, ad);
-    y += h + GAP;
-    return { height: y };
+    return { height: mountPage(root, 0, pageW, inner, y + h + 4, { title: t('shop.sec.tickets'), ribbon: 'danger', tape: 'sky' }) + GAP };
   },
 };

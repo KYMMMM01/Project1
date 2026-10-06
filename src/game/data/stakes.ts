@@ -10,7 +10,7 @@ export const STAKE_STEPS = {
   enemyCapCut: 18,
   actPurr: 1,
   summonCostMult: 1.1,
-  bossTimeCut: 10,
+  bossTimeCut: 13,
   relicChoices: 2,
   freeRerolls: 0,
   specialHpMult: 1.4,

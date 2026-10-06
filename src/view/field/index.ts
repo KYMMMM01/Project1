@@ -1,3 +1,4 @@
+import { Container } from 'pixi.js';
 import { Fx } from '@/fx';
 import { CELL_COUNT } from '@/game/geometry';
 import type { BattleContext, BattleLayout, FieldPart } from '../context';
@@ -38,7 +39,13 @@ export function createField(ctx: BattleContext): FieldPart {
 
   const cells = new CellLayer(layers.floor, layers.projectiles, art);
   const preview = new DragPreview(env, layers.floor, layers.projectiles);
-  const units = new UnitViews(env, layers.units);
+  // Field space, above the HUD (the overlay layer, under the director's banners): where a cat is shown while it is held over the sell strip.
+  const lift = new Container();
+  lift.label = 'field-lift';
+  lift.eventMode = 'none';
+  lift.position.set(ctx.layout.fieldX, ctx.layout.fieldY);
+  layers.overlay.addChild(lift);
+  const units = new UnitViews(env, layers.units, lift);
   const enemies = new EnemyViews(env, layers.enemies);
   const shots = new Projectiles(env, layers.projectiles);
   const effects = new FieldEffects(env);
@@ -75,6 +82,7 @@ export function createField(ctx: BattleContext): FieldPart {
       ground.update(dt);
     },
     resize(layout: BattleLayout): void {
+      lift.position.set(layout.fieldX, layout.fieldY);
       background.resize(layout);
     },
     destroy(): void {
@@ -84,6 +92,7 @@ export function createField(ctx: BattleContext): FieldPart {
       shots.destroy();
       enemies.destroy();
       units.destroy();
+      lift.destroy({ children: true });
       preview.destroy();
       cells.destroy();
       for (const c of [walkway, rug]) {

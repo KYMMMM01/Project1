@@ -66,7 +66,7 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
     // Guide C-05: the elite's cry sits 3 semitones lower and 3 dB louder than a plain kill.
     stage.play(stage.rules.eliteDie, 'enemy_die', 0.85, 0.84, 0.02);
     currency.claimBig(0.3);
-    banners.push('big', 'eliteDown', 3, { title: t('director.eliteDefeated'), color: SHIELD_COLOR }, 0.7, 0.3, 0.3);
+    banners.push('caption', 'eliteDown', 2, { title: t('director.eliteDefeated'), color: SHIELD_COLOR }, 0.9, 0.15, 0.2);
     music.duck(DUCK_BY_TIER[2].depth, 0.4);
   }
 

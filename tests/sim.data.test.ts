@@ -342,9 +342,9 @@ describe('stakes, modifiers and training text', () => {
     expect(stakeRules(1).enemyCapCut).toBe(STAKE_STEPS.enemyCapCut);
     expect(stakeRules(2).actPurr).toBe(1);
     expect(stakeRules(3).summonCostMult).toBeCloseTo(1.1);
-    expect(stakeRules(4).bossTimeCut).toBe(10);
+    expect(stakeRules(4).bossTimeCut).toBe(13);
     expect(stakeRules(5)).toEqual({
-      enemyCapCut: STAKE_STEPS.enemyCapCut, actPurr: 1, summonCostMult: 1.1, bossTimeCut: 10, relicChoices: 2, freeRerolls: 0,
+      enemyCapCut: STAKE_STEPS.enemyCapCut, actPurr: 1, summonCostMult: 1.1, bossTimeCut: 13, relicChoices: 2, freeRerolls: 0,
       specialHpMult: STAKE_STEPS.specialHpMult,
     });
     expect(stakeRules(9)).toEqual(stakeRules(5));

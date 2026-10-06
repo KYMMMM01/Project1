@@ -4,9 +4,6 @@ import { bundleParts, type BundlePart } from '@/meta/bundle';
 import type { CosmeticRow } from '@/meta/economy';
 import type { IapSpec } from '@/meta/data/catalog';
 import type { Bundle, ChestKind } from '@/meta/types';
-import type { RewardDesc } from '@/ui/RewardPopup';
-import type { Texture } from 'pixi.js';
-import { chestKey, unitKey } from './keys';
 
 export const SHOP_SECTIONS = ['chests', 'daily', 'gems', 'pass', 'piggy', 'cosmetics', 'tickets'] as const;
 export type ShopSectionId = (typeof SHOP_SECTIONS)[number];
@@ -18,6 +15,14 @@ export function isShopSection(id: string | undefined): id is ShopSectionId {
 /** The product ids listed under "gems and packs": plain bundles the player can still buy right now. */
 export function listBundleProducts(specs: readonly IapSpec[], canBuy: (id: string) => boolean): IapSpec[] {
   return specs.filter((s) => s.grant === 'bundle' && canBuy(s.id));
+}
+
+/** Percent more gems per won that a pack gives than the cheapest plain gem pack (rounded, never below 0). */
+export function gemBonusPercent(spec: IapSpec, specs: readonly IapSpec[]): number {
+  const rate = (s: IapSpec): number => (s.bundle.gems ?? 0) / s.krw;
+  const base = specs.filter((s) => s.grant === 'bundle' && !s.once && (s.bundle.gems ?? 0) > 0).sort((a, b) => a.krw - b.krw)[0];
+  if (!base || rate(base) <= 0) return 0;
+  return Math.max(0, Math.round((rate(spec) / rate(base) - 1) * 100));
 }
 
 /** What a chest card's main button does: open one the player owns, or buy and open one. */
@@ -55,42 +60,31 @@ export function partsOf(bundle: Bundle): BundlePart[] {
   return bundleParts(bundle);
 }
 
-export type TextureLookup = (key: string) => Texture | null;
-
 function chestName(kind: ChestKind): string {
   return t('meta.chest.' + kind);
 }
 
-/** Tiles of the reward popup for a list of bundle parts. Pictures come from textures when they exist and from icons otherwise. */
-export function rewardDescs(parts: readonly BundlePart[], lookup: TextureLookup): RewardDesc[] {
-  return parts.map((p): RewardDesc => {
-    switch (p.kind) {
-      case 'gold':
-        return { icon: 'coin', amount: p.n, label: t('meta.currency.gold') };
-      case 'gems':
-        return { icon: 'gem', amount: p.n, label: t('meta.currency.gems') };
-      case 'tickets':
-        return { icon: 'ticket', amount: p.n, label: t('meta.currency.tickets') };
-      case 'chest': {
-        const texture = lookup(chestKey(p.chest));
-        return texture ? { texture, amount: p.n, label: chestName(p.chest) } : { icon: 'chest', amount: p.n, label: chestName(p.chest) };
-      }
-      case 'wild':
-        return { icon: 'star', amount: p.n, label: t('rewards.wild', { rarity: t('rarity.' + p.rarity) }), rarity: p.rarity };
-      case 'card': {
-        const texture = lookup(unitKey(p.unit));
-        const label = t('unit.' + p.unit + '.name');
-        return texture ? { texture, amount: p.n, label } : { icon: 'cards', amount: p.n, label };
-      }
-      case 'cosmetic':
-        return { icon: 'wardrobe', amount: 1, label: t('meta.cos.' + p.id) };
-    }
-  });
+/** The name printed under a reward: a currency, a chest, a wild card, a cat or a cosmetic. */
+export function partLabel(p: BundlePart): string {
+  switch (p.kind) {
+    case 'gold':
+      return t('meta.currency.gold');
+    case 'gems':
+      return t('meta.currency.gems');
+    case 'tickets':
+      return t('meta.currency.tickets');
+    case 'chest':
+      return chestName(p.chest);
+    case 'wild':
+      return t('rewards.wild', { rarity: t('rarity.' + p.rarity) });
+    case 'card':
+      return t('unit.' + p.unit + '.name');
+    case 'cosmetic':
+      return t('meta.cos.' + p.id);
+  }
 }
 
-/** Currencies in a list of parts that should fly to the top bar when the popup closes. */
-export function flyingCurrencies(parts: readonly BundlePart[]): { kind: 'gold' | 'gems' | 'tickets'; n: number }[] {
-  const out: { kind: 'gold' | 'gems' | 'tickets'; n: number }[] = [];
-  for (const p of parts) if (p.kind === 'gold' || p.kind === 'gems' || p.kind === 'tickets') out.push({ kind: p.kind, n: p.n });
-  return out;
+/** How many of a reward the player gets (a cosmetic is always one). */
+export function partAmount(p: BundlePart): number {
+  return p.kind === 'cosmetic' ? 1 : p.n;
 }

@@ -7,6 +7,7 @@ import type { BattleEvents, UnitState } from '@/game/api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { FieldEnv } from './env';
 import { hopArc } from './motion';
+import { liftsAboveHud } from './policy';
 import { UnitView, type ExitMode } from './unitView';
 
 /** A recycled view rests this long before reuse, so a juice tween that is still finishing cannot touch its next owner. */
@@ -22,6 +23,10 @@ const AWAKEN_NEW_HOLD = 2.4;
  * Every cat on screen. Views follow the simulation board each frame (a unit that appears gets a
  * pop, one that vanishes without an event fades); the simulation's events add the flourishes: the
  * attack lunge, merge flight and pop, molt spin, awakening hand-off, slide, swap and sell.
+ *
+ * A lifted cat, one being sold and one still springing back from below the field live on `lift`, a
+ * field-space container above the HUD (the overlay layer): the sell strip is HUD paper, and a sticker
+ * that goes under it would leave only its price tag visible.
  */
 export class UnitViews {
   private readonly byUid = new Map<number, UnitView>();
@@ -33,6 +38,7 @@ export class UnitViews {
   constructor(
     private readonly env: FieldEnv,
     private readonly layer: Container,
+    private readonly lift: Container,
   ) {
     this.layer.sortableChildren = true;
     this.pool = new Pool<UnitView>(() => new UnitView(env.art));
@@ -69,6 +75,7 @@ export class UnitViews {
       if (!v) v = this.create(u, 'pop');
       v.mark = this.frame;
       v.step(dt, time, u, cell === selected);
+      this.seat(v);
       this.syncSwirl(v, u);
       if (v.awaiting) this.checkReveal(v);
     }
@@ -85,7 +92,15 @@ export class UnitViews {
         continue;
       }
       v.step(dt, time, null, false);
+      this.seat(v);
     }
+  }
+
+  /** Put the view on the layer it belongs to this frame: the HUD-level lift while it is held, sold or below the field. */
+  private seat(v: UnitView): void {
+    const up = liftsAboveHud(v.dragging, v.exit === 'sell', v.y);
+    const to = up ? this.lift : this.layer;
+    if (v.root.parent !== to) to.addChild(v.root);
   }
 
   private create(u: UnitState, mode: 'pop' | 'hidden'): UnitView {
@@ -139,7 +154,7 @@ export class UnitViews {
       this.live.pop();
     }
     v.retire();
-    this.layer.removeChild(v.root);
+    v.root.parent?.removeChild(v.root);
     this.env.ctx.tweens.call(COOLDOWN, () => this.pool.release(v));
   }
 

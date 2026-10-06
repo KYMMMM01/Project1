@@ -1,14 +1,13 @@
-/** Icon + amount widgets for reward bundles: the same look in missions, the pass and the calendar. */
+/** Reward stickers: the same look in missions, the pass, the calendar and the popups. */
 import { Container, Sprite, type Text } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import type { BundlePart } from '@/meta/bundle';
+import { Color, drawIcon, fitLabel, Rarity, uiLabel, type IconName } from '@/ui';
 import type { Box } from '@/ui/layoutMath';
-import { drawIcon, type IconName } from '@/ui/icons';
-import { Color, Rarity } from '@/ui/theme';
-import { fitLabel, uiLabel } from '@/ui/text';
-import { textureKey } from './parts';
+import { stickerTilt, textureKey } from './parts';
+import { stickerDisc } from './sheets';
 
 function iconFor(part: BundlePart): IconName {
   switch (part.kind) {
@@ -31,7 +30,7 @@ function iconFor(part: BundlePart): IconName {
 
 function tintFor(part: BundlePart): number | undefined {
   if (part.kind === 'wild') return Rarity[part.rarity].color;
-  if (part.kind === 'chest') return part.chest === 'gold' ? Color.gold : part.chest === 'silver' ? Color.textDim : Color.primaryDark;
+  if (part.kind === 'chest') return part.chest === 'gold' ? Color.mustard : part.chest === 'silver' ? Color.teal : undefined;
   return undefined;
 }
 
@@ -79,10 +78,21 @@ export function partName(part: BundlePart): string {
   }
 }
 
+const KINDS = ['gold', 'gems', 'tickets', 'chest', 'wild', 'card', 'cosmetic'] as const;
+
+/** A sticker with the part's picture on it: a die-cut disc, a flat shadow, a slight tilt. Origin = centre. */
+export function partSticker(part: BundlePart, size: number): Container {
+  const c = new Container();
+  const code = KINDS.indexOf(part.kind) * 3 + (part.n % 5);
+  c.addChild(stickerDisc(size, code % 4), partIcon(part, size * 0.74));
+  c.rotation = stickerTilt(code);
+  return c;
+}
+
 export interface RewardChipOpts {
-  /** Icon side in design px (default 56). */
+  /** Sticker diameter in design px (default 56). */
   size?: number;
-  /** 'row' = icon then amount; 'column' = icon over amount over the caption. */
+  /** 'row' = sticker then amount; 'column' = sticker over amount over the caption. */
   layout?: 'row' | 'column';
   fontSize?: number;
   /** Widest the chip may be; the amount shrinks to fit. */
@@ -91,7 +101,7 @@ export interface RewardChipOpts {
   caption?: boolean;
 }
 
-/** One reward part. Origin = centre of the chip. */
+/** One reward part as a sticker with its amount in ink. Origin = centre of the chip. */
 export class RewardChip extends Container {
   readonly uiBox: Box;
   private readonly amountT: Text;
@@ -101,24 +111,24 @@ export class RewardChip extends Container {
     const size = o.size ?? 56;
     const fontSize = o.fontSize ?? 28;
     const layout = o.layout ?? 'row';
-    const icon = partIcon(part, size);
-    this.amountT = uiLabel(partAmount(part), { size: fontSize, strokeWidth: 5 });
+    const sticker = partSticker(part, size);
+    this.amountT = uiLabel(partAmount(part), { size: fontSize });
     if (layout === 'row') {
       if (o.maxWidth) fitLabel(this.amountT, Math.max(40, o.maxWidth - size - 8), fontSize);
       const w = size + 8 + this.amountT.width;
-      icon.position.set(-w / 2 + size / 2, 0);
+      sticker.position.set(-w / 2 + size / 2, 0);
       this.amountT.position.set(-w / 2 + size + 8 + this.amountT.width / 2, 2);
-      this.addChild(icon, this.amountT);
+      this.addChild(sticker, this.amountT);
       this.uiBox = { x: -w / 2, y: -size / 2, w, h: size };
     } else {
       if (o.maxWidth) fitLabel(this.amountT, o.maxWidth, fontSize);
       const gap = 4;
-      const cap = o.caption === true ? uiLabel(partName(part), { size: 24, color: Color.textDim, strokeWidth: 4, shadow: false }) : null;
+      const cap = o.caption === true ? uiLabel(partName(part), { size: 24, color: Color.inkSoft }) : null;
       if (cap && o.maxWidth) fitLabel(cap, o.maxWidth, 24);
       const h = size + gap + this.amountT.height + (cap ? gap + cap.height : 0);
-      icon.position.set(0, -h / 2 + size / 2);
+      sticker.position.set(0, -h / 2 + size / 2);
       this.amountT.position.set(0, -h / 2 + size + gap + this.amountT.height / 2);
-      this.addChild(icon, this.amountT);
+      this.addChild(sticker, this.amountT);
       if (cap) {
         cap.position.set(0, h / 2 - cap.height / 2);
         this.addChild(cap);

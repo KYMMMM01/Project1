@@ -163,7 +163,7 @@ describe('elite and boss waves', () => {
     expect(glass.waveDuration).toBe(55);
     const hard = newSim({ stake: 4 });
     enter(hard, 8);
-    expect(hard.waveDuration).toBe(40);
+    expect(hard.waveDuration).toBe(37);
     const trained = newSim({ loadout: { unitLevels: {}, training: { boss_time: 7 }, relicPool: [] } });
     enter(trained, 12);
     expect(trained.waveDuration).toBe(45 + 7);

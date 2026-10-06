@@ -1,4 +1,5 @@
-import { provide, type Shell } from '../contract';
+import { debugExpose } from '@/core/debug';
+import { provide, services, type Shell } from '../contract';
 import { openUnitScreen } from '../cats/UnitScreen';
 import { isChestResult, playChestReveal } from './ChestReveal';
 import { setShell } from './context';
@@ -20,4 +21,6 @@ export function installServices(shell: Shell): void {
   provide('openOdds', (kind) => openOddsScreen(kind));
   provide('openShop', (section) => openShopSection(section));
   provide('openUnit', (id) => openUnitScreen(id));
+  // QA: open any of these screens directly from the console or a browser script.
+  debugExpose('collection', { openUnit: services.openUnit, openOdds: services.openOdds, openShop: services.openShop, revealChest: services.revealChest, showRewards: services.showRewards });
 }

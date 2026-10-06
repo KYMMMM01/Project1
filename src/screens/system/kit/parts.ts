@@ -45,3 +45,8 @@ export function flightCount(total: number): number {
   if (total <= 0) return 0;
   return Math.max(3, Math.min(12, Math.round(Math.sqrt(total))));
 }
+
+/** Slight, repeatable tilt for a sticker, in radians, from any integer: seven steps either side of straight. */
+export function stickerTilt(n: number): number {
+  return ((((n % 7) + 7) % 7) - 3) * 0.014;
+}

@@ -9,6 +9,8 @@ import {
   dropLook,
   isDrag,
   isSellZone,
+  LIFT_EDGE,
+  liftsAboveHud,
   pathDistance,
   unitTint,
 } from '@/view/field/policy';
@@ -70,6 +72,16 @@ describe('tap decisions', () => {
   it('moves the selection to another unit when the drop would do nothing, else deselects', () => {
     expect(decideTap(4, 9, true, 'none')).toEqual({ kind: 'select', cell: 9 });
     expect(decideTap(4, 9, false, 'none')).toEqual({ kind: 'deselect' });
+  });
+});
+
+describe('cats above the HUD', () => {
+  it('lifts a held, a sold and a below-the-field cat, and nothing on the board', () => {
+    expect(liftsAboveHud(true, false, 200)).toBe(true);
+    expect(liftsAboveHud(false, true, 200)).toBe(true);
+    expect(liftsAboveHud(false, false, FIELD_H + 60)).toBe(true);
+    expect(liftsAboveHud(false, false, FIELD_H - LIFT_EDGE + 1)).toBe(true);
+    expect(liftsAboveHud(false, false, 480)).toBe(false);
   });
 });
 

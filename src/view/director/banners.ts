@@ -13,6 +13,7 @@ import { drawPaper, paperSeed, tapeStrip } from '@/ui/paper';
 import { fitWidth, label } from '@/ui/text';
 import { Color } from '@/ui/theme';
 import type { BattleLayout } from '../context';
+import { BANNER_CAPTION_H, BANNER_TOP_H, bannerSlots } from '../layout';
 import { BannerQueue, type BannerItem } from './policy';
 import type { Stage } from './stage';
 
@@ -34,8 +35,9 @@ interface Lane {
   resize(layout: BattleLayout): void;
 }
 
-const MAX_TEXT = 640;
 const INK = Color.inkDeep;
+/** The torn ends of a label need this much paper beside the text (and the icon). */
+const LABEL_SIDE = 30;
 
 /** Icons are built once per name and moved between lanes: no Graphics churn per banner. */
 class IconCache {
@@ -57,7 +59,11 @@ class IconCache {
   }
 }
 
-/** A torn paper label with an optional icon and one line of ink: the wave banner and the captions. It drops in and settles with a small tilt. */
+/**
+ * A torn paper label with an optional icon and one line of ink: the wave banner and the captions. Both
+ * rows live in the free band between the top HUD and the board's sheet (`bannerSlots`), so they drop in
+ * a few pixels and settle with a small tilt instead of travelling over the board.
+ */
 class PillLane implements Lane {
   readonly root = new Container();
   readonly queue = new BannerQueue<BannerSpec>(3);
@@ -68,7 +74,9 @@ class PillLane implements Lane {
   private icon: Graphics | null = null;
   private plateW = 0;
   private baseY = 0;
-  /** Scale that fits the current title to the plate; the pop animation multiplies it. */
+  /** Scale that fits the band (`bannerSlots`); the pop animation multiplies it. */
+  private baseScale = 1;
+  /** Scale that fits the current title to the plate. */
   private fit = 1;
 
   constructor(
@@ -77,11 +85,12 @@ class PillLane implements Lane {
     size: number,
     private readonly height: number,
     private readonly rise: number,
-    private readonly yOffset: number,
+    private readonly slot: 'topY' | 'captionY',
+    private readonly maxText: number,
     taped: boolean,
   ) {
     this.text = label('', { size, color: INK });
-    this.tape = taped ? tapeStrip({ name: 'pink', pattern: 'gingham', w: 74, h: 26, angle: -8 }) : null;
+    this.tape = taped ? tapeStrip({ name: 'pink', pattern: 'gingham', w: 54, h: 18, angle: -8 }) : null;
     this.root.addChild(this.bg, this.text);
     if (this.tape) this.root.addChild(this.tape);
     this.root.visible = false;
@@ -91,52 +100,59 @@ class PillLane implements Lane {
   show(spec: BannerSpec): void {
     const t = this.text;
     t.text = spec.title;
-    fitWidth(t, MAX_TEXT);
+    fitWidth(t, this.maxText);
     this.fit = t.scale.x;
     this.icon?.parent?.removeChild(this.icon);
-    this.icon = spec.icon ? this.icons.get(spec.icon, this.height * 0.62) : null;
-    const iconW = this.icon ? this.height * 0.62 + 14 : 0;
-    this.plateW = t.width + iconW + 70;
+    const iconSize = this.height * 0.66;
+    this.icon = spec.icon ? this.icons.get(spec.icon, iconSize) : null;
+    const iconW = this.icon ? iconSize + 12 : 0;
+    this.plateW = t.width + iconW + LABEL_SIDE * 2;
     const h = this.height;
     this.bg.clear();
-    drawPaper(this.bg, -this.plateW / 2, -h / 2, { w: this.plateW, h, radius: 14, fill: spec.color, seed: this.seed, torn: ['left', 'right'], shadow: 6 });
+    drawPaper(this.bg, -this.plateW / 2, -h / 2, { w: this.plateW, h, radius: 12, fill: spec.color, seed: this.seed, torn: ['left', 'right'], shadow: 5 });
     t.x = iconW / 2;
     if (this.icon) {
-      this.icon.position.set(-this.plateW / 2 + 35 + this.height * 0.31, 0);
+      this.icon.position.set(-this.plateW / 2 + LABEL_SIDE + iconSize / 2, 0);
       this.root.addChild(this.icon);
     }
-    this.tape?.position.set(-this.plateW / 2 + 46, -h / 2 + 3);
+    this.tape?.position.set(-this.plateW / 2 + 40, -h / 2 + 6);
   }
 
   pose: Pose = (phase, p, age) => {
     const r = this.root;
     r.visible = true;
+    this.text.scale.set(this.fit);
     if (this.stage.reduced) {
       r.y = this.baseY;
       r.rotation = 0;
+      r.scale.set(this.baseScale);
       r.alpha = phase === 'in' ? p : phase === 'out' ? 1 - p : 1;
-      this.text.scale.set(this.fit);
       return;
     }
+    let pop = 1;
     if (phase === 'in') {
       r.y = this.baseY - this.rise * (1 - Ease.cubicOut(p));
       r.rotation = -0.06 * (1 - Ease.backOut(Math.min(1, age / 0.24)));
       r.alpha = Math.min(1, p * 3);
+      pop = 0.88 + 0.12 * Ease.backOut(p);
     } else if (phase === 'hold') {
       r.y = this.baseY;
       r.rotation = 0;
       r.alpha = 1;
     } else {
-      r.y = this.baseY - this.rise * 0.45 * Ease.cubicIn(p);
+      r.y = this.baseY - this.rise * 0.5 * Ease.cubicIn(p);
       r.rotation = 0.03 * Ease.cubicIn(p);
       r.alpha = 1 - Ease.cubicIn(p);
     }
-    this.text.scale.set(this.fit);
+    r.scale.set(this.baseScale * pop);
   };
 
   resize(layout: BattleLayout): void {
+    const slots = bannerSlots(layout);
     this.root.x = layout.w / 2;
-    this.baseY = layout.fieldY + this.yOffset;
+    this.baseScale = slots.scale;
+    this.root.scale.set(slots.scale);
+    this.baseY = slots[this.slot];
     this.root.y = this.baseY;
   }
 }
@@ -312,8 +328,8 @@ export class BannerService {
 
   constructor(stage: Stage) {
     this.lanes = {
-      top: new PillLane(stage, this.icons, 40, 78, 100, 60, true),
-      caption: new PillLane(stage, this.icons, 28, 54, 36, 126, false),
+      top: new PillLane(stage, this.icons, 34, BANNER_TOP_H, 8, 'topY', 520, true),
+      caption: new PillLane(stage, this.icons, 26, BANNER_CAPTION_H, 8, 'captionY', 560, false),
       alert: new BandLane(stage, this.icons),
       big: new BigLane(stage),
     };

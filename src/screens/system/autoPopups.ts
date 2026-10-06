@@ -16,7 +16,6 @@ import type { FeatureId } from '@/meta/data/schedule';
 import { drawIcon, type IconName } from '@/ui/icons';
 import { popups } from '@/ui/Popup';
 import { toast } from '@/ui/Toast';
-import { Color } from '@/ui/theme';
 import type { Shell } from '../contract';
 import { payout } from './kit/claimFx';
 import { NoticePopup, type NoticeRow } from './kit/noticePopup';
@@ -148,8 +147,8 @@ export class AutoPopups {
     const choice = await popups.open(
       new NoticePopup<'claim' | 'later'>({
         title: t('rt.sys.comeback.title'),
-        hero: partIcon(parts[0] as BundlePart, 170),
-        lines: [t('meta.calendar.comeback'), t('rt.sys.comeback.patrol')],
+        hero: partIcon(parts[0] as BundlePart, 124),
+        lines: [t('rt.sys.comeback.body'), t('rt.sys.comeback.patrol')],
         parts,
         buttons: [{ label: t('rt.common.claim'), style: 'primary', result: 'claim', pulse: true }],
         dismissResult: 'later',
@@ -173,7 +172,7 @@ export class AutoPopups {
     const choice = await popups.open(
       new NoticePopup<'claim' | 'later'>({
         title: t('rt.sys.gempass.title'),
-        hero: partIcon(parts[0] as BundlePart, 170),
+        hero: partIcon(parts[0] as BundlePart, 124),
         lines: left > 0 ? [t('rt.sys.gempass.body'), t('rt.sys.gempass.days', { n: left })] : [t('rt.sys.gempass.body')],
         parts,
         buttons: [{ label: t('rt.common.claim'), style: 'primary', result: 'claim', pulse: true }],
@@ -195,7 +194,7 @@ export class AutoPopups {
   private async levelUp(from: number, to: number): Promise<void> {
     patchRoutinePrefs({ seenLevel: to });
     const parts: BundlePart[] = [{ kind: 'gems', n: (to - from) * ACCOUNT_LEVEL_GEMS }];
-    const hero: Container = drawIcon('star', 160, Color.gold);
+    const hero: Container = drawIcon('star', 124);
     await popups.open(
       new NoticePopup<boolean>({
         title: t('rt.sys.level.title', { n: to }),
@@ -223,7 +222,7 @@ export class AutoPopups {
     const choice = await popups.open(
       new NoticePopup<'go' | 'later'>({
         title: t('rt.sys.unlock.title'),
-        hero: drawIcon('gift', 150),
+        hero: drawIcon('gift', 118),
         rows,
         footnote: more > 0 ? [t('rt.sys.unlock.more', { n: more })] : [],
         buttons: jump

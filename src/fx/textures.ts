@@ -245,10 +245,12 @@ function sdPuff(x: number, y: number): number {
 }
 
 const CELLS: Cell[] = [
-  { id: 'disc', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(len(x, y) - 62) },
+  // The three big round shapes are painted twice as large: shockwaves, summon rings and ground discs are drawn up to
+  // 600 px wide, where a 128 px cell would blur the cut edge of the paper.
+  { id: 'disc', w: 256, h: 256, ax: 0.5, ay: 0.5, paint: (x, y) => aa(len(x, y) - 124) },
   { id: 'dot', w: 48, h: 48, ax: 0.5, ay: 0.5, paint: (x, y) => aa(len(x, y) - 21) },
-  { id: 'ring', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 55) - 3) },
-  { id: 'ringThick', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 52) - 10) },
+  { id: 'ring', w: 256, h: 256, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 110) - 6) },
+  { id: 'ringThick', w: 256, h: 256, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 104) - 20) },
   {
     id: 'spark',
     w: 128,

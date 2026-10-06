@@ -1,95 +1,81 @@
-/** The 28-day attendance calendar: claimed boxes, today's box, what is coming, and the big days 7 / 14 / 21 / 28. */
-import { Container, Graphics, type DestroyOptions } from 'pixi.js';
+/** The 28-day attendance calendar as a wall calendar: date squares with a sticker each, claimed days stamped, today taped and circled, and bigger stickers on days 7 / 14 / 21 / 28. */
+import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { errorKey, profile } from '@/meta';
-import type { CalendarView } from '@/meta/routines';
-import { Button } from '@/ui/Button';
-import { drawIcon } from '@/ui/icons';
-import { motion, TweenBag } from '@/ui/motion';
-import { Panel } from '@/ui/Panel';
-import { Popup } from '@/ui/Popup';
-import { uiLabel } from '@/ui/text';
-import { Color } from '@/ui/theme';
-import { toast } from '@/ui/Toast';
+import { Button, Color, motion, Panel, Popup, tapeStrip, toast, TweenBag, uiLabel } from '@/ui';
 import type { Shell } from '../contract';
 import { payout } from './kit/claimFx';
+import { StampMark } from './kit/marks';
 import { partsOf } from './kit/parts';
-import { partIcon, RewardChip } from './kit/rewardChip';
-import { ClaimedMark, sharedPanel } from './kit/widgets';
+import { RewardChip, partSticker } from './kit/rewardChip';
+import { paperSheet, SHEET_SEEDS, sharedSheet } from './kit/sheets';
+import { calendarCellState, isBigDay, type CellState } from './calendarModel';
 import './strings';
 
 const COLS = 7;
-const CELL_W = 84;
-const CELL_H = 112;
+const CELL_W = 78;
+/** The last column holds days 7 / 14 / 21 / 28: wider, with a larger sticker. */
+const BIG_W = 108;
+const CELL_H = 120;
 const GAP = 8;
 const W = 680;
-const GRID_W = COLS * CELL_W + (COLS - 1) * GAP;
-
-type CellState = 'claimed' | 'today' | 'upcoming';
-
-/** Days that carry the calendar's big rewards. */
-const BIG_DAYS: ReadonlySet<number> = new Set([7, 14, 21, 28]);
-
-export function calendarCellState(day: number, view: Pick<CalendarView, 'stamp' | 'next' | 'canClaim'>): CellState {
-  if (day <= view.stamp) return 'claimed';
-  return day === view.next && view.canClaim ? 'today' : 'upcoming';
-}
+const GRID_W = (COLS - 1) * CELL_W + BIG_W + (COLS - 1) * GAP;
 
 class CalendarCell extends Container {
-  private readonly bgs = new Map<string, Container>();
-  private readonly mark = new ClaimedMark(46);
-  private readonly ring = new Graphics();
-  private readonly dayText;
   private readonly bag = new TweenBag();
+  private readonly chip: RewardChip | null;
+  private readonly stamp = new StampMark({ size: 24, tilt: -0.2 });
+  private readonly tape: Graphics;
+  private readonly circle = new Graphics();
+  private readonly dayText: Text;
+  private readonly cw: number;
   private state: CellState = 'upcoming';
 
   constructor(readonly day: number, bundle: Parameters<typeof partsOf>[0]) {
     super();
-    const big = BIG_DAYS.has(day);
+    const big = isBigDay(day);
+    const cw = big ? BIG_W : CELL_W;
+    this.cw = cw;
     const parts = partsOf(bundle);
-    this.dayText = uiLabel(String(day), { size: 24, strokeWidth: 4, shadow: false });
-    this.dayText.position.set(CELL_W / 2 + (big ? 10 : 0), 20);
+    this.addChild(sharedSheet(cw, CELL_H, { fill: Color.paperLight, radius: 16, seed: SHEET_SEEDS[day % SHEET_SEEDS.length], featured: big }));
+
+    this.dayText = uiLabel(String(day), { size: 26 });
+    this.dayText.position.set(big ? 28 : 22, 24);
+    // A marker circle round today's date.
+    this.circle.ellipse(this.dayText.x, this.dayText.y, 17, 15).stroke({ width: 3.5, color: Color.coral, alpha: 0.95 });
+    this.circle.ellipse(this.dayText.x + 1.5, this.dayText.y - 1, 16, 16).stroke({ width: 2, color: Color.coral, alpha: 0.6 });
+    this.circle.visible = false;
+
     const first = parts[0];
-    if (first) {
-      const chip = new RewardChip(first, { layout: 'column', size: big ? 54 : 44, fontSize: 24, maxWidth: CELL_W - 8 });
-      chip.position.set(CELL_W / 2, 66);
-      this.addChild(chip);
+    this.chip = first ? new RewardChip(first, { layout: 'column', size: big ? 64 : 44, fontSize: 24, maxWidth: cw - 8 }) : null;
+    if (this.chip) {
+      this.chip.position.set(cw / 2, 71);
+      this.addChild(this.chip);
     }
     const extra = parts[1];
     if (extra) {
-      const small = partIcon(extra, 30);
-      small.position.set(CELL_W - 17, 21);
+      const small = partSticker(extra, 30);
+      small.position.set(cw - 20, 22);
       this.addChild(small);
     }
-    if (big) {
-      const star = drawIcon('star', 24, Color.gold);
-      star.position.set(15, 20);
-      this.addChild(star);
-    }
-    this.ring.roundRect(-3, -3, CELL_W + 6, CELL_H + 6, 26).stroke({ width: 5, color: Color.primary, alignment: 0.5 });
-    this.ring.visible = false;
-    this.mark.position.set(CELL_W / 2, CELL_H - 22);
-    this.addChild(this.dayText, this.ring, this.mark);
-    this.pivot.set(CELL_W / 2, CELL_H / 2);
+
+    this.tape = tapeStrip({ name: 'sky', pattern: 'dots', w: 58, h: 20, angle: -5 });
+    this.tape.position.set(cw / 2, 2);
+    this.tape.visible = false;
+    this.stamp.position.set(cw / 2, big ? 66 : 58);
+    this.stamp.visible = false;
+    this.addChild(this.circle, this.dayText, this.stamp, this.tape);
+    this.pivot.set(cw / 2, CELL_H / 2);
   }
 
   sync(state: CellState, animate: boolean): void {
-    const big = BIG_DAYS.has(this.day);
-    const variant = state === 'claimed' ? 'default' : state === 'today' || big ? 'gold' : 'inset';
-    let bg = this.bgs.get(variant);
-    if (!bg) {
-      bg = sharedPanel(CELL_W, CELL_H, variant, 20);
-      this.addChildAt(bg, 0);
-      this.bgs.set(variant, bg);
-    }
-    for (const other of this.bgs.values()) other.visible = other === bg;
-    this.alpha = state === 'claimed' ? 0.7 : 1;
-    this.mark.visible = state === 'claimed';
-    if (animate && state === 'claimed' && this.state !== 'claimed') this.mark.stamp();
-    this.dayText.style.fill = state === 'today' ? Color.primary : Color.text;
-    this.ring.visible = state === 'today';
+    this.chip?.setDim(state === 'claimed');
+    this.stamp.visible = state === 'claimed';
+    if (animate && state === 'claimed' && this.state !== 'claimed') this.stamp.slam();
+    this.circle.visible = state === 'today';
+    this.tape.visible = state === 'today';
     this.state = state;
     this.bag.killAll();
     this.scale.set(1);
@@ -104,6 +90,11 @@ class CalendarCell extends Container {
     }
   }
 
+  /** Scene-space-agnostic centre of the cell inside its parent. */
+  placeAt(x: number, y: number): void {
+    this.position.set(x + this.cw / 2, y + CELL_H / 2);
+  }
+
   override destroy(options?: DestroyOptions): void {
     this.bag.killAll();
     super.destroy(options);
@@ -113,30 +104,34 @@ class CalendarCell extends Container {
 export class CalendarPopup extends Popup<void> {
   private readonly cells: CalendarCell[] = [];
   private readonly claimBtn: Button;
-  private readonly progress;
-  private claiming = false;
+  private readonly progress: Text;
 
   constructor(private readonly host: Shell) {
     super({ dismissResult: undefined, priority: 3 });
     const view = profile.calendarView();
-    const gridTop = 160;
+    const left = (W - GRID_W) / 2;
+    const gridTop = 176;
     const gridH = 4 * CELL_H + 3 * GAP;
-    const note = uiLabel(t('rt.sys.cal.note'), { size: 24, color: Color.textDim, wrap: GRID_W, lineHeight: 32, strokeWidth: 4, shadow: false });
+    const note = uiLabel(t('rt.sys.cal.note'), { size: 24, color: Color.inkSoft, wrap: GRID_W, lineHeight: 32 });
     const btnY = gridTop + gridH + 34 + 52;
     const h = btnY + 52 + 18 + note.height + 36;
-    const panel = new Panel({ width: W, height: h, title: t('rt.sys.cal.title'), onClose: () => this.close() });
-    const cycle = uiLabel(t('rt.sys.cal.cycle', { n: view.cycles + 1 }), { size: 28, anchorX: 0, strokeWidth: 5 });
-    cycle.position.set((W - GRID_W) / 2 + 4, 122);
-    this.progress = uiLabel('', { size: 28, color: Color.gold, anchorX: 1, strokeWidth: 5 });
-    this.progress.position.set(W - (W - GRID_W) / 2 - 4, 122);
-    panel.content.addChild(cycle, this.progress);
+    const panel = new Panel({ width: W, height: h, title: t('rt.sys.cal.title'), torn: 'bottom', tape: 'sky', onClose: () => this.close() });
+
+    // The page header: a kraft strip with the calendar's number and how far along it is.
+    const head = paperSheet(GRID_W, 56, { fill: Color.kraft, radius: 14, seed: 21 });
+    head.position.set(left, 104);
+    const cycle = uiLabel(t('rt.sys.cal.cycle', { n: view.cycles + 1 }), { size: 28, anchorX: 0 });
+    cycle.position.set(left + 20, 133);
+    this.progress = uiLabel('', { size: 28, anchorX: 1 });
+    this.progress.position.set(left + GRID_W - 20, 133);
+    panel.content.addChild(head, cycle, this.progress);
 
     view.days.forEach((bundle, i) => {
       const day = i + 1;
       const cell = new CalendarCell(day, bundle);
       const col = i % COLS;
       const row = Math.floor(i / COLS);
-      cell.position.set((W - GRID_W) / 2 + col * (CELL_W + GAP) + CELL_W / 2, gridTop + row * (CELL_H + GAP) + CELL_H / 2);
+      cell.placeAt(left + col * (CELL_W + GAP), gridTop + row * (CELL_H + GAP));
       panel.content.addChild(cell);
       this.cells.push(cell);
     });
@@ -162,7 +157,6 @@ export class CalendarPopup extends Popup<void> {
   }
 
   private claim(): void {
-    if (this.claiming) return;
     const before = profile.calendarView().next;
     const r = profile.claimCalendar();
     if (!r.ok) {
@@ -171,10 +165,8 @@ export class CalendarPopup extends Popup<void> {
       this.sync(false);
       return;
     }
-    this.claiming = true;
     this.host.refresh();
     this.sync(true);
-    this.claiming = false;
     const cell = this.cells[before - 1];
     void payout(this.host, partsOf(r.value.reward), cell ?? this.claimBtn, t('rt.sys.cal.title'));
   }

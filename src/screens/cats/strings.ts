@@ -2,10 +2,17 @@ import { addStrings } from '@/core/i18n';
 
 addStrings('ko', {
   'cats.filter.all': '전체',
-  'cats.awakens': '각성',
+  'cats.merge': '합성',
+  'cats.awaken': '각성',
   'cats.max': '최고',
   'cats.lv': 'Lv.{n}',
+  'cats.wild.title': '만능 카드',
+  'cats.line.merge': '{a} 둘을 합치면 {b}이(가) 돼요.',
+  'cats.line.awaken': '{a}은(는) 각성하면 {b}이(가) 돼요.',
+  'cats.line.guardian': '{a}을(를) 각성하면 {b}이(가) 돼요.',
+  'cats.stamp': '레벨 업!',
   'cats.unit.title': '고양이 정보',
+  'cats.unit.line': '합성 줄',
   'cats.unit.stats': '능력치',
   'cats.unit.skill': '특기',
   'cats.unit.perks': '레벨 특전',
@@ -32,15 +39,21 @@ addStrings('ko', {
   'cats.err.later': '나중에',
   'cats.err.goldTitle': '골드가 모자라요',
   'cats.err.cardsTitle': '카드가 모자라요',
-  'cats.leveled': '{unit} {level}레벨!',
 });
 
 addStrings('en', {
   'cats.filter.all': 'All',
-  'cats.awakens': 'Awakens',
+  'cats.merge': 'Merge',
+  'cats.awaken': 'Awaken',
   'cats.max': 'MAX',
   'cats.lv': 'Lv.{n}',
+  'cats.wild.title': 'Wild cards',
+  'cats.line.merge': 'Two {a} merge into {b}.',
+  'cats.line.awaken': '{a} awakens into {b}.',
+  'cats.line.guardian': 'Awaken {a} to get {b}.',
+  'cats.stamp': 'Level up!',
   'cats.unit.title': 'Cat info',
+  'cats.unit.line': 'Merge line',
   'cats.unit.stats': 'Stats',
   'cats.unit.skill': 'Skill',
   'cats.unit.perks': 'Level perks',
@@ -67,5 +80,4 @@ addStrings('en', {
   'cats.err.later': 'Later',
   'cats.err.goldTitle': 'Not enough gold',
   'cats.err.cardsTitle': 'Not enough cards',
-  'cats.leveled': '{unit} Lv.{level}!',
 });

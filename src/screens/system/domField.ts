@@ -38,11 +38,12 @@ export class DomTextField {
     s.resize = 'none';
     s.margin = '0';
     s.padding = '12px';
-    s.border = `3px solid ${css(Color.neutral)}`;
-    s.borderRadius = '14px';
-    s.background = css(Color.bgDeep);
-    s.color = css(Color.text);
-    s.caretColor = css(Color.primary);
+    // The same teal cut line as the paper pieces around it, on an ivory slip.
+    s.border = `3px dashed ${css(Color.teal)}`;
+    s.borderRadius = '16px';
+    s.background = css(Color.paperLight);
+    s.color = css(Color.ink);
+    s.caretColor = css(Color.coral);
     s.fontFamily = 'ui-monospace, Menlo, Consolas, monospace';
     s.fontSize = '14px';
     s.lineHeight = '1.35';

@@ -16,7 +16,7 @@ import { nextTierGoal, rankCounts } from '../planMath';
 const W = 672;
 const SIDE = 24;
 const ROW_H = 80;
-const LADDER_Y = 176;
+const LADDER_Y = 160;
 const RULE_Y = LADDER_Y + LADDER_H + 26;
 const HEAD_Y = RULE_Y + 62;
 const ROWS_Y = HEAD_Y + 42;

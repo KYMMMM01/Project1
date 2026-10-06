@@ -1,9 +1,8 @@
-/** Pure structure of the cats tab: the four class groups, filtering, upgrade-ready counts and card progress. */
+/** Pure structure of the cats tab: the four class lines, filtering, upgrade-ready counts, card progress and what a cat becomes. */
 import { CLASS_IDS, type ClassId, type UnitId } from '@/game/api';
-import { UNIT_GRID, unitRarity } from '@/game/data/roster';
+import { mergeResultOf, mythicOf, UNIT_GRID, unitClass } from '@/game/data/roster';
 import type { UnitView } from '@/meta/economy';
 import type { BaseUnitId } from '@/meta/types';
-import type { RarityId } from '@/ui/theme';
 
 export type ClassFilter = 'all' | ClassId;
 
@@ -26,6 +25,38 @@ export const CLASS_GROUPS: readonly ClassGroup[] = CLASS_IDS.map((classId) => {
 
 export function visibleGroups(filter: ClassFilter): readonly ClassGroup[] {
   return filter === 'all' ? CLASS_GROUPS : CLASS_GROUPS.filter((g) => g.classId === filter);
+}
+
+/** The five cats of a class in line order: kitten, ..., king, guardian. */
+export function lineOf(classId: ClassId): readonly UnitId[] {
+  return UNIT_GRID[classId];
+}
+
+export interface LineStep {
+  kind: 'merge' | 'awaken';
+  from: UnitId;
+  to: UnitId;
+}
+
+/** What a cat becomes next in its line (two merge into the next rank, a king awakens), or null at the end of the line. */
+export function stepFrom(id: UnitId): LineStep | null {
+  const merged = mergeResultOf(id);
+  if (merged) return { kind: 'merge', from: id, to: merged };
+  const awakened = mythicOf(id);
+  return awakened ? { kind: 'awaken', from: id, to: awakened } : null;
+}
+
+export type LineSentenceKey = 'cats.line.merge' | 'cats.line.awaken' | 'cats.line.guardian';
+
+/**
+ * The plain-words sentence of the unit screen as a string key and two cats: `merge` = two `a` make `b`,
+ * `awaken` = a king `a` becomes the guardian `b`, `guardian` = the guardian `b` comes from awakening the king `a`.
+ */
+export function lineSentence(id: UnitId): { key: LineSentenceKey; a: UnitId; b: UnitId } {
+  const step = stepFrom(id);
+  if (step) return { key: step.kind === 'merge' ? 'cats.line.merge' : 'cats.line.awaken', a: step.from, b: step.to };
+  const line = lineOf(unitClass(id));
+  return { key: 'cats.line.guardian', a: line[3] as UnitId, b: id };
 }
 
 export function isUpgradeReady(v: UnitView): boolean {
@@ -52,7 +83,18 @@ export function cardProgress(v: UnitView): CardProgress {
   return { have: Math.min(needed, v.cards + v.wild), needed, maxed: false };
 }
 
-/** Rarity of a unit of the grid (guardians are mythic). */
-export function rarityOfUnit(id: UnitId): RarityId {
-  return unitRarity(id);
+/** Widest a photo frame gets, and the heights of the two frame kinds: a card also carries the progress bar. */
+export const FRAME_W = 108;
+export const FRAME_H = { card: 150, mini: 114 } as const;
+/** Space under the plate taken by the cat's name. */
+export const NAME_H = 40;
+
+/**
+ * How a line of five cats shares a row `width` wide: every cat gets an equal cell, the plate takes about four
+ * fifths of it (never wider than `FRAME_W`) and the rest is the gap an arrow tag is stuck over.
+ */
+export function lineMetrics(width: number, count = 5): { pitch: number; plateW: number; gap: number } {
+  const pitch = width / count;
+  const plateW = Math.min(FRAME_W, Math.round(pitch * 0.78));
+  return { pitch, plateW, gap: pitch - plateW };
 }

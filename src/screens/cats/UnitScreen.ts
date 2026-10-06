@@ -4,48 +4,49 @@ import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
-import { Ease, uiTweens } from '@/core/tween';
 import { lerp } from '@/core/math';
+import { Ease, uiTweens } from '@/core/tween';
 import { Fx } from '@/fx';
 import type { UnitId } from '@/game/api';
-import { levelSourceOf, unitClass, unitRarity } from '@/game/data/roster';
+import { levelSourceOf, unitClass } from '@/game/data/roster';
 import { unitDef } from '@/game/data/units';
 import { errorKey, profile } from '@/meta';
 import type { UnitView } from '@/meta/economy';
 import { MAX_LEVEL } from '@/meta/data/economy';
 import type { BaseUnitId } from '@/meta/types';
 import {
-  Button, Color, confirmDialog, countUpValue, drawGlow, drawIcon, drawShadow, fitLabel, Panel, popIn, ProgressBar, punch,
-  rarityName, Rarity, ScreenScaffold, toast, TweenBag, uiLabel, vGradient, motion,
+  Button, cacheStatic, Color, confirmDialog, countUpValue, drawDashedLine, drawIcon, drawPaperFace, motion, paperShape,
+  popIn, ProgressBar, ScreenScaffold, toast, TweenBag, uiLabel,
 } from '@/ui';
-import { unitPortrait } from '../shop/art';
-import { classIcon } from '../shop/keys';
+import { PAGE_TOP, paperPage, stampIn, stampMark, type PaperPage } from '../shop/paperBits';
 import { services } from '../contract';
 import { getShell } from '../shop/context';
-import { cardProgress } from './collection';
+import { cardProgress, lineSentence } from './collection';
+import { LineRow } from './LineRow';
+import { UnitHero } from './UnitHero';
 import { deltaText, isImprovement, isUnitId, perkRows, STAT_KEYS, statText, unitStatsAt, type StatBlock, type StatKey } from './unitStats';
 
-const PORTRAIT = 360;
-const HERO_H = 700;
-const CAT_Y = 290;
+const HERO_TOP = 48;
+const STAT_ROW = 72;
+const PERK_ROW = 92;
 
 interface StatRow {
   key: StatKey;
-  label: Text;
   now: Text;
   arrow: Container;
   next: Text;
+  good: Container;
+  bad: Container;
   delta: Text;
 }
 
 interface PerkRowView {
   level: number;
-  icon: Container;
-  lock: Container;
+  row: Container;
+  tick: Container;
+  strip: Graphics;
   chip: Text;
   text: Text;
-  plate: Graphics;
-  row: Container;
 }
 
 function statLabel(key: StatKey, value: number): string {
@@ -53,25 +54,32 @@ function statLabel(key: StatKey, value: number): string {
   return key === 'interval' ? t('cats.stat.sec', { n: s }) : s;
 }
 
-/** Full screen of one cat: big portrait on a pedestal, numbers, perks, card progress and the level-up button. */
+/** A coloured delta pill ("+13") under the text: leaf for better, berry for worse. */
+function deltaPill(fill: number, edge: number): Container {
+  const c = new Container();
+  c.addChild(paperShape({ w: 112, h: 46, kind: 'pill', fill, edge, shadow: 3, grain: false }));
+  return c;
+}
+
+/**
+ * Full screen of one cat: a hero sheet (the sticker on a paper pedestal), its merge line with a plain-words
+ * sentence, the numbers with next-level differences, the skill, the three level perks as a checklist, card
+ * progress and the level-up button. Level-ups roll the numbers, stamp the sheet and rain paper confetti.
+ */
 class UnitScreen {
   private readonly bag = new TweenBag();
   private readonly scaffold: ScreenScaffold;
   private readonly fx: Fx;
   private readonly offUpdate: () => void;
   private readonly offProfile: () => void;
-  private readonly raysLayer = new Container();
   private readonly fxHost = new Container();
-  private readonly portraitHost = new Container();
-  private readonly levelText: Text;
   private readonly statRows: StatRow[] = [];
   private readonly perkViews: PerkRowView[] = [];
+  private readonly action: Button;
+  private hero: UnitHero | null = null;
   private cardBar: ProgressBar | null = null;
   private cardLine: Text | null = null;
   private wildLine: Text | null = null;
-  private cat: Container | null = null;
-  private readonly action: Button;
-  private rays: ReturnType<Fx['rays']> | null = null;
   private unit!: UnitId;
   private base!: BaseUnitId;
   private guardian = false;
@@ -79,19 +87,13 @@ class UnitScreen {
   private levelNow = 1;
 
   constructor(unit: UnitId) {
-    this.scaffold = new ScreenScaffold({
-      title: t('cats.unit.title'),
-      onBack: () => this.close(),
-      actionBarHeight: 148,
-    });
+    this.scaffold = new ScreenScaffold({ title: t('cats.unit.title'), onBack: () => this.close(), actionBarHeight: 148 });
     game.popupLayer.addChild(this.scaffold);
-    const c = this.scaffold.content;
-    c.addChild(this.raysLayer, this.portraitHost, this.fxHost);
+    this.scaffold.content.addChild(this.fxHost);
     this.fx = new Fx(this.fxHost, uiTweens);
     this.offUpdate = game.onUpdate((dt) => this.fx.update(dt));
 
-    this.levelText = uiLabel('', { size: 46, strokeWidth: 7 });
-    this.action = new Button({ label: t('cats.unit.levelUp'), style: 'primary', width: 560, height: 112, fontSize: 44 });
+    this.action = new Button({ label: t('cats.unit.levelUp'), style: 'primary', width: 560, height: 112, fontSize: 44, tape: 'pink' });
     this.scaffold.actionBar.addChild(this.action);
     this.action.onTap(() => this.onAction());
     this.action.onDisabledTap(() => this.explain(this.view()));
@@ -103,163 +105,143 @@ class UnitScreen {
     void this.scaffold.show(true);
   }
 
-  /** Rebuild the static parts for a cat (also used when switching from a guardian to its king). */
+  /** Rebuild the static parts for a cat (also used when another cat of the line is picked). */
   setUnit(unit: UnitId): void {
     this.unit = unit;
     this.base = levelSourceOf(unit) as BaseUnitId;
     this.guardian = unit !== this.base;
     this.rebuild();
     this.refresh();
+    this.scaffold.scroller?.scrollToTop(false);
   }
 
   private rebuild(): void {
     const c = this.scaffold.content;
     const W = this.scaffold.contentWidth;
-    const rarity = unitRarity(this.unit);
-    const rs = Rarity[rarity];
-    this.rays?.stop();
-    this.rays = null;
     this.bag.killAll();
-    for (const ch of [...c.children]) {
-      if (ch !== this.raysLayer && ch !== this.portraitHost && ch !== this.fxHost) ch.destroy({ children: true });
-    }
-    this.portraitHost.removeChildren().forEach((ch) => ch.destroy({ children: true }));
+    for (const ch of [...c.children]) if (ch !== this.fxHost) ch.destroy({ children: true });
     this.statRows.length = 0;
     this.perkViews.length = 0;
 
-    // Hero: slow rays, pedestal, the cat on it.
-    this.rays = this.fx.rays(W / 2, CAT_Y, { color: rs.glow, radius: 460, speed: 0.22, alpha: 0.55, count: 12, parent: this.raysLayer });
-    const glow = new Graphics();
-    drawGlow(glow, W / 2, CAT_Y + 20, 300, rs.glow, 0.35);
-    const ped = new Graphics();
-    drawShadow(ped, W / 2 - 200, CAT_Y + 215, 400, 70, 35, { alpha: 0.5, spread: 22, offsetY: 10 });
-    ped.ellipse(W / 2, CAT_Y + 262, 210, 52).fill(vGradient(Color.panelLight, Color.panelDark)).stroke({ width: 6, color: Color.outline, alignment: 1 });
-    ped.ellipse(W / 2, CAT_Y + 250, 178, 40).fill(vGradient(rs.light, rs.dark)).stroke({ width: 4, color: Color.outline, alignment: 1 });
-    this.portraitHost.addChild(glow, ped);
-    const cat = unitPortrait(this.unit, rarity, PORTRAIT);
-    cat.position.set(W / 2, CAT_Y);
-    this.portraitHost.addChild(cat);
-    this.cat = cat;
-    if (!motion.reduced) {
-      const sx = cat.scale.x;
-      this.bag.run({
-        duration: 1.5, repeat: -1, yoyo: true, ease: Ease.sineInOut,
-        onUpdate: (k) => {
-          cat.y = CAT_Y - 10 * k;
-          cat.scale.y = sx * (1 + 0.015 * k);
-        },
-      });
-    }
+    const hero = new UnitHero(this.unit, W);
+    hero.position.set(0, HERO_TOP);
+    c.addChildAt(hero, 0);
+    this.hero = hero;
+    let y = HERO_TOP + hero.heroH + 26;
 
-    const name = uiLabel(t(`unit.${this.unit}.name`), { size: 56, strokeWidth: 8 });
-    fitLabel(name, W - 40, 56);
-    name.position.set(W / 2, 38);
-    const pill = new Container();
-    const pillBg = new Graphics();
-    const rt = uiLabel(rarityName(rarity), { size: 28, strokeWidth: 5, shadow: false });
-    const rw = rt.width + 44;
-    pillBg.roundRect(-rw / 2, -26, rw, 52, 26).fill(vGradient(rs.color, rs.dark)).stroke({ width: 4, color: Color.outline, alignment: 1 });
-    pill.addChild(pillBg, rt);
-    pill.position.set(W / 2 - 110, 100);
-    const cls = unitClass(this.unit);
-    const clsRow = new Container();
-    const clsIc = drawIcon(classIcon(cls), 46);
-    const clsT = uiLabel(t(`class.${cls}.name`), { size: 28, strokeWidth: 5, shadow: false, anchorX: 0 });
-    clsIc.position.set(0, 0);
-    clsT.position.set(34, 0);
-    clsRow.addChild(clsIc, clsT);
-    clsRow.position.set(W / 2 + 40, 100);
-
-    this.levelText.position.set(W / 2, CAT_Y + 255);
-    const flavour = uiLabel(t(unitDef(this.unit).descKey), { size: 28, color: Color.textDim, strokeWidth: 4, shadow: false, wrap: W - 60, lineHeight: 36 });
-    flavour.position.set(W / 2, CAT_Y + 345);
-    c.addChild(name, pill, clsRow, this.levelText, flavour);
-
-    let y = HERO_H;
-    // Stats.
-    const statsPanel = this.panel(W, 96 + STAT_KEYS.length * 74 + 14, t('cats.unit.stats'), y);
-    STAT_KEYS.forEach((key, i) => {
-      const ry = 90 + i * 74 + 37;
-      const label = uiLabel(t(`cats.stat.${key}`), { size: 28, strokeWidth: 4, shadow: false, anchorX: 0 });
-      label.position.set(28, ry);
-      const now = uiLabel('', { size: 30, strokeWidth: 5, shadow: false, anchorX: 1 });
-      now.position.set(W - 330, ry);
-      const arrow = drawIcon('arrow_up', 30, Color.textDim);
-      arrow.rotation = Math.PI / 2;
-      arrow.position.set(W - 292, ry);
-      const next = uiLabel('', { size: 30, strokeWidth: 5, shadow: false, anchorX: 1 });
-      next.position.set(W - 190, ry);
-      const delta = uiLabel('', { size: 26, color: Color.success, strokeWidth: 4, shadow: false, anchorX: 1 });
-      delta.position.set(W - 32, ry);
-      statsPanel.content.addChild(label, now, arrow, next, delta);
-      this.statRows.push({ key, label, now, arrow, next, delta });
-    });
-    y += statsPanel.panelH + 22;
-
-    // Skill.
-    const skillText = uiLabel(unitDef(this.unit).skillText(), { size: 28, strokeWidth: 4, shadow: false, anchorX: 0, anchorY: 0, wrap: W - 56, lineHeight: 38 });
-    const skillH = 84 + skillText.height + 26;
-    const skillPanel = this.panel(W, skillH, t('cats.unit.skill'), y);
-    skillText.position.set(28, 84);
-    skillPanel.content.addChild(skillText);
-    y += skillH + 22;
-
-    // Perks.
-    const rows = perkRows(this.unit, 1);
-    const perkPanel = this.panel(W, 90 + rows.length * 96 + 14, t('cats.unit.perks'), y);
-    rows.forEach((r, i) => {
-      const row = new Container();
-      row.position.set(0, 90 + i * 96);
-      const plate = new Graphics();
-      const chip = uiLabel(t('cats.unit.perkAt', { n: r.level }), { size: 26, strokeWidth: 5 });
-      chip.position.set(80, 44);
-      const icon = drawIcon('check', 40, Color.success);
-      icon.position.set(W - 56, 44);
-      const lock = drawIcon('lock', 40);
-      lock.position.set(W - 56, 44);
-      const text = uiLabel(r.text, { size: 28, strokeWidth: 4, shadow: false, anchorX: 0, wrap: W - 260, lineHeight: 34 });
-      text.position.set(150, 44);
-      row.addChild(plate, chip, text, icon, lock);
-      perkPanel.content.addChild(row);
-      this.perkViews.push({ level: r.level, icon, lock, chip, text, plate, row });
-    });
-    y += perkPanel.panelH + 22;
-
-    // Card progress or the guardian note.
-    if (this.guardian) {
-      const note = uiLabel(t('cats.unit.guardianNote', { unit: t(`unit.${this.base}.name`) }), {
-        size: 26, color: Color.textDim, strokeWidth: 4, shadow: false, anchorX: 0, anchorY: 0, wrap: W - 56, lineHeight: 34,
-      });
-      const h = 36 + note.height + 36;
-      const p = this.panel(W, h, '', y);
-      note.position.set(28, 36);
-      p.content.addChild(note);
-      this.cardBar = null;
-      this.cardLine = null;
-      this.wildLine = null;
-    } else {
-      const p = this.panel(W, 90 + 48 + 18 + 36 + 34 + 24, t('cats.unit.cards'), y);
-      this.cardBar = new ProgressBar({ width: W - 56, height: 48, color: 'blue', label: '' });
-      this.cardBar.position.set(W / 2, 90 + 24);
-      this.cardLine = uiLabel('', { size: 26, strokeWidth: 4, shadow: false, anchorX: 0, anchorY: 0, wrap: W - 56, lineHeight: 32 });
-      this.cardLine.position.set(28, 90 + 48 + 18);
-      this.wildLine = uiLabel('', { size: 24, color: Color.textDim, strokeWidth: 4, shadow: false, anchorX: 0, anchorY: 0, wrap: W - 56, lineHeight: 30 });
-      this.wildLine.position.set(28, 90 + 48 + 60);
-      p.content.addChild(this.cardBar, this.cardLine, this.wildLine);
-    }
+    y += this.linePage(W, y) + 6;
+    y += this.statsPage(W, y) + 6;
+    y += this.skillPage(W, y) + 6;
+    y += this.perksPage(W, y) + 6;
+    this.cardsPage(W, y);
+    c.addChild(this.fxHost);
     this.scaffold.refresh();
   }
 
-  private panel(W: number, h: number, title: string, y: number): Panel {
-    const p = new Panel({ width: W, height: h, variant: 'inset' });
-    p.position.set(W / 2, y + h / 2);
-    if (title) {
-      const hd = uiLabel(title, { size: 34, strokeWidth: 6, anchorX: 0, color: Color.primary });
-      hd.position.set(28, 44);
-      p.content.addChild(hd);
+  private place(page: PaperPage, y: number): number {
+    page.view.position.set(0, y);
+    this.scaffold.content.addChild(page.view);
+    return page.height;
+  }
+
+  /** The five cats of this class with this one marked, and what two of this cat become, in words. */
+  private linePage(W: number, y: number): number {
+    const sentence = lineSentence(this.unit);
+    const text = t(sentence.key, { a: t(`unit.${sentence.a}.name`), b: t(`unit.${sentence.b}.name`) });
+    const line = uiLabel(text, { size: 28, wrap: W - 64, lineHeight: 36, anchorX: 0, anchorY: 0, align: 'left' });
+    const row = new LineRow({ classId: unitClass(this.unit), width: W - 36, mode: 'mini', onTap: (u) => this.setUnit(u) });
+    row.frames.get(this.unit)?.setMarked(true);
+    const page = paperPage(W, row.rowHeight + 20 + line.height + 6, t('cats.unit.line'), 'info');
+    row.position.set(18, PAGE_TOP + 14);
+    line.position.set(30, PAGE_TOP + 14 + row.rowHeight + 20);
+    page.content.addChild(row, line);
+    return this.place(page, y);
+  }
+
+  private statsPage(W: number, y: number): number {
+    const page = paperPage(W, STAT_KEYS.length * STAT_ROW + 8, t('cats.unit.stats'), 'primary');
+    const g = new Graphics();
+    STAT_KEYS.forEach((key, i) => {
+      const ry = PAGE_TOP + 4 + i * STAT_ROW + STAT_ROW / 2;
+      if (i > 0) drawDashedLine(g, 24, ry - STAT_ROW / 2, W - 24, ry - STAT_ROW / 2, { color: Color.kraftDark, alpha: 0.45, width: 2.5, dash: 10, gap: 8 });
+      const label = uiLabel(t(`cats.stat.${key}`), { size: 28, anchorX: 0 });
+      label.position.set(28, ry);
+      const now = uiLabel('', { size: 30, anchorX: 1 });
+      now.position.set(W - 332, ry);
+      const arrow = drawIcon('arrow_up', 30, Color.inkSoft);
+      arrow.rotation = Math.PI / 2;
+      arrow.position.set(W - 296, ry);
+      const next = uiLabel('', { size: 30, anchorX: 1 });
+      next.position.set(W - 204, ry);
+      const good = deltaPill(Color.leaf, Color.leafDark);
+      const bad = deltaPill(Color.berry, Color.berryDark);
+      good.position.set(W - 88, ry);
+      bad.position.set(W - 88, ry);
+      const delta = uiLabel('', { size: 26, color: Color.inkDeep });
+      delta.position.set(W - 88, ry);
+      page.content.addChild(label, now, arrow, next, good, bad, delta);
+      this.statRows.push({ key, now, arrow, next, good, bad, delta });
+    });
+    cacheStatic(g);
+    page.content.addChildAt(g, 0);
+    return this.place(page, y);
+  }
+
+  private skillPage(W: number, y: number): number {
+    const text = uiLabel(unitDef(this.unit).skillText(), { size: 28, wrap: W - 64, lineHeight: 38, anchorX: 0, anchorY: 0, align: 'left' });
+    const page = paperPage(W, text.height + 14, t('cats.unit.skill'), 'mustard');
+    text.position.set(30, PAGE_TOP + 8);
+    page.content.addChild(text);
+    return this.place(page, y);
+  }
+
+  private perksPage(W: number, y: number): number {
+    const rows = perkRows(this.unit, 1);
+    const page = paperPage(W, rows.length * PERK_ROW + 6, t('cats.unit.perks'), 'success');
+    rows.forEach((r, i) => {
+      const row = new Container();
+      row.position.set(0, PAGE_TOP + 4 + i * PERK_ROW);
+      const strip = new Graphics();
+      const chip = uiLabel(t('cats.unit.perkAt', { n: r.level }), { size: 28, anchorX: 0 });
+      chip.position.set(94, PERK_ROW / 2);
+      const check = new Container();
+      const box = new Graphics();
+      drawPaperFace(box, -22, -22, { w: 44, h: 44, radius: 10, fill: Color.paperLight, edge: Color.kraftDark, edgeAlpha: 0.9, grain: false });
+      cacheStatic(box);
+      const tick = drawIcon('check', 38);
+      check.addChild(box, tick);
+      check.position.set(54, PERK_ROW / 2);
+      const text = uiLabel(r.text, { size: 28, anchorX: 0, wrap: W - 270, lineHeight: 34, align: 'left' });
+      text.position.set(192, PERK_ROW / 2);
+      row.addChild(strip, check, chip, text);
+      page.content.addChild(row);
+      this.perkViews.push({ level: r.level, row, tick, strip, chip, text });
+    });
+    return this.place(page, y);
+  }
+
+  /** Card progress, or for a guardian the note that it follows its king. */
+  private cardsPage(W: number, y: number): void {
+    this.cardBar = null;
+    this.cardLine = null;
+    this.wildLine = null;
+    if (this.guardian) {
+      const note = uiLabel(t('cats.unit.guardianNote', { unit: t(`unit.${this.base}.name`) }), { size: 26, color: Color.inkSoft, wrap: W - 64, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left' });
+      const page = paperPage(W, note.height + 10, t('cats.unit.cards'), 'danger');
+      note.position.set(30, PAGE_TOP + 6);
+      page.content.addChild(note);
+      this.place(page, y);
+      return;
     }
-    this.scaffold.content.addChild(p);
-    return p;
+    const page = paperPage(W, 48 + 14 + 34 + 30 + 14, t('cats.unit.cards'), 'danger');
+    this.cardBar = new ProgressBar({ width: W - 56, height: 48, color: 'blue', label: '' });
+    this.cardBar.position.set(W / 2, PAGE_TOP + 28);
+    this.cardLine = uiLabel('', { size: 26, anchorX: 0, anchorY: 0, wrap: W - 64, lineHeight: 32, align: 'left' });
+    this.cardLine.position.set(30, PAGE_TOP + 48 + 20);
+    this.wildLine = uiLabel('', { size: 24, color: Color.inkSoft, anchorX: 0, anchorY: 0, wrap: W - 64, lineHeight: 30, align: 'left' });
+    this.wildLine.position.set(30, PAGE_TOP + 48 + 56);
+    page.content.addChild(this.cardBar, this.cardLine, this.wildLine);
+    this.place(page, y);
   }
 
   private view(): UnitView {
@@ -271,20 +253,19 @@ class UnitScreen {
     const v = this.view();
     const level = v.level;
     this.levelNow = level;
-    this.levelText.text = t('cats.lv', { n: level });
+    this.hero?.setLevel(level);
     const now = unitStatsAt(this.unit, level);
     const next = unitStatsAt(this.unit, Math.min(MAX_LEVEL, level + 1));
     this.setStats(now, next, v.quote.maxed);
+    const W = this.scaffold.contentWidth;
     perkRows(this.unit, level).forEach((r, i) => {
       const pv = this.perkViews[i];
       if (!pv) return;
-      pv.icon.visible = r.unlocked;
-      pv.lock.visible = !r.unlocked;
-      const dim = r.unlocked ? 1 : 0.5;
-      pv.text.alpha = dim;
-      pv.chip.alpha = dim;
-      pv.plate.clear();
-      if (r.unlocked) pv.plate.roundRect(14, 6, this.scaffold.contentWidth - 28, 76, 18).fill({ color: Color.success, alpha: 0.16 });
+      pv.tick.visible = r.unlocked;
+      pv.text.alpha = r.unlocked ? 1 : 0.6;
+      pv.chip.alpha = r.unlocked ? 1 : 0.6;
+      pv.strip.clear();
+      if (r.unlocked) drawPaperFace(pv.strip, 16, 6, { w: W - 32, h: PERK_ROW - 12, radius: 18, fill: Color.paperDim, edge: Color.leaf, edgeAlpha: 0.7, grain: false });
     });
     this.refreshAction(v);
   }
@@ -292,16 +273,16 @@ class UnitScreen {
   private setStats(now: StatBlock, next: StatBlock, maxed: boolean): void {
     for (const r of this.statRows) {
       r.now.text = statLabel(r.key, now[r.key]);
-      const d = next[r.key] - now[r.key];
-      const show = !maxed && deltaText(r.key, now[r.key], next[r.key]) !== '';
+      const text = maxed ? '' : deltaText(r.key, now[r.key], next[r.key]);
+      const show = text !== '';
+      const good = isImprovement(r.key, next[r.key] - now[r.key]);
       r.arrow.visible = show;
       r.next.visible = show;
+      r.good.visible = show && good;
+      r.bad.visible = show && !good;
       r.delta.visible = show;
       r.next.text = statLabel(r.key, next[r.key]);
-      r.delta.text = show ? deltaText(r.key, now[r.key], next[r.key]) : '';
-      const good = isImprovement(r.key, d);
-      r.delta.tint = good ? 0xffffff : Color.danger;
-      r.next.tint = 0xffffff;
+      r.delta.text = text;
     }
   }
 
@@ -389,22 +370,19 @@ class UnitScreen {
     });
   }
 
+  /** Paper confetti, a stamp on the sheet and a number roll; the sheet scrolls into view first. */
   private celebrate(fromLevel: number, from: StatBlock): void {
     const level = this.levelNow;
-    const rarity = unitRarity(this.unit);
-    const rs = Rarity[rarity];
     const W = this.scaffold.contentWidth;
+    const hero = this.hero;
     const perkUnlocked = perkRows(this.unit, level).some((r) => r.level === level);
     audio.play('upgrade');
     if (perkUnlocked) audio.stinger('level_up');
     haptic(perkUnlocked ? 'success' : 'medium');
 
-    this.fx.rays(W / 2, CAT_Y, { color: rs.glow, radius: 620, speed: 1.4, alpha: 0.9, count: 14, duration: 0.9, parent: this.raysLayer });
-    this.fx.levelUp(W / 2, CAT_Y + 40);
-    if (!motion.reduced) {
-      punch(this.bag, this.levelText, 0.35, 0.3);
-      if (this.cat) punch(this.bag, this.cat, 0.06, 0.3, this.cat.scale.x);
-    }
+    this.scaffold.scroller?.scrollToTop(true);
+    hero?.celebrate();
+    this.fx.confettiRain({ count: 70, x: W / 2, y: HERO_TOP + 40, width: W - 80 });
 
     const to = unitStatsAt(this.unit, level);
     const next = unitStatsAt(this.unit, Math.min(MAX_LEVEL, level + 1));
@@ -413,28 +391,27 @@ class UnitScreen {
       duration: motion.reduced ? 0.01 : 0.55,
       ease: Ease.cubicOut,
       onUpdate: (k) => {
-        this.levelText.text = t('cats.lv', { n: Math.round(countUpValue(fromLevel, level, k)) });
+        hero?.setLevel(Math.round(countUpValue(fromLevel, level, k)));
         for (const r of this.statRows) r.now.text = statLabel(r.key, lerp(from[r.key], to[r.key], k));
       },
       onComplete: () => this.setStats(to, next, maxed),
     });
 
     const pv = this.perkViews.find((p) => p.level === level);
-    if (pv && !motion.reduced) popIn(this.bag, pv.row, { from: 0.9, duration: 0.35, overshoot: 2.6 });
+    if (pv && !motion.reduced) popIn(this.bag, pv.tick, { from: 0.4, duration: 0.4, overshoot: 3 });
 
-    const banner = uiLabel(t('cats.leveled', { unit: t(`unit.${this.unit}.name`), level }), { size: 52, strokeWidth: 8, color: Color.primary });
-    fitLabel(banner, W - 40, 52);
-    banner.position.set(W / 2, CAT_Y - 40);
-    this.scaffold.content.addChild(banner);
+    const stamp = stampMark(t('cats.stamp'), { size: 48, maxWidth: W - 120, tilt: -0.14 });
+    stamp.position.set(W / 2 + 70, HERO_TOP + 138);
+    this.scaffold.content.addChild(stamp);
+    stampIn(this.bag, stamp, 0.1, () => game.shake(0.12));
     this.bag.run({
-      duration: motion.reduced ? 0.4 : 1.1,
-      ease: Ease.cubicOut,
+      duration: motion.reduced ? 0.4 : 0.35,
+      delay: motion.reduced ? 0.4 : 1.3,
+      ease: Ease.linear,
       onUpdate: (k) => {
-        banner.y = CAT_Y - 40 - 90 * k;
-        banner.alpha = k < 0.7 ? 1 : (1 - k) / 0.3;
-        banner.scale.set(1 + 0.25 * Math.sin(Math.min(1, k * 3) * Math.PI / 2));
+        stamp.alpha = 0.94 * (1 - k);
       },
-      onComplete: () => banner.destroy(),
+      onComplete: () => stamp.destroy({ children: true }),
     });
   }
 
@@ -449,7 +426,6 @@ class UnitScreen {
     this.closing = true;
     this.offProfile();
     this.offUpdate();
-    this.rays?.stop();
     this.bag.killAll();
     this.fx.destroy();
     this.scaffold.destroy({ children: true });

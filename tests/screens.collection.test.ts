@@ -1,9 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { setLang, t } from '@/core/i18n';
 import { UNIT_IDS } from '@/game/api';
+import { mergeResultOf } from '@/game/data/roster';
 import { unitSpec } from '@/game/data/units';
 import { createTestProfile } from '@/meta/testing';
 import { BASE_UNITS } from '@/meta/types';
-import { CLASS_GROUPS, cardProgress, isUpgradeReady, upgradeReadyCount, visibleGroups } from '../src/screens/cats/collection';
+import '@/meta/strings';
+import '../src/screens/cats/strings';
+import { CLASS_GROUPS, cardProgress, FRAME_W, isUpgradeReady, lineMetrics, lineOf, lineSentence, stepFrom, upgradeReadyCount, visibleGroups } from '../src/screens/cats/collection';
 import { deltaText, isImprovement, isUnitId, levelSource, perkRows, statText, unitStatsAt } from '../src/screens/cats/unitStats';
 
 describe('collection groups', () => {
@@ -87,5 +91,48 @@ describe('unit stats', () => {
     expect(isUnitId('w_tiger')).toBe(true);
     expect(isUnitId('nope')).toBe(false);
     expect(BASE_UNITS).toHaveLength(16);
+  });
+});
+
+describe('class lines', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('chains merge, merge, merge, awaken from the kitten to the guardian of every class', () => {
+    for (const g of CLASS_GROUPS) {
+      const line = lineOf(g.classId);
+      expect(line).toHaveLength(5);
+      const steps = line.slice(0, 4).map((id) => stepFrom(id));
+      expect(steps.map((s) => s?.kind)).toEqual(['merge', 'merge', 'merge', 'awaken']);
+      steps.forEach((s, i) => expect(s?.to).toBe(line[i + 1]));
+      expect(stepFrom(line[4] as (typeof line)[number])).toBeNull();
+      for (const id of line.slice(0, 3)) expect(stepFrom(id)?.to).toBe(mergeResultOf(id));
+    }
+  });
+
+  it('says in plain words what a cat becomes, with the right Korean particles', () => {
+    setLang('ko');
+    const say = (id: Parameters<typeof lineSentence>[0]) => {
+      const s = lineSentence(id);
+      return t(s.key, { a: t(`unit.${s.a}.name`), b: t(`unit.${s.b}.name`) });
+    };
+    expect(say('w_sword')).toBe('검사냥 둘을 합치면 바이킹냥이 돼요.');
+    expect(say('w_samurai')).toBe('사무라이냥은 각성하면 호랑이 장군이 돼요.');
+    expect(say('w_tiger')).toBe('사무라이냥을 각성하면 호랑이 장군이 돼요.');
+    expect(say('r_gunner')).toBe('총잡이냥은 각성하면 별빛 사수가 돼요.');
+    vi.stubGlobal('document', { documentElement: {} });
+    setLang('en');
+    const s = lineSentence('m_snow');
+    expect(t(s.key, { a: t(`unit.${s.a}.name`), b: t(`unit.${s.b}.name`) })).toMatch(/^Two .+ merge into .+[.]$/);
+    setLang('ko');
+  });
+
+  it('fits five photo frames and four arrow tags in the width of a class page', () => {
+    for (const width of [660, 672, 696]) {
+      const m = lineMetrics(width);
+      expect(m.plateW).toBeLessThanOrEqual(FRAME_W);
+      expect(m.plateW).toBeGreaterThanOrEqual(88);
+      expect(m.gap).toBeGreaterThanOrEqual(24);
+      expect(m.plateW * 5 + m.gap * 4).toBeLessThanOrEqual(width + 0.001);
+    }
   });
 });

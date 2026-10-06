@@ -2,11 +2,14 @@
 import { Container } from 'pixi.js';
 import { fmt } from '@/core/format';
 import type { ChestKind } from '@/meta/types';
-import { Button, Color, drawIcon, Panel, uiLabel, type ButtonStyleId, type IconName, type PanelVariant } from '@/ui';
+import { Button, Color, paperSeed, paperShape, type ButtonStyleId, type IconName, type TapeName, type uiLabel } from '@/ui';
+import { PAGE_TOP, paperPage } from './paperBits';
 import type { ShopSectionId } from './shopLogic';
 
 export const SIDE = 20;
 export const GAP = 18;
+/** Inner padding of a page, and the width left for its content. */
+export const PAD = 16;
 
 /** Everything a block may ask the tab to do. Each action reports its own feedback (toast, sound, reveal). */
 export interface ShopActions {
@@ -50,26 +53,35 @@ export interface Block {
   build(root: Container, env: BlockEnv): BlockBuild;
 }
 
-/** A panel placed by its top-left corner; returns the content container (top-left origin). */
-export function card(root: Container, x: number, y: number, w: number, h: number, variant: PanelVariant = 'default'): Container {
-  const p = new Panel({ width: w, height: h, variant });
-  p.position.set(x + w / 2, y + h / 2);
-  root.addChild(p);
-  return p.content;
+export interface PageOpts {
+  title: string;
+  ribbon: ButtonStyleId;
+  tape?: TapeName;
 }
 
-/** Section title row: icon, big title, an optional smaller line under it. Returns its height. */
-export function sectionHeader(root: Container, y: number, icon: IconName, title: string, sub?: string, wrap = 600): number {
-  const ic = drawIcon(icon, 54);
-  ic.position.set(SIDE + 30, y + 36);
-  const tt = uiLabel(title, { size: 44, strokeWidth: 7, anchorX: 0 });
-  tt.position.set(SIDE + 74, y + 34);
-  root.addChild(ic, tt);
-  if (!sub) return 84;
-  const s = uiLabel(sub, { size: 26, color: Color.textDim, strokeWidth: 4, shadow: false, anchorX: 0, anchorY: 0, wrap, lineHeight: 32 });
-  s.position.set(SIDE + 74, y + 66);
-  root.addChild(s);
-  return 66 + s.height + 22;
+/**
+ * Wrap content in a cream page with its title on a label across the top edge and add it to `root` at `y`.
+ * `inner` is laid out in the page's own coordinates (x from 0 to `w`, y from 0 at the first free line below the
+ * label); `innerH` is the height it used. Returns the height the page takes in the stack.
+ */
+export function mountPage(root: Container, y: number, w: number, inner: Container, innerH: number, o: PageOpts): number {
+  const page = paperPage(w, innerH, o.title, o.ribbon, o.tape);
+  inner.position.set(0, PAGE_TOP);
+  page.content.addChild(inner);
+  page.view.position.set(SIDE, y);
+  root.addChild(page.view);
+  return page.height;
+}
+
+/** A card lying on a page: ivory paper with its own flat shadow. Returns it positioned by its top-left corner; add content to it. */
+export function subCard(parent: Container, x: number, y: number, w: number, h: number, fill: number = Color.paperLight): Container {
+  const c = new Container();
+  const piece = paperShape({ w, h, radius: 22, fill, edge: Color.kraftDark, edgeAlpha: 0.55, shadow: 4, grain: false, seed: paperSeed() });
+  piece.position.set(w / 2, h / 2);
+  c.addChild(piece);
+  c.position.set(x, y);
+  parent.addChild(c);
+  return c;
 }
 
 export interface PriceOpts {

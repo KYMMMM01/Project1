@@ -109,7 +109,7 @@ v1.2 final, chapter 1 stake 0: first legendary median wave 8 / first mythic 16 (
 
 * The random bot cannot reach its target (0%: it never merges, so the merge rule does not touch it).
 * Danger exposure of the synergy bot is 30% of runs (target 40%) and its median surplus is 1.69 (target 1.2-1.6): tightening normal waves further costs more win rate than the tail gives back.
-* The stake curve ends at 33% for stake 5 (target 25%).
+* (2026-10-07: the stake curve now ends at 26% for stake 5 in the standard 300-run report; see the polish section at the end.)
 * Unit perks (levels 4 / 7 / 10) are generic stat bonuses (range, damage, speed, crit, area, targets, duration, effect, reach, aura) rather than bespoke abilities; mythic units have their own three.
 * Bots are simple scripts, not optimisers; every target above is for these bots. The synergy bot never molts to complete a pair (tested, worse) and keeps its focus class by a fixed rule; a human can plan better.
 * The HUD does not show the merge result yet (see REQUESTS).
@@ -122,3 +122,20 @@ v1.2 final, chapter 1 stake 0: first legendary median wave 8 / first mythic 16 (
 * `data/stakes.ts` (balance owner): the stake 4 / 5 rule values (boss time -10 s, elites and bosses +40%) are the lever for the last 8 points of the stake curve (33% at stake 5, target 25%); not changed here.
 * `docs/진행상황.md` still lists `명세_전투규칙.md` and `기획서_GDD.md` as v1.0 (now v1.2 and v1.1); not my file.
 * Dev server: a `[platform] boot failed ... wireLifecycle is not defined` console warning appeared in PAGE_ERRORS once while another engineer was editing `src/platform` (not part of this change). The Vite transform of `board.ts` also went stale once after two simultaneous edits (`touch` fixed it): if the browser shows a `ReferenceError` from a freshly edited file, touch it.
+
+## 2026-10-07 polish: the top stakes
+
+One value changed: `STAKE_STEPS.bossTimeCut` 10 -> 13 (`src/game/data/stakes.ts`). Stake 4 and 5 share it (stakes are cumulative), so it moved both ends of the curve at once; the other lever, `specialHpMult` (stake 5), stayed at 1.4. The rule sentence is generated from the data (`stakeText(4)` = "보스·정예 제한 시간 −13초" / "Boss and elite time limit -13 s", checked in `tests/sim.data.test.ts`); the elite limit at stake 4+ is now 27 / 32 / 37 s and the boss limit 37 / 42 / 47 s. Expectations that moved: `tests/sim.data.test.ts` (10 -> 13), `tests/sim.flow.test.ts` (boss limit 40 -> 37), `docs/명세_전투규칙.md` §13, §17.1.
+
+Synergy bot, chapter 1, level 1, `npm run sim` (`SIM_ONLY=stakes SIM_RUNS=300`, the same seeds as before):
+
+| stake | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| before (300 runs) | 89 | 76 | 67 | 55 | 44 | 33 |
+| after (300 runs) | 89 | 76 | 67 | 55 | 37 | 26 |
+| before (1,500 runs) | - | - | - | - | 42.7 | 28.1 |
+| after (1,500 runs) | - | - | - | - | 36.5 | 23.5 |
+
+Stakes 0-3 are bit-identical (their rules did not change). The first 300 seeds run about 5 points easier at stake 5 than the 1,500-run sample (standard error 2.7 points at 300), so the value was chosen to land in the band at both sizes. Sweep behind it (600 runs, synergy bot, stake 4 / stake 5, specialHpMult 1.4): cut 10 = 42.5 / 30.2, 12 = 39.8 / 28.2, 14 = 35.8 / 25.5, 16 = 32.3 / 21.0. Raising `specialHpMult` instead (1.5 / 1.6 / 1.8 at cut 10 gave 27.5 / 25.0 / 20.3 at stake 5) fixes stake 5 but leaves stake 4 at 42 %, so the boss-time lever alone was the smallest change that fits both bands. Cut 13 against 14 at 1,500 runs: 36.5 / 23.5 against 34.8 / 22.7; 13 keeps stake 4 in the middle of its 35-40 band.
+
+Known gap closed: "the stake curve ends at 33 % (target 25 %)". REQUESTS: `docs/기획서_GDD.md` line 316 and `docs/설계_결정_기록.md` D-17 still say "−10초" (not my files).

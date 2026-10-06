@@ -8,9 +8,10 @@ import { createTestProfile } from '@/meta/testing';
 import type { ChestCard, ChestKind } from '@/meta/types';
 import '@/meta/strings';
 import '../src/screens/shop/strings';
-import { bestRarity, gridLayout, revealSchedule, stacksOf, totalCards } from '../src/screens/shop/revealPlan';
+import { couponPath, cutPoly, lowered } from '../src/screens/shop/cutMath';
+import { bestRarity, flourishOf, gridLayout, revealSchedule, ribbonDots, stacksOf, totalCards } from '../src/screens/shop/revealPlan';
 import {
-  chestAction, cosmeticStatus, flyingCurrencies, isBundleParts, isShopSection, listBundleProducts, rewardDescs, shortBy,
+  chestAction, cosmeticStatus, gemBonusPercent, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, shortBy,
 } from '../src/screens/shop/shopLogic';
 
 const card = (rarity: ChestCard['rarity'], unit: ChestCard['unit']): ChestCard => ({ rarity, unit });
@@ -109,18 +110,82 @@ describe('shop decisions', () => {
   });
 });
 
-describe('reward tiles', () => {
-  it('describes every kind of part and picks currencies to fly', () => {
+describe('reward parts', () => {
+  it('names and counts every kind of part', () => {
     setLang('ko');
     const parts = bundleParts({ gold: 500, gems: 20, tickets: 2, chests: { silver: 1 }, wild: { epic: 4 }, cards: { w_paw: 20 }, cosmetics: ['rug_baby'] });
     expect(isBundleParts(parts)).toBe(true);
-    const tiles = rewardDescs(parts, () => null);
-    expect(tiles).toHaveLength(7);
-    expect(tiles[0]).toMatchObject({ icon: 'coin', amount: 500 });
-    expect(tiles.find((x) => x.icon === 'chest')?.label).toBe('은 상자');
-    expect(tiles.find((x) => x.rarity === 'epic')?.label).toContain('골목대장');
-    expect(flyingCurrencies(parts).map((c) => c.kind)).toEqual(['gold', 'gems', 'tickets']);
+    expect(parts).toHaveLength(7);
+    const of = (kind: string) => parts.find((p) => p.kind === kind) as (typeof parts)[number];
+    expect(partAmount(of('gold'))).toBe(500);
+    expect(partAmount(of('card'))).toBe(20);
+    expect(partAmount(of('cosmetic'))).toBe(1);
+    expect(partLabel(of('chest'))).toBe('은 상자');
+    expect(partLabel(of('wild'))).toContain('골목대장');
+    expect(partLabel(of('card'))).toBe('솜방망이');
     expect(isBundleParts({})).toBe(false);
+  });
+});
+
+describe('gem pack value', () => {
+  it('compares gems per won with the cheapest pack', () => {
+    const bonus = (id: string) => gemBonusPercent(IAP_SPECS.find((s) => s.id === id) as (typeof IAP_SPECS)[number], IAP_SPECS);
+    expect(['gems_260', 'gems_680', 'gems_1450', 'gems_4600'].map(bonus)).toEqual([0, 5, 12, 18]);
+  });
+});
+
+describe('chest reveal plan', () => {
+  it('tells the best rarity by a count of dots as well as by colour', () => {
+    expect((['common', 'rare', 'epic', 'legendary'] as const).map(ribbonDots)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('adds a flourish with every rarity and gives the best card the big finish', () => {
+    const rarities = ['common', 'rare', 'epic', 'legendary'] as const;
+    const marks = (r: (typeof rarities)[number], best: boolean) => {
+      const f = flourishOf(r, best);
+      return [f.tape, f.stamp, f.sun, f.confetti].filter(Boolean).length;
+    };
+    expect(flourishOf('common', false)).toEqual({ dust: true, tape: false, stamp: false, sun: false, confetti: false });
+    expect(rarities.map((r) => marks(r, false))).toEqual([0, 1, 2, 2]);
+    expect(rarities.map((r) => marks(r, true))).toEqual([0, 1, 3, 4]);
+    expect(flourishOf('rare', true).sun).toBe(false);
+  });
+});
+
+describe('cut paper geometry', () => {
+  const has = (pts: number[], px: number, py: number) =>
+    pts.some((v, k) => k % 2 === 0 && Math.abs(v - px) < 0.01 && Math.abs((pts[k + 1] as number) - py) < 0.01);
+
+  it('cuts a die-cut coupon with a notch on each side of the perforation', () => {
+    const w = 640;
+    const h = 250;
+    const across = couponPath(w, h, { axis: 'x', at: 190, r: 14 });
+    const xs = across.filter((_, k) => k % 2 === 0);
+    const ys = across.filter((_, k) => k % 2 === 1);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...xs)).toBeLessThanOrEqual(w);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(h);
+    expect(has(across, 190, 14)).toBe(true);
+    expect(has(across, 190, h - 14)).toBe(true);
+    const down = couponPath(326, 336, { axis: 'y', at: 176, r: 14 });
+    expect(has(down, 14, 176)).toBe(true);
+    expect(has(down, 326 - 14, 176)).toBe(true);
+  });
+
+  it('wobbles an edge by a pixel or so, the same way every time', () => {
+    const rect = [0, 0, 300, 0, 300, 90, 0, 90];
+    const a = cutPoly(rect, 7, 1.2);
+    expect(cutPoly(rect, 7, 1.2)).toEqual(a);
+    expect(cutPoly(rect, 8, 1.2)).not.toEqual(a);
+    expect(a.length).toBeGreaterThan(rect.length);
+    for (let i = 0; i < a.length; i += 2) {
+      const x = a[i] as number;
+      const y = a[i + 1] as number;
+      const off = Math.min(Math.abs(y), Math.abs(y - 90), Math.abs(x), Math.abs(x - 300));
+      expect(off).toBeLessThanOrEqual(1.2001);
+    }
+    expect(lowered(rect, 5)).toEqual([0, 5, 300, 5, 300, 95, 0, 95]);
   });
 });
 

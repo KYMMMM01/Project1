@@ -1,4 +1,4 @@
-/** Settings as a full screen: sound, screen, game, and the player's own data (backup code, purchases, reset). */
+/** Settings as a full screen of paper sheets: sound, screen, game, my records (the Meow Code, purchases), and a note about erasing everything. */
 import { Container, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
@@ -6,31 +6,29 @@ import { getLang, i18nEvents, t, type Lang } from '@/core/i18n';
 import type { NumbersMode } from '@/fx';
 import { profile } from '@/meta';
 import { iap } from '@/platform';
+import { Button, Color, fitLabel, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, uiLabel } from '@/ui';
 import { currentSettings, ensureSettings, updateSettings } from '@/view/hud/settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '@/view/hud/settingsMath';
-import { Button } from '@/ui/Button';
-import { popups } from '@/ui/Popup';
-import { ScreenScaffold } from '@/ui/ScreenScaffold';
-import { SegmentTabs } from '@/ui/TabBar';
-import { Slider, Toggle } from '@/ui/controls';
-import { fitLabel, uiLabel } from '@/ui/text';
-import { Color } from '@/ui/theme';
-import { toast } from '@/ui/Toast';
 import { CodeExportPopup, CodeImportPopup } from './backupPopups';
-import { sharedPanel } from './kit/widgets';
+import { paperSheet } from './kit/sheets';
 import { routinePrefs, setQuality } from './prefs';
 import { resetProgress } from './resetProgress';
 import { QUALITIES, type Quality } from './settingsModel';
+import { formSheet, LABEL_OVERHANG, type FormRow } from './settingsForm';
 import { GAME_VERSION } from './strings';
 
 const ROW_H = 104;
 const SEG_H = 80;
-const TALL_H = 176;
 const SIDE = 28;
-const GAP = 16;
+const GAP = 20;
 
 let current: ScreenScaffold | null = null;
 let dispose: (() => void) | null = null;
+
+/** QA: scroll the open settings screen to an offset without inertia. */
+export function scrollSettingsTo(y: number): void {
+  current?.scroller?.scrollTo(y, false);
+}
 
 /** Close the screen at once (the home scene is going away). */
 export function closeSettingsScreen(): void {
@@ -48,32 +46,18 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   let closed = false;
   let restoring = false;
 
-  const build = (): void => {
-    for (const c of scaffold.content.removeChildren()) c.destroy({ children: true });
-    scaffold.setTitle(t('rt.sys.settings'));
-    const s = currentSettings();
-    const w = scaffold.contentWidth;
-    let y = 4;
+  const labelOf = (row: Container, text: string, w: number, y: number, room: number): Text => {
+    const label = uiLabel(text, { size: 32, anchorX: 0, align: 'left' });
+    fitLabel(label, w - SIDE * 2 - room, 32);
+    label.position.set(SIDE, y);
+    row.addChild(label);
+    return label;
+  };
 
-    const plate = (h: number, label: string): Container => {
-      const row = new Container();
-      row.position.set(0, y);
-      const text = uiLabel(label, { size: 32, anchorX: 0, align: 'left', strokeWidth: 5 });
-      text.position.set(SIDE, h > ROW_H ? 42 : h / 2);
-      fitLabel(text, w - SIDE * 2 - (h > ROW_H ? 0 : 380), 32);
-      row.addChild(sharedPanel(w, h, 'default', 28), text);
-      scaffold.content.addChild(row);
-      y += h + GAP;
-      return row;
-    };
-    const section = (label: string): void => {
-      const text = uiLabel(label, { size: 28, color: Color.textDim, anchorX: 0, strokeWidth: 5, shadow: false });
-      text.position.set(8, y + 22);
-      scaffold.content.addChild(text);
-      y += 56;
-    };
-    const slider = (label: string, value: number, set: (v: number) => void, tick: boolean): void => {
-      const row = plate(ROW_H, label);
+  const sliderRow = (label: string, value: number, set: (v: number) => void, tick: boolean): FormRow => ({
+    height: ROW_H,
+    draw: (row, w) => {
+      labelOf(row, label, w, ROW_H / 2, 380);
       const sl = new Slider({
         width: 360,
         value,
@@ -85,109 +69,123 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
       });
       sl.position.set(w - SIDE - 180, ROW_H / 2);
       row.addChild(sl);
-    };
-    const toggle = (label: string, value: boolean, set: (v: boolean) => void): void => {
-      const row = plate(ROW_H, label);
+    },
+  });
+
+  const toggleRow = (label: string, value: boolean, set: (v: boolean) => void): FormRow => ({
+    height: ROW_H,
+    draw: (row, w) => {
+      labelOf(row, label, w, ROW_H / 2, 160);
       const tg = new Toggle({ value, onChange: set });
       tg.position.set(w - SIDE - 58, ROW_H / 2);
       row.addChild(tg);
+    },
+  });
+
+  const segmentRow = (label: string, options: readonly { id: string; label: string }[], selected: string, pick: (id: string) => void, hint?: string): FormRow => {
+    const height = hint ? 204 : 170;
+    return {
+      height,
+      draw: (row, w) => {
+        labelOf(row, label, w, 32, 0);
+        if (hint) {
+          const hintText = uiLabel(hint, { size: 24, color: Color.inkSoft, anchorX: 0 });
+          fitLabel(hintText, w - SIDE * 2, 24);
+          hintText.position.set(SIDE, 72);
+          row.addChild(hintText);
+        }
+        const seg = new SegmentTabs({ width: w - SIDE * 2, height: SEG_H, selected, tabs: options.map((o) => ({ id: o.id, label: o.label })) });
+        seg.position.set(w / 2, height - 22 - SEG_H / 2);
+        seg.onSelect(pick);
+        row.addChild(seg);
+      },
     };
-    const segments = (label: string, options: readonly { id: string; label: string }[], selected: string, pick: (id: string) => void, hint?: string): void => {
-      const h = hint ? TALL_H + 34 : TALL_H;
-      const row = plate(h, label);
-      if (hint) {
-        const hintText: Text = uiLabel(hint, { size: 24, color: Color.textDim, anchorX: 0, strokeWidth: 4, shadow: false });
-        fitLabel(hintText, w - SIDE * 2, 24);
-        hintText.position.set(SIDE, 82);
-        row.addChild(hintText);
-      }
-      const seg = new SegmentTabs({ width: w - SIDE * 2, height: SEG_H, selected, tabs: options.map((o) => ({ id: o.id, label: o.label })) });
-      seg.position.set(w / 2, h - 56);
-      seg.onSelect(pick);
-      row.addChild(seg);
-    };
-    const button = (label: string, style: 'neutral' | 'danger' | 'info', icon: 'code' | 'shop' | 'warning', onTap: (b: Button) => void, width = w): Button => {
-      const b = new Button({ label, style, icon, width, height: 96, fontSize: 32 });
-      b.onTap(() => onTap(b));
-      return b;
+  };
+
+  const buttonOf = (label: string, style: 'neutral' | 'danger' | 'info', icon: 'code' | 'shop' | 'warning', onTap: (b: Button) => void, width: number): Button => {
+    const b = new Button({ label, style, icon, width, height: 96, fontSize: 32 });
+    b.onTap(() => onTap(b));
+    return b;
+  };
+
+  const build = (): void => {
+    for (const c of scaffold.content.removeChildren()) c.destroy({ children: true });
+    scaffold.setTitle(t('rt.sys.settings'));
+    const s = currentSettings();
+    const w = scaffold.contentWidth;
+    let y = LABEL_OVERHANG;
+    const add = (title: string, rows: readonly FormRow[]): void => {
+      const sheet = formSheet(w, title, rows);
+      sheet.view.position.set(0, y);
+      scaffold.content.addChild(sheet.view);
+      y += sheet.height + GAP + LABEL_OVERHANG;
     };
 
-    section(t('rt.sys.section.sound'));
-    slider(t('rt.sys.music'), s.music, (v) => updateSettings({ music: v }), false);
-    slider(t('rt.sys.sfx'), s.sfx, (v) => updateSettings({ sfx: v }), true);
+    add(t('rt.sys.section.sound'), [sliderRow(t('rt.sys.music'), s.music, (v) => updateSettings({ music: v }), false), sliderRow(t('rt.sys.sfx'), s.sfx, (v) => updateSettings({ sfx: v }), true)]);
 
-    section(t('rt.sys.section.screen'));
-    segments(
-      t('rt.sys.shake'),
-      SHAKE_MODES.map((m) => ({ id: m, label: t(`rt.sys.shake.${m}`) })),
-      s.shake,
-      (id) => updateSettings({ shake: id as ShakeMode }),
-    );
-    toggle(t('rt.sys.flashes'), s.flashes, (v) => updateSettings({ flashes: v }));
     const modes: NumbersMode[] = ['full', 'brief', 'off'];
-    segments(
-      t('rt.sys.numbers'),
-      modes.map((m) => ({ id: m, label: t(`rt.sys.numbers.${m}`) })),
-      s.numbers,
-      (id) => updateSettings({ numbers: id as NumbersMode }),
-    );
-    segments(
-      t('rt.sys.quality'),
-      QUALITIES.map((q) => ({ id: q, label: t(`rt.sys.quality.${q}`) })),
-      routinePrefs().quality,
-      (id) => setQuality(id as Quality),
-      t('rt.sys.quality.hint'),
-    );
+    add(t('rt.sys.section.screen'), [
+      segmentRow(t('rt.sys.shake'), SHAKE_MODES.map((m) => ({ id: m, label: t(`rt.sys.shake.${m}`) })), s.shake, (id) => updateSettings({ shake: id as ShakeMode })),
+      toggleRow(t('rt.sys.flashes'), s.flashes, (v) => updateSettings({ flashes: v })),
+      segmentRow(t('rt.sys.numbers'), modes.map((m) => ({ id: m, label: t(`rt.sys.numbers.${m}`) })), s.numbers, (id) => updateSettings({ numbers: id as NumbersMode })),
+      segmentRow(t('rt.sys.quality'), QUALITIES.map((q) => ({ id: q, label: t(`rt.sys.quality.${q}`) })), routinePrefs().quality, (id) => setQuality(id as Quality), t('rt.sys.quality.hint')),
+    ]);
 
-    section(t('rt.sys.section.game'));
-    toggle(t('rt.sys.haptics'), s.haptics, (v) => updateSettings({ haptics: v }));
-    segments(
-      t('rt.sys.lang'),
-      [
-        { id: 'ko', label: '한국어' },
-        { id: 'en', label: 'English' },
-      ],
-      getLang(),
+    add(t('rt.sys.section.game'), [
+      toggleRow(t('rt.sys.haptics'), s.haptics, (v) => updateSettings({ haptics: v })),
       // The screen is rebuilt by the i18n listener once the handler that changed the language has returned.
-      (id) => updateSettings({ lang: id as Lang }),
-    );
+      segmentRow(t('rt.sys.lang'), [{ id: 'ko', label: '한국어' }, { id: 'en', label: 'English' }], getLang(), (id) => updateSettings({ lang: id as Lang })),
+    ]);
 
-    section(t('rt.sys.section.data'));
     const bw = (w - SIDE * 2 - GAP) / 2;
-    const codeCard = new Container();
-    codeCard.position.set(0, y);
-    const codeTitle = uiLabel(t('rt.sys.code.title'), { size: 32, anchorX: 0, strokeWidth: 5 });
-    codeTitle.position.set(SIDE, 42);
-    const codeHelp = uiLabel(t('meta.backup.help'), { size: 24, color: Color.textDim, wrap: w - SIDE * 2, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 32, strokeWidth: 4, shadow: false });
-    codeHelp.position.set(SIDE, 78);
-    const codeH = 78 + codeHelp.height + 20 + 100 + 24;
-    codeCard.addChild(sharedPanel(w, codeH, 'default', 28), codeTitle, codeHelp);
-    const exp = button(t('rt.sys.code.export'), 'info', 'code', () => void exportCode(), bw);
-    exp.position.set(SIDE + bw / 2, codeH - 24 - 52);
-    const imp = button(t('rt.sys.code.import'), 'info', 'code', () => void popups.open(new CodeImportPopup(onChanged)), bw);
-    imp.position.set(SIDE + bw + GAP + bw / 2, codeH - 24 - 52);
-    codeCard.addChild(exp, imp);
-    scaffold.content.addChild(codeCard);
-    y += codeH + GAP;
-
+    const help = uiLabel(t('meta.backup.help'), { size: 26, color: Color.inkSoft, wrap: w - SIDE * 2, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 36 });
+    const records: FormRow[] = [
+      {
+        height: 62 + Math.ceil(help.height) + 14,
+        draw: (row) => {
+          labelOf(row, t('rt.sys.code.title'), w, 34, 0);
+          help.position.set(SIDE, 62);
+          row.addChild(help);
+        },
+      },
+      {
+        height: 96 + 40,
+        draw: (row) => {
+          const exp = buttonOf(t('rt.sys.code.export'), 'info', 'code', () => void exportCode(), bw);
+          exp.position.set(SIDE + bw / 2, 68);
+          const imp = buttonOf(t('rt.sys.code.import'), 'info', 'code', () => void popups.open(new CodeImportPopup(onChanged)), bw);
+          imp.position.set(SIDE + bw + GAP + bw / 2, 68);
+          row.addChild(exp, imp);
+        },
+      },
+    ];
     if (iap.isAvailable()) {
-      const restore = button(t('rt.sys.restore'), 'neutral', 'shop', (b) => void restorePurchases(b));
-      restore.position.set(w / 2, y + 52);
-      scaffold.content.addChild(restore);
-      y += 96 + 12 + GAP;
+      records.push({
+        height: 96 + 40,
+        draw: (row) => {
+          const restore = buttonOf(t('rt.sys.restore'), 'neutral', 'shop', (b) => void restorePurchases(b), w - SIDE * 2);
+          restore.position.set(w / 2, 68);
+          row.addChild(restore);
+        },
+      });
     }
+    add(t('rt.sys.section.data'), records);
 
-    const resetHint = uiLabel(t('rt.sys.reset.hint'), { size: 24, color: Color.textDim, wrap: w, strokeWidth: 4, shadow: false, lineHeight: 32 });
-    resetHint.position.set(w / 2, y + resetHint.height / 2 + 6);
-    scaffold.content.addChild(resetHint);
-    y += resetHint.height + 16;
-    const reset = button(t('rt.sys.reset'), 'danger', 'warning', () => void resetProgress());
-    reset.position.set(w / 2, y + 52);
-    scaffold.content.addChild(reset);
-    y += 96 + 12 + 24;
+    // The one dangerous action lives on a kraft note of its own, away from the ordinary rows.
+    const note = new Container();
+    const hint = uiLabel(t('rt.sys.reset.hint'), { size: 26, wrap: w - SIDE * 2 - 24, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 36 });
+    const noteH = 40 + Math.ceil(hint.height) + 24 + 96 + 36;
+    note.addChild(paperSheet(w, noteH, { fill: Color.kraft, radius: 26, seed: paperSeed(), dash: 14, dashColor: Color.kraftDark, tape: { name: 'yellow', at: 0.8, pattern: 'gingham' } }));
+    hint.position.set(SIDE + 12, 40);
+    const reset = buttonOf(t('rt.sys.reset'), 'danger', 'warning', () => void resetProgress(), w - SIDE * 2 - 24);
+    reset.position.set(w / 2, noteH - 36 - 48);
+    note.addChild(hint, reset);
+    note.position.set(0, y);
+    scaffold.content.addChild(note);
+    y += noteH + 36;
 
-    const version = uiLabel(t('rt.sys.version', { v: GAME_VERSION }), { size: 24, color: Color.textDim, strokeWidth: 4, shadow: false });
-    version.position.set(w / 2, y + 12);
+    const version = new PaperLabel({ text: t('rt.sys.version', { v: GAME_VERSION }), size: 26, paper: 'kraft', padX: 28, padY: 8 });
+    version.position.set(w / 2, y + 20);
     scaffold.content.addChild(version);
     scaffold.refresh();
   };

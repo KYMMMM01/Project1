@@ -41,6 +41,39 @@ export function stacksOf(result: { cards: readonly ChestCard[]; pity: { unit: Ba
   return out;
 }
 
+/**
+ * Dots on the ribbon across a closed chest: one for a common best card up to four for a legendary one, so the
+ * tier is told by a count as well as by the ribbon's colour.
+ */
+export function ribbonDots(best: ChestRarity): number {
+  return rarityRank(best) + 1;
+}
+
+export interface Flourish {
+  /** A puff of dust under the card. */
+  dust: boolean;
+  /** A strip of tape slapped across the corner. */
+  tape: boolean;
+  /** The rarity's name stamped on the card. */
+  stamp: boolean;
+  /** A flat sunburst behind the card. */
+  sun: boolean;
+  /** Paper confetti raining over the screen. */
+  confetti: boolean;
+}
+
+/** What a card's flip brings with it: every higher rarity keeps the flourishes of the one below and adds one; the best card of a chest gets the big finish. */
+export function flourishOf(rarity: ChestRarity, isBest: boolean): Flourish {
+  const rank = rarityRank(rarity);
+  return {
+    dust: rank === 0,
+    tape: rank >= 1,
+    stamp: rank >= 2,
+    sun: isBest && rank >= 2,
+    confetti: isBest && rank >= 3,
+  };
+}
+
 export function bestRarity(stacks: readonly RevealStack[]): ChestRarity {
   let best: ChestRarity = 'common';
   for (const s of stacks) if (rarityRank(s.rarity) > rarityRank(best)) best = s.rarity;

@@ -4,11 +4,8 @@ import { addStrings } from '@/core/i18n';
 addStrings('ko', {
   'rt.common.claim': '받기',
   'rt.common.claimed': '받았어요',
-  'rt.common.close': '닫기',
   'rt.common.ok': '좋아요',
   'rt.common.later': '나중에',
-  'rt.common.cancel': '취소',
-  'rt.common.locked': '잠겨 있어요',
   'rt.common.odds': '확률 보기',
   'rt.common.reward': '보상',
   'rt.common.resetsIn': '초기화까지 {time}',
@@ -80,7 +77,6 @@ addStrings('ko', {
 
   // calendar
   'rt.sys.cal.title': '출석 달력',
-  'rt.sys.cal.today': '오늘',
   'rt.sys.cal.claim': '오늘 받기',
   'rt.sys.cal.done': '오늘은 받았어요',
   'rt.sys.cal.note': '빠져도 괜찮아요. 접속한 날마다 한 칸씩 나아가요.',
@@ -89,6 +85,7 @@ addStrings('ko', {
 
   // automatic popups
   'rt.sys.comeback.title': '어서 와요!',
+  'rt.sys.comeback.body': '오랜만에 와 줘서 고마워요. 선물 상자를 준비했어요.',
   'rt.sys.comeback.patrol': '순찰 보상을 24시간치까지 모아 뒀어요.',
   'rt.sys.gempass.title': '보석 패스',
   'rt.sys.gempass.body': '오늘의 보석이 기다려요.',
@@ -117,11 +114,8 @@ addStrings('ko', {
 addStrings('en', {
   'rt.common.claim': 'Claim',
   'rt.common.claimed': 'Claimed',
-  'rt.common.close': 'Close',
   'rt.common.ok': 'Nice',
   'rt.common.later': 'Later',
-  'rt.common.cancel': 'Cancel',
-  'rt.common.locked': 'Locked',
   'rt.common.odds': 'See odds',
   'rt.common.reward': 'Reward',
   'rt.common.resetsIn': 'Resets in {time}',
@@ -190,7 +184,6 @@ addStrings('en', {
   'rt.sys.code.back': 'Enter again',
 
   'rt.sys.cal.title': 'Daily calendar',
-  'rt.sys.cal.today': 'Today',
   'rt.sys.cal.claim': 'Claim today',
   'rt.sys.cal.done': 'Claimed today',
   'rt.sys.cal.note': 'Missing a day is fine. Every day you play moves you one box forward.',
@@ -198,6 +191,7 @@ addStrings('en', {
   'rt.sys.cal.progress': 'Day {n}/{max}',
 
   'rt.sys.comeback.title': 'Welcome back!',
+  'rt.sys.comeback.body': 'Thanks for coming back. We saved a chest for you.',
   'rt.sys.comeback.patrol': 'Patrol rewards are saved up for 24 hours.',
   'rt.sys.gempass.title': 'Gem Pass',
   'rt.sys.gempass.body': 'Your gems for today are waiting.',

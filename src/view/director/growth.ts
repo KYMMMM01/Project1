@@ -164,7 +164,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
       'synergy' + e.classId,
       1,
       { title: t('director.synergy', { class: t(classDef(e.classId).nameKey), tier: e.tier }), color, icon: CLASS_ICON[e.classId] },
-      1.1,
+      0.9,
       0.15,
       0.2,
     );
@@ -172,6 +172,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
 
   on('upgrade', (e) => {
     stage.direct(e.kind === 'class' ? 'upgrade' : 'level_up', 0.7);
+    stage.buzz('light');
     if (e.kind === 'summon') {
       fx.levelUp(360, 330, { scale: 0.9 });
       return;
@@ -200,7 +201,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   // The toy's icon flies from the choice card (the HUD owns that flight), so only the caption and the sound live here.
   on('relicGain', (e) => {
     stage.direct('relic_pick', 0.8);
-    banners.push('caption', 'relic', 1, { title: t('director.relic', { name: t(relicDef(e.relic).nameKey) }), color: GOLD }, 1.1, 0.15, 0.2);
+    banners.push('caption', 'relic', 1, { title: t('director.relic', { name: t(relicDef(e.relic).nameKey) }), color: GOLD }, 0.9, 0.15, 0.2);
   });
 
   on('sell', (e) => {
@@ -209,17 +210,20 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     fx.dustPuff(x, y, { scale: 0.9 });
     fx.coinBurst(x, y - 10, { count: 6, scale: 0.8 });
     stage.direct('sell', 0.8);
+    stage.buzz('light');
   });
 
   on('move', (e) => {
     fx.dustPuff(cellCenterX(e.to), cellCenterY(e.to) + 18, { scale: 0.7 });
     stage.play(stage.rules.ui, 'place', 0.5, 1, 0.04);
+    stage.buzz('tap');
   });
 
   on('swap', (e) => {
     fx.dustPuff(cellCenterX(e.a.cell), cellCenterY(e.a.cell) + 18, { scale: 0.6 });
     fx.dustPuff(cellCenterX(e.b.cell), cellCenterY(e.b.cell) + 18, { scale: 0.6 });
     stage.play(stage.rules.ui, 'place', 0.5, 1, 0.04);
+    stage.buzz('tap');
   });
 
   stage.onDestroy(() => {

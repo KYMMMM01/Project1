@@ -1,4 +1,4 @@
-/** The season pass tab: season header, XP bar, and a 30-tier list with a free and a premium reward per tier. */
+/** The season pass tab: a sticker-collection track. A header with the season, the tier and the XP bar, then 30 tiers on two paper lanes. */
 import { Container, Graphics, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { i18nEvents, t } from '@/core/i18n';
@@ -8,30 +8,41 @@ import { featureHint } from '@/meta/features';
 import type { PassView } from '@/meta/routines';
 import type { Bundle, Result } from '@/meta/types';
 import { iap } from '@/platform';
-import { Button } from '@/ui/Button';
-import { drawIcon } from '@/ui/icons';
-import { ProgressBar } from '@/ui/ProgressBar';
-import { popups } from '@/ui/Popup';
-import { cacheStatic, vGradient } from '@/ui/shapes';
-import { ScrollView } from '@/ui/ScrollView';
-import { fitLabel, uiLabel } from '@/ui/text';
-import { Color } from '@/ui/theme';
-import { toast } from '@/ui/Toast';
+import {
+  Button,
+  Color,
+  drawIcon,
+  drawPaintFill,
+  drawPaper,
+  PaperLabel,
+  paperSeed,
+  popups,
+  ProgressBar,
+  ScrollView,
+  toast,
+  uiLabel,
+} from '@/ui';
 import type { ContentArea, Shell, TabScreen } from '../contract';
 import { payout } from '../system/kit/claimFx';
+import { paperConfetti } from '../system/kit/confetti';
 import { NoticePopup } from '../system/kit/noticePopup';
 import { partsOf } from '../system/kit/parts';
-import { bakedPanel, lockedCard } from '../system/kit/widgets';
+import { lockedNote, paperSheet, stickerDisc } from '../system/kit/sheets';
+import { NoteTag } from '../system/kit/tags';
+import { Coupon } from './Coupon';
 import { focusTier, passBadgeCount, PASS_ROW_GAP, PASS_ROW_H, passClaimable, scrollTargetFor, seasonNameKey, xpFill } from './model';
 import { MEDAL_W, PassRowView, type CellTap, type PassCell, type PassTrackId } from './PassRowView';
 import './strings';
 
 const SIDE = 24;
 const HEAD_H = 296;
-const STRIP_H = 52;
-const LIST_TOP = 74;
+/** The lane heads (the "free" label and the premium coupon) sit on this centre line of the header. */
+const LANE_HEAD_Y = 232;
+const COUPON_H = 100;
+const LANES_TOP = 16;
 const REFRESH_EVERY = 20;
 const PRODUCT = 'season_pass';
+const TRACK_W = 22;
 
 export class PassTab implements TabScreen {
   readonly view = new Container();
@@ -39,13 +50,17 @@ export class PassTab implements TabScreen {
   private head: Container | null = null;
   private scroller: ScrollView | null = null;
   private lock: Container | null = null;
-  private line: Graphics | null = null;
+  private track: Graphics | null = null;
+  private trackFill: Graphics | null = null;
+  private trackReach = -1;
+  /** Left edge of the XP bar and the tier label above it, in header space. */
+  private barLeft = 0;
   private rows: PassRowView[] = [];
   private bar: ProgressBar | null = null;
-  private tierText: Text | null = null;
-  private medalText: Text | null = null;
+  private tierLabel: PaperLabel | null = null;
+  private tierNumber: Text | null = null;
   private claimAllBtn: Button | null = null;
-  private buyBtn: Button | null = null;
+  private coupon: Coupon | null = null;
   private signature = '';
   private shown = false;
   private busy = false;
@@ -71,7 +86,7 @@ export class PassTab implements TabScreen {
     return this.area.w - SIDE * 2;
   }
 
-  private cellW(): number {
+  private laneW(): number {
     return (this.listW() - MEDAL_W) / 2;
   }
 
@@ -81,7 +96,7 @@ export class PassTab implements TabScreen {
     this.signature = sig;
     this.teardown();
     if (!profile.featureUnlocked('pass')) {
-      this.lock = lockedCard(this.listW(), featureHint('pass'));
+      this.lock = lockedNote(this.listW(), featureHint('pass'));
       this.view.addChild(this.lock);
       this.layout();
       return;
@@ -90,110 +105,110 @@ export class PassTab implements TabScreen {
     this.buildHead(v);
     const sc = new ScrollView({ width: this.area.w, height: 100, padding: SIDE, paddingBottom: SIDE + 16 });
     this.scroller = sc;
-    this.line = new Graphics();
-    sc.content.addChild(this.line);
-    v.free.forEach((free, i) => {
-      const row = new PassRowView(this.cellW(), free.tier, free, v.premiumRow[i] ?? free, v.premium, (track, kind, cell) =>
-        this.onCell(track, kind, cell, free.tier),
-      );
-      row.position.set(0, LIST_TOP + i * (PASS_ROW_H + PASS_ROW_GAP));
-      sc.content.addChild(row);
-      this.rows.push(row);
-    });
+    this.buildLanes(sc.content, v);
     this.view.addChild(sc, this.head as Container);
     this.layout();
     this.syncAll(false);
     sc.refresh();
   }
 
-  private buildHead(v: PassView): void {
-    const w = this.listW();
-    const head = new Container();
-    head.addChild(bakedPanel(w, HEAD_H, v.premium ? 'gold' : 'default', 34));
-    const name = uiLabel(t(seasonNameKey(v.season)), { size: 36, anchorX: 0, strokeWidth: 6 });
-    name.position.set(32, 40);
-    const clock = drawIcon('clock', 34);
-    const days = uiLabel(v.daysLeft <= 1 ? t('rt.pass.lastDay') : t('rt.pass.daysLeft', { n: v.daysLeft }), { size: 24, color: Color.textDim, anchorX: 1, strokeWidth: 4, shadow: false });
-    days.position.set(w - 32 - 44, 42);
-    fitLabel(days, w - 64 - 44 - name.width - 24, 24);
-    clock.position.set(w - 32 - 17, 42);
-    head.addChild(name, clock, days);
-
-    const medal = new Graphics();
-    medal.circle(0, 4, 48).fill({ color: Color.black, alpha: 0.3 });
-    medal.circle(0, 0, 48).fill(vGradient(0xffe27a, Color.primary)).stroke({ width: 6, color: Color.outline, alignment: 1 });
-    cacheStatic(medal);
-    medal.position.set(32 + 48, 114);
-    this.medalText = uiLabel('', { size: 44, strokeWidth: 6 });
-    this.medalText.position.copyFrom(medal.position);
-    this.tierText = uiLabel('', { size: 30, anchorX: 0, strokeWidth: 5 });
-    this.tierText.position.set(32 + 96 + 22, 94);
-    const barW = w - (32 + 96 + 22) - 32;
-    this.bar = new ProgressBar({ width: barW, height: 42, color: 'gold', value: 0, label: '' });
-    this.bar.position.set(32 + 96 + 22 + barW / 2, 134);
-    head.addChild(medal, this.medalText, this.tierText, this.bar);
-
-    this.claimAllBtn = new Button({ label: t('rt.pass.claimAll'), style: 'success', width: 250, height: 88, fontSize: 34 });
-    this.claimAllBtn.position.set(32 + 125, 214);
-    this.claimAllBtn.onTap(() => this.claimAll());
-    this.claimAllBtn.onDisabledTap(() => toast(t('rt.pass.notYet'), 'info'));
-    head.addChild(this.claimAllBtn);
-
-    if (v.premium) {
-      const tag = new Container();
-      const crown = drawIcon('crown', 52, Color.gold);
-      crown.position.set(-110, 0);
-      const txt = uiLabel(t('rt.pass.owned'), { size: 28, color: Color.gold, strokeWidth: 5 });
-      fitLabel(txt, 250, 28);
-      txt.position.set(20, 2);
-      tag.addChild(crown, txt);
-      tag.position.set(w - 32 - 190, 214);
-      head.addChild(tag);
-    } else if (this.canSell()) {
-      const price = iap.priceText(PRODUCT);
-      const buy = new Button({ label: t('rt.pass.buy'), sublabel: price, icon: 'crown', style: 'purple', width: 340, height: 96, fontSize: 32 });
-      buy.position.set(w - 32 - 170, 214);
-      buy.onTap(() => void this.buy());
-      buy.startPulse({ times: 3 });
-      head.addChild(buy);
-      this.buyBtn = buy;
-      const hint = uiLabel(t('rt.pass.buyHint'), { size: 24, color: Color.textDim, strokeWidth: 4, shadow: false });
-      fitLabel(hint, w - 64, 24);
-      hint.position.set(w / 2, HEAD_H - 20);
-      head.addChild(hint);
-    }
-    this.head = head;
-    this.head.addChild(this.columnStrip());
+  /** Two tall paper lanes with the track between them, then the 30 rows. */
+  private buildLanes(host: Container, v: PassView): void {
+    const lane = this.laneW();
+    const step = PASS_ROW_H + PASS_ROW_GAP;
+    const total = LANES_TOP + v.free.length * step + 4;
+    const seed = paperSeed();
+    const freeLane = paperSheet(lane, total, { fill: Color.paper, radius: 22, torn: ['top', 'bottom'], seed, bake: false });
+    // The premium lane is mustard paper: the cards lie on it like on a gold backing.
+    const premiumLane = paperSheet(lane, total, { fill: Color.mustard, radius: 22, torn: ['top', 'bottom'], seed: seed + 1, bake: false });
+    premiumLane.x = lane + MEDAL_W;
+    host.addChild(freeLane, premiumLane);
+    this.track = new Graphics();
+    this.trackFill = new Graphics();
+    this.trackFill.rotation = Math.PI / 2;
+    host.addChild(this.track, this.trackFill);
+    const first = LANES_TOP + 8 + PASS_ROW_H / 2;
+    const last = first + (v.free.length - 1) * step;
+    const x = lane + MEDAL_W / 2;
+    drawPaper(this.track, x - TRACK_W / 2, first - 40, { w: TRACK_W, h: last - first + 80, kind: 'pill', fill: Color.track, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 2 });
+    this.trackReach = -1;
+    v.free.forEach((free, i) => {
+      const row = new PassRowView(lane, free.tier, free, v.premiumRow[i] ?? free, v.premium, (track, kind, cell) => this.onCell(track, kind, cell, free.tier));
+      row.position.set(0, LANES_TOP + 8 + i * step);
+      host.addChild(row);
+      this.rows.push(row);
+    });
   }
 
-  /** "Free | Tier | Premium" labels above the list. */
-  private columnStrip(): Container {
-    const strip = new Container();
-    const cw = this.cellW();
-    const mk = (text: string, x: number, color: number): void => {
-      const l = uiLabel(text, { size: 28, color, strokeWidth: 5 });
-      fitLabel(l, cw - 20, 28);
-      l.position.set(x, HEAD_H + 8 + STRIP_H / 2);
-      strip.addChild(l);
-    };
-    mk(t('meta.pass.free'), cw / 2, Color.text);
-    mk(t('rt.pass.col.tier'), cw + MEDAL_W / 2, Color.textDim);
-    mk(t('meta.pass.premium'), cw + MEDAL_W + cw / 2, Color.gold);
-    return strip;
+  private buildHead(v: PassView): void {
+    const w = this.listW();
+    const lane = this.laneW();
+    const head = new Container();
+
+    const season = new PaperLabel({ text: t(seasonNameKey(v.season)), size: 34, paper: 'primary', padX: 32, padY: 9, maxWidth: w - 300 });
+    season.position.set(season.uiBox.w / 2, 30);
+    season.rotation = -0.012;
+    const days = new NoteTag(270, 'clock');
+    days.setText(v.daysLeft <= 1 ? t('rt.pass.lastDay') : t('rt.pass.daysLeft', { n: v.daysLeft }));
+    days.position.set(w, 30);
+    head.addChild(season, days);
+
+    // The current tier as a mustard sticker, the label and the painted XP bar beside it.
+    const cx = 56;
+    const cy = 120;
+    const disc = stickerDisc(104, 0, Color.mustard);
+    disc.position.set(cx, cy);
+    disc.rotation = -0.05;
+    this.tierNumber = uiLabel('', { size: 52, color: Color.inkDeep });
+    this.tierNumber.position.set(cx, cy + 1);
+    const barX = cx + 52 + 22;
+    const barW = w - barX - 200 - 28;
+    this.barLeft = barX;
+    this.tierLabel = new PaperLabel({ text: ' ', size: 28, paper: Color.paperLight, padX: 22, padY: 6, maxWidth: barW });
+    this.bar = new ProgressBar({ width: barW, height: 44, color: 'gold', value: 0, label: '' });
+    this.bar.position.set(barX + barW / 2, cy + 22);
+    this.claimAllBtn = new Button({ label: t('rt.pass.claimAll'), style: 'success', width: 200, height: 88, fontSize: 32 });
+    this.claimAllBtn.position.set(w - 100, cy);
+    this.claimAllBtn.onTap(() => this.claimAll());
+    this.claimAllBtn.onDisabledTap(() => toast(t('rt.pass.notYet'), 'info'));
+    head.addChild(disc, this.tierNumber, this.tierLabel, this.bar, this.claimAllBtn);
+
+    // Lane heads: "free" over the left lane, the coupon (or the crown label) over the premium lane.
+    const freeHead = new PaperLabel({ text: t('meta.pass.free'), size: 34, paper: Color.paperLight, padX: 40, padY: 12, maxWidth: lane - 24 });
+    freeHead.position.set(lane / 2, LANE_HEAD_Y);
+    head.addChild(freeHead);
+    const premiumX = lane + MEDAL_W + lane / 2;
+    if (v.premium) {
+      const owned = new PaperLabel({ text: t('rt.pass.owned'), size: 30, paper: 'mustard', padX: 22, padY: 12, maxWidth: lane - 16 });
+      const crown = drawIcon('crown', 44);
+      crown.position.set(-owned.uiBox.w / 2 + 6, -2);
+      owned.addChild(crown);
+      owned.position.set(premiumX, LANE_HEAD_Y);
+      head.addChild(owned);
+    } else if (this.canSell()) {
+      this.coupon = new Coupon(lane, COUPON_H, t('rt.pass.buy'), iap.priceText(PRODUCT), () => void this.buy());
+      this.coupon.position.set(premiumX, LANE_HEAD_Y);
+      head.addChild(this.coupon);
+    } else {
+      const label = new PaperLabel({ text: t('meta.pass.premium'), size: 34, paper: 'mustard', padX: 36, padY: 12, maxWidth: lane - 24 });
+      label.position.set(premiumX, LANE_HEAD_Y);
+      head.addChild(label);
+    }
+    this.head = head;
   }
 
   private teardown(): void {
     this.rows = [];
     this.bar = null;
-    this.tierText = null;
-    this.medalText = null;
+    this.tierLabel = null;
+    this.tierNumber = null;
     this.claimAllBtn?.stopPulse();
     this.claimAllBtn = null;
-    this.buyBtn?.stopPulse();
-    this.buyBtn = null;
+    this.coupon = null;
     this.head = null;
     this.scroller = null;
-    this.line = null;
+    this.track = null;
+    this.trackFill = null;
     this.lock = null;
     for (const c of this.view.removeChildren()) c.destroy({ children: true });
   }
@@ -201,24 +216,24 @@ export class PassTab implements TabScreen {
   private layout(): void {
     const { x, y, w, h } = this.area;
     this.view.position.set(x, y);
-    this.head?.position.set(SIDE, 12);
+    this.head?.position.set(SIDE, 10);
     this.lock?.position.set(SIDE, 40);
     if (this.scroller) {
-      const top = 12 + HEAD_H + 8 + STRIP_H + 4;
-      this.scroller.position.set(0, top);
-      this.scroller.setViewSize(w, Math.max(0, h - top));
+      this.scroller.position.set(0, HEAD_H);
+      this.scroller.setViewSize(w, Math.max(0, h - HEAD_H));
     }
   }
 
   private syncAll(animate: boolean): void {
     const v = profile.passView();
-    if (this.medalText) this.medalText.text = String(v.tier);
-    if (this.tierText) {
-      this.tierText.text = v.tier >= v.free.length ? t('rt.pass.maxed') : t('rt.pass.tierNow', { n: v.tier });
-      fitLabel(this.tierText, this.listW() - 150 - 64, 30);
+    const maxed = v.tier >= v.free.length;
+    if (this.tierNumber) this.tierNumber.text = String(v.tier);
+    if (this.tierLabel) {
+      this.tierLabel.setText(maxed ? t('rt.pass.maxed') : t('rt.pass.tierNow', { n: v.tier }));
+      this.tierLabel.position.set(this.barLeft + this.tierLabel.uiBox.w / 2, 120 - 28);
     }
-    this.bar?.setLabel(v.tier >= v.free.length ? 'MAX' : t('rt.pass.xp', { cur: v.xpIntoTier, max: v.xpPerTier }));
-    this.bar?.setValue(v.tier >= v.free.length ? 1 : xpFill(v), animate);
+    this.bar?.setLabel(maxed ? 'MAX' : t('rt.pass.xp', { cur: v.xpIntoTier, max: v.xpPerTier }));
+    this.bar?.setValue(maxed ? 1 : xpFill(v), animate);
     const open = passClaimable(v);
     this.claimAllBtn?.setEnabled(open > 0);
     this.claimAllBtn?.setBadge(open > 0 ? open : undefined);
@@ -229,23 +244,23 @@ export class PassTab implements TabScreen {
       const prem = v.premiumRow[i];
       if (free && prem) row.sync(free, prem, v.premium, free.tier === Math.max(1, v.tier) && v.tier > 0, animate);
     });
-    this.drawLine(v);
+    this.drawTrack(v);
   }
 
-  /** The timeline behind the medallions: grey for the whole season, gold up to the player's XP. */
-  private drawLine(v: PassView): void {
-    const g = this.line;
+  /** The painted line behind the medals: kraft for the whole season, mustard up to the player's XP. */
+  private drawTrack(v: PassView): void {
+    const g = this.trackFill;
     if (!g) return;
+    const lane = this.laneW();
     const step = PASS_ROW_H + PASS_ROW_GAP;
-    const x = this.cellW() + MEDAL_W / 2;
-    const first = LIST_TOP + PASS_ROW_H / 2;
-    const start = first - step / 2;
-    const last = first + (v.free.length - 1) * step;
+    const first = LANES_TOP + 8 + PASS_ROW_H / 2;
     const p = v.tier >= v.free.length ? v.free.length : v.tier + v.xpIntoTier / v.xpPerTier;
-    const reach = p >= 1 ? first + (p - 1) * step : start + (first - start) * p;
+    const reach = Math.round(p >= 1 ? first + (p - 1) * step : first - 40 + (40 * p));
+    if (reach === this.trackReach) return;
+    this.trackReach = reach;
     g.clear();
-    g.roundRect(x - 7, start, 14, last - start + 18, 7).fill(Color.neutralDark).stroke({ width: 4, color: Color.outline, alignment: 1 });
-    if (reach > start) g.roundRect(x - 5, start + 2, 10, reach - start, 5).fill(Color.primary);
+    const len = reach - (first - 40);
+    if (len > 8) drawPaintFill(g, first - 38, -(lane + MEDAL_W / 2) - 7, len, 14, Color.mustard);
   }
 
   private onCell(track: PassTrackId, kind: CellTap, cell: PassCell, tier: number): void {
@@ -257,7 +272,7 @@ export class PassTab implements TabScreen {
         audio.play('ui_error');
         if (this.canSell()) {
           toast(t('rt.pass.premiumLocked'), 'info');
-          this.buyBtn?.startPulse({ times: 4 });
+          this.coupon?.nudge();
         }
         break;
       case 'notYet':
@@ -290,7 +305,7 @@ export class PassTab implements TabScreen {
     void payout(this.shell, partsOf(reward), from, t('rt.common.reward'));
   }
 
-  /** Take every open tier of both rows in one go and show one combined reward. */
+  /** Take every open tier of both lanes in one go and show one combined reward. */
   private claimAll(): void {
     const v = profile.passView();
     let sum: Bundle = {};
@@ -309,11 +324,11 @@ export class PassTab implements TabScreen {
   private async buy(): Promise<void> {
     if (this.busy) return;
     this.busy = true;
-    this.buyBtn?.setBusy(true);
+    this.coupon?.setBusy(true);
     const outcome = await iap.purchase(PRODUCT);
     this.busy = false;
     if (this.view.destroyed) return;
-    this.buyBtn?.setBusy(false);
+    this.coupon?.setBusy(false);
     if (outcome === 'cancelled') return;
     if (outcome !== 'purchased') {
       audio.play('ui_error');
@@ -326,16 +341,17 @@ export class PassTab implements TabScreen {
     await this.celebrate();
   }
 
-  /** Premium just opened: show what is waiting and offer to take it. */
+  /** Premium just opened: confetti, what is waiting, and an offer to take it. */
   private async celebrate(): Promise<void> {
     const v = profile.passView();
     const ready = v.premiumRow.filter((r) => r.claimable);
     let sum: Bundle = {};
     for (const r of ready) sum = mergeBundles(sum, r.reward);
+    paperConfetti(80);
     const choice = await popups.open(
       new NoticePopup<'claim' | 'later'>({
         title: t('rt.pass.celebrate.title'),
-        hero: drawIcon('crown', 150, Color.gold),
+        hero: drawIcon('crown', 120),
         lines: [ready.length > 0 ? t('rt.pass.celebrate.body', { n: ready[ready.length - 1]?.tier ?? 0 }) : t('rt.pass.celebrate.empty')],
         parts: partsOf(sum),
         buttons:
@@ -347,6 +363,7 @@ export class PassTab implements TabScreen {
             : [{ label: t('rt.common.ok'), style: 'primary', result: 'later' }],
         dismissResult: 'later',
         priority: 2,
+        tape: 'yellow',
       }),
     );
     if (choice === 'claim' && !this.view.destroyed) this.claimAll();
@@ -380,8 +397,8 @@ export class PassTab implements TabScreen {
     const sc = this.scroller;
     if (!sc) return;
     sc.refresh();
-    const contentH = LIST_TOP + 30 * (PASS_ROW_H + PASS_ROW_GAP) + SIDE * 2 + 16;
-    sc.scrollTo(scrollTargetFor(focusTier(profile.passView()), sc.viewHeight, contentH, LIST_TOP), false);
+    const contentH = LANES_TOP + 8 + 30 * (PASS_ROW_H + PASS_ROW_GAP) + SIDE * 2 + 16;
+    sc.scrollTo(scrollTargetFor(focusTier(profile.passView()), sc.viewHeight, contentH, LANES_TOP + 8), false);
   }
 
   hide(): void {

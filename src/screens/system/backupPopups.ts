@@ -6,21 +6,17 @@ import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
 import { errorKey, profile } from '@/meta';
 import type { BackupPreview } from '@/meta/profile';
-import { Button } from '@/ui/Button';
-import { TweenBag } from '@/ui/motion';
-import { Panel } from '@/ui/Panel';
-import { Popup } from '@/ui/Popup';
-import { fitLabel, uiLabel } from '@/ui/text';
-import { Color } from '@/ui/theme';
-import { toast } from '@/ui/Toast';
+import { Button, Color, drawDashedLine, drawIcon, fitLabel, Panel, Popup, toast, TweenBag, uiLabel } from '@/ui';
 import { DomTextField } from './domField';
-import { bakedPanel } from './kit/widgets';
+import { paperSheet } from './kit/sheets';
 import { savedAtText } from './settingsModel';
 import './strings';
 
 const W = 640;
 const PAD = 40;
 const FIELD_H = 230;
+/** Height of one line of the receipt. */
+const ROW = 56;
 
 /** Copy text through the async clipboard, falling back to the selection command; true when it worked. */
 async function copyText(field: DomTextField): Promise<boolean> {
@@ -37,13 +33,13 @@ async function copyText(field: DomTextField): Promise<boolean> {
   }
 }
 
-/** The field, its inset frame and the invisible rectangle the DOM element is placed over. */
+/** The field's recessed well and the invisible rectangle the DOM element is placed over. */
 function fieldFrame(y: number): { frame: Container; anchor: Graphics } {
   const frame = new Container();
-  frame.addChild(bakedPanel(W - PAD * 2, FIELD_H, 'inset', 24));
+  frame.addChild(paperSheet(W - PAD * 2, FIELD_H, { fill: Color.paperDim, radius: 24, shadow: false }));
   frame.position.set(PAD, y);
   const anchor = new Graphics();
-  anchor.rect(0, 0, W - PAD * 2 - 20, FIELD_H - 20).fill({ color: Color.black, alpha: 0 });
+  anchor.rect(0, 0, W - PAD * 2 - 20, FIELD_H - 20).fill({ color: Color.ink, alpha: 0 });
   anchor.position.set(10, 10);
   frame.addChild(anchor);
   return { frame, anchor };
@@ -58,13 +54,13 @@ export class CodeExportPopup extends Popup<void> {
   constructor(code: string) {
     super({ dismissResult: undefined, priority: 3 });
     this.field = new DomTextField({ readOnly: true, value: code });
-    const help = uiLabel(t('rt.sys.code.exportHelp'), { size: 28, wrap: W - PAD * 2, lineHeight: 38, strokeWidth: 5, shadow: false });
+    const help = uiLabel(t('rt.sys.code.exportHelp'), { size: 28, wrap: W - PAD * 2, lineHeight: 38 });
     const fieldY = 96 + help.height + 26;
     const h = fieldY + FIELD_H + 20 + 30 + 20 + 104 + 44;
-    const panel = new Panel({ width: W, height: h, title: t('rt.sys.code.title'), onClose: () => this.close() });
+    const panel = new Panel({ width: W, height: h, title: t('rt.sys.code.title'), torn: 'bottom', tape: 'sky', onClose: () => this.close() });
     help.position.set(W / 2, 96 + help.height / 2);
     const { frame, anchor } = fieldFrame(fieldY);
-    const len = uiLabel(t('rt.sys.code.length', { n: fmt(code.length) }), { size: 24, color: Color.textDim, anchorX: 1, strokeWidth: 4, shadow: false });
+    const len = uiLabel(t('rt.sys.code.length', { n: fmt(code.length) }), { size: 24, color: Color.inkSoft, anchorX: 1 });
     len.position.set(W - PAD, fieldY + FIELD_H + 24);
     const copy = new Button({ label: t('rt.sys.code.copy'), style: 'primary', width: 360, height: 104, fontSize: 40, icon: 'code' });
     copy.position.set(W / 2, h - 44 - 52);
@@ -103,7 +99,7 @@ export class CodeImportPopup extends Popup<boolean> {
   private readonly bag = new TweenBag();
   private readonly field: DomTextField;
   private readonly layer = new Container();
-  private readonly panel: Panel;
+  private panel: Panel | null = null;
   private closing = false;
   private opened = false;
   private busy = false;
@@ -111,25 +107,30 @@ export class CodeImportPopup extends Popup<boolean> {
   constructor(private readonly onApplied: () => void) {
     super({ dismissResult: false, priority: 3 });
     this.field = new DomTextField({ readOnly: false, placeholder: t('rt.sys.code.placeholder') });
-    this.panel = new Panel({ width: W, height: 740, title: t('rt.sys.code.import'), onClose: () => this.close() });
-    this.panel.content.addChild(this.layer);
-    this.body.addChild(this.panel);
-    this.setContentSize(W + 80, 740 + 90);
     this.render({ kind: 'input' });
   }
 
+  /** Each stage has its own height: the sheet is cut again to fit it. */
   private render(stage: Stage): void {
     for (const c of this.layer.removeChildren()) c.destroy({ children: true });
-    if (stage.kind === 'input') this.renderInput();
-    else this.renderPreview(stage);
+    const h = stage.kind === 'input' ? this.renderInput() : this.renderPreview(stage);
+    this.layer.parent?.removeChild(this.layer);
+    this.panel?.destroy({ children: true });
+    const panel = new Panel({ width: W, height: h, title: t('rt.sys.code.import'), torn: 'bottom', tape: 'sky', onClose: () => this.close() });
+    panel.content.addChild(this.layer);
+    this.body.addChild(panel);
+    this.panel = panel;
+    this.setContentSize(W + 80, h + 90);
+    if (this.screenW > 0) this.layout(this.screenW, this.screenH);
   }
 
-  private renderInput(): void {
-    const help = uiLabel(t('rt.sys.code.importHelp'), { size: 28, wrap: W - PAD * 2, lineHeight: 38, strokeWidth: 5, shadow: false });
+  /** Lays the stage out into `layer`; returns the height of the sheet it needs. */
+  private renderInput(): number {
+    const help = uiLabel(t('rt.sys.code.importHelp'), { size: 28, wrap: W - PAD * 2, lineHeight: 38 });
     help.position.set(W / 2, 96 + help.height / 2);
     const fieldY = 96 + help.height + 26;
     const { frame, anchor } = fieldFrame(fieldY);
-    const by = fieldY + FIELD_H + 40 + 52;
+    const by = fieldY + FIELD_H + 36 + 52;
     const paste = new Button({ label: t('rt.sys.code.paste'), style: 'info', width: 270, height: 104, fontSize: 36 });
     paste.position.set(W / 2 - 150, by);
     paste.onTap(() => void this.paste());
@@ -141,11 +142,12 @@ export class CodeImportPopup extends Popup<boolean> {
     this.bag.call(this.opened ? 0.05 : 0.3, () => {
       if (!this.closing && !anchor.destroyed) this.field.attach(anchor);
     });
+    return by + 52 + 48;
   }
 
-  private renderPreview(stage: Extract<Stage, { kind: 'preview' }>): void {
+  private renderPreview(stage: Extract<Stage, { kind: 'preview' }>): number {
     this.field.hide();
-    const title = uiLabel(t('rt.sys.code.previewTitle'), { size: 32, strokeWidth: 5 });
+    const title = uiLabel(t('rt.sys.code.previewTitle'), { size: 32 });
     title.position.set(W / 2, 112);
     const info = stage.info;
     const rows: [string, string][] = [
@@ -156,28 +158,44 @@ export class CodeImportPopup extends Popup<boolean> {
     ];
     const saved = savedAtText(info.savedAt);
     if (saved) rows.push([t('rt.sys.code.savedAt'), saved]);
-    const plate = bakedPanel(W - PAD * 2, rows.length * 62 + 28, 'inset', 24);
-    plate.position.set(PAD, 150);
-    this.layer.addChild(title, plate);
+    // What the code holds, as a receipt: ruled rows on an ivory slip.
+    const slipH = rows.length * ROW + 28;
+    const slip = new Container();
+    slip.addChild(paperSheet(W - PAD * 2, slipH, { fill: Color.paperLight, radius: 20, torn: ['top', 'bottom'] }));
+    slip.position.set(PAD, 150);
+    const rules = new Graphics();
+    slip.addChild(rules);
+    this.layer.addChild(title, slip);
     rows.forEach(([k, v], i) => {
-      const y = 150 + 14 + i * 62 + 31;
-      const key = uiLabel(k, { size: 28, color: Color.textDim, anchorX: 0, strokeWidth: 4, shadow: false });
-      key.position.set(PAD + 24, y);
-      const val = uiLabel(v, { size: 30, anchorX: 1, strokeWidth: 5 });
-      val.position.set(W - PAD - 24, y);
+      const y = 14 + i * ROW + ROW / 2;
+      const key = uiLabel(k, { size: 28, color: Color.inkSoft, anchorX: 0 });
+      key.position.set(26, y);
+      const val = uiLabel(v, { size: 30, anchorX: 1 });
+      val.position.set(W - PAD * 2 - 26, y);
       fitLabel(val, 300, 30);
-      this.layer.addChild(key, val);
+      slip.addChild(key, val);
+      if (i < rows.length - 1) drawDashedLine(rules, 22, y + ROW / 2, W - PAD * 2 - 22, y + ROW / 2, { width: 2.5, alpha: 0.6, seed: i + 1 });
     });
-    const warnY = 150 + rows.length * 62 + 28 + 28;
-    const warn = uiLabel(t('rt.sys.code.warn'), { size: 26, color: Color.danger, wrap: W - PAD * 2, lineHeight: 34, strokeWidth: 5, shadow: false });
-    warn.position.set(W / 2, warnY + warn.height / 2);
+    const warnY = 150 + slipH + 22;
+    const warn = uiLabel(t('rt.sys.code.warn'), { size: 26, color: Color.inkDeep, wrap: W - PAD * 2 - 92, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 34 });
+    const warnH = Math.max(78, Math.ceil(warn.height) + 28);
+    const note = new Container();
+    note.addChild(paperSheet(W - PAD * 2, warnH, { fill: Color.mustard, radius: 18 }));
+    const sign = drawIcon('warning', 46);
+    sign.position.set(46, warnH / 2);
+    warn.position.set(82, (warnH - warn.height) / 2);
+    note.addChild(sign, warn);
+    note.position.set(PAD, warnY);
+    const applyY = warnY + warnH + 24 + 52;
     const apply = new Button({ label: t('rt.sys.code.apply'), style: 'danger', width: 520, height: 104, fontSize: 36 });
-    apply.position.set(W / 2, 740 - 50 - 52 - 104 - 8);
+    apply.position.set(W / 2, applyY);
     apply.onTap(() => void this.apply(stage.code));
+    const backY = applyY + 52 + 16 + 44;
     const back = new Button({ label: t('rt.sys.code.back'), style: 'neutral', width: 320, height: 88, fontSize: 30 });
-    back.position.set(W / 2, 740 - 50 - 44);
+    back.position.set(W / 2, backY);
     back.onTap(() => this.render({ kind: 'input' }));
-    this.layer.addChild(warn, apply, back);
+    this.layer.addChild(note, apply, back);
+    return backY + 44 + 48;
   }
 
   private async paste(): Promise<void> {
