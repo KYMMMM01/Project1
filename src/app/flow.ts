@@ -4,12 +4,14 @@
  * the app was killed.
  */
 import { debugEnabled } from '@/core/debug';
+import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { Scene, scenes, type TransitionKind } from '@/core/scene';
 import type { BattleInit, BattleSnapshot } from '@/game';
 import { bundleParts, errorKey, profile } from '@/meta';
 import { BattleScene, setBattleCreatedHook, setBattleExit } from '@/scenes/BattleScene';
 import { HomeScene } from '@/scenes/HomeScene';
+import { playClaim } from '@/screens/battle/claim';
 import { services, type StartRunRequest, type TabId } from '@/screens/contract';
 import { shell } from '@/screens/shell/controller';
 import { continuePrompt } from '@/screens/shell/ContinuePrompt';
@@ -54,11 +56,16 @@ function onBattleCreated(scene: BattleScene): void {
   if (debugEnabled()) void import('@/view/field/debug').then((m) => m.installBattleDebug(scene));
   if (run.sandbox) return;
   gameplayStart();
+  // A restart prepares the next run while this battle is still on screen for the length of the transition: wave saves are for the run this battle was created for.
+  const mine = profile.pendingRun;
   battle.events.on('waveStart', () => {
+    if (profile.pendingRun !== mine) return;
     const snapshot = battle.snapshot();
     if (snapshot) void profile.saveSnapshot(snapshot);
   });
   ctx.events.on('finished', () => gameplayStop());
+  // The run was reported as stopped when it was lost; a revive plays on.
+  battle.events.on('revive', () => gameplayStart());
   ctx.retry = () => void retry(run);
 }
 
@@ -99,12 +106,14 @@ async function begin(request: StartRunRequest, snack: SnackChoice | undefined, b
   return opened;
 }
 
-/** Retry from the result screen: the same request, straight into a new run (no pre-run page). */
+/** Retry from the result screen or restart from the pause menu: the same request, straight into a new run (no pre-run page). */
 async function retry(previous: RunConfig): Promise<void> {
   if (retrying) return;
   retrying = true;
   try {
     const { mode, chapter, stake } = previous.init;
+    // A restart leaves the run in progress as the pending one and a new run cannot be prepared over it: it is thrown away without a reward. After a result nothing is pending and this does nothing.
+    await profile.discardPendingRun();
     await begin({ mode, chapter, stake }, undefined);
   } finally {
     retrying = false;
@@ -112,13 +121,25 @@ async function retry(previous: RunConfig): Promise<void> {
 }
 
 /**
+ * A tutorial the app was killed in has nothing to continue or pay out (its forced steps are not in a
+ * wave save): it is dropped without counting as a run, so a new player gets the tutorial again.
+ */
+async function dropInterruptedTutorial(): Promise<void> {
+  if (profile.pendingRun?.init.mode === 'tutorial') await profile.discardPendingRun();
+}
+
+/**
  * Shell.startRun: a run in progress is offered first; the tutorial starts at once; every other mode
  * goes through the pre-run page. Resolves when the battle is opening or the player backed out.
  */
-export function startRun(request: StartRunRequest): Promise<void> {
+export async function startRun(request: StartRunRequest): Promise<void> {
+  await dropInterruptedTutorial();
   if (profile.pendingRun) return offerContinue();
-  if (request.mode === 'tutorial') return begin(request, undefined).then(() => undefined);
-  if (preRun) return Promise.resolve();
+  if (request.mode === 'tutorial') {
+    await begin(request, undefined);
+    return;
+  }
+  if (preRun) return;
   return new Promise<void>((resolve) => {
     const close = (): void => {
       preRun?.destroy();
@@ -141,6 +162,7 @@ export function startRun(request: StartRunRequest): Promise<void> {
 
 /** The run the app was killed in: continue it, or end it with the rewards earned so far. */
 export async function offerContinue(): Promise<void> {
+  await dropInterruptedTutorial();
   for (;;) {
     const pending = profile.pendingRun;
     if (!pending) return;
@@ -163,16 +185,19 @@ export async function offerContinue(): Promise<void> {
       toast(t(errorKey(settled.error)), 'warning');
       return;
     }
-    shell.refresh();
+    // The profile already holds the rewards: currencies fly to the top bar like any claim, and only cards and chests need a sheet.
     const { gold, bundle } = settled.value;
-    await services.showRewards(bundleParts({ ...bundle, gold: (bundle.gold ?? 0) + gold }), t('shell.cont.settled'));
+    const rest = playClaim({ x: game.w / 2, y: game.h / 2 }, bundleParts({ ...bundle, gold: (bundle.gold ?? 0) + gold }), shell);
+    toast(t('shell.cont.settled'), 'success');
     shell.refresh();
+    if (rest.length > 0) await services.showRewards(rest, t('shell.cont.settled'));
     return;
   }
 }
 
 /** The very first scene: the tutorial battle for a brand-new player, the home screen for everyone else. */
 export async function chooseFirstScene(): Promise<() => Scene> {
+  await dropInterruptedTutorial();
   if (!profile.pendingRun && profile.data.stats.runs === 0) {
     const prepared = await profile.prepareRun({ mode: 'tutorial' });
     if (prepared.ok) return battleScene(runConfig(prepared.value));
@@ -180,7 +205,17 @@ export async function chooseFirstScene(): Promise<() => Scene> {
   return homeScene();
 }
 
-/** Called once the first scene is on screen: a left-over run is offered right away. */
+/** Chests opened (and paid out) in an earlier session whose reveal never finished: the player has not seen those cards yet. */
+async function replayReveals(): Promise<void> {
+  for (const result of [...profile.data.reveals]) {
+    if (!(scenes.current instanceof HomeScene)) return;
+    await services.revealChest(result);
+    shell.refresh();
+  }
+}
+
+/** Called once the first scene is on screen: a reveal cut short last time is shown again, then a left-over run is offered. */
 export function afterFirstScene(): void {
-  if (profile.pendingRun && scenes.current instanceof HomeScene) void offerContinue();
+  if (!(scenes.current instanceof HomeScene)) return;
+  void replayReveals().then(() => (profile.pendingRun ? offerContinue() : undefined));
 }

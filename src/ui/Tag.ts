@@ -1,5 +1,5 @@
 import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
-import { ButtonPalettes, Color, type ButtonStyleId } from './theme';
+import { ButtonPalettes, Color, MIN_FONT, type ButtonStyleId } from './theme';
 import type { Box } from './layoutMath';
 import { motion, popIn, TweenBag } from './motion';
 import { makeRng } from './paperMath';
@@ -36,7 +36,7 @@ export class Tag extends Container {
     super();
     this.style = opts.style ?? 'danger';
     this.shape = opts.shape ?? 'pill';
-    this.fontSize = Math.max(20, opts.fontSize ?? (this.shape === 'burst' ? 30 : 24));
+    this.fontSize = Math.max(MIN_FONT, opts.fontSize ?? (this.shape === 'burst' ? 30 : 24));
     this.art.addChild(this.g);
     this.addChild(this.art);
     this.rotation = opts.tilt ?? 0;

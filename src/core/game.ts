@@ -1,4 +1,5 @@
 import { Application, Container, Rectangle } from 'pixi.js';
+import { Color } from '@/ui/theme';
 import { Emitter } from './events';
 import { uiTweens } from './tween';
 import { clamp } from './math';
@@ -71,7 +72,7 @@ export class Game {
     await app.init({
       width: DESIGN_W,
       height: DESIGN_MIN_H,
-      backgroundColor: 0xa06a33,
+      backgroundColor: Color.woodDark,
       antialias: true,
       autoDensity: true,
       resolution: 1,

@@ -5,8 +5,9 @@ import { clamp, damp } from '@/core/math';
 import { Color, drawSpeechBubble, fitWidth, label, rarityName } from '@/ui';
 import { mergeResultOf, unitRarity } from '@/game';
 import type { DropAction, UnitId } from '@/game/api';
-import { CELL_H, FIELD_W, cellCenterX, cellCenterY, cellRow } from '@/game/geometry';
+import { CELL_H, CELL_W, COLS, FIELD_W, ROWS, cellCenterX, cellCenterY, cellRow } from '@/game/geometry';
 import type { FieldEnv } from './env';
+import { previewBelow } from './policy';
 import { FEET_DY, unitSpriteScale } from './unitView';
 
 const PORTRAIT_H = 66;
@@ -66,6 +67,11 @@ export class DragPreview {
   /** Call once per frame. `from` is the cell of the held cat (-1 when nothing is held), `over` the cell under the finger and `action` what dropping there would do. */
   update(dt: number, from: number, over: number, action: DropAction | null): void {
     const { battle } = this.env;
+    // Released: the bubble goes at once instead of fading over the merge flourish that follows.
+    if (from < 0 && this.show > 0) {
+      this.show = 0;
+      this.bubble.visible = false;
+    }
     const held = from >= 0 ? battle.units[from] : null;
     const target = from >= 0 && over >= 0 ? battle.units[over] : null;
     const act = held ? action : null;
@@ -124,18 +130,32 @@ export class DragPreview {
   private place(cell: number): void {
     const cx = cellCenterX(cell);
     const cy = cellCenterY(cell);
-    const flip = cellRow(cell) === 0;
+    const left = clamp(cx - this.bubbleW / 2, 8, FIELD_W - this.bubbleW - 8);
+    const row = cellRow(cell);
+    const flip = previewBelow(row, ROWS, this.hiddenIn(row - 1, left), this.hiddenIn(row + 1, left));
     if (flip !== this.flip) {
       this.flip = flip;
       this.draw();
     }
-    const left = clamp(cx - this.bubbleW / 2, 8, FIELD_W - this.bubbleW - 8);
     // The tail tip points at the cell's edge; the body sits clear of the cat inside it.
     const y = flip ? cy + CELL_H / 2 - 4 + TAIL.len : cy - CELL_H / 2 + 8 - TAIL.len - BUBBLE_H;
     this.bubble.pivot.set(this.bubbleW / 2, BUBBLE_H / 2);
     this.bubble.position.set(left + this.bubbleW / 2, y + BUBBLE_H / 2);
     this.tailX = cx - left;
     if (this.drawnTailX !== Math.round(this.tailX)) this.draw();
+  }
+
+  /** Cats standing in `row` under the span the bubble would cover (0 for a row that does not exist). */
+  private hiddenIn(row: number, left: number): number {
+    if (row < 0 || row >= ROWS) return 0;
+    const right = left + this.bubbleW;
+    let n = 0;
+    for (let col = 0; col < COLS; col++) {
+      const cell = row * COLS + col;
+      const x = cellCenterX(cell);
+      if (x + CELL_W / 2 > left && x - CELL_W / 2 < right && this.env.battle.units[cell]) n++;
+    }
+    return n;
   }
 
   private draw(): void {

@@ -182,6 +182,8 @@ export class FloatingNumbers {
 
   /** Maximum simultaneous numbers; lowering it lets the extras finish. */
   cap: number;
+  /** A number never rises above this y (layer space): the scene sets it to the edge of the HUD so no hit is drawn under a pill. */
+  minY = -Infinity;
 
   constructor(parent: Container, cap = 40) {
     this.cap = cap;
@@ -306,7 +308,7 @@ export class FloatingNumbers {
     const s = n.scale * pop;
     const root = n.root;
     root.scale.set(s);
-    root.position.set(n.x, n.y - d.rise * Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9))));
+    root.position.set(n.x, Math.max(this.minY, n.y - d.rise * Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9)))));
     root.rotation = n.tiltAmp === 0 ? 0 : springWobble(n.age, n.tiltAmp, 3.2, 3.5);
     // Hold fully opaque for the first 70% of life, then fade out.
     root.alpha = t < 0.7 ? 1 : 1 - Ease.quadIn((t - 0.7) / 0.3);

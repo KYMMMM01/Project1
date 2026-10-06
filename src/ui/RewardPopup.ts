@@ -1,7 +1,7 @@
-import { Container, FillGradient, Graphics, Sprite, type DestroyOptions, type Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, type DestroyOptions, type Texture } from 'pixi.js';
 import { audio, type SfxId } from '@/audio';
 import { haptic } from '@/core/haptics';
-import { TAU } from '@/core/math';
+import { mixColor, TAU } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Button } from './Button';
 import { countUpDuration, countUpValue, formatCount } from './countUp';
@@ -11,7 +11,7 @@ import { numberText } from './numbers';
 import { Panel } from './Panel';
 import { Popup, popups } from './Popup';
 import { drawPaper, paperSeed } from './paper';
-import { drawGlow } from './shapes';
+import { cacheStatic } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { Color, Rarity, type RarityId } from './theme';
 
@@ -54,34 +54,9 @@ const TILE = 148;
 const GAP = 22;
 const PANEL_W = 640;
 
-const rayGradients = new Map<number, FillGradient>();
-
-/**
- * Radial fade for the sunburst. The gradient texture is shared per radius and never destroyed:
- * destroying it while a batch still references it makes Pixi warn, and only a handful of radii exist.
- */
-function rayGradient(r: number): FillGradient {
-  const key = Math.round(r);
-  let g = rayGradients.get(key);
-  if (!g) {
-    // Global-space radial so every wedge fades out with distance from the centre.
-    g = new FillGradient({
-      type: 'radial',
-      center: { x: 0, y: 0 },
-      innerRadius: 0,
-      outerCenter: { x: 0, y: 0 },
-      outerRadius: key,
-      colorStops: [
-        { offset: 0, color: 'rgba(255,226,140,0.7)' },
-        { offset: 0.55, color: 'rgba(255,204,110,0.3)' },
-        { offset: 1, color: 'rgba(255,196,100,0)' },
-      ],
-      textureSpace: 'global',
-    });
-    rayGradients.set(key, g);
-  }
-  return g;
-}
+/** The sunburst's paper: warm cream over the dim, kept faint so the sheet stays the brightest thing. */
+const RAY_COLOR = mixColor(Color.paperLight, Color.mustard, 0.35);
+const RAY_ALPHA = 0.2;
 
 interface Tile {
   view: Container;
@@ -118,11 +93,11 @@ export class RewardPopup extends Popup<RewardChoice> {
     const h = head + gridH + 36 + 112 + 50;
     const panel = new Panel({ width: PANEL_W, height: h, title: opts.title, ribbon: 'primary', torn: 'bottom', tape: 'pink' });
 
-    // Slowly turning sunburst behind the panel makes the screen feel like an event.
+    // A slowly turning paper sunburst behind the panel makes the screen feel like an event.
     this.drawRays(Math.max(PANEL_W, h) * 0.62);
     this.rays.position.set(0, -h / 2 + 120);
     this.body.addChild(this.rays, panel);
-    this.setContentSize(PANEL_W + 80, h + 90);
+    this.setContentSize(PANEL_W + 48, h + 90);
 
     if (opts.subtitle) {
       const sub = uiLabel(opts.subtitle, { size: 28, color: Color.inkSoft });
@@ -187,18 +162,16 @@ export class RewardPopup extends Popup<RewardChoice> {
     super.close(choice);
   }
 
+  /** A flat paper sunburst, drawn once and turned slowly: no gradient, no glow, no additive blend. */
   private drawRays(r: number): void {
     const g = this.rays;
     const rays = 12;
-    const fill = rayGradient(r);
     for (let i = 0; i < rays; i++) {
       const a0 = (i / rays) * TAU;
       const a1 = a0 + (TAU / rays) * 0.42;
-      g.poly([0, 0, Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r]).fill(fill);
+      g.poly([0, 0, Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r]).fill({ color: RAY_COLOR, alpha: RAY_ALPHA });
     }
-    drawGlow(g, 0, 0, r * 0.5, 0xffd45e, 0.4);
-    g.blendMode = 'add';
-    g.alpha = 0.5;
+    cacheStatic(g);
     if (motion.reduced) return;
     this.bag.run({
       duration: 32,

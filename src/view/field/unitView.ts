@@ -102,9 +102,10 @@ export class UnitView {
     this.shadow = this.makeSprite(art.shadow);
     this.shadow.position.y = 1;
     this.rank = this.makeSprite(art.rank.common);
-    this.rank.position.y = 13;
+    this.rank.position.y = 12;
     this.badge = this.makeSprite(art.badge.warrior);
-    this.badge.position.set(-38, 4);
+    // The class sticker sits just above the rank tag's left end, so the longest tag (five pips) never runs under it.
+    this.badge.position.set(-38, -14);
     this.dome = this.makeSprite(art.shield);
     this.dome.position.y = -46;
     this.noAct = this.makeSprite(art.noAct);

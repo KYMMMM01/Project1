@@ -1,6 +1,7 @@
 import { Container, Graphics, Rectangle, type DestroyOptions } from 'pixi.js';
 import { game } from '@/core/game';
 import { Ease } from '@/core/tween';
+import { backGesture } from './backGesture';
 import { IconButton } from './IconButton';
 import { boxOf } from './layout';
 import { scaffoldLayout, type SafeRect } from './layoutMath';
@@ -83,6 +84,7 @@ export class ScreenScaffold extends Container {
   private readonly backdrop: boolean;
   private backFn: (() => void) | null;
   private offResize: (() => void) | null = null;
+  private releaseBack: (() => void) | null = null;
   private rects: ReturnType<typeof scaffoldLayout>;
 
   constructor(opts: ScreenScaffoldOpts) {
@@ -127,6 +129,7 @@ export class ScreenScaffold extends Container {
     this.layout();
     this.offResize = game.events.on('resize', () => this.layout());
     live.push(this);
+    this.syncBack();
     if (!keyBound) {
       keyBound = true;
       window.addEventListener('keydown', onKey);
@@ -155,12 +158,13 @@ export class ScreenScaffold extends Container {
 
   onBack(fn: (() => void) | null): this {
     this.backFn = fn;
+    this.syncBack();
     return this;
   }
 
   /**
-   * Run the back handler. Returns false (and does nothing) when the screen has none. Wire the
-   * browser's back gesture to ScreenScaffold.handleBack() after popups.handleBack().
+   * Run the back handler. Returns false (and does nothing) when the screen has none. The system Back
+   * gesture arrives here by itself (backGesture(), after the popups) while the screen is shown.
    */
   back(): boolean {
     if (!this.backFn) return false;
@@ -183,6 +187,7 @@ export class ScreenScaffold extends Container {
   /** Screen change in: content cross-fades while rising 24 px (160 ms). Resolves when settled. */
   show(animate = true): Promise<void> {
     this.visible = true;
+    this.syncBack();
     this.main.y = 0;
     this.main.alpha = 1;
     this.titleLayer.alpha = 1;
@@ -210,6 +215,7 @@ export class ScreenScaffold extends Container {
   hide(animate = true): Promise<void> {
     if (!animate || motion.reduced) {
       this.visible = false;
+      this.syncBack();
       return Promise.resolve();
     }
     return this.bag.runKeyed(this.main, {
@@ -221,6 +227,7 @@ export class ScreenScaffold extends Container {
       },
       onComplete: () => {
         this.visible = false;
+        this.syncBack();
       },
     }).finished;
   }
@@ -240,6 +247,7 @@ export class ScreenScaffold extends Container {
     this.offResize?.();
     this.offResize = null;
     this.backFn = null;
+    this.syncBack();
     const i = live.indexOf(this);
     if (i >= 0) live.splice(i, 1);
     if (live.length === 0 && keyBound) {
@@ -288,6 +296,16 @@ export class ScreenScaffold extends Container {
     refreshCache(this.titleG);
   }
 
+  /** The system Back gesture is held while a page that can be left is shown. */
+  private syncBack(): void {
+    const want = this.backFn !== null && this.visible;
+    if (want && !this.releaseBack) this.releaseBack = backGesture().hold();
+    else if (!want && this.releaseBack) {
+      this.releaseBack();
+      this.releaseBack = null;
+    }
+  }
+
   private layoutTitle(): void {
     const tb = this.rects.titleBar;
     const cy = game.safeTop + this.titleH / 2 - 2;
@@ -309,3 +327,5 @@ export class ScreenScaffold extends Container {
     this.titleLabel.position.set(tb.w / 2, cy);
   }
 }
+
+backGesture().onBack(() => ScreenScaffold.handleBack());

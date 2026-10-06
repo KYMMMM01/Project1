@@ -6,6 +6,7 @@
 import type { OddsRow } from '@/game/api';
 import { t } from '@/core/i18n';
 import { fmt } from '@/core/format';
+import { tn } from './plural';
 import { CHEST_RARITIES, type BaseUnitId, type ChestKind, type ChestRarity } from './types';
 
 export const ODDS_VERSION = 1;
@@ -106,7 +107,7 @@ export function oddsView(table: OddsTable, pity: PityState): OddsView {
   const wildText = t('meta.odds.wild', { pct: percentText(table.wildShare) });
   const top = CHEST_RARITIES[CHEST_RARITIES.length - 1];
   const guaranteeTexts = table.guarantees.map((g) =>
-    t(g.atLeast === top ? 'meta.odds.guaranteeTop' : 'meta.odds.guarantee', { n: g.count, rarity: t('rarity.' + g.atLeast) }),
+    tn(g.atLeast === top ? 'meta.odds.guaranteeTop' : 'meta.odds.guarantee', g.count, { rarity: t('rarity.' + g.atLeast) }),
   );
   let pityView: OddsView['pity'] = null;
   if (table.pity) {

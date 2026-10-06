@@ -49,40 +49,48 @@ export function isImprovement(key: StatKey, delta: number): boolean {
   return key === 'interval' ? delta < 0 : delta > 0;
 }
 
-/** Number text for a stat: damage keeps one decimal below 10, the interval two, range whole, crit as a percentage. */
-export function statText(key: StatKey, value: number): string {
+/** The number a stat is shown as: damage keeps one decimal below 10, the interval two, range whole, crit as whole percent points. */
+function shown(key: StatKey, value: number): number {
   switch (key) {
     case 'damage':
-      return value < 10 ? String(Math.round(value * 10) / 10) : String(Math.round(value));
+      return value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
     case 'interval':
-      return String(Math.round(value * 100) / 100);
+      return Math.round(value * 100) / 100;
     case 'range':
-      return String(Math.round(value));
+      return Math.round(value);
     case 'crit':
-      return Math.round(value * 100) + '%';
+      return Math.round(value * 100);
     case 'critMult':
-      return 'x' + Math.round(value * 10) / 10;
+      return Math.round(value * 10) / 10;
   }
 }
 
-/** Signed difference text between two values of one stat ("+13", "-0.05", "+3%p"), or '' when nothing changes. */
+/** Number text for a stat: damage keeps one decimal below 10, the interval two, range whole, crit as a percentage. */
+export function statText(key: StatKey, value: number): string {
+  const v = shown(key, value);
+  if (key === 'crit') return v + '%';
+  return key === 'critMult' ? 'x' + v : String(v);
+}
+
+/**
+ * Signed difference text between two values of one stat ("+13", "-0.05", "+3%p"), or '' when nothing changes. It is
+ * the difference of the two numbers as they are shown, so "14 -> 15" always reads "+1" and never "+1.4".
+ */
 export function deltaText(key: StatKey, from: number, to: number): string {
-  const a = statText(key, from);
-  const b = statText(key, to);
-  if (a === b) return '';
-  const d = to - from;
+  const d = shown(key, to) - shown(key, from);
+  if (d === 0) return '';
   const sign = d > 0 ? '+' : '-';
+  const m = Math.abs(d);
   switch (key) {
     case 'crit':
-      return sign + Math.abs(Math.round(to * 100) - Math.round(from * 100)) + '%p';
+      return sign + m + '%p';
     case 'interval':
-      return sign + Math.abs(Math.round(d * 100) / 100);
-    case 'damage': {
-      const m = Math.abs(d);
-      return sign + (m < 10 ? Math.round(m * 10) / 10 : Math.round(m));
-    }
-    default:
-      return sign + Math.abs(Math.round(d));
+      return sign + Math.round(m * 100) / 100;
+    case 'damage':
+    case 'critMult':
+      return sign + Math.round(m * 10) / 10;
+    case 'range':
+      return sign + m;
   }
 }
 

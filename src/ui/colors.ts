@@ -11,6 +11,20 @@ export function desaturate(c: number, amount: number): number {
   return mixColor(c, (y << 16) | (y << 8) | y, clamp01(amount));
 }
 
+/**
+ * The tint (a per-channel multiplier) that turns text filled with `from` into `to`. Only darkens:
+ * a channel of `to` above the matching channel of `from` is left as it was. Lets a label be built in
+ * its resting colour and change state by tint alone, with no re-rasterised glyphs.
+ */
+export function tintToward(from: number, to: number): number {
+  const ch = (s: number): number => {
+    const a = (from >> s) & 0xff;
+    const b = (to >> s) & 0xff;
+    return a === 0 ? 0xff : Math.min(0xff, Math.round((b / a) * 0xff));
+  };
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
 /** Positive `t` lightens toward white, negative darkens toward black. */
 export function shade(c: number, t: number): number {
   return t >= 0 ? mixColor(c, 0xffffff, t) : mixColor(c, 0x000000, -t);

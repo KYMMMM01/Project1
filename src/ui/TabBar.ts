@@ -5,6 +5,7 @@ import { haptic } from '@/core/haptics';
 import { lerp, mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Badge, type BadgeValue } from './Badge';
+import { tintToward } from './colors';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { backOut, motion, shakeX, TweenBag } from './motion';
@@ -35,8 +36,8 @@ const ICON = 58;
 const LABEL_Y = 102;
 /** Where the kraft strip's torn top edge sits (the selected tab pokes up through it). */
 const STRIP_TOP = 22;
-/** Unselected labels: the soft ink, a notch darker so it stays readable on kraft. */
-const DIM = 0x6b4d38;
+/** Unselected labels are filled in `Color.inkMid` (readable on kraft); this tint takes them to full ink when selected. */
+const SELECTED_TINT = tintToward(Color.inkMid, Color.ink);
 const TAPES: readonly TapeName[] = ['sky', 'yellow', 'pink', 'green'];
 
 class Tab extends Container {
@@ -65,9 +66,8 @@ class Tab extends Container {
     this.featured = featured;
     this.icon = drawIcon(def.icon, ICON);
     this.lockIcon = drawIcon('lock', 28);
-    // White glyphs, tinted to ink: the label colour follows the selection amount without a redraw.
-    this.text = uiLabel(def.label, { size: 24, color: 0xffffff });
-    this.text.tint = DIM;
+    // The label colour follows the selection amount by tint alone: no text is redrawn.
+    this.text = uiLabel(def.label, { size: 24, color: Color.inkMid });
 
     const r = featured ? 54 : 46;
     if (featured) {
@@ -279,7 +279,7 @@ export class TabBar extends Container {
     t.plateOn.alpha = k;
     t.paper.alpha = k;
     t.paper.y = (1 - k) * 18;
-    t.text.tint = mixColor(DIM, Color.ink, k);
+    t.text.tint = mixColor(Color.white, SELECTED_TINT, k);
     t.icon.alpha = t.def.locked ? 0.55 : 1;
     t.badge.y = baseY - 22 - e * 22;
   }
@@ -365,7 +365,7 @@ export class SegmentTabs extends Container {
 
     opts.tabs.forEach((d, i) => {
       const cx = this.cellX(i);
-      const t = uiLabel(d.label, { size: 30, color: 0xffffff });
+      const t = uiLabel(d.label, { size: 30, color: Color.inkMid });
       fitLabel(t, this.cellW - 24, 30);
       t.position.set(cx, -1);
       this.labels.push(t);
@@ -451,7 +451,7 @@ export class SegmentTabs extends Container {
       const t = this.labels[i];
       if (!t) return;
       t.scale.set(Math.min(1, (this.cellW - 24) / Math.max(1, t.width / t.scale.x)));
-      t.tint = d.id === this.selected ? Color.ink : DIM;
+      t.tint = d.id === this.selected ? SELECTED_TINT : Color.white;
     });
   }
 }

@@ -57,10 +57,10 @@ addStrings('en', {
   'battle.chapter': 'Chapter {n}',
   'battle.best': 'Best: Butler {n}',
   'battle.best.none': 'Not cleared yet',
-  'battle.chapter.locked': 'Clear the chapter before it first.',
+  'battle.chapter.locked': 'Clear the previous chapter first.',
   'battle.stake.row': 'Butler level',
   'battle.stake.base': 'Normal rules.',
-  'battle.stake.locked': 'Clear the level before it first.',
+  'battle.stake.locked': 'Clear the previous level first.',
   'battle.start': 'Go!',
 
   'battle.patrol.title': 'Patrol',
@@ -87,13 +87,13 @@ addStrings('en', {
   'battle.daily.cup': 'Weekly cup: {score} pts',
   'battle.daily.cup.next': 'Next prize at {need} pts',
   'battle.daily.cup.done': 'Every prize is yours to take!',
-  'battle.cup.claim': 'Claim cup prize',
+  'battle.cup.claim': 'Cup prize',
 
   'battle.endless.title': 'Endless Mode',
   'battle.endless.best': 'Best: wave {n}',
   'battle.endless.week': 'This week: wave {n}',
   'battle.endless.play': 'Play',
-  'battle.endless.claim': 'Claim weekly prize',
+  'battle.endless.claim': 'Weekly prize',
 
   'battle.sweep.title': 'Sweep',
   'battle.sweep.tickets': '{n} tickets',

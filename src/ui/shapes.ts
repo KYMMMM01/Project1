@@ -57,8 +57,8 @@ export function vGradient3(top: number, mid: number, bottom: number, midAt = 0.5
  */
 export function glossGradient(_topAlpha: number, _bottomAlpha?: number): FillGradient {
   return gradient([
-    [0, rgba(0xffffff, 0)],
-    [1, rgba(0xffffff, 0)],
+    [0, rgba(Color.white, 0)],
+    [1, rgba(Color.white, 0)],
   ]);
 }
 
@@ -148,7 +148,7 @@ export const PanelColors: Record<PanelVariant, PanelPalette> = {
   light: { fill: Color.panelLight, edge: edgeTone(Color.panelLight), text: Color.ink, textDim: Color.inkSoft },
   inset: { fill: Color.paperDim, edge: mixColor(Color.paperDim, Color.shadow, 0.4), text: Color.ink, textDim: Color.inkSoft },
   gold: { fill: Color.panel, edge: Color.mustardDark, text: Color.ink, textDim: Color.inkSoft },
-  kraft: { fill: Color.kraft, edge: Color.kraftDark, text: Color.ink, textDim: 0x5c4030 },
+  kraft: { fill: Color.kraft, edge: Color.kraftDark, text: Color.ink, textDim: Color.inkMid },
 };
 
 export interface PanelDrawOpts {

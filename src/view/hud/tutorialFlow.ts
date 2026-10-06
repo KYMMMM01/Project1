@@ -6,6 +6,19 @@ export type TutorialStep = 'summon' | 'merge' | 'pick' | 'free';
 
 export const TUTORIAL_SUMMONS = 3;
 
+/** Seconds of unspent fish before the free-play nudge points at the summon button, how long it stays, and how often it may come back. */
+export const NUDGE_AFTER = 5;
+export const NUDGE_FOR = 5;
+export const NUDGE_MAX = 3;
+/** Until the board holds this many cats the nudge keeps coming back: a player who only did the scripted steps loses on wave 4 with fish unspent. */
+export const NUDGE_CATS = 6;
+
+/** True when the nudge is due: the fish have sat unspent long enough, and it either still has a try left or the board is still thin. */
+export function nudgeDue(idle: number, nudges: number, cats: number): boolean {
+  if (idle < NUDGE_AFTER) return false;
+  return cats < NUDGE_CATS || nudges < NUDGE_MAX;
+}
+
 export class TutorialFlow {
   step: TutorialStep = 'summon';
   summons = 0;

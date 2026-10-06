@@ -42,8 +42,8 @@ interface TierLook {
 /** Border per synergy tier: plain kraft line, then a bronze, a silver and a mustard paper border. */
 const TIER_LOOK: readonly TierLook[] = [
   { edge: Color.kraftDark, width: 2, alpha: 0.5 },
-  { edge: 0xb8845a, width: 4, alpha: 0.95 },
-  { edge: 0x9ea8b4, width: 4, alpha: 0.95 },
+  { edge: Color.bronze, width: 4, alpha: 0.95 },
+  { edge: Color.stone, width: 4, alpha: 0.95 },
   { edge: Color.mustardDark, width: 5, alpha: 1 },
 ];
 
@@ -93,7 +93,7 @@ export class ClassChip extends Container {
     // Medallion: the glyph sits on a round well so every class reads at the same weight.
     const med = new Graphics();
     const mx = -CLASS_CHIP_W / 2 + 42;
-    drawPaper(med, mx - 31, -31, { w: 62, h: 62, kind: 'circle', fill: mixColor(this.accent, 0xffffff, 0.55), edge: Color.kraftDark, shadow: 3, grain: false, seed: this.seed + 1 });
+    drawPaper(med, mx - 31, -31, { w: 62, h: 62, kind: 'circle', fill: mixColor(this.accent, Color.white, 0.55), edge: Color.kraftDark, shadow: 3, grain: false, seed: this.seed + 1 });
     cacheStatic(med);
     const icon = drawIcon(opts.icon, 46);
     icon.position.set(mx, 0);
@@ -132,14 +132,14 @@ export class ClassChip extends Container {
         this.bag.killKeyed(this.body);
         this.body.y = 3;
         this.body.scale.set(0.95);
-        this.body.tint = 0xece0d0;
+        this.body.tint = Color.pressTint;
         haptic('tap');
         this.downAt = game.time;
         this.deferSfx = inScrollHost(this);
         if (!this.deferSfx && this.tapFn) audio.play('ui_click');
       },
       up: (released) => {
-        this.body.tint = 0xffffff;
+        this.body.tint = Color.white;
         // A hold long enough to raise the tooltip is a "what is this?" gesture, not a tap.
         const fire = released && game.time - this.downAt < HOLD_DELAY;
         this.release(released);

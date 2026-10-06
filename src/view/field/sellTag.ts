@@ -3,17 +3,23 @@ import { tex } from '@/core/assets';
 import { damp } from '@/core/math';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
-import { Color, drawPaper, label, paperSeed } from '@/ui';
+import { Color, drawIcon, drawPaper, label, paperSeed } from '@/ui';
 
 const W = 188;
+/** A cat that also pays purr gets a longer tag: the sell strip says both amounts, so the tag does too. */
+const W_PURR = 290;
 const H = 54;
 
-/** The price tag that follows a dragged unit while it is over the sell zone: a paper tag with a "Sell" cue, the fish icon and the amount. */
+/** The price tag that follows a dragged unit while it is over the sell zone: a paper tag with a "Sell" cue, the fish icon and the amount, and the purr it pays. */
 export class SellTag {
   readonly view = new Container();
   private readonly text: Text;
   private readonly cue: Text;
   private readonly icon: Sprite;
+  private readonly plain = new Graphics();
+  private readonly wide = new Graphics();
+  private readonly purrIcon: Container;
+  private readonly purrText: Text;
   private alphaNow = 0;
   private show = false;
   private sig = '';
@@ -21,30 +27,46 @@ export class SellTag {
   constructor(private readonly layer: Container) {
     this.view.label = 'sell-tag';
     this.view.eventMode = 'none';
-    const bg = new Graphics();
-    drawPaper(bg, -W / 2, -H / 2, { w: W, h: H, kind: 'pill', fill: Color.paperLight, seed: paperSeed() });
+    const seed = paperSeed();
+    drawPaper(this.plain, -W / 2, -H / 2, { w: W, h: H, kind: 'pill', fill: Color.paperLight, seed });
+    drawPaper(this.wide, -W_PURR / 2, -H / 2, { w: W_PURR, h: H, kind: 'pill', fill: Color.paperLight, seed });
     this.cue = label(t('view.sell'), { size: 26, color: Color.berryDark });
-    this.cue.position.set(-W / 2 + 46, 0);
     this.icon = new Sprite(tex('icon_fish'));
     this.icon.anchor.set(0.5);
     this.icon.width = 38;
     this.icon.height = 27;
-    this.icon.position.set(W / 2 - 78, 0);
     this.text = label('', { size: 28, anchorX: 0 });
-    this.text.position.set(W / 2 - 58, 1);
-    this.view.addChild(bg, this.cue, this.icon, this.text);
+    this.purrIcon = drawIcon('purr', 30);
+    this.purrText = label('', { size: 28, anchorX: 0 });
+    this.arrange(false);
+    this.view.addChild(this.plain, this.wide, this.cue, this.icon, this.text, this.purrIcon, this.purrText);
     this.view.visible = false;
     layer.addChild(this.view);
   }
 
-  /** Show the tag at (x, y) for a sale worth `fish`; call hide() to fade it out. */
-  place(x: number, y: number, fish: number): void {
+  /** Lay the parts out for the short or the long tag. */
+  private arrange(withPurr: boolean): void {
+    const w = withPurr ? W_PURR : W;
+    this.plain.visible = !withPurr;
+    this.wide.visible = withPurr;
+    this.purrIcon.visible = this.purrText.visible = withPurr;
+    this.cue.position.set(-w / 2 + 46, 0);
+    this.icon.position.set(withPurr ? -35 : w / 2 - 78, 0);
+    this.text.position.set(withPurr ? -15 : w / 2 - 58, 1);
+    this.purrIcon.position.set(60, 0);
+    this.purrText.position.set(80, 1);
+  }
+
+  /** Show the tag at (x, y) for a sale worth `fish` (and `purr`); call hide() to fade it out. */
+  place(x: number, y: number, fish: number, purr: number): void {
     this.show = true;
     this.view.position.set(x, y);
-    const sig = String(fish);
+    const sig = fish + '|' + purr;
     if (sig !== this.sig) {
       this.sig = sig;
       this.text.text = '+' + fmt(fish);
+      this.purrText.text = '+' + fmt(purr);
+      this.arrange(purr > 0);
     }
   }
 

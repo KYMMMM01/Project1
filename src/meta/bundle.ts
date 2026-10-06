@@ -1,6 +1,7 @@
 /** Pure helpers on reward bundles. */
 import { t } from '@/core/i18n';
 import { fmt } from '@/core/format';
+import { tn } from './plural';
 import { CHEST_KINDS, CHEST_RARITIES, type BaseUnitId, type Bundle, type ChestKind, type ChestRarity } from './types';
 
 export type BundlePart =
@@ -66,13 +67,13 @@ export function describeBundle(b: Bundle): string[] {
       case 'gold':
       case 'gems':
       case 'tickets':
-        return t('meta.reward.' + p.kind, { n: fmt(p.n) });
+        return tn('meta.reward.' + p.kind, p.n, { n: fmt(p.n) });
       case 'chest':
         return t('meta.reward.chest', { name: t('meta.chest.' + p.chest), n: p.n });
       case 'wild':
-        return t('meta.reward.wild', { rarity: t('rarity.' + p.rarity), n: p.n });
+        return tn('meta.reward.wild', p.n, { rarity: t('rarity.' + p.rarity) });
       case 'card':
-        return t('meta.reward.card', { unit: t('unit.' + p.unit + '.name'), n: p.n });
+        return tn('meta.reward.card', p.n, { unit: t('unit.' + p.unit + '.name') });
       case 'cosmetic':
         return t('meta.cos.' + p.id);
     }

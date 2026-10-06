@@ -32,7 +32,11 @@ export class ClassRow {
         owned: b.classOwned(id),
         tier: b.synergyTier(id),
         accent: CLASS_ACCENT[id],
-        onTap: () => open(id),
+        onTap: () => {
+          env.hints.used('chips');
+          env.hints.used('synergy');
+          open(id);
+        },
       });
       const tape = tapeStrip({ name: CLASS_TAPE[id], w: 56, h: 22, angle: i % 2 === 0 ? -20 : 16, pattern: i % 2 === 0 ? 'dots' : 'gingham' });
       tape.position.set(-CLASS_CHIP_W / 2 + 26, -CLASS_CHIP_H / 2 + 2);

@@ -12,6 +12,18 @@ export const STAKE_COUNT = MAX_STAKE + 1;
 /** The first-purchase card stays on the home tab this long once it has appeared (GDD section 8.3). */
 export const PROMO_WINDOW_MS = 72 * 3_600_000;
 
+const DATE_FORMAT = {
+  ko: new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', timeZone: 'UTC' }),
+  en: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+} as const;
+
+/** "10월 7일" / "Oct 7" for a "YYYY-MM-DD" day; what the daily card tags today's challenge with (the ruleset code is for support, not for players). */
+export function dailyDateLabel(date: string, lang: 'ko' | 'en'): string {
+  const [y, m, d] = date.split('-').map(Number);
+  if (!y || !m || !d) return date;
+  return DATE_FORMAT[lang].format(Date.UTC(y, m - 1, d));
+}
+
 /** A chapter opens once the one before it is cleared at stake 0. */
 export function chapterUnlocked(cleared: readonly number[], chapter: number): boolean {
   return chapter >= 1 && chapter <= CHAPTER_COUNT && (chapter === 1 || (cleared[chapter - 2] ?? 0) >= 1);

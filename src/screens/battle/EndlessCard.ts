@@ -7,7 +7,9 @@ import { playClaim } from './claim';
 import './strings';
 
 const H = 296;
-const BTN_W = 232;
+const BTN_W = 248;
+/** Width of the column left of the buttons: the bar and the texts stay inside it. */
+const LEFT_W = 356;
 
 /** Endless mode: the best wave reached, this week's progress toward the prizes, and the way in. */
 export class EndlessCard extends HomeCard {
@@ -24,15 +26,15 @@ export class EndlessCard extends HomeCard {
     super(w, H, t('battle.endless.title'), 'skull', { tape: 'pink' });
     this.best.position.set(CARD_PAD, this.contentTop + 22);
     this.week.position.set(CARD_PAD, this.contentTop + 66);
-    this.bar = new ProgressBar({ width: 372, height: 36, color: 'red', label: '' });
-    this.bar.position.set(CARD_PAD + 186, this.contentTop + 120);
+    this.bar = new ProgressBar({ width: LEFT_W, height: 36, color: 'red', label: '' });
+    this.bar.position.set(CARD_PAD + LEFT_W / 2, this.contentTop + 120);
     this.body.addChild(this.best, this.week, this.bar);
 
     const x = w - CARD_PAD - BTN_W / 2;
     this.play = new Button({ label: t('battle.endless.play'), icon: 'play', style: 'primary', width: BTN_W, height: 88, fontSize: 38 });
     this.play.position.set(x, this.contentTop + 52);
     this.play.onTap(() => void this.shell.startRun({ mode: 'endless' }));
-    this.claimPrize = new Button({ label: t('battle.endless.claim'), icon: 'gift', style: 'success', width: BTN_W, height: 88, fontSize: 26, disabledMark: 'none' });
+    this.claimPrize = new Button({ label: t('battle.endless.claim'), icon: 'gift', style: 'success', width: BTN_W, height: 88, fontSize: 30, disabledMark: 'none' });
     this.claimPrize.position.set(x, this.contentTop + 52 + 88 + 12);
     this.claimPrize.onTap(() => void this.takePrize());
     this.body.addChild(this.play, this.claimPrize);

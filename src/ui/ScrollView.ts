@@ -137,7 +137,7 @@ export class ScrollView extends Container implements ScrollHost {
   setViewSize(w: number, h: number): void {
     this.viewW = w;
     this.viewH = h;
-    this.maskG.clear().rect(0, 0, w, h).fill(0xffffff);
+    this.maskG.clear().rect(0, 0, w, h).fill(Color.white);
     this.hitArea = new Rectangle(0, 0, w, h);
     this.ay.viewport = h;
     this.ax.viewport = w;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FEATURES } from '@/meta/data/schedule';
 import {
-  jumpTarget, mayShowPopup, newUnlocks, nextPopup, primaryJump, reconcileSeen, sortUnlocks, UNLOCK_ORDER, type PopupFacts,
+  jumpTarget, mayShowPopup, newUnlocks, nextPopup, primaryJump, reconcileSeen, seenAfterImport, sortUnlocks, UNLOCK_ORDER, type PopupFacts,
 } from '@/screens/system/popupPolicy';
 
 function facts(patch: Partial<PopupFacts> = {}): PopupFacts {
@@ -68,6 +68,29 @@ describe('feature unlock batches', () => {
   it('trims the record when a smaller profile was restored', () => {
     expect(reconcileSeen(['cats'], ['cats', 'missions', 'pass'], 2, 6)).toEqual({ seenUnlocked: ['cats'], seenLevel: 2 });
     expect(reconcileSeen(['cats', 'missions'], ['cats'], 5, 3)).toEqual({ seenUnlocked: ['cats'], seenLevel: 3 });
+  });
+});
+
+describe('after a backup import', () => {
+  it('announces nothing the restored profile already had, and no level-up gems that were never paid here', () => {
+    // A fresh install (level 1, nothing seen) that just took a level 98 code with everything unlocked.
+    const unlocked = [...UNLOCK_ORDER];
+    expect(nextPopup(facts({ level: 98, unlocked }))?.kind).toBe('levelUp');
+    expect(nextPopup(facts({ level: 98, unlocked, ...seenAfterImport(unlocked, 98) }))).toBeNull();
+  });
+
+  it('follows a code with a lower level than this device had reached', () => {
+    const r = seenAfterImport(['cats'], 3);
+    expect(r).toEqual({ seenUnlocked: ['cats'], seenLevel: 3 });
+    // The next real level-up is announced again.
+    expect(nextPopup(facts({ level: 4, unlocked: ['cats'], ...r }))).toEqual({ kind: 'levelUp', from: 3, to: 4 });
+  });
+
+  it('copies the unlock list instead of sharing it with the profile', () => {
+    const unlocked = ['cats'];
+    const r = seenAfterImport(unlocked, 2);
+    unlocked.push('missions');
+    expect(r.seenUnlocked).toEqual(['cats']);
   });
 });
 

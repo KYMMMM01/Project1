@@ -136,50 +136,69 @@ export interface GridSlot {
   y: number;
 }
 
+/** Natural size of a reveal card's plate. The name is set under it at a fixed size on screen, whatever the scale. */
+export const PLATE = { w: 116, h: 136 } as const;
+/** Font size of a card's name on screen: never below the kit's body-text floor, never shrunk to fit. */
+export const NAME_SIZE = 24;
+export const NAME_LINE = 26;
+/** Space between a plate and its name, and below the name. */
+export const NAME_GAP = 8;
+const NAME_PAD = 4;
+const CELL_GAP = 10;
+/** Room above the first row for the tape and tags that overhang a plate. */
+const CREST = 22;
+const MAX_SCALE = 1.5;
+const MAX_COLS = 6;
+
 export interface GridLayout {
   cols: number;
   rows: number;
-  /** 'small' or 'medium' CardFrame, scaled by `scale` from its natural size. */
-  size: 'small' | 'medium';
+  /** Plate scale from its natural size. */
   scale: number;
-  cardW: number;
-  cardH: number;
-  /** Card centres, relative to the top-left of the area. */
+  /** Width of one cell; a name may use all of it. */
+  cellW: number;
+  /** Plate size on screen. */
+  plateW: number;
+  plateH: number;
+  /** Height reserved under each plate for its name. */
+  nameBlock: number;
+  /** Plate centres, relative to the top-left of the area. */
   slots: GridSlot[];
 }
 
-const NATURAL = { small: { w: 150, h: 200 }, medium: { w: 220, h: 292 } } as const;
-
-export function gridColumns(n: number): number {
-  if (n <= 3) return Math.max(1, n);
-  if (n <= 6) return 3;
-  if (n <= 12) return 4;
-  return 5;
+/** Height a name of `lines` lines takes under its plate. */
+export function nameBlockOf(lines: number): number {
+  return NAME_GAP + lines * NAME_LINE + NAME_PAD;
 }
 
-/** Lay `n` cards out in rows inside a `w` x `h` area; the last row is centred. Cards keep a 12 px gap and a crest margin. */
-export function gridLayout(n: number, w: number, h: number): GridLayout {
-  const cols = gridColumns(n);
-  const rows = Math.max(1, Math.ceil(n / cols));
-  const gap = 14;
-  const crest = 30;
-  const cellW = (w - gap * (cols - 1)) / cols;
-  const cellH = (h - crest - gap * (rows - 1)) / rows;
-  const fit = (s: 'small' | 'medium'): number => Math.min(cellW / NATURAL[s].w, cellH / NATURAL[s].h);
-  const useMedium = fit('medium') >= 0.7;
-  const size = useMedium ? 'medium' : 'small';
-  const scale = Math.min(useMedium ? 1 : 1.15, fit(size));
-  const cardW = NATURAL[size].w * scale;
-  const cardH = NATURAL[size].h * scale;
-  const slots: GridSlot[] = [];
-  const usedH = rows * cardH + (rows - 1) * gap;
-  const top = crest + Math.max(0, (h - crest - usedH) / 2);
-  for (let i = 0; i < n; i++) {
-    const row = Math.floor(i / cols);
-    const inRow = Math.min(cols, n - row * cols);
-    const col = i - row * cols;
-    const rowW = inRow * cardW + (inRow - 1) * gap;
-    slots.push({ x: (w - rowW) / 2 + cardW / 2 + col * (cardW + gap), y: top + cardH / 2 + row * (cardH + gap) });
+/**
+ * Lay `n` plates out in rows inside a `w` x `h` area, the last row centred. Every column count is tried and the one
+ * that allows the biggest plates wins (fewer rows on a tie); a cell is as wide as its share of the area and carries
+ * the name under the plate, so names keep their size and wrap in the cell instead of shrinking with the card.
+ * `nameBlockFor` says how tall the names get when a cell is that wide (a long name wraps to a second line).
+ */
+export function gridLayout(n: number, w: number, h: number, nameBlockFor: (cellW: number) => number = () => nameBlockOf(1)): GridLayout {
+  let best: GridLayout | null = null;
+  for (let cols = 1; cols <= Math.min(Math.max(1, n), MAX_COLS); cols++) {
+    const rows = Math.max(1, Math.ceil(n / cols));
+    const cellW = (w - CELL_GAP * (cols - 1)) / cols;
+    const nameBlock = nameBlockFor(cellW);
+    const fitW = cellW / PLATE.w;
+    const fitH = (h - CREST - CELL_GAP * (rows - 1) - rows * nameBlock) / (rows * PLATE.h);
+    const scale = Math.max(0.1, Math.min(fitW, fitH, MAX_SCALE));
+    if (best && (scale < best.scale - 1e-9 || (Math.abs(scale - best.scale) <= 1e-9 && rows >= best.rows))) continue;
+    best = { cols, rows, scale, cellW, plateW: PLATE.w * scale, plateH: PLATE.h * scale, nameBlock, slots: [] };
   }
-  return { cols, rows, size, scale, cardW, cardH, slots };
+  const g = best as GridLayout;
+  const rowH = g.plateH + g.nameBlock;
+  const usedH = g.rows * rowH + (g.rows - 1) * CELL_GAP;
+  const top = CREST + Math.max(0, (h - CREST - usedH) / 2);
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / g.cols);
+    const inRow = Math.min(g.cols, n - row * g.cols);
+    const col = i - row * g.cols;
+    const rowW = inRow * g.cellW + (inRow - 1) * CELL_GAP;
+    g.slots.push({ x: (w - rowW) / 2 + g.cellW / 2 + col * (g.cellW + CELL_GAP), y: top + g.plateH / 2 + row * (rowH + CELL_GAP) });
+  }
+  return g;
 }

@@ -2,7 +2,7 @@
  * HUD decisions with no display objects in them: which parts are visible on which run, how the gauge
  * reads, what the summon button says, which offers may be shown. Pure so they can be unit tested.
  */
-import type { ClassId, EnemyTrait, Fail, PityInfo, RarityId, UnitId } from '@/game';
+import type { BattlePhase, ClassId, EnemyTrait, Fail, PityInfo, RarityId, UnitId } from '@/game';
 
 // ───────────────────────────── staged reveal (GDD 9.1) ─────────────────────────────
 
@@ -52,6 +52,14 @@ export function speedSteps(butler: boolean, sandbox: boolean): readonly number[]
 export function nextSpeed(current: number, steps: readonly number[]): number {
   const i = steps.indexOf(current);
   return steps[(i + 1) % steps.length] ?? 1;
+}
+
+/**
+ * The pause menu opens only while the run is still going. Once the simulation says won or lost, only the staging is left
+ * and the result is already decided: a quit from there would file a won run as "Defeated" (abandon() cannot undo the phase).
+ */
+export function canOpenPause(phase: BattlePhase, ending: boolean): boolean {
+  return !ending && phase !== 'won' && phase !== 'lost';
 }
 
 // ───────────────────────────── enemy gauge ─────────────────────────────
@@ -169,6 +177,21 @@ export function luckLine(luck: number): LuckLine {
   if (l >= 0.45 && l <= 0.55) return { kind: 'avg', n: 50 };
   if (l > 0.55) return { kind: 'top', n: Math.max(1, Math.round((1 - l) * 100)) };
   return { kind: 'low', n: Math.max(1, Math.round(l * 100)) };
+}
+
+/**
+ * Fish the player still held when the run was lost, worth a line on the result screen: only when they could have bought
+ * cats with it (an empty cell and at least two summons' worth). 0 = nothing to say.
+ */
+export function unspentFish(victory: boolean, abandoned: boolean, fish: number, cost: number, emptyCells: number): number {
+  if (victory || abandoned || emptyCells <= 0 || cost <= 0) return 0;
+  return fish >= cost * 2 ? Math.floor(fish) : 0;
+}
+
+/** The wave a lost run ended on: the one on the HUD (cleared waves + the one being fought), never below the cleared count and never past the last. */
+export function wavesReached(wave: number, cleared: number, total: number): number {
+  const reached = Math.max(wave, cleared);
+  return total > 0 ? Math.min(total, reached) : reached;
 }
 
 /** "So close" shows when the run ended within `near` waves of the finish line. */

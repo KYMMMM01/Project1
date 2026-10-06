@@ -11,12 +11,14 @@ import type { UnitId } from '@/game';
 import type { BattleContext, BattleLayout, HudAnchor, HudPart } from '../context';
 import { BossBar } from './BossBar';
 import { BottomPanel } from './BottomPanel';
+import type { Weighted } from './bubbleMath';
 import { EnvImpl } from './env';
-import { Hints } from './hints';
+import { HintBubble } from './HintBubble';
+import { Hints, onScreen } from './hints';
 import { PauseMenu, type PauseAction } from './popups/PauseMenu';
 import { SummonPickPopup } from './popups/SummonPickPopup';
 import { findTwins } from './planMath';
-import { REVIVE_MIN_WAVES, revealFlags } from './policy';
+import { canOpenPause, REVIVE_MIN_WAVES, revealFlags } from './policy';
 import { canOfferContinue, openContinue, type DefeatReason } from './screens/ContinueScreen';
 import { RelicScreen } from './screens/RelicScreen';
 import { openResult, type ResultHandle } from './screens/ResultScreen';
@@ -27,6 +29,9 @@ import { Tutorial } from './Tutorial';
 
 /** Frames to wait for the field to draw a new cat before the pair hint gives up on it. */
 const TWINS_WAIT = 90;
+
+/** Seconds no hint bubble comes up after a banner or caption has taken the top of the screen. */
+const BANNER_HOLD = 2.6;
 
 /** Simulated seconds a single frame can never exceed (3x speed, 0.05 s frame cap, hit-stop aside): a bigger step means skipped events. */
 const RESYNC_JUMP = 0.5;
@@ -40,6 +45,7 @@ class Hud implements HudPart {
   private readonly root = new Container();
   private readonly hints: Hints;
   private env!: EnvImpl;
+  private bubble!: HintBubble;
   private top!: TopBar;
   private boss!: BossBar;
   private bottom!: BottomPanel;
@@ -92,6 +98,9 @@ class Hud implements HudPart {
     this.root.addChild(this.top.root, this.bottom.root, this.boss.root);
     this.top.pauseBtn.onTap(() => void this.openPause());
     this.layoutAll(ctx.layout);
+    this.bubble = new HintBubble(env, ctx.layers.overlay);
+    this.hints.bind({ bubble: this.bubble, avoid: () => this.avoidList() });
+    env.explainAt = (command) => this.explainTarget(command);
 
     if (env.tutorial) {
       this.tutorial = new Tutorial(env, () => {
@@ -100,7 +109,7 @@ class Hud implements HudPart {
         const tl = env.toHud(new Point(b.x, b.y));
         const br = env.toHud(new Point(b.x + b.width, b.y + b.height));
         return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
-      });
+      }, (on) => this.bottom.actions.summon.attention(on));
     }
 
     const battle = ctx.battle;
@@ -113,6 +122,18 @@ class Hud implements HudPart {
     env.on(battle.events, 'summonOffer', ({ options }) => this.openPick(options));
     env.on(battle.events, 'relicOffer', () => this.showRelics());
     env.on(battle.events, 'defeat', ({ reason }) => (this.defeatReason = reason));
+    // A banner or caption is about to take the top of the screen: a hint waits until it has gone.
+    for (const type of ['waveStart', 'synergy', 'relicGain', 'actClear', 'bossAbility', 'hazardWarn', 'enrage', 'rescued'] as const) {
+      env.on(battle.events, type, () => env.hints.hold(BANNER_HOLD));
+    }
+    env.on(battle.events, 'laser', () => env.hints.used('laser'));
+    env.on(battle.events, 'upgrade', ({ kind }) => {
+      if (kind === 'summon') env.hints.used('grade');
+    });
+    env.on(battle.events, 'sell', () => env.hints.used('sell'));
+    env.on(battle.events, 'molt', () => env.hints.used('molt'));
+    env.on(battle.events, 'awaken', () => env.hints.used('awaken'));
+    env.on(ctx.events, 'speed', () => env.hints.used('speed'));
     env.on(battle.events, 'waveStart', ({ wave }) => {
       if (wave >= 1 && env.reveal.speed) env.hints.request('speed', this.top.speedBtn);
       if (wave >= 2 && env.reveal.preview) env.hints.request('preview', this.top.previewLayer);
@@ -137,10 +158,52 @@ class Hud implements HudPart {
   private teardown(): void {
     this.tutorial?.destroy();
     this.tutorial = null;
+    this.hints.bind(null);
+    this.bubble.destroy();
     this.env.dispose();
     this.top.destroy();
     this.bottom.destroy();
     this.boss.destroy();
+  }
+
+  /** Rectangles a hint bubble should not cover: the cats, the summon button, the enemy preview and the chips. */
+  private avoidList(): Weighted[] {
+    const out: Weighted[] = [];
+    const add = (c: Container, weight: number): void => {
+      if (onScreen(c)) out.push({ ...this.bubble.boundsOf(c), weight });
+    };
+    add(this.top.previewLayer, 2);
+    add(this.top.waveLabel, 2);
+    add(this.bottom.classes.root, 1.5);
+    add(this.bottom.currency.fish, 1.2);
+    add(this.bottom.currency.purr, 1.2);
+    add(this.bottom.actions.summon, 3);
+    add(this.bottom.actions.laser, 1);
+    add(this.bottom.actions.util, 1);
+    for (const u of this.ctx.battle.units) {
+      const view = u ? this.ctx.unitView(u.uid) : null;
+      if (view) add(view, 3);
+    }
+    return out;
+  }
+
+  /** The control a refusal is about; null when the command lives in a popup (its toast shows above it). */
+  private explainTarget(command: string): Container | null {
+    switch (command) {
+      case 'summon':
+        return this.bottom.actions.summon.btn;
+      case 'upgradeSummon':
+        return this.bottom.actions.grade;
+      case 'callNextWave':
+        return this.bottom.actions.callBtn;
+      case 'laser':
+        return this.bottom.actions.laser;
+      case 'awaken':
+      case 'sell':
+        return this.bottom.sheet.buttonFor(command);
+      default:
+        return null;
+    }
   }
 
   private layoutAll(l: BattleLayout): void {
@@ -190,7 +253,7 @@ class Hud implements HudPart {
   // ───────────────────────── pause ─────────────────────────
 
   private async openPause(): Promise<void> {
-    if (this.pauseOpen || this.ending || this.destroyed) return;
+    if (this.pauseOpen || this.destroyed || !canOpenPause(this.ctx.battle.phase, this.ending)) return;
     this.pauseOpen = true;
     this.ctx.setPaused('user', true);
     const action = await popups.open(new PauseMenu(this.env));

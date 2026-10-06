@@ -19,17 +19,16 @@ const STEPS = 11;
 
 /** The v1.0 battle verbs, drawn as one teal block at the end of the grid. */
 const BATTLE_VERBS: readonly SfxId[] = ['laser_on', 'laser_off', 'molt', 'purr', 'awaken', 'call_wave', 'sunbeam', 'hazard_warn', 'splash', 'zap', 'weaken', 'shield_break'];
-const VERB_TEAL = 0x178a8f;
 
 /** Button colour per sound family, so the grid reads at a glance. */
 function familyColor(id: SfxId): number {
-  if (BATTLE_VERBS.includes(id)) return VERB_TEAL;
+  if (BATTLE_VERBS.includes(id)) return Color.tealDark;
   if (id.startsWith('ui_') || id === 'place' || id === 'pickup') return Color.infoDark;
-  if (id.startsWith('summon') || id.startsWith('merge') || id === 'upgrade' || id === 'sell') return Color.purpleDark;
+  if (id.startsWith('summon') || id.startsWith('merge') || id === 'upgrade' || id === 'sell') return Color.violetDark;
   if (id.startsWith('shoot') || id.startsWith('hit') || id === 'crit' || id === 'explosion' || id.startsWith('boss') || id === 'enemy_die') return Color.dangerDark;
-  if (['freeze', 'stun', 'buff', 'heal'].includes(id)) return 0xb0508a;
+  if (['freeze', 'stun', 'buff', 'heal'].includes(id)) return Color.mustardDark;
   if (['wave_start', 'wave_clear', 'danger_alarm', 'countdown_tick', 'whoosh', 'relic_pick'].includes(id)) return Color.successDark;
-  if (id.startsWith('chest') || id.startsWith('card') || id.startsWith('reel') || id === 'jackpot' || id === 'gamble_fail') return 0xa8326a;
+  if (id.startsWith('chest') || id.startsWith('card') || id.startsWith('reel') || id === 'jackpot' || id === 'gamble_fail') return Color.berryDark;
   return Color.primaryDark;
 }
 
@@ -83,7 +82,7 @@ class DemoButton extends Container {
     this.bg.roundRect(0, 0, bw, bh - 6, 14).fill(this.baseColor);
     this.bg.roundRect(6, 4, bw - 12, 8, 4).fill({ color: lighten(this.baseColor, 0.45), alpha: 0.5 });
     this.flash.clear();
-    this.flash.roundRect(0, 0, bw, bh - 6, 14).fill(0xffffff);
+    this.flash.roundRect(0, 0, bw, bh - 6, 14).fill(Color.white);
   }
 
   pulse(): void {
@@ -278,7 +277,7 @@ export default class AudioDemo extends Scene {
     this.gridView.position.set(PAD, this.gridTop);
     this.gridView.hitArea = new Rectangle(0, 0, game.w - PAD * 2, this.gridH);
     this.gridMask.clear();
-    this.gridMask.rect(PAD, this.gridTop, game.w - PAD * 2, this.gridH).fill(0xffffff);
+    this.gridMask.rect(PAD, this.gridTop, game.w - PAD * 2, this.gridH).fill(Color.white);
     this.gridView.mask = this.gridMask;
     this.gridBg.clear();
     this.gridBg.roundRect(PAD - 6, this.gridTop - 6, game.w - PAD * 2 + 12, this.gridH + 12, 16).fill({ color: Color.bgDeep, alpha: 0.8 });
@@ -334,7 +333,7 @@ export default class AudioDemo extends Scene {
     const f = this.gridFlash;
     this.tweens.killOf(f);
     f.clear();
-    f.roundRect(col * (cw + GAP), row * (CELL_H + GAP), cw, CELL_H - 6, 12).fill(0xffffff);
+    f.roundRect(col * (cw + GAP), row * (CELL_H + GAP), cw, CELL_H - 6, 12).fill(Color.white);
     f.alpha = 0.55;
     this.tweens.to(f, { alpha: 0 }, { duration: 0.28, ease: Ease.quadOut });
   }

@@ -7,18 +7,18 @@ import { motion, TweenBag } from './motion';
 import { drawPaper, paperSeed } from './paper';
 import { cacheStatic, paintTexture } from './shapes';
 import { fitLabel, uiLabel } from './text';
-import { Color } from './theme';
+import { Color, MIN_FONT } from './theme';
 
 export type BarColor = 'gold' | 'green' | 'red' | 'blue' | 'purple' | 'cyan';
 
 /** Flat craft-paper paints, one per bar colour. */
 const BAR_COLORS: Record<BarColor, number> = {
   gold: Color.mustard,
-  green: 0x84c063,
-  red: 0xe8675a,
+  green: Color.leaf,
+  red: Color.coral,
   blue: Color.teal,
   purple: Color.violet,
-  cyan: 0x7ccbe0,
+  cyan: Color.gem,
 };
 
 export interface ProgressBarOpts {
@@ -36,6 +36,11 @@ export interface ProgressBarOpts {
   ghost?: boolean;
   /** Round icon sitting on the left end of the bar. */
   icon?: IconName;
+  /**
+   * Label glyph size in design px (never below the 24 px floor). Default: 56 % of the bar height,
+   * which a bar under 43 px tall cannot carry; pass 24 there and the text overlays the bar's edges.
+   */
+  labelSize?: number;
 }
 
 /**
@@ -46,11 +51,11 @@ export interface ProgressBarOpts {
 export class ProgressBar extends Container {
   readonly uiBox: Box;
   private readonly barW: number;
-  private readonly barH: number;
   private readonly innerW: number;
   private readonly innerH: number;
   private readonly left: number;
   private readonly capMin: number;
+  private readonly labelPx: number;
 
   private readonly fill: NineSliceSprite;
   private readonly ghostBar: NineSliceSprite | null;
@@ -69,8 +74,8 @@ export class ProgressBar extends Container {
     const h = opts.height ?? 36;
     const w = opts.width;
     this.barW = w;
-    this.barH = h;
     this.format = opts.format;
+    this.labelPx = Math.max(MIN_FONT, Math.round(opts.labelSize ?? h * 0.56));
     this.colorKey = opts.color ?? 'gold';
     this.ticks = opts.ticks ?? 0;
     const pad = 4;
@@ -99,7 +104,7 @@ export class ProgressBar extends Container {
     };
 
     if (opts.ghost) {
-      this.ghostBar = slice(paintTexture(0xfff3d6, this.innerH));
+      this.ghostBar = slice(paintTexture(Color.paperLight, this.innerH));
       this.addChild(this.ghostBar);
     } else {
       this.ghostBar = null;
@@ -121,7 +126,7 @@ export class ProgressBar extends Container {
       this.addChild(ic);
     }
     if (opts.label !== undefined || opts.format) {
-      this.labelT = uiLabel(opts.label ?? '', { size: Math.max(20, Math.round(h * 0.56)) });
+      this.labelT = uiLabel(opts.label ?? '', { size: this.labelPx });
       this.addChild(this.labelT);
     }
     this.apply(opts.value ?? 0);
@@ -139,7 +144,7 @@ export class ProgressBar extends Container {
 
   setLabel(text: string): void {
     if (!this.labelT) {
-      this.labelT = uiLabel(text, { size: Math.max(20, Math.round(this.barH * 0.56)) });
+      this.labelT = uiLabel(text, { size: this.labelPx });
       this.addChild(this.labelT);
     }
     this.labelT.text = text;
@@ -291,7 +296,7 @@ export class CooldownRing extends Container {
 
   setLabel(text: string): void {
     if (!this.labelT) {
-      this.labelT = uiLabel(text, { size: Math.max(20, Math.round(this.rInner * 0.8)) });
+      this.labelT = uiLabel(text, { size: Math.max(MIN_FONT, Math.round(this.rInner * 0.8)) });
       this.addChild(this.labelT);
     }
     this.labelT.text = text;

@@ -15,15 +15,14 @@ import type { BattleLayout } from '../context';
 import type { HudEnv } from './env';
 import { Hand } from './Hand';
 import type { Rect } from './layoutMath';
-import { TUTORIAL_SUMMONS, TutorialFlow, findMergePair } from './tutorialFlow';
+import { NUDGE_FOR, TUTORIAL_SUMMONS, TutorialFlow, findMergePair, nudgeDue } from './tutorialFlow';
 
 /** How long the clock runs after a tap so the new kitten can pop in before the next prompt. */
 const BREATH = 0.75;
 const MARGIN = 18;
-/** Seconds of unspent fish before the free-play nudge points at the summon button, how long it stays, and how often it may come back. */
-const NUDGE_AFTER = 6;
-const NUDGE_FOR = 5;
-const NUDGE_MAX = 3;
+/** The hand points at the button's top-right corner: its body then covers neither the cost label nor the screen's bottom edge. */
+const HAND_X = 0.84;
+const HAND_DY = 10;
 
 export class Tutorial {
   readonly flow = new TutorialFlow();
@@ -39,6 +38,7 @@ export class Tutorial {
   private text = '';
   private drag: { a: number; b: number } | null = null;
   private held = false;
+  private carrying = false;
   private shown = false;
   private paintedKey = '';
   private readonly seed = paperSeed();
@@ -50,6 +50,8 @@ export class Tutorial {
   constructor(
     private readonly env: HudEnv,
     private readonly summonTarget: () => Rect,
+    /** Keeps the summon button breathing while the pointer is on it. */
+    private readonly pulse: (on: boolean) => void,
   ) {
     this.layout = env.layout();
     const parent = env.ctx.layers.overlay;
@@ -81,6 +83,12 @@ export class Tutorial {
     });
     env.on(b.events, 'merge', () => {
       if (this.flow.onMerge()) this.end();
+    });
+    // While the player holds a cat the hand would sit on the merge bubble: it steps out of the way.
+    env.on(env.ctx.events, 'drag', ({ from }) => {
+      this.carrying = from !== null;
+      this.hand.visible = !this.carrying;
+      if (this.carrying) this.endNudge();
     });
     env.on(b.events, 'summonOffer', () => {
       if (this.flow.onOffer()) this.end();
@@ -123,9 +131,10 @@ export class Tutorial {
     this.text = t('hud.tut.summon', { n: this.flow.summons, total: TUTORIAL_SUMMONS });
     this.target = () => this.summonTarget();
     this.show();
+    this.pulse(true);
     const r = this.target();
     if (r) {
-      this.hand.position.set(r.x + r.w * 0.62, r.y + r.h * 0.55);
+      this.hand.position.set(r.x + r.w * HAND_X, r.y + HAND_DY);
       this.hand.tap();
     }
   }
@@ -227,6 +236,7 @@ export class Tutorial {
 
   private clear(): void {
     this.shown = false;
+    this.pulse(false);
     this.bag.killKeyed(this.layer);
     this.bag.killKeyed(this.ring);
     this.layer.visible = false;
@@ -243,7 +253,13 @@ export class Tutorial {
   /** Between the merge and the scripted pick the player plays freely: point at the button when fish pile up unspent. */
   private nudge(dt: number): void {
     const { battle, ctx } = this.env;
-    const idle = this.flow.step === 'free' && !this.flow.offered && !ctx.paused && battle.fish >= battle.summonCost();
+    let cats = 0;
+    let room = false;
+    for (const u of battle.units) {
+      if (u) cats++;
+      else room = true;
+    }
+    const idle = this.flow.step === 'free' && !this.flow.offered && !ctx.paused && room && battle.fish >= battle.summonCost();
     if (!idle) {
       this.idle = 0;
       this.endNudge();
@@ -255,13 +271,14 @@ export class Tutorial {
       return;
     }
     this.idle += dt;
-    if (this.idle < NUDGE_AFTER || this.nudges >= NUDGE_MAX) return;
+    if (!nudgeDue(this.idle, this.nudges, cats) || this.carrying) return;
     this.nudges++;
     this.nudgeLeft = NUDGE_FOR;
     const r = this.summonTarget();
-    this.nudgeHand.position.set(r.x + r.w * 0.62, r.y + r.h * 0.55);
+    this.nudgeHand.position.set(r.x + r.w * HAND_X, r.y + HAND_DY);
     this.nudgeHand.visible = true;
     this.nudgeHand.tap();
+    this.pulse(true);
     tooltip.show(this.nudgeHand, { text: t('hud.tut.more') }, NUDGE_FOR);
   }
 
@@ -270,6 +287,7 @@ export class Tutorial {
     if (!this.nudgeHand.visible) return;
     this.nudgeHand.visible = false;
     this.nudgeLeft = 0;
+    this.pulse(false);
     if (tooltip.target === this.nudgeHand) tooltip.hide();
   }
 
@@ -296,6 +314,7 @@ export class Tutorial {
     this.bag.killAll();
     this.hold(false);
     this.endNudge();
+    this.pulse(false);
     if (tooltip.target === this.anchor) tooltip.hide();
     this.layer.destroy({ children: true });
     this.nudgeHand.destroy({ children: true });

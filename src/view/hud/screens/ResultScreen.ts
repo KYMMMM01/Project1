@@ -42,7 +42,7 @@ import { Coupon } from '../Coupon';
 import type { HudEnv } from '../env';
 import { CLASS_TAPE, fitSprite, unitPhoto, unitPortrait } from '../kit';
 import { bestCat } from '../planMath';
-import { luckLine, offerRoute, rewardTiles, soCloseWaves, type RewardTile } from '../policy';
+import { luckLine, offerRoute, rewardTiles, soCloseWaves, unspentFish, type RewardTile } from '../policy';
 
 export interface ResultHandlers {
   retry(): void;
@@ -99,8 +99,11 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   });
   title.position.set(W / 2, 82);
   const near = soCloseWaves(stats.wavesCleared, stats.totalWaves, victory);
+  const battle = env.battle;
+  const left = unspentFish(victory, abandoned, battle.fish, battle.summonCost(), battle.units.filter((u) => !u).length);
+  // A run lost with fish in the purse says why before it says anything cheerful.
   const sub = new PaperLabel({
-    text: near > 0 ? t('hud.res.close', { n: near }) : t(victory ? 'hud.res.winSub' : 'hud.res.loseSub'),
+    text: left > 0 ? t('hud.res.loseFish', { n: fmt(left) }) : near > 0 ? t('hud.res.close', { n: near }) : t(victory ? 'hud.res.winSub' : 'hud.res.loseSub'),
     size: 28,
     paper: Color.paper,
     padX: 26,

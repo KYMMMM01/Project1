@@ -10,7 +10,6 @@ import type { Scene } from '@/core/scene';
 import { loadFxTier, setFxSettings } from '@/fx';
 import { initMeta, profile } from '@/meta';
 import { getBootResult, initPlatform, platform } from '@/platform';
-import { markUnlocksSeen } from '@/scenes/HomeScene';
 import type { TabId } from '@/screens/contract';
 import { shell } from '@/screens/shell/controller';
 import '@/screens/shell/strings';
@@ -68,7 +67,6 @@ export function createApp(): App {
       await initMeta();
       setInterval(() => profile.refresh(), REFRESH_MS);
     }, 'shell.boot.warn.meta');
-    markUnlocksSeen();
     await attempt('settings', async () => {
       await ensureSettings();
       if (!currentSettings().lang) setLang(detectLang());

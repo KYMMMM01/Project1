@@ -38,6 +38,7 @@ export type { DailySetup } from './daily';
 export { shopOffers } from './shop';
 export type { ShopOffer } from './shop';
 export { describeBundle, bundleParts, mergeBundles } from './bundle';
+export { tn } from './plural';
 export type { BundlePart } from './bundle';
 export { featureHint, isFeatureUnlocked } from './features';
 export { encodeBackup, decodeBackup } from './backup';

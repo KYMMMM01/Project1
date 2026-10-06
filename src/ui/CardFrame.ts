@@ -10,7 +10,7 @@ import { RarityPips } from './RarityPips';
 import { cacheStatic } from './shapes';
 import { Tag } from './Tag';
 import { fitLabel, uiLabel } from './text';
-import { Color, Rarity, rarityIndex, RARITY_GOLD, RARITY_ORDER, type RarityId } from './theme';
+import { Color, MIN_FONT, Rarity, rarityIndex, RARITY_GOLD, RARITY_ORDER, type RarityId } from './theme';
 
 export type CardSize = 'small' | 'medium' | 'large';
 
@@ -30,8 +30,8 @@ interface Metrics {
 }
 
 const METRICS: Record<CardSize, Metrics> = {
-  small: { w: 150, h: 200, radius: 20, name: 22, level: 20, bar: 24, plate: 74, pip: 11, over: 8, crest: 14 },
-  medium: { w: 220, h: 292, radius: 26, name: 28, level: 24, bar: 28, plate: 88, pip: 13, over: 10, crest: 18 },
+  small: { w: 150, h: 200, radius: 20, name: 24, level: 24, bar: 30, plate: 80, pip: 11, over: 8, crest: 14 },
+  medium: { w: 220, h: 292, radius: 26, name: 28, level: 24, bar: 32, plate: 92, pip: 13, over: 10, crest: 18 },
   large: { w: 320, h: 424, radius: 34, name: 38, level: 30, bar: 34, plate: 116, pip: 17, over: 14, crest: 26 },
 };
 
@@ -90,7 +90,7 @@ export class CardFrame extends Container {
 
     this.drawArt();
     const mask = new Graphics();
-    mask.roundRect(this.windowRect.x, this.windowRect.y, this.windowRect.w, this.windowRect.h, m.radius * 0.5).fill(0xffffff);
+    mask.roundRect(this.windowRect.x, this.windowRect.y, this.windowRect.w, this.windowRect.h, m.radius * 0.5).fill(Color.white);
     this.portraitHost.mask = mask;
     this.addChild(this.art, this.portraitHost, mask, this.overlay);
     this.buildPips();
@@ -181,11 +181,11 @@ export class CardFrame extends Container {
       text: label,
       style: 'danger',
       shape: small ? 'pill' : 'flag',
-      fontSize: small ? 20 : 24,
+      fontSize: MIN_FONT,
       tilt: small ? 0.1 : 0.14,
     });
     const m = this.m;
-    if (small) t.position.set(m.w / 2 - t.uiBox.w / 2 - 2, -m.h / 2 + 4);
+    if (small) t.position.set(m.w / 2 - t.uiBox.w / 2 - 2, -m.h / 2 - 4);
     else t.position.set(m.w / 2 + 10 - t.uiBox.w / 2, -m.h / 2 + 30);
     this.overlay.addChild(t);
     this.newTag = t;
@@ -255,8 +255,9 @@ export class CardFrame extends Container {
     this.overlay.addChild(back, pips);
 
     if (uiPrefs.colorAssist) {
-      const name = uiLabel(rarityName(this.rarity), { size: Math.max(20, Math.round(m.name * 0.78)) });
-      fitLabel(name, wr.w - 12, 22);
+      const size = Math.max(MIN_FONT, Math.round(m.name * 0.78));
+      const name = uiLabel(rarityName(this.rarity), { size });
+      fitLabel(name, wr.w - 12, size);
       name.position.set(0, y - m.pip - name.height / 2 - 2);
       this.overlay.addChild(name);
     }

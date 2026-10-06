@@ -24,6 +24,8 @@ addStrings('ko', {
   'rt.pass.celebrate.empty': '이제 단계마다 프리미엄 보상이 쌓여요.',
   'rt.pass.celebrate.claim': '모두 받기',
   'rt.pass.celebrate.later': '나중에 받기',
+  'rt.pass.ending.title': '시즌이 곧 끝나요',
+  'rt.pass.ending.body': '못 받은 보상이 있어요. 시즌이 끝나면 사라져요.',
 });
 
 addStrings('en', {
@@ -48,6 +50,8 @@ addStrings('en', {
   'rt.pass.celebrate.empty': 'From now on every tier adds a Premium reward.',
   'rt.pass.celebrate.claim': 'Claim all',
   'rt.pass.celebrate.later': 'Claim later',
+  'rt.pass.ending.title': 'The season is ending',
+  'rt.pass.ending.body': 'Rewards are still waiting. They are gone when the season ends.',
 });
 
 /** Number of rotating season names. */

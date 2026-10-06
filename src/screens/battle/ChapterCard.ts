@@ -51,7 +51,7 @@ export interface ChapterCardHandlers {
   onCalendar(): void;
 }
 
-/** What one chapter shows: the print, its labels and the boss; a locked chapter gets a kraft veil with the reason. */
+/** What one chapter shows: the print, its labels and the boss; a locked chapter gets a kraft veil with a lock (the speech bubble below says why, once). */
 function buildArt(chapter: number, unlocked: boolean, best: number): Container {
   const art = new Container();
   const photo = new ChapterPhoto({ w: FRAME_W, h: FRAME_H, chapter, tape: 'sky', tilt: -0.012 });
@@ -60,11 +60,9 @@ function buildArt(chapter: number, unlocked: boolean, best: number): Container {
 
   if (!unlocked) {
     const veil = new Graphics().rect(PAD + 10, FRAME_Y + 10, FRAME_W - 20, FRAME_H - 20).fill({ color: Color.kraft, alpha: 0.84 });
-    const lock = drawIcon('lock', 92);
-    lock.position.set(W / 2, FRAME_Y + FRAME_H / 2 - 30);
-    const hint = new PaperLabel({ text: t('battle.chapter.locked'), size: 26, paper: Color.paperLight, maxWidth: 520 });
-    hint.position.set(W / 2, FRAME_Y + FRAME_H / 2 + 50);
-    art.addChild(veil, lock, hint);
+    const lock = drawIcon('lock', 104);
+    lock.position.set(W / 2, FRAME_Y + FRAME_H / 2);
+    art.addChild(veil, lock);
   }
 
   const boss = bossSticker(chapter, BOSS_BOX, BOSS_BOX, !unlocked);

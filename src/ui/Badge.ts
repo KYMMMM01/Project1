@@ -3,7 +3,7 @@ import { Ease } from '@/core/tween';
 import { backOut, motion, TweenBag } from './motion';
 import { drawPaper, drawPaperFace, paperSeed } from './paper';
 import { uiLabel } from './text';
-import { Color } from './theme';
+import { Color, MIN_FONT } from './theme';
 import type { Box } from './layoutMath';
 
 /** `true` = plain dot, a number = count (0 hides it), `undefined`/`false` = hidden. */
@@ -110,8 +110,9 @@ export class Badge extends Container {
     let h = d;
     if (typeof value === 'number') {
       const str = value > this.maxCount ? `${this.maxCount}+` : String(value);
-      this.text = uiLabel(str, { size: 22, color: Color.inkDeep });
-      h = Math.round(d * 1.4);
+      const fs = Math.max(MIN_FONT, Math.round(d));
+      this.text = uiLabel(str, { size: fs, color: Color.inkDeep });
+      h = Math.max(Math.round(d * 1.4), Math.round(fs * 1.35));
       w = Math.max(h, Math.ceil(this.text.width) + 18);
     }
     const kind = w === h ? 'circle' : 'pill';

@@ -11,7 +11,8 @@ import { StampMark } from './kit/marks';
 import { partsOf } from './kit/parts';
 import { RewardChip, partSticker } from './kit/rewardChip';
 import { paperSheet, SHEET_SEEDS, sharedSheet } from './kit/sheets';
-import { calendarCellState, isBigDay, type CellState } from './calendarModel';
+import { calendarCellState, calendarPage, isBigDay, type CellState } from './calendarModel';
+import { WELCOME_H, WELCOME_PARTS, WelcomeRow } from './calendarWelcome';
 import './strings';
 
 const COLS = 7;
@@ -31,7 +32,7 @@ class CalendarCell extends Container {
   private readonly circle = new Graphics();
   private readonly dayText: Text;
   private readonly cw: number;
-  private state: CellState = 'upcoming';
+  private state: CellState | null = null;
 
   constructor(readonly day: number, bundle: Parameters<typeof partsOf>[0]) {
     super();
@@ -71,6 +72,7 @@ class CalendarCell extends Container {
   }
 
   sync(state: CellState, animate: boolean): void {
+    if (state === this.state) return;
     this.chip?.setDim(state === 'claimed');
     this.stamp.visible = state === 'claimed';
     if (animate && state === 'claimed' && this.state !== 'claimed') this.stamp.slam();
@@ -104,7 +106,13 @@ class CalendarCell extends Container {
 export class CalendarPopup extends Popup<void> {
   private readonly cells: CalendarCell[] = [];
   private readonly claimBtn: Button;
+  private readonly cycle: Text;
   private readonly progress: Text;
+  private readonly welcome: WelcomeRow | null;
+  private readonly offChange: () => void;
+  /** What the last sync drew: the profile changes often and a redraw of the same page would restart the pulses. */
+  private drawn = '';
+  private claiming = false;
 
   constructor(private readonly host: Shell) {
     super({ dismissResult: undefined, priority: 3 });
@@ -113,18 +121,20 @@ export class CalendarPopup extends Popup<void> {
     const gridTop = 176;
     const gridH = 4 * CELL_H + 3 * GAP;
     const note = uiLabel(t('rt.sys.cal.note'), { size: 24, color: Color.inkSoft, wrap: GRID_W, lineHeight: 32 });
-    const btnY = gridTop + gridH + 34 + 52;
+    // The welcome-back row only exists when the chest was waiting as the page opened.
+    const lift = view.comebackReady ? WELCOME_H + 22 : 0;
+    const btnY = gridTop + gridH + 34 + 52 + lift;
     const h = btnY + 52 + 18 + note.height + 36;
     const panel = new Panel({ width: W, height: h, title: t('rt.sys.cal.title'), torn: 'bottom', tape: 'sky', onClose: () => this.close() });
 
     // The page header: a kraft strip with the calendar's number and how far along it is.
     const head = paperSheet(GRID_W, 56, { fill: Color.kraft, radius: 14, seed: 21 });
     head.position.set(left, 104);
-    const cycle = uiLabel(t('rt.sys.cal.cycle', { n: view.cycles + 1 }), { size: 28, anchorX: 0 });
-    cycle.position.set(left + 20, 133);
+    this.cycle = uiLabel('', { size: 28, anchorX: 0 });
+    this.cycle.position.set(left + 20, 133);
     this.progress = uiLabel('', { size: 28, anchorX: 1 });
     this.progress.position.set(left + GRID_W - 20, 133);
-    panel.content.addChild(head, cycle, this.progress);
+    panel.content.addChild(head, this.cycle, this.progress);
 
     view.days.forEach((bundle, i) => {
       const day = i + 1;
@@ -136,6 +146,14 @@ export class CalendarPopup extends Popup<void> {
       this.cells.push(cell);
     });
 
+    if (view.comebackReady) {
+      this.welcome = new WelcomeRow(GRID_W, () => this.claimWelcome());
+      this.welcome.position.set(left, gridTop + gridH + 22);
+      panel.content.addChild(this.welcome);
+    } else {
+      this.welcome = null;
+    }
+
     this.claimBtn = new Button({ label: t('rt.sys.cal.claim'), style: 'success', width: 420, height: 104, fontSize: 40, disabledMark: 'none' });
     this.claimBtn.position.set(W / 2, btnY);
     this.claimBtn.onTap(() => this.claim());
@@ -144,21 +162,49 @@ export class CalendarPopup extends Popup<void> {
     this.body.addChild(panel);
     this.setContentSize(W + 80, h + 90);
     this.sync(false);
+    // Midnight, a comeback claimed elsewhere or an import change what the page shows while it is open.
+    this.offChange = profile.subscribe(() => {
+      if (!this.claiming) this.sync(false);
+    });
   }
 
   private sync(animate: boolean): void {
     const view = profile.calendarView();
-    this.cells.forEach((cell) => cell.sync(calendarCellState(cell.day, view), animate));
-    this.progress.text = t('rt.sys.cal.progress', { n: view.stamp, max: this.cells.length });
-    this.claimBtn.setEnabled(view.canClaim);
-    this.claimBtn.setLabel(t(view.canClaim ? 'rt.sys.cal.claim' : 'rt.sys.cal.done'));
-    if (view.canClaim) this.claimBtn.startPulse({ times: 4 });
+    const page = calendarPage(view, profile.data.calendar.lastDate === profile.today(), this.cells.length);
+    const key = `${page.page}|${page.stamp}|${page.canClaim}|${view.comebackReady}`;
+    if (key === this.drawn) return;
+    this.drawn = key;
+    this.cells.forEach((cell) => cell.sync(calendarCellState(cell.day, page), animate));
+    this.cycle.text = t('rt.sys.cal.cycle', { n: page.page });
+    this.progress.text = t('rt.sys.cal.progress', { n: page.stamp, max: this.cells.length });
+    this.claimBtn.setEnabled(page.canClaim);
+    this.claimBtn.setLabel(t(page.canClaim ? 'rt.sys.cal.claim' : 'rt.sys.cal.done'));
+    if (page.canClaim) this.claimBtn.startPulse({ times: 4 });
     else this.claimBtn.stopPulse();
+    this.welcome?.setClaimed(!view.comebackReady);
   }
 
   private claim(): void {
-    const before = profile.calendarView().next;
-    const r = profile.claimCalendar();
+    this.claiming = true;
+    try {
+      const r = profile.claimCalendar();
+      if (!r.ok) {
+        audio.play('ui_error');
+        toast(t(errorKey(r.error)), 'warning');
+        this.sync(false);
+        return;
+      }
+      this.host.refresh();
+      this.sync(true);
+      // The stamp lands on the day that was claimed: after day 28 the profile already reads as the next, empty page.
+      void payout(this.host, partsOf(r.value.reward), this.cells[r.value.day - 1] ?? this.claimBtn, t('rt.sys.cal.title'));
+    } finally {
+      this.claiming = false;
+    }
+  }
+
+  private claimWelcome(): void {
+    const r = profile.claimComeback();
     if (!r.ok) {
       audio.play('ui_error');
       toast(t(errorKey(r.error)), 'warning');
@@ -166,12 +212,11 @@ export class CalendarPopup extends Popup<void> {
       return;
     }
     this.host.refresh();
-    this.sync(true);
-    const cell = this.cells[before - 1];
-    void payout(this.host, partsOf(r.value.reward), cell ?? this.claimBtn, t('rt.sys.cal.title'));
+    void payout(this.host, WELCOME_PARTS, this.welcome ?? this.claimBtn, t('rt.sys.comeback.title'));
   }
 
   override destroy(options?: DestroyOptions): void {
+    this.offChange();
     this.claimBtn.stopPulse();
     super.destroy(options);
   }

@@ -1,7 +1,8 @@
+import { audio } from '@/audio';
 import { t } from '@/core/i18n';
 import { bundleParts, describeBundle, iapSpec, profile } from '@/meta';
 import { iap } from '@/platform';
-import { Button, Tag, drawIcon, fitLabel, uiLabel } from '@/ui';
+import { Button, Tag, drawIcon, fitLabel, toast, uiLabel } from '@/ui';
 import { services, type Shell } from '../contract';
 import { CARD_PAD, HomeCard } from './HomeCard';
 import { PROMO_PRODUCT } from './promo';
@@ -38,12 +39,24 @@ export class PromoCard extends HomeCard {
     this.price.setLabel(iap.priceText(PROMO_PRODUCT));
   }
 
+  /** The grant makes the card go away (the pack is no longer purchasable) before the store call returns, so nothing after the purchase may need the card. */
   private async buy(): Promise<void> {
     this.price.setBusy(true);
     const outcome = await iap.purchase(PROMO_PRODUCT);
-    if (this.destroyed) return;
-    this.price.setBusy(false);
-    if (outcome !== 'purchased') return;
+    if (!this.destroyed) this.price.setBusy(false);
+    if (outcome === 'cancelled') {
+      toast(t('shop.buy.cancel'), 'info');
+      return;
+    }
+    if (outcome === 'failed') {
+      audio.play('ui_error');
+      toast(t('shop.buy.fail'), 'error');
+      return;
+    }
+    if (outcome === 'unavailable') {
+      toast(t('shop.buy.unavailable'), 'warning');
+      return;
+    }
     this.shell.refresh();
     const spec = iapSpec(PROMO_PRODUCT);
     if (spec) await services.showRewards(bundleParts(spec.bundle), iap.productName(PROMO_PRODUCT));

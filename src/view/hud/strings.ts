@@ -47,15 +47,16 @@ addStrings('ko', {
   'hud.plan.awaken': '각성하면',
   'hud.plan.top': '가장 높은 등급이에요',
   'hud.plan.have': '같은 고양이 {n}마리',
-  'hud.plan.rule': '{n}마리면 합칠 수 있어요',
+  'hud.plan.rule': '{n}마리부터 합쳐요',
   'hud.plan.ready': '끌어서 합쳐요!',
-  'hud.plan.synergy': '시너지 {need}단계 (지금 {now})',
+  'hud.plan.synergy': '시너지 {now}/{need}단계',
   'hud.plan.purr': '골골 {have}/{need}',
 
   // odds
   'hud.odds.title': '소환 확률',
   'hud.odds.grade': '소환 등급 {lv}단계',
-  'hud.odds.status': '골목대장 이상 안 나온 횟수 {n}/{limit} · 추가 확률 +{bonus}%p',
+  'hud.odds.status': '천장: 골목대장 이상 안 나온 횟수 {n}/{limit} · 추가 확률 +{bonus}%p',
+  'hud.pity': '천장',
   'hud.odds.rule': '골목대장 이상이 {limit}번 안 나오면 {next}번째부터 소환마다 확률이 쌓여요. 나오면 처음부터 다시 세요. 위 표는 다음 소환에 실제로 쓰는 확률이에요.',
   'hud.odds.tutorial': '처음 세 번의 소환은 튜토리얼 대본이에요. 그 뒤부터는 위 표대로 나와요.',
 
@@ -130,6 +131,7 @@ addStrings('ko', {
   'hud.res.winSub': '냥이 수비대가 집을 지켰어요!',
   'hud.res.loseSub': '다음엔 더 잘할 수 있어요.',
   'hud.res.close': '{n}웨이브만 더 가면 클리어였어요!',
+  'hud.res.loseFish': '물고기가 {n}마리 남았어요. 고양이를 더 불러요!',
   'hud.res.waves': '웨이브',
   'hud.res.kills': '처치',
   'hud.res.merges': '합성',
@@ -164,7 +166,7 @@ addStrings('ko', {
   // tutorial
   'hud.tut.summon': '버튼을 눌러 고양이를 불러요! ({n}/{total})',
   'hud.tut.merge': '같은 고양이끼리 끌어서 합쳐요! 같은 직업의 다음 등급이 돼요.',
-  'hud.tut.more': '물고기가 모이면 고양이를 더 불러요!',
+  'hud.tut.more': '물고기가 넉넉해요! 고양이를 더 불러요!',
 
   // laser
   'hud.laser.hint': '길 위를 눌러 빨간 점을 찍어요.',
@@ -208,7 +210,7 @@ addStrings('ko', {
   'hud.hint.speed': '누를 때마다 배속이 바뀌어요.',
   'hud.hint.preview': '다음 웨이브에 나올 적이에요. 눌러서 알아봐요.',
   'hud.hint.tracker': '6번째 소환마다 세 마리 중 하나를 골라요.',
-  'hud.hint.laser': '레이저예요. 켜지면 길 위를 눌러 빨간 점을 찍어요.',
+  'hud.hint.laser': '레이저예요. 길 위를 눌러 빨간 점을 찍어요.',
   'hud.hint.callWave': '미리 불러서 생선 보너스를 받아요!',
   'hud.hint.purr': '골골이에요. 털갈이와 각성에 써요.',
   'hud.hint.molt': '골골로 같은 등급의 다른 직업으로 바꿔요.',
@@ -257,18 +259,19 @@ addStrings('en', {
   'hud.ladder.merge': 'Merge',
   'hud.ladder.awaken': 'Awaken',
 
-  'hud.plan.merge': 'Merges into',
-  'hud.plan.awaken': 'Awakens into',
+  'hud.plan.merge': 'Merge',
+  'hud.plan.awaken': 'Awaken',
   'hud.plan.top': 'Highest rank',
   'hud.plan.have': 'Same cat: {n}',
-  'hud.plan.rule': '{n} of a kind can merge',
+  'hud.plan.rule': 'Need {n} to merge',
   'hud.plan.ready': 'Drag to merge!',
-  'hud.plan.synergy': 'Synergy tier {need} (now {now})',
+  'hud.plan.synergy': 'Synergy {now}/{need}',
   'hud.plan.purr': 'Purr {have}/{need}',
 
   'hud.odds.title': 'Summon odds',
   'hud.odds.grade': 'Summon grade {lv}',
-  'hud.odds.status': 'Summons without Alley Boss+: {n}/{limit} · bonus +{bonus} pts',
+  'hud.odds.status': 'Pity: summons without Alley Boss+: {n}/{limit} · bonus +{bonus} pts',
+  'hud.pity': 'Pity',
   'hud.odds.rule': 'If {limit} summons in a row give no Alley Boss or better, every summon from the {next}th adds to the chance until one shows up. The table above is exactly what the next summon rolls on.',
   'hud.odds.tutorial': 'The first three summons are scripted for the tutorial. After that, the table above is what you get.',
 
@@ -337,6 +340,7 @@ addStrings('en', {
   'hud.res.winSub': 'The Meow Guard saved the house!',
   'hud.res.loseSub': 'You will do better next time.',
   'hud.res.close': 'Only {n} more waves to clear it!',
+  'hud.res.loseFish': 'You had {n} fish left. Spend them on cats!',
   'hud.res.waves': 'Waves',
   'hud.res.kills': 'Kills',
   'hud.res.merges': 'Merges',
@@ -370,7 +374,7 @@ addStrings('en', {
 
   'hud.tut.summon': 'Tap to summon a cat! ({n}/{total})',
   'hud.tut.merge': 'Drag one cat onto its twin to merge! You get the next rank of the same class.',
-  'hud.tut.more': 'Got fish? Summon more cats!',
+  'hud.tut.more': 'Fish ready! Summon more cats!',
 
   'hud.laser.hint': 'Tap the walkway to place the red dot.',
   'hud.laser.active': 'The laser is on. Drag the dot to move it.',
@@ -411,7 +415,7 @@ addStrings('en', {
   'hud.hint.speed': 'Tap to change the game speed.',
   'hud.hint.preview': 'Enemies of the next wave. Tap one to learn more.',
   'hud.hint.tracker': 'Every 6th summon lets you pick one of three cats.',
-  'hud.hint.laser': 'The laser. When it is ready, tap the walkway to drop the red dot.',
+  'hud.hint.laser': 'The laser. Tap the walkway to drop the red dot.',
   'hud.hint.callWave': 'Call the next wave early for bonus fish!',
   'hud.hint.purr': 'Purr pays for molting and awakening.',
   'hud.hint.molt': 'Spend purr to change a cat into another class of the same rarity.',

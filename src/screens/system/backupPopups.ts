@@ -9,6 +9,7 @@ import type { BackupPreview } from '@/meta/profile';
 import { Button, Color, drawDashedLine, drawIcon, fitLabel, Panel, Popup, toast, TweenBag, uiLabel } from '@/ui';
 import { DomTextField } from './domField';
 import { paperSheet } from './kit/sheets';
+import { markProfileSeen } from './prefs';
 import { savedAtText } from './settingsModel';
 import './strings';
 
@@ -77,6 +78,11 @@ export class CodeExportPopup extends Popup<void> {
     const ok = await copyText(this.field);
     audio.play(ok ? 'ui_confirm' : 'ui_error');
     toast(t(ok ? 'rt.sys.code.copied' : 'rt.sys.code.copyFail'), ok ? 'success' : 'warning');
+  }
+
+  override layout(w: number, h: number): void {
+    super.layout(w, h);
+    this.field.place();
   }
 
   override close(result?: void): void {
@@ -234,6 +240,8 @@ export class CodeImportPopup extends Popup<boolean> {
     this.busy = true;
     const r = await profile.importCode(code);
     this.busy = false;
+    // The profile is replaced whether or not this popup is still on screen: what it holds is not news.
+    if (r.ok) markProfileSeen();
     if (this.destroyed) return;
     if (!r.ok) {
       audio.play('ui_error');
@@ -246,6 +254,11 @@ export class CodeImportPopup extends Popup<boolean> {
     toast(t('meta.toast.restored'), 'success');
     this.onApplied();
     this.close(true);
+  }
+
+  override layout(w: number, h: number): void {
+    super.layout(w, h);
+    this.field.place();
   }
 
   override close(result?: boolean): void {

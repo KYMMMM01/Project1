@@ -141,10 +141,10 @@ export class CurrencyPill extends Container {
       duration: 0.3,
       ease: Ease.linear,
       onUpdate: (k) => {
-        this.view.tint = mixColor(0xf08a7a, 0xffffff, k);
+        this.view.tint = mixColor(Color.coral, Color.white, k);
       },
       onComplete: () => {
-        this.view.tint = 0xffffff;
+        this.view.tint = Color.white;
       },
     });
   }
@@ -176,7 +176,8 @@ export class CurrencyPill extends Container {
   }
 
   private fitNumber(): void {
-    const avail = this.fitArea.x1 - this.fitArea.x0;
+    // A few px of air on both sides: a fitted number must not touch the "+" button or the icon.
+    const avail = this.fitArea.x1 - this.fitArea.x0 - 12;
     this.num.scale.set(1);
     if (this.num.width > avail) this.num.scale.set(avail / this.num.width);
     this.num.position.set((this.fitArea.x0 + this.fitArea.x1) / 2, 1);

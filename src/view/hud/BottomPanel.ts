@@ -49,6 +49,7 @@ export class BottomPanel {
   }
 
   private openOdds(): void {
+    this.env.hints.used('odds');
     void this.env.modal(new OddsPopup(this.env));
   }
 

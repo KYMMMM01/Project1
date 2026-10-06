@@ -5,7 +5,8 @@
 import { Container, Graphics, Point, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import type { CurrencyReason } from '@/game';
-import { Button, Color, CurrencyPill, drawIcon, drawPaper, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
+import { t } from '@/core/i18n';
+import { Button, Color, CurrencyPill, drawPaper, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
 import { tapArea } from './kit';
 import { pityVisible } from './policy';
@@ -60,7 +61,7 @@ export class CurrencyRow {
   private readonly bag = new TweenBag();
   private readonly pity = new Container();
   private readonly pityText: Text;
-  private readonly pityStar: Container;
+  private readonly pityCaption: Text;
   private readonly pityBg = new Graphics();
   private readonly pitySeed = paperSeed();
   private readonly odds: Button;
@@ -81,9 +82,10 @@ export class CurrencyRow {
     this.purr.position.set(380, 0);
     this.purr.visible = r.purr;
 
-    this.pityStar = drawIcon('star', 30);
-    this.pityText = uiLabel('', { size: 26, anchorX: 0, align: 'left', color: Color.inkDeep });
-    this.pity.addChild(this.pityBg, this.pityStar, this.pityText);
+    // Two lines on the mustard paper: what it counts, then how far along it is.
+    this.pityCaption = uiLabel(t('hud.pity'), { size: 24, color: Color.inkDeep });
+    this.pityText = uiLabel('', { size: 28, color: Color.inkDeep });
+    this.pity.addChild(this.pityBg, this.pityCaption, this.pityText);
     // The chip grows leftwards from its right edge so a long "10/12" never runs into the odds button.
     this.pity.position.set(PITY_RIGHT, 0);
     this.pity.visible = false;
@@ -126,11 +128,11 @@ export class CurrencyRow {
   }
 
   private drawPity(): void {
-    const w = Math.max(100, 64 + this.pityText.width);
+    const w = Math.max(104, 44 + Math.max(this.pityText.width, this.pityCaption.width));
     this.pityBg.clear();
     drawPaper(this.pityBg, -w, -32, { w, h: 64, kind: 'pill', fill: Color.mustard, edge: Color.mustardDark, shadow: 4, grain: false, seed: this.pitySeed });
-    this.pityStar.position.set(-w + 32, 0);
-    this.pityText.position.set(-w + 52, 1);
+    this.pityCaption.position.set(-w / 2, -14);
+    this.pityText.position.set(-w / 2, 14);
     tapArea(this.pity, -w, -44, w, 88);
   }
 

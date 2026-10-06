@@ -222,7 +222,8 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   on('swap', (e) => {
     fx.dustPuff(cellCenterX(e.a.cell), cellCenterY(e.a.cell) + 18, { scale: 0.6 });
     fx.dustPuff(cellCenterX(e.b.cell), cellCenterY(e.b.cell) + 18, { scale: 0.6 });
-    stage.play(stage.rules.ui, 'place', 0.5, 1, 0.04);
+    // A trade sounds a third higher than a plain move, so the two are told apart by ear.
+    stage.play(stage.rules.ui, 'place', 0.55, 1.26, 0.03);
     stage.buzz('tap');
   });
 

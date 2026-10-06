@@ -79,6 +79,16 @@ export function decideTap(selected: number | null, cell: number, occupied: boole
   return occupied ? { kind: 'select', cell } : DESELECT;
 }
 
+/**
+ * Which side of the target cell the merge bubble takes: over the row above or under the row below, whichever hides fewer
+ * cats. The top row has nothing above it but the enemy lane and the bottom row nothing below, so they take the other side.
+ */
+export function previewBelow(row: number, rows: number, hiddenAbove: number, hiddenBelow: number): boolean {
+  if (row <= 0) return true;
+  if (row >= rows - 1) return false;
+  return hiddenBelow < hiddenAbove;
+}
+
 export type ReleaseDecision = { kind: 'sell' } | { kind: 'drop'; to: number } | { kind: 'cancel' };
 
 const CANCEL: ReleaseDecision = { kind: 'cancel' };

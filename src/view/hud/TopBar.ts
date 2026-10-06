@@ -309,7 +309,9 @@ export class TopBar {
     const i = this.slotUnder(e, this.previewLayer, this.rects.preview, this.previewIds.length);
     const id = this.previewIds[i];
     const box = this.slots[i]?.box;
-    if (id && box) this.showEnemy(box, id);
+    if (!id || !box) return;
+    this.env.hints.used('preview');
+    this.showEnemy(box, id);
   }
 
   private tapToy(e: FederatedPointerEvent): void {
@@ -317,6 +319,7 @@ export class TopBar {
     const id = this.toyIds[i];
     const box = this.toySlots[i]?.box;
     if (!id || !box) return;
+    this.env.hints.used('toys');
     const def = relicDef(id);
     tooltip.show(box, { title: t(def.nameKey), text: def.descText() }, 6);
   }

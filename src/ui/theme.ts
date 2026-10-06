@@ -1,3 +1,6 @@
+import { mixColor } from '@/core/math';
+import { desaturate } from './colors';
+
 /**
  * Visual tokens shared by every screen. Colours are 0xRRGGBB.
  *
@@ -14,6 +17,8 @@ export const Color = {
   ink: 0x4a3222,
   /** Secondary text on cream paper (AA on `paper`). */
   inkSoft: 0x7d5e45,
+  /** Between `inkSoft` and `ink`: unselected labels on kraft strips (AA on `kraft`). */
+  inkMid: 0x6b4d38,
   /** Darker ink for labels that sit on coloured craft paper (coral, berry, teal). */
   inkDeep: 0x3b2418,
   /** Light text. Only for text that sits directly on artwork or a dark dim; always with a brown stroke. */
@@ -32,6 +37,13 @@ export const Color = {
   /** The wooden floor behind every sheet. */
   wood: 0xc48f50,
   woodDark: 0xa06a33,
+  /** Sunlit plank streaks on the floor. */
+  woodLight: 0xe0b070,
+  /** Tint a pressed paper takes on the frame of the pointerdown. */
+  pressTint: 0xece0d0,
+  /** Warm grey and copper: the silver and bronze edges of the synergy tiers. */
+  stone: 0xa59d90,
+  bronze: 0xb8845a,
   /** Colour of the flat shadow under a piece of paper (drawn at about 22 % alpha). */
   shadow: 0x6a4527,
   coral: 0xf0796b,
@@ -109,7 +121,7 @@ export function rarityIndex(r: RarityId): number {
 }
 
 /** Smallest font size any component may use (design px); below this text is unreadable on a phone. */
-export const MIN_FONT = 20;
+export const MIN_FONT = 24;
 
 /** Touch-target sizes (design px): absolute minimum, comfortable default, primary call-to-action height. */
 export const Hit = { min: 88, comfy: 96, cta: 120 } as const;
@@ -151,6 +163,18 @@ export const ButtonPalettes: Record<ButtonStyleId, ButtonPalette> = {
   mustard: paperTones(Color.mustard, 0xcf9a28, Color.inkDeep),
   kraft: paperTones(Color.kraft, 0xb48f62, Color.ink),
 };
+
+/** The kraft the disabled paper is pulled toward. */
+const MUTED_KRAFT = 0xd6c6a8;
+
+/**
+ * Disabled look: the same paper with its colour drained toward kraft. The ink stays full strength
+ * (AA on every muted paper): a greyed button still has to say what it does and what it costs.
+ */
+export function mutedPalette(p: ButtonPalette): ButtonPalette {
+  const f = (c: number): number => mixColor(desaturate(c, 0.9), MUTED_KRAFT, 0.5);
+  return { base: f(p.base), top: f(p.top), bottom: f(p.bottom), lip: f(p.lip), ink: Color.ink, textStroke: Color.outline };
+}
 
 export type TapeName = 'pink' | 'sky' | 'yellow' | 'green';
 

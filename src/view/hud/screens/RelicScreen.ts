@@ -98,7 +98,11 @@ export class RelicScreen {
     const fresh = key !== this.optionKey;
     this.optionKey = key;
     const content = this.scaffold.content;
-    for (const c of this.cards) c.destroy({ children: true });
+    // A card still being dealt must lose its tween with it: a tween writing to a destroyed container throws on every frame.
+    for (const c of this.cards) {
+      this.bag.killKeyed(c);
+      c.destroy({ children: true });
+    }
     this.cards = [];
     this.head?.destroy({ children: true });
 
@@ -204,7 +208,7 @@ export class RelicScreen {
     const y1 = card.y;
     card.y = y1 + 140;
     card.alpha = 0;
-    this.bag.run({
+    this.bag.runKeyed(card, {
       duration: 0.28,
       delay: 0.05 + i * 0.08,
       ease: Ease.backOut,
@@ -240,7 +244,7 @@ export class RelicScreen {
       hang: [0.05, 0.08],
     });
     this.cards.forEach((c, i) => {
-      if (i !== index) this.bag.run({ duration: 0.18, ease: Ease.cubicIn, onUpdate: (k) => (c.alpha = 1 - k) });
+      if (i !== index) this.bag.runKeyed(c, { duration: 0.18, ease: Ease.cubicIn, onUpdate: (k) => (c.alpha = 1 - k) });
     });
     this.bag.call(0.2, () => this.render());
   }

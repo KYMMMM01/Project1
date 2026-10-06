@@ -3,8 +3,8 @@ import { Scene } from '@/core/scene';
 import { game } from '@/core/game';
 import { Ease, Tweener } from '@/core/tween';
 import { debugExpose } from '@/core/debug';
-import { label } from '@/ui/text';
-import { Color, Rarity, RARITY_ORDER } from '@/ui/theme';
+import { Button, artLabel, drawFloor, drawPaper, label, PaperLabel, paperSeed } from '@/ui';
+import { Color, Rarity, RARITY_ORDER, TapeColors } from '@/ui/theme';
 import {
   FX_TIER_ORDER,
   Fx,
@@ -38,11 +38,12 @@ import {
 const COLS = 3;
 const GAP = 12;
 const CELL_H = 188;
-const TOP = 112;
-const BOTTOM = 176;
+const TOP = 120;
+const BOTTOM = 332;
 const SIDE = 24;
-/** Distance of the page-navigation row from the bottom edge; the toolbar sits below it. */
-const NAV_FROM_BOTTOM = 140;
+/** Distance of the page-navigation row from the bottom edge; the two toolbar rows sit below it. */
+const NAV_FROM_BOTTOM = 264;
+const TOOLBAR_FROM_BOTTOM = [160, 60] as const;
 
 interface Entry {
   name: string;
@@ -66,17 +67,16 @@ interface CellView {
 /** A tiny procedural cat face used as a stand-in unit for the juice and aura cells. */
 function avatarTexture(): Texture {
   const g = new Graphics();
-  g.poly([-50, -28, -40, -74, -10, -44]).fill(0xe88f45);
-  g.poly([50, -28, 40, -74, 10, -44]).fill(0xe88f45);
-  g.poly([-42, -40, -38, -62, -22, -46]).fill(0xffa8b8);
-  g.poly([42, -40, 38, -62, 22, -46]).fill(0xffa8b8);
-  g.circle(0, 0, 56).fill(0xffb35c).stroke({ width: 5, color: 0x5a2d12 });
-  g.ellipse(-20, -4, 7, 10).fill(0x2a1746);
-  g.ellipse(20, -4, 7, 10).fill(0x2a1746);
-  g.circle(-18, -8, 2.5).fill(0xffffff);
-  g.circle(22, -8, 2.5).fill(0xffffff);
-  g.poly([-7, 10, 7, 10, 0, 18]).fill(0xff7a8a);
-  g.roundRect(-30, 26, 60, 3, 1).fill({ color: 0x5a2d12, alpha: 0.0 });
+  g.poly([-50, -28, -40, -74, -10, -44]).fill(Color.mustardDark);
+  g.poly([50, -28, 40, -74, 10, -44]).fill(Color.mustardDark);
+  g.poly([-42, -40, -38, -62, -22, -46]).fill(TapeColors.pink.base);
+  g.poly([42, -40, 38, -62, 22, -46]).fill(TapeColors.pink.base);
+  g.circle(0, 0, 56).fill(Color.mustard).stroke({ width: 5, color: Color.ink });
+  g.ellipse(-20, -4, 7, 10).fill(Color.inkDeep);
+  g.ellipse(20, -4, 7, 10).fill(Color.inkDeep);
+  g.circle(-18, -8, 2.5).fill(Color.white);
+  g.circle(22, -8, 2.5).fill(Color.white);
+  g.poly([-7, 10, 7, 10, 0, 18]).fill(Color.berry);
   const t = game.app.renderer.generateTexture({ target: g, resolution: 2 });
   g.destroy();
   return t;
@@ -94,11 +94,11 @@ export default class FxDemo extends Scene {
   private readonly cells: CellView[] = [];
   private readonly entries: Entry[];
   private readonly pageContainers: Container[] = [];
-  private readonly title = label('FX GALLERY', { size: 40, color: Color.primary });
-  private readonly pageLabel = label('1/1', { size: 26 });
-  private readonly settingsLabel = label('', { size: 20, color: Color.textDim });
+  private readonly title = new PaperLabel({ text: 'FX GALLERY', size: 36, paper: 'primary' });
+  private readonly pageLabel = artLabel('1/1', { size: 28 });
+  private readonly settingsLabel = label('', { size: 24, color: Color.inkSoft });
   private readonly chip = new Container();
-  private readonly chipCount = label('0', { size: 30, color: Color.gold });
+  private readonly chipCount = label('0', { size: 30, color: Color.inkDeep });
   private readonly spinner = new Sprite(fxTexture('star'));
   private avatarTex: Texture | null = null;
   private page = 0;
@@ -194,48 +194,46 @@ export default class FxDemo extends Scene {
   private buildHud(): void {
     this.title.position.set(game.w / 2, 40);
     this.pageLabel.position.set(game.w / 2, game.h - NAV_FROM_BOTTOM);
-    this.settingsLabel.position.set(game.w / 2, game.h - 30);
+    this.settingsLabel.position.set(game.w / 2, 78);
 
-    const prev = this.button('<', 260, game.h - NAV_FROM_BOTTOM);
-    const next = this.button('>', game.w - 260, game.h - NAV_FROM_BOTTOM);
-    prev.on('pointerdown', () => this.showPage(this.page - 1));
-    next.on('pointerdown', () => this.showPage(this.page + 1));
+    const prev = this.button('<', 260, game.h - NAV_FROM_BOTTOM, () => this.showPage(this.page - 1));
+    const next = this.button('>', game.w - 260, game.h - NAV_FROM_BOTTOM, () => this.showPage(this.page + 1));
     prev.label = 'prev';
     next.label = 'next';
 
-    const mk = (text: string, x: number, fn: () => void): Container => {
-      const b = this.button(text, x, game.h - 76, 104, 54, 20);
-      b.label = 'toolbar';
-      b.on('pointerdown', fn);
+    const mk = (text: string, col: number, row: 0 | 1, fn: () => void): Container => {
+      const b = this.button(text, game.w / 2 + (col - 1) * 240, game.h - TOOLBAR_FROM_BOTTOM[row], fn, 220, 88, 28);
+      b.label = `toolbar${row}`;
       return b;
     };
-    const qual = mk('Tier', 76, () => {
+    const qual = mk('Tier', 0, 0, () => {
       const next = FX_TIER_ORDER[(FX_TIER_ORDER.indexOf(fxSettings.tier) + 1) % FX_TIER_ORDER.length] ?? 'mid';
       setFxSettings({ tier: next, autoTier: false });
       this.refreshSettingsLabel();
     });
-    const fl = mk('Flashes', 189, () => {
+    const fl = mk('Flashes', 1, 0, () => {
       setFxSettings({ flashes: !fxSettings.flashes });
       this.refreshSettingsLabel();
     });
-    const rm = mk('Reduced', 302, () => {
+    const rm = mk('Reduced', 2, 0, () => {
       setFxSettings({ reducedMotion: !fxSettings.reducedMotion });
       this.refreshSettingsLabel();
     });
-    const nm = mk('Numbers', 415, () => {
+    const nm = mk('Numbers', 0, 1, () => {
       const order: readonly NumbersMode[] = ['full', 'brief', 'off'];
       setFxSettings({ numbers: order[(order.indexOf(fxSettings.numbers) + 1) % order.length] ?? 'full' });
       this.refreshSettingsLabel();
     });
-    const gv = mk('Auto', 528, () => {
+    const gv = mk('Auto', 1, 1, () => {
       setFxSettings({ autoTier: !fxSettings.autoTier });
       this.refreshSettingsLabel();
     });
-    const clr = mk('Clear', 641, () => this.fx.clear());
+    const clr = mk('Clear', 2, 1, () => this.fx.clear());
     this.hud.addChild(this.title, this.pageLabel, this.settingsLabel, prev, next, qual, fl, rm, nm, gv, clr);
 
     // HUD chip: target for the fly-to demo.
-    const chipBg = new Graphics().roundRect(-90, -30, 180, 60, 30).fill(Color.panel).stroke({ width: 4, color: Color.outline });
+    const chipBg = new Graphics();
+    drawPaper(chipBg, -90, -30, { w: 180, h: 60, kind: 'pill', fill: Color.paperLight, seed: paperSeed(), grain: false });
     const coin = new Sprite(fxTexture('coin'));
     coin.anchor.set(0.5);
     coin.tint = Color.gold;
@@ -248,22 +246,18 @@ export default class FxDemo extends Scene {
     this.hud.addChild(this.chip);
 
     this.spinner.anchor.set(0.5);
-    this.spinner.tint = 0xffd23f;
+    this.spinner.tint = Color.mustard;
     this.spinner.scale.set(0.9);
     this.spinner.position.set(60, 40);
     this.hud.addChild(this.spinner);
     this.refreshSettingsLabel();
   }
 
-  private button(text: string, x: number, y: number, w = 92, h = 64, size = 34): Container {
-    const c = new Container();
-    const g = new Graphics().roundRect(-w / 2, -h / 2, w, h, 18).fill(Color.panelLight).stroke({ width: 4, color: Color.outline });
-    const t = label(text, { size });
-    c.addChild(g, t);
-    c.position.set(x, y);
-    c.eventMode = 'static';
-    c.cursor = 'pointer';
-    return c;
+  private button(text: string, x: number, y: number, onTap: () => void, w = 104, h = 88, size = 34): Container {
+    const b = new Button({ label: text, style: 'neutral', width: w, height: h, fontSize: size, sfx: false, haptic: false });
+    b.onTap(onTap);
+    b.position.set(x, y);
+    return b;
   }
 
   private refreshSettingsLabel(): void {
@@ -275,8 +269,8 @@ export default class FxDemo extends Scene {
     const w = game.w;
     const h = game.h;
     this.bg.clear();
-    this.bg.rect(0, 0, w, h).fill(0x0e0a1d);
-    this.bg.rect(0, 0, w, 90).fill({ color: 0x1b1233, alpha: 0.9 });
+    drawFloor(this.bg, w, h);
+    drawPaper(this.bg, -14, -14, { w: w + 28, h: 122, radius: 0, fill: Color.kraft, torn: 'bottom', shadow: 6, seed: 3 });
 
     const cellW = (w - SIDE * 2 - GAP * (COLS - 1)) / COLS;
     const rows = Math.max(1, Math.floor((h - TOP - BOTTOM + GAP) / (CELL_H + GAP)));
@@ -300,9 +294,10 @@ export default class FxDemo extends Scene {
       const y = TOP + row * (CELL_H + GAP);
       const view = new Container();
       view.position.set(x, y);
-      const panel = new Graphics().roundRect(0, 0, cellW, CELL_H, 22).fill(0x1d1538).stroke({ width: 3, color: 0x3a2c66 });
-      const name = label(entry.name, { size: 22, color: Color.textDim, stroke: Color.outline });
-      name.position.set(cellW / 2, CELL_H - 20);
+      // A dark warm well keeps the additive effects readable; the name hangs on a paper label.
+      const panel = new Graphics().roundRect(0, 0, cellW, CELL_H, 22).fill({ color: Color.inkDeep, alpha: 0.55 }).stroke({ width: 3, color: Color.kraftDark, alpha: 0.8 });
+      const name = new PaperLabel({ text: entry.name, size: 24, paper: Color.paperLight, maxWidth: cellW - 16, seed: i + 1 });
+      name.position.set(cellW / 2, CELL_H - 26);
       view.addChild(panel, name);
       view.eventMode = 'static';
       view.hitArea = { contains: (px: number, py: number) => px >= 0 && py >= 0 && px <= cellW && py <= CELL_H };
@@ -313,8 +308,10 @@ export default class FxDemo extends Scene {
     });
     for (const c of this.hud.children) if (c.label === 'prev' || c.label === 'next') c.y = h - NAV_FROM_BOTTOM;
     this.pageLabel.position.set(w / 2, h - NAV_FROM_BOTTOM);
-    this.settingsLabel.position.set(w / 2, h - 30);
-    for (const c of this.hud.children) if (c.label === 'toolbar') c.y = h - 76;
+    for (const c of this.hud.children) {
+      const row = c.label === 'toolbar0' ? 0 : c.label === 'toolbar1' ? 1 : null;
+      if (row !== null) c.y = h - TOOLBAR_FROM_BOTTOM[row];
+    }
     this.showPage(Math.min(this.page, pages - 1));
   }
 
@@ -386,14 +383,14 @@ export default class FxDemo extends Scene {
     return s;
   }
 
-  /** A larger, purple stand-in for a boss. */
+  /** A larger, violet stand-in for a boss. */
   private bossOf(c: CellView): Sprite {
     if (c.boss) return c.boss;
     this.avatarTex ??= avatarTexture();
     const s = new Sprite(this.avatarTex);
     s.anchor.set(0.5);
     s.scale.set(1.15);
-    s.tint = 0xc9a0ff;
+    s.tint = Rarity.epic.glow;
     s.position.set(c.w / 2, c.h / 2 - 12);
     s.visible = false;
     c.view.addChild(s);
@@ -417,12 +414,12 @@ export default class FxDemo extends Scene {
     const e = (name: string, run: (c: CellView) => void): Entry => ({ name, run });
     const list: Entry[] = [
       e('hitSpark', (c) => fx.hitSpark(c.cx, c.cy)),
-      e('hitSparkAimed', (c) => fx.hitSpark(c.cx, c.cy, { angle: -0.6, color: 0x9fe8ff })),
+      e('hitSparkAimed', (c) => fx.hitSpark(c.cx, c.cy, { angle: -0.6, color: Color.gem })),
       e('critBurst', (c) => fx.critBurst(c.cx, c.cy)),
       e('slashArc', (c) => fx.slashArc(c.cx, c.cy)),
-      e('shockwave', (c) => fx.shockwave(c.cx, c.cy, { color: 0x9fd0ff })),
+      e('shockwave', (c) => fx.shockwave(c.cx, c.cy, { color: Rarity.rare.glow })),
       e('explosion', (c) => fx.explosion(c.cx, c.cy)),
-      e('deathPuff', (c) => fx.deathPuff(c.cx, c.cy, { color: 0x9ad06a })),
+      e('deathPuff', (c) => fx.deathPuff(c.cx, c.cy, { color: Color.leaf })),
       e('coinBurst', (c) => fx.coinBurst(c.cx, c.cy + 20)),
       e('mergeBurst', (c) => {
         const col = Rarity[RARITY_ORDER[(c.counter++ % 4) + 1] as keyof typeof Rarity].color;
@@ -489,8 +486,8 @@ export default class FxDemo extends Scene {
         const av = this.avatarOf(c);
         this.toggle(c, () => fx.buffAura(av, { color: Color.success, radius: 50, offsetY: 20 }));
       }),
-      e('rays', (c) => this.toggle(c, () => fx.rays(c.cx, c.cy, { color: 0xffe9a0, radius: 200, alpha: 0.7 }))),
-      e('sparkleTrail', (c) => this.orbit(c, (o) => fx.sparkleTrail(o, { color: 0xfff0a8 }))),
+      e('rays', (c) => this.toggle(c, () => fx.rays(c.cx, c.cy, { color: Rarity.legendary.light, radius: 200, alpha: 0.7 }))),
+      e('sparkleTrail', (c) => this.orbit(c, (o) => fx.sparkleTrail(o, { color: Color.mustard }))),
       e('smokeTrail', (c) => this.orbit(c, (o) => fx.smokeTrail(o))),
       e('ambientTwinkle', (c) =>
         this.toggle(c, () => fx.ambientTwinkle(c.cx, c.cy, c.w - 30, c.h - 70, { rate: 9 })),
@@ -511,7 +508,7 @@ export default class FxDemo extends Scene {
       e('slashLine', (c) => fx.slashLine(c.cx - 95, c.cy + 50, c.cx + 95, c.cy - 55)),
       e('shieldBreak', (c) => fx.shieldBreak(c.cx, c.cy)),
       e('moltPuff', (c) => {
-        const colors = [0xffb35c, 0xf1f4f8, 0x9fd0ff, 0xc9a0ff];
+        const colors = [Color.mustard, Color.paperLight, Rarity.rare.glow, Rarity.epic.glow];
         const av = this.avatarOf(c);
         const t = fx.moltPuff(c.cx, c.cy, { color: colors[this.moltStep++ % colors.length] });
         tw.call(t.impact, () => squash(tw, av, 1.2, 0.85, 240));
@@ -542,7 +539,7 @@ export default class FxDemo extends Scene {
             this.coins += 10;
             this.chipCount.text = String(this.coins);
             punchScale(this.tweens, this.chip, 0.22, 140);
-            if (i % 3 === 0) fx.dustPuff(this.chip.x - 56, this.chip.y, { color: 0xffe27a, scale: 0.5 });
+            if (i % 3 === 0) fx.dustPuff(this.chip.x - 56, this.chip.y, { color: Color.mustard, scale: 0.5 });
           },
         });
       }),
@@ -573,13 +570,13 @@ export default class FxDemo extends Scene {
         fx.hitSpark(c.cx, c.cy);
       }),
       e('screenFlash', (c) => {
-        screenFx.flash(c.counter++ % 2 === 0 ? 0xffffff : 0xffd45e, 0.4, 140);
+        screenFx.flash(c.counter++ % 2 === 0 ? Color.white : Color.mustard, 0.4, 140);
       }),
       e('dangerVignette', () => {
         this.dangerStep = (this.dangerStep + 1) % 4;
         screenFx.setDanger(this.dangerStep / 3);
       }),
-      e('vignettePulse', () => screenFx.vignettePulse(0xff2a2a, 0.3, 500, 2)),
+      e('vignettePulse', () => screenFx.vignettePulse(Color.berry, 0.3, 500, 2)),
       e('letterbox', () => {
         this.letterboxOn = !this.letterboxOn;
         screenFx.letterbox(this.letterboxOn, { height: 150 });
@@ -616,7 +613,7 @@ export default class FxDemo extends Scene {
   private orbit(c: CellView, trail: (o: Sprite) => FxHandle): void {
     const o = new Sprite(fxTexture('dot'));
     o.anchor.set(0.5);
-    o.tint = 0xffffff;
+    o.tint = Color.white;
     o.scale.set(0.5);
     this.addChild(o);
     const h = trail(o);

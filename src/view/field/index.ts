@@ -50,6 +50,12 @@ export function createField(ctx: BattleContext): FieldPart {
   const shots = new Projectiles(env, layers.projectiles);
   const effects = new FieldEffects(env);
   const input = new FieldInput(env, layers.floor, layers.zones, layers.projectiles, units, cells);
+  /** Hits near the entrance rise toward the top HUD: they stop at its lower edge (a sticker's own half height clear) instead of vanishing under the pills. */
+  const NUMBER_CLEAR = 52;
+  const clampNumbers = (layout: BattleLayout): void => {
+    ctx.fx.numbers.minY = layout.safeTop + layout.topH + NUMBER_CLEAR - layout.fieldY;
+  };
+  clampNumbers(ctx.layout);
   const offRefused = ctx.events.on('refused', (e) => {
     if (e.cell !== null) units.refuse(e.cell);
   });
@@ -59,7 +65,10 @@ export function createField(ctx: BattleContext): FieldPart {
     const source = input.dragFrom ?? ctx.selected;
     for (let c = 0; c < CELL_COUNT; c++) {
       let look: CellLook = null;
-      if (source !== null) look = c === source ? (dragging ? 'origin' : 'selected') : dropLook(battle.dropAction(source, c));
+      if (source !== null) {
+        look = c === source ? (dragging ? 'origin' : 'selected') : dropLook(battle.dropAction(source, c));
+        if (look === 'swap' && !dragging) look = 'pick';
+      }
       cells.set(c, look, dragging && input.hover === c);
     }
     const held = input.dragFrom ?? -1;
@@ -83,6 +92,7 @@ export function createField(ctx: BattleContext): FieldPart {
     },
     resize(layout: BattleLayout): void {
       lift.position.set(layout.fieldX, layout.fieldY);
+      clampNumbers(layout);
       background.resize(layout);
     },
     destroy(): void {

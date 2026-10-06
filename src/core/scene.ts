@@ -1,4 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
+import { Color } from '@/ui/theme';
 import { game } from './game';
 import { Ease, Tweener, uiTweens } from './tween';
 
@@ -76,7 +77,7 @@ export class SceneManager {
   private drawCover(): void {
     const g = this.cover;
     g.clear();
-    g.rect(0, 0, game.w, game.h).fill(0x3b2418);
+    g.rect(0, 0, game.w, game.h).fill(Color.inkDeep);
     if (this.irisActive && this.irisR > 0.5) {
       g.circle(game.w / 2, game.h / 2, this.irisR).cut();
     }

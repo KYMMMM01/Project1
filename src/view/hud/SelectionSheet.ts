@@ -41,6 +41,8 @@ const TEXT_X = 122;
 /** The close button sits on the card's top-right corner; text stays clear of it. */
 const TEXT_RIGHT = 628;
 const PLAN_X = 16;
+/** Room kept at the end of a cut skill line for its info mark. */
+const INFO_W = 36;
 const PLAN_Y = 114;
 
 /** One short line for a refused awakening, shown on the (disabled) button itself. */
@@ -137,6 +139,11 @@ export class SelectionSheet {
 
   get shown(): boolean {
     return this.cell !== null;
+  }
+
+  /** The sheet's button for a command a refusal can be about. */
+  buttonFor(command: 'awaken' | 'sell'): Button {
+    return command === 'awaken' ? this.awaken : this.sell;
   }
 
   /** Show for `cell`, or hide with null. */
@@ -245,10 +252,17 @@ export class SelectionSheet {
 
     this.fullSkill = def.skillText();
     const skill = uiLabel(this.fullSkill, { size: 24, color: Color.inkSoft, anchorX: 0, align: 'left' });
-    this.fitLine(skill, TEXT_RIGHT - TEXT_X);
+    const lineW = TEXT_RIGHT - TEXT_X;
+    this.fitLine(skill, lineW);
     skill.position.set(TEXT_X, 98);
     if (skill.text !== this.fullSkill) {
-      tapArea(skill, 0, -22, TEXT_RIGHT - TEXT_X, 44);
+      // A cut line says so: an info mark closes it, and the whole band around it opens the full text.
+      skill.text = this.fullSkill;
+      this.fitLine(skill, lineW - INFO_W);
+      const info = drawIcon('info', 26);
+      info.position.set(TEXT_X + lineW - 13, 98);
+      d.addChild(info);
+      tapArea(skill, 0, -44, lineW, 88);
       skill.on('pointerdown', () => tooltip.show(skill, { title: t(def.nameKey), text: this.fullSkill }, 8));
     }
     d.addChild(skill);

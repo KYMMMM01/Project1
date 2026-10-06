@@ -10,7 +10,7 @@ import { Fx } from '@/fx';
 import type { UnitId } from '@/game/api';
 import { levelSourceOf, unitClass } from '@/game/data/roster';
 import { unitDef } from '@/game/data/units';
-import { errorKey, profile } from '@/meta';
+import { errorKey, profile, tn } from '@/meta';
 import type { UnitView } from '@/meta/economy';
 import { MAX_LEVEL } from '@/meta/data/economy';
 import type { BaseUnitId } from '@/meta/types';
@@ -80,6 +80,10 @@ class UnitScreen {
   private cardBar: ProgressBar | null = null;
   private cardLine: Text | null = null;
   private wildLine: Text | null = null;
+  private cardsView: Container | null = null;
+  private cardsTop = 0;
+  /** Whether the built cards page has room for the wild-card line. */
+  private cardsWild = false;
   private unit!: UnitId;
   private base!: BaseUnitId;
   private guardian = false;
@@ -133,7 +137,8 @@ class UnitScreen {
     y += this.statsPage(W, y) + 6;
     y += this.skillPage(W, y) + 6;
     y += this.perksPage(W, y) + 6;
-    this.cardsPage(W, y);
+    this.cardsTop = y;
+    this.cardsPage(W, y, false);
     c.addChild(this.fxHost);
     this.scaffold.refresh();
   }
@@ -220,8 +225,9 @@ class UnitScreen {
     return this.place(page, y);
   }
 
-  /** Card progress, or for a guardian the note that it follows its king. */
-  private cardsPage(W: number, y: number): void {
+  /** Card progress, or for a guardian the note that it follows its king. The wild-card line gets its room only when there is one. */
+  private cardsPage(W: number, y: number, wild: boolean): void {
+    this.cardsWild = wild;
     this.cardBar = null;
     this.cardLine = null;
     this.wildLine = null;
@@ -231,9 +237,10 @@ class UnitScreen {
       note.position.set(30, PAGE_TOP + 6);
       page.content.addChild(note);
       this.place(page, y);
+      this.cardsView = page.view;
       return;
     }
-    const page = paperPage(W, 48 + 14 + 34 + 30 + 14, t('cats.unit.cards'), 'danger');
+    const page = paperPage(W, 48 + 14 + 34 + (wild ? 30 : 0) + 14, t('cats.unit.cards'), 'danger');
     this.cardBar = new ProgressBar({ width: W - 56, height: 48, color: 'blue', label: '' });
     this.cardBar.position.set(W / 2, PAGE_TOP + 28);
     this.cardLine = uiLabel('', { size: 26, anchorX: 0, anchorY: 0, wrap: W - 64, lineHeight: 32, align: 'left' });
@@ -242,6 +249,16 @@ class UnitScreen {
     this.wildLine.position.set(30, PAGE_TOP + 48 + 56);
     page.content.addChild(this.cardBar, this.cardLine, this.wildLine);
     this.place(page, y);
+    this.cardsView = page.view;
+  }
+
+  /** Rebuild the last page when the wild-card line appears or goes away, so no blank band is left under the card line. */
+  private fitCardsPage(wild: boolean): void {
+    if (this.guardian || wild === this.cardsWild) return;
+    this.cardsView?.destroy({ children: true });
+    this.cardsPage(this.scaffold.contentWidth, this.cardsTop, wild);
+    this.scaffold.content.addChild(this.fxHost);
+    this.scaffold.refresh();
   }
 
   private view(): UnitView {
@@ -295,15 +312,14 @@ class UnitScreen {
       return;
     }
     const p = cardProgress(v);
+    const wildText = p.maxed ? '' : !q.enoughCards ? tn('cats.unit.needMore', q.wildUsed - v.wild) : q.wildUsed > 0 ? tn('cats.unit.wildLine', q.wildUsed) : v.wild > 0 ? tn('cats.unit.wildHave', v.wild) : '';
+    this.fitCardsPage(wildText !== '');
     if (this.cardBar && this.cardLine && this.wildLine) {
       this.cardBar.setColor(p.maxed ? 'gold' : p.have >= p.needed ? 'green' : 'blue');
       this.cardBar.setLabel(p.maxed ? t('cats.max') : `${p.have}/${p.needed}`);
       this.cardBar.setValue(p.needed > 0 ? p.have / p.needed : 1, false);
       this.cardLine.text = p.maxed ? t('cats.unit.maxLine') : t('cats.unit.cardsLine', { own: v.cards, need: q.cards });
-      if (p.maxed) this.wildLine.text = '';
-      else if (!q.enoughCards) this.wildLine.text = t('cats.unit.needMore', { n: q.wildUsed - v.wild });
-      else if (q.wildUsed > 0) this.wildLine.text = t('cats.unit.wildLine', { n: q.wildUsed, m: q.wildUsed });
-      else this.wildLine.text = v.wild > 0 ? t('cats.unit.wildHave', { n: v.wild }) : '';
+      this.wildLine.text = wildText;
     }
     if (q.maxed) {
       this.action.setLabel(t('cats.unit.maxed'));
@@ -346,7 +362,7 @@ class UnitScreen {
       const need = Math.max(1, q.wildUsed - v.wild);
       void confirmDialog({
         title: t('cats.err.cardsTitle'),
-        message: t('cats.err.cards', { n: need }),
+        message: tn('cats.err.cards', need),
         confirmLabel: t('cats.err.goShop'),
         cancelLabel: t('cats.err.later'),
       }).then((go) => {

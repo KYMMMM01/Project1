@@ -1,16 +1,16 @@
 import { Container, Graphics, Rectangle, type DestroyOptions, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { t } from '@/core/i18n';
-import { mixColor } from '@/core/math';
 import type { UnitId } from '@/game/api';
 import { unitClass, unitRarity, unitRarityIndex } from '@/game/data/roster';
 import {
-  backOut, bindPress, cacheStatic, Color, drawDashedRect, drawIcon, drawPaper, drawPaperFace, fitLabel, motion, paperSeed, paperShape,
-  ProgressBar, Rarity, RARITY_GOLD, tapeStrip, TweenBag, uiLabel, type PressBinding,
+  backOut, bindPress, cacheStatic, Color, drawDashedRect, drawIcon, motion, paperSeed, paperShape, ProgressBar, Rarity, tapeStrip, TweenBag, uiLabel,
+  type PressBinding,
 } from '@/ui';
 import { unitPortrait } from '../shop/art';
+import { buildPlate } from '../shop/photoPlate';
 import { classIcon } from '../shop/keys';
-import { FRAME_H, NAME_H, type CardProgress } from './collection';
+import { FRAME_H, NAME_LINE, NAME_PAD, type CardProgress } from './collection';
 
 export type FrameMode = keyof typeof FRAME_H;
 
@@ -24,13 +24,16 @@ export interface FrameState {
 /**
  * One cat as a compact paper photo frame: cream border, a mat in the rarity colour (rarity also adds an
  * ornament: dashed line, corner mounts, tape, star), the sticker in the window, the level pill, the card bar
- * and an "upgrade ready" sticker; the name sits under the plate on the page. Origin = centre of the plate.
+ * and an "upgrade ready" sticker; the name sits under the plate on the page and wraps to a second line rather than
+ * shrinking or being cut. Origin = centre of the plate.
  * Built once; `setState` and `setMarked` update it in place.
  */
 export class LineFrame extends Container {
   readonly unit: UnitId;
   readonly plateW: number;
   readonly plateH: number;
+  /** Room the name takes under the plate (one or two lines plus the space round them). */
+  readonly nameBlock: number;
   private readonly bag = new TweenBag();
   private readonly body = new Container();
   private readonly marker = new Container();
@@ -53,45 +56,16 @@ export class LineFrame extends Container {
     const w = plateW;
     const h = this.plateH;
     const rarity = unitRarity(unit);
-    const rar = Rarity[rarity];
     const tier = unitRarityIndex(unit);
     const seed = paperSeed();
 
-    const g = new Graphics();
     const matH = mode === 'card' ? 104 : h - 12;
-    const win = { x: -w / 2 + 11, y: -h / 2 + 11, w: w - 22, h: matH - 10 };
-    drawPaper(g, -w / 2, -h / 2, { w, h, radius: 18, fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed });
-    drawPaperFace(g, -w / 2 + 6, -h / 2 + 6, { w: w - 12, h: matH, radius: 13, fill: rar.color, edge: rar.dark, grain: false, seed: seed + 1, wobble: 0.7 });
-    drawPaperFace(g, win.x, win.y, { ...win, radius: 9, fill: mixColor(rar.light, Color.paper, 0.62), edge: rar.dark, grain: false, seed: seed + 2, wobble: 0.6 });
-    // Rarity piles up ornaments, so a tier can be told without colour.
-    if (tier >= 1) drawDashedRect(g, -w / 2 + 3.5, -h / 2 + 3.5, w - 7, h - 7, { radius: 15, color: tier === 4 ? RARITY_GOLD : rar.dark, width: 2, dash: 8, gap: 6, alpha: 0.8, seed: seed + 3 });
-    if (tier >= 2) {
-      const c = 13;
-      const mount = tier === 4 ? RARITY_GOLD : rar.dark;
-      for (const sx of [-1, 1] as const) {
-        for (const [cy, sy] of [[-h / 2 + 6, -1], [-h / 2 + 6 + matH, 1]] as const) {
-          const cx = sx * (w / 2 - 6);
-          g.poly([cx, cy, cx - sx * c, cy, cx, cy - sy * c]).fill(mount);
-        }
-      }
-    }
-    cacheStatic(g);
-    this.body.addChild(g);
-
+    const plate = buildPlate({ w, h, matH, rarity, tier, seed });
+    const win = plate.win;
+    this.body.addChild(plate.base);
     const portrait = unitPortrait(unit, rarity, win.h - 2);
     portrait.position.set(win.x + win.w / 2, win.y + win.h / 2 + 2);
-    this.body.addChild(portrait);
-    if (tier >= 3) {
-      const tape = tapeStrip({ name: tier === 3 ? 'yellow' : 'pink', w: w * 0.42, h: w * 0.13, angle: -3, pattern: tier === 3 ? 'dots' : 'gingham', seed });
-      tape.position.set(0, -h / 2 + 2);
-      this.body.addChild(tape);
-    }
-    if (tier >= 4) {
-      const star = drawIcon('star', w * 0.26, RARITY_GOLD);
-      star.position.set(-w / 2 + w * 0.1, -h / 2 + w * 0.08);
-      star.rotation = -0.2;
-      this.body.addChild(star);
-    }
+    this.body.addChild(portrait, plate.over);
 
     // A guardian has no cards of its own: its strip is the class mark on a paper pill instead of a bar.
     const guardian = tier === 4;
@@ -111,15 +85,16 @@ export class LineFrame extends Container {
     this.levelPill.visible = false;
     this.body.addChild(this.levelPill);
 
-    const ready = paperShape({ w: 44, h: 44, kind: 'circle', fill: Color.leaf, edge: Color.leafDark, grain: false, seed: seed + 6 });
-    this.readySticker.addChild(ready, drawIcon('arrow_up', 28, Color.inkDeep));
-    this.readySticker.position.set(w / 2 - 6, -h / 2 + 6);
+    // Kept inside the plate's top-right corner so it never reaches up into the merge / awaken words over the gaps.
+    const ready = paperShape({ w: 38, h: 38, kind: 'circle', fill: Color.leaf, edge: Color.leafDark, grain: false, seed: seed + 6 });
+    this.readySticker.addChild(ready, drawIcon('arrow_up', 26, Color.inkDeep));
+    this.readySticker.position.set(w / 2 - 8, -h / 2 + 12);
     this.readySticker.visible = false;
     this.body.addChild(this.readySticker);
 
-    const name = uiLabel(t(`unit.${unit}.name`), { size: 24 });
-    fitLabel(name, cellW - 12, 24);
-    name.position.set(0, h / 2 + 24);
+    const name = uiLabel(t(`unit.${unit}.name`), { size: 24, wrap: cellW - 8, align: 'center', lineHeight: NAME_LINE, anchorY: 0 });
+    name.position.set(0, h / 2 + 10);
+    this.nameBlock = NAME_PAD + Math.ceil(name.height);
 
     this.marker.visible = false;
     const ring = new Graphics();
@@ -132,7 +107,7 @@ export class LineFrame extends Container {
     this.addChild(this.body, this.marker, name);
     this.eventMode = 'static';
     this.cursor = 'pointer';
-    this.hitArea = new Rectangle(-cellW / 2, -h / 2 - 12, cellW, h + NAME_H + 12);
+    this.hitArea = new Rectangle(-cellW / 2, -h / 2 - 12, cellW, h + this.nameBlock + 12);
     this.press = bindPress(this, {
       down: () => {
         this.bag.killOf(this.body.scale);

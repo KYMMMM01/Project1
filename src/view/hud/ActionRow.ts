@@ -15,7 +15,12 @@ const GRADE_X = 121;
 const LASER_X = 615;
 const LASER_SIZE = 116;
 const PAWS = 6;
-const CALL_X = 579;
+/** The call button's right edge lines up with the odds button above it (x 688); it is 236 wide. */
+const CALL_X = 570;
+const CALL_W = 236;
+const CALL_H = 84;
+/** The laser sits a little lower than the summon button's centre, so the call button above it clears its ring. */
+const LASER_DY = -4;
 
 type LaserState = 'ready' | 'active' | 'cool' | '';
 
@@ -30,7 +35,7 @@ export class ActionRow {
   /** Tracker and call-wave button: they share the row the selection sheet covers. */
   readonly util = new Container();
   private readonly bag = new TweenBag();
-  private readonly grade: Button;
+  readonly grade: Button;
   private readonly laserBtn: IconButton;
   private readonly coolRing: CooldownRing;
   private readonly aimRing: CooldownRing;
@@ -70,8 +75,9 @@ export class ActionRow {
     this.aimRing = new CooldownRing({ radius: LASER_SIZE / 2 + 9, thickness: 9, color: Color.coral });
     this.coolRing.visible = false;
     this.aimRing.visible = false;
-    this.laserBtn = new IconButton({ icon: 'target', style: 'info', size: LASER_SIZE, fireOnDown: true, sfx: false, haptic: false });
+    this.laserBtn = new IconButton({ icon: 'target', style: 'info', size: LASER_SIZE, fireOnDown: true, sfx: 'ui_click', haptic: false });
     this.laserBtn.onTap(() => {
+      env.hints.used('laser');
       tooltip.show(this.laser, { text: t(b.laser.active ? 'hud.laser.active' : b.laser.cooldown > 0 ? 'hud.laser.cool' : 'hud.laser.hint') }, 3);
     });
     this.laserText = uiLabel('', { size: 26 });
@@ -94,11 +100,14 @@ export class ActionRow {
     this.tracker.visible = r.tracker && b.summonOfferProgress().every > 0;
 
     this.callBtn = new Button({
-      label: t('hud.call'), sublabel: '', sublabelIcon: 'fish', icon: 'wave_call', style: 'success', width: 262, height: 96, fontSize: 32, fireOnDown: true,
+      label: t('hud.call'), sublabel: '', sublabelIcon: 'fish', icon: 'wave_call', style: 'success', width: CALL_W, height: CALL_H, fontSize: 32, fireOnDown: true,
     });
     this.callBtn.onTap(() => {
       const fail = env.ctx.command('callNextWave', () => b.callNextWave());
-      if (fail === null) audio.play('call_wave');
+      if (fail === null) {
+        audio.play('call_wave');
+        env.hints.used('callWave');
+      }
     });
     this.callBtn.visible = false;
 
@@ -113,7 +122,11 @@ export class ActionRow {
     env.on(b.events, 'waveStart', ({ wave }) => {
       if (wave >= 2) env.hints.request('laser', this.laser);
     });
-    env.on(b.events, 'laser', () => this.pop());
+    env.on(b.events, 'laser', () => {
+      this.pop();
+      // The dot is down: the "tap the path" tip has done its job.
+      if (tooltip.target === this.laser) tooltip.hide();
+    });
   }
 
   private pop(): void {
@@ -129,10 +142,10 @@ export class ActionRow {
   layout(summonY: number, utilY: number): void {
     this.summon.position.set(360, summonY);
     this.grade.position.set(GRADE_X, summonY + 4);
-    this.laser.position.set(LASER_X, summonY - 12);
+    this.laser.position.set(LASER_X, summonY + LASER_DY);
     this.util.position.set(0, utilY);
     this.tracker.position.set(24, 0);
-    this.callBtn.position.set(CALL_X, 0);
+    this.callBtn.position.set(CALL_X, 6);
   }
 
   // ───────────────────────── per frame ─────────────────────────

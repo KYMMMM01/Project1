@@ -25,7 +25,6 @@ addStrings('ko', {
   'shell.pre.boss': '이 챕터의 보스',
   'shell.pre.lines': '합성 줄',
   'shell.pre.lines.hint': '같은 고양이 둘을 합치면 같은 줄의 다음 등급이 돼요.',
-  'shell.pre.lines.merge': '합성',
   'shell.pre.lines.awaken': '각성',
   'shell.pre.snack': '출발 간식',
   'shell.pre.snack.hint': '하나만 고를 수 있어요. 고르면 바로 출발해요.',
@@ -42,7 +41,7 @@ addStrings('ko', {
 
   'shell.cont.title': '이어서 할까요?',
   'shell.cont.body': '끝내지 못한 판이 있어요. 이어서 할 수 있어요.',
-  'shell.cont.wave': '{n}웨이브',
+  'shell.cont.wave': '{n}웨이브부터',
   'shell.cont.yes': '이어서',
   'shell.cont.no': '그만두기',
   'shell.cont.giveup.title': '정말 그만둘까요?',
@@ -79,7 +78,6 @@ addStrings('en', {
   'shell.pre.boss': 'Chapter boss',
   'shell.pre.lines': 'Merge lines',
   'shell.pre.lines.hint': 'Two identical cats merge into the next rank of the same line.',
-  'shell.pre.lines.merge': 'Merge',
   'shell.pre.lines.awaken': 'Awaken',
   'shell.pre.snack': 'Starter snack',
   'shell.pre.snack.hint': 'Pick one. The run starts right away.',
@@ -96,7 +94,7 @@ addStrings('en', {
 
   'shell.cont.title': 'Continue?',
   'shell.cont.body': 'A run was left unfinished. You can pick it up.',
-  'shell.cont.wave': 'Wave {n}',
+  'shell.cont.wave': 'From wave {n}',
   'shell.cont.yes': 'Continue',
   'shell.cont.no': 'Give up',
   'shell.cont.giveup.title': 'Give up this run?',

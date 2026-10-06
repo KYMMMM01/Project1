@@ -83,6 +83,14 @@ export function reconcileSeen(
   return { seenUnlocked: seen.filter((f) => have.has(f)), seenLevel: Math.min(seenLevel, level) };
 }
 
+/**
+ * Everything a restored profile holds is old news: its level and unlocks were announced on the device
+ * the code came from, and its level-up gems were paid there. The record is set to match it exactly.
+ */
+export function seenAfterImport(unlocked: readonly string[], level: number): { seenUnlocked: string[]; seenLevel: number } {
+  return { seenUnlocked: unlocked.slice(), seenLevel: level };
+}
+
 /** The next popup to show, or null. Priority: welcome back, gem pass, level up, new unlocks. */
 export function nextPopup(f: PopupFacts): DuePopup | null {
   if (f.comebackReady && !f.offered.has('comeback')) return { kind: 'comeback' };

@@ -23,6 +23,8 @@ import {
 const PAD = 24;
 const TITLE_H = 64;
 const RADIUS = 30;
+/** The paper disc under a card's icon. */
+const discPaper = (seed: number) => ({ w: 52, h: 52, kind: 'circle', fill: Color.paperDim, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 2 }) as const;
 
 interface CardOpts {
   /** The one piece of washi tape this card carries. */
@@ -47,7 +49,7 @@ export abstract class HomeCard extends Container {
   private lockHint: string | null = null;
   private working = false;
 
-  protected constructor(w: number, h: number, title: string, icon: IconName, opts: CardOpts) {
+  protected constructor(w: number, h: number, private readonly title: string, private readonly iconName: IconName, opts: CardOpts) {
     super();
     this.cardW = w;
     this.cardH = h;
@@ -62,22 +64,29 @@ export abstract class HomeCard extends Container {
     }
     drawDashedLine(sheet, PAD, TITLE_H, w - PAD, TITLE_H, { seed: this.seed });
     const disc = new Graphics();
-    drawPaper(disc, PAD, 10, { w: 52, h: 52, kind: 'circle', fill: Color.paperDim, edge: Color.kraftDark, shadow: 3, grain: false, seed: this.seed + 2 });
+    drawPaper(disc, PAD, 10, discPaper(this.seed));
     const tape = tapeStrip({ name: opts.tape, pattern: this.seed % 2 === 0 ? 'dots' : 'gingham', w: 84, h: 26, angle: (this.seed % 5) - 2, seed: this.seed });
     tape.position.set(w * 0.5 + ((this.seed >>> 4) % 90) - 45, 3);
     art.addChild(sheet, disc, tape);
     cacheStatic(art);
 
-    const ic = drawIcon(icon, 38);
-    ic.position.set(PAD + 26, 36);
-    const head = uiLabel(title, { size: 32, anchorX: 0 });
-    head.position.set(PAD + 66, 37);
-    fitLabel(head, w - PAD * 2 - 66, 32);
-    this.addChild(art, ic, head, this.body, this.veil);
+    this.addChild(art, this.titleRow(), this.body, this.veil);
   }
 
   get locked(): boolean {
     return this.lockHint !== null;
+  }
+
+  /** The icon and the title on the card's title row; the locked veil draws its own copy, so a closed card still says what it is. */
+  private titleRow(): Container {
+    const row = new Container();
+    const ic = drawIcon(this.iconName, 38);
+    ic.position.set(PAD + 26, 36);
+    const head = uiLabel(this.title, { size: 32, anchorX: 0 });
+    head.position.set(PAD + 66, 37);
+    fitLabel(head, this.cardW - PAD * 2 - 66, 32);
+    row.addChild(ic, head);
+    return row;
   }
 
   /** Bottom edge of the title row: where the card's own content may start. */
@@ -104,13 +113,17 @@ export abstract class HomeCard extends Container {
     const sheet = new Graphics();
     drawPaper(sheet, 0, 0, { w, h, radius: RADIUS, fill: Color.kraft, edge: Color.kraftDark, seed: this.seed });
     drawDashedRect(sheet, 14, 14, w - 28, h - 28, { radius: RADIUS - 8, color: Color.kraftDark, seed: this.seed });
+    drawDashedLine(sheet, PAD, TITLE_H, w - PAD, TITLE_H, { seed: this.seed, color: Color.kraftDark });
+    drawPaper(sheet, PAD, 10, discPaper(this.seed));
     cacheStatic(sheet);
     sheet.eventMode = 'static';
+    // The lock and the hint sit in the middle of what is left under the title row.
+    const mid = TITLE_H + (h - TITLE_H) / 2;
     const lock = drawIcon('lock', 64);
-    lock.position.set(w / 2, h / 2 - 28);
+    lock.position.set(w / 2, mid - 28);
     const text = uiLabel(hint, { size: 26, wrap: w - 72 });
-    text.position.set(w / 2, h / 2 + 44);
-    this.veil.addChild(sheet, lock, text);
+    text.position.set(w / 2, mid + 44);
+    this.veil.addChild(sheet, this.titleRow(), lock, text);
   }
 
   /**

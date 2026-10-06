@@ -1,7 +1,9 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
+import { lerp } from '@/core/math';
 import { Ease } from '@/core/tween';
+import { backGesture } from './backGesture';
 import { backOut, motion, TweenBag } from './motion';
 import { Dim } from './theme';
 
@@ -74,9 +76,21 @@ export abstract class Popup<R = void> extends Container {
     this.h = h;
     this.backdrop.clear().rect(0, 0, w, h).fill({ color: Dim.backdrop, alpha: Dim.backdropAlpha * this.dimScale });
     this.shell.position.set(w / 2, h / 2);
-    const fitW = this.contentW > 0 ? (w - 16) / this.contentW : 1;
+    const fitW = this.contentW > 0 ? (w - 16) / this.reachW() : 1;
     const fitH = this.contentH > 0 ? (h - 48) / this.contentH : 1;
     this.body.scale.set(Math.min(1, fitW, fitH));
+  }
+
+  /**
+   * Width the artwork really needs, centred on the origin: the declared footprint, unless the drawn
+   * bounds are narrower. Callers pad their declared width for tape and buttons that hang off the
+   * sheet (+80 is common), and a popup that is only padded wide must not be shrunk: it would take its
+   * 24 px text below the floor for nothing.
+   */
+  private reachW(): number {
+    const b = this.body.getLocalBounds();
+    if (b.width <= 0) return this.contentW;
+    return Math.min(this.contentW, 2 * Math.max(-b.minX, b.maxX));
   }
 
   /** Called once the open animation has started and the popup is on screen. */
@@ -95,6 +109,8 @@ interface Entry {
   popup: Popup<unknown>;
   resolve: (v: unknown) => void;
   closing: boolean;
+  /** Hidden under a popup that opened on top of it; comes back when that one is gone. */
+  covered: boolean;
 }
 
 interface Queued {
@@ -105,6 +121,9 @@ interface Queued {
 
 const OPEN_TIME = 0.18;
 const CLOSE_TIME = 0.12;
+/** Cross-fade of a covered popup: out as the new sheet pops in, back as it leaves. */
+const COVER_TIME = OPEN_TIME;
+const UNCOVER_TIME = CLOSE_TIME;
 const QUEUE_GAP = 0.15;
 
 /** Singleton modal stack on game.popupLayer. */
@@ -114,14 +133,11 @@ export class PopupManager {
   private readonly bag = new TweenBag();
   private attached = false;
   private pumping = false;
+  private releaseBack: (() => void) | null = null;
 
   /** The topmost popup that is not already closing. */
   get top(): Popup<unknown> | null {
-    for (let i = this.stack.length - 1; i >= 0; i--) {
-      const e = this.stack[i] as Entry;
-      if (!e.closing) return e.popup;
-    }
-    return null;
+    return this.liveTop()?.popup ?? null;
   }
 
   get count(): number {
@@ -132,12 +148,19 @@ export class PopupManager {
     return this.queue.length;
   }
 
-  /** Show a popup right now, on top of whatever is open. Resolves when it closes. */
+  /**
+   * Show a popup right now, on top of whatever is open. Resolves when it closes. Only the topmost
+   * sheet is drawn: the one below fades out with its dim (the new sheet brings its own, so the
+   * backdrop never doubles and two ribbons never peek out of each other) and fades back when the
+   * top one closes.
+   */
   open<R>(popup: Popup<R>): Promise<R> {
-    const entry = { popup: popup as Popup<unknown>, closing: false } as Entry;
+    const entry = { popup: popup as Popup<unknown>, closing: false, covered: false } as Entry;
     const done = new Promise<R>((resolve) => {
       entry.resolve = resolve as (v: unknown) => void;
     });
+    const under = this.liveTop();
+    if (under) this.setCovered(under, true);
     this.stack.push(entry);
     this.attach();
     game.popupLayer.addChild(popup);
@@ -165,6 +188,8 @@ export class PopupManager {
     const entry = this.stack.find((e) => e.popup === (popup as Popup<unknown>));
     if (!entry || entry.closing) return;
     entry.closing = true;
+    const below = this.liveTop();
+    if (below) this.setCovered(below, false);
     // While it fades out the popup itself keeps swallowing taps, so nothing underneath can be hit.
     popup.interactiveChildren = false;
     popup.eventMode = 'static';
@@ -174,6 +199,9 @@ export class PopupManager {
     this.animateClose(popup, () => {
       const i = this.stack.indexOf(entry);
       if (i >= 0) this.stack.splice(i, 1);
+      this.bag.killKeyed(popup);
+      this.bag.killKeyed(popup.backdrop);
+      this.bag.killKeyed(popup.shell);
       if (!popup.destroyed) {
         game.popupLayer.removeChild(popup);
         popup.destroy({ children: true });
@@ -202,7 +230,8 @@ export class PopupManager {
 
   /**
    * Back / Escape handler. Returns true when a popup took the event (closed, or deliberately
-   * refused), so the caller must not also navigate away. Wire window "popstate" to this.
+   * refused), so the caller must not also navigate away. The system Back gesture reaches it through
+   * backGesture(); nothing else needs to wire it.
    */
   handleBack(): boolean {
     const t = this.top;
@@ -212,6 +241,39 @@ export class PopupManager {
   }
 
   /* ------------------------------------------------------------ internals */
+
+  private liveTop(): Entry | null {
+    for (let i = this.stack.length - 1; i >= 0; i--) {
+      const e = this.stack[i] as Entry;
+      if (!e.closing) return e;
+    }
+    return null;
+  }
+
+  private setCovered(e: Entry, covered: boolean): void {
+    if (e.covered === covered) return;
+    e.covered = covered;
+    const p = e.popup;
+    const to = covered ? 0 : 1;
+    if (motion.reduced) {
+      p.alpha = to;
+      p.visible = !covered;
+      return;
+    }
+    p.visible = true;
+    const from = p.alpha;
+    this.bag.runKeyed(p, {
+      duration: covered ? COVER_TIME : UNCOVER_TIME,
+      ease: Ease.linear,
+      onUpdate: (k) => {
+        p.alpha = lerp(from, to, k);
+      },
+      onComplete: () => {
+        p.alpha = to;
+        p.visible = !covered;
+      },
+    });
+  }
 
   private pump(): void {
     if (this.pumping || this.stack.length > 0 || this.queue.length === 0) return;
@@ -296,6 +358,7 @@ export class PopupManager {
   private attach(): void {
     if (this.attached) return;
     this.attached = true;
+    this.releaseBack = backGesture().hold();
     window.addEventListener('keydown', this.onKey);
     this.offResize = game.events.on('resize', this.onResize);
   }
@@ -303,6 +366,8 @@ export class PopupManager {
   private detach(): void {
     if (!this.attached) return;
     this.attached = false;
+    this.releaseBack?.();
+    this.releaseBack = null;
     window.removeEventListener('keydown', this.onKey);
     this.offResize?.();
     this.offResize = null;
@@ -310,3 +375,5 @@ export class PopupManager {
 }
 
 export const popups = new PopupManager();
+
+backGesture().onBack(() => popups.handleBack());

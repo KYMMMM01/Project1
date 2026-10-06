@@ -187,13 +187,13 @@ function bakeRanks(): Record<RarityId, Texture> {
   RARITY_ORDER.forEach((id, index) => {
     const r = Rarity[id];
     const pips = index + 1;
-    const w = 20 + pips * 11;
+    const w = 24 + pips * 13;
     const g = new Graphics();
-    g.roundRect(-w / 2 + 1, -9 + 2.5, w, 18, 9).fill({ color: Color.shadow, alpha: 0.3 });
-    g.roundRect(-w / 2, -9, w, 18, 9).fill(r.color).stroke({ width: 2, color: r.dark });
+    g.roundRect(-w / 2 + 1, -13 + 3, w, 26, 13).fill({ color: Color.shadow, alpha: 0.3 });
+    g.roundRect(-w / 2, -13, w, 26, 13).fill(r.color).stroke({ width: 2.5, color: r.dark });
     // One pip per rank, so the rank never rests on the hue alone.
-    for (let i = 0; i < pips; i++) g.circle((i - (pips - 1) / 2) * 11, 0, 3.6).fill(CREAM).stroke({ width: 1.2, color: r.dark });
-    out[id] = bake(g, w + 8, 28);
+    for (let i = 0; i < pips; i++) g.circle((i - (pips - 1) / 2) * 13, 0, 4.8).fill(CREAM).stroke({ width: 1.5, color: r.dark });
+    out[id] = bake(g, w + 8, 36);
   });
   return out;
 }

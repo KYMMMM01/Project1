@@ -9,20 +9,23 @@ import { Fx, type EmitDef } from '@/fx';
 import { profile } from '@/meta';
 import type { ChestRarity, ChestResult } from '@/meta/types';
 import {
-  backOut, Button, CardFrame, Color, countUpDuration, countUpValue, drawFloor, drawIcon, formatCount, motion, numberText, paperSeed, paperShape,
-  PaperLabel, Rarity, rarityName, Tag, tapeStrip, TweenBag, type TapeName,
+  backOut, Button, Color, countUpDuration, countUpValue, drawFloor, formatCount, motion, paperSeed, paperShape,
+  PaperLabel, Rarity, rarityName, tapeStrip, TweenBag, type TapeName,
 } from '@/ui';
-import { chestArt, unitPortrait, wildArt } from './art';
-import { bestRarity, flourishOf, gridLayout, rarityRank, revealSchedule, ribbonDots, stacksOf, totalCards, type GridLayout, type RevealSchedule, type RevealStack } from './revealPlan';
+import { chestArt } from './art';
+import { RevealCard } from './RevealCard';
+import {
+  bestRarity, flourishOf, gridLayout, nameBlockOf, PLATE, rarityRank, revealSchedule, ribbonDots, stacksOf, totalCards,
+  type GridLayout, type RevealSchedule, type RevealStack,
+} from './revealPlan';
 import { stampIn, stampMark } from './paperBits';
 
 interface StackView {
   stack: RevealStack;
-  holder: Container;
-  back: Container;
-  face: Container;
-  count: ReturnType<typeof numberText>;
+  card: RevealCard;
   shown: boolean;
+  /** The card has landed in its slot and follows it when the screen is resized. */
+  placed: boolean;
   tape?: Container;
   stamp?: Container;
 }

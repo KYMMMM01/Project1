@@ -1,3 +1,4 @@
+import { gameplayStop } from '@/app/lifecycle';
 import { audio } from '@/audio';
 import { debugExpose } from '@/core/debug';
 import { game } from '@/core/game';
@@ -26,14 +27,6 @@ const BADGE_POLL = 1;
 const REFRESH_POLL = 60;
 /** Where the shop's "+" buttons lead: the section that sells each currency. */
 const SHOP_SECTION: Record<CurrencyKind, string> = { gold: 'daily', gems: 'gems', tickets: 'daily' };
-
-/** Features already announced with a toast; seeded at boot so only unlocks made after that are announced. */
-const announced = new Set<string>();
-
-/** Remember what is already unlocked (boot, after the profile is loaded) so the first home does not announce it. */
-export function markUnlocksSeen(): void {
-  for (const f of profile.data.unlocked) announced.add(f);
-}
 
 /**
  * The home screen: the wooden floor, the top bar (level, currencies, settings), the five tabs and
@@ -84,7 +77,8 @@ export class HomeScene extends Scene implements HomeSurface {
     this.relayout();
     this.host.start();
     this.refresh(false);
-    this.announceUnlocks();
+    // Play never outlives the battle screen, whichever way the battle was left.
+    gameplayStop();
     debugExpose('home', { shell, scene: this, goTab: (id: TabId) => shell.goTab(id) });
   }
 
@@ -155,15 +149,6 @@ export class HomeScene extends Scene implements HomeSurface {
       const locked = this.locked(id);
       this.tabBar.setLocked(id, locked);
       this.tabBar.setBadge(id, locked ? false : this.host.badge(id));
-    }
-  }
-
-  private announceUnlocks(): void {
-    for (const f of profile.data.unlocked) {
-      if (announced.has(f)) continue;
-      announced.add(f);
-      const name = t('meta.feature.' + f);
-      toast(t('meta.toast.unlock', { feature: name }), 'success');
     }
   }
 

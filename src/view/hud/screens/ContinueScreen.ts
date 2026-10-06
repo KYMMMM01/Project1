@@ -11,7 +11,7 @@ import { errorKey, profile } from '@/meta';
 import { ads } from '@/platform';
 import { Button, Color, drawDashedRect, drawIcon, drawPaintFill, motion, paperShape, paperSeed, ScreenScaffold, tapeStrip, toast, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
-import { offerRoute } from '../policy';
+import { offerRoute, wavesReached } from '../policy';
 
 export type DefeatReason = 'overrun' | 'boss_timeout' | null;
 
@@ -49,7 +49,7 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
   const stats = env.battle.getStats();
   const heart = drawIcon('heart', 150);
   heart.position.set(w / 2, 150);
-  const where = uiLabel(t('hud.cont.where', { n: stats.wavesCleared, total: stats.totalWaves || '-' }), { size: 34 });
+  const where = uiLabel(t('hud.cont.where', { n: wavesReached(env.battle.wave, stats.wavesCleared, stats.totalWaves), total: stats.totalWaves || '-' }), { size: 34 });
   where.position.set(w / 2, 280);
   const why = uiLabel(t(reason === 'boss_timeout' ? 'hud.cont.why.boss' : 'hud.cont.why.over'), {
     size: 30, wrap: w - 100, lineHeight: 40, color: Color.inkSoft,

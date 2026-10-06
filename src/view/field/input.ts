@@ -254,6 +254,7 @@ export class FieldInput {
       }
       case 'deselect':
         this.ctx.select(null);
+        audio.play('ui_back', { volume: 0.45 });
         break;
       case 'drop':
         this.ctx.command('drop', () => battle.drop(decision.from, decision.to), decision.from);
@@ -302,7 +303,8 @@ export class FieldInput {
     }
     const view = this.view;
     if (this.selling && view && this.dragFrom !== null) {
-      this.sellTag.place(view.x, view.y - 128, battle.sellValue(this.dragFrom).fish);
+      const worth = battle.sellValue(this.dragFrom);
+      this.sellTag.place(view.x, view.y - 128, worth.fish, worth.purr);
     } else {
       this.sellTag.hide();
     }

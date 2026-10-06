@@ -1,12 +1,11 @@
 import { debugExpose } from '@/core/debug';
-import { accountProgress, profile } from '@/meta';
 import { popups } from '@/ui/Popup';
 import { ensureSettings } from '@/view/hud/settings';
 import { provide, services, type Shell } from '../contract';
 import { AutoPopups } from './autoPopups';
 import { CalendarPopup } from './calendarPopup';
 import { stopConfetti } from './kit/confetti';
-import { loadRoutinePrefs, patchRoutinePrefs } from './prefs';
+import { loadRoutinePrefs, markProfileSeen } from './prefs';
 import { closeSettingsScreen, openSettingsScreen, scrollSettingsTo } from './settingsScreen';
 import './strings';
 
@@ -52,6 +51,6 @@ export function installSystemScreens(shell: Shell): void {
     popups,
     scrollSettingsTo,
     /** QA: count every level and unlock as announced, so no automatic popup interrupts a screenshot. */
-    markSeen: () => patchRoutinePrefs({ seenLevel: accountProgress(profile.data.accountXp).level, seenUnlocked: [...profile.data.unlocked] }),
+    markSeen: markProfileSeen,
   });
 }

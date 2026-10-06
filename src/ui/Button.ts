@@ -1,10 +1,9 @@
 import { Container, Graphics, Rectangle, type DestroyOptions, type Text } from 'pixi.js';
 import { audio, type SfxId } from '@/audio';
 import { haptic, type HapticId } from '@/core/haptics';
-import { clamp, lerp, mixColor } from '@/core/math';
+import { clamp, lerp } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Badge, type BadgeValue } from './Badge';
-import { desaturate } from './colors';
 import { LoadingSpinner } from './Decor';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
@@ -13,7 +12,7 @@ import { drawPaperFace, drawPaperShadow, paperSeed, tapeStrip, type PaperOpts } 
 import { clearActivePress, inScrollHost, setActivePress, type Pressable } from './press';
 import { refreshCache } from './shapes';
 import { fitLabel, uiLabel } from './text';
-import { ButtonPalettes, Color, Hit, type ButtonPalette, type ButtonStyleId, type TapeName } from './theme';
+import { ButtonPalettes, Color, Hit, MIN_FONT, mutedPalette, type ButtonPalette, type ButtonStyleId, type TapeName } from './theme';
 
 export interface ButtonOpts {
   label?: string;
@@ -43,12 +42,6 @@ export interface ButtonOpts {
   /** Sound played on press; false for silence. */
   sfx?: SfxId | false;
   haptic?: HapticId | false;
-}
-
-/** Disabled look: kraft paper with the colour drained and the ink softened. */
-function mutedPalette(p: ButtonPalette): ButtonPalette {
-  const f = (c: number) => mixColor(desaturate(c, 0.9), 0xc9b697, 0.5);
-  return { base: f(p.base), top: f(p.top), bottom: f(p.bottom), lip: f(p.lip), ink: 0x9a846e, textStroke: Color.outline };
 }
 
 /** Press depth, spring and wobble, in design px / radians. */
@@ -122,7 +115,7 @@ export class Button extends Container implements Pressable {
     this.iconName = opts.icon;
     this.subIconName = opts.sublabelIcon;
     this.iconColor = opts.iconColor;
-    this.fontSize = Math.max(20, opts.fontSize ?? Math.round(Math.max(24, Math.min(48, h * 0.38))));
+    this.fontSize = Math.max(MIN_FONT, opts.fontSize ?? Math.round(Math.max(MIN_FONT, Math.min(48, h * 0.38))));
     this.radius = opts.radius === 'pill' ? h / 2 : (opts.radius ?? Math.min(h * 0.3, 36));
     this.lip = Math.round(clamp(h * 0.06, 4, 6));
     this.pressDrop = Math.round(this.lip * 0.75);
@@ -382,7 +375,7 @@ export class Button extends Container implements Pressable {
       fitLabel(this.labelT, w - padX * 2 - iconSize - gap, fs);
       this.content.addChild(this.labelT);
     }
-    const subFs = Math.max(20, Math.round(fs * 0.58));
+    const subFs = Math.max(MIN_FONT, Math.round(fs * 0.58));
     let subIconSize = 0;
     if (hasSub) {
       this.subT = uiLabel(this.subText, { size: subFs, color: ink });
@@ -445,7 +438,7 @@ export class Button extends Container implements Pressable {
     this.face.y = this.pressDrop;
     this.face.rotation = 0;
     this.face.scale.set(PRESS_SCALE);
-    this.face.tint = 0xece0d0;
+    this.face.tint = Color.pressTint;
     this.shadowG.alpha = 0.55;
     if (this.hapticId) haptic(this.hapticId);
     // Inside a scroll list the click waits for the tap to be confirmed, so a drag stays silent.
@@ -467,7 +460,7 @@ export class Button extends Container implements Pressable {
     const face = this.face;
     const y0 = face.y;
     const s0 = face.scale.x;
-    face.tint = 0xffffff;
+    face.tint = Color.white;
     this.shadowG.alpha = 1;
     if (motion.reduced || y0 === 0) {
       face.y = 0;

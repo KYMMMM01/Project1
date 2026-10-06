@@ -21,6 +21,16 @@ export function seasonNameKey(season: number): string {
   return `rt.pass.season.${i}`;
 }
 
+/** The last days of a season in which tiers nobody took are pointed out (a new season wipes them). */
+const SEASON_WARN_DAYS = 3;
+
+/** Token of today's season-end reminder while something can still be taken, or null when none is due (all taken, too early, or already shown today). */
+export function seasonEndWarning(view: PassView, lastWarned: string): string | null {
+  if (view.daysLeft > SEASON_WARN_DAYS || passClaimable(view) === 0) return null;
+  const key = `${view.season}:${view.daysLeft}`;
+  return key === lastWarned ? null : key;
+}
+
 /** Tier row (1-based) the list opens on: the tier the player has reached, or the first one before any. */
 export function focusTier(view: PassView): number {
   return Math.max(1, view.tier);

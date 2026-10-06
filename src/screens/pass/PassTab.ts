@@ -28,9 +28,10 @@ import { paperConfetti } from '../system/kit/confetti';
 import { NoticePopup } from '../system/kit/noticePopup';
 import { partsOf } from '../system/kit/parts';
 import { lockedNote, paperSheet, stickerDisc } from '../system/kit/sheets';
-import { NoteTag } from '../system/kit/tags';
+import { IconLabel, NoteTag } from '../system/kit/tags';
+import { loadRoutinePrefs, patchRoutinePrefs, routinePrefs } from '../system/prefs';
 import { Coupon } from './Coupon';
-import { focusTier, passBadgeCount, PASS_ROW_GAP, PASS_ROW_H, passClaimable, scrollTargetFor, seasonNameKey, xpFill } from './model';
+import { focusTier, passBadgeCount, PASS_ROW_GAP, PASS_ROW_H, passClaimable, scrollTargetFor, seasonEndWarning, seasonNameKey, xpFill } from './model';
 import { MEDAL_W, PassRowView, type CellTap, type PassCell, type PassTrackId } from './PassRowView';
 import './strings';
 
@@ -43,6 +44,13 @@ const LANES_TOP = 16;
 const REFRESH_EVERY = 20;
 const PRODUCT = 'season_pass';
 const TRACK_W = 22;
+
+/** Everything both lanes have open right now, as one bundle. */
+function openRewards(v: PassView): Bundle {
+  let sum: Bundle = {};
+  for (const row of [...v.free, ...v.premiumRow]) if (row.claimable) sum = mergeBundles(sum, row.reward);
+  return sum;
+}
 
 export class PassTab implements TabScreen {
   readonly view = new Container();
@@ -59,12 +67,14 @@ export class PassTab implements TabScreen {
   private bar: ProgressBar | null = null;
   private tierLabel: PaperLabel | null = null;
   private tierNumber: Text | null = null;
+  private daysTag: NoteTag | null = null;
   private claimAllBtn: Button | null = null;
   private coupon: Coupon | null = null;
   private signature = '';
   private shown = false;
   private busy = false;
   private claiming = false;
+  private warning = false;
   private sinceRefresh = 0;
   private offChange: (() => void) | null = null;
   private offLang: (() => void) | null = null;
@@ -149,8 +159,8 @@ export class PassTab implements TabScreen {
     season.position.set(season.uiBox.w / 2, 30);
     season.rotation = -0.012;
     const days = new NoteTag(270, 'clock');
-    days.setText(v.daysLeft <= 1 ? t('rt.pass.lastDay') : t('rt.pass.daysLeft', { n: v.daysLeft }));
     days.position.set(w, 30);
+    this.daysTag = days;
     head.addChild(season, days);
 
     // The current tier as a mustard sticker, the label and the painted XP bar beside it.
@@ -179,10 +189,7 @@ export class PassTab implements TabScreen {
     head.addChild(freeHead);
     const premiumX = lane + MEDAL_W + lane / 2;
     if (v.premium) {
-      const owned = new PaperLabel({ text: t('rt.pass.owned'), size: 30, paper: 'mustard', padX: 22, padY: 12, maxWidth: lane - 16 });
-      const crown = drawIcon('crown', 44);
-      crown.position.set(-owned.uiBox.w / 2 + 6, -2);
-      owned.addChild(crown);
+      const owned = new IconLabel({ text: t('rt.pass.owned'), icon: 'crown', fill: Color.mustard, size: 30, padX: 24, padY: 12, maxWidth: lane - 16 });
       owned.position.set(premiumX, LANE_HEAD_Y);
       head.addChild(owned);
     } else if (this.canSell()) {
@@ -202,6 +209,7 @@ export class PassTab implements TabScreen {
     this.bar = null;
     this.tierLabel = null;
     this.tierNumber = null;
+    this.daysTag = null;
     this.claimAllBtn?.stopPulse();
     this.claimAllBtn = null;
     this.coupon = null;
@@ -228,6 +236,7 @@ export class PassTab implements TabScreen {
     const v = profile.passView();
     const maxed = v.tier >= v.free.length;
     if (this.tierNumber) this.tierNumber.text = String(v.tier);
+    this.daysTag?.setText(v.daysLeft <= 1 ? t('rt.pass.lastDay') : t('rt.pass.daysLeft', { n: v.daysLeft }));
     if (this.tierLabel) {
       this.tierLabel.setText(maxed ? t('rt.pass.maxed') : t('rt.pass.tierNow', { n: v.tier }));
       this.tierLabel.position.set(this.barLeft + this.tierLabel.uiBox.w / 2, 120 - 28);
@@ -307,9 +316,7 @@ export class PassTab implements TabScreen {
 
   /** Take every open tier of both lanes in one go and show one combined reward. */
   private claimAll(): void {
-    const v = profile.passView();
-    let sum: Bundle = {};
-    for (const row of [...v.free, ...v.premiumRow]) if (row.claimable) sum = mergeBundles(sum, row.reward);
+    const sum = openRewards(profile.passView());
     const free = profile.claimAllPass('free');
     const premium = profile.claimAllPass('premium');
     if (!free.ok && !premium.ok) {
@@ -339,6 +346,37 @@ export class PassTab implements TabScreen {
     this.signature = '';
     this.ensureBuilt();
     await this.celebrate();
+  }
+
+  /** A new season wipes every tier nobody took: on each of its last days, the first visit to the tab says so once and offers to take them. */
+  private async warnSeasonEnd(): Promise<void> {
+    if (this.warning) return;
+    this.warning = true;
+    try {
+      await loadRoutinePrefs();
+      if (!this.shown || this.view.destroyed) return;
+      const v = profile.passView();
+      const key = seasonEndWarning(v, routinePrefs().passWarned);
+      if (!key) return;
+      patchRoutinePrefs({ passWarned: key });
+      const choice = await popups.open(
+        new NoticePopup<'claim' | 'later'>({
+          title: t('rt.pass.ending.title'),
+          hero: drawIcon('clock', 118),
+          lines: [t('rt.pass.ending.body')],
+          parts: partsOf(openRewards(v)),
+          buttons: [
+            { label: t('rt.pass.claimAll'), style: 'success', result: 'claim', pulse: true },
+            { label: t('rt.common.later'), style: 'neutral', result: 'later' },
+          ],
+          dismissResult: 'later',
+          priority: 2,
+        }),
+      );
+      if (choice === 'claim' && !this.view.destroyed) this.claimAll();
+    } finally {
+      this.warning = false;
+    }
   }
 
   /** Premium just opened: confetti, what is waiting, and an offer to take it. */
@@ -390,6 +428,7 @@ export class PassTab implements TabScreen {
     this.offChange ??= profile.subscribe(this.onChange);
     this.offLang ??= i18nEvents.on('change', this.onLang);
     this.focusCurrent();
+    if (profile.featureUnlocked('pass')) void this.warnSeasonEnd();
   }
 
   /** Scroll so the tier the player has reached sits in the upper third of the list. */

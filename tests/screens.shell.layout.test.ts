@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TAB_BAR_H, TOP_BAR_CONTENT_H, coverCrop, pillWidth, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
+import { TAB_BAR_H, TOP_BAR_CONTENT_H, classLineSlots, coverCrop, pillRow, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
 import { planRun } from '@/screens/shell/runPlan';
 
 describe('shell layout', () => {
@@ -28,11 +28,11 @@ describe('shell layout', () => {
     expect(shellLayout(720, 1280, 0, 0).area.h).toBeGreaterThan(900);
   });
 
-  it('splits the width into equal currency pills that fit the margins', () => {
-    const w = pillWidth(720, 24, 24, 3);
-    expect(w).toBe(208);
-    expect(w * 3 + 24 * 2 + 24 * 2).toBeLessThanOrEqual(720);
-    expect(pillWidth(2000, 24, 24, 3)).toBe(260);
+  it('lays the currency pills out with the same gutter on both sides', () => {
+    const { pw, x0 } = pillRow(720, 24, 28, 21, 3);
+    expect(x0 - 21).toBe(24);
+    expect(x0 + pw * 3 + 28 * 2).toBeCloseTo(720 - 24, 6);
+    expect(pillRow(2000, 24, 28, 21, 3).pw).toBe(260);
   });
 
   it('turns xp into a safe 0..1 ring fraction', () => {
@@ -72,6 +72,26 @@ describe('photo crop', () => {
 
   it('falls back to the whole picture for a degenerate box', () => {
     expect(coverCrop(720, 1287, 0, 300)).toEqual({ x: 0, y: 0, w: 720, h: 1287 });
+  });
+});
+
+describe('class line slots', () => {
+  it('keeps the photos in order and gives the awaken gap the room the merge arrows do not use', () => {
+    const s = classLineSlots(556, 5, 68, 40);
+    expect(s.centres).toHaveLength(5);
+    expect(s.arrows).toHaveLength(4);
+    expect(s.centres[0]).toBe(34);
+    expect(s.centres[4]).toBeCloseTo(556 - 34, 6);
+    expect(s.lastGap).toBeCloseTo(556 - 5 * 68 - 3 * 40, 6);
+    expect(s.lastGap).toBeGreaterThanOrEqual(88);
+    expect((s.centres[1] as number) - (s.centres[0] as number)).toBe(68 + 40);
+    expect(s.arrows[0]).toBeCloseTo((s.centres[0] as number) + 34 + 20, 6);
+  });
+
+  it('spreads the gaps evenly when the row is too short for a wide last gap', () => {
+    const s = classLineSlots(400, 5, 68, 40);
+    expect(s.lastGap).toBeCloseTo((400 - 340) / 4, 6);
+    expect((s.centres[1] as number) - (s.centres[0] as number)).toBeCloseTo(68 + s.lastGap, 6);
   });
 });
 

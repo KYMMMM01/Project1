@@ -1,11 +1,14 @@
 import { Container, Graphics, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
+import { t } from '@/core/i18n';
+import { onStorageVolatile } from '@/core/save';
 import { Ease } from '@/core/tween';
 import { drawIcon, type IconName } from './icons';
 import { backOut, motion, TweenBag } from './motion';
 import { drawPaper, paperSeed, tapeStrip } from './paper';
 import { cacheStatic } from './shapes';
+import './strings';
 import { uiLabel } from './text';
 import { ButtonPalettes, Color, type ButtonStyleId, type TapeName } from './theme';
 
@@ -25,6 +28,8 @@ interface Pending {
 
 const LINE_H = 38;
 const MAX_LINES = 2;
+/** Centre line below the safe area: under the home currency row and the battle wave bar, so a toast never hides a number that just changed. */
+const REST_Y = 262;
 
 /** Messages are capped at two lines: longer text is cut with an ellipsis rather than growing the pill. */
 function capLines(label: Text): void {
@@ -62,8 +67,8 @@ function buildToast(text: string, kind: ToastKind): { view: Container; label: Te
 }
 
 /**
- * Queue of transient messages on game.overlayLayer. One toast shows at a time; each slides down from
- * the top, holds for a time scaled to its length, and slides away. Toasts never take input.
+ * Queue of transient messages on game.overlayLayer. One toast shows at a time; each rises into place
+ * under the top bars, holds for a time scaled to its length, and drifts away. Toasts never take input.
  */
 class ToastManager {
   private readonly queue: Pending[] = [];
@@ -110,7 +115,7 @@ class ToastManager {
     this.view = view;
     view.eventMode = 'none';
     game.overlayLayer.addChild(view);
-    const y = game.safeTop + 170;
+    const y = game.safeTop + REST_Y;
     view.x = game.w / 2;
     audio.play(item.kind === 'error' || item.kind === 'warning' ? 'ui_error' : 'ui_tab', { volume: 0.6 });
 
@@ -118,11 +123,12 @@ class ToastManager {
       view.y = y;
     } else {
       view.alpha = 0;
+      const rise = backOut(2);
       this.bag.run({
         duration: 0.26,
         ease: Ease.linear,
         onUpdate: (k) => {
-          view.y = y - 70 * (1 - backOut(2)(k));
+          view.y = y + 56 * (1 - rise(k));
           view.alpha = Math.min(1, k * 4);
         },
         onComplete: () => {
@@ -185,3 +191,6 @@ export function toast(text: string, kind: ToastKind = 'info'): void {
 export function clearToasts(): void {
   manager.clear();
 }
+
+// Progress that cannot be written to disk is the one failure the player must hear about, and once.
+onStorageVolatile(() => toast(t('ui.storage.volatile'), 'warning'));

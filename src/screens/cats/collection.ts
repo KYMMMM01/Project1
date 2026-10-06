@@ -86,8 +86,13 @@ export function cardProgress(v: UnitView): CardProgress {
 /** Widest a photo frame gets, and the heights of the two frame kinds: a card also carries the progress bar. */
 export const FRAME_W = 108;
 export const FRAME_H = { card: 150, mini: 114 } as const;
-/** Space under the plate taken by the cat's name. */
-export const NAME_H = 40;
+/** Height of the band above a card row where the merge / awaken words sit over the gaps. */
+export const RAIL_H = 34;
+/** One line of a cat's name under its plate, and the room kept above and below the lines. */
+export const NAME_LINE = 26;
+export const NAME_PAD = 18;
+/** How far an arrow tag reaches onto each neighbouring plate: its cream border only, never the picture window (11 px in). */
+export const TAG_OVERLAP = 5;
 
 /**
  * How a line of five cats shares a row `width` wide: every cat gets an equal cell, the plate takes about four
@@ -97,4 +102,9 @@ export function lineMetrics(width: number, count = 5): { pitch: number; plateW: 
   const pitch = width / count;
   const plateW = Math.min(FRAME_W, Math.round(pitch * 0.78));
   return { pitch, plateW, gap: pitch - plateW };
+}
+
+/** Width of the arrow tag over a gap: the gap plus a little onto each border, so it can never cover a picture. */
+export function arrowWidth(gap: number): number {
+  return Math.round(gap + TAG_OVERLAP * 2);
 }

@@ -16,7 +16,8 @@ import {
 } from '@/meta/data/schedule';
 import { cupScore, dailyCode, dailySetup, hashString, parseDailyCode } from '@/meta/daily';
 import { describeBundle, mergeBundles } from '@/meta/bundle';
-import { isFeatureUnlocked, unlockedFeatures } from '@/meta/features';
+import { featureHint, isFeatureUnlocked, unlockedFeatures } from '@/meta/features';
+import { tn } from '@/meta/plural';
 import { ODDS, oddsView, validateOdds } from '@/meta/odds';
 import {
   canPlayStake, chaptersCleared, computeRunPayout, consolationCards, firstClearBundle, runGold, runXp, sweepPayout,
@@ -418,5 +419,40 @@ describe('text', () => {
   it('keeps Korean in the friendly polite tone, never the stiff "-습니다" form', () => {
     setLang('ko');
     for (const k of keys()) expect(t(k), k).not.toMatch(/(습니다|합니다)[.!]?$/);
+  });
+
+  it('writes a count of one in the singular in English, with the same placeholders as the plural', () => {
+    setLang('en');
+    for (const k of [
+      'meta.reward.gems', 'meta.reward.tickets', 'meta.reward.wild', 'meta.reward.card', 'meta.odds.guarantee',
+      'meta.odds.guaranteeTop', 'meta.unlock.runs', 'meta.piggy.free',
+    ]) expect(tokens(t(k + '.one')), k).toEqual(tokens(t(k)));
+    expect(describeBundle({ wild: { rare: 1 } })).toEqual(['1 wild card (Street)']);
+    expect(describeBundle({ wild: { rare: 3 } })).toEqual(['3 wild cards (Street)']);
+    expect(describeBundle({ gold: 1, gems: 1, tickets: 1, cards: { w_paw: 1 } })).toEqual([
+      '1 gold', '1 gem', '1 sweep ticket', `1 ${t('unit.w_paw.name')} card`,
+    ]);
+    expect(featureHint('cats')).toBe('Unlocks after 1 run.');
+    expect(featureHint('missions')).toBe('Unlocks after 3 runs.');
+    expect(oddsView(ODDS.silver, { goldOpened: 0, target: null }).guaranteeTexts).toEqual([
+      'At least 1 Alley Boss card or better in every chest.',
+    ]);
+    expect(oddsView(ODDS.gold, { goldOpened: 0, target: null }).guaranteeTexts).toEqual(['At least 3 King cards in every chest.']);
+    expect(tn('meta.piggy.free', 1, { days: 1, n: 40 })).toBe('After 1 day you can take 40 gems out for free.');
+  });
+
+  it('leaves Korean counts alone, whatever the count', () => {
+    setLang('ko');
+    expect(describeBundle({ wild: { rare: 1 } })).toEqual(['만능 카드(동네) 1장']);
+    expect(featureHint('cats')).toBe('1판을 마치면 열려요.');
+  });
+
+  it('announces an unlock with a text that fits every feature name, singular or plural', () => {
+    setLang('en');
+    for (const f of FEATURES) {
+      const line = t('meta.toast.unlock', { feature: t('meta.feature.' + f) });
+      expect(line, f).toMatch(/^Unlocked: .+!$/);
+    }
+    expect(t('meta.toast.unlock', { feature: t('meta.feature.missions') })).toBe('Unlocked: Missions!');
   });
 });

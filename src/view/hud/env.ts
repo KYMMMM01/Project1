@@ -6,7 +6,7 @@ import { type Container, Point } from 'pixi.js';
 import type { Emitter } from '@/core/events';
 import { hasString, t } from '@/core/i18n';
 import type { BattleApi, Fail } from '@/game';
-import { popups, toast, type Popup } from '@/ui';
+import { popups, toast, tooltip, type Popup } from '@/ui';
 import type { BattleContext, BattleLayout } from '../context';
 import type { Hints } from './hints';
 import { failKeys, type Reveal } from './policy';
@@ -32,7 +32,7 @@ export interface HudEnv {
   centreOf(obj: Container): { x: number; y: number };
   /** A Pixi-global point in HUD (scene) space. */
   toHud(global: Point): { x: number; y: number };
-  /** Explain a refused command in plain words. */
+  /** Explain a refused command in plain words, in a bubble on the control that was pressed (a toast when the command lives in a popup). */
   explain(command: string, fail: Fail): void;
 }
 
@@ -43,6 +43,8 @@ export class EnvImpl implements HudEnv {
   private readonly offs: Array<() => void> = [];
   private holds = 0;
   private readonly tmp = new Point();
+  /** The control a command's refusal is about, set by the HUD once its parts exist. */
+  explainAt: ((command: string) => Container | null) | null = null;
 
   constructor(
     readonly ctx: BattleContext,
@@ -80,6 +82,8 @@ export class EnvImpl implements HudEnv {
   }
 
   modal<R>(popup: Popup<R>): Promise<R> {
+    // An enemy card the player left open must not stay on top of the popup (the kit's tooltip layer is above popups).
+    tooltip.hide();
     const release = this.holdPause();
     return popups.open(popup).finally(release);
   }
@@ -95,10 +99,13 @@ export class EnvImpl implements HudEnv {
 
   explain(command: string, fail: Fail): void {
     const key = failKeys(command, fail).find((k) => hasString(k));
-    toast(key ? t(key) : t('hud.fail.not_available'), 'warning');
+    const text = key ? t(key) : t('hud.fail.not_available');
+    const target = this.explainAt?.(command) ?? null;
+    if (!target || !this.hints.explain(target, text)) toast(text, 'warning');
   }
 
   dispose(): void {
+    this.explainAt = null;
     for (const off of this.offs.splice(0)) off();
     if (this.holds > 0) {
       this.holds = 0;

@@ -5,11 +5,13 @@ import { fmt } from '@/core/format';
 import { profile, accountProgress } from '@/meta';
 import { CurrencyPill, IconButton, ProgressBar } from '@/ui';
 import type { CurrencyKind } from '../contract';
-import { TOP_PAD_TOP, TOP_PILL_H, TOP_ROW_GAP, TOP_ROW_H, pillWidth } from './layoutMath';
+import { TOP_PAD_TOP, TOP_PILL_H, TOP_ROW_GAP, TOP_ROW_H, pillRow } from './layoutMath';
 import { BADGE_R, LevelBadge } from './LevelBadge';
 
 const SIDE = 24;
-const GAP = 24;
+/** The kit's coin sticker sticks out this far past its pill's left end; the gap after a pill must clear the next sticker. */
+const PILL_OVERHANG = 21;
+const PILL_GAP = 28;
 const BADGE_SLOT = BADGE_R * 2 + 12;
 const SETTINGS_SLOT = 88;
 const KINDS: readonly CurrencyKind[] = ['gold', 'gems', 'tickets'];
@@ -56,12 +58,10 @@ export class HomeTopBar extends Container {
     this.xpBar.position.set(SIDE + BADGE_SLOT + XP_BAR_W / 2, rowA + 2);
     this.settingsBtn.position.set(w - SIDE - SETTINGS_SLOT / 2, rowA);
 
-    const pw = pillWidth(w, SIDE, GAP, KINDS.length);
-    const total = pw * KINDS.length + GAP * (KINDS.length - 1);
-    const x0 = (w - total) / 2;
+    const { pw, x0 } = pillRow(w, SIDE, PILL_GAP, PILL_OVERHANG, KINDS.length);
     KINDS.forEach((k, i) => {
       this.pills[k].setWidth(pw);
-      this.pills[k].position.set(x0 + pw / 2 + i * (pw + GAP), rowB);
+      this.pills[k].position.set(x0 + pw / 2 + i * (pw + PILL_GAP), rowB);
     });
   }
 

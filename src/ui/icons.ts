@@ -409,13 +409,17 @@ function sword(k: Ink, rot: number, blade: number): void {
   p.at();
 }
 
+/**
+ * Two half rings chasing each other. The glyph is ink on ink (fill and outline are one colour), so the
+ * outline's own weight is part of the stroke: a thin stroke and a wide ring keep the hole open at 40 px.
+ */
 function reroll(k: Ink, c: number): void {
-  const r = 27;
-  const arcs = [-3.0, -3.0 + PI];
-  const span = 2.55;
+  const r = 30;
+  const arcs = [-2.55, -2.55 + PI];
+  const span = 1.75;
   k.merged(
     c,
-    11,
+    1,
     (p) => {
       for (const a0 of arcs) p.arc(0, 0, r, a0, a0 + span);
     },
@@ -428,7 +432,7 @@ function reroll(k: Ink, c: number): void {
         const ty = Math.cos(a1);
         const nx = Math.cos(a1);
         const ny = Math.sin(a1);
-        p.rpoly([px + tx * 24, py + ty * 24, px + nx * 17, py + ny * 17, px - nx * 17, py - ny * 17], 4);
+        p.rpoly([px + tx * 17, py + ty * 17, px + nx * 11, py + ny * 11, px - nx * 11, py - ny * 11], 2.5);
       }
     },
   );
@@ -676,12 +680,12 @@ const ICONS: Record<IconName, IconDef> = {
     },
   },
   ad: {
-    color: 0xa767ff,
+    color: Color.teal,
     draw: (k, c) => {
       k.solid(c, (p) => p.rrect(-43, -34, 86, 60, 13));
-      k.solid([0x2b1b5e, 0x432a8c], (p) => p.rrect(-35, -27, 70, 45, 8));
+      k.solid(Color.ink, (p) => p.rrect(-35, -27, 70, 45, 8));
       k.solid(c, (p) => p.rrect(-20, 28, 40, 9, 4));
-      k.detail(WHITE, (p) => p.rpoly([-9, -17, -9, 8, 15, -4.5], 3));
+      k.detail(Color.paperLight, (p) => p.rpoly([-9, -17, -9, 8, 15, -4.5], 3));
     },
   },
   coin: {

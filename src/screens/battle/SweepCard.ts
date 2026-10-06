@@ -3,9 +3,10 @@ import { t } from '@/core/i18n';
 import { bundleParts, profile } from '@/meta';
 import { TICKET_AD_AMOUNT } from '@/meta/data/economy';
 import { ads } from '@/platform';
-import { Button, Color, drawIcon, fitLabel, uiLabel } from '@/ui';
-import { services, type Shell } from '../contract';
+import { Button, Color, drawIcon, fitLabel, toast, uiLabel } from '@/ui';
+import type { Shell } from '../contract';
 import { CARD_PAD, HomeCard } from './HomeCard';
+import { playClaim } from './claim';
 import { sweepable, type Selection } from './model';
 import './strings';
 
@@ -79,9 +80,10 @@ export class SweepCard extends HomeCard {
     const { chapter, stake } = this.sel;
     const r = await this.claim(this.go, async () => profile.sweep(chapter, stake));
     if (!r) return;
+    // The gold is already in the profile: it flies to the top bar like any other claim, and a sheet asking to "claim" it again would be a second payout.
+    playClaim(this.go, bundleParts({ gold: r.value.gold }), this.shell);
+    toast(t('battle.sweep.done', { xp: fmt(r.value.xp) }), 'success');
     this.sync();
-    this.shell.refresh();
-    await services.showRewards(bundleParts({ gold: r.value.gold }), t('battle.sweep.done', { xp: fmt(r.value.xp) }));
     this.shell.refresh();
   }
 

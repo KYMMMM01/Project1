@@ -85,7 +85,7 @@ export function drawFloor(g: Graphics, w: number, h: number): void {
   const rnd = makeRng(0xf100);
   for (let y = 0; y < h; y += 172) {
     const tone = rnd();
-    g.rect(0, y, w, 172).fill({ color: tone < 0.5 ? Color.woodDark : 0xe0b070, alpha: 0.05 + 0.07 * rnd() });
+    g.rect(0, y, w, 172).fill({ color: tone < 0.5 ? Color.woodDark : Color.woodLight, alpha: 0.05 + 0.07 * rnd() });
     for (let i = 0; i < 5; i++) {
       const sy = y + 14 + rnd() * 146;
       const sx = rnd() * w;
@@ -186,7 +186,7 @@ export function drawPaperFace(g: Graphics, x: number, y: number, o: PaperOpts): 
   if (o.edge !== false && r.mask === 0) {
     g.poly(pts).stroke({ width: o.edgeWidth ?? 2, color: o.edge ?? edgeTone(o.fill), alpha: o.edgeAlpha ?? 0.5, alignment: 0, join: 'round' });
   }
-  const fibre = mixColor(o.fill, 0xffffff, 0.6);
+  const fibre = mixColor(o.fill, Color.white, 0.6);
   for (const line of path.torn) {
     const moved = shifted(line, x, y);
     g.moveTo(moved[0] as number, moved[1] as number);

@@ -5,9 +5,9 @@ import { fmtDuration } from '@/core/format';
 import { at, createTestProfile, type TestRig } from '@/meta/testing';
 import { missionBadges, tierFill, tierMarks, weekDays } from '@/screens/missions/model';
 import {
-  focusTier, passBadgeCount, passClaimable, PASS_ROW_GAP, PASS_ROW_H, retroactiveCount, scrollTargetFor, seasonNameKey, xpFill,
+  focusTier, passBadgeCount, passClaimable, PASS_ROW_GAP, PASS_ROW_H, retroactiveCount, scrollTargetFor, seasonEndWarning, seasonNameKey, xpFill,
 } from '@/screens/pass/model';
-import { calendarCellState, isBigDay } from '@/screens/system/calendarModel';
+import { calendarCellState, calendarPage, isBigDay } from '@/screens/system/calendarModel';
 import { currencyOnly, currencyTotals, flightCount, partsOf, stickerTilt, textureKey } from '@/screens/system/kit/parts';
 import { countdownText, daysUntil, msUntilNextMidnight, msUntilNextMonday } from '@/screens/system/kit/time';
 import { qualityPatch, savedAtText } from '@/screens/system/settingsModel';
@@ -164,6 +164,20 @@ describe('pass model', () => {
     expect(retroactiveCount(profile.passView())).toBe(0);
   });
 
+  it('warns once a day in the last days of a season while a tier can still be taken', async () => {
+    const { profile } = await advanced();
+    profile.data.pass.xp = 250;
+    const v = profile.passView();
+    expect(seasonEndWarning({ ...v, daysLeft: 9 }, '')).toBeNull();
+    const today = seasonEndWarning({ ...v, daysLeft: 3 }, '');
+    expect(today).toBe(`${v.season}:3`);
+    expect(seasonEndWarning({ ...v, daysLeft: 3 }, today ?? '')).toBeNull();
+    expect(seasonEndWarning({ ...v, daysLeft: 2 }, today ?? '')).toBe(`${v.season}:2`);
+    // Nothing left to lose: nothing to say.
+    expect(profile.claimAllPass('free').ok).toBe(true);
+    expect(seasonEndWarning({ ...profile.passView(), daysLeft: 1 }, '')).toBeNull();
+  });
+
   it('cycles season names and keeps the fill within 0..1', async () => {
     expect(seasonNameKey(0)).toBe('rt.pass.season.0');
     expect(seasonNameKey(4)).toBe('rt.pass.season.0');
@@ -217,6 +231,25 @@ describe('calendar look', () => {
 
   it('gives days 7, 14, 21 and 28 the big stickers', () => {
     expect([...Array(28).keys()].map((i) => i + 1).filter(isBigDay)).toEqual([7, 14, 21, 28]);
+  });
+
+  it('keeps the page that day 28 completed on show, stamped to the end, until the next day can be claimed', () => {
+    // The meta layer has already wrapped: stamp 0, one calendar finished, last claim today.
+    const done = calendarPage({ stamp: 0, next: 1, cycles: 1, canClaim: false }, true, 28);
+    expect(done).toEqual({ page: 1, stamp: 28, next: 1, canClaim: false });
+    expect([1, 14, 28].map((d) => calendarCellState(d, done))).toEqual(['claimed', 'claimed', 'claimed']);
+    // Tomorrow: the second page, empty, with day 1 up for the taking.
+    const fresh = calendarPage({ stamp: 0, next: 1, cycles: 1, canClaim: true }, false, 28);
+    expect(fresh).toEqual({ page: 2, stamp: 0, next: 1, canClaim: true });
+    expect(calendarCellState(1, fresh)).toBe('today');
+  });
+
+  it('shows an ordinary page as the profile reports it', () => {
+    expect(calendarPage({ stamp: 27, next: 28, cycles: 0, canClaim: true }, false, 28)).toEqual({ page: 1, stamp: 27, next: 28, canClaim: true });
+    // A brand-new profile has stamp 0 and no finished page: nothing to hold.
+    expect(calendarPage({ stamp: 0, next: 1, cycles: 0, canClaim: false }, true, 28).stamp).toBe(0);
+    // A first claim today does not look like a finished page.
+    expect(calendarPage({ stamp: 1, next: 2, cycles: 3, canClaim: false }, true, 28)).toEqual({ page: 4, stamp: 1, next: 2, canClaim: false });
   });
 });
 

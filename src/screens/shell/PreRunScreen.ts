@@ -33,6 +33,7 @@ import { ChapterPhoto, bossSticker, chapterInfo } from '../battle/ChapterPhoto';
 import type { StartRunRequest } from '../contract';
 import { startBob } from './bob';
 import { CLASS_LINE_H, ClassLine } from './ClassLine';
+import { LockSet } from './LockSet';
 import { planRun, type RunPlan } from './runPlan';
 import './strings';
 
@@ -170,8 +171,11 @@ function buildLines(w: number): Panel {
 
 interface SnackRow {
   panel: Panel;
-  buttons: Button[];
+  ad: Button;
+  gems: Button;
 }
+
+const adReady = (): boolean => ads.canOffer(OFFERS.start_snack.ad);
 
 function buildSnackRow(id: SnackId, w: number, onPick: (via: 'ad' | 'gems') => void): SnackRow {
   const h = 236;
@@ -191,15 +195,15 @@ function buildSnackRow(id: SnackId, w: number, onPick: (via: 'ad' | 'gems') => v
   panel.content.addChild(disc, icon, name, desc);
 
   const bw = (w - 24 * 2 - 16) / 2;
-  const adReady = ads.canOffer(OFFERS.start_snack.ad);
+  const offered = adReady();
   const adBtn = new Button({
-    label: adReady ? t('shell.pre.ad') : t('shell.pre.ad.none'),
+    label: offered ? t('shell.pre.ad') : t('shell.pre.ad.none'),
     icon: 'ad',
     style: 'success',
     width: bw,
     height: 88,
     fontSize: 30,
-    enabled: adReady,
+    enabled: offered,
     disabledMark: 'none',
   });
   adBtn.position.set(24 + bw / 2, h - 24 - 44);
@@ -215,7 +219,7 @@ function buildSnackRow(id: SnackId, w: number, onPick: (via: 'ad' | 'gems') => v
   gemBtn.position.set(24 + bw + 16 + bw / 2, h - 24 - 44);
   gemBtn.onTap(() => onPick('gems'));
   panel.content.addChild(adBtn, gemBtn);
-  return { panel, buttons: [adBtn, gemBtn] };
+  return { panel, ad: adBtn, gems: gemBtn };
 }
 
 export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): PreRunHandle {
@@ -227,11 +231,11 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
   const bag = new TweenBag();
   let alive = true;
   let busy = false;
-  const locks: Button[] = [];
+  const locks = new LockSet();
 
   const setBusy = (v: boolean): void => {
     busy = v;
-    for (const b of locks) b.setEnabled(!v);
+    locks.setBusy(v);
   };
 
   const run = async (snack: SnackChoice | undefined, source: Button): Promise<void> => {
@@ -269,13 +273,11 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
     content.addChild(head, hint);
     y += 78 + hint.height + 18;
     for (const id of SNACKS) {
-      const row = buildSnackRow(id, w, (via) => {
-        const source = row.buttons[via === 'ad' ? 0 : 1] as Button;
-        void run({ id, via }, source);
-      });
+      const row = buildSnackRow(id, w, (via) => void run({ id, via }, via === 'ad' ? row.ad : row.gems));
       row.panel.y += y;
       content.addChild(row.panel);
-      locks.push(...row.buttons);
+      locks.add(row.ad, adReady);
+      locks.add(row.gems);
       y += row.panel.panelH + 18;
     }
   }
@@ -283,7 +285,7 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
 
   const go = new Button({ label: plan.snackAllowed ? t('shell.pre.start') : t('shell.pre.go'), icon: 'play', style: 'primary', width: 600, height: 124, fontSize: 48, tape: 'pink' });
   go.onTap(() => void run(undefined, go));
-  locks.push(go);
+  locks.add(go);
   scaffold.actionBar.addChild(go);
   startBob(bag, go);
 

@@ -1,6 +1,6 @@
 import { BitmapFont, BitmapText } from 'pixi.js';
 import { labelStyle } from './text';
-import { Color } from './theme';
+import { Color, MIN_FONT } from './theme';
 
 /**
  * Counters repaint every frame while they roll up. A canvas-backed Text would re-rasterise on each
@@ -20,13 +20,13 @@ function fontName(size: number, onArt: boolean): string {
  * that sit on artwork (tint those light).
  */
 export function numberText(size: number, color: number = Color.ink, text = '', onArt = false): BitmapText {
-  const s = Math.max(20, Math.round(size));
+  const s = Math.max(MIN_FONT, Math.round(size));
   const name = fontName(s, onArt);
   if (!installed.has(name)) {
     installed.add(name);
     BitmapFont.install({
       name,
-      style: labelStyle({ size: s, color: 0xffffff, onArt }),
+      style: labelStyle({ size: s, color: Color.white, onArt }),
       chars: CHARS,
       resolution: 2,
       padding: 4,

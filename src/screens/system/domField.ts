@@ -1,7 +1,8 @@
 /**
  * A real <textarea> laid over the canvas: Pixi has no text input, and a paste field has to be a
  * native one so the OS paste menu, selection handles and keyboard work. It is positioned from the
- * on-screen bounds of a placeholder display object.
+ * on-screen bounds of a placeholder display object. The host popup calls place() after it has laid
+ * itself out again: a resize listener of the field's own would measure the popup before it moved.
  */
 import type { Container } from 'pixi.js';
 import { game } from '@/core/game';
@@ -20,7 +21,6 @@ export interface DomFieldOpts {
 export class DomTextField {
   readonly el: HTMLTextAreaElement;
   private anchor: Container | null = null;
-  private offResize: (() => void) | null = null;
 
   constructor(o: DomFieldOpts) {
     const el = document.createElement('textarea');
@@ -52,7 +52,6 @@ export class DomTextField {
     s.display = 'none';
     document.body.appendChild(el);
     this.el = el;
-    this.offResize = game.events.on('resize', () => this.place());
   }
 
   get value(): string {
@@ -74,7 +73,7 @@ export class DomTextField {
     this.el.style.display = 'none';
   }
 
-  /** Re-fit to the anchor: call after a popup finished its open animation or the screen changed. */
+  /** Re-fit to the anchor: call once the host has settled (after its open animation, after it was laid out for a new screen size). */
   place(): void {
     const a = this.anchor;
     if (!a || a.destroyed) return;
@@ -95,8 +94,6 @@ export class DomTextField {
   }
 
   destroy(): void {
-    this.offResize?.();
-    this.offResize = null;
     this.el.remove();
     this.anchor = null;
   }
