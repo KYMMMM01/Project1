@@ -1,0 +1,94 @@
+/**
+ * Shared contract of the home shell and its screens. The shell (HomeScene) owns the top currency
+ * bar, the bottom tab bar and the flow into a battle; each tab and each system popup is built
+ * independently against this file and never imports another screen's module. Cross-screen calls
+ * (open the chest reveal from the home tab, jump to a shop section from a "not enough gems" toast)
+ * go through `services`.
+ */
+import type { Container } from 'pixi.js';
+import type { Tweener } from '@/core/tween';
+import type { BattleMode } from '@/game';
+
+export type TabId = 'shop' | 'cats' | 'battle' | 'missions' | 'pass';
+
+export const TAB_ORDER: readonly TabId[] = ['shop', 'cats', 'battle', 'missions', 'pass'];
+
+/** The rectangle a tab may draw in (scene space): below the currency bar, above the tab bar. */
+export interface ContentArea {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface TabScreen {
+  /** Root display object; the shell adds/removes it and positions nothing inside it. */
+  readonly view: Container;
+  /** Tab became visible: refresh from the profile, restart idle animation. */
+  show(): void;
+  /** Tab was hidden: stop timers and idle animation. */
+  hide(): void;
+  resize(area: ContentArea): void;
+  /** Real-time tick while visible. */
+  update(dt: number): void;
+  /** Tab-bar badge: a count, true for a plain dot, false/0 for none. */
+  badge(): number | boolean;
+  destroy(): void;
+}
+
+export type CurrencyKind = 'gold' | 'gems' | 'tickets';
+
+export interface StartRunRequest {
+  mode: BattleMode;
+  chapter?: number;
+  stake?: number;
+}
+
+/** What the shell offers to tabs and popups. */
+export interface Shell {
+  /** Real-time clock for screen animation (killed when the home scene exits). */
+  readonly ui: Tweener;
+  readonly area: ContentArea;
+  goTab(id: TabId): void;
+  /** Scene-space centre of a currency icon in the top bar (target for reward flights). */
+  currencyAnchor(kind: CurrencyKind): { x: number; y: number };
+  /** Re-read the profile into the top bar and the tab badges (call after any claim or purchase). */
+  refresh(): void;
+  /** Go through the pre-run screen (snack offer) and into the battle. Resolves when the battle scene is opening. */
+  startRun(request: StartRunRequest): Promise<void>;
+}
+
+/** Things one screen module provides for everyone. Missing providers resolve as no-ops. */
+export interface ScreenServices {
+  /** Play the chest-opening sequence for an already decided result (meta `ChestResult`), then resolve. */
+  revealChest(result: unknown): Promise<void>;
+  /** Show a "you received" popup for a reward bundle (meta `BundlePart[]`), flying currencies to the top bar. */
+  showRewards(parts: unknown, title?: string): Promise<void>;
+  /** Open the odds screen of a chest kind ('wooden' | 'silver' | 'gold'). */
+  openOdds(kind: string): void;
+  openSettings(): void;
+  openCalendar(): void;
+  /** Jump to the shop tab and scroll to a section ('chests' | 'daily' | 'gems' | 'pass' | 'piggy' | 'cosmetics'). */
+  openShop(section?: string): void;
+  /** Open one unit's detail screen from anywhere. */
+  openUnit(unitId: string): void;
+}
+
+const registry: Partial<ScreenServices> = {};
+
+export function provide<K extends keyof ScreenServices>(name: K, fn: ScreenServices[K]): void {
+  registry[name] = fn;
+}
+
+/** Call a service if someone provides it. Promise-returning services resolve immediately when absent. */
+export const services: ScreenServices = {
+  revealChest: (result) => registry.revealChest?.(result) ?? Promise.resolve(),
+  showRewards: (parts, title) => registry.showRewards?.(parts, title) ?? Promise.resolve(),
+  openOdds: (kind) => registry.openOdds?.(kind),
+  openSettings: () => registry.openSettings?.(),
+  openCalendar: () => registry.openCalendar?.(),
+  openShop: (section) => registry.openShop?.(section),
+  openUnit: (unitId) => registry.openUnit?.(unitId),
+};
+
+export type TabFactory = (shell: Shell) => TabScreen;
