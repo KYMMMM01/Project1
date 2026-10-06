@@ -1,10 +1,12 @@
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, NineSliceSprite, Sprite, type Texture } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { clamp, clamp01, damp, mixColor } from '@/core/math';
 import type { Tweener } from '@/core/tween';
-import { fxTexture, popIn } from '@/fx';
+import { Color, TapeColors, paintTexture } from '@/ui';
+import { popIn } from '@/fx';
 import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
+import type { FieldArt, StatusSticker } from './art';
 import { barSegments, type BarSegments } from './policy';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
 
@@ -12,11 +14,13 @@ import { deathScale, stepRate, walkBob, walkTilt } from './motion';
 const SIZE_PER_RADIUS = 3.05;
 const BOSS_SIZE_PER_RADIUS = 3.0;
 
-const ICY = 0xaee4ff;
-const COOL = 0x9ec4ff;
-const SCORCH = 0xffb27a;
-const TOXIC = 0xa8e08c;
-const RAGE = 0xff6a5a;
+/** Flat tints multiplied into the sprite while a status lasts; each also has its own sticker above the bar. */
+const ICY = mixColor(Color.white, TapeColors.sky.base, 0.85);
+const COOL = mixColor(Color.white, Color.teal, 0.55);
+const SCORCH = mixColor(Color.white, Color.coral, 0.5);
+const TOXIC = mixColor(Color.white, Color.leaf, 0.6);
+const RAGE = mixColor(Color.white, Color.berry, 0.6);
+const BAR_H = 6;
 
 /** Texture key of an enemy: bosses use their own id, the small balloon borrows the big one's art. */
 export function enemyTextureKey(id: EnemyId): string {
@@ -28,7 +32,8 @@ export function enemyTextureKey(id: EnemyId): string {
 /**
  * One enemy. Layers, outside in: `root` (positioned at the enemy; the director may use it), `lean`
  * (this class's own walk bob and waddle), `body` (left to juice helpers: spawn pop, hit squash and
- * knock), and the `sprite`.
+ * knock), and the `sprite`. A flat shadow lies under it; elite and boss add a dashed ground ring and
+ * a small sticker, and the health bar is a kraft strip with a painted fill.
  */
 export class EnemyView {
   readonly root = new Container();
@@ -54,48 +59,56 @@ export class EnemyView {
   private readonly aura: Sprite;
   private readonly ring: Sprite;
   private readonly stun: Sprite;
-  private readonly barBack: Sprite;
-  private readonly barHp: Sprite;
-  private readonly barShield: Sprite;
+  private readonly barBack: NineSliceSprite;
+  private readonly barHp: NineSliceSprite;
+  private readonly barShield: NineSliceSprite;
   private readonly bar = new Container();
+  private readonly badge: Sprite;
+  private readonly sticker: Sprite;
   private readonly seg: BarSegments = { hp: 0, shield: 0 };
+  private sickness: StatusSticker | null = null;
   private size = 56;
   private barW = 44;
   private spriteScale = 0.2;
   private rate = 2;
   private facing = 1;
-  private statusColor = 0xffffff;
+  private statusColor: number = Color.white;
   private statusAmt = 0;
-  private lastTint = 0xffffff;
+  private lastTint: number = Color.white;
   private barShown = false;
   private barAlpha = 0;
 
-  constructor() {
+  constructor(private readonly art: FieldArt) {
     this.root.label = 'enemy';
     this.body.label = 'body';
     this.sprite.label = 'sprite';
     this.sprite.anchor.set(0.5);
-    this.shadow = this.makeSprite(fxTexture('glow'));
-    this.shadow.tint = 0x000000;
-    this.aura = this.makeSprite(fxTexture('glow'));
-    this.aura.blendMode = 'add';
-    this.ring = this.makeSprite(fxTexture('ring'));
-    this.ring.tint = 0xff4d5e;
+    this.shadow = this.makeSprite(art.shadow);
+    this.aura = this.makeSprite(art.groundRing);
+    this.ring = this.makeSprite(art.ring);
+    this.ring.tint = Color.berry;
     this.ring.visible = false;
-    this.stun = this.makeSprite(fxTexture('star'));
-    this.stun.tint = 0xffe14d;
+    this.stun = this.makeSprite(art.star);
     this.stun.visible = false;
-    this.barBack = new Sprite(Texture.WHITE);
-    this.barHp = new Sprite(Texture.WHITE);
-    this.barShield = new Sprite(Texture.WHITE);
-    this.barBack.tint = 0x140a2e;
-    this.barBack.alpha = 0.75;
-    this.barShield.tint = 0x4ee3ff;
+    const fillTex = paintTexture(Color.white, BAR_H);
+    const slice = (texture: Texture, caps: number): NineSliceSprite =>
+      new NineSliceSprite({ texture, leftWidth: caps, rightWidth: caps, topHeight: 2, bottomHeight: 2 });
+    this.barBack = slice(art.barTrack, 7);
+    this.barHp = slice(fillTex, BAR_H / 2);
+    this.barShield = slice(fillTex, BAR_H / 2);
+    this.barShield.tint = TapeColors.sky.base;
+    this.barBack.height = BAR_H + 6;
+    this.barHp.height = BAR_H;
+    this.barShield.height = BAR_H;
+    this.badge = this.makeSprite(art.mark.elite);
+    this.badge.visible = false;
+    this.sticker = this.makeSprite(art.status.slow);
+    this.sticker.visible = false;
     this.bar.addChild(this.barBack, this.barHp, this.barShield);
     this.bar.visible = false;
     this.body.addChild(this.sprite);
     this.lean.addChild(this.body);
-    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.bar);
+    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker);
     this.root.eventMode = 'none';
   }
 
@@ -123,35 +136,40 @@ export class EnemyView {
     this.rate = stepRate(def.speed);
     this.facing = Math.cos(enemy.angle) < 0 ? -1 : 1;
     const heavy = this.isBoss || this.isElite;
-    this.shadow.width = this.size * (heavy ? 1.15 : 0.95);
-    this.shadow.height = this.size * (heavy ? 0.4 : 0.32);
-    this.shadow.alpha = heavy ? 0.55 : 0.4;
+    this.shadow.width = this.size * (heavy ? 1.0 : 0.85);
+    this.shadow.height = this.size * (heavy ? 0.3 : 0.26);
+    this.shadow.alpha = heavy ? 0.4 : 0.32;
     this.shadow.position.y = this.size * 0.36;
+    // Elite and boss stand inside a dashed ground ring and carry a small sticker above the head.
     this.aura.visible = heavy;
-    this.aura.tint = this.isBoss ? 0xff4d7a : 0xffb347;
+    this.aura.tint = this.isBoss ? Color.berry : Color.mustardDark;
     this.aura.width = this.size * 1.5;
-    this.aura.height = this.size * 0.7;
+    this.aura.height = this.size * 0.62;
     this.aura.position.y = this.size * 0.34;
+    this.badge.visible = heavy;
+    this.badge.texture = this.isBoss ? this.art.mark.boss : this.art.mark.elite;
+    this.badge.position.set(-this.size * 0.42, -this.size * 0.5);
     this.ring.width = this.ring.height = this.size * 1.22;
     this.ring.visible = false;
-    this.stun.width = this.stun.height = Math.max(18, this.size * 0.34);
+    this.stun.width = this.stun.height = Math.max(20, this.size * 0.36);
     this.stun.position.y = -this.size * 0.62;
     this.stun.visible = false;
-    this.barW = clamp(this.size * 0.8, 36, 70);
-    this.barBack.position.set(-this.barW / 2 - 1.5, -2);
-    this.barBack.width = this.barW + 3;
-    this.barBack.height = 8;
+    this.barW = clamp(this.size * 0.8, 40, 70);
+    this.barBack.position.set(-this.barW / 2 - 3, -3);
+    this.barBack.width = this.barW + 6;
     this.barHp.position.set(-this.barW / 2, 0);
-    this.barHp.height = 4;
-    this.barShield.height = 4;
-    this.bar.position.set(0, -this.size * 0.56 - 8);
+    this.barShield.position.set(-this.barW / 2, 0);
+    this.bar.position.set(0, -this.size * 0.56 - 10);
+    this.sticker.position.set(this.barW / 2 + 8, -this.size * 0.56 - 12);
+    this.sticker.visible = false;
+    this.sickness = null;
     this.bar.visible = false;
     this.barShown = false;
     this.barAlpha = 0;
     this.statusAmt = 0;
-    this.statusColor = 0xffffff;
-    this.lastTint = 0xffffff;
-    this.sprite.tint = 0xffffff;
+    this.statusColor = Color.white;
+    this.lastTint = Color.white;
+    this.sprite.tint = Color.white;
     this.sprite.alpha = 1;
     this.sprite.scale.set(this.spriteScale * this.facing, this.spriteScale);
     this.root.alpha = 1;
@@ -168,7 +186,7 @@ export class EnemyView {
   }
 
   appear(tweens: Tweener): void {
-    popIn(tweens, this.body, { ms: 230, overshoot: 2.0 });
+    popIn(tweens, this.body, { ms: 230, overshoot: 1.6 });
   }
 
   /** Per-frame upkeep. `enemy` is null for a dead view that is still playing out. */
@@ -191,7 +209,7 @@ export class EnemyView {
     this.root.position.set(this.x, this.y);
     this.root.zIndex = this.y + this.size * 0.3;
     this.sprite.scale.x = this.spriteScale * this.facing;
-    this.aura.alpha = this.aura.visible ? 0.3 + 0.12 * Math.sin(time * 3.2) : 0;
+    this.aura.alpha = this.aura.visible ? 0.8 + 0.12 * Math.sin(time * 3.2) : 0;
     if (this.dying) {
       const s = deathScale(this.deathK);
       this.root.scale.set(Math.max(0, s));
@@ -200,41 +218,52 @@ export class EnemyView {
   }
 
   private updateStatus(dt: number, time: number, e: EnemyState): void {
-    let color = 0xffffff;
+    let color: number = Color.white;
     let amt = 0;
+    let sick: StatusSticker | null = null;
     if (e.frozen) {
       color = ICY;
       amt = 0.85;
+      sick = 'freeze';
     } else if (e.slow > 0.05) {
       color = COOL;
       amt = 0.6;
+      sick = 'slow';
     } else if (e.burning) {
       color = SCORCH;
       amt = 0.55;
+      sick = 'burn';
     } else if (e.poisoned) {
       color = TOXIC;
       amt = 0.55;
+      sick = 'poison';
     }
     if (e.enraged) {
       color = RAGE;
       amt = 0.35 + 0.3 * (0.5 + 0.5 * Math.sin(time * 7));
+      sick = 'rage';
+    }
+    if (sick !== this.sickness) {
+      this.sickness = sick;
+      this.sticker.visible = sick !== null;
+      if (sick) this.sticker.texture = this.art.status[sick];
     }
     if (amt > 0) this.statusColor = color;
     this.statusAmt = damp(this.statusAmt, amt, 0.06, dt);
-    const tint = this.statusAmt < 0.01 ? 0xffffff : mixColor(0xffffff, this.statusColor, this.statusAmt);
+    const tint = this.statusAmt < 0.01 ? Color.white : mixColor(Color.white, this.statusColor, this.statusAmt);
     if (tint !== this.lastTint) {
       this.lastTint = tint;
       this.sprite.tint = tint;
     }
     this.ring.visible = e.focused;
     if (e.focused) {
-      this.ring.alpha = 0.7 + 0.25 * Math.sin(time * 9);
+      this.ring.alpha = 0.8 + 0.2 * Math.sin(time * 9);
       this.ring.rotation = time * 1.5;
     }
     this.stun.visible = e.stunned;
     if (e.stunned) {
       this.stun.rotation = time * 5;
-      this.stun.alpha = 0.9;
+      this.stun.alpha = 1;
     }
   }
 
@@ -248,10 +277,10 @@ export class EnemyView {
     this.bar.alpha = this.barAlpha;
     barSegments(e.hp, e.maxHp, e.shield, e.maxShield, this.seg);
     const hpFrac = e.maxHp > 0 ? e.hp / e.maxHp : 0;
-    this.barHp.tint = hpFrac > 0.6 ? 0x5ee06a : hpFrac > 0.3 ? 0xffd23f : 0xff5a5a;
-    this.barHp.width = this.barW * this.seg.hp;
+    this.barHp.tint = hpFrac > 0.6 ? Color.leaf : hpFrac > 0.3 ? Color.mustard : Color.coral;
+    this.barHp.width = this.seg.hp > 0 ? Math.max(BAR_H, this.barW * this.seg.hp) : 0;
     this.barShield.x = -this.barW / 2 + this.barW * this.seg.hp;
-    this.barShield.width = this.barW * this.seg.shield;
+    this.barShield.width = this.seg.shield > 0 ? Math.max(BAR_H, this.barW * this.seg.shield) : 0;
   }
 
   /** The enemy died: start the collapse (a bar that shows nothing now is hidden). */
@@ -260,6 +289,8 @@ export class EnemyView {
     this.bar.visible = false;
     this.ring.visible = false;
     this.stun.visible = false;
+    this.sticker.visible = false;
+    this.sickness = null;
   }
 
   retire(): void {

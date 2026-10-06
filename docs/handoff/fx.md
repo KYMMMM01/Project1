@@ -1,6 +1,21 @@
-# FX module hand-off (`src/fx`)
+# FX module hand-off (`src/fx`), paper scrapbook restyle
 
 Procedural VFX library for the battle and meta scenes: particles, impact presets, looping cell and zone visuals, floating numbers, currency fly-to, screen effects, hit-stop, object juice, an awakening cut-in, quality tiers with an automatic governor. No image files; every particle shape is drawn into one atlas at first use.
+
+## The paper look (2026-10-06)
+
+Effects are cut paper, not light. The public API, timings, pooling and quality tiers are unchanged; the drawing changed:
+
+- **Nothing blends additively.** The particle system has one flat layer (the `additive` layer and `Blend` are gone, and so is `EmitDef.blend`; `Loop.sprite(id, blend, tint)` is now `Loop.sprite(id, tint)` and `ParticleSystem.alloc(id, prio)`). Every burst, loop and ray draws opaque or plainly translucent flat shapes.
+- **The atlas is flat** (`textures.ts`): hard anti-aliased edges, no gradients. `disc` (was `glow`) is a hard disc, `sparkle` a four-point star, `smoke` a flat puff of five circles, `ring` and `ringThick` crisp rings, `spark` / `streak` / `bolt` flat blades, `wedge` a flat triangle (one ray of a sunburst), `pillar` and `beam` flat strips, `starburst` a nine-point paper burst, `vortex` crisp spiral arms, `coin` two flat tones, `puddle` a flat blob. New shapes: `patch` (a flat rounded square for cell tints) and `sun` (a twelve-point paper sun). Shape ids are otherwise unchanged.
+- **One palette** (`palette.ts`): `Hue` (cream, spark, sun, gold, fire, ember, flame, fur, heal, heart, water, ice, iceLight, zap, alarm, dust, smoke, smokeDark, shadow), `CONFETTI` and `CLASS_HUE`, every entry a kit token or a `mixColor` of two (`Color`, `Rarity`, `TapeColors`). The lightest tone is the cream of the paper. No hex literals in `src/fx` outside tests. The director and the field import it too.
+- **Sticker numerals** (`numbers.ts`): each number is a pooled `Container` of an optional paper starburst (crit coral, boss hit berry), a brown edge font (a flat warm shadow baked in) and a face font in a flat colour with a cream outline. Face colours by kind: damage coral, crit and boss hit mustard, dot teal, heal leaf, gold mustard, hurt berry. Face fonts are baked per colour on first use (`NumberOpts.color` still overrides the face; the director uses it for burn, poison, bleed and shield). `ensureNumberFonts()` bakes the edge and the stock faces at boot. Crit and big sizes were lowered a little (40 to 56 and 56 to 80) because the outline adds weight.
+- **Zones** (`zones.ts`): sunbeam cell = flat mustard patch, two pale leaning bands, a sun sticker; laser dot = the classic red dot with a cream rim and highlight, thin pulsing rings and a faint beam running down; hazard warning and wet and zap cells = berry dashed outline (`drawDashedRect`), a flat tint (water blue or mustard; the warning's tint rises over the telegraph time), a drop or bolt sticker, blink 1.6 to 3 Hz as before; wet puddle = flat blue pool with thin rings and flat drops; zap = flickering mustard tint with arcs; weaken swirl = flat blue beads with a cream rim; blizzard = pale blue disc with wind streaks, snow and paper crystals; potion = leaf puffs and bubble rings; black hole = ink-brown hub and spiral arms (no purple).
+- **Cut-in** (`cutin.ts`), a paper collage: warm brown dim (`Dim.backdrop`), cream streaks, a strip of the class colour with cream tape strips along its edges and a flat shadow, the cat sticker popping with an overshoot in front of a flat paper sun that turns slowly, the name on a torn cream `PaperLabel`, the class tag as on-art text, a warm flash. The rainbow outline (`rainbow()`) is gone with its tests. Plan, offsets and skip rules are unchanged.
+- **Screen**: flashes default to `Hue.sun` (warm), the red edge pulse and the danger vignette use `Hue.alarm`, letterbox bars are ink brown. The flash safety rules (0.5 s gap, alpha 0.45, red wash, the flash setting) are untouched.
+- **Hit flash** (`juice.ts`) now lays a flat white copy of the sprite on top (normal blend), not an additive one.
+- **Particles**: confetti is paper (kit papers and tapes), smoke is warm kraft dust (`Hue.dust`, `Hue.smoke`), explosions are coral and mustard flat bursts with ink-brown smoke, ice is sky blue, hearts are berry. Projectile streaks on the field use the flat `streak` shape.
+
 
 Import everything from `@/fx` (barrel `src/fx/index.ts`).
 
@@ -10,18 +25,19 @@ Import everything from `@/fx` (barrel `src/fx/index.ts`).
 |---|---|
 | `settings.ts` | `fxSettings` (`tier`, `autoTier`, `quality`, `flashes`, `reducedMotion`, `numbers`), `FX_TIERS`, `setFxSettings`, `onFxTierChange`, `tierScale`, `countScale`, `REDUCED`, `motionSeconds` |
 | `governor.ts` | `QualityGovernor` (pure), `startFxGovernor` / `stopFxGovernor` (game-wide, started by every `new Fx`), `loadFxTier` / `saveFxTier` |
-| `textures.ts` | One 2x atlas, 27 shapes (`FX_TEX_IDS`), `ensureFxTextures`, `fxTexture(id)`, `fxVignette()` |
-| `particles.ts` | `ParticleSystem` (two `ParticleContainer` layers, normal + additive), `EmitDef`, `BurstMods`, `EmitterHandle`; budget with priority fill, `sway`, `converge` |
+| `textures.ts` | One 2x atlas, 29 flat shapes (`FX_TEX_IDS`), `ensureFxTextures`, `fxTexture(id)`, `fxVignette()` |
+| `palette.ts` | `Hue`, `CONFETTI`, `CLASS_HUE`: the colours of every effect, all kit tokens or mixes of two |
+| `particles.ts` | `ParticleSystem` (one flat `ParticleContainer`), `EmitDef`, `BurstMods`, `EmitterHandle`; budget with priority fill, `sway`, `converge` |
 | `loops.ts` | `Loop` (pooled sprites + riding emitters + fade), `FxEnv`, `FxRect`, `ZoneHandle` |
-| `zones.ts` | Looping / timed visuals: `sunbeamCell`, `laserDot`, `hazardWarn`, `wetPuddle`, `zapCell`, `weakenSwirl`, `blizzardZone`, `potionCloud`, `blackHole` (use them through `Fx`) |
+| `zones.ts` | Looping / timed visuals: `sunbeamCell`, `laserDot`, `hazardWarn`, `wetPuddle`, `zapCell`, `weakenSwirl`, `blizzardZone`, `potionCloud`, `blackHole` (use them through `Fx`); flat paper looks, see above |
 | `fx.ts` | The `Fx` facade with every preset |
-| `cutin.ts` | `AwakeningCutIn` + shared `awakeningCutIn`; pure `awakeningPlan`, `bannerOffset`, `dimAmount`, `rainbow` |
+| `cutin.ts` | `AwakeningCutIn` + shared `awakeningCutIn`; pure `awakeningPlan`, `bannerOffset`, `dimAmount` |
 | `screen.ts` | `screenFx` (flash, vignette pulse, danger, letterbox), `fxShake`, `Trauma`, `createHitStop` |
 | `freeze.ts` | `TimeFreeze` (overlapping hit-stop / slow-mo, cooldown, caps) |
-| `numbers.ts` | `FloatingNumbers` (pooled `BitmapText`, 7 styles) |
+| `numbers.ts` | `FloatingNumbers` (pooled sticker numerals: starburst, edge and face `BitmapText`, 7 styles) |
 | `flyTo.ts`, `flyPath.ts` | Currency fly-to-HUD |
 | `juice.ts` | `punchScale squash popIn popOut wobbleRotation shakeObject rattleObject kickObject floatBob pulseLoop hitFlash` |
-| `rays.ts`, `bolt.ts`, `curves.ts`, `budget.ts`, `handles.ts` | God-rays, bolt geometry, curves and colour ramps, particle accounting, handle types |
+| `rays.ts`, `bolt.ts`, `curves.ts`, `budget.ts`, `handles.ts` | Paper sunburst rays, bolt geometry, curves and colour ramps, particle accounting, handle types |
 
 Demo: `?demo=fx` (`src/demo/FxDemo.ts`), 71 gallery cells on 5 pages; hooks on `window.__dbg.fx` (`names, play, playAt, playAll, stats, page, settings, tier, where, clear, chrome, manual, advance, fx, cutin, portrait, screen, freeze`).
 
@@ -62,12 +78,12 @@ New in this pass:
 
 | Call | Notes |
 |---|---|
-| `sunbeamCell(rect)` | warm diagonal shaft + slow dust motes, 3 sprites + about 6 particles; `rect` = `{x,y,w,h}` top-left in the Fx root coordinates |
-| `laserDot(x,y,{color?,scale?,follow?})` | pulsing red dot, two thin rings, glint; `moveTo` glides (half-life 45 ms) |
-| `hazardWarn(rect, 'wet'\|'zap', {duration = 0.8})` | outline blinks 1.6 to 3 Hz while a fill rises; drop / bolt glyph so colour is not the only cue; pops and ends itself |
-| `wetPuddle(rect)` | rippling puddle, leaping droplets |
-| `zapCell(rect)` | flicker glow, crackling arcs (budget-limited, priority 0), sparks |
-| `weakenSwirl(x,y,{follow?,scale?})` | droopy blue spiral of beads, sweat drops; pass `follow: unitSprite` to ride along with a dragged unit |
+| `sunbeamCell(rect)` | a flat warm patch, two pale bands and a sun sticker (about 8 sprites, no particles); `rect` = `{x,y,w,h}` top-left in the Fx root coordinates |
+| `laserDot(x,y,{color?,scale?,follow?})` | the classic red dot, two thin rings, a faint beam; `moveTo` glides (half-life 45 ms) |
+| `hazardWarn(rect, 'wet'\|'zap', {duration = 0.8})` | berry dashed outline blinks 1.6 to 3 Hz while a flat tint rises; drop / bolt sticker so colour is not the only cue; pops and ends itself |
+| `wetPuddle(rect)` | flat blue pool with rings, leaping drops, berry outline and drop sticker |
+| `zapCell(rect)` | flickering mustard tint, crackling arcs (budget-limited, priority 0), sparks, berry outline and bolt sticker |
+| `weakenSwirl(x,y,{follow?,scale?})` | droopy blue spiral of flat beads, sweat drops; pass `follow: unitSprite` to ride along with a dragged unit |
 | `blizzardZone / potionCloud / blackHole (x,y,radius,{color?,follow?})` | radius is the gameplay reach (a thin ring marks it) |
 
 Existing loops: `buffAura(target)`, `poisonCloud`, `rays`, `sparkleTrail(target)`, `smokeTrail(target)`, `ambientTwinkle(x,y,w,h)`; handles have `stop()` and `moveTo()`.
@@ -95,11 +111,10 @@ Unchanged from the first pass: `screenFx.flash(color, alpha, ms)` (one per 0.5 s
 
 ## Verification
 
-- Types: `npx tsc --noEmit` prints nothing for the whole repo at the time of writing (zero errors in `src/fx`, `src/demo/FxDemo.ts`, `tests/fx*`).
-- Unit tests: `npx vitest run tests/fx` = 7 files, 184 tests, all pass (curves, budget, bolt, flyTo path, TimeFreeze overlap, governor incl. no-oscillation and stall filter, tiers and subscriptions, numbers capacity, juice cleanup, Loop lifecycle and pool reuse, every zone preset incl. reduced motion, hazardWarn timing and blink rate, cut-in timeline maths, facade: sequences, tiers, meteor / star impact timing, handle safety after clear / destroy).
-- Browser (Aside, `?demo=fx`): the page runs with throttled rAF, so captures drive `game.tick` by hand and composite canvas crops in the page. Looked at: stage strips for hit spark, crit, slash arc, shockwave, explosion, death puff, coins, ice, lightning, heal, dust, level-up, merge, summon 0-4 (incl. mythic charge to impact), boss landing and death with the flickering sprite, floating numbers, every new preset (zones at several ages, hazard fill, puddle, zap arcs, swirl, laser glide, molt, hearts, slash line, shield break, meteor, star, coin rain), the gallery pages, screen effects (danger, letterbox, boss pulse, white and red flash), and the cut-in at 6 points (full) and 4 points (short). Real pointer taps on cells and the page buttons work. PAGE_ERRORS stayed `[]` (one run showed another module's image `relic_tuna_cans` failing to decode; not from fx).
-- Leaks: `playAll()` x8 with 2.6 s steps: particle objects created plateau at the cap (400), numbers 5, loops 8 and emitters 17 steady (the toggles), timers 37 steady (the long demo timelines), then `clear()` + 0.5 s leaves live 0, loops 0, emitters 0, timers 0, rays 0, numbers 0. Same sequence on `low`: live particles stay at or under the cap of 120 (119 at the end of the run). One mixed burst (summon 4 + 3, explosion, coin rain, wave clear) peaks at 316 / 200 / 96 live particles on high / mid / low.
-- Cut-in lifecycle in the page: resolves after 1.6 s, `onImpact` exactly once, overlay children back to the single screen-fx layer; a real tap skips; an early double tap fires `onImpact` once and ends; a second `awakening` settles the first at once.
+- Types: `npx tsc --noEmit` prints nothing for the whole tree.
+- Unit tests: `npx vitest run tests/fx` = 7 files green (curves, budget, bolt, flyTo path, TimeFreeze, governor, tiers, numbers (now also: crit and boss hit sit on a starburst, a recycled sticker drops it, a face colour override gets its own pool), juice, Loop lifecycle and pool reuse, every zone preset incl. reduced motion, hazardWarn timing and blink rate, cut-in timeline maths, facade). The rainbow tests went with `rainbow()`.
+- Browser (Aside, `PAGE_ERRORS` `[]`), screenshots in `scratchpad/shots/field/`: `s1_drag_swap` and `ch1` to `ch5` (damage numbers on wood and on cream, crit stickers with their burst, slash and hit bursts, projectile streaks), `crowd1` (wave 21: flat zones, flights, crit stickers), `s2_hazard_warn` and `s2_hazard_warn2` (telegraphs), `s8_laser`, `s2_cutin_b`, `s11_cutin_hold`, `s9_victory_a/b` (confetti), `s6_defeat_a/b`. The effects gallery (`?demo=fx`, 71 cells: summon tiers, boss death, coin rain, meteor, ...) was not re-run, so those presets were checked only through the unit tests and what fires in a battle.
+- Load: counts and pooling are unchanged (one particle layer instead of two, same budget). The frame time of a crowded wave is in `field.md` (9.2 ms before, 9.2 to 9.7 ms after, same script).
 
 ## Bugs found and fixed while verifying
 
@@ -111,7 +126,7 @@ Unchanged from the first pass: `screenFx.flash(color, alpha, ms)` (one per 0.5 s
 
 ## Known gaps
 
-- Atlas build (one-off at the first `Fx`) was not timed on a device; estimate 20-40 ms. Check on the target phone.
+- Atlas build (one-off at the first `Fx`) was not timed on a device; estimate 20-40 ms. Check on the target phone. `ensureNumberFonts()` now bakes seven small bitmap fonts at boot (the edge plus six faces, a few ms each); not timed on a device either.
 - Frame-time governor thresholds are the guide's, except 17.5 ms for climbing; tune on real devices.
 - `hazardWarn` creates one `Graphics` and two `Sprite`s per call, the cut-in about ten objects per play (per event, not per frame). Everything animated per frame is pooled and allocation free.
 - No audio is played by fx; pair `awakening`, `bossDeath`, `slashLine`, etc. with `audio.play(...)` at `timeline.impact`.

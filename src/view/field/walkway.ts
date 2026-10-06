@@ -1,57 +1,52 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
-import { cacheStatic } from '@/ui';
+import { Color, cacheStatic } from '@/ui';
 import { fxTex } from '@/fx';
-import {
-  LANE_WIDTH,
-  PATH_BOTTOM,
-  PATH_LEFT,
-  PATH_LENGTH,
-  PATH_RADIUS,
-  PATH_RIGHT,
-  PATH_TOP,
-  pathPoint,
-  type PathPoint,
-} from '@/game/geometry';
+import { PATH_BOTTOM, PATH_LEFT, PATH_LENGTH, PATH_RADIUS, PATH_RIGHT, PATH_TOP, pathPoint, type PathPoint } from '@/game/geometry';
 
 const PAW_SPACING = 40;
 const STRAIGHT_H = PATH_RIGHT - PATH_LEFT - 2 * PATH_RADIUS;
 const STRAIGHT_V = PATH_BOTTOM - PATH_TOP - 2 * PATH_RADIUS;
 const ARC = (Math.PI / 2) * PATH_RADIUS;
 
-function chevron(g: Graphics): void {
-  g.moveTo(-6, -8).lineTo(5, 0).lineTo(-6, 8);
-  g.stroke({ width: 9, color: 0x140a2e, alpha: 0.22, cap: 'round', join: 'round' });
-  g.moveTo(-6, -8).lineTo(5, 0).lineTo(-6, 8);
-  g.stroke({ width: 4.5, color: 0xffffff, alpha: 0.5, cap: 'round', join: 'round' });
-}
-
-/** The mouse hole enemies come out of: a dark arch with a lit rim over a floor shadow. */
-function doorway(x: number, y: number): Graphics {
+/** A small cream paper tag on the floor: a flat shadow, the paper, an ink chevron that points along the way. */
+function arrowTag(x: number, y: number, rotation: number, big: boolean): Graphics {
+  const s = big ? 1.25 : 1;
   const g = new Graphics();
-  g.ellipse(x, y + 8, 34, 12).fill({ color: 0x000000, alpha: 0.28 });
-  g.roundRect(x - 25, y - 44, 50, 54, 22).fill(0x5a3320).stroke({ width: 3, color: 0x2a140c });
-  g.roundRect(x - 20, y - 39, 40, 49, 18).fill(0x1c0d10);
-  g.roundRect(x - 20, y - 39, 40, 49, 18).stroke({ width: 3, color: 0xd9a066, alpha: 0.75 });
-  g.ellipse(x, y + 4, 15, 6).fill({ color: 0xffd9a0, alpha: 0.18 });
-  g.roundRect(x - 13, y - 33, 8, 20, 4).fill({ color: 0xffffff, alpha: 0.07 });
+  const body = [-17, -12, 6, -12, 19, 0, 6, 12, -17, 12].map((v) => v * s);
+  g.poly(body.map((v, i) => (i % 2 === 0 ? v + 3 * s : v + 4 * s))).fill({ color: Color.shadow, alpha: 0.24 });
+  g.poly(body).fill(Color.paperLight);
+  g.poly(body).stroke({ width: 1.6, color: Color.kraftDark, alpha: 0.55, join: 'round' });
+  g.moveTo(-6 * s, -6 * s).lineTo(3 * s, 0).lineTo(-6 * s, 6 * s).stroke({ width: 3.6 * s, color: big ? Color.coral : Color.inkSoft, cap: 'round', join: 'round' });
+  g.position.set(x, y);
+  g.rotation = rotation;
   return g;
 }
 
 /**
- * Decoration of the enemy loop: a faint worn lane, a paw-print trail that walks the way the
- * enemies do, direction chevrons at the four corners and the doorway at the spawn point. All of it
- * is baked once, low in contrast so characters stay the loudest thing on the floor.
+ * Where the enemies come in: a cut-paper mouse door with a dark opening, and a coral arrow tag laid
+ * on the lane in front of it (the one place the quiet trail gets a louder colour).
+ */
+function entrance(x: number, y: number): Container {
+  const root = new Container();
+  const g = new Graphics();
+  const arch = (dx: number, dy: number): Graphics => g.circle(x + dx, y - 20 + dy, 25).rect(x - 25 + dx, y - 20 + dy, 50, 30);
+  arch(3, 5).fill({ color: Color.shadow, alpha: 0.26 });
+  arch(0, 0).fill(Color.kraft);
+  arch(0, 0).stroke({ width: 2, color: Color.kraftDark, alpha: 0.8, join: 'round' });
+  g.circle(x, y - 18, 17.5).rect(x - 17.5, y - 18, 35, 26).fill(Color.inkDeep);
+  g.ellipse(x, y + 4, 12, 4).fill({ color: Color.ink, alpha: 0.55 });
+  root.addChild(g, arrowTag(x + 52, y + 2, 0, true));
+  return root;
+}
+
+/**
+ * Decoration of the enemy loop, all of it flat and all of it quieter than a cat: a trail of paw
+ * prints in a darker wood tone that walks the way the enemies do, small paper arrow tags at the four
+ * corners, and the entrance. Baked once.
  */
 export function buildWalkway(): Container {
   const root = new Container();
   root.label = 'walkway';
-
-  const lane = new Graphics();
-  const w = PATH_RIGHT - PATH_LEFT;
-  const h = PATH_BOTTOM - PATH_TOP;
-  lane.roundRect(PATH_LEFT, PATH_TOP, w, h, PATH_RADIUS).stroke({ width: LANE_WIDTH - 2, color: 0x10060a, alpha: 0.05, join: 'round' });
-  lane.roundRect(PATH_LEFT, PATH_TOP, w, h, PATH_RADIUS).stroke({ width: LANE_WIDTH - 12, color: 0x10060a, alpha: 0.085, join: 'round' });
-  root.addChild(lane);
 
   const paw = fxTex('paw');
   const p: PathPoint = { x: 0, y: 0, angle: 0 };
@@ -65,22 +60,18 @@ export function buildWalkway(): Container {
     // Left and right feet alternate across the line of travel; the toes point along it.
     s.position.set(p.x + Math.cos(p.angle + Math.PI / 2) * side * 8, p.y + Math.sin(p.angle + Math.PI / 2) * side * 8);
     s.rotation = p.angle + Math.PI / 2 + side * 0.12;
-    s.tint = 0x2a140c;
-    s.alpha = 0.2;
+    s.tint = Color.woodDark;
+    s.alpha = 0.34;
     root.addChild(s);
   }
 
   const corners = [STRAIGHT_H + ARC / 2, STRAIGHT_H + ARC + STRAIGHT_V + ARC / 2, 2 * STRAIGHT_H + 2 * ARC + STRAIGHT_V + ARC / 2, 2 * STRAIGHT_H + 2 * STRAIGHT_V + 3 * ARC + ARC / 2];
   for (const s of corners) {
     pathPoint(s, p);
-    const c = new Graphics();
-    chevron(c);
-    c.position.set(p.x, p.y);
-    c.rotation = p.angle;
-    root.addChild(c);
+    root.addChild(arrowTag(p.x, p.y, p.angle, false));
   }
   pathPoint(0, p);
-  root.addChild(doorway(p.x, p.y));
+  root.addChild(entrance(p.x, p.y));
   cacheStatic(root);
   return root;
 }

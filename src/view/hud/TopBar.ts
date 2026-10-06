@@ -1,43 +1,48 @@
 /**
- * Top area: pause, enemy gauge, speed; second row with the wave label and timer, the next-wave
- * preview strip and the owned toys. Everything except the wave timer and the overflow countdown is
- * driven by simulation events.
+ * Top area: pause, enemy gauge, speed; second row with the phase label and countdown, the next-wave
+ * preview cards and the owned toys. Everything except the countdown and the overflow timer is driven
+ * by simulation events.
  */
-import { Container, Graphics, Rectangle, type FederatedPointerEvent, type Text } from 'pixi.js';
+import { Container, Rectangle, type FederatedPointerEvent, type Text } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { Ease, type Tween } from '@/core/tween';
 import { enemyDef, relicDef, type EnemyId, type RelicId } from '@/game';
 import {
   Color,
   drawIcon,
-  fitLabel,
   IconButton,
   motion,
+  PaperLabel,
+  paperSeed,
+  paperShape,
   popIn,
   ProgressBar,
   punch,
   TweenBag,
   tooltip,
   uiLabel,
-  vGradient,
   type BarColor,
-  shade,
 } from '@/ui';
 import { profile } from '@/meta';
 import type { BattleLayout } from '../context';
 import type { HudEnv } from './env';
+import { GAUGE_H, GAUGE_W, GaugeStrip } from './GaugeStrip';
 import { enemyPortrait, relicIcon } from './kit';
 import { gaugeLevel, nextSpeed, overflowLeft, speedSteps, traitOrder } from './policy';
 import { slotCentre, slotWidth, topRects, type Rect, type TopRects } from './layoutMath';
 
 const SLOT_MAX = 56;
 const PREVIEW_MAX = 4;
+const PREVIEW_SLOT = 64;
 const TOY_MAX = 6;
 /** Seconds the picked toy's icon takes to fly from the choice screen to the row. */
 const TOY_FLIGHT = 0.6;
 
 /** Touch targets are at least 88 wide, so a strip is one target and the tap picks the icon nearest to the finger. */
 const STRIP_H = 96;
+
+const CARD_W = 60;
+const CARD_H = 66;
 
 interface Slot {
   box: Container;
@@ -49,11 +54,12 @@ export class TopBar {
   readonly root = new Container();
   readonly pauseBtn: IconButton;
   readonly speedBtn: IconButton;
-  readonly gauge: ProgressBar;
-  readonly waveLabel: Text;
+  readonly gauge: GaugeStrip;
+  readonly waveLabel: PaperLabel;
 
   private readonly bag = new TweenBag();
   private readonly timer: ProgressBar;
+  private readonly timerText: Text;
   private readonly warn: Container;
   private readonly row2Right = new Container();
   readonly previewLayer = new Container();
@@ -72,8 +78,9 @@ export class TopBar {
   private lastTimer = -1;
   private lastTimerText = '';
   private timerColor: BarColor = 'blue';
-  private gaugeColor: BarColor = 'green';
   private lastLevel = -1;
+  /** One cut-edge seed per preview card, so a rebuilt row keeps the shape of each card. */
+  private readonly cardSeeds = Array.from({ length: PREVIEW_MAX }, () => paperSeed());
 
   constructor(private readonly env: HudEnv) {
     const l = env.layout();
@@ -82,12 +89,13 @@ export class TopBar {
 
     this.pauseBtn = new IconButton({ icon: 'pause', style: 'neutral', size: 76, fireOnDown: true, sfx: 'ui_click' });
     this.speedBtn = new IconButton({ icon: 'speed_1', style: 'info', size: 76, fireOnDown: true });
-    this.gauge = new ProgressBar({ width: 440, height: 50, color: 'green', icon: 'skull', value: 0 });
+    this.gauge = new GaugeStrip();
     this.warn = drawIcon('warning', 34);
     this.warn.visible = false;
-    this.waveLabel = uiLabel('', { size: 28, anchorX: 0, align: 'left' });
-    this.timer = new ProgressBar({ width: 208, height: 28, color: 'blue', value: 1 });
-    this.more = uiLabel('', { size: 24, color: Color.textDim });
+    this.waveLabel = new PaperLabel({ text: t('hud.prep'), size: 24, paper: Color.paper, padX: 16, padY: 7, maxWidth: this.rects.wave.w + 8 });
+    this.timer = new ProgressBar({ width: this.rects.timer.w, height: this.rects.timer.h, color: 'blue', value: 1 });
+    this.timerText = uiLabel('', { size: 24 });
+    this.more = uiLabel('', { size: 24, onArt: true });
     this.more.visible = false;
 
     this.previewLayer.eventMode = 'static';
@@ -95,7 +103,7 @@ export class TopBar {
     this.previewLayer.on('pointerdown', (e: FederatedPointerEvent) => this.tapPreview(e));
     this.toyLayer.on('pointerdown', (e: FederatedPointerEvent) => this.tapToy(e));
     this.row2Right.addChild(this.previewLayer, this.toyLayer, this.more);
-    this.root.addChild(this.pauseBtn, this.speedBtn, this.gauge, this.warn, this.waveLabel, this.timer, this.row2Right);
+    this.root.addChild(this.pauseBtn, this.speedBtn, this.gauge, this.warn, this.waveLabel, this.timer, this.timerText, this.row2Right);
     this.steps = speedSteps(this.canTriple(), env.sandbox);
     this.pauseBtn.visible = true;
     this.speedBtn.visible = env.reveal.speed;
@@ -147,11 +155,7 @@ export class TopBar {
     const count = b.enemyCount;
     const cap = b.enemyCap;
     const level = gaugeLevel(count, cap);
-    const color: BarColor = level === 2 ? 'red' : level === 1 ? 'gold' : 'green';
-    if (color !== this.gaugeColor) {
-      this.gaugeColor = color;
-      this.gauge.setColor(color);
-    }
+    this.gauge.setLevel(level);
     this.gauge.setValue(cap > 0 ? count / cap : 0, this.lastLevel >= 0);
     if (!this.overflowing) this.gauge.setLabel(t('hud.gauge', { n: count, cap }));
     if (level !== this.lastLevel) {
@@ -180,7 +184,7 @@ export class TopBar {
       this.gauge.setLabel(t('hud.overflow', { s: left.toFixed(1) }));
       if (!this.overflowing) {
         this.overflowing = true;
-        this.gauge.setColor('red');
+        this.gauge.setLevel(2);
         this.warn.visible = true;
         if (!motion.reduced) {
           this.bag.runKeyed(this.gauge, {
@@ -196,12 +200,11 @@ export class TopBar {
       this.overflowing = false;
       this.bag.killKeyed(this.gauge);
       this.gauge.scale.set(1);
-      this.gaugeColor = 'red';
       this.gaugeDirty = true;
     }
   }
 
-  // ───────────────────────── wave row ─────────────────────────
+  // ───────────────────────── phase label and countdown ─────────────────────────
 
   private refreshWave(): void {
     const b = this.env.battle;
@@ -209,12 +212,18 @@ export class TopBar {
     if (b.wave <= 0) text = t('hud.prep');
     else if (b.totalWaves > 0) text = t('hud.wave', { act: b.act, wave: b.wave, total: b.totalWaves });
     else text = t('hud.waveOpen', { act: b.act, wave: b.wave });
-    this.waveLabel.text = text;
-    fitLabel(this.waveLabel, this.rects.wave.w, 28, 0.75);
+    this.waveLabel.setText(text);
+    this.placeWave();
+  }
+
+  /** The label hangs from the left edge of the second row whatever its width. */
+  private placeWave(): void {
+    const r = this.rects;
+    this.waveLabel.position.set(r.wave.x + this.waveLabel.uiBox.w / 2, r.row2Y - 22);
   }
 
   private punchWave(): void {
-    punch(this.bag, this.waveLabel, 0.18, 0.22);
+    punch(this.bag, this.waveLabel, 0.12, 0.22);
   }
 
   private updateTimer(): void {
@@ -244,7 +253,7 @@ export class TopBar {
     }
     if (text !== this.lastTimerText) {
       this.lastTimerText = text;
-      this.timer.setLabel(text);
+      this.timerText.text = text;
     }
   }
 
@@ -259,23 +268,24 @@ export class TopBar {
     const entries = this.env.battle.previewWave();
     const shown = entries.slice(0, PREVIEW_MAX);
     const r = this.rects.preview;
-    const slot = slotWidth(shown.length, r.w, 64);
+    const slot = slotWidth(shown.length, r.w, PREVIEW_SLOT);
     this.previewIds = shown.map((en) => en.enemy);
     shown.forEach((en, i) => {
       const box = new Container();
-      box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 8);
+      box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 6);
+      // Cards lie slightly crooked, like scraps dropped on the floor.
+      box.rotation = (i % 2 === 0 ? -1 : 1) * 0.035;
       const def = enemyDef(en.enemy);
       const boss = def.traits.includes('boss') || def.traits.includes('elite');
-      const plate = new Graphics();
-      plate.roundRect(-26, -26, 52, 52, 14).fill(vGradient(boss ? shade(Color.danger, -0.5) : Color.panelLight, boss ? shade(Color.dangerDark, -0.5) : Color.panelDark))
-        .stroke({ width: 4, color: Color.outline, alignment: 1 });
+      const card = paperShape({ w: CARD_W, h: CARD_H, radius: 12, fill: boss ? Color.berry : Color.paper, seed: this.cardSeeds[i], grain: false });
       const pic = enemyPortrait(en.enemy, 46);
-      const count = uiLabel(`×${en.count}`, { size: 22, strokeWidth: 4, shadow: false });
-      count.position.set(14, 22);
-      box.addChild(plate, pic, count);
+      pic.position.set(-3, -9);
+      const count = uiLabel(`×${en.count}`, { size: 24, color: boss ? Color.inkDeep : Color.ink });
+      count.position.set(8, 22);
+      box.addChild(card, pic, count);
       if (boss) {
-        const mark = drawIcon('skull', 24);
-        mark.position.set(-16, -22);
+        const mark = drawIcon('skull', 26);
+        mark.position.set(-17, -23);
         box.addChild(mark);
       }
       this.previewLayer.addChild(box);
@@ -291,7 +301,7 @@ export class TopBar {
   /** Index of the icon under the finger in a strip of `n` equal slots starting at `r.x`. */
   private slotUnder(e: FederatedPointerEvent, layer: Container, r: Rect, n: number): number {
     if (n <= 0) return -1;
-    const slot = Math.min(r.w / n, layer === this.previewLayer ? 64 : SLOT_MAX);
+    const slot = Math.min(r.w / n, layer === this.previewLayer ? PREVIEW_SLOT : SLOT_MAX);
     return Math.min(n - 1, Math.max(0, Math.floor((layer.toLocal(e.global).x - r.x) / slot)));
   }
 
@@ -374,12 +384,12 @@ export class TopBar {
     const r = this.rects;
     this.pauseBtn.position.set(r.pause.x, r.pause.y);
     this.speedBtn.position.set(r.speed.x, r.speed.y);
-    this.gauge.position.set(r.gauge.x + r.gauge.w / 2, r.gauge.y + r.gauge.h / 2);
-    this.warn.position.set(r.gauge.x + r.gauge.w - 34, r.gauge.y + r.gauge.h / 2);
+    this.gauge.position.set(r.gauge.x + GAUGE_W / 2, r.gauge.y + GAUGE_H / 2);
+    this.warn.position.set(r.gauge.x + r.gauge.w - 36, r.gauge.y + r.gauge.h / 2);
     this.previewLayer.hitArea = new Rectangle(r.preview.x, r.row2Y - STRIP_H / 2 - 4, r.preview.w, STRIP_H);
     this.toyLayer.hitArea = new Rectangle(r.toys.x, r.row2Y - STRIP_H / 2 - 4, r.toys.w, STRIP_H);
-    this.waveLabel.position.set(r.wave.x, r.row2Y - 18);
-    this.timer.position.set(r.wave.x + r.wave.w / 2, r.row2Y + 18);
+    this.timer.position.set(r.timer.x + r.timer.w / 2, r.timer.y + r.timer.h / 2);
+    this.timerText.position.copyFrom(this.timer.position);
     this.refreshPreview();
     this.refreshToys(false);
     this.refreshWave();
@@ -414,7 +424,7 @@ export class TopBar {
     this.refreshToys(false);
   }
 
-  /** A boss or elite strip takes over the right half of the second row (preview strip and toys). */
+  /** A boss or elite strip takes over the right half of the second row (preview cards and toys). */
   setBossMode(on: boolean): void {
     const layer = this.row2Right;
     this.bag.killKeyed(layer);
@@ -433,14 +443,9 @@ export class TopBar {
     });
   }
 
-  /** The speed steps may change when the Butler Pass is bought mid-session; cheap to recompute on demand. */
-  refreshSteps(): void {
-    this.steps = speedSteps(this.canTriple(), this.env.sandbox);
-  }
-
   anchorOf(name: 'enemyGauge' | 'wave' | 'relics'): { x: number; y: number } {
     const r = this.rects;
-    if (name === 'enemyGauge') return { x: r.gauge.x + r.gauge.w / 2, y: r.gauge.y + r.gauge.h / 2 };
+    if (name === 'enemyGauge') return { x: r.gauge.x + GAUGE_W / 2, y: r.gauge.y + GAUGE_H / 2 };
     if (name === 'wave') return { x: r.wave.x + r.wave.w / 2, y: r.row2Y };
     return this.toyAnchor();
   }

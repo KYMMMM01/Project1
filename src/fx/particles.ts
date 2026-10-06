@@ -1,21 +1,20 @@
 import { Container, Particle, ParticleContainer, Point } from 'pixi.js';
 import { TAU } from '@/core/math';
+import { Color } from '@/ui/theme';
 import { ParticleBudget, scaleCount } from './budget';
 import { ColorRamp, Ease, fadeEnvelope, pick, type EaseFn, type Range } from './curves';
 import { countScale, fxSettings, tierScale } from './settings';
 import { fxTex, fxTexture, type FxTexId } from './textures';
 
 /*
- * Why ParticleContainer + Particle (and not Container + Sprite): the two blend layers (normal and
- * additive) are each ONE ParticleContainer, which uploads a flat vertex buffer for every particle
- * and issues exactly one draw call per layer regardless of the live count. A Sprite per particle
+ * Why ParticleContainer + Particle (and not Container + Sprite): the particle layer is ONE
+ * ParticleContainer, which uploads a flat vertex buffer for every particle and issues exactly one
+ * draw call regardless of the live count. Nothing blends additively: cut paper has no light. A Sprite per particle
  * would go through the full scene-graph transform pass and the batcher every frame. All particle
  * textures come from a single atlas source, which is the one hard requirement of ParticleContainer.
  * Every property is flagged dynamic because pooled particles change texture, scale and colour each
  * frame; position/rotation/colour/uv/vertex streams are rewritten in place with no allocation.
  */
-
-export type Blend = 'normal' | 'add';
 
 export type Shape =
   | { type: 'point' }
@@ -26,8 +25,6 @@ export type Shape =
 
 export interface EmitDef {
   tex: FxTexId;
-  /** Default 'add'. */
-  blend?: Blend;
   /** 0 ambient .. 3 critical; decides who is dropped when the pool is crowded. Default 1. */
   prio?: 0 | 1 | 2 | 3;
   /** Particles per burst (ignored by continuous emitters). */
@@ -146,15 +143,15 @@ export class Fp {
 class Layer {
   readonly live: Fp[] = [];
   readonly container: ParticleContainer;
-  constructor(blend: Blend) {
+  constructor() {
     this.container = new ParticleContainer({
       texture: fxTexture('dot'),
       dynamicProperties: { vertex: true, position: true, rotation: true, uvs: true, color: true },
       // Rounding vertices to device pixels makes slow particles visibly stair-step.
       roundPixels: false,
-      blendMode: blend === 'add' ? 'add' : 'normal',
+      blendMode: 'normal',
     });
-    this.container.label = `fx-${blend}`;
+    this.container.label = 'fx-flat';
   }
 }
 
@@ -228,20 +225,19 @@ export class ParticleSystem {
   created = 0;
   emitted = 0;
 
-  private readonly normal = new Layer('normal');
-  private readonly additive = new Layer('add');
+  private readonly flat = new Layer();
   private readonly pool: Fp[] = [];
   private readonly emitters: EmitterHandle[] = [];
 
   constructor(parent: Container, cap = 700) {
     this.budget = new ParticleBudget(cap);
     this.root.label = 'fx-particles';
-    this.root.addChild(this.normal.container, this.additive.container);
+    this.root.addChild(this.flat.container);
     parent.addChild(this.root);
   }
 
   get liveCount(): number {
-    return this.normal.live.length + this.additive.live.length;
+    return this.flat.live.length;
   }
 
   get emitterCount(): number {
@@ -276,12 +272,11 @@ export class ParticleSystem {
    * Returns null when the budget refuses; the caller must fill every field it relies on and then
    * call `commit(p)`.
    */
-  alloc(id: FxTexId, blend: Blend, prio: 0 | 1 | 2 | 3): Fp | null {
+  alloc(id: FxTexId, prio: 0 | 1 | 2 | 3): Fp | null {
     if (this.reserve(1, prio) === 0) return null;
     const p = this.pool.pop() ?? this.make();
     const info = fxTex(id);
-    const layer = blend === 'add' ? this.additive : this.normal;
-    p.layer = layer;
+    p.layer = this.flat;
     p.prio = prio;
     p.render.texture = info.texture;
     p.render.anchorX = info.ax;
@@ -299,7 +294,7 @@ export class ParticleSystem {
     p.alignVel = false;
     p.homing = false;
     p.swayAmp = 0;
-    p.ramp.setSolid(0xffffff);
+    p.ramp.setSolid(Color.white);
     return p;
   }
 
@@ -316,14 +311,12 @@ export class ParticleSystem {
   update(dt: number): void {
     if (dt <= 0) return;
     if (this.emitters.length > 0) this.stepEmitters(dt);
-    this.stepLayer(this.normal, dt);
-    this.stepLayer(this.additive, dt);
+    this.stepLayer(this.flat, dt);
   }
 
   /** Remove everything immediately (scene exit, restart). */
   clear(): void {
-    this.drain(this.normal);
-    this.drain(this.additive);
+    this.drain(this.flat);
     for (const e of this.emitters) e.alive = false;
     this.emitters.length = 0;
     this.budget.reset();
@@ -379,8 +372,7 @@ export class ParticleSystem {
   private reclaim(n: number, prio: number): number {
     let freed = 0;
     for (let pass = 0; pass < prio && freed < n; pass++) {
-      freed += this.reclaimLayer(this.normal, pass, n - freed);
-      if (freed < n) freed += this.reclaimLayer(this.additive, pass, n - freed);
+      freed += this.reclaimLayer(this.flat, pass, n - freed);
     }
     return freed;
   }
@@ -541,8 +533,7 @@ export class ParticleSystem {
     const p = this.pool.pop() ?? this.make();
     const info = fxTex(def.tex);
     const k = mods?.scale ?? 1;
-    const layer = def.blend === 'normal' ? this.normal : this.additive;
-    p.layer = layer;
+    p.layer = this.flat;
     p.prio = def.prio ?? 1;
 
     let ox = 0;
@@ -652,8 +643,8 @@ export class ParticleSystem {
     r.texture = info.texture;
     r.anchorX = def.anchorX ?? info.ax;
     r.anchorY = def.anchorY ?? info.ay;
-    layer.live.push(p);
-    layer.container.particleChildren.push(r);
+    this.flat.live.push(p);
+    this.flat.container.particleChildren.push(r);
     this.emitted++;
     if (p.age >= 0) this.pose(p, 0);
     else r.color = 0;

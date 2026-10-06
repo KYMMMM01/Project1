@@ -92,7 +92,16 @@ describe('boss strip', () => {
       expect(r.boss.x + r.boss.w).toBeLessThanOrEqual(720);
       expect(r.boss.y + r.boss.h).toBeLessThanOrEqual(l.safeTop + l.topH);
       expect(r.timer.x + r.timer.w).toBeLessThanOrEqual(r.boss.x);
+      // the boss sticker overhangs the strip's left end by about 34 px and must not land on the countdown bar
+      expect(r.timer.x + r.timer.w).toBeLessThanOrEqual(r.boss.x - 34);
     }
+  });
+
+  it('keeps the countdown bar clear of the pause button and under the phase label row', () => {
+    const r = topRects(layout(1280));
+    expect(r.timer.h).toBeGreaterThanOrEqual(34);
+    expect(r.timer.y + r.timer.h).toBeLessThanOrEqual(r.area.y + r.area.h);
+    expect(r.timer.y).toBeGreaterThan(r.pause.y + 38);
   });
 });
 

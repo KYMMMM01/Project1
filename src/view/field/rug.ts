@@ -1,48 +1,47 @@
 import { Container, Graphics } from 'pixi.js';
-import { cacheStatic, drawShadow } from '@/ui';
-import { BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT, CELL_H, CELL_W, COLS, ROWS } from '@/game/geometry';
-import { darken, lighten } from '@/core/math';
-import { perimeterDashes, type RugSkin } from './rugSkins';
+import { cacheStatic, drawDashedRect, drawPaperFace, drawPaperShadow, paperSeed, tapeStrip } from '@/ui';
+import { makeRng } from '@/ui/paperMath';
+import { BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT, CELL_H, CELL_W, COLS } from '@/game/geometry';
+import { cellPaper, type RugSkin } from './rugSkins';
 
-/** Margin of the mat around the 5 x 4 cells; it is also the width of the outer band. */
-export const RUG_PAD = 12;
+/** Margin of the sheet around the 5 x 4 cells. */
+export const RUG_PAD = 14;
 export const RUG_X = BOARD_X - RUG_PAD;
 export const RUG_Y = BOARD_Y - RUG_PAD;
 export const RUG_W = BOARD_W + 2 * RUG_PAD;
 export const RUG_H = BOARD_H + 2 * RUG_PAD;
 const RADIUS = 30;
+/** The dashed line sits this far inside the cut edge. */
+const DASH_INSET = 8;
+/** The pattern stays clear of the dashed line. */
+const MARGIN = 14;
+const CELL_INSET = 5;
 
 const IX = RUG_PAD;
 const IY = RUG_PAD;
 
-type Pattern = (g: Graphics, skin: RugSkin) => void;
+type Pattern = (g: Graphics, ink: number, alpha: number) => void;
 
-function stripes(g: Graphics, skin: RugSkin): void {
-  const w = 36;
-  for (let i = 0; i * w < BOARD_W; i += 2) g.rect(IX + (i + 1) * w, IY, w, BOARD_H);
-  g.fill({ color: skin.alt, alpha: 0.65 });
-  for (let i = 0; i * w < BOARD_W; i++) g.rect(IX + i * w + w - 1.5, IY, 3, BOARD_H);
-  g.fill({ color: skin.accent, alpha: 0.12 });
+function stripes(g: Graphics, ink: number, alpha: number): void {
+  const w = 34;
+  for (let x = MARGIN; x + w <= RUG_W - MARGIN; x += w * 2) g.rect(x, MARGIN, w, RUG_H - 2 * MARGIN);
+  g.fill({ color: ink, alpha });
 }
 
-function checks(g: Graphics, skin: RugSkin): void {
-  const w = CELL_W / 2;
-  const h = CELL_H / 2;
-  for (let r = 0; r < ROWS * 2; r++) for (let c = 0; c < COLS * 2; c++) if ((r + c) % 2 === 1) g.rect(IX + c * w, IY + r * h, w, h);
-  g.fill({ color: skin.alt, alpha: 0.6 });
+function gingham(g: Graphics, ink: number, alpha: number): void {
+  const w = 26;
+  for (let x = MARGIN; x + w <= RUG_W - MARGIN; x += w * 2) g.rect(x, MARGIN, w, RUG_H - 2 * MARGIN);
+  g.fill({ color: ink, alpha: alpha * 0.8 });
+  for (let y = MARGIN; y + w <= RUG_H - MARGIN; y += w * 2) g.rect(MARGIN, y, RUG_W - 2 * MARGIN, w);
+  g.fill({ color: ink, alpha: alpha * 0.8 });
 }
 
-function dots(g: Graphics, skin: RugSkin): void {
-  const sx = CELL_W / 2;
-  const sy = CELL_H / 2;
-  for (let r = 0; r < ROWS * 2; r++) {
-    for (let c = 0; c < COLS * 2; c++) {
-      const x = IX + (c + 0.5 + (r % 2) * 0.5) * sx;
-      if (x > IX + BOARD_W - 8) continue;
-      g.circle(x, IY + (r + 0.5) * sy, 6);
-    }
+function dots(g: Graphics, ink: number, alpha: number): void {
+  const step = 40;
+  for (let r = 0, y = MARGIN + 12; y < RUG_H - MARGIN - 6; r++, y += step * 0.8) {
+    for (let x = MARGIN + 12 + (r % 2) * (step / 2); x < RUG_W - MARGIN - 6; x += step) g.circle(x, y, 7);
   }
-  g.fill({ color: skin.accent, alpha: 0.5 });
+  g.fill({ color: ink, alpha });
 }
 
 function pawPrint(g: Graphics, x: number, y: number, rot: number, s: number): void {
@@ -57,75 +56,55 @@ function pawPrint(g: Graphics, x: number, y: number, rot: number, s: number): vo
   }
 }
 
-function paws(g: Graphics, skin: RugSkin): void {
-  // Prints walk across the cell boundaries (under the cats' feet is where they would be hidden).
-  for (let r = 1; r < ROWS; r++) {
-    for (let c = 0; c <= COLS; c++) {
-      const x = IX + c * CELL_W + (r % 2 === 0 ? 0 : CELL_W / 2);
-      if (x < IX + 20 || x > IX + BOARD_W - 20) continue;
-      pawPrint(g, x, IY + r * CELL_H, (c + r) % 2 === 0 ? 0.35 : -0.35, 1.1);
-    }
+function paws(g: Graphics, ink: number, alpha: number): void {
+  const rnd = makeRng(0x9a85);
+  for (let r = 0, y = MARGIN + 18; y < RUG_H - MARGIN - 12; r++, y += 62) {
+    for (let x = MARGIN + 18 + (r % 2) * 34; x < RUG_W - MARGIN - 14; x += 68) pawPrint(g, x + (rnd() - 0.5) * 8, y + (rnd() - 0.5) * 8, (rnd() - 0.5) * 1.2, 1.15);
   }
-  g.fill({ color: skin.accent, alpha: 0.42 });
+  g.fill({ color: ink, alpha });
 }
 
-function waves(g: Graphics, skin: RugSkin): void {
-  const step = 28;
-  for (let k = 0; k * step < BOARD_H - 10; k++) {
-    const y = IY + 18 + k * step;
-    g.moveTo(IX, y + Math.sin(k * 0.9) * 5);
-    for (let x = 6; x <= BOARD_W; x += 6) g.lineTo(IX + x, y + Math.sin((x / 54) * Math.PI * 2 + k * 0.9) * 5);
+function waves(g: Graphics, ink: number, alpha: number): void {
+  const step = 30;
+  for (let k = 0, y = MARGIN + 14; y < RUG_H - MARGIN - 8; k++, y += step) {
+    g.moveTo(MARGIN, y + Math.sin(k * 0.9) * 5);
+    for (let x = 8; x <= RUG_W - 2 * MARGIN; x += 8) g.lineTo(MARGIN + x, y + Math.sin((x / 54) * Math.PI * 2 + k * 0.9) * 5);
   }
-  g.stroke({ width: 6, color: skin.alt, alpha: 0.7, cap: 'round', join: 'round' });
-  for (let k = 0; k * step < BOARD_H - 10; k++) {
-    const y = IY + 18 + k * step + 9;
-    g.moveTo(IX, y + Math.sin(k * 0.9) * 5);
-    for (let x = 6; x <= BOARD_W; x += 6) g.lineTo(IX + x, y + Math.sin((x / 54) * Math.PI * 2 + k * 0.9) * 5);
-  }
-  g.stroke({ width: 2.5, color: skin.accent, alpha: 0.35, cap: 'round', join: 'round' });
+  g.stroke({ width: 5, color: ink, alpha, cap: 'round', join: 'round' });
 }
 
-function star(g: Graphics, cx: number, cy: number, r: number, inner: number, rot: number): void {
+function star(g: Graphics, cx: number, cy: number, r: number, rot: number): void {
   const pts: number[] = [];
   for (let i = 0; i < 10; i++) {
     const a = rot + (i * Math.PI) / 5;
-    const rad = i % 2 === 0 ? r : inner;
+    const rad = i % 2 === 0 ? r : r * 0.45;
     pts.push(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
   }
   g.poly(pts);
 }
 
-function stars(g: Graphics, skin: RugSkin): void {
-  const sx = CELL_W / 2;
-  const sy = CELL_H / 2;
+function stars(g: Graphics, ink: number, alpha: number): void {
+  const step = 54;
   let n = 0;
-  for (let r = 0; r < ROWS * 2; r++) {
-    for (let c = 0; c < COLS * 2; c++) {
-      const x = IX + (c + 0.5 + (r % 2) * 0.5) * sx;
-      if (x > IX + BOARD_W - 10) continue;
-      const big = (n++ % 3) === 0;
-      star(g, x, IY + (r + 0.5) * sy, big ? 9 : 6, big ? 4 : 2.6, -Math.PI / 2 + (n % 2) * 0.3);
-    }
+  for (let r = 0, y = MARGIN + 18; y < RUG_H - MARGIN - 10; r++, y += step * 0.86) {
+    for (let x = MARGIN + 18 + (r % 2) * (step / 2); x < RUG_W - MARGIN - 12; x += step) star(g, x, y, n++ % 3 === 0 ? 11 : 8, -Math.PI / 2 + (n % 2) * 0.35);
   }
-  g.fill({ color: skin.accent, alpha: 0.48 });
+  g.fill({ color: ink, alpha });
 }
 
-function diamond(g: Graphics, skin: RugSkin): void {
-  const hw = CELL_W / 4;
-  const hh = CELL_H / 4;
-  const rhombus = (cx: number, cy: number): void => {
-    g.poly([cx, cy - hh, cx + hw, cy, cx, cy + hh, cx - hw, cy]);
-  };
-  for (let j = 0; j < ROWS * 2; j++) for (let i = 0; i < COLS * 2; i++) rhombus(IX + hw + i * hw * 2, IY + hh + j * hh * 2);
-  g.fill({ color: skin.alt, alpha: 0.62 });
-  for (let j = 1; j < ROWS * 2; j++) for (let i = 1; i < COLS * 2; i++) rhombus(IX + i * hw * 2, IY + j * hh * 2);
-  g.stroke({ width: 2.2, color: skin.accent, alpha: 0.42, join: 'round' });
+function diamond(g: Graphics, ink: number, alpha: number): void {
+  const hw = 34;
+  const hh = 38;
+  for (let j = 0, cy = MARGIN + hh; cy < RUG_H - MARGIN; j++, cy += hh * 2) {
+    for (let cx = MARGIN + hw + (j % 2) * hw; cx < RUG_W - MARGIN; cx += hw * 2) g.poly([cx, cy - hh * 0.62, cx + hw * 0.62, cy, cx, cy + hh * 0.62, cx - hw * 0.62, cy]);
+  }
+  g.fill({ color: ink, alpha });
 }
 
 const PATTERNS: Record<RugSkin['pattern'], Pattern | null> = {
   plain: null,
   stripes,
-  checks,
+  gingham,
   dots,
   paws,
   waves,
@@ -134,43 +113,35 @@ const PATTERNS: Record<RugSkin['pattern'], Pattern | null> = {
 };
 
 /**
- * The mat under the board, drawn once from a skin and baked into one texture: soft drop shadow,
- * an outer band with stitching, a calm pattern, and twenty faint inset tiles. Its origin is the
- * mat's top-left corner at (RUG_X, RUG_Y) in field space.
+ * The board: a sheet of craft paper lying on the floor, built once from a skin and baked into one
+ * texture. Hand-cut edge on a flat shadow, a flat pattern, a dashed line just inside, a strip of tape
+ * at the top, and twenty slightly darker paper squares laid on it for the cells. Its origin is the
+ * sheet's top-left corner at (RUG_X, RUG_Y) in field space.
  */
 export function buildRug(skin: RugSkin): Container {
   const root = new Container();
   root.label = 'rug';
   const g = new Graphics();
-  drawShadow(g, 0, 0, RUG_W, RUG_H, RADIUS, { alpha: 0.5, spread: 20, offsetY: 12 });
-  g.roundRect(0, 0, RUG_W, RUG_H, RADIUS).fill(skin.border);
-  g.roundRect(0, 0, RUG_W, RUG_H, RADIUS).stroke({ width: 2.5, color: lighten(skin.border, 0.35), alpha: 0.5, alignment: 1 });
-  g.roundRect(RUG_PAD, RUG_PAD, BOARD_W, BOARD_H, 12).fill(skin.base);
-  // Fine weave: horizontal threads at a whisper of contrast keep large areas from looking flat.
-  for (let y = IY + 3; y < IY + BOARD_H; y += 7) g.rect(IX, y, BOARD_W, 1.6);
-  g.fill({ color: darken(skin.base, 0.5), alpha: 0.08 });
-  PATTERNS[skin.pattern]?.(g, skin);
-  // Band bevel: a light inner lip and a dark inner shadow where the field meets the band.
-  g.roundRect(RUG_PAD, RUG_PAD, BOARD_W, BOARD_H, 12).stroke({ width: 5, color: darken(skin.border, 0.4), alpha: 0.5, alignment: 1 });
-  g.roundRect(RUG_PAD - 1, RUG_PAD - 1, BOARD_W + 2, BOARD_H + 2, 13).stroke({ width: 2, color: lighten(skin.border, 0.45), alpha: 0.35 });
+  const sheet = { w: RUG_W, h: RUG_H, radius: RADIUS, fill: skin.paper, seed: paperSeed(), shadow: 10, shadowAlpha: 0.32 } as const;
+  drawPaperShadow(g, 0, 0, sheet);
+  drawPaperFace(g, 0, 0, sheet);
+  const pattern = PATTERNS[skin.pattern];
+  // The pattern shows between and around the cells at full strength and, laid over them again, as a whisper.
+  pattern?.(g, skin.mark, 0.34);
+  drawDashedRect(g, DASH_INSET, DASH_INSET, RUG_W - 2 * DASH_INSET, RUG_H - 2 * DASH_INSET, { radius: RADIUS - 6, color: skin.dash, width: 3.5 });
 
-  const dashes = perimeterDashes(RUG_W - 12, RUG_H - 12, RADIUS - 6, 9, 7);
-  for (const d of dashes) g.moveTo(6 + d.x0, 6 + d.y0).lineTo(6 + d.x1, 6 + d.y1);
-  g.stroke({ width: 3, color: skin.stitch, alpha: 0.9, cap: 'round' });
-
-  // Twenty inset tiles: a dark recess with a light lower lip, so they read as pockets, not buttons.
+  const cell = cellPaper(skin);
   for (let c = 0; c < CELL_COUNT; c++) {
-    const x = IX + (c % COLS) * CELL_W + 5;
-    const y = IY + Math.floor(c / COLS) * CELL_H + 5;
-    g.roundRect(x, y, CELL_W - 10, CELL_H - 10, 16).fill({ color: 0x000000, alpha: 0.13 });
+    const x = IX + (c % COLS) * CELL_W + CELL_INSET;
+    const y = IY + Math.floor(c / COLS) * CELL_H + CELL_INSET;
+    drawPaperFace(g, x, y, { w: CELL_W - 2 * CELL_INSET, h: CELL_H - 2 * CELL_INSET, radius: 20, fill: cell, seed: paperSeed(), wobble: 0.9, edgeWidth: 2, edgeAlpha: 0.32 });
   }
-  for (let c = 0; c < CELL_COUNT; c++) {
-    const x = IX + (c % COLS) * CELL_W + 5;
-    const y = IY + Math.floor(c / COLS) * CELL_H + 5;
-    g.roundRect(x, y, CELL_W - 10, CELL_H - 10, 16).stroke({ width: 3, color: 0x000000, alpha: 0.14, alignment: 1 });
-    g.roundRect(x + 1.5, y + 2.5, CELL_W - 13, CELL_H - 13, 15).stroke({ width: 1.8, color: 0xffffff, alpha: 0.09 });
-  }
+  pattern?.(g, skin.mark, 0.09);
   root.addChild(g);
+
+  const tape = tapeStrip({ name: skin.tape, pattern: skin.tapePrint, w: 128, h: 36, angle: -3 });
+  tape.position.set(RUG_W / 2, 1);
+  root.addChild(tape);
   cacheStatic(root);
   return root;
 }

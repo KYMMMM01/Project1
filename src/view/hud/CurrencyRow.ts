@@ -5,7 +5,7 @@
 import { Container, Graphics, Point, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import type { CurrencyReason } from '@/game';
-import { Button, Color, CurrencyPill, drawIcon, motion, popIn, TweenBag, uiLabel, vGradient, shade } from '@/ui';
+import { Button, Color, CurrencyPill, drawIcon, drawPaper, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
 import { tapArea } from './kit';
 import { pityVisible } from './policy';
@@ -62,6 +62,7 @@ export class CurrencyRow {
   private readonly pityText: Text;
   private readonly pityStar: Container;
   private readonly pityBg = new Graphics();
+  private readonly pitySeed = paperSeed();
   private readonly odds: Button;
   private pityShown = false;
   private readonly tmp = new Point();
@@ -81,7 +82,7 @@ export class CurrencyRow {
     this.purr.visible = r.purr;
 
     this.pityStar = drawIcon('star', 30);
-    this.pityText = uiLabel('', { size: 26, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
+    this.pityText = uiLabel('', { size: 26, anchorX: 0, align: 'left', color: Color.inkDeep });
     this.pity.addChild(this.pityBg, this.pityStar, this.pityText);
     // The chip grows leftwards from its right edge so a long "10/12" never runs into the odds button.
     this.pity.position.set(PITY_RIGHT, 0);
@@ -89,7 +90,7 @@ export class CurrencyRow {
     this.drawPity();
     this.pity.on('pointerup', openOdds);
 
-    this.odds = new Button({ label: '%', style: 'info', width: 92, height: 76, fontSize: 40, radius: 'pill' });
+    this.odds = new Button({ label: '%', style: 'info', width: 84, height: 84, fontSize: 40, radius: 'pill' });
     this.odds.position.set(646, 0);
     this.odds.onTap(openOdds);
     this.odds.visible = r.odds;
@@ -126,24 +127,26 @@ export class CurrencyRow {
 
   private drawPity(): void {
     const w = Math.max(100, 64 + this.pityText.width);
-    this.pityBg.clear().roundRect(-w, -34, w, 68, 34).fill(vGradient(shade(Color.purple, -0.12), Color.purpleDark)).stroke({ width: 5, color: Color.outline, alignment: 1 });
+    this.pityBg.clear();
+    drawPaper(this.pityBg, -w, -32, { w, h: 64, kind: 'pill', fill: Color.mustard, edge: Color.mustardDark, shadow: 4, grain: false, seed: this.pitySeed });
     this.pityStar.position.set(-w + 32, 0);
     this.pityText.position.set(-w + 52, 1);
     tapArea(this.pity, -w, -44, w, 88);
   }
 
+  /** While the bonus is growing the chip sways like a scrap of paper in a draught. */
   private pulse(on: boolean): void {
     if (!on || motion.reduced) {
-      this.bag.killKeyed(this.pityBg);
-      this.pityBg.alpha = 1;
+      this.bag.killKeyed(this.pity);
+      this.pity.rotation = 0;
       return;
     }
-    this.bag.runKeyed(this.pityBg, {
+    this.bag.runKeyed(this.pity, {
       duration: 0.5,
       ease: Ease.sineInOut,
       yoyo: true,
       repeat: -1,
-      onUpdate: (k) => (this.pityBg.alpha = 0.7 + 0.3 * k),
+      onUpdate: (k) => (this.pity.rotation = -0.03 + 0.06 * k),
     });
   }
 

@@ -1,12 +1,13 @@
 /**
- * Sell strip along the top edge of the bottom panel while a kitten is dragged. It lights up when the
- * kitten is over it and says what the sale pays. It never takes input: the field part owns the drop.
+ * Sell strip along the top edge of the bottom panel while a kitten is dragged: a strip of kraft paper
+ * with a dashed berry line that turns into berry paper when the kitten is over it, and says what the
+ * sale pays. It never takes input: the field part owns the drop.
  */
 import { Container, Graphics } from 'pixi.js';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { Color, drawIcon, fitLabel, motion, TweenBag, uiLabel, vGradient, shade } from '@/ui';
+import { Color, drawDashedRect, drawIcon, drawPaper, fitLabel, motion, paperSeed, TweenBag, uiLabel } from '@/ui';
 import type { Text } from 'pixi.js';
 import type { HudEnv } from './env';
 import type { Rect } from './layoutMath';
@@ -17,13 +18,14 @@ export class SellStrip {
   private readonly plate = new Graphics();
   private readonly label: Text;
   private readonly icon = drawIcon('sell', 52);
+  private readonly seed = paperSeed();
   private rect: Rect = { x: 0, y: 0, w: 720, h: 112 };
   private lit = false;
   private from: number | null = null;
   private shown = false;
 
   constructor(private readonly env: HudEnv) {
-    this.label = uiLabel('', { size: 32, strokeWidth: 6 });
+    this.label = uiLabel('', { size: 32 });
     this.root.addChild(this.plate, this.icon, this.label);
     this.root.visible = false;
     this.root.eventMode = 'none';
@@ -40,10 +42,17 @@ export class SellStrip {
     const { w, h } = this.rect;
     const g = this.plate;
     g.clear();
-    g.roundRect(8, 4, w - 16, h - 8, 34)
-      .fill(this.lit ? vGradient(shade(Color.danger, 0.3), Color.dangerDark) : vGradient(shade(Color.danger, -0.45), shade(Color.dangerDark, -0.45)))
-      .stroke({ width: 6, color: this.lit ? Color.white : Color.outline, alignment: 1 });
-    g.roundRect(18, 14, w - 36, h - 28, 26).stroke({ width: 4, color: this.lit ? shade(Color.danger, 0.7) : shade(Color.danger, 0.3), alpha: this.lit ? 1 : 0.55, alignment: 1 });
+    drawPaper(g, 8, 4, {
+      w: w - 16,
+      h: h - 8,
+      radius: 30,
+      fill: this.lit ? Color.berry : Color.kraft,
+      edge: this.lit ? Color.berryDark : Color.kraftDark,
+      grain: false,
+      seed: this.seed,
+    });
+    drawDashedRect(g, 22, 18, w - 44, h - 36, { radius: 20, color: this.lit ? Color.paper : Color.berry, width: 3.5, seed: this.seed });
+    this.label.style.fill = this.lit ? Color.inkDeep : Color.ink;
     this.icon.position.set(w / 2 - 188, h / 2);
     this.label.position.set(w / 2 + 28, h / 2);
   }

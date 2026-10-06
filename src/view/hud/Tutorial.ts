@@ -10,7 +10,7 @@ import { t } from '@/core/i18n';
 import type { UnitId } from '@/game';
 import { cellCenterX, cellCenterY, CELL_H, CELL_W } from '@/game/geometry';
 import { Ease } from '@/core/tween';
-import { motion, tooltip, TweenBag, Color } from '@/ui';
+import { Color, Dim, drawDashedRect, motion, paperSeed, tooltip, TweenBag } from '@/ui';
 import type { BattleLayout } from '../context';
 import type { HudEnv } from './env';
 import { Hand } from './Hand';
@@ -41,6 +41,7 @@ export class Tutorial {
   private held = false;
   private shown = false;
   private paintedKey = '';
+  private readonly seed = paperSeed();
   private idle = 0;
   private nudgeLeft = 0;
   private nudges = 0;
@@ -59,7 +60,7 @@ export class Tutorial {
       b.eventMode = 'static';
       this.blockers.push(b);
     }
-    this.anchor.rect(-2, -2, 4, 4).fill({ color: Color.white, alpha: 0.01 });
+    this.anchor.rect(-2, -2, 4, 4).fill({ color: Color.paper, alpha: 0.01 });
     this.anchor.eventMode = 'none';
     this.layer.addChild(this.dim, ...this.blockers, this.ring, this.anchor, this.hand);
     this.layer.visible = false;
@@ -199,9 +200,11 @@ export class Tutorial {
     const h = r.h + MARGIN * 2;
     const W = this.layout.w;
     const H = this.layout.h;
-    this.dim.clear().rect(0, 0, W, H).fill({ color: Color.bgDeep, alpha: 0.68 });
+    // The warm-brown dim with a hole cut out of it; the hole is edged with a dashed cream line, like a cut-out window.
+    this.dim.clear().rect(0, 0, W, H).fill({ color: Dim.backdrop, alpha: Dim.backdropAlpha });
     this.dim.roundRect(x, y, w, h, 32).cut();
-    this.ring.clear().roundRect(x, y, w, h, 32).stroke({ width: 7, color: Color.gold });
+    this.ring.clear();
+    drawDashedRect(this.ring, x, y, w, h, { radius: 32, color: Color.paper, width: 5, seed: this.seed });
     const rects: Array<[number, number, number, number]> = [
       [0, 0, W, y],
       [0, y + h, W, Math.max(0, H - (y + h))],

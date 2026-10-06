@@ -1,10 +1,9 @@
 import type { Container } from 'pixi.js';
 import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
-import { RARITY_ORDER, Rarity } from '@/ui';
+import { Color } from '@/ui';
 import { hitFlash, shakeObject, squash } from '@/fx';
-import { unitRarity } from '@/game';
-import type { BattleEvents, RarityId, UnitState } from '@/game/api';
+import type { BattleEvents, UnitState } from '@/game/api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { FieldEnv } from './env';
 import { hopArc } from './motion';
@@ -98,7 +97,7 @@ export class UnitViews {
     this.layer.addChild(v.root);
     this.byUid.set(u.uid, v);
     this.live.push(v);
-    if (mode === 'pop') v.appear(this.env.ctx.tweens, 2.2, 260);
+    if (mode === 'pop') v.appear(this.env.ctx.tweens, 1.7, 260);
     else v.root.visible = false;
     return v;
   }
@@ -156,7 +155,7 @@ export class UnitViews {
       v.awaiting = false;
       return;
     }
-    if (this.env.time > v.revealAt) this.reveal(v, 2.6, 320, true);
+    if (this.env.time > v.revealAt) this.reveal(v, 2.0, 320, true);
   }
 
   // ── events ──
@@ -221,7 +220,7 @@ export class UnitViews {
     }
     if (target) this.startExit(target, 'hold', MERGE_FLIGHT);
     ctx.tweens.call(MERGE_FLIGHT, () => {
-      if (result.token === token) this.reveal(result, 3.0, 260, true);
+      if (result.token === token) this.reveal(result, 2.1, 260, true);
     });
   }
 
@@ -231,7 +230,7 @@ export class UnitViews {
     const token = result.token;
     if (old) this.startExit(old, 'spin', 0.24);
     this.env.ctx.tweens.call(0.22, () => {
-      if (result.token === token) this.reveal(result, 2.8, 300, false);
+      if (result.token === token) this.reveal(result, 2.0, 300, false);
     });
   }
 
@@ -256,15 +255,7 @@ export class UnitViews {
     if (!v) return;
     const { tweens } = this.env.ctx;
     shakeObject(tweens, v.body, 6, 180);
-    hitFlash(tweens, v.sprite, { ms: 120, color: 0xff4d5e, peak: 0.55 });
-  }
-
-  /** Result colour of merging onto the unit in `cell`: the colour of the next rarity up. */
-  mergeColor(cell: number): number {
-    const u = this.env.battle.units[cell];
-    if (!u) return 0xffffff;
-    const next = RARITY_ORDER[Math.min(RARITY_ORDER.length - 1, RARITY_ORDER.indexOf(unitRarity(u.id)) + 1)] as RarityId;
-    return Rarity[next].glow;
+    hitFlash(tweens, v.sprite, { ms: 120, color: Color.berry, peak: 0.55 });
   }
 
   beginDrag(v: UnitView, px: number, py: number): void {

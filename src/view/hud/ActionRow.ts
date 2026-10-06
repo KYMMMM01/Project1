@@ -1,21 +1,26 @@
 /**
- * The action row: summon-grade upgrade, the big SUMMON button, the laser indicator, and above them
+ * The action row: summon-grade upgrade, the big SUMMON button, the round laser button, and above them
  * the six-step tracker toward the next pick-of-three and the "call next wave" button.
  */
-import { Container, Graphics, type Text } from 'pixi.js';
+import { Container, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { Button, CooldownRing, drawGlow, drawIcon, motion, popIn, punch, tooltip, TweenBag, uiLabel, Color } from '@/ui';
+import { Button, Color, CooldownRing, drawIcon, IconButton, motion, popIn, punch, tooltip, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
-import { tapArea } from './kit';
 import { SummonButton } from './SummonButton';
 
 const GRADE_X = 121;
 const LASER_X = 615;
+const LASER_SIZE = 116;
 const PAWS = 6;
 const CALL_X = 579;
+
+type LaserState = 'ready' | 'active' | 'cool' | '';
+
+/** What the laser button wears in each state: teal while it waits, coral while it aims, kraft while it recharges. */
+const LASER_STYLE = { ready: 'info', active: 'primary', cool: 'kraft' } as const;
 
 export class ActionRow {
   readonly root = new Container();
@@ -26,11 +31,12 @@ export class ActionRow {
   readonly util = new Container();
   private readonly bag = new TweenBag();
   private readonly grade: Button;
-  private readonly ring: CooldownRing;
-  private readonly glow = new Graphics();
-  private readonly ringLabel: Text;
+  private readonly laserBtn: IconButton;
+  private readonly coolRing: CooldownRing;
+  private readonly aimRing: CooldownRing;
+  private readonly laserText: Text;
   private readonly tracker = new Container();
-  private readonly paws: Array<{ lit: Graphics; dim: Graphics }> = [];
+  private readonly paws: Array<{ lit: Container; dim: Container }> = [];
   private readonly trackerCaption: Text;
   private summonCount = 0;
   private gradeDirty = true;
@@ -39,18 +45,17 @@ export class ActionRow {
   private callShown = false;
   private callBonus = -2;
   private callClock = 0;
-  private laserState: 'ready' | 'active' | 'cool' | '' = '';
+  private laserState: LaserState = '';
   private laserP = -1;
-  private laserText = '';
+  private laserSeconds = '';
+  private gradeReady: boolean | null = null;
 
   constructor(private readonly env: HudEnv) {
     const b = env.battle;
     const r = env.reveal;
     this.summon = new SummonButton(env);
 
-    this.grade = new Button({
-      label: '', style: 'purple', width: 150, height: 120, fontSize: 38, fireOnDown: true, haptic: 'light',
-    });
+    this.grade = new Button({ label: '', style: 'kraft', width: 150, height: 120, fontSize: 38, fireOnDown: true, haptic: 'light', disabledMark: 'none' });
     // A small up arrow on the corner says "upgrade" without taking room from the level text.
     const up = drawIcon('arrow_up', 40);
     up.position.set(-50, -42);
@@ -60,34 +65,30 @@ export class ActionRow {
     });
     this.grade.visible = r.gradeUpgrade;
 
-    this.ring = new CooldownRing({ radius: 50, thickness: 12, color: Color.danger, icon: 'laser' });
-    drawGlow(this.glow, 0, 0, 84, Color.danger, 0.9);
-    this.glow.blendMode = 'add';
-    this.glow.alpha = 0;
-    this.ringLabel = uiLabel('', { size: 26, strokeWidth: 5 });
-    this.ringLabel.position.set(0, 74);
-    this.laser.addChild(this.glow, this.ring, this.ringLabel);
-    tapArea(this.laser, -58, -70, 116, 156);
-    this.laser.on('pointerdown', () => {
-      this.laser.scale.set(0.94);
+    // The ring around the button is the clock: it fills while the laser recharges (teal) and drains while it is on (coral).
+    this.coolRing = new CooldownRing({ radius: LASER_SIZE / 2 + 9, thickness: 9, color: Color.teal });
+    this.aimRing = new CooldownRing({ radius: LASER_SIZE / 2 + 9, thickness: 9, color: Color.coral });
+    this.coolRing.visible = false;
+    this.aimRing.visible = false;
+    this.laserBtn = new IconButton({ icon: 'target', style: 'info', size: LASER_SIZE, fireOnDown: true, sfx: false, haptic: false });
+    this.laserBtn.onTap(() => {
       tooltip.show(this.laser, { text: t(b.laser.active ? 'hud.laser.active' : b.laser.cooldown > 0 ? 'hud.laser.cool' : 'hud.laser.hint') }, 3);
     });
-    const release = (): void => {
-      this.laser.scale.set(1);
-    };
-    for (const ev of ['pointerup', 'pointerupoutside', 'pointerleave', 'pointercancel'] as const) this.laser.on(ev, release);
+    this.laserText = uiLabel('', { size: 26 });
+    this.laserText.position.set(0, LASER_SIZE / 2 + 24);
+    this.laser.addChild(this.coolRing, this.aimRing, this.laserBtn, this.laserText);
     this.laser.visible = r.laser;
 
     for (let i = 0; i < PAWS; i++) {
       // The glyph's own colour is baked in, so a lit and a dim copy are swapped instead of tinted.
-      const dim = drawIcon('paw', 32, Color.neutralDark);
-      const lit = drawIcon('paw', 32, Color.gold);
+      const dim = drawIcon('paw', 32, Color.kraft);
+      const lit = drawIcon('paw', 32, Color.mustard);
       dim.position.set(i * 36 + 16, 0);
       lit.position.copyFrom(dim.position);
       this.tracker.addChild(dim, lit);
       this.paws.push({ lit, dim });
     }
-    this.trackerCaption = uiLabel(t('hud.tracker'), { size: 24, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
+    this.trackerCaption = uiLabel(t('hud.tracker'), { size: 24, anchorX: 0, align: 'left' });
     this.trackerCaption.position.set(PAWS * 36 + 6, 0);
     this.tracker.addChild(this.trackerCaption);
     this.tracker.visible = r.tracker && b.summonOfferProgress().every > 0;
@@ -116,7 +117,7 @@ export class ActionRow {
   }
 
   private pop(): void {
-    if (!motion.reduced) punch(this.bag, this.ring, 0.14, 0.2);
+    if (!motion.reduced) punch(this.bag, this.laserBtn, 0.14, 0.2);
   }
 
   invalidate(): void {
@@ -142,13 +143,19 @@ export class ActionRow {
     if (cost < 0) {
       this.grade.setLabel(t('hud.max'));
       this.grade.setSublabel(undefined);
-      this.grade.setStyle('neutral');
+      this.grade.setStyle('kraft');
       return;
     }
+    const ready = b.fish >= cost;
     this.grade.setLabel(`Lv.${b.summonGrade() + 1}`);
     this.grade.setSublabel(fmt(cost), 'fish');
-    this.grade.setStyle(b.fish >= cost ? 'purple' : 'neutral');
-    if (b.fish >= cost) this.env.hints.request('grade', this.grade);
+    // Cream paper when the fish are there, plain kraft when not; the price says the rest.
+    this.grade.setStyle(ready ? 'neutral' : 'kraft');
+    if (ready) {
+      this.env.hints.request('grade', this.grade);
+      if (this.gradeReady === false) this.grade.shine();
+    }
+    this.gradeReady = ready;
   }
 
   private refreshTracker(): void {
@@ -167,49 +174,41 @@ export class ActionRow {
 
   private updateLaser(): void {
     const L = this.env.battle.laser;
-    let state: 'ready' | 'active' | 'cool';
+    let state: Exclude<LaserState, ''>;
     let p: number;
-    let text = '';
+    let seconds = '';
     if (L.active) {
       state = 'active';
       p = L.duration > 0 ? L.timeLeft / L.duration : 0;
-      text = String(Math.ceil(L.timeLeft));
+      seconds = String(Math.ceil(L.timeLeft));
     } else if (L.cooldown > 0) {
       state = 'cool';
       p = L.cooldownTotal > 0 ? 1 - L.cooldown / L.cooldownTotal : 1;
-      text = String(Math.ceil(L.cooldown));
+      seconds = String(Math.ceil(L.cooldown));
     } else {
       state = 'ready';
       p = 1;
     }
     if (Math.abs(p - this.laserP) > 0.004 || state !== this.laserState) {
       this.laserP = p;
-      this.ring.setProgress(p);
+      (state === 'active' ? this.aimRing : this.coolRing).setProgress(p);
     }
-    if (text !== this.laserText) {
-      this.laserText = text;
-      this.ringLabel.text = text ? t('hud.secs', { s: text }) : '';
+    if (seconds !== this.laserSeconds) {
+      this.laserSeconds = seconds;
+      this.laserText.text = seconds ? t('hud.secs', { s: seconds }) : '';
     }
-    if (state !== this.laserState) {
-      const was = this.laserState;
-      this.laserState = state;
-      this.ring.alpha = state === 'cool' ? 0.75 : 1;
-      this.bag.killKeyed(this.glow);
-      this.glow.alpha = 0;
-      if (state === 'ready' && was === 'cool') {
-        this.pop();
-        audio.play('ui_tab', { volume: 0.5 });
-      }
-      if ((state === 'ready' || state === 'active') && !motion.reduced) {
-        const strong = state === 'active' ? 0.9 : 0.55;
-        this.bag.runKeyed(this.glow, {
-          duration: 0.7,
-          ease: Ease.sineInOut,
-          yoyo: true,
-          repeat: -1,
-          onUpdate: (k) => (this.glow.alpha = strong * (0.35 + 0.65 * k)),
-        });
-      }
+    if (state === this.laserState) return;
+    const was = this.laserState;
+    this.laserState = state;
+    this.laserBtn.setStyle(LASER_STYLE[state]);
+    this.coolRing.visible = state === 'cool';
+    this.aimRing.visible = state === 'active';
+    this.laserBtn.stopPulse();
+    if (state === 'active') this.laserBtn.startPulse({ times: -1, amount: 0.04 });
+    if (state === 'ready' && was === 'cool') {
+      this.pop();
+      this.laserBtn.shine();
+      audio.play('ui_tab', { volume: 0.5 });
     }
   }
 

@@ -2,7 +2,9 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import { game } from '@/core/game';
 import { Ease, type EaseFn } from '@/core/tween';
 import { clamp, lerp } from '@/core/math';
+import { Color } from '@/ui/theme';
 import { safeFlashColor } from './curves';
+import { Hue } from './palette';
 import { FX_TIERS, REDUCED, fxSettings } from './settings';
 import { TimeFreeze, type TimeFreezeOpts, type TimeScaled } from './freeze';
 import { fxVignette } from './textures';
@@ -97,7 +99,7 @@ export class ScreenFx {
    * washed toward white.
    * @returns true when a flash was actually started.
    */
-  flash(color = 0xffffff, alpha = 0.3, ms = 120): boolean {
+  flash(color: number = Hue.sun, alpha = 0.3, ms = 120): boolean {
     if (!fxSettings.flashes) return false;
     const p = this.ensure();
     const now = game.time;
@@ -117,7 +119,7 @@ export class ScreenFx {
    * One-shot edge vignette pulse (boss warning): `count` smooth swells of `ms` each, never faster
    * than 2 Hz. Skipped when flashes are off, because it is the same photosensitivity class.
    */
-  vignettePulse(color = 0xff2a2a, alpha = 0.3, ms = 500, count = 2): void {
+  vignettePulse(color: number = Hue.alarm, alpha = 0.3, ms = 500, count = 2): void {
     if (!fxSettings.flashes) return;
     const p = this.ensure();
     this.pulseDur = (Math.max(ms, PULSE_MIN_MS) / 1000) * Math.max(1, count);
@@ -131,7 +133,7 @@ export class ScreenFx {
 
   /**
    * Sustained low-health danger vignette, level 0 (off) .. 1 (about to lose). It breathes at
-   * 0.9..1.7 Hz and gets stronger with the level; with reduced motion it is a steady glow.
+   * 0.9..1.7 Hz and gets stronger with the level; with reduced motion it is a steady tint.
    */
   setDanger(level: number): void {
     this.ensure();
@@ -142,7 +144,7 @@ export class ScreenFx {
   letterbox(show: boolean, o: LetterboxOpts = {}): void {
     const p = this.ensure();
     this.barHeight = o.height ?? this.barHeight;
-    p.barTop.tint = p.barBottom.tint = o.color ?? 0x000000;
+    p.barTop.tint = p.barBottom.tint = o.color ?? Color.ink;
     this.barFrom = this.barK;
     this.barTo = show ? 1 : 0;
     this.barAge = 0;
@@ -256,13 +258,13 @@ export class ScreenFx {
     const flash = mk(Texture.WHITE);
     flash.visible = false;
     const vignette = mk(fxVignette());
-    vignette.tint = 0xff2a2a;
+    vignette.tint = Hue.alarm;
     vignette.visible = false;
     const pulse = mk(fxVignette());
     pulse.visible = false;
     const barTop = mk(Texture.WHITE);
     const barBottom = mk(Texture.WHITE);
-    barTop.tint = barBottom.tint = 0x000000;
+    barTop.tint = barBottom.tint = Color.ink;
     const layer = new Container();
     layer.addChild(vignette, pulse, flash, barTop, barBottom);
     layer.eventMode = 'none';

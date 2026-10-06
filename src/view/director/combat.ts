@@ -35,23 +35,25 @@ import {
   MUZZLE_STREAK,
   PULL_STREAKS,
   SHIELD_GLANCE,
-  SHIELD_GLINT,
+  SHIELD_SPARK,
   STAR_POP,
   STUN_STARS,
   VULN_PULSE,
 } from './defs';
 import { DOT_NUMBER_COLOR, SHIELD_COLOR, SHOOT_CUE, STATUS_COLOR, STATUS_SFX, UNIT_COLOR } from './palette';
 import { Gate, enemyInfo, type Bus, type Stage } from './stage';
+import { Hue } from '@/fx/palette';
+import { Color } from '@/ui/theme';
 
-const W = 0xffffff;
+const W = Hue.cream;
 const PI = Math.PI;
 
 /** [white, pale, colour] ramps per cat so a spark never builds an array. */
 const RAMP = {} as Record<UnitId, readonly number[]>;
 for (const id of UNIT_IDS) RAMP[id] = [W, lighten(UNIT_COLOR[id], 0.7), UNIT_COLOR[id]];
-const NEUTRAL_RAMP: readonly number[] = [W, 0xfff2c4, 0xffd96b];
+const NEUTRAL_RAMP: readonly number[] = [W, Hue.sun, Hue.spark];
 
-/** Flash size and streak count of the muzzle cue per cat: a gunner kicks, a ninja flicks, a mage glows. */
+/** Flash size and streak count of the muzzle cue per cat: a gunner kicks, a ninja flicks, a mage casts. */
 const MUZZLE_SHAPE: Partial<Record<UnitId, readonly [flash: number, streaks: number]>> = {
   r_sling: [0.8, 1],
   r_archer: [0.9, 1.5],
@@ -178,7 +180,7 @@ export function mountCombat(stage: Stage, on: Bus): void {
 
     if (e.absorbed > 0 && perEnemy.ready(en.uid, SUB_SHIELD, stage.now, 0.1)) {
       ps.burst(SHIELD_GLANCE, x, y, { colors: [W, SHIELD_COLOR], scale: info.radius / 20 });
-      if (stage.detail > 0) ps.burst(SHIELD_GLINT, x, y, { colors: [W, SHIELD_COLOR] });
+      if (stage.detail > 0) ps.burst(SHIELD_SPARK, x, y, { colors: [W, SHIELD_COLOR] });
       if (density === 0) fx.number(x + 22, y - info.radius - 18, e.absorbed, 'damage', { color: SHIELD_COLOR, scale: 0.7 });
     }
   });
@@ -246,7 +248,7 @@ export function mountCombat(stage: Stage, on: Bus): void {
     const back = en.angle + PI;
     const info = enemyInfo(en.id);
     ps.burst(PULL_STREAKS, en.x + Math.cos(en.angle) * info.radius, en.y + Math.sin(en.angle) * info.radius, {
-      colors: [W, 0xd9b8ff, 0xb26bff],
+      colors: [W, Hue.heart, Color.berry],
       dir: back,
       scale: Math.max(0.8, info.radius / 20),
     });

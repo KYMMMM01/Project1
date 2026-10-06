@@ -1,11 +1,13 @@
 /**
- * The toy choice between acts: a full screen with three large toy cards and one inline reroll offer
- * (free first, then an ad or gems through the meta layer). The card list always mirrors
- * battle.pending, so rerolls, multi-picks and restored runs need no special cases.
+ * The toy choice between acts: a full screen with three large toy cards, each a paper photo frame
+ * pinned down with tape, and one inline reroll offer (free first, then an ad or gems through the meta
+ * layer). The card list always mirrors battle.pending, so rerolls, multi-picks and restored runs need
+ * no special cases.
  */
 import { Container, Graphics } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
+import { mixColor } from '@/core/math';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { flyTo } from '@/fx';
@@ -15,17 +17,23 @@ import { ads } from '@/platform';
 import {
   Button,
   Color,
-  drawGlow,
+  drawDashedRect,
+  drawPaper,
+  drawPaperFace,
   fitLabel,
   motion,
+  PaperLabel,
+  paperSeed,
   Rarity,
   rarityName,
+  RARITY_GOLD,
   ScreenScaffold,
+  tapeStrip,
+  Tag,
   TweenBag,
   toast,
   uiLabel,
-  vGradient,
-  shade,
+  type TapeName,
 } from '@/ui';
 import type { HudEnv } from '../env';
 import { PressCard, relicIcon } from '../kit';
@@ -34,14 +42,26 @@ import { offerRoute } from '../policy';
 const CARD_W = 672;
 const CARD_H = 216;
 const GAP = 18;
-const TOP = 112;
+const TOP = 152;
+/** The mat the toy lies on: a square window at the card's left. */
+const MAT = 176;
+const MAT_PAD = 20;
 
 type RelicPending = Extract<PendingChoice, { kind: 'relic' }>;
+
+/** One strip of tape per card, a different print for each rarity so a row of cards is never one flat colour. */
+const TAPE: Record<'common' | 'rare' | 'epic' | 'legendary', { name: TapeName; pattern: 'dots' | 'gingham' | 'stripes' }> = {
+  common: { name: 'sky', pattern: 'dots' },
+  rare: { name: 'green', pattern: 'gingham' },
+  epic: { name: 'pink', pattern: 'dots' },
+  legendary: { name: 'yellow', pattern: 'stripes' },
+};
 
 export class RelicScreen {
   private readonly scaffold: ScreenScaffold;
   private readonly bag = new TweenBag();
   private readonly release: () => void;
+  private readonly seed = paperSeed();
   private cards: PressCard[] = [];
   private head: Container | null = null;
   private busy = false;
@@ -89,10 +109,11 @@ export class RelicScreen {
     head.y = dy;
     const act = this.env.battle.act;
     const line = p.picksLeft > 1 ? t('hud.relic.many', { n: p.picksLeft }) : t('hud.relic.one');
-    const a = uiLabel(t('hud.relic.cleared', { act }), { size: 40, color: Color.gold, strokeWidth: 6 });
-    a.position.set(this.scaffold.contentWidth / 2, 30);
-    const b = uiLabel(line, { size: 28, wrap: this.scaffold.contentWidth - 20, strokeWidth: 4, shadow: false });
-    b.position.set(this.scaffold.contentWidth / 2, 78);
+    const w = this.scaffold.contentWidth;
+    const a = new PaperLabel({ text: t('hud.relic.cleared', { act }), size: 44, paper: 'primary', padX: 44, padY: 12, maxWidth: w - 20, seed: this.seed });
+    a.position.set(w / 2, 42);
+    const b = new PaperLabel({ text: line, size: 28, paper: Color.paper, padX: 28, padY: 8, maxWidth: w - 20, seed: this.seed + 1 });
+    b.position.set(w / 2, 100);
     head.addChild(a, b);
     content.addChild(head);
     this.head = head;
@@ -100,45 +121,73 @@ export class RelicScreen {
     const best = this.bestIndex(p);
     p.options.forEach((id, i) => {
       const def = relicDef(id);
-      const r = Rarity[def.rarity];
       const card = new PressCard(CARD_W, CARD_H, () => this.pick(i), { holdLimit: Infinity });
-      card.position.set(this.scaffold.contentWidth / 2, dy + TOP + CARD_H / 2 + i * (CARD_H + GAP));
-      const g = new Graphics();
-      g.roundRect(-CARD_W / 2, -CARD_H / 2 + 8, CARD_W, CARD_H, 34).fill({ color: Color.black, alpha: 0.4 });
-      g.roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 34)
-        .fill(vGradient(shade(Color.panelLight, 0.06), Color.panel))
-        .stroke({ width: 7, color: r.color, alignment: 1 });
-      g.roundRect(-CARD_W / 2 + 9, -CARD_H / 2 + 9, CARD_W - 18, CARD_H - 18, 26).stroke({ width: 3, color: Color.outline, alpha: 0.8, alignment: 1 });
-      const glow = new Graphics();
-      drawGlow(glow, 0, 0, 120, r.glow, 0.55);
-      glow.position.set(-CARD_W / 2 + 112, 0);
-      glow.blendMode = 'add';
-      const icon = relicIcon(id, 148, def.rarity);
-      icon.position.set(-CARD_W / 2 + 112, 0);
-      const name = uiLabel(t(def.nameKey), { size: 40, anchorX: 0, align: 'left', strokeWidth: 6 });
-      name.position.set(-CARD_W / 2 + 206, -62);
-      fitLabel(name, CARD_W - 206 - 150, 40, 0.7);
-      const tag = uiLabel(rarityName(def.rarity), { size: 24, color: r.light, anchorX: 1, align: 'right', strokeWidth: 4, shadow: false });
-      tag.position.set(CARD_W / 2 - 30, -62);
-      const desc = uiLabel(def.descText(), {
-        size: 27, wrap: CARD_W - 206 - 36, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left', strokeWidth: 4, shadow: false,
-      });
-      desc.position.set(-CARD_W / 2 + 206, -30);
-      card.addChild(g, glow, icon, name, tag, desc);
+      card.position.set(w / 2, dy + TOP + CARD_H / 2 + i * (CARD_H + GAP));
+      card.addChild(this.frame(def.rarity, i));
+      const icon = relicIcon(id, 134, def.rarity);
+      icon.position.set(-CARD_W / 2 + MAT_PAD + MAT / 2, 4);
+      const rar = Rarity[def.rarity];
+      const textX = -CARD_W / 2 + MAT_PAD + MAT + 26;
+      const name = uiLabel(t(def.nameKey), { size: 40, anchorX: 0, align: 'left' });
+      name.position.set(textX, -52);
+      fitLabel(name, CARD_W / 2 - 20 - textX - 150, 40, 0.7);
+      const tag = new Container();
+      const tagLabel = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkDeep });
+      const tagW = tagLabel.width + 28;
+      const tagBg = new Graphics();
+      drawPaper(tagBg, -tagW / 2, -17, { w: tagW, h: 34, kind: 'pill', fill: rar.color, edge: rar.dark, shadow: 3, grain: false, seed: this.seed + 20 + i });
+      tag.addChild(tagBg, tagLabel);
+      tag.position.set(CARD_W / 2 - 34 - tagW / 2, -52);
+      const desc = uiLabel(def.descText(), { size: 27, wrap: CARD_W / 2 - 30 - textX, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left' });
+      desc.position.set(textX, -22);
+      card.addChild(icon, name, tag, desc);
       if (this.env.tutorial && i === best) {
-        const rec = uiLabel(t('hud.recommend'), { size: 24, color: Color.textDark, stroke: false, shadow: false });
-        const pill = new Graphics();
-        pill.roundRect(-52, -18, 104, 36, 18).fill(Color.gold).stroke({ width: 4, color: Color.outline });
-        const tagc = new Container();
-        tagc.addChild(pill, rec);
-        tagc.position.set(-CARD_W / 2 + 112, -CARD_H / 2 + 6);
-        card.addChild(tagc);
+        const rec = new Tag({ text: t('hud.recommend'), style: 'mustard', shape: 'flag', fontSize: 24, tilt: 0.1 });
+        rec.position.set(CARD_W / 2 - 90, CARD_H / 2 - 20);
+        card.addChild(rec);
       }
       content.addChild(card);
       this.cards.push(card);
       if (fresh && !motion.reduced) this.deal(card, i);
     });
     this.buildReroll(p);
+  }
+
+  /** The photo frame: cream border, a mat in the rarity colour holding the toy, and the ornaments that pile up with rarity. */
+  private frame(rarity: 'common' | 'rare' | 'epic' | 'legendary', i: number): Container {
+    const c = new Container();
+    const g = new Graphics();
+    const rar = Rarity[rarity];
+    const idx = ['common', 'rare', 'epic', 'legendary'].indexOf(rarity);
+    const seed = this.seed + 10 + i * 4;
+    const x = -CARD_W / 2;
+    const y = -CARD_H / 2;
+    drawPaper(g, x, y, { w: CARD_W, h: CARD_H, radius: 34, fill: Color.paperLight, edge: Color.kraftDark, shadow: 7, seed });
+    const mx = x + MAT_PAD;
+    const my = -MAT / 2 + 4;
+    drawPaperFace(g, mx, my, { w: MAT, h: MAT, radius: 26, fill: rar.color, edge: rar.dark, grain: false, seed: seed + 1, wobble: 0.7 });
+    drawPaperFace(g, mx + 14, my + 14, { w: MAT - 28, h: MAT - 28, radius: 18, fill: mixColor(rar.light, Color.paper, 0.62), edge: rar.dark, grain: false, seed: seed + 2, wobble: 0.6 });
+    if (idx >= 1) drawDashedRect(g, x + 8, y + 8, CARD_W - 16, CARD_H - 16, { radius: 28, color: rar.dark, width: 2.5, dash: 12, gap: 9, alpha: 0.8, seed: seed + 3 });
+    if (idx >= 2) {
+      // Photo-corner mounts on the mat.
+      const k = 26;
+      const mount = idx === 3 ? RARITY_GOLD : rar.dark;
+      for (const sx of [0, 1] as const) {
+        for (const sy of [0, 1] as const) {
+          const cx = mx + sx * MAT;
+          const cy = my + sy * MAT;
+          const dx = sx === 0 ? 1 : -1;
+          const dyy = sy === 0 ? 1 : -1;
+          g.poly([cx, cy, cx + dx * k, cy, cx, cy + dyy * k]).fill(mount);
+        }
+      }
+    }
+    c.addChild(g);
+    const pin = TAPE[rarity];
+    const tape = tapeStrip({ name: pin.name, pattern: pin.pattern, w: 124, h: 32, angle: i % 2 === 0 ? -3 : 3, seed });
+    tape.position.set(0, y + 2);
+    c.addChild(tape);
+    return c;
   }
 
   /** Highest rarity first: the card the tutorial points at. */
@@ -212,7 +261,7 @@ export class RelicScreen {
       return;
     }
     if (paidUsed) {
-      const note = uiLabel(t('hud.relic.noMore'), { size: 28, color: Color.textDim, strokeWidth: 4, shadow: false });
+      const note = uiLabel(t('hud.relic.noMore'), { size: 28 });
       bar.addChild(note);
       return;
     }
@@ -224,7 +273,7 @@ export class RelicScreen {
     }
     const route = this.env.tutorial ? 'none' : offerRoute(ads.status('relic_reroll').reason, false);
     if (route === 'none') return;
-    const gems = new Button({ label: t('hud.relic.reroll'), sublabel: '10', sublabelIcon: 'gem', icon: 'reroll', style: 'purple', width: route === 'ad' ? 300 : 420, height: 104, fontSize: 36 });
+    const gems = new Button({ label: t('hud.relic.reroll'), sublabel: '10', sublabelIcon: 'gem', icon: 'reroll', style: 'mustard', width: route === 'ad' ? 300 : 420, height: 104, fontSize: 36 });
     gems.onTap(() => this.pay('gems', gems));
     if (route === 'ad') {
       const ad = new Button({ label: t('hud.relic.reroll'), sublabel: t('hud.ad'), icon: 'ad', style: 'success', width: 340, height: 104, fontSize: 36 });

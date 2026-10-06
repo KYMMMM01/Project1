@@ -31,11 +31,26 @@ addStrings('ko', {
   'hud.recommend': '추천',
 
   // class sheet
-  'hud.class.have': '보드 위 {n}종',
+  'hud.class.have': '서로 다른 고양이 {n}종',
   'hud.class.need': '{n}종',
   'hud.class.need.more': '{n}종 이상',
   'hud.class.level': '직업 강화 {lv}/{max}',
   'hud.class.note': '단계마다 이 직업의 피해가 {n}%씩 늘어요.',
+  'hud.class.rule': '같은 고양이 둘을 합치면 같은 직업의 다음 등급이 돼요.',
+  'hud.class.goal': '시너지 {tier}단계까지 {n}종 더',
+  'hud.class.goalMax': '시너지 최고 단계예요',
+  'hud.ladder.merge': '합성',
+  'hud.ladder.awaken': '각성',
+
+  // what a cat becomes (selection sheet)
+  'hud.plan.merge': '합치면',
+  'hud.plan.awaken': '각성하면',
+  'hud.plan.top': '가장 높은 등급이에요',
+  'hud.plan.have': '같은 고양이 {n}마리',
+  'hud.plan.rule': '{n}마리면 합칠 수 있어요',
+  'hud.plan.ready': '끌어서 합쳐요!',
+  'hud.plan.synergy': '시너지 {need}단계 (지금 {now})',
+  'hud.plan.purr': '골골 {have}/{need}',
 
   // odds
   'hud.odds.title': '소환 확률',
@@ -48,7 +63,6 @@ addStrings('ko', {
   'hud.molt': '털갈이',
   'hud.molt.sub': '{cost} · 남은 {left}번',
   'hud.molt.info': '골골 {cost}개로 같은 등급의 다른 직업이 돼요. 남은 털갈이 {left}번',
-  'hud.molt.keep': '등급은 그대로',
   'hud.awaken': '각성',
   'hud.awaken.r.legend': '대왕만 가능',
   'hud.awaken.r.synergy': '시너지 2단계',
@@ -149,7 +163,7 @@ addStrings('ko', {
 
   // tutorial
   'hud.tut.summon': '버튼을 눌러 고양이를 불러요! ({n}/{total})',
-  'hud.tut.merge': '같은 고양이끼리 끌어서 합쳐요!',
+  'hud.tut.merge': '같은 고양이끼리 끌어서 합쳐요! 같은 직업의 다음 등급이 돼요.',
   'hud.tut.more': '물고기가 모이면 고양이를 더 불러요!',
 
   // laser
@@ -202,6 +216,7 @@ addStrings('ko', {
   'hud.hint.grade': '소환 등급을 올리면 좋은 고양이가 더 잘 나와요.',
   'hud.hint.awaken': '대왕은 시너지 2단계에서 골골을 모으면 수호신이 돼요.',
   'hud.hint.sell': '팔면 생선을 돌려받아요. 고양이를 아래로 끌어다 놓아도 팔 수 있어요.',
+  'hud.hint.twins': '같은 고양이 둘을 합치면 같은 직업의 다음 등급이 돼요.',
 });
 
 addStrings('en', {
@@ -231,11 +246,25 @@ addStrings('en', {
   'hud.cancel': 'Cancel',
   'hud.recommend': 'Best',
 
-  'hud.class.have': '{n} on the board',
+  'hud.class.have': 'Different cats: {n}',
   'hud.class.need': '{n} kinds',
   'hud.class.need.more': '{n}+ kinds',
   'hud.class.level': 'Class upgrade {lv}/{max}',
   'hud.class.note': 'Each level adds {n}% damage to this class.',
+  'hud.class.rule': 'Merging two identical cats makes the next rank of the same class.',
+  'hud.class.goal': '{n} more for tier {tier}',
+  'hud.class.goalMax': 'Top synergy tier',
+  'hud.ladder.merge': 'Merge',
+  'hud.ladder.awaken': 'Awaken',
+
+  'hud.plan.merge': 'Merges into',
+  'hud.plan.awaken': 'Awakens into',
+  'hud.plan.top': 'Highest rank',
+  'hud.plan.have': 'Same cat: {n}',
+  'hud.plan.rule': '{n} of a kind can merge',
+  'hud.plan.ready': 'Drag to merge!',
+  'hud.plan.synergy': 'Synergy tier {need} (now {now})',
+  'hud.plan.purr': 'Purr {have}/{need}',
 
   'hud.odds.title': 'Summon odds',
   'hud.odds.grade': 'Summon grade {lv}',
@@ -246,7 +275,6 @@ addStrings('en', {
   'hud.molt': 'Molt',
   'hud.molt.sub': '{cost} · {left} left',
   'hud.molt.info': 'Spend {cost} purr to become another class of the same rarity. Molts left: {left}',
-  'hud.molt.keep': 'Same rarity',
   'hud.awaken': 'Awaken',
   'hud.awaken.r.legend': 'Kings only',
   'hud.awaken.r.synergy': 'Needs tier 2',
@@ -341,7 +369,7 @@ addStrings('en', {
   'hud.res.retry': 'Try again',
 
   'hud.tut.summon': 'Tap to summon a cat! ({n}/{total})',
-  'hud.tut.merge': 'Drag one cat onto its twin to merge!',
+  'hud.tut.merge': 'Drag one cat onto its twin to merge! You get the next rank of the same class.',
   'hud.tut.more': 'Got fish? Summon more cats!',
 
   'hud.laser.hint': 'Tap the walkway to place the red dot.',
@@ -391,4 +419,5 @@ addStrings('en', {
   'hud.hint.grade': 'A higher summon grade makes better cats more likely.',
   'hud.hint.awaken': 'A King with synergy tier 2 and enough purr awakens into a Guardian.',
   'hud.hint.sell': 'Selling returns fish. You can also drag a cat down onto the panel to sell it.',
+  'hud.hint.twins': 'Merging two identical cats makes the next rank of the same class.',
 });

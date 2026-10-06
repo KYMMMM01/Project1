@@ -10,6 +10,7 @@ import { EnemyViews } from './enemies';
 import type { FieldEnv } from './env';
 import { FieldInput } from './input';
 import { dropLook } from './policy';
+import { DragPreview } from './preview';
 import { Projectiles } from './projectiles';
 import { buildRug, RUG_X, RUG_Y } from './rug';
 import { rugSkin } from './rugSkins';
@@ -36,6 +37,7 @@ export function createField(ctx: BattleContext): FieldPart {
   layers.floor.addChild(walkway, rug);
 
   const cells = new CellLayer(layers.floor, layers.projectiles, art);
+  const preview = new DragPreview(env, layers.floor, layers.projectiles);
   const units = new UnitViews(env, layers.units);
   const enemies = new EnemyViews(env, layers.enemies);
   const shots = new Projectiles(env, layers.projectiles);
@@ -45,23 +47,17 @@ export function createField(ctx: BattleContext): FieldPart {
     if (e.cell !== null) units.refuse(e.cell);
   });
 
-  function updateCells(): void {
+  function updateCells(dt: number): void {
     const dragging = input.dragFrom !== null;
     const source = input.dragFrom ?? ctx.selected;
     for (let c = 0; c < CELL_COUNT; c++) {
-      const occupied = (battle.units[c] ?? null) !== null;
       let look: CellLook = null;
-      let color = 0xffffff;
-      if (source !== null) {
-        if (c === source) {
-          look = 'selected';
-        } else {
-          look = dropLook(battle.dropAction(source, c));
-          if (look === 'merge') color = units.mergeColor(c);
-        }
-      }
-      cells.set(c, look, occupied, color, dragging && input.hover === c);
+      if (source !== null) look = c === source ? (dragging ? 'origin' : 'selected') : dropLook(battle.dropAction(source, c));
+      cells.set(c, look, dragging && input.hover === c);
     }
+    const held = input.dragFrom ?? -1;
+    const over = input.hover;
+    preview.update(dt, held, over, held >= 0 && over >= 0 && over !== held ? battle.dropAction(held, over) : null);
   }
 
   return {
@@ -74,7 +70,7 @@ export function createField(ctx: BattleContext): FieldPart {
       shots.update();
       effects.update();
       input.update(dt);
-      updateCells();
+      updateCells(dt);
       cells.update(dt, env.time);
       ground.update(dt);
     },
@@ -88,6 +84,7 @@ export function createField(ctx: BattleContext): FieldPart {
       shots.destroy();
       enemies.destroy();
       units.destroy();
+      preview.destroy();
       cells.destroy();
       for (const c of [walkway, rug]) {
         layers.floor.removeChild(c);

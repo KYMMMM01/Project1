@@ -11,6 +11,7 @@ import {
   CardFrame,
   Color,
   drawIcon,
+  fitLabel,
   HOLD_DELAY,
   motion,
   Panel,
@@ -22,6 +23,7 @@ import { audio } from '@/audio';
 import { haptic } from '@/core/haptics';
 import type { HudEnv } from '../env';
 import { CLASS_ICON, PressCard, unitPortrait } from '../kit';
+import { planOf } from '../planMath';
 import { recommendPick } from '../policy';
 import { Hand } from '../Hand';
 
@@ -52,10 +54,10 @@ export class SummonPickPopup extends Popup<void> {
       unitClass,
     );
 
-    const h = 560;
-    const panel = new Panel({ width: W, height: h, title: t('hud.pick.title') });
+    const h = 624;
+    const panel = new Panel({ width: W, height: h, title: t('hud.pick.title'), torn: 'bottom', tape: 'pink' });
     const c = panel.content;
-    const sub = uiLabel(t('hud.pick.sub'), { size: 26, color: Color.textDim, strokeWidth: 4, shadow: false, wrap: W - 80 });
+    const sub = uiLabel(t('hud.pick.sub'), { size: 26, color: Color.inkSoft, wrap: W - 80 });
     sub.position.set(W / 2, 84);
     c.addChild(sub);
 
@@ -76,18 +78,28 @@ export class SummonPickPopup extends Popup<void> {
       const klass = new Container();
       const icon = drawIcon(CLASS_ICON[def.classId], 40);
       icon.position.set(-44, 0);
-      const name = uiLabel(t(classDef(def.classId).nameKey), { size: 28, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
+      const name = uiLabel(t(classDef(def.classId).nameKey), { size: 28, anchorX: 0, align: 'left' });
       name.position.set(-18, 0);
       klass.addChild(icon, name);
       klass.position.set(0, 190);
       card.addChild(klass);
+      // What two of this cat make (or what a king awakens into): the line the player is building.
+      const plan = planOf(id, []);
+      if (plan.result) {
+        const lead = uiLabel(t(plan.kind === 'awaken' ? 'hud.plan.awaken' : 'hud.plan.merge'), { size: 24, color: Color.inkSoft });
+        lead.position.set(0, 226);
+        const next = uiLabel(t(unitDef(plan.result).nameKey), { size: 26 });
+        fitLabel(next, 232, 26, 0.8);
+        next.position.set(0, 256);
+        card.addChild(lead, next);
+      }
       this.offs.push(attachTooltip(card, () => ({ title: t(def.nameKey), text: def.skillText() })));
       c.addChild(card);
       this.cards.push(card);
     });
 
-    const tip = uiLabel(t('hud.pick.tip'), { size: 24, color: Color.textDim, strokeWidth: 4, shadow: false, wrap: W - 80 });
-    tip.position.set(W / 2, h - 44);
+    const tip = uiLabel(t('hud.pick.tip'), { size: 24, color: Color.inkSoft, wrap: W - 80 });
+    tip.position.set(W / 2, h - 46);
     c.addChild(tip);
     this.body.addChild(panel);
 

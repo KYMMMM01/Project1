@@ -16,11 +16,12 @@ import { hitFlash } from './juice';
 import { Rays, makeSpritePool, type RaysOpts } from './rays';
 import { FX_TIERS, REDUCED, fxSettings, motionSeconds, tierScale } from './settings';
 import { ScreenFx, Trauma, fxShake, screenFx } from './screen';
+import { CONFETTI, Hue } from './palette';
 import { ensureFxTextures } from './textures';
 import * as zones from './zones';
 import type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
 
-const W = 0xffffff;
+const W = Hue.cream;
 const PI = Math.PI;
 
 export interface FxOpts {
@@ -136,8 +137,6 @@ export interface FxCreateOpts {
 
 /** Where along a slash line sparks fly off, alternating sides. */
 const SLASH_SPARKS: readonly number[] = [0.3, 0.45, 0.65, 0.8, 0.97];
-
-const CONFETTI_PALETTE: readonly number[] = [0xff4d7a, 0xffd23f, 0x4ee3ff, 0xb26bff, 0x7dff6b, 0xffffff];
 
 /** Tier -> rarity colours (research guide 3.7). */
 function tierStyle(tier: number): (typeof Rarity)[keyof typeof Rarity] {
@@ -289,7 +288,7 @@ export class Fx {
   /* ---- combat hits -------------------------------------------------------------------------- */
 
   hitSpark(x: number, y: number, o: HitSparkOpts = {}): void {
-    const c = o.color ?? 0xffd96b;
+    const c = o.color ?? Hue.spark;
     const hi = lighten(c, 0.75);
     const m: BurstMods = { scale: o.scale ?? 1 };
     const aimed = o.angle !== undefined;
@@ -310,7 +309,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 0, count: 1, life: 0.14, size: 54, sizeEnd: 92, colors: [W, c], alpha: 0.85, fadeIn: 0, fadeOut: 0.85, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 0, count: 1, life: 0.14, size: 54, sizeEnd: 92, colors: [W, c], alpha: 0.85, fadeIn: 0, fadeOut: 0.85, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.burst(
@@ -321,9 +320,9 @@ export class Fx {
 
   critBurst(x: number, y: number, o: CritOpts = {}): void {
     if (o.strong) fxShake(Trauma.t1);
-    const c = o.color ?? 0xffc933;
+    const c = o.color ?? Hue.gold;
     const hi = lighten(c, 0.7);
-    const deep = 0xff7a1a;
+    const deep = Hue.fire;
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
       {
@@ -354,7 +353,7 @@ export class Fx {
   }
 
   slashArc(x: number, y: number, o: SlashOpts = {}): void {
-    const c = o.color ?? 0xffffff;
+    const c = o.color ?? Hue.cream;
     const tint = lighten(c, 0.4);
     const s = o.scale ?? 1;
     const ang = o.angle ?? -2.4;
@@ -386,7 +385,7 @@ export class Fx {
   }
 
   shockwave(x: number, y: number, o: ShockwaveOpts = {}): void {
-    const c = o.color ?? 0xffffff;
+    const c = o.color ?? Hue.cream;
     const r = (o.radius ?? 150) * (o.scale ?? 1);
     const d = o.delay ?? 0;
     this.burst(
@@ -407,11 +406,11 @@ export class Fx {
 
   explosion(x: number, y: number, o: FxOpts = {}): void {
     const s = o.scale ?? 1;
-    const c = o.color ?? 0xff8a2a;
+    const c = o.color ?? Hue.fire;
     const hot = lighten(c, 0.65);
     const m: BurstMods = { scale: s };
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.26, size: 50, sizeEnd: 210, colors: [W, hot, c], alpha: 0.85, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.26, size: 50, sizeEnd: 210, colors: [W, hot, c], alpha: 0.85, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
       x, y, m,
     );
     this.burst(
@@ -419,7 +418,7 @@ export class Fx {
       x, y, m,
     );
     this.shockwave(x, y, { color: c, radius: 135, scale: s });
-    // Fire: additive puffs that cool from white-yellow through orange to dark red.
+    // Fire: puffs that cool from pale yellow through coral to dark red.
     this.burst(
       {
         tex: 'smoke', prio: 2, count: 7, life: [0.32, 0.55], shape: { type: 'circle', r: 22 }, speed: [40, 150], drag: 3,
@@ -430,21 +429,21 @@ export class Fx {
     this.burst(
       {
         tex: 'dot', prio: 1, count: 18, life: [0.5, 1.0], speed: [160, 560], drag: 1.6, gravity: 520, size: [6, 13], sizeEnd: 2,
-        colors: [W, 0xffc34a, 0xff4a1a], fadeIn: 0, fadeOut: 0.5,
+        colors: [W, Hue.ember, Hue.flame], fadeIn: 0, fadeOut: 0.5,
       },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'shard', blend: 'normal', prio: 1, count: 6, life: [0.55, 0.9], speed: [180, 460], gravity: 900, drag: 0.6, size: [14, 24],
+        tex: 'shard', prio: 1, count: 6, life: [0.55, 0.9], speed: [180, 460], gravity: 900, drag: 0.6, size: [14, 24],
         sizeEnd: [8, 12], spin: [-9, 9], rot: [0, TAU], colors: [darken(c, 0.3), darken(c, 0.65)], fadeIn: 0, fadeOut: 0.4,
       },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 1, count: 7, life: [0.8, 1.25], shape: { type: 'circle', r: 26 }, speed: [30, 110], drag: 1.6,
-        gravity: -45, size: [56, 80], sizeEnd: [120, 168], rot: [0, TAU], spin: [-0.6, 0.6], colors: [0x4a3d52, 0x2a2133], alpha: 0.6,
+        tex: 'smoke', prio: 1, count: 7, life: [0.8, 1.25], shape: { type: 'circle', r: 26 }, speed: [30, 110], drag: 1.6,
+        gravity: -45, size: [56, 80], sizeEnd: [120, 168], rot: [0, TAU], spin: [-0.6, 0.6], colors: [Hue.smoke, Hue.smokeDark], alpha: 0.6,
         fadeIn: 0.15, fadeOut: 0.6, delay: [0.05, 0.14],
       },
       x, y, m,
@@ -452,15 +451,15 @@ export class Fx {
   }
 
   deathPuff(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? 0xb7c2d0;
+    const c = o.color ?? Hue.dust;
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
-      { tex: 'glow', prio: 1, count: 1, life: 0.16, size: 50, sizeEnd: 100, colors: [W, lighten(c, 0.6)], alpha: 0.8, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 1, count: 1, life: 0.16, size: 50, sizeEnd: 100, colors: [W, lighten(c, 0.6)], alpha: 0.8, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 1, count: 6, life: [0.4, 0.68], shape: { type: 'circle', r: 12 }, speed: [40, 140], drag: 3,
+        tex: 'smoke', prio: 1, count: 6, life: [0.4, 0.68], shape: { type: 'circle', r: 12 }, speed: [40, 140], drag: 3,
         gravity: -26, size: [34, 48], sizeEnd: [72, 100], rot: [0, TAU], spin: [-1.5, 1.5],
         colors: [lighten(c, 0.5), c, darken(c, 0.45)], alpha: 0.85, fadeIn: 0.06, fadeOut: 0.65,
       },
@@ -468,7 +467,7 @@ export class Fx {
     );
     this.burst(
       {
-        tex: 'shard', blend: 'normal', prio: 1, count: 6, life: [0.45, 0.72], speed: [170, 360], gravity: 760, drag: 0.7, size: [14, 24],
+        tex: 'shard', prio: 1, count: 6, life: [0.45, 0.72], speed: [170, 360], gravity: 760, drag: 0.7, size: [14, 24],
         sizeEnd: [8, 12], spin: [-10, 10], rot: [0, TAU], colors: [lighten(c, 0.2), c, darken(c, 0.4)], fadeIn: 0, fadeOut: 0.45,
       },
       x, y, m,
@@ -483,12 +482,12 @@ export class Fx {
     const m: BurstMods = { scale: o.scale ?? 1, count: (o.count ?? 10) / 10 };
     const gold = o.color ?? Color.gold;
     this.burst(
-      { tex: 'glow', prio: 1, count: 1, life: 0.2, size: 40, sizeEnd: 120, colors: [W, gold], alpha: 0.8, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 1, count: 1, life: 0.2, size: 40, sizeEnd: 120, colors: [W, gold], alpha: 0.8, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
       x, y, { scale: o.scale ?? 1 },
     );
     this.burst(
       {
-        tex: 'coin', blend: 'normal', prio: 1, count: 10, life: [0.7, 1.05], speed: [280, 540], dir: -PI / 2, spread: 0.95, gravity: 1500,
+        tex: 'coin', prio: 1, count: 10, life: [0.7, 1.05], speed: [280, 540], dir: -PI / 2, spread: 0.95, gravity: 1500,
         drag: 0.4, flip: [9, 17], spin: [-2, 2], size: [28, 36], colors: [lighten(gold, 0.25), gold], fadeIn: 0, fadeOut: 0.28,
       },
       x, y, m,
@@ -516,7 +515,7 @@ export class Fx {
     });
     this.burst(
       {
-        tex: 'glow', prio: 2, count: 16, life: [0.13, 0.2], shape: { type: 'ring', r: 120, width: 30 }, size: [30, 44], sizeEnd: [10, 16],
+        tex: 'disc', prio: 2, count: 16, life: [0.13, 0.2], shape: { type: 'ring', r: 120, width: 30 }, size: [30, 44], sizeEnd: [10, 16],
         colors: [hi, color], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: 34, ease: Ease.cubicIn },
       },
       x, y, m,
@@ -529,7 +528,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.24, delay: suck, size: 50, sizeEnd: 210, colors: [W, hi, color], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.75 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.24, delay: suck, size: 50, sizeEnd: 210, colors: [W, hi, color], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.75 },
       x, y, m,
     );
     this.burst(
@@ -580,8 +579,8 @@ export class Fx {
     const m: BurstMods = { scale: s };
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 1, count: 6, life: [0.32, 0.5], shape: { type: 'circle', r: 10 }, speed: [40, 120], drag: 3,
-        gravity: -30, size: [24, 34], sizeEnd: [52, 72], rot: [0, TAU], colors: [0xf1f4f8, c], alpha: 0.55, fadeIn: 0.1, fadeOut: 0.6,
+        tex: 'smoke', prio: 1, count: 6, life: [0.32, 0.5], shape: { type: 'circle', r: 10 }, speed: [40, 120], drag: 3,
+        gravity: -30, size: [24, 34], sizeEnd: [52, 72], rot: [0, TAU], colors: [Hue.cream, c], alpha: 0.55, fadeIn: 0.1, fadeOut: 0.6,
       },
       x, y + 10, m,
     );
@@ -600,7 +599,7 @@ export class Fx {
   private summonRare(x: number, y: number, c: number, hi: number, glow: number, s: number): FxTimeline {
     const impact = 0.06;
     const m: BurstMods = { scale: s, delay: impact };
-    this.groundGlow(x, y + 28, c, hi, s, 0.5, 1);
+    this.groundDisc(x, y + 28, c, hi, s, 0.5, 1);
     this.shockwave(x, y, { color: c, radius: 135, scale: s, delay: impact });
     this.burst(
       {
@@ -610,7 +609,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 1, count: 1, life: 0.16, size: 60, sizeEnd: 130, colors: [W, hi], alpha: 0.8, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 1, count: 1, life: 0.16, size: 60, sizeEnd: 130, colors: [W, hi], alpha: 0.8, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.buzz('light');
@@ -620,11 +619,11 @@ export class Fx {
   private summonEpic(x: number, y: number, c: number, hi: number, glow: number, s: number): FxTimeline {
     const impact = 0.12;
     const m: BurstMods = { scale: s, delay: impact };
-    this.groundGlow(x, y + 30, c, hi, s, 0.6, 1.2);
+    this.groundDisc(x, y + 30, c, hi, s, 0.6, 1.2);
     // Anticipation: a handful of motes streams in while the cell swells (the caller squashes it).
     this.burst(
       {
-        tex: 'glow', prio: 2, count: 8, life: [0.09, impact], shape: { type: 'ring', r: 110, width: 30 }, size: [24, 34], sizeEnd: [8, 12],
+        tex: 'disc', prio: 2, count: 8, life: [0.09, impact], shape: { type: 'ring', r: 110, width: 30 }, size: [24, 34], sizeEnd: [8, 12],
         colors: [hi, c], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: 26, ease: Ease.cubicIn },
       },
       x, y, { scale: s },
@@ -640,7 +639,7 @@ export class Fx {
       x, y + 20, m,
     );
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.2, size: 70, sizeEnd: 170, colors: [W, glow, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.2, size: 70, sizeEnd: 170, colors: [W, glow, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.after(impact, () => {
@@ -654,11 +653,11 @@ export class Fx {
   private summonLegendary(x: number, y: number, c: number, hi: number, glow: number, s: number): FxTimeline {
     const impact = 0.22;
     const m: BurstMods = { scale: s, delay: impact };
-    this.groundGlow(x, y + 30, c, hi, s, 0.75, 1.5);
+    this.groundDisc(x, y + 30, c, hi, s, 0.75, 1.5);
     // Anticipation: the colour is known, the cell contracts, light is sucked in, the edges warm up.
     this.burst(
       {
-        tex: 'glow', prio: 2, count: 12, life: [0.16, impact], shape: { type: 'ring', r: 170, width: 40 }, size: [28, 40], sizeEnd: [8, 14],
+        tex: 'disc', prio: 2, count: 12, life: [0.16, impact], shape: { type: 'ring', r: 170, width: 40 }, size: [28, 40], sizeEnd: [8, 14],
         colors: [hi, c], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: 40, ease: Ease.cubicIn },
       },
       x, y, { scale: s },
@@ -683,7 +682,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.28, size: 90, sizeEnd: 260, colors: [W, hi, c], alpha: 0.95, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.28, size: 90, sizeEnd: 260, colors: [W, hi, c], alpha: 0.95, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.after(impact, () => {
@@ -709,8 +708,8 @@ export class Fx {
     if (mythic) {
       this.burst(
         {
-          tex: 'confetti', blend: 'normal', prio: 2, count: 18, life: [0.9, 1.4], speed: [200, 560], drag: 1.7, gravity: 640, flip: [8, 16],
-          spin: [-8, 8], rot: [0, TAU], size: [14, 22], palette: CONFETTI_PALETTE, colors: [W], fadeIn: 0, fadeOut: 0.3,
+          tex: 'confetti', prio: 2, count: 18, life: [0.9, 1.4], speed: [200, 560], drag: 1.7, gravity: 640, flip: [8, 16],
+          spin: [-8, 8], rot: [0, TAU], size: [14, 22], palette: CONFETTI, colors: [W], fadeIn: 0, fadeOut: 0.3,
         },
         x, y, m,
       );
@@ -727,7 +726,7 @@ export class Fx {
     // Anticipation: light streams in from a wide ring while a core swells.
     this.burst(
       {
-        tex: 'glow', prio: 3, count: 20, life: [0.26, 0.34], delay: [0, 0.04], shape: { type: 'ring', r: 290, width: 70 }, size: [32, 50], sizeEnd: [10, 18],
+        tex: 'disc', prio: 3, count: 20, life: [0.26, 0.34], delay: [0, 0.04], shape: { type: 'ring', r: 290, width: 70 }, size: [32, 50], sizeEnd: [10, 18],
         colors: [hi, c, W], alpha: 0.9, fadeIn: 0.12, fadeOut: 0.2, converge: { swirl: 70, ease: Ease.cubicIn },
       },
       x, y, m,
@@ -748,15 +747,15 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 3, count: 1, life: charge, size: 24, sizeEnd: 150, colors: [hi, W], alpha: 0.85, sizeEase: Ease.quadIn, fadeIn: 0.2, fadeOut: 0.05 },
+      { tex: 'disc', prio: 3, count: 1, life: charge, size: 24, sizeEnd: 150, colors: [hi, W], alpha: 0.85, sizeEase: Ease.quadIn, fadeIn: 0.2, fadeOut: 0.05 },
       x, y, m,
     );
     this.rays(x, y, { color: glow, radius: 520 * s, duration: 2.0, alpha: 0.55, count: 14, speed: 0.5, fade: 0.4 });
-    this.groundGlow(x, y + 30, c, hi, s, 0.9, 1.9, charge);
+    this.groundDisc(x, y + 30, c, hi, s, 0.9, 1.9, charge);
 
     // Impact.
     this.burst(
-      { tex: 'glow', prio: 3, count: 1, life: 0.34, delay: charge, size: 90, sizeEnd: 340, colors: [W, hi, c], alpha: 1, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 3, count: 1, life: 0.34, delay: charge, size: 90, sizeEnd: 340, colors: [W, hi, c], alpha: 1, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.burst(
@@ -775,8 +774,8 @@ export class Fx {
     );
     this.burst(
       {
-        tex: 'confetti', blend: 'normal', prio: 3, count: 44, life: [1.3, 2.1], delay: charge, speed: [260, 820], drag: 1.7, gravity: 640, flip: [8, 16],
-        spin: [-8, 8], rot: [0, TAU], size: [14, 22], palette: CONFETTI_PALETTE, colors: [W], fadeIn: 0, fadeOut: 0.3,
+        tex: 'confetti', prio: 3, count: 44, life: [1.3, 2.1], delay: charge, speed: [260, 820], drag: 1.7, gravity: 640, flip: [8, 16],
+        spin: [-8, 8], rot: [0, TAU], size: [14, 22], palette: CONFETTI, colors: [W], fadeIn: 0, fadeOut: 0.3,
       },
       x, y, m,
     );
@@ -796,11 +795,11 @@ export class Fx {
     return { impact: charge, duration: 2.4 };
   }
 
-  /** Flat additive ellipse under a summoned unit; hints the colour before anything else happens. */
-  private groundGlow(x: number, y: number, c: number, hi: number, s: number, alpha: number, widthK: number, delay = 0): void {
+  /** Flat ellipse under a summoned unit; hints the colour before anything else happens. */
+  private groundDisc(x: number, y: number, c: number, hi: number, s: number, alpha: number, widthK: number, delay = 0): void {
     this.burst(
       {
-        tex: 'glow', prio: 1, count: 1, life: 0.55, delay, size: 150 * widthK, sizeEnd: 190 * widthK, sizeY: 64 * widthK, sizeYEnd: 80 * widthK,
+        tex: 'disc', prio: 1, count: 1, life: 0.55, delay, size: 150 * widthK, sizeEnd: 190 * widthK, sizeY: 64 * widthK, sizeYEnd: 80 * widthK,
         colors: [hi, c], alpha, fadeIn: 0.15, fadeOut: 0.7,
       },
       x, y, { scale: s },
@@ -855,7 +854,7 @@ export class Fx {
       x, y + 10, m,
     );
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.3, size: 60, sizeEnd: 200, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.3, size: 60, sizeEnd: 200, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
   }
@@ -867,13 +866,13 @@ export class Fx {
    * sifting down from the top edge. Pair it with a "WARNING" banner that stays up for `duration`.
    */
   bossWarning(): FxTimeline {
-    this.screen.vignettePulse(0xff2a2a, 0.3, 500, 2);
+    this.screen.vignettePulse(Hue.alarm, 0.3, 500, 2);
     // game.shake decays on its own, so a steady ~2 px rumble is a stream of small top-ups.
     for (let i = 0; i < 8; i++) this.after(i * 0.12, () => fxShake(0.2));
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 0, count: 14, life: [0.9, 1.5], delay: [0, 0.4], shape: { type: 'rect', w: game.w, h: 24 }, speed: [30, 90],
-        dir: PI / 2, spread: 0.3, drag: 0.8, size: [30, 46], sizeEnd: [60, 90], rot: [0, TAU], spin: [-0.6, 0.6], colors: [0x8a7f99, 0x4a4258],
+        tex: 'smoke', prio: 0, count: 14, life: [0.9, 1.5], delay: [0, 0.4], shape: { type: 'rect', w: game.w, h: 24 }, speed: [30, 90],
+        dir: PI / 2, spread: 0.3, drag: 0.8, size: [30, 46], sizeEnd: [60, 90], rot: [0, TAU], spin: [-0.6, 0.6], colors: [Hue.smoke, Hue.smokeDark],
         alpha: 0.35, fadeIn: 0.2, fadeOut: 0.6,
       },
       game.w / 2, -10,
@@ -885,14 +884,14 @@ export class Fx {
   /** Boss touching down (B-02): T3 shake, a 66 ms hit-stop, a ground ring and a cloud of dust. */
   bossLanding(x: number, y: number, o: FxOpts = {}): FxTimeline {
     const s = o.scale ?? 1;
-    const c = o.color ?? 0xe6d2b0;
+    const c = o.color ?? Hue.dust;
     fxShake(Trauma.t3);
     this.freeze?.freeze(0.066, 0);
     this.shockwave(x, y, { color: c, radius: 230, scale: s });
     this.dustPuff(x, y, { color: c, scale: 1.7 * s });
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 2, count: 12, life: [0.5, 0.9], shape: { type: 'rect', w: 160, h: 16 }, speed: [60, 190], dir: -PI / 2,
+        tex: 'smoke', prio: 2, count: 12, life: [0.5, 0.9], shape: { type: 'rect', w: 160, h: 16 }, speed: [60, 190], dir: -PI / 2,
         spread: 1.35, drag: 2.6, gravity: -20, size: [40, 60], sizeEnd: [90, 130], rot: [0, TAU], spin: [-1, 1],
         colors: [lighten(c, 0.2), c, darken(c, 0.4)], alpha: 0.6, fadeIn: 0.08, fadeOut: 0.6,
       },
@@ -911,7 +910,7 @@ export class Fx {
    */
   bossDeath(x: number, y: number, o: BossDeathOpts = {}): FxSequence {
     const s = o.scale ?? 1;
-    const c = o.color ?? 0xff8a2a;
+    const c = o.color ?? Hue.fire;
     const r = (o.radius ?? 80) * s;
     // Every beat is a timer on the scene clock, which a hit-stop slows: the whole sequence follows the slow motion.
     // One cooldown after the opening freeze event ends (about 0.55 s), so the final blast may freeze again.
@@ -930,7 +929,7 @@ export class Fx {
     if (target) {
       for (let i = 0; i < 7; i++) {
         this.after(i * 0.06, () => {
-          if (!target.destroyed) hitFlash(this.tweens, target, { color: i % 2 === 0 ? 0xffffff : 0xff4d5e, ms: 60, peak: 0.8 });
+          if (!target.destroyed) hitFlash(this.tweens, target, { color: i % 2 === 0 ? Hue.cream : Hue.fire, ms: 60, peak: 0.8 });
         });
       }
     }
@@ -950,7 +949,7 @@ export class Fx {
     const m: BurstMods = { scale: s };
     const hot = lighten(c, 0.65);
     this.burst(
-      { tex: 'glow', prio: 3, count: 1, life: 0.4, size: 120, sizeEnd: 420, colors: [W, hot, c], alpha: 1, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 3, count: 1, life: 0.4, size: 120, sizeEnd: 420, colors: [W, hot, c], alpha: 1, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.burst(
@@ -962,7 +961,7 @@ export class Fx {
     this.burst(
       {
         tex: 'dot', prio: 3, count: 50, life: [0.7, 1.4], speed: [200, 760], drag: 1.5, gravity: 520, size: [7, 15], sizeEnd: 2,
-        colors: [W, 0xffc34a, 0xff4a1a], fadeIn: 0, fadeOut: 0.5,
+        colors: [W, Hue.ember, Hue.flame], fadeIn: 0, fadeOut: 0.5,
       },
       x, y, m,
     );
@@ -975,15 +974,15 @@ export class Fx {
     );
     this.burst(
       {
-        tex: 'shard', blend: 'normal', prio: 3, count: 14, life: [0.8, 1.3], speed: [220, 620], gravity: 900, drag: 0.6, size: [16, 28], sizeEnd: [8, 14],
+        tex: 'shard', prio: 3, count: 14, life: [0.8, 1.3], speed: [220, 620], gravity: 900, drag: 0.6, size: [16, 28], sizeEnd: [8, 14],
         spin: [-9, 9], rot: [0, TAU], colors: [darken(c, 0.3), darken(c, 0.65)], fadeIn: 0, fadeOut: 0.4,
       },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 2, count: 14, life: [1.0, 1.6], shape: { type: 'circle', r: 50 }, speed: [40, 150], drag: 1.6, gravity: -45,
-        size: [70, 100], sizeEnd: [150, 210], rot: [0, TAU], spin: [-0.6, 0.6], colors: [0x4a3d52, 0x2a2133], alpha: 0.6, fadeIn: 0.15, fadeOut: 0.6,
+        tex: 'smoke', prio: 2, count: 14, life: [1.0, 1.6], shape: { type: 'circle', r: 50 }, speed: [40, 150], drag: 1.6, gravity: -45,
+        size: [70, 100], sizeEnd: [150, 210], rot: [0, TAU], spin: [-0.6, 0.6], colors: [Hue.smoke, Hue.smokeDark], alpha: 0.6, fadeIn: 0.15, fadeOut: 0.6,
       },
       x, y, m,
     );
@@ -993,7 +992,7 @@ export class Fx {
   private miniBlast(x: number, y: number, c: number, s: number): void {
     const m: BurstMods = { scale: s };
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.2, size: 50, sizeEnd: 120, colors: [W, lighten(c, 0.6), c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 2, count: 1, life: 0.2, size: 50, sizeEnd: 120, colors: [W, lighten(c, 0.6), c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.burst(
@@ -1002,8 +1001,8 @@ export class Fx {
     );
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 1, count: 3, life: [0.4, 0.7], shape: { type: 'circle', r: 10 }, speed: [30, 100], drag: 3, gravity: -30,
-        size: [28, 40], sizeEnd: [60, 84], rot: [0, TAU], colors: [0x6a5a70, 0x3a2f44], alpha: 0.6, fadeIn: 0.1, fadeOut: 0.6,
+        tex: 'smoke', prio: 1, count: 3, life: [0.4, 0.7], shape: { type: 'circle', r: 10 }, speed: [30, 100], drag: 3, gravity: -30,
+        size: [28, 40], sizeEnd: [60, 84], rot: [0, TAU], colors: [Hue.smoke, Hue.smokeDark], alpha: 0.6, fadeIn: 0.1, fadeOut: 0.6,
       },
       x, y, m,
     );
@@ -1033,20 +1032,20 @@ export class Fx {
     const k = fxSettings.reducedMotion ? REDUCED.confetti : 1;
     this.burst(
       {
-        tex: 'confetti', blend: 'normal', prio: 1, count: o.count ?? 90, life: [2.4, 3.4], delay: [0, motionSeconds(0.9)], shape: { type: 'rect', w, h: 20 },
+        tex: 'confetti', prio: 1, count: o.count ?? 90, life: [2.4, 3.4], delay: [0, motionSeconds(0.9)], shape: { type: 'rect', w, h: 20 },
         speed: [120, 380], dir: PI / 2, spread: 0.45, gravity: 260, drag: 0.5, flip: [7, 15], spin: [-6, 6], rot: [0, TAU], size: [15, 24],
-        palette: o.palette ?? CONFETTI_PALETTE, colors: [W], fadeIn: 0, fadeOut: 0.18,
+        palette: o.palette ?? CONFETTI, colors: [W], fadeIn: 0, fadeOut: 0.18,
       },
       x, y, { count: k * tierScale() },
     );
   }
 
   iceShatter(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? 0x7fd6ff;
+    const c = o.color ?? Hue.ice;
     const hi = lighten(c, 0.7);
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: 0.2, size: 50, sizeEnd: 170, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 2, count: 1, life: 0.2, size: 50, sizeEnd: 170, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.burst(
@@ -1069,8 +1068,8 @@ export class Fx {
     );
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 1, count: 5, life: [0.45, 0.75], shape: { type: 'circle', r: 14 }, speed: [30, 100], drag: 2.5, gravity: -20,
-        size: [36, 52], sizeEnd: [76, 104], rot: [0, TAU], colors: [0xe8f8ff, c], alpha: 0.4, fadeIn: 0.1, fadeOut: 0.6,
+        tex: 'smoke', prio: 1, count: 5, life: [0.45, 0.75], shape: { type: 'circle', r: 14 }, speed: [30, 100], drag: 2.5, gravity: -20,
+        size: [36, 52], sizeEnd: [76, 104], rot: [0, TAU], colors: [Hue.iceLight, c], alpha: 0.4, fadeIn: 0.1, fadeOut: 0.6,
       },
       x, y, m,
     );
@@ -1082,13 +1081,13 @@ export class Fx {
 
   /** Lingering toxic cloud for `duration` seconds; returns a handle to stop or move it. */
   poisonCloud(x: number, y: number, o: FxOpts & { duration?: number } = {}): FxHandle {
-    const c = o.color ?? 0x7ed957;
+    const c = o.color ?? Hue.heal;
     const s = o.scale ?? 1;
     const dur = o.duration ?? 2.4;
     const m: BurstMods = { scale: s };
     const smoke = this.ps.emit(
       {
-        tex: 'smoke', blend: 'normal', prio: 1, life: [0.9, 1.5], shape: { type: 'circle', r: 46 }, speed: [8, 30], gravity: -14, drag: 0.5,
+        tex: 'smoke', prio: 1, life: [0.9, 1.5], shape: { type: 'circle', r: 46 }, speed: [8, 30], gravity: -14, drag: 0.5,
         size: [48, 70], sizeEnd: [96, 130], rot: [0, TAU], spin: [-0.5, 0.5], colors: [lighten(c, 0.2), c, darken(c, 0.6)], alpha: 0.4,
         fadeIn: 0.25, fadeOut: 0.5,
       },
@@ -1105,12 +1104,12 @@ export class Fx {
   }
 
   /**
-   * Jagged lightning bolt with a glow pass, optional side branches, flickering out in ~130 ms.
+   * Jagged lightning bolt (a coloured band round a cream core), optional side branches, flickering out in ~130 ms.
    * Built from pooled particles (two strikes along slightly different paths), so it batches and
    * respects the particle budget.
    */
   lightning(x0: number, y0: number, x1: number, y1: number, o: LightningOpts = {}): void {
-    const c = o.color ?? 0x8fd0ff;
+    const c = o.color ?? Hue.zap;
     const hi = lighten(c, 0.8);
     const s = o.scale ?? 1;
     const thick = (o.thickness ?? 5) * s;
@@ -1135,8 +1134,8 @@ export class Fx {
       }
     }
     const m: BurstMods = { scale: s };
-    this.burst({ tex: 'glow', prio: 1, count: 1, life: 0.14, size: 60, sizeEnd: 100, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 }, x1, y1, m);
-    this.burst({ tex: 'glow', prio: 1, count: 1, life: 0.1, size: 40, sizeEnd: 60, colors: [W, c], alpha: 0.7, fadeIn: 0, fadeOut: 0.8 }, x0, y0, m);
+    this.burst({ tex: 'disc', prio: 1, count: 1, life: 0.14, size: 60, sizeEnd: 100, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 }, x1, y1, m);
+    this.burst({ tex: 'disc', prio: 1, count: 1, life: 0.1, size: 40, sizeEnd: 60, colors: [W, c], alpha: 0.7, fadeIn: 0, fadeOut: 0.8 }, x0, y0, m);
     this.burst(
       { tex: 'spark', prio: 0, count: 5, life: [0.12, 0.22], speed: [180, 420], drag: 4, alignVel: true, stretch: 0.002, size: [18, 28], sizeEnd: 6, colors: [W, hi, c], fadeIn: 0 },
       x1, y1, m,
@@ -1144,11 +1143,11 @@ export class Fx {
   }
 
   healPlus(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? 0x6dff8a;
+    const c = o.color ?? Hue.heal;
     const hi = lighten(c, 0.65);
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
-      { tex: 'glow', prio: 1, count: 1, life: 0.5, size: 80, sizeEnd: 130, sizeY: 60, sizeYEnd: 90, colors: [hi, c], alpha: 0.7, fadeIn: 0.2, fadeOut: 0.7 },
+      { tex: 'disc', prio: 1, count: 1, life: 0.5, size: 80, sizeEnd: 130, sizeY: 60, sizeYEnd: 90, colors: [hi, c], alpha: 0.7, fadeIn: 0.2, fadeOut: 0.7 },
       x, y + 14, m,
     );
     this.burst(
@@ -1177,10 +1176,10 @@ export class Fx {
     const r = (o.radius ?? 56) * (o.scale ?? 1);
     const oy = o.offsetY ?? 0;
     const handles = [
-      // Steady soft glow under the pulses so the aura reads even between rings.
+      // A steady flat disc under the pulses so the aura reads even between rings.
       this.ps.emit(
         {
-          tex: 'glow', prio: 0, life: 0.9, size: r * 1.7, sizeEnd: r * 2.1, colors: [hi, c], alpha: 0.32, fadeIn: 0.4, fadeOut: 0.5,
+          tex: 'disc', prio: 0, life: 0.9, size: r * 1.7, sizeEnd: r * 2.1, colors: [hi, c], alpha: 0.32, fadeIn: 0.4, fadeOut: 0.5,
         },
         0, 0, 2.4, { follow: target, offsetY: oy },
       ),
@@ -1207,12 +1206,12 @@ export class Fx {
   }
 
   dustPuff(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? 0xd2c3a8;
+    const c = o.color ?? Hue.dust;
     const m: BurstMods = { scale: o.scale ?? 1 };
     for (const dir of [0, PI]) {
       this.burst(
         {
-          tex: 'smoke', blend: 'normal', prio: 0, count: 3, life: [0.38, 0.58], speed: [60, 150], dir, spread: 0.3, drag: 3.4, gravity: -28,
+          tex: 'smoke', prio: 0, count: 3, life: [0.38, 0.58], speed: [60, 150], dir, spread: 0.3, drag: 3.4, gravity: -28,
           size: [26, 36], sizeEnd: [58, 84], rot: [0, TAU], spin: [-1.5, 1.5], colors: [lighten(c, 0.2), c], alpha: 0.6, fadeIn: 0.08, fadeOut: 0.65,
         },
         x, y, m,
@@ -1222,14 +1221,14 @@ export class Fx {
 
   /** Anticipation: light converges on (x,y) for `duration` seconds while a core swells. */
   chargeUp(x: number, y: number, o: FxOpts & { radius?: number; duration?: number } = {}): void {
-    const c = o.color ?? Color.purple;
+    const c = o.color ?? Color.teal;
     const hi = lighten(c, 0.6);
     const r = o.radius ?? 200;
     const d = motionSeconds(o.duration ?? 0.7);
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
       {
-        tex: 'glow', prio: 2, count: 24, life: [0.28, 0.38], delay: [0, d * 0.75], shape: { type: 'ring', r, width: r * 0.3 }, size: [26, 42], sizeEnd: [8, 14],
+        tex: 'disc', prio: 2, count: 24, life: [0.28, 0.38], delay: [0, d * 0.75], shape: { type: 'ring', r, width: r * 0.3 }, size: [26, 42], sizeEnd: [8, 14],
         colors: [hi, c], alpha: 0.9, fadeIn: 0.12, fadeOut: 0.2, converge: { swirl: 46, ease: Ease.cubicIn },
       },
       x, y, m,
@@ -1249,7 +1248,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 2, count: 1, life: d, size: 20, sizeEnd: 120, colors: [hi, W], alpha: 0.85, sizeEase: Ease.quadIn, fadeIn: 0.2, fadeOut: 0.05 },
+      { tex: 'disc', prio: 2, count: 1, life: d, size: 20, sizeEnd: 120, colors: [hi, W], alpha: 0.85, sizeEase: Ease.quadIn, fadeIn: 0.2, fadeOut: 0.05 },
       x, y, m,
     );
   }
@@ -1263,7 +1262,7 @@ export class Fx {
 
   /** Glittering trail that follows a display object. */
   sparkleTrail(target: Container, o: FxOpts = {}): FxHandle {
-    const c = o.color ?? 0xfff0a8;
+    const c = o.color ?? Hue.sun;
     const m: BurstMods = { scale: o.scale ?? 1 };
     const a = this.ps.emit(
       {
@@ -1273,19 +1272,19 @@ export class Fx {
       0, 0, 38, { follow: target, mods: m },
     );
     const b = this.ps.emit(
-      { tex: 'glow', prio: 0, life: [0.22, 0.34], size: [20, 28], sizeEnd: 4, colors: [lighten(c, 0.4), c], alpha: 0.5, fadeIn: 0.05, fadeOut: 0.7 },
+      { tex: 'disc', prio: 0, life: [0.22, 0.34], size: [20, 28], sizeEnd: 4, colors: [lighten(c, 0.4), c], alpha: 0.5, fadeIn: 0.05, fadeOut: 0.7 },
       0, 0, 26, { follow: target, mods: m },
     );
     return new EmitterGroup([a, b]);
   }
 
-  /** Soft smoke trail (rockets, fast enemies) that follows a display object. */
+  /** Puffy smoke trail (rockets, fast enemies) that follows a display object. */
   smokeTrail(target: Container, o: FxOpts = {}): FxHandle {
-    const c = o.color ?? 0xcfc6da;
+    const c = o.color ?? Hue.dust;
     const m: BurstMods = { scale: o.scale ?? 1 };
     const h = this.ps.emit(
       {
-        tex: 'smoke', blend: 'normal', prio: 0, life: [0.5, 0.85], shape: { type: 'circle', r: 5 }, speed: [4, 22], gravity: -26, drag: 1,
+        tex: 'smoke', prio: 0, life: [0.5, 0.85], shape: { type: 'circle', r: 5 }, speed: [4, 22], gravity: -26, drag: 1,
         size: [16, 22], sizeEnd: [40, 58], rot: [0, TAU], spin: [-1, 1], colors: [lighten(c, 0.2), c, darken(c, 0.5)], alpha: 0.45, fadeIn: 0.12, fadeOut: 0.65,
       },
       0, 0, 32, { follow: target, mods: m },
@@ -1295,7 +1294,7 @@ export class Fx {
 
   /** Sparse twinkling stars across a rectangle (menus, reveal backdrops). */
   ambientTwinkle(x: number, y: number, w: number, h: number, o: FxOpts & { rate?: number } = {}): FxHandle {
-    const c = o.color ?? 0xfff0b0;
+    const c = o.color ?? Hue.sun;
     const e = this.ps.emit(
       {
         tex: 'sparkle', prio: 0, life: [1.3, 2.4], shape: { type: 'rect', w, h }, speed: 0, size: [6, 10], sizeEnd: [24, 38], sizeEase: Ease.arc,
@@ -1328,7 +1327,7 @@ export class Fx {
     return zones.wetPuddle(this.env, rect, o);
   }
 
-  /** Looping `zap` hazard: flickering glow with crackling yellow arcs. */
+  /** Looping `zap` hazard: a flickering mustard tint with crackling arcs. */
   zapCell(rect: FxRect, o?: ZoneOpts): ZoneHandle {
     return zones.zapCell(this.env, rect, o);
   }
@@ -1363,7 +1362,7 @@ export class Fx {
     const len = Math.hypot(x1 - x0, y1 - y0);
     if (len < 4) return;
     const ang = Math.atan2(y1 - y0, x1 - x0);
-    const c = o.color ?? 0xffffff;
+    const c = o.color ?? Hue.cream;
     const tint = lighten(c, 0.35);
     const th = (o.thickness ?? 1) * (o.scale ?? 1);
     this.burst(
@@ -1392,14 +1391,14 @@ export class Fx {
     );
   }
 
-  /** A shield (barrier) bursting: glassy shards and crystals, a pale ring and glints. */
+  /** A shield (barrier) bursting: pale shards and crystals, a ring and sparkles. */
   shieldBreak(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? 0x8fe3ff;
+    const c = o.color ?? Hue.ice;
     const hi = lighten(c, 0.75);
     const s = o.scale ?? 1;
     const m: BurstMods = { scale: s };
     this.burst(
-      { tex: 'glow', prio: 1, count: 1, life: 0.2, size: 44, sizeEnd: 160, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 1, count: 1, life: 0.2, size: 44, sizeEnd: 160, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.burst(
@@ -1432,7 +1431,7 @@ export class Fx {
    * and drift down in a puff of the same colour. `color` is the fur / class colour.
    */
   moltPuff(x: number, y: number, o: FxOpts = {}): FxTimeline {
-    const c = o.color ?? 0xffb35c;
+    const c = o.color ?? Hue.fur;
     const hi = lighten(c, 0.5);
     const lo = darken(c, 0.25);
     const s = o.scale ?? 1;
@@ -1440,30 +1439,30 @@ export class Fx {
     const suck = 0.3;
     this.burst(
       {
-        tex: 'tuft', blend: 'normal', prio: 1, count: 9, life: [0.22, suck], shape: { type: 'ring', r: 85, width: 30 }, size: [24, 32], sizeEnd: [10, 14], spin: [-6, 6],
+        tex: 'tuft', prio: 1, count: 9, life: [0.22, suck], shape: { type: 'ring', r: 85, width: 30 }, size: [24, 32], sizeEnd: [10, 14], spin: [-6, 6],
         rot: [0, TAU], colors: [hi, c], fadeIn: 0.1, fadeOut: 0.15, converge: { swirl: 36, ease: Ease.cubicIn },
       },
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 1, count: 1, life: suck, size: 20, sizeEnd: 90, colors: [hi, c], alpha: 0.7, sizeEase: Ease.quadIn, fadeIn: 0.2, fadeOut: 0.05 },
+      { tex: 'disc', prio: 1, count: 1, life: suck, size: 20, sizeEnd: 90, colors: [hi, c], alpha: 0.7, sizeEase: Ease.quadIn, fadeIn: 0.2, fadeOut: 0.05 },
       x, y, m,
     );
     this.burst(
-      { tex: 'glow', prio: 1, count: 1, life: 0.22, delay: suck, size: 40, sizeEnd: 150, colors: [hi, c], alpha: 0.6, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 1, count: 1, life: 0.22, delay: suck, size: 40, sizeEnd: 150, colors: [hi, c], alpha: 0.6, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.shockwave(x, y, { color: c, radius: 100, scale: s, delay: suck });
     this.burst(
       {
-        tex: 'tuft', blend: 'normal', prio: 1, count: 12, life: [0.7, 1.1], delay: suck, speed: [150, 340], drag: 2.8, gravity: 140, size: [26, 40], sizeEnd: [18, 28],
+        tex: 'tuft', prio: 1, count: 12, life: [0.7, 1.1], delay: suck, speed: [150, 340], drag: 2.8, gravity: 140, size: [26, 40], sizeEnd: [18, 28],
         spin: [-9, 9], rot: [0, TAU], colors: [hi, c, lo], fadeIn: 0, fadeOut: 0.45,
       },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'smoke', blend: 'normal', prio: 1, count: 4, life: [0.4, 0.7], delay: suck, shape: { type: 'circle', r: 14 }, speed: [30, 90], drag: 3, size: [34, 48],
+        tex: 'smoke', prio: 1, count: 4, life: [0.4, 0.7], delay: suck, shape: { type: 'circle', r: 14 }, speed: [30, 90], drag: 3, size: [34, 48],
         sizeEnd: [70, 96], rot: [0, TAU], colors: [lighten(c, 0.6), c], alpha: 0.45, fadeIn: 0.1, fadeOut: 0.6,
       },
       x, y, m,
@@ -1477,11 +1476,11 @@ export class Fx {
 
   /** Two or three small hearts float up from a purring cat. */
   purrHearts(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? 0xff7fa8;
+    const c = o.color ?? Hue.heart;
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
       {
-        tex: 'heart', blend: 'normal', prio: 1, count: 3, life: [1.0, 1.4], delay: [0, 0.35], shape: { type: 'circle', r: 22 }, speed: [55, 95], dir: -PI / 2, spread: 0.45,
+        tex: 'heart', prio: 1, count: 3, life: [1.0, 1.4], delay: [0, 0.35], shape: { type: 'circle', r: 22 }, speed: [55, 95], dir: -PI / 2, spread: 0.45,
         drag: 0.5, gravity: -14, size: [10, 14], sizeEnd: [24, 32], sizeEase: Ease.backOut, rot: [-0.25, 0.25], colors: [lighten(c, 0.35), c], fadeIn: 0, fadeOut: 0.45,
         sway: { amp: [8, 16], freq: [0.8, 1.4] },
       },
@@ -1494,7 +1493,7 @@ export class Fx {
   }
 
   /**
-   * Coins pour down across the whole field for about a second, tumbling, with glints among them.
+   * Coins pour down across the whole field for about a second, tumbling, with sparkles among them.
    * The count scales with the tier.
    */
   coinRain(o: CoinRainOpts = {}): FxTimeline {
@@ -1509,7 +1508,7 @@ export class Fx {
     const gold = Color.gold;
     this.burst(
       {
-        tex: 'coin', blend: 'normal', prio: 1, count: o.count ?? 48, life: [fall * 0.95, fall * 1.1], delay: [0, 0.45], shape: { type: 'rect', w, h: 30 }, speed: [v0 * 0.9, v0 * 1.1],
+        tex: 'coin', prio: 1, count: o.count ?? 48, life: [fall * 0.95, fall * 1.1], delay: [0, 0.45], shape: { type: 'rect', w, h: 30 }, speed: [v0 * 0.9, v0 * 1.1],
         dir: PI / 2, spread: 0.1, gravity: g, drag: 0, flip: [9, 17], spin: [-2, 2], size: [30, 42], colors: [lighten(gold, 0.25), gold], fadeIn: 0, fadeOut: 0.2,
       },
       x, -40, { count: k },
@@ -1540,7 +1539,7 @@ export class Fx {
   private skyStrike(x: number, y: number, o: SkyStrikeOpts, star: boolean): FxTimeline {
     const s = o.scale ?? 1;
     const ang = o.angle ?? (star ? 1.0 : 1.25);
-    const c = o.color ?? (star ? 0xfff0a8 : 0xff8a2a);
+    const c = o.color ?? (star ? Hue.sun : Hue.fire);
     const hi = lighten(c, 0.6);
     const dx = Math.cos(ang);
     const dy = Math.sin(ang);
@@ -1548,14 +1547,14 @@ export class Fx {
     const dist = Math.max(360, (y + 100) / Math.max(0.35, dy));
     const fall = Math.max(0.3, dist / (star ? 1500 : 1800));
     const loop = new Loop(this.env, x, y, { fadeIn: fall * 0.6, fadeOut: 0.25, life: fall });
-    const shadow = loop.sprite('glow', 'normal', 0x000000);
+    const shadow = loop.sprite('disc', Hue.shadow);
     const head = new Container();
     loop.own(head);
     const m: BurstMods = { scale: s };
     loop.emit(
       {
         tex: 'spark', prio: 1, life: 0.09, size: (star ? 220 : 340) * s, sizeY: (star ? 22 : 46) * s, rot: ang, anchorX: 1,
-        colors: star ? [W, hi, c] : [hi, c, 0xd8431a], alpha: 0.95, fadeIn: 0, fadeOut: 0.8,
+        colors: star ? [W, hi, c] : [hi, c, Hue.flame], alpha: 0.95, fadeIn: 0, fadeOut: 0.8,
       },
       70, 0, 0, undefined, head,
     );
@@ -1564,7 +1563,7 @@ export class Fx {
       70, 0, 0, undefined, head,
     );
     loop.emit(
-      { tex: star ? 'star' : 'glow', prio: 1, life: 0.07, size: (star ? 46 : 110) * s, spin: star ? [-8, 8] : 0, colors: [W, hi], alpha: 0.95, fadeIn: 0, fadeOut: 0.6 },
+      { tex: star ? 'star' : 'disc', prio: 1, life: 0.07, size: (star ? 46 : 110) * s, spin: star ? [-8, 8] : 0, colors: [W, hi], alpha: 0.95, fadeIn: 0, fadeOut: 0.6 },
       60, 0, 0, undefined, head,
     );
     if (star) {
@@ -1578,14 +1577,14 @@ export class Fx {
     } else {
       loop.emit(
         {
-          tex: 'smoke', blend: 'normal', prio: 1, life: [0.4, 0.7], shape: { type: 'circle', r: 8 }, speed: [10, 40], drag: 1.5, size: [30, 44], sizeEnd: [70, 100], rot: [0, TAU],
-          colors: [0x6a5a70, 0x2a2133], alpha: 0.5, fadeIn: 0.1, fadeOut: 0.6,
+          tex: 'smoke', prio: 1, life: [0.4, 0.7], shape: { type: 'circle', r: 8 }, speed: [10, 40], drag: 1.5, size: [30, 44], sizeEnd: [70, 100], rot: [0, TAU],
+          colors: [Hue.smoke, Hue.smokeDark], alpha: 0.5, fadeIn: 0.1, fadeOut: 0.6,
         },
         40, 0, 0, m, head,
       );
       loop.emit(
         {
-          tex: 'dot', prio: 1, life: [0.3, 0.6], speed: [30, 120], dir: ang + PI, spread: 0.6, gravity: 220, size: [5, 9], sizeEnd: 2, colors: [W, 0xffc34a, 0xff4a1a],
+          tex: 'dot', prio: 1, life: [0.3, 0.6], speed: [30, 120], dir: ang + PI, spread: 0.6, gravity: 220, size: [5, 9], sizeEnd: 2, colors: [W, Hue.ember, Hue.flame],
           fadeIn: 0, fadeOut: 0.5,
         },
         50, 0, 0, m, head,
@@ -1596,7 +1595,7 @@ export class Fx {
       const p = Math.min(1, age / fall);
       const away = 1 - p * p;
       head.position.set(-dx * dist * away, -dy * dist * away);
-      loop.fit(shadow, 'glow', (60 + 90 * p) * s, (26 + 34 * p) * s);
+      loop.fit(shadow, 'disc', (60 + 90 * p) * s, (26 + 34 * p) * s);
       shadow.alpha = 0.5 * p;
       if (landed || age < fall) return;
       landed = true;
@@ -1613,7 +1612,7 @@ export class Fx {
       fxShake(Trauma.t1);
       this.buzz('light');
       this.burst(
-        { tex: 'glow', prio: 2, count: 1, life: 0.26, size: 50, sizeEnd: 190, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+        { tex: 'disc', prio: 2, count: 1, life: 0.26, size: 50, sizeEnd: 190, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
         x, y, m,
       );
       this.shockwave(x, y, { color: c, radius: 120, scale: s });

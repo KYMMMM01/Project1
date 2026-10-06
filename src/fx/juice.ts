@@ -1,5 +1,6 @@
 import { Container, Sprite, Texture } from 'pixi.js';
 import { Pool } from '@/core/pool';
+import { Color } from '@/ui/theme';
 import { Ease, type EaseFn, type Tween, type Tweener } from '@/core/tween';
 import { backOutS, kickCurve, popCurve, springWobble } from './curves';
 import { REDUCED, fxSettings } from './settings';
@@ -526,15 +527,14 @@ export function pulseLoop(tw: Tweener, o: Container, amount = 0.04, period = 1.1
 
 /**
  * Whitening a sprite normally needs a ColorMatrix filter, and a filter on every unit would break
- * batching and cost a render-texture pass each. Instead a pooled additive sprite that shares the
- * unit's texture sits directly above it for ~50 ms and adds white on top. It is a sibling rather
+ * batching and cost a render-texture pass each. Instead a pooled sprite that shares the
+ * unit's texture sits directly above it for ~50 ms and lays a flat white copy on top. It is a sibling rather
  * than a child (Pixi 8 sprites do not take children) and mirrors the unit's transform every frame,
  * so it covers exactly the unit's opaque pixels and ignores the unit's own tint.
  */
 const overlays = new Pool<Sprite>(
   () => {
     const s = new Sprite(Texture.EMPTY);
-    s.blendMode = 'add';
     s.eventMode = 'none';
     return s;
   },
@@ -579,7 +579,7 @@ export function hitFlash(tw: Tweener, sprite: Sprite, o: HitFlashOpts = {}): Twe
   const parent = sprite.parent;
   if (!parent) return tw.run({ duration: 0 });
   const overlay = overlays.get();
-  overlay.tint = o.color ?? 0xffffff;
+  overlay.tint = o.color ?? Color.white;
   overlay.visible = true;
   const peak = o.peak ?? 0.9;
   syncOverlay(overlay, sprite);

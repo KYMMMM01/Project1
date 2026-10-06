@@ -1,68 +1,71 @@
-import { BitmapFont, BitmapText, Container, FillGradient } from 'pixi.js';
+import { BitmapFont, BitmapText, Container, Sprite } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { clamp, formatNumber } from '@/core/math';
 import { Color, FONT_FAMILY } from '@/ui/theme';
 import { popCurve, springWobble } from './curves';
+import { Hue } from './palette';
 import { fxSettings } from './settings';
+import { fxTexture } from './textures';
 
 export type NumStyle = 'damage' | 'crit' | 'dot' | 'heal' | 'gold' | 'hurt' | 'big';
 
-const FONT_PLAIN = 'FxNum';
-const FONT_HOT = 'FxNumHot';
+const FONT_EDGE = 'FxNumEdge';
 const BAKED = 64;
+const CHARS = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×'];
 
-let fontsReady = false;
+const faces = new Map<number, string>();
+let edgeReady = false;
 
-/**
- * Bake the two bitmap fonts once. Call after the game fonts are loaded (BootScene does this before
- * any scene starts); show() calls it lazily too. Plain = white fill, dark outline, tinted per style;
- * Hot = baked gold-to-orange gradient with a brown outline for crits and boss hits.
- */
-export function ensureNumberFonts(): void {
-  if (fontsReady) return;
-  fontsReady = true;
-  const chars = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×'];
+function installEdge(): void {
+  if (edgeReady) return;
+  edgeReady = true;
+  // The thin brown rim of the sticker, with a flat warm offset shadow under it.
   BitmapFont.install({
-    name: FONT_PLAIN,
-    chars,
+    name: FONT_EDGE,
+    chars: CHARS,
     resolution: 2,
-    padding: 8,
+    padding: 10,
     style: {
       fontFamily: FONT_FAMILY,
       fontSize: BAKED,
-      fill: 0xffffff,
-      stroke: { color: Color.outline, width: 11, join: 'round' },
-      dropShadow: { color: Color.outline, alpha: 0.85, blur: 0, angle: Math.PI / 2, distance: 5 },
-    },
-  });
-  BitmapFont.install({
-    name: FONT_HOT,
-    chars,
-    resolution: 2,
-    padding: 8,
-    style: {
-      fontFamily: FONT_FAMILY,
-      fontSize: BAKED,
-      fill: new FillGradient({
-        type: 'linear',
-        start: { x: 0, y: 0 },
-        end: { x: 0, y: 1 },
-        colorStops: [
-          { offset: 0, color: 0xfff6b0 },
-          { offset: 0.45, color: 0xffd23a },
-          { offset: 1, color: 0xff8a1e },
-        ],
-        textureSpace: 'local',
-      }),
-      stroke: { color: 0x6b2e00, width: 12, join: 'round' },
-      dropShadow: { color: 0x2a0f00, alpha: 0.9, blur: 0, angle: Math.PI / 2, distance: 6 },
+      fill: Color.ink,
+      stroke: { color: Color.ink, width: 14, join: 'round' },
+      dropShadow: { color: Hue.shadow, alpha: 0.32, blur: 0, angle: Math.PI / 2, distance: 5 },
     },
   });
 }
 
+/** The bitmap font of one face colour: flat fill and a cream outline, laid over the edge font. Baked once per colour. */
+function faceFont(color: number): string {
+  let name = faces.get(color);
+  if (name) return name;
+  name = 'FxNum' + color.toString(16);
+  faces.set(color, name);
+  BitmapFont.install({
+    name,
+    chars: CHARS,
+    resolution: 2,
+    padding: 10,
+    style: { fontFamily: FONT_FAMILY, fontSize: BAKED, fill: color, stroke: { color: Color.paperLight, width: 8, join: 'round' } },
+  });
+  return name;
+}
+
+/**
+ * Bake the edge font and the face fonts of the stock styles once. Call after the game fonts are loaded
+ * (BootScene does this before any scene starts); show() calls it lazily too. A number is a sticker:
+ * a flat face colour by kind, a cream outline, a thin brown edge and a flat shadow.
+ */
+export function ensureNumberFonts(): void {
+  installEdge();
+  for (const def of Object.values(STYLES)) faceFont(def.face);
+}
+
 interface StyleDef {
-  font: string;
-  tint: number;
+  /** Flat face colour of the sticker. */
+  face: number;
+  /** A paper starburst behind the number, in this colour (crits and boss hits). */
+  burst: number | null;
   /** Rendered glyph height in design px at magnitude 1 and at magnitude 1000 (it grows with log10). */
   size: readonly [number, number];
   life: number;
@@ -82,37 +85,37 @@ interface StyleDef {
 
 const STYLES: Record<NumStyle, StyleDef> = {
   damage: {
-    font: FONT_PLAIN, tint: 0xffffff, size: [30, 48], life: 0.6, rise: 40, pop: [0.6, 1.15, 1], popSeconds: 0.14,
+    face: Color.coral, burst: null, size: [30, 48], life: 0.6, rise: 40, pop: [0.6, 1.15, 1], popSeconds: 0.14,
     tilt: 0, prio: 0, prefix: '', suffix: '', scatter: 24,
   },
   crit: {
-    font: FONT_HOT, tint: 0xffffff, size: [44, 64], life: 0.9, rise: 58, pop: [0.6, 1.5, 1.2], popSeconds: 0.18,
+    face: Color.mustard, burst: Color.coral, size: [40, 56], life: 0.9, rise: 58, pop: [0.6, 1.5, 1.2], popSeconds: 0.18,
     tilt: 0.052, prio: 2, prefix: '', suffix: '!', scatter: 22,
   },
   dot: {
-    font: FONT_PLAIN, tint: 0xa6ec5a, size: [22, 30], life: 0.55, rise: 36, pop: [0.6, 1.1, 1], popSeconds: 0.12,
+    face: Color.teal, burst: null, size: [22, 30], life: 0.55, rise: 36, pop: [0.6, 1.1, 1], popSeconds: 0.12,
     tilt: 0, prio: 0, prefix: '', suffix: '', scatter: 26,
   },
   heal: {
-    font: FONT_PLAIN, tint: 0x6dff8a, size: [32, 42], life: 0.85, rise: 52, pop: [0.5, 1.2, 1], popSeconds: 0.15,
+    face: Color.leaf, burst: null, size: [32, 42], life: 0.85, rise: 52, pop: [0.5, 1.2, 1], popSeconds: 0.15,
     tilt: 0, prio: 1, prefix: '+', suffix: '', scatter: 14,
   },
   gold: {
-    font: FONT_PLAIN, tint: Color.gold, size: [32, 44], life: 0.85, rise: 52, pop: [0.5, 1.2, 1], popSeconds: 0.15,
+    face: Color.mustard, burst: null, size: [32, 44], life: 0.85, rise: 52, pop: [0.5, 1.2, 1], popSeconds: 0.15,
     tilt: 0, prio: 1, prefix: '+', suffix: '', scatter: 14,
   },
   hurt: {
-    font: FONT_PLAIN, tint: 0xff5a5a, size: [34, 50], life: 0.9, rise: 48, pop: [0.5, 1.2, 1], popSeconds: 0.15,
+    face: Color.berry, burst: null, size: [34, 50], life: 0.9, rise: 48, pop: [0.5, 1.2, 1], popSeconds: 0.15,
     tilt: 0, prio: 2, prefix: '-', suffix: '', scatter: 16,
   },
   big: {
-    font: FONT_HOT, tint: 0xffffff, size: [64, 92], life: 1.15, rise: 64, pop: [0.4, 1.4, 1.15], popSeconds: 0.22,
+    face: Color.mustard, burst: Color.berry, size: [56, 80], life: 1.15, rise: 64, pop: [0.4, 1.4, 1.15], popSeconds: 0.22,
     tilt: 0.06, prio: 3, prefix: '', suffix: '!', scatter: 10,
   },
 };
 
 export interface NumberOpts {
-  /** Override the style's colour tint (plain-font styles only). */
+  /** Override the style's face colour. */
   color?: number;
   /** Extra size multiplier. */
   scale?: number;
@@ -122,8 +125,12 @@ export interface NumberOpts {
   noScatter?: boolean;
 }
 
+/** One sticker: an optional paper starburst, the brown edge and the coloured face, drawn as one object. */
 class Num {
-  readonly text: BitmapText;
+  readonly root = new Container();
+  readonly face: BitmapText;
+  private readonly edge: BitmapText;
+  private readonly burst: Sprite;
   style: NumStyle = 'damage';
   def: StyleDef = STYLES.damage;
   age = 0;
@@ -134,10 +141,27 @@ class Num {
   value = 0;
   key: string | number | undefined;
   constructor(readonly font: string) {
-    this.text = new BitmapText({ text: '', style: { fontFamily: font, fontSize: BAKED } });
-    this.text.anchor.set(0.5);
-    this.text.visible = false;
-    this.text.eventMode = 'none';
+    this.burst = new Sprite(fxTexture('starburst'));
+    this.burst.anchor.set(0.5);
+    this.burst.width = this.burst.height = BAKED * 2.1;
+    this.burst.visible = false;
+    this.edge = new BitmapText({ text: '', style: { fontFamily: FONT_EDGE, fontSize: BAKED } });
+    this.face = new BitmapText({ text: '', style: { fontFamily: font, fontSize: BAKED } });
+    this.edge.anchor.set(0.5);
+    this.face.anchor.set(0.5);
+    this.root.addChild(this.burst, this.edge, this.face);
+    this.root.visible = false;
+    this.root.eventMode = 'none';
+  }
+
+  setText(text: string): void {
+    this.edge.text = text;
+    this.face.text = text;
+  }
+
+  setBurst(color: number | null): void {
+    this.burst.visible = color !== null;
+    if (color !== null) this.burst.tint = color;
   }
 }
 
@@ -191,24 +215,25 @@ export class FloatingNumbers {
       this.skipped++;
       return;
     }
-    let n = this.pools.get(def.font)?.pop();
+    const font = faceFont(o.color ?? def.face);
+    let n = this.pools.get(font)?.pop();
     if (!n) {
-      n = new Num(def.font);
+      n = new Num(font);
       this.created++;
-      this.layer.addChild(n.text);
+      this.layer.addChild(n.root);
     }
     n.style = style;
     n.def = def;
     n.age = 0;
     n.key = o.key;
     n.value = typeof value === 'number' ? value : 0;
-    n.text.tint = o.color ?? def.tint;
-    n.text.visible = true;
+    n.setBurst(def.burst);
+    n.root.visible = true;
     n.tiltAmp = def.tilt * (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.4);
     n.x = x + (o.noScatter ? 0 : (Math.random() * 2 - 1) * def.scatter);
     n.y = y;
     this.setText(n, value, def, o);
-    this.layer.addChild(n.text);
+    this.layer.addChild(n.root);
     this.active.push(n);
     this.apply(n);
   }
@@ -266,7 +291,7 @@ export class FloatingNumbers {
   private setText(n: Num, value: number | string, def: StyleDef, o: NumberOpts): void {
     const mag = typeof value === 'number' ? Math.max(1, Math.abs(value)) : 1;
     const str = typeof value === 'number' ? formatNumber(value) : value;
-    n.text.text = def.prefix + str.replace(/^-/, '') + def.suffix;
+    n.setText(def.prefix + str.replace(/^-/, '') + def.suffix);
     // Size grows with log10 of the magnitude (guide: 30 + 6 log10 px), so a 4-digit hit reads bigger
     // than a 2-digit one.
     const k = clamp(Math.log10(mag) / 3, 0, 1);
@@ -279,16 +304,16 @@ export class FloatingNumbers {
     const t = n.age / d.life;
     const pop = popCurve(Math.min(1, n.age / d.popSeconds), d.pop[0], d.pop[1], d.pop[2]);
     const s = n.scale * pop;
-    const text = n.text;
-    text.scale.set(s);
-    text.position.set(n.x, n.y - d.rise * Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9))));
-    text.rotation = n.tiltAmp === 0 ? 0 : springWobble(n.age, n.tiltAmp, 3.2, 3.5);
+    const root = n.root;
+    root.scale.set(s);
+    root.position.set(n.x, n.y - d.rise * Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9))));
+    root.rotation = n.tiltAmp === 0 ? 0 : springWobble(n.age, n.tiltAmp, 3.2, 3.5);
     // Hold fully opaque for the first 70% of life, then fade out.
-    text.alpha = t < 0.7 ? 1 : 1 - Ease.quadIn((t - 0.7) / 0.3);
+    root.alpha = t < 0.7 ? 1 : 1 - Ease.quadIn((t - 0.7) / 0.3);
   }
 
   private recycle(n: Num): void {
-    n.text.visible = false;
+    n.root.visible = false;
     let pool = this.pools.get(n.font);
     if (!pool) {
       pool = [];

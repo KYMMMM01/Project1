@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { awakeningPlan, bannerOffset, dimAmount, rainbow } from '@/fx/cutin';
+import { awakeningPlan, bannerOffset, dimAmount } from '@/fx/cutin';
 
 describe('awakeningPlan', () => {
   it('the full cut-in is about 1.6 s, the short one 0.8 s', () => {
@@ -78,30 +78,6 @@ describe('banner and dim curves', () => {
       const d = dimAmount(t, p);
       expect(d).toBeGreaterThanOrEqual(0);
       expect(d).toBeLessThanOrEqual(1 + 1e-9);
-    }
-  });
-});
-
-describe('rainbow', () => {
-  it('returns valid colours and cycles through different hues', () => {
-    const seen = new Set<number>();
-    for (let i = 0; i < 24; i++) {
-      const c = rainbow(i / 24);
-      expect(c).toBeGreaterThanOrEqual(0);
-      expect(c).toBeLessThanOrEqual(0xffffff);
-      seen.add(c);
-    }
-    expect(seen.size).toBeGreaterThan(18);
-  });
-
-  it('wraps: hue 0 and hue 1 are the same colour', () => {
-    expect(rainbow(0)).toBe(rainbow(1));
-  });
-
-  it('stays light and saturated enough to read on a dark banner (no channel below 40%)', () => {
-    for (let i = 0; i < 24; i++) {
-      const c = rainbow(i / 24);
-      for (const ch of [(c >> 16) & 255, (c >> 8) & 255, c & 255]) expect(ch).toBeGreaterThanOrEqual(0.4 * 255 - 1);
     }
   });
 });

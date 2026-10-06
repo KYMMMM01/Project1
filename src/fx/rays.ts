@@ -2,6 +2,7 @@ import { Container, Sprite } from 'pixi.js';
 import { Pool } from '@/core/pool';
 import { TAU, rand } from '@/core/math';
 import { smoothstep01 } from './curves';
+import { Hue } from './palette';
 import { fxSettings, tierScale } from './settings';
 import { fxTex } from './textures';
 
@@ -23,7 +24,7 @@ export interface RaysOpts {
   parent?: Container;
 }
 
-/** A rotating fan of additive light wedges. Created through Fx.rays(); returned as its own handle. */
+/** A rotating fan of flat paper wedges: a sunburst. Created through Fx.rays(); returned as its own handle. */
 export class Rays {
   readonly container = new Container();
   alive = true;
@@ -54,7 +55,7 @@ export class Rays {
     this.container.alpha = 0;
     this.container.eventMode = 'none';
     const info = fxTex('wedge');
-    const color = o.color ?? 0xffe9a0;
+    const color = o.color ?? Hue.sun;
     for (let i = 0; i < n; i++) {
       const s = this.pool.get();
       s.texture = info.texture;
@@ -66,7 +67,6 @@ export class Rays {
       s.scale.set((radius * (long ? 1 : rand(0.62, 0.8))) / info.w, ((radius * (long ? 0.2 : 0.13)) / info.h) * rand(0.8, 1.15));
       s.rotation = (i / n) * TAU + rand(-0.08, 0.08);
       s.alpha = 1;
-      s.blendMode = 'add';
       this.container.addChild(s);
       this.sprites.push(s);
       this.phase.push(rand(0, TAU));

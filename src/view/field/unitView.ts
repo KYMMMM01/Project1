@@ -1,12 +1,12 @@
 import { Container, Sprite } from 'pixi.js';
 import { tex } from '@/core/assets';
 import { Ease, type Tween, type TweenOpts, type Tweener } from '@/core/tween';
-import { clamp01, damp, lerp, TAU } from '@/core/math';
-import { fxTexture, popIn, type ZoneHandle } from '@/fx';
+import { clamp, clamp01, damp, lerp, TAU } from '@/core/math';
+import { popIn, type ZoneHandle } from '@/fx';
 import { cellCenterX, cellCenterY, cellCol } from '@/game/geometry';
 import { unitClass, unitRarity } from '@/game';
 import type { UnitId, UnitState } from '@/game/api';
-import type { RarityId } from '@/ui';
+import { Color, type RarityId } from '@/ui';
 import type { FieldArt } from './art';
 import { ATTACK_SECONDS, attackPose, breathe, makePose } from './motion';
 import { unitTint } from './policy';
@@ -15,6 +15,11 @@ import { unitTint } from './policy';
 export const FEET_DY = 34;
 const LUNGE_PX = 8;
 const UNIT_HEIGHT: Record<RarityId, number> = { common: 92, rare: 94, epic: 96, legendary: 100, mythic: 104 };
+
+/** Scale that puts a cat's art at its rarity's on-board height (also used for the drag preview's ghosts). */
+export function unitSpriteScale(id: UnitId, textureHeight: number): number {
+  return UNIT_HEIGHT[unitRarity(id)] / Math.max(1, textureHeight);
+}
 
 /** How a unit that has left the board is shown on its way out. */
 export type ExitMode = 'none' | 'fly' | 'hold' | 'spin' | 'sell' | 'fade';
@@ -64,8 +69,7 @@ export class UnitView {
 
   private readonly deco = new Container();
   private readonly shadow: Sprite;
-  private readonly base: Sprite;
-  private readonly warm: Sprite;
+  private readonly rank: Sprite;
   private readonly badge: Sprite;
   private readonly rig = new Container();
   private readonly dome: Sprite;
@@ -87,28 +91,25 @@ export class UnitView {
   private press = 0;
   private lift = 0;
   private select = 0;
-  private lastTint = 0xffffff;
+  private lean = 0;
+  private lastTint: number = Color.white;
 
   constructor(art: FieldArt) {
     this.root.label = 'unit';
     this.body.label = 'body';
     this.sprite.label = 'sprite';
     this.sprite.anchor.set(0.5, 1);
-    this.shadow = this.makeSprite(fxTexture('glow'), 86, 30);
-    this.shadow.tint = 0x000000;
-    this.shadow.position.y = 3;
-    this.base = this.makeSprite(art.base.common, 88, 36);
-    this.warm = this.makeSprite(fxTexture('glow'), 124, 52);
-    this.warm.tint = 0xffd27a;
-    this.warm.blendMode = 'add';
-    this.warm.alpha = 0;
-    this.badge = this.makeSprite(art.badge.warrior, 34, 34);
-    this.badge.position.set(-39, 7);
-    this.dome = this.makeSprite(art.shield, 100, 112);
+    this.shadow = this.makeSprite(art.shadow);
+    this.shadow.position.y = 1;
+    this.rank = this.makeSprite(art.rank.common);
+    this.rank.position.y = 13;
+    this.badge = this.makeSprite(art.badge.warrior);
+    this.badge.position.set(-38, 4);
+    this.dome = this.makeSprite(art.shield);
     this.dome.position.y = -46;
-    this.noAct = this.makeSprite(art.noAct, 32, 32);
+    this.noAct = this.makeSprite(art.noAct);
     this.overhead.position.y = -106;
-    this.deco.addChild(this.shadow, this.warm, this.base);
+    this.deco.addChild(this.shadow, this.rank);
     this.body.addChild(this.sprite);
     this.rig.addChild(this.body);
     this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.overhead);
@@ -127,11 +128,9 @@ export class UnitView {
     this.noAct.alpha = 0;
   }
 
-  private makeSprite(texture: Sprite['texture'], w: number, h: number): Sprite {
+  private makeSprite(texture: Sprite['texture']): Sprite {
     const s = new Sprite(texture);
     s.anchor.set(0.5);
-    s.width = w;
-    s.height = h;
     s.eventMode = 'none';
     return s;
   }
@@ -144,8 +143,8 @@ export class UnitView {
     const rarity = unitRarity(unit.id);
     const texture = tex('unit_' + unit.id);
     this.sprite.texture = texture;
-    this.spriteScale = UNIT_HEIGHT[rarity] / Math.max(1, texture.height);
-    this.base.texture = art.base[rarity];
+    this.spriteScale = unitSpriteScale(unit.id, texture.height);
+    this.rank.texture = art.rank[rarity];
     this.badge.texture = art.badge[unitClass(unit.id)];
     this.phase = (unit.uid * 1.713) % TAU;
     this.x = this.homeX(unit.cell);
@@ -159,17 +158,16 @@ export class UnitView {
     this.exit = 'none';
     this.exitK = 0;
     this.attackK = -1;
-    this.blocked = this.weak = this.sun = this.shield = this.press = this.lift = this.select = 0;
+    this.blocked = this.weak = this.sun = this.shield = this.press = this.lift = this.select = this.lean = 0;
     this.pressed = false;
     this.awaiting = false;
     this.revealAt = 0;
     this.holdUntil = 0;
-    this.lastTint = 0xffffff;
-    this.sprite.tint = 0xffffff;
+    this.lastTint = Color.white;
+    this.sprite.tint = Color.white;
     this.sprite.alpha = 1;
     this.dome.alpha = 0;
     this.noAct.alpha = 0;
-    this.warm.alpha = 0;
     this.root.alpha = 1;
     this.root.scale.set(1);
     this.root.visible = true;
@@ -253,7 +251,9 @@ export class UnitView {
     if (this.attackK >= 0) attackPose(this.attackK, pose);
     else breathe(time, this.phase, 1 - 0.5 * this.weak, pose);
     let k = (1 - 0.06 * this.press) * (1 + 0.12 * this.lift) * (1 + 0.022 * this.select * Math.sin(time * 7));
-    let rot = (-0.16 * this.blocked - 0.07 * this.weak) * this.facing;
+    // A lifted sticker tilts the way it is being pulled and leans a little to one side.
+    this.lean = damp(this.lean, this.dragging ? clamp((this.dragX - this.x) * 0.004, -0.12, 0.12) : 0, 0.05, dt);
+    let rot = (-0.16 * this.blocked - 0.07 * this.weak) * this.facing + this.lift * (0.07 * this.facing + this.lean);
     let fade = 1;
     switch (this.exit) {
       case 'fly':
@@ -293,15 +293,14 @@ export class UnitView {
       this.lastTint = tint;
       this.sprite.tint = tint;
     }
-    this.warm.alpha = 0.55 * this.sun;
-    this.dome.alpha = 0.5 * this.shield * (0.85 + 0.15 * Math.sin(time * 2.4 + this.phase));
+    this.dome.alpha = 0.9 * this.shield * (0.85 + 0.15 * Math.sin(time * 2.4 + this.phase));
     this.noAct.alpha = this.blocked;
     this.noAct.scale.set(0.8 + 0.2 * this.blocked);
     this.noAct.position.set(0, -100 + Math.sin(time * 3 + this.phase) * 2);
-    // Lifted units cast a wider, fainter shadow on the ground below them.
-    this.shadow.alpha = 0.4 - 0.14 * this.lift;
-    this.shadow.scale.set(1 + 0.22 * this.lift);
-    this.shadow.position.y = 3 + 4 * this.lift;
+    // A lifted sticker casts a wider, fainter shadow on the paper below it.
+    this.shadow.alpha = 0.34 - 0.12 * this.lift;
+    this.shadow.scale.set(1 + 0.24 * this.lift);
+    this.shadow.position.y = 1 + 5 * this.lift;
   }
 
   /** Pop in: the cat scales up with a back-out while its base and shadow grow in underneath. */

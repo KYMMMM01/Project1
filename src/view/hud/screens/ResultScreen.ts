@@ -1,7 +1,8 @@
 /**
- * The result screen: victory or defeat, the run's numbers, the luck line, then the rewards paid by
- * the meta layer (gold and XP counting up, chest and card reveals, level-ups, a newly cleared stake)
- * and at most two inline offers. Sandbox runs show the statistics only.
+ * The result screen, a scrapbook page: the title on a big paper label, the best cat as a taped photo,
+ * the run's numbers as a tidy list on paper, then the rewards paid by the meta layer (gold and XP
+ * counting up, stickers popping in, level-ups, a newly cleared stake) and at most two paper coupons
+ * (double the rewards, a snack box). Sandbox runs show the statistics only.
  */
 import { Container, Graphics, type BitmapText } from 'pixi.js';
 import { audio } from '@/audio';
@@ -10,7 +11,7 @@ import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import type { UnitId } from '@/game';
+import { unitDef, unitRarity, type UnitId } from '@/game';
 import { accountProgress, errorKey, profile, type RunReward } from '@/meta';
 import { ads } from '@/platform';
 import {
@@ -18,24 +19,29 @@ import {
   Color,
   countUpDuration,
   countUpValue,
+  drawDashedLine,
+  drawDashedRect,
   drawIcon,
+  drawPaper,
   fitLabel,
   LoadingSpinner,
   motion,
   numberText,
+  PaperLabel,
+  paperSeed,
+  paperShape,
   popIn,
-  Rarity,
   rarityName,
   ScreenScaffold,
   toast,
   TweenBag,
   uiLabel,
-  vGradient,
   type IconName,
-  shade,
 } from '@/ui';
+import { Coupon } from '../Coupon';
 import type { HudEnv } from '../env';
-import { fitSprite, unitPortrait } from '../kit';
+import { CLASS_TAPE, fitSprite, unitPhoto, unitPortrait } from '../kit';
+import { bestCat } from '../planMath';
 import { luckLine, offerRoute, rewardTiles, soCloseWaves, type RewardTile } from '../policy';
 
 export interface ResultHandlers {
@@ -46,6 +52,9 @@ export interface ResultHandlers {
 const W = 672;
 const TILE = 150;
 const TILE_GAP = 24;
+const ROW_H = 54;
+const SHEET_H = 480;
+const COUPON_H = 120;
 
 const TILE_ICON: Record<RewardTile['kind'], IconName> = {
   gold: 'coin',
@@ -73,66 +82,92 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   const bag = new TweenBag();
   const c = scaffold.content;
   const release = env.holdPause();
+  const seed = paperSeed();
   let alive = true;
   let y = 0;
 
-  // ── banner ──
-  const banner = new Container();
-  banner.position.set(W / 2, 120);
-  const rays = new Graphics();
-  if (victory) {
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      const b = a + 0.16;
-      rays.poly([0, 0, Math.cos(a) * 330, Math.sin(a) * 330, Math.cos(b) * 330, Math.sin(b) * 330]).fill({ color: shade(Color.gold, 0.4), alpha: 0.2 });
-    }
-  }
-  const title = uiLabel(t(victory ? 'hud.res.win' : 'hud.res.lose'), { size: victory ? 92 : 80, color: victory ? Color.gold : Color.textDim, strokeWidth: 12 });
-  const near = soCloseWaves(stats.wavesCleared, stats.totalWaves, victory);
-  const sub = uiLabel(near > 0 ? t('hud.res.close', { n: near }) : t(victory ? 'hud.res.winSub' : 'hud.res.loseSub'), {
-    size: 30, wrap: W - 40, lineHeight: 40, strokeWidth: 5, shadow: false,
+  // ── title ──
+  const title = new PaperLabel({
+    text: t(victory ? 'hud.res.win' : 'hud.res.lose'),
+    size: victory ? 88 : 76,
+    paper: victory ? 'mustard' : 'kraft',
+    padX: 70,
+    padY: 20,
+    maxWidth: W - 20,
+    tape: 'sky',
+    seed,
   });
-  sub.position.set(0, 86);
-  banner.addChild(rays, title, sub);
-  c.addChild(banner);
-  y = 250;
+  title.position.set(W / 2, 82);
+  const near = soCloseWaves(stats.wavesCleared, stats.totalWaves, victory);
+  const sub = new PaperLabel({
+    text: near > 0 ? t('hud.res.close', { n: near }) : t(victory ? 'hud.res.winSub' : 'hud.res.loseSub'),
+    size: 28,
+    paper: Color.paper,
+    padX: 26,
+    padY: 8,
+    maxWidth: W - 20,
+    seed: seed + 1,
+  });
+  sub.position.set(W / 2, 180);
+  c.addChild(title, sub);
+  y = 236;
 
-  // ── numbers ──
-  const cells: Array<{ icon: IconName; label: string; value: string; color?: number }> = [
+  // ── the page: best cat on the left, numbers on the right ──
+  const sheet = new Container();
+  sheet.position.set(0, y);
+  const page = paperShape({ w: W, h: SHEET_H, radius: 30, fill: Color.paper, seed: seed + 2 });
+  page.position.set(W / 2, SHEET_H / 2);
+  const cut = new Graphics();
+  drawDashedRect(cut, 14, 14, W - 28, SHEET_H - 28, { radius: 22 });
+  sheet.addChild(page, cut);
+
+  const cat = bestCat(stats, env.battle.units, unitRarity);
+  if (cat) {
+    const def = unitDef(cat);
+    const photo = unitPhoto({ size: 196, rarity: def.rarity, unit: cat, tape: CLASS_TAPE[def.classId], seed });
+    photo.position.set(136, 148);
+    photo.rotation = -0.03;
+    const name = uiLabel(t(def.nameKey), { size: 30 });
+    fitLabel(name, 220, 30, 0.7);
+    name.position.set(136, 282);
+    const rank = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkSoft });
+    rank.position.set(136, 316);
+    sheet.addChild(photo, name, rank);
+  }
+
+  const cells: Array<{ icon: IconName; label: string; value: string }> = [
     { icon: 'trophy', label: t('hud.res.waves'), value: stats.totalWaves > 0 ? `${stats.wavesCleared}/${stats.totalWaves}` : String(stats.wavesCleared) },
     { icon: 'skull', label: t('hud.res.kills'), value: fmt(stats.kills) },
     { icon: 'arrow_up', label: t('hud.res.merges'), value: fmt(stats.merges) },
-    { icon: 'crown', label: t('hud.res.best'), value: rarityName(stats.bestRarity), color: Rarity[stats.bestRarity].light },
+    { icon: 'crown', label: t('hud.res.best'), value: rarityName(stats.bestRarity) },
     { icon: 'clock', label: t('hud.res.time'), value: fmtDuration(stats.duration) },
     { icon: 'paw', label: t('hud.res.summons'), value: fmt(stats.summons) },
   ];
-  const statH = 3 * 92 + 150;
-  const plate = new Graphics();
-  plate.roundRect(0, 6, W, statH, 32).fill({ color: Color.black, alpha: 0.3 });
-  plate.roundRect(0, 0, W, statH, 32).fill(vGradient(Color.panelLight, Color.panel)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-  plate.position.set(0, y);
-  c.addChild(plate);
+  const listX = cat ? 276 : 40;
+  const listR = W - 40;
+  const listY = 32;
+  const lines = new Graphics();
   cells.forEach((cell, i) => {
-    const cx = 24 + (i % 2) * (W / 2);
-    const cy = y + 20 + Math.floor(i / 2) * 92;
-    const icon = drawIcon(cell.icon, 52);
-    icon.position.set(cx + 28, cy + 40);
-    const label = uiLabel(cell.label, { size: 24, color: Color.textDim, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
-    label.position.set(cx + 70, cy + 22);
-    const value = uiLabel(cell.value, { size: 36, color: cell.color ?? Color.white, anchorX: 0, align: 'left', strokeWidth: 5 });
-    value.position.set(cx + 70, cy + 58);
-    fitLabel(value, W / 2 - 110, 36, 0.7);
-    c.addChild(icon, label, value);
+    const cy = listY + i * ROW_H + ROW_H / 2;
+    const icon = drawIcon(cell.icon, 38);
+    icon.position.set(listX + 19, cy);
+    const label = uiLabel(cell.label, { size: 24, color: Color.inkSoft, anchorX: 0, align: 'left' });
+    label.position.set(listX + 50, cy);
+    const value = uiLabel(cell.value, { size: 34, anchorX: 1, align: 'right' });
+    fitLabel(value, listR - listX - 150, 34, 0.7);
+    value.position.set(listR, cy);
+    sheet.addChild(icon, label, value);
+    if (i > 0) drawDashedLine(lines, listX, listY + i * ROW_H, listR, listY + i * ROW_H, { color: Color.kraftDark, width: 2, dash: 8, gap: 8, alpha: 0.7 });
   });
+  sheet.addChild(lines);
   const luck = luckLine(stats.summonLuck);
-  const luckT = uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), {
-    size: 28, wrap: W - 60, lineHeight: 36, color: luck.kind === 'top' ? Color.gold : Color.white, strokeWidth: 4, shadow: false,
-  });
-  luckT.position.set(W / 2, y + 3 * 92 + 50);
-  const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.textDim, strokeWidth: 4, shadow: false });
-  seedT.position.set(W / 2, y + 3 * 92 + 112);
-  c.addChild(luckT, seedT);
-  y += statH + 28;
+  const luckT = uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 26, wrap: W - 80, lineHeight: 34 });
+  luckT.position.set(W / 2, listY + cells.length * ROW_H + 52);
+  const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.inkSoft });
+  seedT.position.set(W / 2, SHEET_H - 40);
+  sheet.addChild(luckT, seedT);
+  c.addChild(sheet);
+  y += SHEET_H + 32;
 
   // ── rewards ──
   const rewardLayer = new Container();
@@ -164,25 +199,41 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     });
   };
 
-  const buildTile = (tile: RewardTile, x: number, ty: number): Container => {
+  /** A teal paper strip with the currency's sticker over its left end and the count in ink. */
+  const counter = (art: string, fallback: IconName, cx: number, cy: number): { box: Container; text: BitmapText } => {
+    const box = new Container();
+    box.position.set(cx, cy);
+    const w = 308;
+    const g = new Graphics();
+    drawPaper(g, -w / 2, -38, { w, h: 76, radius: 14, fill: Color.teal, edge: Color.tealDark, torn: 'right', seed: paperSeed(), grain: false });
+    const icon = fitSprite(art, 78) ?? drawIcon(fallback, 66);
+    icon.position.set(-w / 2 + 16, -2);
+    const text = numberText(52, Color.inkDeep, '+0');
+    text.position.set(26, 1);
+    box.addChild(g, text, icon);
+    return { box, text };
+  };
+
+  /** A reward as a sticker: a die-cut piece of cream paper with its art, count and name, lying a little crooked. */
+  const buildTile = (tile: RewardTile, x: number, ty: number, tilt: number): Container => {
     const box = new Container();
     box.position.set(x + TILE / 2, ty + TILE / 2);
+    box.rotation = tilt;
     const g = new Graphics();
-    g.roundRect(-TILE / 2, -TILE / 2 + 6, TILE, TILE, 28).fill({ color: Color.black, alpha: 0.3 });
-    g.roundRect(-TILE / 2, -TILE / 2, TILE, TILE, 28).fill(vGradient(shade(Color.panelLight, 0.1), Color.panelLight)).stroke({ width: 5, color: Color.outline, alignment: 1 });
+    drawPaper(g, -TILE / 2, -TILE / 2, { w: TILE, h: TILE, radius: 28, fill: Color.paperLight, edge: Color.kraftDark, seed: paperSeed(), grain: false });
     box.addChild(g);
     let art: Container | null = null;
     if (tile.kind === 'card') art = unitPortrait(tile.id as UnitId, 84);
     else if (tile.kind === 'chest') art = fitSprite(CHEST_ART[tile.id] ?? 'icon_chest_wood', 92);
     else if (TILE_ART[tile.kind]) art = fitSprite(TILE_ART[tile.kind] as string, 84);
     art ??= drawIcon(TILE_ICON[tile.kind], 76);
-    art.position.set(0, -22);
-    const count = uiLabel(`×${fmt(tile.count)}`, { size: 32, strokeWidth: 5 });
-    count.position.set(0, 38);
+    art.position.set(0, -26);
+    const count = uiLabel(`×${fmt(tile.count)}`, { size: 32 });
+    count.position.set(0, 32);
     const nameKey = tile.kind === 'chest' ? `hud.res.chest.${tile.id}` : tile.kind === 'card' ? `unit.${tile.id}.name` : tile.kind === 'wild' ? `rarity.${tile.id}` : `hud.res.r.${tile.kind}`;
-    const name = uiLabel(t(nameKey), { size: 22, color: Color.textDim, strokeWidth: 4, shadow: false });
-    name.position.set(0, 66);
-    fitLabel(name, TILE - 12, 22, 0.8);
+    const name = uiLabel(t(nameKey), { size: 24, color: Color.inkSoft });
+    name.position.set(0, 60);
+    fitLabel(name, TILE - 12, 24, 0.8);
     box.addChild(art, count, name);
     return box;
   };
@@ -190,70 +241,49 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   const showRewards = (reward: RunReward, levelBefore: number, levelAfter: number): void => {
     spinner.destroy();
     let ry = 0;
-    const head = uiLabel(t('hud.res.rewards'), { size: 38, anchorX: 0, align: 'left', strokeWidth: 6 });
-    head.position.set(8, 24);
+    const head = new PaperLabel({ text: t('hud.res.rewards'), size: 34, paper: 'kraft', padX: 34, padY: 8, seed: seed + 3 });
+    head.position.set(head.uiBox.w / 2 + 6, 26);
     rewardLayer.addChild(head);
-    ry += 64;
+    ry += 76;
 
-    // Gold and XP counters.
-    goldT = numberText(52, Color.gold, '+0');
-    xpT = numberText(52, shade(Color.gem, 0.3), '+0');
-    const rowGold = new Container();
-    const rowXp = new Container();
-    const goldIcon = fitSprite('icon_gold', 64) ?? drawIcon('coin', 60);
-    const xpIcon = fitSprite('icon_xp', 64) ?? drawIcon('star', 60);
-    goldIcon.position.set(60, 40);
-    xpIcon.position.set(W / 2 + 60, 40);
-    goldT.position.set(60 + 40 + 80, 40);
-    xpT.position.set(W / 2 + 60 + 40 + 80, 40);
-    rowGold.addChild(goldIcon, goldT);
-    rowXp.addChild(xpIcon, xpT);
-    const rowWrap = new Container();
-    rowWrap.position.set(0, ry);
-    rowWrap.addChild(rowGold, rowXp);
-    rewardLayer.addChild(rowWrap);
-    goldTile = rowGold;
+    const gold = counter('icon_gold', 'coin', W * 0.25, ry + 40);
+    const xp = counter('icon_xp', 'star', W * 0.75, ry + 40);
+    goldT = gold.text;
+    xpT = xp.text;
+    goldTile = gold.box;
+    rewardLayer.addChild(gold.box, xp.box);
     countTo(goldT, reward.gold);
     countTo(xpT, reward.xp);
     audio.play('coin_many');
-    ry += 96;
+    ry += 100;
 
-    if (levelAfter > levelBefore) {
-      const lv = uiLabel(t('hud.res.level', { a: levelBefore, b: levelAfter }), { size: 36, color: Color.gold, strokeWidth: 6 });
-      lv.position.set(W / 2, ry + 26);
-      rewardLayer.addChild(lv);
-      bag.call(0.5, () => {
-        if (!alive) return;
-        audio.play('level_up');
-        haptic('success');
-        popIn(bag, lv, { from: 0.4, duration: 0.3, overshoot: 3 });
+    /** A line on its own label, hidden until its moment. */
+    const callout = (text: string, paper: 'mustard' | 'success' | 'primary', delay: number | null): void => {
+      const label = new PaperLabel({ text, size: 32, paper, padX: 30, padY: 8, maxWidth: W - 20, seed: seed + ry });
+      label.position.set(W / 2, ry + 26);
+      rewardLayer.addChild(label);
+      ry += 66;
+      if (delay === null) return;
+      label.alpha = 0;
+      bag.call(delay, () => {
+        if (!alive || label.destroyed) return;
+        if (paper === 'mustard') {
+          audio.play('level_up');
+          haptic('success');
+        }
+        popIn(bag, label, { from: 0.4, duration: 0.3, overshoot: 3 });
       });
-      lv.alpha = 0;
-      ry += 64;
-    }
-    if (reward.firstClear) {
-      const fc = uiLabel(t('hud.res.firstClear', { chapter: reward.chapter, stake: reward.stake }), {
-        size: 32, color: Color.energy, wrap: W - 40, strokeWidth: 5,
-      });
-      fc.position.set(W / 2, ry + 26);
-      rewardLayer.addChild(fc);
-      bag.call(0.8, () => alive && popIn(bag, fc, { from: 0.5, duration: 0.3, overshoot: 3 }));
-      fc.alpha = 0;
-      ry += 64;
-    }
-    if (reward.newBest) {
-      const nb = uiLabel(t('hud.res.newBest'), { size: 32, color: Color.gold, strokeWidth: 5 });
-      nb.position.set(W / 2, ry + 26);
-      rewardLayer.addChild(nb);
-      ry += 64;
-    }
+    };
+    if (levelAfter > levelBefore) callout(t('hud.res.level', { a: levelBefore, b: levelAfter }), 'mustard', 0.5);
+    if (reward.firstClear) callout(t('hud.res.firstClear', { chapter: reward.chapter, stake: reward.stake }), 'success', 0.8);
+    if (reward.newBest) callout(t('hud.res.newBest'), 'primary', null);
 
     const tiles = rewardTiles(0, 0, reward.bundle);
     const perRow = 4;
     tiles.forEach((tile, i) => {
       const col = i % perRow;
       const row = Math.floor(i / perRow);
-      const box = buildTile(tile, col * (TILE + TILE_GAP), ry + row * (TILE + TILE_GAP));
+      const box = buildTile(tile, col * (TILE + TILE_GAP), ry + row * (TILE + TILE_GAP), (i % 3 - 1) * 0.04);
       rewardLayer.addChild(box);
       box.alpha = 0;
       bag.call(0.6 + i * 0.14, () => {
@@ -279,64 +309,61 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const butler = profile.data.owned.butler;
     if (doubleRoute !== 'none') {
       const viaAd = doubleRoute === 'ad';
-      const btn = new Button({
-        label: t('hud.res.double'),
-        sublabel: viaAd ? (butler ? t('hud.res.butler') : t('hud.ad')) : '20',
-        sublabelIcon: viaAd ? undefined : 'gem',
+      const coupon: Coupon = new Coupon({
+        w: W,
+        h: COUPON_H,
+        paper: viaAd ? 'mustard' : 'info',
         icon: viaAd ? (butler ? 'crown' : 'ad') : 'gem',
-        style: viaAd ? 'success' : 'purple',
-        width: W,
-        height: 112,
-        fontSize: 42,
+        label: t('hud.res.double'),
+        sub: viaAd ? (butler ? t('hud.res.butler') : t('hud.ad')) : '20',
+        onTap: () => {
+          void (async () => {
+            coupon.setBusy(true);
+            const r = await profile.doubleResult(viaAd ? 'ad' : 'gems');
+            if (!alive) return;
+            coupon.setBusy(false);
+            if (!r.ok) {
+              toast(t(errorKey(r.error)), 'warning');
+              return;
+            }
+            coupon.setSpent(t('hud.res.doubled'));
+            audio.play('reward_claim');
+            if (goldT) countTo(goldT, r.value.gold * 2);
+            if (xpT) countTo(xpT, r.value.xp * 2);
+            if (goldTile && !motion.reduced) popIn(bag, goldTile, { from: 0.9, duration: 0.25 });
+          })();
+        },
       });
-      btn.position.set(W / 2, h + 56);
-      btn.onTap(() => {
-        void (async () => {
-          btn.setBusy(true);
-          const r = await profile.doubleResult(viaAd ? 'ad' : 'gems');
-          if (!alive) return;
-          btn.setBusy(false);
-          if (!r.ok) {
-            toast(t(errorKey(r.error)), 'warning');
-            return;
-          }
-          btn.setLabel(t('hud.res.doubled'));
-          btn.setSublabel(undefined);
-          btn.setStyle('neutral');
-          btn.setEnabled(false);
-          audio.play('reward_claim');
-          if (goldT) countTo(goldT, r.value.gold * 2);
-          if (xpT) countTo(xpT, r.value.xp * 2);
-          if (goldTile && !motion.reduced) popIn(bag, goldTile, { from: 0.9, duration: 0.25 });
-        })();
-      });
-      offers.addChild(btn);
-      h += 136;
+      coupon.position.set(W / 2, h + COUPON_H / 2);
+      offers.addChild(coupon);
+      h += COUPON_H + 22;
     }
     if (offerRoute(ads.status('snack_box').reason, false) === 'ad' && profile.snackChestsLeft() > 0) {
-      const btn = new Button({
-        label: t('hud.res.snack'), sublabel: t('hud.res.snackLeft', { n: profile.snackChestsLeft() }), icon: 'ad', style: 'info', width: W, height: 104, fontSize: 38,
+      const coupon: Coupon = new Coupon({
+        w: W,
+        h: COUPON_H,
+        paper: 'info',
+        icon: 'chest',
+        label: t('hud.res.snack'),
+        sub: t('hud.res.snackLeft', { n: profile.snackChestsLeft() }),
+        onTap: () => {
+          void (async () => {
+            coupon.setBusy(true);
+            const r = await profile.claimSnackChest();
+            if (!alive) return;
+            coupon.setBusy(false);
+            if (!r.ok) {
+              toast(t(errorKey(r.error)), 'warning');
+              return;
+            }
+            coupon.setSpent(t('hud.res.snackDone'));
+            audio.play('chest_open');
+          })();
+        },
       });
-      btn.position.set(W / 2, h + 52);
-      btn.onTap(() => {
-        void (async () => {
-          btn.setBusy(true);
-          const r = await profile.claimSnackChest();
-          if (!alive) return;
-          btn.setBusy(false);
-          if (!r.ok) {
-            toast(t(errorKey(r.error)), 'warning');
-            return;
-          }
-          btn.setLabel(t('hud.res.snackDone'));
-          btn.setSublabel(undefined);
-          btn.setStyle('neutral');
-          btn.setEnabled(false);
-          audio.play('chest_open');
-        })();
-      });
-      offers.addChild(btn);
-      h += 128;
+      coupon.position.set(W / 2, h + COUPON_H / 2);
+      offers.addChild(coupon);
+      h += COUPON_H + 22;
     }
     if (h === 0) {
       offers.destroy();
@@ -353,7 +380,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   const home = new Button({ label: t('hud.res.home'), icon: 'home', style: 'neutral', width: 230, height: 108, fontSize: 36 });
   home.position.set(-205, 0);
   home.onTap(() => handlers.exit());
-  const retry = new Button({ label: t('hud.res.retry'), icon: 'play', style: 'primary', width: 400, height: 124, fontSize: 52 });
+  const retry = new Button({ label: t('hud.res.retry'), icon: 'play', style: 'primary', width: 400, height: 124, fontSize: 52, tape: 'sky' });
   retry.position.set(115, 0);
   retry.onTap(() => handlers.retry());
   bar.addChild(home, retry);
@@ -367,11 +394,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     audio.stinger('victory');
     haptic('success');
   } else audio.stinger('defeat');
-  if (!motion.reduced) {
-    popIn(bag, title, { from: 0.2, duration: 0.4, overshoot: 2.5 });
-    // 20 degrees a second: a full turn every 18 s.
-    if (victory) bag.run({ duration: 18, ease: Ease.linear, repeat: -1, onUpdate: (k) => (rays.rotation = k * Math.PI * 2) });
-  }
+  if (!motion.reduced) popIn(bag, title, { from: 0.2, duration: 0.4, overshoot: 2.5 });
 
   // ── settle the run with the meta layer ──
   if (!showStatsOnly) {
@@ -398,7 +421,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   };
 }
 
-/** One burst of paper confetti over the banner: 90 pieces on one tween, no per-frame allocation. */
+/** One burst of paper confetti over the title: 90 pieces on one tween, no per-frame allocation. */
 function confetti(scaffold: ScreenScaffold, bag: TweenBag): void {
   const N = 90;
   const layer = new Container();
@@ -407,7 +430,7 @@ function confetti(scaffold: ScreenScaffold, bag: TweenBag): void {
   const vx = new Float32Array(N);
   const vy = new Float32Array(N);
   const spin = new Float32Array(N);
-  const colors = [Color.gold, shade(Color.danger, 0.3), Color.info, Color.energy, shade(Color.purple, 0.4)];
+  const colors = [Color.mustard, Color.coral, Color.teal, Color.leaf, Color.berry];
   for (let i = 0; i < N; i++) {
     const g = new Graphics();
     g.rect(-7, -4, 14, 8).fill(colors[i % colors.length] as number);

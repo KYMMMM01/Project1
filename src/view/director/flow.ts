@@ -15,10 +15,11 @@ import type { BannerService } from './banners';
 import type { MusicService } from './music';
 import { dangerStrength, heartbeatInterval, overflowSeconds } from './policy';
 import { Gate, type Bus, type Stage } from './stage';
+import { Hue } from '@/fx/palette';
 
-const GOLD = 0xffd23f;
-/** Accent of the wave banner per act, cycling after the fourth. */
-const ACT_COLOR: readonly number[] = [0x7fb8ff, 0x7ddc6a, 0xffb629, 0xff7fc2];
+const GOLD = Color.mustard;
+/** Paper colour of the wave banner per act, cycling after the fourth. */
+const ACT_COLOR: readonly number[] = [Color.teal, Color.leaf, Color.mustard, Color.coral];
 const FINISH_DELAY_DEFEAT = 1.1;
 const FINISH_DELAY_VICTORY = 2.2;
 /** The victory staging never waits longer than this for the boss finale to end. */
@@ -87,8 +88,8 @@ export function mountFlow(stage: Stage, on: Bus, banners: BannerService, music: 
   host.eventMode = 'none';
   host.visible = false;
   host.label = 'director-overflow';
-  const digits = label('', { size: 200, color: 0xff6a5a, strokeWidth: 18 });
-  const warn = label(t('director.overflow'), { size: 38, color: Color.text });
+  const digits = label('', { size: 200, color: Hue.alarm, stroke: Color.paperLight, strokeWidth: 22 });
+  const warn = label(t('director.overflow'), { size: 38, onArt: true });
   warn.y = -150;
   host.addChild(digits, warn);
   ctx.layers.overlay.addChild(host);
@@ -304,7 +305,7 @@ export function mountFlow(stage: Stage, on: Bus, banners: BannerService, music: 
     }
     fx.confettiRain({ count: 90, y: -ctx.layout.fieldY - 30 });
     stage.later(0.5, () => fx.confettiRain({ count: 50, y: -ctx.layout.fieldY - 30 }));
-    screenFx.flash(0xffe08a, 0.4, 160);
+    screenFx.flash(Hue.sun, 0.4, 160);
     banners.push('big', 'victory', 5, { title: t('director.victory'), color: GOLD }, 1.5, 0.4, 0.3);
     stage.buzz('jackpot');
     schedule(FINISH_DELAY_VICTORY, true);

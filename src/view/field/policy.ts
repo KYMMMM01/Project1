@@ -12,6 +12,7 @@ import {
   cellAt,
 } from '@/game/geometry';
 import { mixColor } from '@/core/math';
+import { Color, TapeColors } from '@/ui/theme';
 
 /** A press that travels further than this (design px) is a drag, not a tap. */
 export const DRAG_THRESHOLD = 10;
@@ -86,13 +87,14 @@ export function dropLook(action: DropAction): DropLook {
   return action === 'none' ? 'blocked' : action;
 }
 
-const WARM = 0xffeec2;
-const SLUMP = 0x8f93aa;
-const DROOP = 0xb9c6ff;
+/** Sprite tints are multiplied into the art: a sunlit cat is a touch warmer, a blocked one muted, a weakened one pale blue. */
+const WARM = mixColor(Color.white, Color.mustard, 0.3);
+const SLUMP = mixColor(Color.paperDim, Color.inkSoft, 0.5);
+const DROOP = mixColor(Color.white, TapeColors.sky.base, 0.75);
 
 /** Sprite tint from how much each condition applies (0..1); the strongest visible one leads. */
 export function unitTint(blocked: number, weak: number, sun: number): number {
-  let c = 0xffffff;
+  let c: number = Color.white;
   if (sun > 0) c = mixColor(c, WARM, sun);
   if (weak > 0) c = mixColor(c, DROOP, weak * 0.7);
   if (blocked > 0) c = mixColor(c, SLUMP, blocked);

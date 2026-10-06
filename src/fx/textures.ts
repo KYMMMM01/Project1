@@ -2,14 +2,14 @@ import { CanvasSource, Rectangle, Texture } from 'pixi.js';
 import { putTex } from '@/core/assets';
 
 /**
- * One procedural atlas for every particle shape, so each blend layer is a single draw call.
- * Shapes are evaluated per pixel from signed-distance functions: perfectly anti-aliased, soft where
- * glow is wanted, white on transparent so a particle's colour comes purely from its tint. The atlas
+ * One procedural atlas for every particle shape, so the particle layer is a single draw call.
+ * Shapes are evaluated per pixel from signed-distance functions: perfectly anti-aliased and flat (cut
+ * paper has hard edges and no glow), white on transparent so a particle's colour comes purely from its tint. The atlas
  * is painted at 2x and registered with resolution 2, so a cell's size in the table below is already
  * in design px.
  */
 export const FX_TEX_IDS = [
-  'glow',
+  'disc',
   'dot',
   'ring',
   'ringThick',
@@ -36,6 +36,8 @@ export const FX_TEX_IDS = [
   'puddle',
   'zapGlyph',
   'streak',
+  'patch',
+  'sun',
 ] as const;
 
 export type FxTexId = (typeof FX_TEX_IDS)[number];
@@ -126,30 +128,6 @@ function sdEllipse(px: number, py: number, rx: number, ry: number): number {
   return (len(px / rx, py / ry) - 1) * Math.min(rx, ry);
 }
 
-function hash(ix: number, iy: number, seed: number): number {
-  let h = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041);
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-function vnoise(x: number, y: number, seed: number): number {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const fx = x - ix;
-  const fy = y - iy;
-  const ux = fx * fx * (3 - 2 * fx);
-  const uy = fy * fy * (3 - 2 * fy);
-  const a = hash(ix, iy, seed);
-  const b = hash(ix + 1, iy, seed);
-  const c = hash(ix, iy + 1, seed);
-  const d = hash(ix + 1, iy + 1, seed);
-  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
-}
-
-function fbm(x: number, y: number, seed: number): number {
-  return (vnoise(x, y, seed) * 0.5 + vnoise(x * 2, y * 2, seed + 1) * 0.3 + vnoise(x * 4, y * 4, seed + 2) * 0.2);
-}
-
 /** iq's heart distance (unit heart, tip at the origin, +y up). */
 function sdHeart(px: number, py: number): number {
   const x = Math.abs(px);
@@ -236,41 +214,41 @@ function sdCrystal(px: number, py: number): number {
   return best;
 }
 
+/** Flat star with `n` points (alternating outer and inner radius), pointing up. */
+function starN(n: number, outer: number, inner: number): number[] {
+  const v: number[] = [];
+  for (let i = 0; i < n * 2; i++) {
+    const r = i % 2 === 0 ? outer : inner;
+    const a = -Math.PI / 2 + (i * Math.PI) / n;
+    v.push(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  return v;
+}
+
+const SPARKLE = [0, -60, 12, -12, 60, 0, 12, 12, 0, 60, -12, 12, -60, 0, -12, -12];
+const BURST = starN(9, 62, 28);
+const SUN = starN(12, 62, 40);
+
+/** Circles whose union is the flat paper puff. */
+const PUFF: ReadonlyArray<readonly [number, number, number]> = [
+  [0, 8, 36],
+  [-30, 12, 25],
+  [30, 12, 25],
+  [-14, -16, 27],
+  [18, -14, 23],
+];
+
+function sdPuff(x: number, y: number): number {
+  let d = Infinity;
+  for (const [cx, cy, r] of PUFF) d = Math.min(d, len(x - cx, y - cy) - r);
+  return d;
+}
+
 const CELLS: Cell[] = [
-  {
-    id: 'glow',
-    w: 128,
-    h: 128,
-    ax: 0.5,
-    ay: 0.5,
-    paint: (x, y) => {
-      const r = len(x, y) / 64;
-      return clamp01(Math.exp(-r * r * 3.4) * 1.08) * (1 - smooth(0.72, 1, r));
-    },
-  },
+  { id: 'disc', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(len(x, y) - 62) },
   { id: 'dot', w: 48, h: 48, ax: 0.5, ay: 0.5, paint: (x, y) => aa(len(x, y) - 21) },
-  {
-    id: 'ring',
-    w: 128,
-    h: 128,
-    ax: 0.5,
-    ay: 0.5,
-    paint: (x, y) => {
-      const r = len(x, y);
-      return Math.max(aa(Math.abs(r - 55) - 2.4), 0.26 * Math.exp(-(((r - 55) / 7) ** 2))) * (1 - smooth(60, 64, r));
-    },
-  },
-  {
-    id: 'ringThick',
-    w: 128,
-    h: 128,
-    ax: 0.5,
-    ay: 0.5,
-    paint: (x, y) => {
-      const r = len(x, y);
-      return Math.pow(smooth(40, 58.5, r), 1.5) * (1 - smooth(58.5, 63.5, r));
-    },
-  },
+  { id: 'ring', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 55) - 3) },
+  { id: 'ringThick', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 52) - 10) },
   {
     id: 'spark',
     w: 128,
@@ -278,46 +256,16 @@ const CELLS: Cell[] = [
     ax: 0.5,
     ay: 0.5,
     paint: (x, y) => {
+      // A flat lens: a rounded head at the right, a pointed tail at the left.
       const u = (x + 64) / 128;
       const head = 0.9;
       const hh = u < head ? 9.5 * Math.pow(u / head, 1.05) : 9.5 * Math.sqrt(Math.max(0, 1 - ((u - head) / (1 - head)) ** 2));
-      const across = Math.exp(-((y / (hh + 0.6)) ** 2) * 1.5);
-      return clamp01(across * (0.08 + 0.92 * Math.pow(u, 1.5)) * smooth(0, 0.05, u) * (1 - smooth(0.97, 1, u)));
+      return aa(Math.abs(y) - hh) * smooth(0, 0.04, u);
     },
   },
-  {
-    id: 'sparkle',
-    w: 128,
-    h: 128,
-    ax: 0.5,
-    ay: 0.5,
-    paint: (x, y) => {
-      const u = x / 64;
-      const v = y / 64;
-      const s = Math.sqrt(Math.abs(u)) + Math.sqrt(Math.abs(v));
-      const star = 1 - smooth(0.72, 1.0, s);
-      const glow = 0.9 * Math.exp(-((len(u, v) * 3.6) ** 2));
-      return clamp01(Math.max(star, glow));
-    },
-  },
+  { id: 'sparkle', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, SPARKLE) - 1) },
   { id: 'star', w: 112, h: 112, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y + 2, STAR) - 4) },
-  {
-    id: 'smoke',
-    w: 128,
-    h: 128,
-    ax: 0.5,
-    ay: 0.5,
-    paint: (x, y) => {
-      const u = x / 64;
-      const v = y / 64;
-      const r = len(u, v);
-      const n = fbm(u * 1.7 + 11, v * 1.7 + 5, 7);
-      const edge = 0.5 + n * 0.42;
-      const body = Math.pow(1 - smooth(edge - 0.5, edge + 0.02, r), 1.25);
-      const mottle = 0.82 + 0.18 * fbm(u * 3.1 + 2, v * 3.1 + 9, 3);
-      return clamp01(body * mottle * 0.92) * (1 - smooth(0.84, 1, r));
-    },
-  },
+  { id: 'smoke', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPuff(x, y)) },
   { id: 'shard', w: 64, h: 64, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, SHARD) - 0.6) },
   { id: 'confetti', w: 40, h: 24, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdBox(x, y, 15, 7) - 2) },
   {
@@ -384,13 +332,8 @@ const CELLS: Cell[] = [
     h: 64,
     ax: 0,
     ay: 0.5,
-    paint: (x, y) => {
-      const u = (x + 128) / 256;
-      const v = Math.abs(y) / 32;
-      const hw = 0.04 + 0.96 * u;
-      const across = 1 - smooth(hw * 0.3, hw, v);
-      return clamp01(across * Math.pow(1 - u, 1.15) * smooth(0, 0.04, u));
-    },
+    // A flat triangle with its apex at the origin: one ray of a paper sunburst.
+    paint: (x, y) => aa(Math.abs(y) - (32 * (x + 128)) / 256) * smooth(0, 0.03, (x + 128) / 256),
   },
   {
     id: 'pillar',
@@ -398,14 +341,10 @@ const CELLS: Cell[] = [
     h: 256,
     ax: 0.5,
     ay: 0.94,
+    // A flat strip that widens upwards, square at the top, tapering to a point at the foot.
     paint: (x, y) => {
-      const u = x / 32;
       const t = (y + 128) / 256;
-      // Window the sides to zero so the wide halo never shows the cell's rectangular edge.
-      const side = 1 - smooth(0.35, 1, Math.abs(u));
-      const core = Math.exp(-((u * 1.9) ** 2));
-      const soft = 0.55 * Math.exp(-((u * 0.9) ** 2));
-      return clamp01(Math.max(core, soft) * side * Math.pow(t, 0.85) * (1 - smooth(0.965, 1, t)));
+      return aa(Math.abs(x) - (6 + 24 * t)) * smooth(0, 0.03, t);
     },
   },
   {
@@ -418,38 +357,11 @@ const CELLS: Cell[] = [
       const px = x - 4;
       const dA = len(px + 20, y) - 68;
       const dB = len(px + 62, y) - 68;
-      const d = Math.max(dA, -dB);
-      return clamp01(Math.max(aa(d), d > 0 ? 0.3 * Math.exp(-d / 5) : 0));
+      return aa(Math.max(dA, -dB));
     },
   },
-  {
-    id: 'bolt',
-    w: 64,
-    h: 16,
-    ax: 0,
-    ay: 0.5,
-    paint: (x, y) => {
-      const core = Math.exp(-((y / 1.5) ** 2));
-      const glow = 0.4 * Math.exp(-((y / 4.6) ** 2));
-      return clamp01(core + glow) * (1 - smooth(22, 31.5, Math.abs(x)));
-    },
-  },
-  {
-    id: 'starburst',
-    w: 128,
-    h: 128,
-    ax: 0.5,
-    ay: 0.5,
-    paint: (x, y) => {
-      const r = len(x, y) / 64;
-      const th = Math.atan2(y, x);
-      const s2 = Math.sin(2 * th);
-      const reach = 1 - 0.4 * s2 * s2;
-      const spikes = Math.pow(Math.abs(Math.cos(4 * th)), 20) * Math.pow(clamp01(1 - r / reach), 1.5);
-      const core = Math.exp(-((r * 4.4) ** 2)) + 0.22 * Math.exp(-r * r * 7);
-      return clamp01(spikes + core) * (1 - smooth(0.88, 1, r));
-    },
-  },
+  { id: 'bolt', w: 64, h: 16, ax: 0, ay: 0.5, paint: (x, y) => aa(Math.max(Math.abs(y) - 2.6, Math.abs(x) - 30)) },
+  { id: 'starburst', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, BURST)) },
   {
     id: 'coin',
     w: 64,
@@ -457,29 +369,13 @@ const CELLS: Cell[] = [
     ax: 0.5,
     ay: 0.5,
     paint: (x, y) => aa(len(x, y) - 28),
+    // Two flat tones: a slightly darker rim and a thin inner ring, no highlight.
     shade: (x, y) => {
       const r = len(x, y);
-      const rim = smooth(20, 23.5, r);
-      const inner = 0.2 * Math.exp(-(((r - 12.5) / 2.2) ** 2));
-      const hi = 0.35 * smooth(0.55, 1, 1 - len(x + 11, y + 11) / 17);
-      return clamp01(0.74 + 0.26 * rim + inner + hi);
+      return clamp01(0.82 + 0.18 * smooth(20, 23.5, r) - 0.16 * Math.exp(-(((r - 12.5) / 1.6) ** 2)));
     },
   },
-  {
-    id: 'beam',
-    w: 64,
-    h: 256,
-    ax: 0.5,
-    ay: 0.5,
-    paint: (x, y) => {
-      const u = Math.abs(x) / 32;
-      const t = (y + 128) / 256;
-      // Flat-topped with crisp edges: a shaft of light, not a smudge.
-      const across = 1 - smooth(0.62, 1, u);
-      const along = Math.pow(Math.sin(Math.PI * clamp01(t)), 0.6);
-      return clamp01(across * along * (0.7 + 0.3 * Math.exp(-u * u * 3)));
-    },
-  },
+  { id: 'beam', w: 64, h: 256, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdBox(x, y, 26, 118) - 6) },
   {
     id: 'vortex',
     w: 128,
@@ -489,10 +385,10 @@ const CELLS: Cell[] = [
     paint: (x, y) => {
       const r = len(x, y) / 64;
       const th = Math.atan2(y, x);
-      // Three logarithmic arms that thin out towards the rim, plus a hot core.
-      const arm = Math.pow(0.5 + 0.5 * Math.cos(3 * th - 7.5 * Math.log(r + 0.12)), 1.6 + 2.6 * r);
-      const body = arm * smooth(0.05, 0.22, r) * (1 - smooth(0.5, 1, r));
-      return clamp01(body + 0.75 * Math.exp(-((r * 4.2) ** 2)));
+      // Three crisp spiral arms that thin out towards the rim, round a flat hub.
+      const arm = 0.5 + 0.5 * Math.cos(3 * th - 7.5 * Math.log(r + 0.12));
+      const body = clamp01((arm - (0.45 + 0.35 * r)) * 9) * smooth(0.08, 0.16, r) * (1 - smooth(0.72, 0.96, r));
+      return clamp01(Math.max(body, 1 - smooth(0.12, 0.17, r)));
     },
   },
   {
@@ -524,13 +420,6 @@ const CELLS: Cell[] = [
       const e = len(x / 59, y / 27) / edge;
       return aa((e - 1) * 24);
     },
-    shade: (x, y) => {
-      const th = Math.atan2(y * 2.2, x);
-      const edge = 1 + 0.07 * Math.sin(3 * th + 0.7) + 0.045 * Math.sin(5 * th + 2.1);
-      const e = len(x / 59, y / 27) / edge;
-      const glint = 0.22 * Math.exp(-(((x + 20) / 15) ** 2) - (((y + 7) / 4) ** 2));
-      return clamp01(0.62 + 0.3 * smooth(0.6, 0.98, e) + glint);
-    },
   },
   { id: 'zapGlyph', w: 64, h: 64, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, BOLT_GLYPH) - 1.5) },
   {
@@ -541,13 +430,13 @@ const CELLS: Cell[] = [
     ay: 0.5,
     paint: (x, y) => {
       const u = (x + 128) / 256;
-      // Pointed at both ends, fullest a little before the middle: the wake of a blade.
+      // Pointed at both ends, fullest a little before the middle: a flat swipe.
       const h = 5.6 * Math.pow(Math.sin(Math.PI * Math.pow(clamp01(u), 0.72)), 0.85);
-      const core = Math.exp(-((y / (0.32 * h + 0.35)) ** 2));
-      const glow = 0.4 * Math.exp(-((y / (h + 0.8)) ** 2));
-      return clamp01(core + glow) * smooth(0, 0.03, u) * (1 - smooth(0.97, 1, u));
+      return aa(Math.abs(y) - (0.4 + h * 0.62)) * smooth(0, 0.03, u) * (1 - smooth(0.97, 1, u));
     },
   },
+  { id: 'patch', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdBox(x, y, 56, 56) - 8) },
+  { id: 'sun', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, SUN)) },
 ];
 
 interface Packed {

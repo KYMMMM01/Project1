@@ -27,15 +27,15 @@ export interface TopRects {
   pause: Point;
   speed: Point;
   gauge: Rect;
-  /** Wave label and timer bar. */
+  /** Phase label and countdown bar. */
   wave: Rect;
-  /** Next-wave preview strip. */
+  /** Next-wave preview cards. */
   preview: Rect;
   /** Row of owned toys. */
   toys: Rect;
   /** Boss / elite strip: takes over the preview and toy area while one is alive. */
   boss: Rect;
-  /** The wave timer bar (centre-origin bar of this size sits in it). */
+  /** The countdown bar (a centre-origin bar of this size sits in it). */
   timer: Rect;
   /** Vertical centre of the second row. */
   row2Y: number;
@@ -50,13 +50,14 @@ export function topRects(l: BattleLayout): TopRects {
     area: { x: 0, y: y0, w: HUD_W, h: l.topH },
     pause: { x: SIDE + 44, y: row1Y },
     speed: { x: HUD_W - SIDE - 44, y: row1Y },
-    // The bar's round icon hangs 43 px off its left end, so the bar starts that far clear of the pause button.
-    gauge: { x: 150, y: row1Y - 25, w: 440, h: 50 },
+    // The skull sticker hangs 43 px off the strip's left end, so the strip starts that far clear of the pause button.
+    gauge: { x: 150, y: row1Y - 29, w: 440, h: 58 },
     wave: { x: SIDE, y: row2Y - rowH / 2, w: 212, h: rowH },
     preview: { x: 236, y: row2Y - rowH / 2, w: 208, h: rowH },
     toys: { x: 452, y: row2Y - rowH / 2, w: HUD_W - SIDE - 452, h: rowH },
-    boss: { x: 240, y: row2Y - 34, w: HUD_W - SIDE - 240, h: 66 },
-    timer: { x: SIDE, y: row2Y + 4, w: 212, h: 28 },
+    // The boss sticker overhangs the strip's left end by about 30 px, which the countdown bar leaves free.
+    boss: { x: 264, y: row2Y - 34, w: HUD_W - SIDE - 264, h: 66 },
+    timer: { x: SIDE, y: row2Y + 2, w: 212, h: 34 },
     row2Y,
   };
 }

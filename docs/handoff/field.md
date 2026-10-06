@@ -1,56 +1,54 @@
-# Handoff: field (battle scene and playfield)
+# Handoff: field (battle scene and playfield), paper scrapbook restyle
 
-Date 2026-10-06. Engineer A. Paths: `src/scenes/BattleScene.ts`, `src/view/field/**`, `src/view/layout.ts`, `src/view/strings.ts`, `tests/view.field*.test.ts`, and the battle route in `src/main.ts`.
+Date 2026-10-06. Paths: `src/scenes/BattleScene.ts`, `src/view/field/**`, `src/view/layout.ts`, `src/view/strings.ts`, `tests/view.field*.test.ts`. The playfield now lives in the paper world of `docs/handoff/ui.md`: cut paper on a wooden floor, flat warm shadows, dashed teal lines, washi tape. Behaviour, timing and the contract (`src/view/context.ts`) are unchanged; the earlier hand-off (clock, input rules, pooling, hand-off to the director) still holds and is summarised in "How it is wired".
 
-## What exists
+## The look, piece by piece
 
-| File | Role |
+| Piece | How it is made |
 |---|---|
-| `src/scenes/BattleScene.ts` | `BattleScene(run: RunConfig)`: builds the simulation (`createBattle(init, snapshot)`, falling back to a fresh run when the snapshot does not fit), the layer tree, the `Fx` facade and the `BattleContext`, then `createField`, `createDirector`, `createHud`. Owns the clock. Exports `setBattleExit(fn)` and `setBattleCreatedHook(fn)`. |
-| `src/view/layout.ts` | `computeBattleLayout(w, h, safeTop, safeBottom)` (top HUD 168, bottom panel 452, the 720 x 624 field centred in the band, spare height split above and below) and `backgroundPlacement`. Pure. |
-| `src/view/field/clock.ts` | `BattleClock`: speed, nesting pause reasons, hit-stop (longest wins), slow-motion that eases back over 200 ms. Pure. |
-| `src/view/field/index.ts` | `createField(ctx)`: composes everything below; `update` runs units, enemies, shots, effects, input, cell looks, ground effects. |
-| `background.ts`, `rug.ts` + `rugSkins.ts`, `walkway.ts` | Chapter art with edge-matched fill and dark top/bottom fade; the baked mat (13 skins as data, 8 patterns, stitched border, shadow, 20 inset tiles); the baked walkway (worn lane, paw trail, corner chevrons, doorway at the spawn). |
-| `cells.ts` | Cell looks: selected (brackets), move (target ring), swap (double arrow), merge (rarity glow plus up arrow), blocked (dimmed plus cross). Each look has a glyph as well as a colour. Hover emphasis for the cell under a dragged unit; press flash on pointer-down. |
-| `unitView.ts` + `units.ts` | Cat views (idle breathing with per-unit phase, spawn pop, attack lunge, merge flight and pop, molt spin, slide / swap hop, sell, blocked slump with a no-act glyph, weakened droop plus the fx swirl, sunlit warm tint and glow, shield dome, drag lift with a wider shadow). Pooled. |
-| `enemyView.ts` + `enemies.ts` | Enemy views (walk bob and waddle from `enemy.age`, turn-around squash, spawn pop, hit flash / knock / squash, death collapse, damaged-only health bar with a cyan shield segment, status tints, laser focus ring, stun star, elite / boss aura and shadow, depth sort by y). Pooled. |
-| `projectiles.ts` + `projectileLooks.ts` | Pooled shots, one look per unit type (pebble, arrow, shuriken, bullet streak, star arrow with a long trail, snowball, fireball with glow, bell, fish bone, music note, potion flask, coin, plus a generic orb). Textures are baked in `art.ts`. |
-| `effects.ts` | Mirrors sunbeams, active hazards (wet / zap), zone areas (blizzard / black hole / potion cloud) and the laser dot from the simulation state every frame; hazard warnings come from the `hazardWarn` event. |
-| `input.ts`, `policy.ts`, `rangeRing.ts`, `sellTag.ts` | Pointer handling and its pure decisions (drag threshold 10 px, tap vs drag, tap-tap, release rules, area classification), the clipped dashed range ring, the price tag shown over the sell zone. |
-| `debug.ts` | `?scene=battle&chapter=N&stake=N&seed=N&mode=...&sandbox=1&runs=N` (plus `rug=`, `fx=`, `level=`) and `window.__dbg.battle = { scene, ctx, battle, give, skipToWave, spawn, win, lose, setSpeed }`. Loaded lazily by `main.ts`, debug builds only. |
+| **Board** (`rug.ts`) | One cream sheet (`buildRug(skin)`, origin = top-left, still exports `RUG_W/RUG_H/RUG_X/RUG_Y`, used by the shop preview): hand-cut edge on a flat shadow (`drawPaperShadow/Face`, one `paperSeed()`), the skin's flat pattern, a dashed line 8 px inside (`drawDashedRect`), one strip of tape at the top, and twenty cell squares laid on it (a shade darker, soft irregular corners, own seed each). The pattern is drawn twice: full strength under the cells (it shows in the gutters and the rim) and as a whisper over them. Baked once with `cacheStatic`. |
+| **Rug skins** (`rugSkins.ts`) | All 13 ids are craft mats: `{ pattern, paper, mark, dash, tape, tapePrint }`, every colour a kit token or a `mixColor` of two (no hex). Default = the mock's cream sheet, plain, teal dash, sky dotted tape. Patterns: plain, stripes, gingham, dots, paws, waves, stars, diamond. `cellPaper(skin)` = the sheet a shade darker. |
+| **Walkway** (`walkway.ts`) | A quiet trail of paw prints in `woodDark` at 34 % alpha along the loop, four small cream paper arrow tags at the corners (travel direction), and the entrance: a cut-paper mouse door with a dark opening and a coral arrow tag in front of it. Baked once. This game has no leak point (enemies circle until the field count rules end the run, see the battle spec), so there is nothing else to sign. |
+| **Cells** (`cells.ts`, `art.ts`) | Three shared sprites per cell: a flat paper tint (`tileFill`, tinted), a dashed outline (`tileRing`, tinted) and a small round sticker. Looks: `selected` teal, `origin` kraft (the empty slot a lifted cat left), `move` teal, `swap` mustard, `merge` leaf green, `blocked` berry. Moves and swaps stay quiet (faint tint and outline) until the pointer is over them; merges stay loud and their outline breathes; blocked shows a soft berry tint and a sticker only under the pointer. Every look has its own sticker as well as its colour. Press = the paper dips. |
+| **Drag preview** (`preview.ts`) | Over an identical cat: a paper speech bubble with the RESULT's portrait, its name and its rank name from `mergeResultOf(held.id)` (the line a build follows; flips below the cell on the top row, tail always on the target, clamped to the field). Over an empty cell: a 40 % ghost of the held cat. Over another cat: a ghost of that cat in the cell the held one left. One pooled object, redrawn only when the result or tail changes, never per frame. |
+| **Cats** (`unitView.ts`) | A flat ground shadow, a **rank tag** under the feet (paper in the rarity hue with one cream pip per rank, so rank never rests on colour), a **class sticker** (round, class paper, cream border, flat shadow) at the left foot, sunlit = a warm tint (no glow). Lifted: the shadow grows, the sprite rises, tilts the way it is pulled and leans (`lean`). Shield = flat sky bubble with a cream outline; cannot act = berry sticker with a slash. Spawn and reveal pops overshoot a little (1.7 to 2.1, was 2.2 to 3.0). |
+| **Enemies** (`enemyView.ts`) | Flat shadow; **health bar** = kraft strip (9-slice) with a painted fill (`paintTexture`, leaf / mustard / coral by health) and a sky shield segment; elite = mustard star sticker and a dashed mustard ground ring, boss = berry crown sticker and a dashed berry ring; status = flat tints plus one small sticker above the bar (slow, freeze, burn, poison, rage); focus = dashed berry ring; stun = a paper star. |
+| **Range ring** (`rangeRing.ts`) | A dashed teal circle (dashes of constant length at any range) with a faint flat teal fill, clipped to the field. |
+| **Shots** (`projectiles.ts`, `projectileLooks.ts`, `art.ts`) | Flat shapes with a cream sticker border and a thin ink edge; the streak behind is a pale flat swipe (no additive glow). `ProjectileLook.glow` is gone. |
+| **Sell tag** (`sellTag.ts`) | A cream paper pill, berry-dark "Sell" cue, fish icon, ink amount. |
+| **Floor** (`background.ts`) | The chapter art is untouched; on top of it a warm vignette (one stretched sprite of `fxVignette()` in `Color.shadow`) and a warm shade at the top and bottom (no more purple-brown `bgDeep`), so the cream sheet stays the brightest thing on the floor. |
+| **Ground effects** (`effects.ts` + `fx/zones.ts`) | Sunbeam cell = a flat mustard patch, two pale leaning bands and a small sun sticker; hazard warning and active hazard = berry dashed outline, flat tint (water blue or mustard), a drop or bolt sticker. See `fx.md`. |
+
+## Files
+
+`art.ts` (baked textures: shadow, rank tags, class stickers, cell stickers, tile paper and outline, rings, shield bubble, status and elite/boss stickers, bar track, shot shapes), `background.ts`, `cells.ts`, `clock.ts`, `debug.ts`, `effects.ts`, `enemies.ts`, `enemyView.ts`, `env.ts`, `index.ts`, `input.ts`, `motion.ts`, `policy.ts` (tints are tokens now), `preview.ts` (new), `projectileLooks.ts`, `projectiles.ts`, `rangeRing.ts`, `rug.ts`, `rugSkins.ts`, `sellTag.ts`, `unitView.ts`, `units.ts`, `walkway.ts`.
+
+Removed because the restyle left them unused: `perimeterDashes` (stitching), the rarity glow colour of the merge look (`UnitViews.mergeColor`), the rarity base discs, the sunlit glow sprite, additive trails and glows on shots, the enemy aura and the dark health plate.
 
 ## How it is wired
 
-- Layer tree: `background`, then a never-moving `shake` container holding `fieldRoot` (positioned at the layout's field origin) with `floor, zones, fxBack, enemies, units, projectiles, fxFront, numbers`, then `hud`, then `overlay`. `fxBack` sits right above `zones` (behind characters, as its comment says), not above `projectiles` as the contract's list order reads. `game.setShakeTarget(shake)` is set on construction and cleared on exit, so only the field shakes.
-- Clock (`BattleScene.update`): `battleDt = clock.tick(dt, fxClock)`; the simulation, `ctx.tweens` take `battleDt`; `ctx.ui`, the three parts and `ctx.fx` take real `dt`. Effect presets that ask for hit-stop go through a `TimeFreeze` whose factor is multiplied in, so the guide's caps hold. The scene pauses with reason `system` while `game` reports the tab hidden.
-- The field reads the simulation every frame (units, enemies, projectiles, zones, hazards, sunbeams, laser) and uses events only for flourishes, so skipped or missing events (fast-forward, revive) cannot leave stale visuals; vanished views fade quietly.
-- Ground effects (sunbeams, hazards, zones) run on a second `Fx` bound to `layers.zones`, updated by the field. `ctx.fx` (on `fxFront`) is used for the laser dot and the weakened swirl.
-- `ctx.exit()` goes to the scene registered with `setBattleExit(() => new HomeScene())`, otherwise `BootScene`. `ctx.retry()` starts a new `BattleScene` (same seed for sandbox and daily runs, a fresh seed otherwise; `runsPlayed + 1`).
-- `finished`: the scene announces it itself only when the director has not within 8 real seconds of the simulation's `victory` / `defeat` event.
-
-## Things the director and HUD should know
-
-- Unit view containers: `ctx.unitView(uid)` is the unit's `root` (positioned at the feet). The field never writes the root's scale, alpha or visibility except when it recycles the view, so `popIn`, `punchScale` and friends are safe on it. The sprite is `root.getChildByLabel('sprite', true)`. The field overwrites root position every frame.
-- Awakening hand-off: on `awaken` the field keeps the OLD unit's view (hide it with `visible = false` or `alpha = 0` when your cut-in starts; otherwise the field fades it at 0.9 s) and creates the NEW unit's view hidden; reveal it by making its root visible (for example `popIn`) on your impact; otherwise the field pops it in at 2.4 s. This was not exercised against a real cut-in.
-- Boss death: a dead boss's view stays standing, still, in `ctx.enemyView(uid)` for 2.6 s or until its root is hidden (`visible = false` / `alpha = 0`), then the field removes it. Other enemies collapse in 170 ms (a white flash first). Enemy sprite: `root.getChildByLabel('sprite', true)`.
-- The field plays `audio.play('pickup')` and a light haptic when a drag lifts a unit (it owns that gesture). Do not repeat it on the `drag` event. Every other sound is yours.
-- `ctx.events 'drag'` is emitted on lift, whenever the cell under the pointer or the sell state changes, and with `{ from: null }` when the drag ends (drop, cancel, or interruption).
-- Interrupted drags (popup, pending choice, pause, lost pointer) put the unit back with a spring.
+- Layer tree: `background`, then the never-moving `shake` container holding `fieldRoot` with `floor, zones, fxBack, enemies, units, projectiles, fxFront, numbers`, then `hud`, then `overlay`. Cells and the drag preview use `floor` (tints, ghosts) and `projectiles` (stickers and the bubble, above the cats).
+- Clock (`BattleScene.update`), pause, hit-stop and slow motion: unchanged. The field reads the simulation every frame and uses events only for flourishes.
+- Awakening hand-off, boss death hold, drag events, refusal head-shake: unchanged (the cut-in in `fx.md` now hands over to the new cat as before; seen working, see below).
+- Rug skins reach the field through `RunConfig.rugSkin` -> `rugSkin(id)`; unknown ids fall back to `DEFAULT_RUG`.
+- Debug route and hooks unchanged: `?scene=battle&chapter=N&seed=N&sandbox=1&runs=N&rug=ID&lang=en|ko&debug=1`, `window.__dbg.battle`.
 
 ## Verified
 
-- `npx tsc --noEmit` prints nothing for my paths; `npx vitest run tests/view.field` passes (42 tests: layout and background placement, tap / release / area decisions, range-ring clipping, battle clock, attack / walk / death curves, rug skins and stitching, projectile looks).
-- Browser (Aside runner, screenshots in `scratchpad/shots/field/`, PAGE_ERRORS `[]` throughout): `f01_start` (empty board with sunbeams, doorway, paw trail), `f04_five_units` and `f05`-`f07` (summon pops, drag with every highlight, merge flight, result pop, projectiles in flight), `f10_mid_*` (bot-built mid-run board with walking cucumbers and a roomba), `g1_enemies` / `g1b_hazard` (elite, storm-cloud boss, wet and zap hazards with the blocked unit slumped and its no-act glyph), `g2_selected` (selection brackets, range ring, swap / move looks), `g3_laser` (laser dot), `g4_sell` / `g5_sold` (price tag over the sell zone, sale), `h1_kitchen_checks` (chapter 2 with the checks mat). Retry (fresh scene, same sandbox seed) and exit (boot screen) verified without errors.
-- The Aside tab renders at about 1 fps, so animation checks advance the game by hand (`ticker.update(lastTime + ms)` in a loop) and the QA scripts use that.
+- `npx tsc --noEmit` prints nothing for the whole tree; `npx vitest run tests/view.field tests/view.director tests/fx` = 13 files, 262 tests green (full suite: the one known `screens.shell.layout` xp-ring failure only). New or changed tests: rug skins as paper (token colours, cells a shade darker, every tape name exists, default = the mock's sheet), unit tints as tokens, sticker numerals (see `fx.md`), the no-purple palette test (see `director.md`).
+- Browser (Aside, `PAGE_ERRORS` `[]` in every run), screenshots in `scratchpad/shots/field/` (open these): `s1_prep` (prep with cats, sunbeams, shield bubble, walkway, entrance), `s1_selected`, `s1_drag_merge` (leaf outlines, result bubble, origin outline, lifted cat), `s1_drag_move`, `s1_drag_swap` (ghosts, quiet outlines), `s8_sell` (paper sell tag), `s8_laser`, `s2_cutin_b`, `s2_boss_warning`, `s2_hazard_warn`, `s2_hazard_warn2`, `s11_after` (awakened cat in place after the cut-in), `s9_victory_a/b`, `s6_defeat_a/b`, `ch1` to `ch5` and `ch1_tall` to `ch5_tall` (each chapter with its own mat, 720 x 1280 and the 720 x 1600 layout), `crowd1/2` (crowded wave 21, chapter 3), `rugs_sheet` (all 13 mats with cats on them), `en_drag_merge`, `en_banners`, `en_tall` (English).
+- Tall layouts were produced by overriding `window.visualViewport` to 405 x 900 and firing `resize` (`game.h` becomes 1600).
+- Frame time (Aside, chapter 3, wave 21, 20 cats, 48 enemies on screen, speed 3, 150 frames of `game.tick + render + gl.finish`, same script before and after): before mean 9.2 ms, p50 7.7, p95 17.2; after mean 9.4, 9.7 and 9.2 ms over three runs, p50 7.5 to 8.3, p95 15.7 to 17.8. No measurable change. Every paper shape is baked once (`cacheStatic` or texture bakes in `art.ts`), cell and status looks switch textures and tints only.
 
 ## Known gaps
 
-- Not seen in the browser: the awakening hand-off against the real cut-in, molt, the zone looks (blizzard / black hole / potion cloud), enemy status tints beyond hazards, boss death hold with the director's sequence, tall (1600) and notch layouts (the maths is unit-tested only), and touch input on a real phone.
-- `skipToWave` mutes the simulation's event emitter while it fast-forwards (so the HUD opens no offers) and then every view re-reads the state; `win()` keeps events on, so offers opened during it stay open until the result flow takes over.
-- Units that are not on the board when a snapshot resumes appear with the normal spawn pop.
-- The sell tag's label (`view.sell`) is a new Hangul string; run `npm run font` (the dev script does it on start) so the subset has its glyphs.
-- Enemy sprites for `balloon_small` borrow the big balloon's art at a smaller size (no `enemy_balloon_small` image exists).
+- The sell zone is the HUD's panel: a dragged cat disappears behind it (the field layer sits under the HUD), only the sell tag shows. Unchanged behaviour, noted for the HUD owner.
+- The `blocked` cell look (berry tint, no-entry sticker) was checked in code and in the art bake, but not captured with a real blocked target (a hazard-wet cell) in the browser.
+- Zone looks of the three zone casters (blizzard, black hole, potion cloud) were seen only as the green potion discs in `crowd1`; blizzard and black hole are covered by the unit tests only.
+- Enemy status stickers were seen (slow, burn); freeze, poison and rage share the same code path and were not individually captured.
+- No leak point exists in the rules (see Walkway), so only the entrance carries a sign.
+- Touch input on a real phone was not tested.
 
 ## REQUESTS
 
-None blocking. Suggestions for other parts: the HUD's toy-pick screen and summon popup do not close when the simulation's pending choice is resolved from outside (only seen with the debug fast-forward); the director may want to use `layers.fxBack` for ground rings since the field leaves it empty.
+None. For other parts: the shop's `fxPreview` (`src/screens/shop/blocksStyle.ts`) still draws the old dark gradient and `drawGlow`; its rug preview uses `buildRug` and picks up the new mats without a change.

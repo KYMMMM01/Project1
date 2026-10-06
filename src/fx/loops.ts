@@ -2,9 +2,10 @@ import { Container, Point, type Sprite } from 'pixi.js';
 import type { Pool } from '@/core/pool';
 import type { Tween, TweenOpts } from '@/core/tween';
 import { damp } from '@/core/math';
+import { Color } from '@/ui/theme';
 import { smoothstep01 } from './curves';
 import type { FxHandle } from './handles';
-import type { Blend, BurstMods, EmitDef, EmitterHandle, ParticleSystem } from './particles';
+import type { BurstMods, EmitDef, EmitterHandle, ParticleSystem } from './particles';
 import { fxTex, type FxTexId } from './textures';
 
 /** A board cell or any rectangle, top-left based, in the Fx root's coordinates (design px). */
@@ -110,12 +111,11 @@ export class Loop implements ZoneHandle {
   }
 
   /** A pooled sprite from the atlas, added to this loop at its origin. Size it with fit(). */
-  sprite(id: FxTexId, blend: Blend, tint = 0xffffff): Sprite {
+  sprite(id: FxTexId, tint: number = Color.white): Sprite {
     const info = fxTex(id);
     const s = this.env.sprites.get();
     s.texture = info.texture;
     s.anchor.set(info.ax, info.ay);
-    s.blendMode = blend === 'add' ? 'add' : 'normal';
     s.tint = tint;
     s.alpha = 1;
     s.rotation = 0;

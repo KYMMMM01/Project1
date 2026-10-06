@@ -101,6 +101,18 @@ describe('cell looks and tints', () => {
     expect(unitTint(1, 1, 1)).toBe(unitTint(1, 0, 0));
   });
 
+  it('warms a sunlit cat, mutes a blocked one and cools a weakened one, never to a neon tone', () => {
+    const channels = (c: number): [number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+    const [sr, , sb] = channels(unitTint(0, 0, 1));
+    expect(sr).toBeGreaterThan(sb);
+    const [wr, , wb] = channels(unitTint(0, 1, 0));
+    expect(wb).toBeGreaterThan(wr);
+    const slump = channels(unitTint(1, 0, 0));
+    for (const ch of slump) expect(ch).toBeLessThan(250);
+    // Every tint is multiplied into the art, so none may crush it to near black.
+    for (const t of [unitTint(0, 0, 1), unitTint(0, 1, 0), unitTint(1, 0, 0)]) for (const ch of channels(t)) expect(ch).toBeGreaterThan(120);
+  });
+
   it('splits the bar between health and shield', () => {
     const out = { hp: 0, shield: 0 };
     barSegments(50, 100, 20, 40, out);

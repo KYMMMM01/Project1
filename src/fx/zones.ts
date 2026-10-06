@@ -1,11 +1,15 @@
 import { Graphics, Sprite, Texture, type Container } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { TAU, clamp01, lighten } from '@/core/math';
+import { drawDashedRect } from '@/ui/paper';
+import { Color } from '@/ui/theme';
 import { boltPointCount, buildBolt, strokeBolt } from './bolt';
 import { Loop, hash01, type FxEnv, type FxRect, type LoopOpts, type ZoneHandle } from './loops';
+import { Hue } from './palette';
 import { fxSettings } from './settings';
+import type { FxTexId } from './textures';
 
-const W = 0xffffff;
+const W = Hue.cream;
 const PI = Math.PI;
 
 /** Looping cell hazards and zones. Each returns a handle: stop() fades it out, `done` settles when it is gone. */
@@ -21,7 +25,7 @@ export interface ZoneOpts {
 export type HazardKind = 'wet' | 'zap';
 
 export interface HazardWarnOpts {
-  /** Telegraph time in seconds; the outline fills up over it. Default 0.8 (the battle rules' warning). */
+  /** Telegraph time in seconds; the tint fills up over it. Default 0.8 (the battle rules' warning). */
   duration?: number;
 }
 
@@ -29,91 +33,104 @@ function loopOpts(o: ZoneOpts, base: LoopOpts = {}): LoopOpts {
   return o.follow ? { ...base, follow: o.follow } : base;
 }
 
-/** Warm diagonal light shaft with slow dust motes over one board cell. About 2 sprites and 6 particles. */
+/** A round paper sticker at (x, y): flat shadow, cream border, coloured face and a cream glyph. */
+function sticker(loop: Loop, x: number, y: number, size: number, fill: number, glyph: FxTexId): void {
+  const shadow = loop.sprite('disc', Hue.shadow);
+  loop.fit(shadow, 'disc', size, size);
+  shadow.position.set(x + 1.5, y + 3);
+  shadow.alpha = 0.3;
+  const rim = loop.sprite('disc', W);
+  loop.fit(rim, 'disc', size, size);
+  rim.position.set(x, y);
+  const face = loop.sprite('disc', fill);
+  loop.fit(face, 'disc', size - 6, size - 6);
+  face.position.set(x, y);
+  const mark = loop.sprite(glyph, W);
+  loop.fit(mark, glyph, size * (glyph === 'droplet' ? 0.36 : 0.52), size * (glyph === 'droplet' ? 0.52 : 0.52));
+  mark.position.set(x, y + (glyph === 'droplet' ? 1 : 0));
+}
+
+/** The dashed outline every hazard cell wears, in berry. */
+function hazardOutline(loop: Loop, rect: FxRect): Graphics {
+  const g = new Graphics();
+  drawDashedRect(g, -rect.w / 2 + 4, -rect.h / 2 + 4, rect.w - 8, rect.h - 8, { radius: 22, color: Color.berry, width: 4, dash: 14, gap: 10 });
+  loop.own(g);
+  return g;
+}
+
+/**
+ * A sunbeam cell: a warm flat patch of light with two pale bands leaning across it and a small sun
+ * sticker in the corner. Quiet on purpose: the cats are the loudest thing on the board.
+ */
 export function sunbeamCell(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0xffd98a;
-  const hi = lighten(c, 0.45);
+  const c = o.color ?? Hue.gold;
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, rect.x + rect.w / 2, rect.y + rect.h / 2, { fadeIn: 0.7, fadeOut: 0.5 });
-  const long = Math.max(rect.w, rect.h) * 1.6;
-  const floor = loop.sprite('glow', 'add', c);
-  loop.fit(floor, 'glow', rect.w * 1.3, rect.h * 1.05);
-  const wide = loop.sprite('beam', 'add', c);
-  loop.fit(wide, 'beam', rect.w * 0.5, long);
-  const thin = loop.sprite('beam', 'add', hi);
-  loop.fit(thin, 'beam', rect.w * 0.17, long * 0.95);
-  const hair = loop.sprite('beam', 'add', W);
-  loop.fit(hair, 'beam', rect.w * 0.07, long * 0.8);
-  wide.x = -rect.w * 0.06;
-  thin.x = rect.w * 0.17;
-  hair.x = -rect.w * 0.22;
+  const patch = loop.sprite('patch', c);
+  loop.fit(patch, 'patch', rect.w - 6, rect.h - 6);
+  const long = Math.max(rect.w, rect.h) * 1.1;
+  const wide = loop.sprite('beam', Hue.sun);
+  loop.fit(wide, 'beam', rect.w * 0.22, long);
+  wide.x = -rect.w * 0.12;
+  const thin = loop.sprite('beam', Hue.sun);
+  loop.fit(thin, 'beam', rect.w * 0.09, long * 0.9);
+  thin.x = rect.w * 0.16;
+  sticker(loop, -rect.w / 2 + 22, -rect.h / 2 + 22, 30, c, 'sun');
   loop.step = (age) => {
     const slow = calm ? 0 : age;
-    // Leaning "\": the top of the shaft sits up-left of the cell centre.
-    const lean = -0.5 + 0.035 * Math.sin(slow * 0.7);
+    const lean = -0.5 + 0.03 * Math.sin(slow * 0.7);
     wide.rotation = lean;
-    thin.rotation = lean + 0.02 * Math.sin(slow * 0.9 + 1);
-    hair.rotation = lean - 0.015 * Math.sin(slow * 1.1);
-    floor.alpha = 0.3 + 0.08 * Math.sin(slow * 1.2);
-    wide.alpha = 0.34 + 0.1 * Math.sin(slow * 0.9 + 0.6);
-    thin.alpha = 0.42 + 0.12 * Math.sin(slow * 1.3 + 2);
-    hair.alpha = 0.3 + 0.12 * Math.sin(slow * 1.7 + 4);
+    thin.rotation = lean;
+    patch.alpha = 0.3 + 0.04 * Math.sin(slow * 1.2);
+    wide.alpha = 0.3;
+    thin.alpha = 0.34;
   };
-  loop.emit(
-    {
-      tex: 'dot', prio: 0, life: [2.2, 3.4], shape: { type: 'rect', w: rect.w * 0.8, h: rect.h * 0.8 }, speed: [4, 11], dir: -PI / 2 + 0.7, spread: 0.7, drag: 0.2,
-      size: [3, 6], colors: [W, hi], alpha: 0.9, fadeIn: 0.3, fadeOut: 0.4, sway: { amp: [3, 8], freq: [0.2, 0.5] },
-    },
-    2.8,
-  );
   return loop;
 }
 
 /**
- * Pulsing red target dot with two thin expanding rings and a tiny sparkle. moveTo() glides it to a
- * new spot (call it every frame to make it follow a finger or an enemy).
+ * The classic red laser dot with a faint beam running down to where the finger is: a flat red disc, a
+ * small cream highlight and a thin ring that pulses out. moveTo() glides it to a new spot (call it every
+ * frame to make it follow a finger or an enemy).
  */
 export function laserDot(env: FxEnv, x: number, y: number, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0xff2a3a;
+  const c = o.color ?? Hue.alarm;
   const s = o.scale ?? 1;
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, x, y, loopOpts(o, { fadeIn: 0.12, fadeOut: 0.2, halfLife: 0.045 }));
-  const glow = loop.sprite('glow', 'add', c);
-  const ringA = loop.sprite('ring', 'add', lighten(c, 0.3));
-  const ringB = loop.sprite('ring', 'add', lighten(c, 0.3));
-  const core = loop.sprite('dot', 'normal', c);
+  const beam = loop.sprite('beam', c);
+  loop.fit(beam, 'beam', 7 * s, 220 * s);
+  beam.y = 110 * s;
+  beam.alpha = 0.16;
+  const ringA = loop.sprite('ring', c);
+  const ringB = loop.sprite('ring', c);
+  const rim = loop.sprite('dot', W);
+  loop.fit(rim, 'dot', 23 * s, 23 * s);
+  const core = loop.sprite('dot', c);
   loop.fit(core, 'dot', 17 * s, 17 * s);
-  const hot = loop.sprite('dot', 'normal', W);
-  loop.fit(hot, 'dot', 7 * s, 7 * s);
-  const glint = loop.sprite('sparkle', 'add', 0xffd6dc);
-  glint.x = 10 * s;
-  glint.y = -10 * s;
-  loop.fit(glint, 'sparkle', 26 * s, 26 * s);
-  glow.alpha = 0.85;
+  const highlight = loop.sprite('dot', W);
+  loop.fit(highlight, 'dot', 5 * s, 5 * s);
+  highlight.position.set(-3 * s, -3 * s);
   loop.step = (age) => {
-    const beat = calm ? 0 : Math.sin(age * TAU * 2.2);
-    loop.fit(glow, 'glow', (70 + 9 * beat) * s, (70 + 9 * beat) * s);
     for (let i = 0; i < 2; i++) {
       const ring = i === 0 ? ringA : ringB;
       const p = calm ? 0.5 : (age * 1.1 + i * 0.5) % 1;
-      const d = (20 + 46 * Ease.cubicOut(p)) * s;
+      const d = (22 + 46 * Ease.cubicOut(p)) * s;
       loop.fit(ring, 'ring', d, d);
-      ring.alpha = calm ? 0.6 : 0.8 * (1 - p) * (1 - p);
+      ring.alpha = calm ? 0.5 : 0.7 * (1 - p) * (1 - p);
     }
-    glint.rotation = calm ? 0 : age * 1.6;
-    glint.alpha = calm ? 0.8 : 0.35 + 0.65 * Math.abs(Math.sin(age * 5.2));
   };
   return loop;
 }
 
 /**
- * Cell hazard telegraph: a rounded outline that blinks faster as time runs out while a fill rises
- * from the bottom of the cell, with a drop / bolt glyph so the kind is not told by colour alone.
+ * Cell hazard telegraph: a berry dashed outline that blinks faster as time runs out while a flat tint
+ * rises from the bottom of the cell, with a drop / bolt sticker so the kind is not told by colour alone.
  * Ends with a small pop after `duration` seconds.
  */
 export function hazardWarn(env: FxEnv, rect: FxRect, kind: HazardKind, o: HazardWarnOpts = {}): ZoneHandle {
   const duration = Math.max(0.1, o.duration ?? 0.8);
-  const col = kind === 'wet' ? 0x4da6ff : 0xffe23a;
+  const col = kind === 'wet' ? Hue.water : Hue.zap;
   const calm = fxSettings.reducedMotion;
   const pop = 0.2;
   const loop = new Loop(env, rect.x + rect.w / 2, rect.y + rect.h / 2, { fadeIn: 0.08, fadeOut: pop, life: duration });
@@ -122,58 +139,43 @@ export function hazardWarn(env: FxEnv, rect: FxRect, kind: HazardKind, o: Hazard
 
   const fill = new Sprite(Texture.WHITE);
   fill.anchor.set(0.5, 1);
-  fill.tint = lighten(col, 0.2);
-  fill.alpha = 0.5;
+  fill.tint = col;
+  fill.alpha = 0.34;
   fill.width = innerW;
   fill.y = innerH / 2;
-  const edge = new Sprite(Texture.WHITE);
-  edge.anchor.set(0.5);
-  edge.tint = W;
-  edge.alpha = 0.85;
-  edge.width = innerW;
-  edge.height = 4;
-  const outline = new Graphics().roundRect(-rect.w / 2 + 3, -rect.h / 2 + 3, rect.w - 6, rect.h - 6, 18).stroke({ width: 6, color: col });
   loop.own(fill);
-  loop.own(edge);
-  loop.own(outline);
-  const glyphId = kind === 'wet' ? 'droplet' : 'zapGlyph';
-  const glyph = loop.sprite(glyphId, 'normal', kind === 'wet' ? 0xd6ecff : W);
-  loop.fit(glyph, glyphId, Math.min(rect.w, rect.h) * 0.3 * (kind === 'wet' ? 0.7 : 1), Math.min(rect.w, rect.h) * 0.3);
+  const outline = hazardOutline(loop, rect);
+  sticker(loop, -rect.w / 2 + 22, -rect.h / 2 + 22, 32, Color.berry, kind === 'wet' ? 'droplet' : 'zapGlyph');
 
   loop.step = (age) => {
     const p = clamp01(age / duration);
-    const h = innerH * p;
-    fill.height = Math.max(0.01, h);
-    edge.y = innerH / 2 - h;
-    edge.visible = p > 0.02 && p < 1;
+    fill.height = Math.max(0.01, innerH * p);
     // 1.6 Hz rising to 3 Hz: a countdown, and still inside the flash-safety limit.
     const blink = calm ? 0.8 : 0.5 + 0.5 * Math.sin(age * TAU * (1.6 + 1.4 * p));
-    outline.alpha = 0.45 + 0.55 * blink;
-    glyph.alpha = 0.5 + 0.35 * blink;
+    outline.alpha = 0.5 + 0.5 * blink;
     const over = Math.max(0, age - duration) / pop;
-    loop.container.scale.set(1 + 0.16 * Ease.cubicOut(clamp01(over)));
+    loop.container.scale.set(1 + 0.12 * Ease.cubicOut(clamp01(over)));
   };
   return loop;
 }
 
-/** Looping puddle hazard: a glossy blue pool with rings spreading from random spots and droplets leaping out of it. */
+/** Looping puddle hazard: a flat blue pool with thin rings spreading from random spots and flat drops leaping out of it. */
 export function wetPuddle(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0x3f8fe8;
-  const light = lighten(c, 0.6);
+  const c = o.color ?? Hue.water;
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, rect.x + rect.w / 2, rect.y + rect.h / 2 + rect.h * 0.08, { fadeIn: 0.35, fadeOut: 0.45 });
-  const pw = rect.w * 0.94;
-  const ph = rect.h * 0.64;
-  const pool = loop.sprite('puddle', 'normal', c);
+  const pw = rect.w * 0.9;
+  const ph = rect.h * 0.6;
+  const tint = loop.sprite('patch', c);
+  loop.fit(tint, 'patch', rect.w - 6, rect.h - 6);
+  tint.y = -rect.h * 0.08;
+  tint.alpha = 0.16;
+  const pool = loop.sprite('puddle', c);
   loop.fit(pool, 'puddle', pw, ph);
-  pool.alpha = 0.7;
-  const sheen = loop.sprite('puddle', 'add', light);
-  sheen.alpha = 0.16;
-  const rings = [loop.sprite('ring', 'add', W), loop.sprite('ring', 'add', W), loop.sprite('ring', 'add', W)];
+  pool.alpha = 0.78;
+  const rings = [loop.sprite('ring', W), loop.sprite('ring', W), loop.sprite('ring', W)];
   const period = 1.7;
   loop.step = (age) => {
-    const b = calm ? 0 : Math.sin(age * 1.6);
-    loop.fit(sheen, 'puddle', pw * (0.86 + 0.03 * b), ph * (0.82 + 0.04 * b));
     for (let i = 0; i < 3; i++) {
       const t = age / period + i / 3;
       const cycle = Math.floor(t);
@@ -183,13 +185,15 @@ export function wetPuddle(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHandl
       loop.fit(ring, 'ring', wd, wd * 0.42);
       ring.x = (hash01(cycle * 3 + i) - 0.5) * pw * 0.5;
       ring.y = (hash01(cycle * 5 + i + 7) - 0.5) * ph * 0.3;
-      ring.alpha = calm ? 0 : 0.75 * Math.pow(1 - p, 1.5);
+      ring.alpha = calm ? 0 : 0.8 * Math.pow(1 - p, 1.5);
     }
   };
+  hazardOutline(loop, rect).y = -rect.h * 0.08;
+  sticker(loop, -rect.w / 2 + 22, -rect.h * 0.08 - rect.h / 2 + 22, 30, Color.berry, 'droplet');
   loop.emit(
     {
       tex: 'droplet', prio: 0, life: [0.55, 0.85], shape: { type: 'rect', w: pw * 0.7, h: ph * 0.3 }, speed: [120, 210], dir: -PI / 2, spread: 0.45,
-      gravity: 640, size: [9, 13], sizeEnd: [6, 9], colors: [W, light], alpha: 0.95, fadeIn: 0, fadeOut: 0.35,
+      gravity: 640, size: [9, 13], sizeEnd: [6, 9], colors: [W, lighten(c, 0.5)], alpha: 0.95, fadeIn: 0, fadeOut: 0.35,
     },
     calm ? 1.2 : 3.4,
     0,
@@ -198,21 +202,20 @@ export function wetPuddle(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHandl
   return loop;
 }
 
-/** Looping electrified-cell hazard: a flickering yellow glow, crackling arcs that jump across the cell and flying sparks. */
+/** Looping electrified-cell hazard: a flat mustard tint that flickers, crackling arcs that jump across the cell and flying sparks. */
 export function zapCell(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0xffe23a;
+  const c = o.color ?? Hue.zap;
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, rect.x + rect.w / 2, rect.y + rect.h / 2, { fadeIn: 0.25, fadeOut: 0.35 });
-  const glow = loop.sprite('glow', 'add', c);
-  loop.fit(glow, 'glow', rect.w * 1.25, rect.h * 1.05);
-  const glyph = loop.sprite('zapGlyph', 'add', lighten(c, 0.5));
-  loop.fit(glyph, 'zapGlyph', Math.min(rect.w, rect.h) * 0.3, Math.min(rect.w, rect.h) * 0.3);
+  const tint = loop.sprite('patch', c);
+  loop.fit(tint, 'patch', rect.w - 6, rect.h - 6);
+  hazardOutline(loop, rect);
+  sticker(loop, -rect.w / 2 + 22, -rect.h / 2 + 22, 30, Color.berry, 'zapGlyph');
   const pts = new Float32Array(2 * boltPointCount(3));
   let next = 0.1;
   loop.step = (age) => {
     const flick = calm ? 0.6 : 0.5 + 0.5 * Math.sin(age * 17) * Math.sin(age * 7.3 + 1);
-    glow.alpha = 0.2 + 0.2 * flick;
-    glyph.alpha = 0.3 + 0.3 * flick;
+    tint.alpha = 0.18 + 0.14 * flick;
     if (calm || age < next) return;
     next = age + 0.1 + 0.1 * hash01(age * 91.7);
     // Two arcs per burst, each a chord from one random point to another at least a third of a cell away.
@@ -242,16 +245,16 @@ export function zapCell(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHandle 
  * down, with the odd sweat drop. Pass `follow` (the unit's sprite) so it rides along when the unit is moved.
  */
 export function weakenSwirl(env: FxEnv, x: number, y: number, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0x6f9dff;
+  const c = o.color ?? Hue.water;
   const s = o.scale ?? 1;
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, x, y, loopOpts(o, { fadeIn: 0.3, fadeOut: 0.35 }));
   const N = 7;
-  const glows: Sprite[] = [];
+  const rims: Sprite[] = [];
   const beads: Sprite[] = [];
   for (let i = 0; i < N; i++) {
-    glows.push(loop.sprite('glow', 'add', c));
-    beads.push(loop.sprite('dot', 'normal', lighten(c, 0.35)));
+    rims.push(loop.sprite('dot', W));
+    beads.push(loop.sprite('dot', c));
   }
   loop.step = (age) => {
     const spin = age * (calm ? 0.9 : 2.5);
@@ -262,22 +265,22 @@ export function weakenSwirl(env: FxEnv, x: number, y: number, o: ZoneOpts = {}):
       const px = Math.cos(phase) * radius;
       // A flattened orbit whose centre sinks along the chain: the spiral hangs down like a wilted curl.
       const py = (-46 + u * 52 + u * u * 14) * s + Math.sin(phase) * radius * 0.42;
-      const size = (26 - 12 * u) * s;
-      const g = glows[i] as Sprite;
+      const size = (22 - 10 * u) * s;
+      const r = rims[i] as Sprite;
       const b = beads[i] as Sprite;
-      g.position.set(px, py);
+      r.position.set(px, py);
       b.position.set(px, py);
-      loop.fit(g, 'glow', size * 2.4, size * 2.4);
-      loop.fit(b, 'dot', size * 0.62, size * 0.62);
-      const a = 1 - 0.62 * u;
-      g.alpha = 0.55 * a;
+      loop.fit(r, 'dot', size, size);
+      loop.fit(b, 'dot', size - 4, size - 4);
+      const a = 1 - 0.55 * u;
+      r.alpha = a;
       b.alpha = a;
     }
   };
   loop.emit(
     {
       tex: 'droplet', prio: 0, life: [0.7, 1.0], shape: { type: 'circle', r: 18 * s }, speed: [4, 16], dir: Math.PI / 2, spread: 0.6, gravity: 150 * s,
-      size: [10, 14], sizeEnd: [7, 9], colors: [0xdcecff, 0xa9d4ff], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.4,
+      size: [10, 14], sizeEnd: [7, 9], colors: [Hue.iceLight, Hue.ice], alpha: 0.95, fadeIn: 0.1, fadeOut: 0.4,
     },
     calm ? 0.5 : 1.3,
     0,
@@ -286,34 +289,34 @@ export function weakenSwirl(env: FxEnv, x: number, y: number, o: ZoneOpts = {}):
   return loop;
 }
 
-/** The soft disc and thin boundary ring every zone shares, so players can read its exact reach. */
+/** The flat disc and thin boundary ring every zone shares, so players can read its exact reach. */
 function zoneBase(loop: Loop, radius: number, disc: number, tint: number, discAlpha: number, ringAlpha: number): { disc: Sprite; ring: Sprite } {
-  const d = loop.sprite('glow', 'add', disc);
-  loop.fit(d, 'glow', radius * 2.1, radius * 2.1);
+  const d = loop.sprite('disc', disc);
+  loop.fit(d, 'disc', radius * 2.06, radius * 2.06);
   d.alpha = discAlpha;
-  const ring = loop.sprite('ring', 'add', tint);
+  const ring = loop.sprite('ring', tint);
   loop.fit(ring, 'ring', radius * 2.06, radius * 2.06);
   ring.alpha = ringAlpha;
   return { disc: d, ring };
 }
 
-/** Looping blizzard: pale disc, wind streaks circling the zone and snow and ice crystals blowing across it. */
+/** Looping blizzard: pale blue disc, wind streaks circling the zone and snow and paper crystals blowing across it. */
 export function blizzardZone(env: FxEnv, x: number, y: number, radius: number, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0xbfe6ff;
+  const c = o.color ?? Hue.ice;
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, x, y, loopOpts(o, { fadeIn: 0.5, fadeOut: 0.6 }));
-  const base = zoneBase(loop, radius, 0x8ccbff, lighten(c, 0.4), 0.2, 0.5);
+  const base = zoneBase(loop, radius, c, Hue.water, 0.2, 0.6);
   const STREAKS = 6;
   const streaks: Sprite[] = [];
   for (let i = 0; i < STREAKS; i++) {
-    const s = loop.sprite('spark', 'add', lighten(c, 0.5));
+    const s = loop.sprite('spark', W);
     loop.fit(s, 'spark', radius * 0.7, 12);
-    s.alpha = 0.5;
+    s.alpha = 0.7;
     streaks.push(s);
   }
   loop.step = (age) => {
-    base.ring.alpha = 0.42 + (calm ? 0 : 0.12 * Math.sin(age * 1.4));
-    base.disc.alpha = 0.18 + (calm ? 0 : 0.04 * Math.sin(age * 0.9));
+    base.ring.alpha = 0.5 + (calm ? 0 : 0.1 * Math.sin(age * 1.4));
+    base.disc.alpha = 0.2 + (calm ? 0 : 0.03 * Math.sin(age * 0.9));
     const spin = age * (calm ? 0.4 : 1.5);
     for (let i = 0; i < STREAKS; i++) {
       const a = spin + (i / STREAKS) * TAU;
@@ -335,36 +338,36 @@ export function blizzardZone(env: FxEnv, x: number, y: number, radius: number, o
   loop.emit(
     {
       tex: 'crystal', prio: 0, life: [1.4, 2.1], shape: { type: 'circle', r: r * 0.9 }, speed: [10, 30], dir: PI / 2, spread: 0.9, gravity: 40, gravityX: 40,
-      size: [14, 22], sizeEnd: [10, 16], spin: [-2, 2], rot: [0, TAU], colors: [W, lighten(c, 0.4)], alpha: 0.9, fadeIn: 0.2, fadeOut: 0.4, sway: { amp: [3, 8], freq: [0.4, 0.9] },
+      size: [14, 22], sizeEnd: [10, 16], spin: [-2, 2], rot: [0, TAU], colors: [W, Hue.iceLight], alpha: 0.9, fadeIn: 0.2, fadeOut: 0.4, sway: { amp: [3, 8], freq: [0.4, 0.9] },
     },
     r * 0.025,
   );
   loop.emit(
     {
-      tex: 'smoke', blend: 'normal', prio: 0, life: [1.5, 2.2], shape: { type: 'circle', r: r * 0.8 }, speed: [12, 30], dir: 0.4, spread: 1, drag: 0.4,
-      size: [r * 0.45, r * 0.65], sizeEnd: [r * 0.6, r * 0.85], rot: [0, TAU], spin: [-0.4, 0.4], colors: [0xeaf7ff, c], alpha: 0.22, fadeIn: 0.35, fadeOut: 0.5,
+      tex: 'smoke', prio: 0, life: [1.5, 2.2], shape: { type: 'circle', r: r * 0.8 }, speed: [12, 30], dir: 0.4, spread: 1, drag: 0.4,
+      size: [r * 0.45, r * 0.65], sizeEnd: [r * 0.6, r * 0.85], rot: [0, TAU], spin: [-0.4, 0.4], colors: [W, Hue.iceLight], alpha: 0.22, fadeIn: 0.35, fadeOut: 0.5,
     },
     r * 0.015,
   );
   return loop;
 }
 
-/** Looping potion mist: slow billowing clouds, rising bubbles and fizz in the potion's colour. */
+/** Looping potion mist: slow billowing flat puffs, rising bubble rings and fizz in the potion's colour. */
 export function potionCloud(env: FxEnv, x: number, y: number, radius: number, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0xb98cff;
+  const c = o.color ?? Color.leaf;
   const hi = lighten(c, 0.55);
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, x, y, loopOpts(o, { fadeIn: 0.5, fadeOut: 0.6 }));
-  const base = zoneBase(loop, radius, c, hi, 0.16, 0.42);
+  const base = zoneBase(loop, radius, c, Color.leafDark, 0.16, 0.55);
   const PUFFS = 5;
   const puffs: Sprite[] = [];
   for (let i = 0; i < PUFFS; i++) {
-    const p = loop.sprite('smoke', 'normal', i % 2 === 0 ? c : lighten(c, 0.25));
-    p.alpha = 0.34;
+    const p = loop.sprite('smoke', i % 2 === 0 ? c : lighten(c, 0.25));
+    p.alpha = 0.3;
     puffs.push(p);
   }
   loop.step = (age) => {
-    base.ring.alpha = 0.36 + (calm ? 0 : 0.1 * Math.sin(age * 1.7));
+    base.ring.alpha = 0.5 + (calm ? 0 : 0.1 * Math.sin(age * 1.7));
     const t = age * (calm ? 0.25 : 0.7);
     for (let i = 0; i < PUFFS; i++) {
       const a = t * (i % 2 === 0 ? 1 : -0.8) + (i / PUFFS) * TAU;
@@ -392,39 +395,35 @@ export function potionCloud(env: FxEnv, x: number, y: number, radius: number, o:
   return loop;
 }
 
-/** Looping black hole: a dark core, two counter-rotating accretion swirls and light streaks falling in. */
+/** Looping black hole drawn as ink on paper: a dark hub, two counter-rotating spiral arms and streaks falling in. */
 export function blackHole(env: FxEnv, x: number, y: number, radius: number, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? 0xa56bff;
-  const hi = lighten(c, 0.5);
+  const c = o.color ?? Color.inkSoft;
   const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, x, y, loopOpts(o, { fadeIn: 0.5, fadeOut: 0.55 }));
-  const base = zoneBase(loop, radius, 0x5a2fb0, c, 0.22, 0.42);
-  const swirlA = loop.sprite('vortex', 'add', c);
+  const base = zoneBase(loop, radius, Color.ink, c, 0.16, 0.55);
+  const swirlA = loop.sprite('vortex', c);
   loop.fit(swirlA, 'vortex', radius * 1.7, radius * 1.7);
-  const swirlB = loop.sprite('vortex', 'add', 0x5ac8ff);
+  const swirlB = loop.sprite('vortex', Color.kraftDark);
   loop.fit(swirlB, 'vortex', radius * 1.15, radius * 1.15);
-  const rim = loop.sprite('ringThick', 'add', hi);
-  const halo = loop.sprite('glow', 'normal', 0x07020f);
-  loop.fit(halo, 'glow', radius * 0.95, radius * 0.95);
-  halo.alpha = 0.85;
-  const core = loop.sprite('dot', 'normal', 0x000000);
+  const rim = loop.sprite('ringThick', Color.ink);
+  const core = loop.sprite('dot', Color.inkDeep);
   loop.step = (age) => {
     const spin = calm ? 0.25 : 1;
     swirlA.rotation = age * 2.2 * spin;
-    swirlA.alpha = 0.6;
+    swirlA.alpha = 0.7;
     swirlB.rotation = -age * 3.4 * spin;
-    swirlB.alpha = 0.42;
+    swirlB.alpha = 0.6;
     const beat = calm ? 0 : Math.sin(age * 3.1);
     const d = radius * (0.5 + 0.03 * beat);
     loop.fit(rim, 'ringThick', d, d);
-    rim.alpha = 0.55 + 0.15 * beat;
-    loop.fit(core, 'dot', radius * 0.3, radius * 0.3);
-    base.ring.alpha = 0.38 + (calm ? 0 : 0.1 * Math.sin(age * 2));
+    rim.alpha = 0.8;
+    loop.fit(core, 'dot', radius * 0.34, radius * 0.34);
+    base.ring.alpha = 0.5 + (calm ? 0 : 0.1 * Math.sin(age * 2));
   };
   loop.emit(
     {
       tex: 'spark', prio: 0, life: [0.7, 1.0], shape: { type: 'ring', r: radius * 0.98, width: radius * 0.24 }, size: [24, 38], sizeEnd: [8, 12], alignVel: true,
-      stretch: 0.0008, colors: [W, hi, c], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.3, converge: { swirl: 46, ease: Ease.cubicIn },
+      stretch: 0.0008, colors: [Hue.cream, Color.kraft], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.3, converge: { swirl: 46, ease: Ease.cubicIn },
     },
     radius * 0.1,
   );

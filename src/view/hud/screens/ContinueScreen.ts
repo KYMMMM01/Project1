@@ -1,14 +1,15 @@
 /**
  * "Continue?": offered once after a defeat that can still be revived. A full screen with the effect
- * spelled out, one ad button, one gem button and a plain way out. Sandbox runs continue for free.
+ * spelled out on one paper page, one ad button, one gem button and a plain way out. Sandbox runs
+ * continue for free.
  */
-import { Graphics } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
+import { Ease } from '@/core/tween';
 import { errorKey, profile } from '@/meta';
 import { ads } from '@/platform';
-import { Button, Color, drawGlow, drawIcon, motion, ScreenScaffold, toast, TweenBag, uiLabel, shade } from '@/ui';
-import { Ease } from '@/core/tween';
+import { Button, Color, drawDashedRect, drawIcon, drawPaintFill, motion, paperShape, paperSeed, ScreenScaffold, tapeStrip, toast, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
 import { offerRoute } from '../policy';
 
@@ -45,24 +46,31 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
   };
 
   const c = scaffold.content;
-  const glow = new Graphics();
-  drawGlow(glow, 0, 0, 190, shade(Color.danger, 0.3), 0.7);
-  glow.position.set(w / 2, 150);
-  glow.blendMode = 'add';
-  const heart = drawIcon('heart', 170);
-  heart.position.set(w / 2, 150);
   const stats = env.battle.getStats();
-  const where = uiLabel(t('hud.cont.where', { n: stats.wavesCleared, total: stats.totalWaves || '-' }), { size: 34, strokeWidth: 5 });
-  where.position.set(w / 2, 310);
+  const heart = drawIcon('heart', 150);
+  heart.position.set(w / 2, 150);
+  const where = uiLabel(t('hud.cont.where', { n: stats.wavesCleared, total: stats.totalWaves || '-' }), { size: 34 });
+  where.position.set(w / 2, 280);
   const why = uiLabel(t(reason === 'boss_timeout' ? 'hud.cont.why.boss' : 'hud.cont.why.over'), {
-    size: 30, wrap: w - 40, lineHeight: 40, color: Color.textDim, strokeWidth: 4, shadow: false,
+    size: 30, wrap: w - 100, lineHeight: 40, color: Color.inkSoft,
   });
-  why.position.set(w / 2, 380);
-  const fix = uiLabel(t(reason === 'boss_timeout' ? 'hud.cont.fix.boss' : 'hud.cont.fix.over'), {
-    size: 32, wrap: w - 40, lineHeight: 42, color: Color.gold, strokeWidth: 5, shadow: false,
-  });
-  fix.position.set(w / 2, 480);
-  c.addChild(glow, heart, where, why, fix);
+  why.position.set(w / 2, 344);
+  const fix = uiLabel(t(reason === 'boss_timeout' ? 'hud.cont.fix.boss' : 'hud.cont.fix.over'), { size: 32, wrap: w - 130, lineHeight: 42 });
+  fix.position.set(w / 2, 444);
+
+  // One cream page holds the story; the effect of continuing is marked with a stroke of yellow marker.
+  const pageH = Math.round(fix.y + fix.height / 2 + 50);
+  const page = new Container();
+  page.addChild(paperShape({ w: w - 16, h: pageH - 16, radius: 28, fill: Color.paper, seed: paperSeed() }));
+  page.position.set(w / 2, pageH / 2 + 8);
+  const marker = new Graphics();
+  drawPaintFill(marker, 56, fix.y - fix.height / 2 - 10, w - 112, fix.height + 20, Color.mustard);
+  marker.alpha = 0.8;
+  const cut = new Graphics();
+  drawDashedRect(cut, 22, 22, w - 44, pageH - 44, { radius: 22 });
+  const tape = tapeStrip({ name: 'sky', w: 120, h: 30, angle: -3, pattern: 'dots' });
+  tape.position.set(w / 2, 16);
+  c.addChild(page, cut, tape, marker, heart, where, why, fix);
 
   const revive = (btn: Button, via: 'ad' | 'gems' | null): void => {
     void (async () => {
@@ -82,7 +90,7 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
     })();
   };
 
-  let y = 640;
+  let y = pageH + 120;
   if (env.sandbox) {
     const go = new Button({ label: t('hud.cont.go'), icon: 'play', style: 'success', width: 560, height: 120, fontSize: 46 });
     go.position.set(w / 2, y);
@@ -99,7 +107,7 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
       y += 150;
     }
     const gem = new Button({
-      label: t('hud.cont.gems'), sublabel: String(GEMS), sublabelIcon: 'gem', style: 'purple', width: 560, height: 104, fontSize: 38,
+      label: t('hud.cont.gems'), sublabel: String(GEMS), sublabelIcon: 'gem', style: 'info', width: 560, height: 104, fontSize: 38,
       enabled: profile.data.gems >= GEMS, disabledMark: 'none',
     });
     gem.position.set(w / 2, y);
@@ -108,21 +116,19 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
     c.addChild(gem);
     y += 130;
   }
-  const quit = new Button({ label: t('hud.cont.quit'), style: 'neutral', width: 360, height: 92, fontSize: 34 });
+  const quit = new Button({ label: t('hud.cont.quit'), style: 'kraft', width: 360, height: 92, fontSize: 34 });
   quit.position.set(w / 2, y + 20);
   quit.onTap(() => finish(false));
   c.addChild(quit);
 
   if (!motion.reduced) {
+    // The heart beats: a scale change only, no glow.
     bag.run({
       duration: 1.4,
       repeat: -1,
       ease: Ease.sineInOut,
       yoyo: true,
-      onUpdate: (k) => {
-        glow.alpha = 0.55 + 0.45 * k;
-        heart.scale.set(1 + 0.06 * k);
-      },
+      onUpdate: (k) => heart.scale.set(1 + 0.06 * k),
     });
   }
   void scaffold.show(true);

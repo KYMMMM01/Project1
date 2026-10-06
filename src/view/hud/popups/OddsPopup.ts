@@ -19,11 +19,9 @@ export class OddsPopup extends Popup<void> {
   constructor(private readonly env: HudEnv) {
     super({ dismissResult: undefined, priority: 1 });
     this.table = new OddsTable({ width: TABLE_W, rows: [] });
-    this.gradeT = uiLabel('', { size: 28, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
-    this.status = uiLabel('', { size: 28, anchorX: 0, anchorY: 0, align: 'left', color: Color.gold, strokeWidth: 4, shadow: false, wrap: TABLE_W });
-    this.rule = uiLabel('', {
-      size: 24, anchorX: 0, anchorY: 0, align: 'left', color: Color.textDim, wrap: TABLE_W, lineHeight: 32, strokeWidth: 4, shadow: false,
-    });
+    this.gradeT = uiLabel('', { size: 28, anchorX: 0, align: 'left' });
+    this.status = uiLabel('', { size: 28, anchorX: 0, anchorY: 0, align: 'left', wrap: TABLE_W });
+    this.rule = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, align: 'left', color: Color.inkSoft, wrap: TABLE_W, lineHeight: 32 });
     this.gradeT.position.set(40, 100);
     this.table.position.set((W - TABLE_W) / 2, 130);
     // Measure first: the rule text is longer in English, so the panel is as tall as its content.

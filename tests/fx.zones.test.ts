@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container, Texture } from 'pixi.js';
+import { Color } from '@/ui/theme';
 
 vi.mock('@/fx/textures', () => ({
   ensureFxTextures: () => undefined,
@@ -72,10 +73,11 @@ describe('Loop lifecycle', () => {
     const loop = new Loop(env, 10, 20, { fadeIn: 0.2, fadeOut: 0.3 });
     expect(loops).toEqual([loop]);
     expect(ground.children).toContain(loop.container);
-    const a = loop.sprite('glow', 'add');
-    loop.sprite('ring', 'normal', 0xff0000);
+    const a = loop.sprite('disc');
+    loop.sprite('ring', Color.coral);
     expect(loop.container.children.length).toBe(2);
-    expect(a.blendMode).toBe('add');
+    expect(a.blendMode).not.toBe('add');
+    expect(a.tint).toBe(Color.white);
 
     advance(loop, 0.05);
     expect(loop.container.alpha).toBeGreaterThan(0);
@@ -116,7 +118,7 @@ describe('Loop lifecycle', () => {
   it('dispose() is idempotent and a disposed loop ignores updates and moves', () => {
     const { env, pool } = makeEnv();
     const loop = new Loop(env, 0, 0);
-    loop.sprite('dot', 'add');
+    loop.sprite('dot');
     loop.dispose();
     loop.dispose();
     loop.update(DT);
@@ -129,8 +131,8 @@ describe('Loop lifecycle', () => {
     const { env, pool } = makeEnv();
     for (let i = 0; i < 50; i++) {
       const loop = new Loop(env, 0, 0);
-      loop.sprite('dot', 'add');
-      loop.sprite('ring', 'add');
+      loop.sprite('dot');
+      loop.sprite('ring');
       loop.dispose();
     }
     expect(pool.created).toBe(2);

@@ -54,10 +54,18 @@ export class Hints {
     return this.seen.has(id);
   }
 
-  /** Ask for a bubble on `target`; ignored when the player has seen it or it is already waiting. */
-  request(id: HintId, target: Container, onSelection = false): void {
+  /**
+   * Ask for a bubble on `target`; ignored when the player has seen it or it is already waiting. `first`
+   * puts it at the front of the queue and sends a bubble that is up right now back to wait its turn.
+   */
+  request(id: HintId, target: Container, onSelection = false, first = false): void {
     if (this.seen.has(id) || this.queue.some((q) => q.id === id)) return;
-    this.queue.push({ id, target, onSelection });
+    if (!first) {
+      this.queue.push({ id, target, onSelection });
+      return;
+    }
+    if (this.live && !this.live.onSelection) this.interrupt();
+    this.queue.unshift({ id, target, onSelection });
   }
 
   /** Drop everything still waiting (the target is gone, the screen changed). */

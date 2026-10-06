@@ -1,12 +1,13 @@
 /**
- * The four class chips: class glyph, five rarity pips (which rarities are on the board) and the
- * synergy tier. In the first run the row stays hidden until the first merge.
+ * The four class chips: class glyph, five rarity pips (which ranks are on the board) and the synergy
+ * tier, each cream card taped down with its class's washi tape. In the first run the row stays hidden
+ * until the first merge.
  */
 import { Container } from 'pixi.js';
 import { CLASS_IDS, type ClassId } from '@/game';
-import { ClassChip, motion, popIn, TweenBag } from '@/ui';
+import { ClassChip, CLASS_CHIP_H, CLASS_CHIP_W, motion, popIn, tapeStrip, TweenBag } from '@/ui';
 import type { HudEnv } from './env';
-import { CLASS_ACCENT, CLASS_ICON } from './kit';
+import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE } from './kit';
 
 const FIRST_X = 96;
 const STEP = 176;
@@ -14,6 +15,7 @@ const STEP = 176;
 export class ClassRow {
   readonly root = new Container();
   private readonly chips: ClassChip[] = [];
+  private readonly holders: Container[] = [];
   private readonly bag = new TweenBag();
   private dirty = true;
   private unlocked: boolean;
@@ -32,9 +34,14 @@ export class ClassRow {
         accent: CLASS_ACCENT[id],
         onTap: () => open(id),
       });
-      chip.position.set(FIRST_X + i * STEP, 0);
-      this.root.addChild(chip);
+      const tape = tapeStrip({ name: CLASS_TAPE[id], w: 56, h: 22, angle: i % 2 === 0 ? -20 : 16, pattern: i % 2 === 0 ? 'dots' : 'gingham' });
+      tape.position.set(-CLASS_CHIP_W / 2 + 26, -CLASS_CHIP_H / 2 + 2);
+      const holder = new Container();
+      holder.position.set(FIRST_X + i * STEP, 0);
+      holder.addChild(chip, tape);
+      this.root.addChild(holder);
       this.chips.push(chip);
+      this.holders.push(holder);
     });
     this.root.visible = this.unlocked;
 
@@ -54,8 +61,8 @@ export class ClassRow {
     this.unlocked = true;
     this.root.visible = true;
     this.refresh(false);
-    this.chips.forEach((chip, i) => {
-      if (!motion.reduced) popIn(this.bag, chip, { from: 0.3, duration: 0.3, delay: i * 0.06, overshoot: 2.5 });
+    this.holders.forEach((holder, i) => {
+      if (!motion.reduced) popIn(this.bag, holder, { from: 0.3, duration: 0.3, delay: i * 0.06, overshoot: 2.5 });
     });
     this.env.hints.request('chips', this.root);
   }

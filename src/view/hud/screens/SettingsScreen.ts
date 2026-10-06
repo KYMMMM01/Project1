@@ -4,7 +4,7 @@ import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { i18nEvents, t, getLang, type Lang } from '@/core/i18n';
 import type { NumbersMode } from '@/fx';
-import { Color, ScreenScaffold, SegmentTabs, Slider, Toggle, uiLabel, vGradient } from '@/ui';
+import { Color, drawPaper, paperSeed, ScreenScaffold, SegmentTabs, Slider, Toggle, uiLabel } from '@/ui';
 import { currentSettings, updateSettings } from '../settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '../settingsMath';
 
@@ -27,9 +27,8 @@ export function openSettings(onClose: () => void): ScreenScaffold {
       const row = new Container();
       row.position.set(0, y);
       const g = new Graphics();
-      g.roundRect(0, 4, w, h, 28).fill({ color: Color.black, alpha: 0.3 });
-      g.roundRect(0, 0, w, h, 28).fill(vGradient(Color.panelLight, Color.panel)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-      const text = uiLabel(label, { size: 32, anchorX: 0, align: 'left', strokeWidth: 5 });
+      drawPaper(g, 0, 0, { w, h, radius: 26, fill: Color.paperLight, edge: Color.kraftDark, seed: paperSeed(), grain: false });
+      const text = uiLabel(label, { size: 32, anchorX: 0, align: 'left' });
       text.position.set(28, h > ROW_H ? 40 : h / 2);
       row.addChild(g, text);
       scaffold.content.addChild(row);

@@ -3,12 +3,12 @@ import { tex } from '@/core/assets';
 import { damp } from '@/core/math';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
-import { Color, label } from '@/ui';
+import { Color, drawPaper, label, paperSeed } from '@/ui';
 
 const W = 188;
 const H = 54;
 
-/** The price tag that follows a dragged unit while it is over the sell zone: fish icon, amount, and a "Sell" cue. */
+/** The price tag that follows a dragged unit while it is over the sell zone: a paper tag with a "Sell" cue, the fish icon and the amount. */
 export class SellTag {
   readonly view = new Container();
   private readonly text: Text;
@@ -22,15 +22,15 @@ export class SellTag {
     this.view.label = 'sell-tag';
     this.view.eventMode = 'none';
     const bg = new Graphics();
-    bg.roundRect(-W / 2, -H / 2, W, H, H / 2).fill({ color: 0x2a1746, alpha: 0.94 }).stroke({ width: 4, color: Color.danger });
-    this.cue = label(t('view.sell'), { size: 26, color: Color.danger, stroke: Color.outline });
+    drawPaper(bg, -W / 2, -H / 2, { w: W, h: H, kind: 'pill', fill: Color.paperLight, seed: paperSeed() });
+    this.cue = label(t('view.sell'), { size: 26, color: Color.berryDark });
     this.cue.position.set(-W / 2 + 46, 0);
     this.icon = new Sprite(tex('icon_fish'));
     this.icon.anchor.set(0.5);
     this.icon.width = 38;
     this.icon.height = 27;
     this.icon.position.set(W / 2 - 78, 0);
-    this.text = label('', { size: 28, color: Color.gold, anchorX: 0 });
+    this.text = label('', { size: 28, anchorX: 0 });
     this.text.position.set(W / 2 - 58, 1);
     this.view.addChild(bg, this.cue, this.icon, this.text);
     this.view.visible = false;

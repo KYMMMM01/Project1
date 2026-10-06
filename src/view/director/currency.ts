@@ -8,6 +8,8 @@ import { hasTex, tex } from '@/core/assets';
 import type { BattleEvents } from '@/game';
 import { FlightLedger, PitchLadder, iconsFor, shareOf } from './policy';
 import type { Stage } from './stage';
+import { Hue } from '@/fx/palette';
+import { Color } from '@/ui/theme';
 
 /** A kill worth at least this much fish (elites, bosses) waits one tick for its death staging to claim it. */
 const BIG_KILL = 15;
@@ -102,12 +104,12 @@ export class CurrencyService {
         if (hasTex('icon_fish')) opts.texture = tex('icon_fish');
         else {
           opts.texture = fxTexture('coin');
-          opts.tint = 0xffd23f;
+          opts.tint = Color.mustard;
         }
         opts.size = small ? 34 : 44;
       } else {
         opts.texture = fxTexture('heart');
-        opts.tint = 0xff7fa8;
+        opts.tint = Hue.heart;
         opts.size = 34;
       }
       if (small) {

@@ -16,11 +16,13 @@ import type { MusicService } from './music';
 import { ABILITY_CAPTION } from './palette';
 import { WindowLimiter } from './policy';
 import { Gate, enemyInfo, type Bus, type Stage } from './stage';
+import { Hue } from '@/fx/palette';
+import { Color } from '@/ui/theme';
 
-const W = 0xffffff;
-const RED = 0xff4d5e;
-const ZAP = 0xcfe8ff;
-const WET = 0x62cfff;
+const W = Hue.cream;
+const RED = Color.berry;
+const ZAP = Hue.zap;
+const WET = Hue.water;
 
 export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: MusicService): void {
   const ctx = stage.ctx;
@@ -48,7 +50,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
       'alert',
       'warning',
       3,
-      { title: t('director.warning'), sub: t(boss ? 'director.bossIncoming' : 'director.eliteIncoming', { name }), color: boss ? 0xffd23f : 0xffa24a },
+      { title: t('director.warning'), sub: t(boss ? 'director.bossIncoming' : 'director.eliteIncoming', { name }), color: boss ? Color.berry : Color.coral },
       boss ? 1.9 : 1.4,
       0.2,
       0.2,
@@ -82,7 +84,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
     const en = e.enemy;
     const info = enemyInfo(en.id);
     fx.shockwave(en.x, en.y, { color: RED, radius: 150 });
-    fx.shockwave(en.x, en.y, { color: 0xffffff, radius: 100, delay: 0.1 });
+    fx.shockwave(en.x, en.y, { color: Hue.cream, radius: 100, delay: 0.1 });
     ps.burst(SOFT_RING, en.x, en.y, { colors: [W, RED], scale: 1.4 });
     stage.direct('boss_roar', info.boss ? 0.85 : 0.5, info.boss ? 1 : 1.3);
     if (stage.gates.ready(Gate.enrage, stage.now, 1)) {
@@ -117,11 +119,11 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
       case 'vaccinate': {
         const view = ctx.enemyView(en.uid);
         if (view) {
-          const aura = fx.buffAura(view, { color: 0x80e6b8, radius: info.radius * 1.6 });
+          const aura = fx.buffAura(view, { color: Color.leaf, radius: info.radius * 1.6 });
           remember(aura);
           stage.later(e.duration, () => aura.stop());
         } else {
-          fx.shockwave(en.x, en.y, { color: 0x80e6b8, radius: 120 });
+          fx.shockwave(en.x, en.y, { color: Color.leaf, radius: 120 });
         }
         stage.direct('heal', 0.6, 0.8);
         break;
@@ -209,7 +211,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
   on('weaken', (e) => {
     stage.play(stage.rules.weaken, 'weaken', 0.6, 1, 0.03);
     if (!sweatLimit.take(stage.now)) return;
-    ps.burst(SWEAT, cellCenterX(e.unit.cell), cellCenterY(e.unit.cell) - 36, { colors: [W, 0x9db4ff] });
+    ps.burst(SWEAT, cellCenterX(e.unit.cell), cellCenterY(e.unit.cell) - 36, { colors: [W, Hue.ice] });
   });
 
   on('laser', (e) => {
@@ -218,7 +220,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
   });
 
   on('laserEnd', (e) => {
-    ps.burst(SOFT_RING, e.state.x, e.state.y, { colors: [W, 0xff9aa6], scale: 0.5 });
+    ps.burst(SOFT_RING, e.state.x, e.state.y, { colors: [W, Hue.heart], scale: 0.5 });
     stage.direct('laser_off', 0.6);
   });
 

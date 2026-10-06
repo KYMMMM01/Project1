@@ -1,38 +1,60 @@
 /**
- * Boss / elite strip: name and health with a ghost trail, plus an estimated kill time computed from
- * the damage dealt over the last five seconds. It takes over the preview and toy area of the top
- * area's second row (the walkway runs right under the top area, so nothing may hang below it) and
- * marks the estimate on the wave timer, which is the time limit during such waves.
+ * Boss / elite strip: a wide torn paper strip with the boss sticker over its left end, the name, the
+ * time left, a health bar with a ghost trail and an estimated kill time computed from the damage dealt
+ * over the last five seconds. It takes over the preview and toy area of the top area's second row (the walkway
+ * runs right under the top area, so nothing may hang below it) and marks the estimate on the
+ * countdown bar, which is the time limit during such waves.
  */
 import { Container, Graphics, type Text } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { enemyDef, type EnemyState } from '@/game';
-import { Color, drawIcon, fitLabel, motion, ProgressBar, TweenBag, uiLabel, type IconName } from '@/ui';
+import {
+  Color,
+  drawIcon,
+  drawPaper,
+  fitLabel,
+  motion,
+  paperSeed,
+  paperShape,
+  ProgressBar,
+  TweenBag,
+  uiLabel,
+  type IconName,
+} from '@/ui';
 import type { HudEnv } from './env';
+import { enemyPortrait } from './kit';
 import { DamageWindow, killTone, type KillTone } from './killEstimate';
 import { topRects, type Rect } from './layoutMath';
 import type { TopBar } from './TopBar';
 
 /** Estimates beyond this many seconds read "99s or more" instead of a number nobody can use. */
 const EST_FAR = 99;
-const PAD = 14;
-const ROW_Y = 21;
+const STICKER = 78;
+/** Text starts right of the sticker; the torn right end keeps its own margin. */
+const TEXT_X = 54;
+const RIGHT_PAD = 28;
+const ROW_Y = 22;
+const HP_Y = 47;
 
-const TONE_COLOR: Record<KillTone, number> = { green: Color.success, amber: Color.primary, red: Color.danger };
+/** The paper each kill-time verdict sits on, with a glyph so the colour is never the only cue. */
+const TONE_PAPER: Record<KillTone, number> = { green: Color.leaf, amber: Color.mustard, red: Color.coral };
 const TONE_ICON: Record<KillTone, IconName> = { green: 'check', amber: 'clock', red: 'warning' };
 
 export class BossBar {
   readonly root = new Container();
   private readonly bag = new TweenBag();
-  private readonly back = new Graphics();
+  private readonly back = new Container();
   private readonly nameT: Text;
-  private readonly tagT: Text;
   private readonly estT: Text;
+  private readonly timeT: Text;
+  private readonly clock = drawIcon('clock', 24);
   private readonly mark = new Graphics();
   private readonly hp: ProgressBar;
-  private icon: Container | null = null;
-  private estIcon: Container | null = null;
+  private readonly seed = paperSeed();
+  private nameFull = '';
+  private sticker: Container | null = null;
+  private estBadge: Container | null = null;
   private estTone: KillTone | null = null;
   private readonly window = new DamageWindow();
   private boss: EnemyState | null = null;
@@ -42,6 +64,7 @@ export class BossBar {
   private hpDirty = false;
   private lastMarker = -2;
   private lastEst = '';
+  private lastLeft = -1;
   private rect: Rect;
   private timer: Rect;
 
@@ -53,11 +76,11 @@ export class BossBar {
     this.rect = r.boss;
     this.timer = r.timer;
     this.root.visible = false;
-    this.hp = new ProgressBar({ width: this.rect.w - PAD * 2, height: 26, color: 'red', ghost: true, value: 1 });
-    this.nameT = uiLabel('', { size: 26, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
-    this.tagT = uiLabel('', { size: 22, anchorX: 1, align: 'right', color: Color.gold, strokeWidth: 4, shadow: false });
-    this.estT = uiLabel('', { size: 24, anchorX: 1, align: 'right', strokeWidth: 4, shadow: false });
-    this.root.addChild(this.back, this.hp, this.nameT, this.tagT, this.estT, this.mark);
+    this.hp = new ProgressBar({ width: this.rect.w - TEXT_X - RIGHT_PAD, height: 24, color: 'red', ghost: true, value: 1 });
+    this.nameT = uiLabel('', { size: 26, anchorX: 0, align: 'left' });
+    this.estT = uiLabel('', { size: 24, anchorX: 1, align: 'right' });
+    this.timeT = uiLabel('', { size: 24, anchorX: 1, align: 'right' });
+    this.root.addChild(this.back, this.hp, this.nameT, this.timeT, this.clock, this.estT, this.mark);
 
     const b = env.battle;
     env.on(b.events, 'hit', ({ enemy, amount }) => {
@@ -84,15 +107,14 @@ export class BossBar {
     this.boss = enemy;
     this.finishing = false;
     const def = enemyDef(enemy.id);
-    const isBoss = def.traits.includes('boss');
-    this.nameT.text = t(def.nameKey);
-    this.tagT.text = t(isBoss ? 'trait.boss.name' : 'trait.elite.name');
-    this.icon?.destroy();
-    this.icon = drawIcon(isBoss ? 'skull' : 'warning', 30);
-    this.root.addChild(this.icon);
+    this.nameFull = t(def.nameKey);
+    this.sticker?.destroy({ children: true });
+    this.sticker = enemyPortrait(enemy.id, STICKER);
+    this.root.addChild(this.sticker);
     this.window.reset(this.env.battle.time);
     this.lastMarker = -2;
     this.lastEst = '';
+    this.lastLeft = -1;
     this.estTone = null;
     this.bag.killKeyed(this.root);
     this.shown = true;
@@ -163,45 +185,61 @@ export class BossBar {
   private place(): void {
     const { w, h } = this.rect;
     this.root.position.set(this.rect.x, this.rect.y);
-    this.back.clear().roundRect(0, 0, w, h, 22).fill({ color: Color.bgDeep, alpha: 0.9 }).stroke({ width: 4, color: Color.outline });
-    this.back.roundRect(4, 4, w - 8, h - 8, 18).stroke({ width: 2, color: Color.neutral, alpha: 0.35 });
-    this.hp.position.set(w / 2, h - 22);
-    this.icon?.position.set(PAD + 12, ROW_Y);
-    this.nameT.position.set(PAD + 32, ROW_Y);
-    this.tagT.position.set(w - PAD - 4, ROW_Y);
-    this.estT.position.set(w - PAD - 4 - this.tagT.width - 22, ROW_Y);
+    for (const c of this.back.removeChildren()) c.destroy({ children: true });
+    this.back.addChild(paperShape({ w, h: h - 8, radius: 10, fill: Color.paper, torn: ['right'], seed: this.seed, grain: false }));
+    this.back.position.set(w / 2, h / 2);
+    this.hp.position.set(TEXT_X + (w - TEXT_X - RIGHT_PAD) / 2, HP_Y);
+    this.sticker?.position.set(6, h / 2 - 2);
+    this.nameT.position.set(TEXT_X, ROW_Y);
     this.mark.position.set(this.timer.x + this.timer.w / 2 - this.rect.x, this.timer.y + this.timer.h / 2 - this.rect.y);
-    fitLabel(this.nameT, w - PAD * 2 - 32 - this.tagT.width - 170, 26, 0.7);
-    this.estIcon?.position.set(this.estT.x - this.estT.width - 18, ROW_Y);
+    this.layoutRow();
   }
 
-  /** Marker on the wave timer: the bar will have shrunk to here when the boss dies at today's rate. */
+  /** The top row, right to left: kill estimate with its verdict, the time left with a clock, and the name in what remains. */
+  private layoutRow(): void {
+    const right = this.rect.w - RIGHT_PAD;
+    this.estT.position.set(right, ROW_Y);
+    const badgeX = right - this.estT.width - 22;
+    this.estBadge?.position.set(badgeX, ROW_Y);
+    this.timeT.position.set(badgeX - 30, ROW_Y);
+    this.clock.position.set(badgeX - 30 - this.timeT.width - 18, ROW_Y);
+    this.nameT.text = this.nameFull;
+    fitLabel(this.nameT, this.clock.x - 14 - TEXT_X, 26, 0.7);
+  }
+
+  /** Marker on the countdown bar: the bar will have shrunk to here when the boss dies at today's rate. */
   private drawMark(frac: number, tone: KillTone | null): void {
     const g = this.mark.clear();
     if (frac < 0) return;
     const { w, h } = this.timer;
     const x = -w / 2 + 5 + frac * (w - 10);
-    const color = tone ? TONE_COLOR[tone] : Color.white;
-    g.poly([x - 9, h / 2 + 11, x + 9, h / 2 + 11, x, h / 2 - 1]).fill(color).stroke({ width: 3, color: Color.outline, join: 'round' });
-    g.rect(x - 1.5, -h / 2 + 2, 3, h - 4).fill({ color: Color.white, alpha: 0.9 });
+    const color = tone ? TONE_PAPER[tone] : Color.paper;
+    g.rect(x - 1.5, -h / 2 + 2, 3, h - 4).fill({ color: Color.ink, alpha: 0.75 });
+    g.poly([x - 9, h / 2 + 11, x + 9, h / 2 + 11, x, h / 2 - 1]).fill(color).stroke({ width: 3, color: Color.ink, join: 'round' });
   }
 
   private setEst(text: string, tone: KillTone | null): void {
+    let moved = false;
     if (text !== this.lastEst) {
       this.lastEst = text;
       this.estT.text = text;
+      moved = true;
     }
     if (tone !== this.estTone) {
+      moved = true;
       this.estTone = tone;
-      this.estIcon?.destroy();
-      this.estIcon = null;
-      this.estT.style.fill = tone ? TONE_COLOR[tone] : Color.textDim;
+      this.estBadge?.destroy({ children: true });
+      this.estBadge = null;
       if (tone) {
-        this.estIcon = drawIcon(TONE_ICON[tone], 26);
-        this.root.addChild(this.estIcon);
+        const badge = new Container();
+        const g = new Graphics();
+        drawPaper(g, -17, -17, { w: 34, h: 34, kind: 'circle', fill: TONE_PAPER[tone], shadow: 3, grain: false, seed: this.seed + 5 });
+        badge.addChild(g, drawIcon(TONE_ICON[tone], 24));
+        this.root.addChild(badge);
+        this.estBadge = badge;
       }
     }
-    this.estIcon?.position.set(this.estT.x - this.estT.width - 18, ROW_Y);
+    if (moved) this.layoutRow();
   }
 
   layout(): void {
@@ -224,6 +262,12 @@ export class BossBar {
     if (!this.boss) return;
     const limit = Math.max(0.001, b.waveDuration);
     const left = Math.max(0, limit - Math.min(limit, b.waveTime));
+    const seconds = Math.ceil(left);
+    if (seconds !== this.lastLeft) {
+      this.lastLeft = seconds;
+      this.timeT.text = t('hud.secs', { s: seconds });
+      this.layoutRow();
+    }
     const est = this.window.estimate(b.time, this.boss.hp + this.boss.shield);
     const known = est >= 0;
     const tone = known ? killTone(est, left) : null;

@@ -1,51 +1,68 @@
 import { Container, Sprite } from 'pixi.js';
-import { fxTexture } from '@/fx';
 import { damp } from '@/core/math';
+import { Color } from '@/ui';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { FieldArt, CellGlyph } from './art';
 import type { DropLook } from './policy';
 
-export type CellLook = 'selected' | DropLook | null;
+/** `origin` is the empty slot a lifted cat leaves behind; `selected` is the cat that was tapped. */
+export type CellLook = 'selected' | 'origin' | DropLook | null;
 
-/** Colour-blind-safe palette (blue / orange / yellow / grey), each also told apart by its glyph. */
-const LOOK_COLOR = { selected: 0xffe066, move: 0x56b4e9, swap: 0xe69f00, blocked: 0x151024 } as const;
+/** Opacities of the tint, the dashed outline and the sticker. */
+type Levels = readonly [fill: number, ring: number, glyph: number];
+
+interface LookStyle {
+  color: number;
+  glyph: CellGlyph | null;
+  /** Shown on every cell in this state. */
+  idle: Levels;
+  /** Shown on the cell under the pointer. */
+  hot: Levels;
+}
+
+/**
+ * One dashed outline and one flat tint per state, in the kit's paper colours, each with its own sticker
+ * as well so colour is never the only cue: teal = where it goes, leaf = merges, mustard = swaps, berry = refused.
+ * Moves and swaps stay quiet until the pointer is over them; merges stay loud, because finding the
+ * identical cats is the point of lifting one.
+ */
+const STYLE: Record<Exclude<CellLook, null>, LookStyle> = {
+  selected: { color: Color.teal, glyph: null, idle: [0.16, 1, 0], hot: [0.16, 1, 0] },
+  origin: { color: Color.kraftDark, glyph: null, idle: [0.2, 0.9, 0], hot: [0.2, 0.9, 0] },
+  move: { color: Color.teal, glyph: 'move', idle: [0.05, 0.26, 0], hot: [0.16, 1, 0.9] },
+  swap: { color: Color.mustardDark, glyph: 'swap', idle: [0.06, 0.32, 0], hot: [0.2, 1, 1] },
+  merge: { color: Color.leaf, glyph: 'merge', idle: [0.22, 0.95, 1], hot: [0.3, 1, 1] },
+  blocked: { color: Color.berry, glyph: 'blocked', idle: [0.1, 0, 0], hot: [0.22, 0.55, 0.85] },
+};
 
 interface Node {
   floor: Container;
   mark: Container;
   fill: Sprite;
-  frame: Sprite;
-  brackets: Sprite;
-  glow: Sprite;
+  ring: Sprite;
   glyph: Sprite;
   look: CellLook;
+  style: LookStyle | null;
   glyphKind: CellGlyph | null;
-  color: number;
   fillA: number;
-  frameA: number;
-  bracketsA: number;
-  glowA: number;
+  ringA: number;
   glyphA: number;
-  fillT: number;
-  frameT: number;
-  bracketsT: number;
-  glowT: number;
-  glyphT: number;
   hover: number;
   hoverT: number;
   press: number;
 }
 
 const HALF_LIFE = 0.045;
+const GLYPH_X = 35;
+const GLYPH_Y = -40;
 
 /**
- * Per-cell state looks, drawn from a handful of shared sprites each (no per-frame redraw). Every
- * look has its own glyph or shape as well as its colour: move = target ring, swap = double arrow,
- * merge = rarity glow + up arrow, blocked = dimmed + cross, selected = corner brackets.
+ * Per-cell state looks, drawn from three shared sprites each (no per-frame redraw): a flat paper tint,
+ * a dashed outline and a small sticker. The dashed outline of the merge look breathes so identical cats
+ * stand out while one is held.
  */
 export class CellLayer {
   private readonly nodes: Node[] = [];
-  private readonly glowTex = fxTexture('glow');
 
   constructor(
     private readonly floor: Container,
@@ -57,138 +74,86 @@ export class CellLayer {
       const y = cellCenterY(cell);
       const floorNode = new Container();
       floorNode.position.set(x, y);
-      const glow = new Sprite(this.glowTex);
-      glow.anchor.set(0.5);
-      glow.blendMode = 'add';
-      glow.width = 190;
-      glow.height = 190;
       const fill = new Sprite(art.tileFill);
       fill.anchor.set(0.5);
-      const frame = new Sprite(art.tileFrame);
-      frame.anchor.set(0.5);
-      const brackets = new Sprite(art.brackets);
-      brackets.anchor.set(0.5);
-      floorNode.addChild(glow, fill, frame, brackets);
+      const ring = new Sprite(art.tileRing);
+      ring.anchor.set(0.5);
+      floorNode.addChild(fill, ring);
       const markNode = new Container();
       markNode.position.set(x, y);
       const glyph = new Sprite(art.glyph.move);
       glyph.anchor.set(0.5);
+      glyph.position.x = GLYPH_X;
       markNode.addChild(glyph);
       floorNode.eventMode = 'none';
       markNode.eventMode = 'none';
       this.floor.addChild(floorNode);
       this.marks.addChild(markNode);
-      const node: Node = {
-        floor: floorNode, mark: markNode, fill, frame, brackets, glow, glyph, look: null, glyphKind: null, color: 0xffffff,
-        fillA: 0, frameA: 0, bracketsA: 0, glowA: 0, glyphA: 0, fillT: 0, frameT: 0, bracketsT: 0, glowT: 0, glyphT: 0,
-        hover: 0, hoverT: 0, press: 0,
-      };
+      fill.tint = Color.kraftDark;
       floorNode.visible = false;
       markNode.visible = false;
-      this.nodes.push(node);
+      this.nodes.push({
+        floor: floorNode, mark: markNode, fill, ring, glyph, look: null, style: null, glyphKind: null,
+        fillA: 0, ringA: 0, glyphA: 0, hover: 0, hoverT: 0, press: 0,
+      });
     }
   }
 
-  /**
-   * Set what one cell shows. `color` is the merge glow (the result's rarity colour); `hover` marks
-   * the cell under the pointer, which stands out more.
-   */
-  set(cell: number, look: CellLook, occupied: boolean, color: number, hover: boolean): void {
+  /** Set what one cell shows. `hover` marks the cell under the pointer, which stands out more. */
+  set(cell: number, look: CellLook, hover: boolean): void {
     const n = this.nodes[cell];
     if (!n) return;
     n.hoverT = hover ? 1 : 0;
-    if (n.look === look && n.color === color) return;
+    if (n.look === look) return;
     n.look = look;
-    n.color = color;
-    n.fillT = n.frameT = n.bracketsT = n.glowT = n.glyphT = 0;
-    let glyph: CellGlyph | null = null;
-    switch (look) {
-      case 'selected':
-        n.fill.tint = n.frame.tint = n.brackets.tint = LOOK_COLOR.selected;
-        n.fillT = 0.14;
-        n.frameT = 0.55;
-        n.bracketsT = 1;
-        break;
-      case 'move':
-        n.fill.tint = n.frame.tint = LOOK_COLOR.move;
-        n.fillT = 0.15;
-        n.frameT = 0.6;
-        if (!occupied) glyph = 'move';
-        n.glyph.tint = 0xcfeeff;
-        n.glyphT = 0.8;
-        break;
-      case 'swap':
-        n.fill.tint = n.frame.tint = LOOK_COLOR.swap;
-        n.fillT = 0.2;
-        n.frameT = 0.95;
-        glyph = 'swap';
-        n.glyph.tint = 0xffc34d;
-        n.glyphT = 1;
-        break;
-      case 'merge':
-        n.fill.tint = n.frame.tint = n.glow.tint = color;
-        n.fillT = 0.24;
-        n.frameT = 1;
-        n.glowT = 0.95;
-        glyph = 'arrowUp';
-        n.glyph.tint = color;
-        n.glyphT = 1;
-        break;
-      case 'blocked':
-        n.fill.tint = LOOK_COLOR.blocked;
-        n.fillT = 0.4;
-        glyph = 'blocked';
-        n.glyph.tint = 0xe3e6f4;
-        n.glyphT = 0.9;
-        break;
-      case null:
-        n.fill.tint = 0xffffff;
-        break;
+    n.style = look ? STYLE[look] : null;
+    if (!n.style) {
+      n.fill.tint = Color.kraftDark;
+      return;
     }
-    if (glyph && glyph !== n.glyphKind) {
-      n.glyph.texture = this.art.glyph[glyph];
-      n.glyphKind = glyph;
+    n.fill.tint = n.ring.tint = n.style.color;
+    if (n.style.glyph && n.style.glyph !== n.glyphKind) {
+      n.glyph.texture = this.art.glyph[n.style.glyph];
+      n.glyphKind = n.style.glyph;
     }
-    if (!glyph) n.glyphT = 0;
-    // Glyphs sit in the cell's top-right corner beside the unit's head; a target ring sits in the middle of an empty cell.
-    n.glyph.x = glyph === 'move' ? 0 : 33;
   }
 
-  /** Pointer went down on this cell: a quick light flash and dip, before anything else happens. */
+  /** Pointer went down on this cell: a quick dip of the paper, before anything else happens. */
   press(cell: number): void {
     const n = this.nodes[cell];
     if (n) n.press = 1;
   }
 
   update(dt: number, time: number): void {
+    const k = Math.pow(0.5, dt / HALF_LIFE);
     for (const n of this.nodes) {
-      const k = Math.pow(0.5, dt / HALF_LIFE);
-      n.fillA = n.fillT + (n.fillA - n.fillT) * k;
-      n.frameA = n.frameT + (n.frameA - n.frameT) * k;
-      n.bracketsA = n.bracketsT + (n.bracketsA - n.bracketsT) * k;
-      n.glowA = n.glowT + (n.glowA - n.glowT) * k;
-      n.glyphA = n.glyphT + (n.glyphA - n.glyphT) * k;
       n.hover = damp(n.hover, n.hoverT, 0.04, dt);
       if (n.press > 0) n.press = Math.max(0, n.press - dt * 5);
+      const st = n.style;
+      const h = n.hover;
+      const fillT = st ? st.idle[0] + (st.hot[0] - st.idle[0]) * h : 0;
+      const ringT = st ? st.idle[1] + (st.hot[1] - st.idle[1]) * h : 0;
+      const glyphT = st ? st.idle[2] + (st.hot[2] - st.idle[2]) * h : 0;
+      n.fillA = fillT + (n.fillA - fillT) * k;
+      n.ringA = ringT + (n.ringA - ringT) * k;
+      n.glyphA = glyphT + (n.glyphA - glyphT) * k;
 
-      const visible = n.fillA > 0.004 || n.frameA > 0.004 || n.glowA > 0.004 || n.glyphA > 0.004 || n.bracketsA > 0.004 || n.press > 0;
+      const visible = n.fillA > 0.004 || n.ringA > 0.004 || n.glyphA > 0.004 || n.press > 0;
       n.floor.visible = visible;
       n.mark.visible = visible;
       if (!visible) continue;
 
-      const h = n.hover;
       const lit = n.press;
-      n.fill.alpha = Math.min(1, n.fillA * (1 + 0.8 * h)) + 0.2 * lit;
-      n.frame.alpha = Math.min(1, n.frameA * (0.8 + 0.4 * h));
-      n.frame.scale.set(1 + 0.05 * h - 0.03 * lit);
+      const merge = n.look === 'merge';
+      n.fill.alpha = Math.min(1, n.fillA) + 0.22 * lit;
       n.fill.scale.set(1 + 0.04 * h - 0.03 * lit);
-      n.brackets.alpha = n.bracketsA;
-      n.brackets.scale.set(1 + 0.03 * Math.sin(time * 6));
-      n.glow.alpha = n.glowA * (0.7 + 0.3 * Math.sin(time * 5.2) + 0.3 * h);
-      const bob = n.look === 'merge' ? Math.sin(time * 8) * 3.5 : 0;
+      const beat = merge ? Math.sin(time * 7) : n.look === 'selected' ? Math.sin(time * 4) * 0.5 : 0;
+      n.ring.alpha = Math.min(1, n.ringA * (merge ? 0.82 + 0.18 * beat : 1));
+      n.ring.scale.set(1 + 0.05 * h - 0.03 * lit + 0.022 * beat);
+      const bob = merge ? Math.sin(time * 8) * 3 : 0;
       n.glyph.alpha = n.glyphA;
-      n.glyph.scale.set((n.look === 'swap' ? 0.85 : n.look === 'move' ? 0.62 : 0.8) * (1 + 0.28 * h) + (n.look === 'move' ? 0.06 * Math.sin(time * 6) : 0));
-      n.glyph.y = (n.glyphKind === 'move' ? 4 : -42) + bob;
+      n.glyph.scale.set((n.look === 'swap' ? 0.9 : 0.8) * (1 + 0.28 * h));
+      n.glyph.y = GLYPH_Y + bob;
     }
   }
 

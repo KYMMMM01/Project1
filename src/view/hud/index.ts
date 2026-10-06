@@ -15,6 +15,7 @@ import { EnvImpl } from './env';
 import { Hints } from './hints';
 import { PauseMenu, type PauseAction } from './popups/PauseMenu';
 import { SummonPickPopup } from './popups/SummonPickPopup';
+import { findTwins } from './planMath';
 import { REVIVE_MIN_WAVES, revealFlags } from './policy';
 import { canOfferContinue, openContinue, type DefeatReason } from './screens/ContinueScreen';
 import { RelicScreen } from './screens/RelicScreen';
@@ -23,6 +24,9 @@ import { openSettings } from './screens/SettingsScreen';
 import { ensureSettings } from './settings';
 import { TopBar } from './TopBar';
 import { Tutorial } from './Tutorial';
+
+/** Frames to wait for the field to draw a new cat before the pair hint gives up on it. */
+const TWINS_WAIT = 90;
 
 /** Simulated seconds a single frame can never exceed (3x speed, 0.05 s frame cap, hit-stop aside): a bigger step means skipped events. */
 const RESYNC_JUMP = 0.5;
@@ -48,6 +52,8 @@ class Hud implements HudPart {
     if (e.key === 'Escape' && !e.repeat && this.env.modalCount === 0) void this.openPause();
   };
   private summons = 0;
+  /** Waiting to point the first-time "merge identical cats" bubble at a pair, once the field has drawn it. */
+  private twinsFrames = 0;
   private lastTime = 0;
   private dragging = false;
   private pauseOpen = false;
@@ -117,6 +123,10 @@ class Hud implements HudPart {
     env.on(battle.events, 'summon', () => {
       if (++this.summons >= 3 && env.reveal.odds) env.hints.request('odds', this.bottom.currency.root);
     });
+    // Outside the tutorial (which teaches the merge itself) the first pair of identical cats earns one bubble.
+    if (!env.tutorial && !env.hints.has('twins')) {
+      for (const type of ['summon', 'move', 'swap', 'merge', 'molt', 'awaken'] as const) env.on(battle.events, type, () => (this.twinsFrames = TWINS_WAIT));
+    }
 
     // A restored run may be waiting on a choice.
     const pending = battle.pending;
@@ -157,6 +167,24 @@ class Hud implements HudPart {
       return;
     }
     this.relic = new RelicScreen(this.env, () => (this.relic = null));
+  }
+
+  /** Ask for the "identical cats merge" bubble on one cat of the first pair, as soon as that cat has a view. */
+  private pointAtTwins(): void {
+    const units = this.ctx.battle.units;
+    const pair = findTwins(units);
+    if (!pair) {
+      this.twinsFrames = 0;
+      return;
+    }
+    const view = this.ctx.unitView((units[pair[0]] as NonNullable<(typeof units)[number]>).uid);
+    if (!view) {
+      this.twinsFrames--;
+      return;
+    }
+    this.twinsFrames = 0;
+    // The one hint that explains the merge rule goes before whatever else is waiting.
+    this.env.hints.request('twins', view, false, true);
   }
 
   // ───────────────────────── pause ─────────────────────────
@@ -254,6 +282,7 @@ class Hud implements HudPart {
     this.boss.update();
     this.bottom.update(dt);
     this.tutorial?.update(dt);
+    if (this.twinsFrames > 0) this.pointAtTwins();
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.
     if (this.pick && this.env.battle.pending?.kind !== 'summon') this.pick.close();
     // A bubble never shows over a popup, a staged moment or a drag; while a cat is selected only the selection bar's own hints may.

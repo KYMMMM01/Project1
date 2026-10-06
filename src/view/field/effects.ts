@@ -1,10 +1,11 @@
+import { Color } from '@/ui';
 import type { FxRect, ZoneHandle } from '@/fx';
 import { CELL_COUNT, CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { BattleEvents, UnitId, ZoneState } from '@/game/api';
 import type { FieldEnv } from './env';
 
-/** Warmer and dimmer than the preset's default so the beams light the mat without bleaching the cats. */
-const SUN_COLOR = 0xe6a548;
+/** The patch of light is mustard paper: warm, flat, and quieter than a cat. */
+const SUN_COLOR = Color.mustard;
 const NO_HAZARD = 0;
 const WET = 1;
 const ZAP = 2;

@@ -247,7 +247,7 @@ export function traitOrder(traits: readonly EnemyTrait[]): EnemyTrait[] {
 
 /** First-time speech bubbles: ids in the order they may appear. */
 export const HINT_IDS = [
-  'chips', 'synergy', 'toys', 'sun', 'speed', 'preview', 'tracker', 'laser', 'callWave', 'purr', 'molt', 'odds',
+  'twins', 'chips', 'synergy', 'toys', 'sun', 'speed', 'preview', 'tracker', 'laser', 'callWave', 'purr', 'molt', 'odds',
   'grade', 'awaken', 'sell',
 ] as const;
 export type HintId = (typeof HINT_IDS)[number];

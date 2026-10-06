@@ -1,17 +1,27 @@
-# Handoff: director (battle staging)
+# Handoff: director (battle staging), paper scrapbook restyle
 
 Date 2026-10-06. Module `src/view/director/**`, tests `tests/view.director.policy.test.ts` and `tests/view.director.palette.test.ts`.
-Entry point `createDirector(ctx): DirectorPart` (`src/view/director/index.ts`), built against `src/view/context.ts` only. It subscribes to `ctx.battle.events` and stages every moment on top of the playfield through `ctx.fx`, the fx screen / flight / cut-in helpers, `audio`, `haptic()` and `game.shake()` (via `fxShake`). It never blocks input and never waits for an animation.
+Entry point `createDirector(ctx): DirectorPart` (`src/view/director/index.ts`), built against `src/view/context.ts` only. It subscribes to `ctx.battle.events` and stages every moment on top of the playfield through `ctx.fx`, the fx screen / flight / cut-in helpers, `audio`, `haptic()` and `game.shake()` (via `fxShake`). It never blocks input and never waits for an animation. Timing, caps, pooling and sounds are as before; this pass changed the look only.
+
+## The paper look of the staging
+
+- **Banners** (`banners.ts`) are paper. `BannerSpec.color` is now the PAPER colour of the piece, text is dark ink (`Color.inkDeep`), one strip of tape at most:
+  - `top` (wave start, call next) and `caption` (synergy, relic, ability, hazard, enrage): a torn paper label (`drawPaper` with torn ends, own `paperSeed()` per lane, flat shadow). The wave label carries one gingham tape strip; the caption does not. It drops in with a small tilt that settles (`backOut`), exits lifting and tilting back; reduced motion fades.
+  - `alert` (boss and elite warning): a paper ribbon with hazard tape (ink strips with mustard slants, flat) along both edges, sliding across with the blinking warning icon, the word and the name in ink. Boss = berry paper, elite = coral paper.
+  - `big` (act clear, boss defeated, victory, nine lives): a torn ribbon in the banner's colour with a sky dotted tape strip, title and optional sub line in ink, unrolling from the middle (`scale.x` with `expoOut`) in front of a flat paper sunburst (the atlas `sun` shape) that pops with an overshoot and turns slowly. Reduced motion: fade, no burst.
+- **Boss intro**: the warning ribbon above, the red edge pulse (`fx.bossWarning`, now `Hue.alarm`) and the dust sifting from the top edge in warm kraft smoke; landing and death staging are `fx.md`'s (flat bursts, warm smoke, no purple).
+- **Overflow numerals** (`flow.ts`): the big countdown digit is a sticker numeral (alarm red with a thick cream outline) and the warning line is on-art text.
+- **Colours** (`palette.ts`, `defs.ts`, `boss.ts`, `combat.ts`, `growth.ts`, `deaths.ts`, `currency.ts`, `flow.ts`): no hex literals left. Every colour is a kit token or a mix of two through `Hue` (`src/fx/palette.ts`, the one local palette object, see `fx.md`). Class colours are `CLASS_HUE` (warrior coral, ranger leaf, mage rare blue, trickster mustard) and are the same object the field uses. Dot numbers pick their face colour (burn ember, poison dark leaf, bleed berry); a shield soak uses sky. The cosmetic summon themes use heart / ice / paw tones from `Hue`.
 
 ## What exists
 
 | File | Role |
 |---|---|
 | `policy.ts` | Pure staging rules, unit tested: `GapGate`, `WindowLimiter`, `FrameBudget`, `KeyedGate` (per-enemy cue spacing), `PitchLadder` (kill streak / merge chain / coin ticks), `HitStopGate` (one global hit-stop per 400 ms, 200 ms cap, 50 ms when reduced), `NumberAggregator` + `numberDensity` + `shouldShowNumber`, `FlightLedger` + `iconsFor` + `shareOf`, `BannerQueue`, `SummonRate` + `summonPlan`, `IntensityMeter` + `intensityTarget`, `dangerStrength`, `heartbeatInterval`, `overflowSeconds`, `SoundRule` (gap + concurrency window + shared pool) |
-| `palette.ts` | Data: enemy tints, cat colours, class colours, shoot cue per cat (sfx, pitch, gain, swing / shot / cast), status colours and sounds, cosmetic summon themes (`themeOf('fx_gem1..3')`) |
+| `palette.ts` | Data: enemy tints, cat colours, class colours (`CLASS_HUE`), shoot cue per cat (sfx, pitch, gain, swing / shot / cast), status colours and sounds, cosmetic summon themes (`themeOf('fx_gem1..3')`); all colours are paper tokens |
 | `defs.ts` | Module-level particle recipes (hit spark, muzzle, impact, status cues, wind, whirl, splash, ...), so no hit builds an object |
 | `stage.ts` | `Stage`: director clock, sound rules (one chatter pool of 9 starts per 0.3 s keeps the 24 audio voices free for big moments), rationed shake / hit-stop / slow-mo / haptics, tracked timers, frame hooks, `Bus` |
-| `banners.ts` | `BannerService`: four pooled lanes (top pill, caption pill, hazard-stripe warning band, big centre text with rays), each a `BannerQueue` |
+| `banners.ts` | `BannerService`: four pooled lanes (top label, caption label, hazard-tape warning ribbon, big unrolling ribbon over a sunburst), each a `BannerQueue` |
 | `currency.ts` | `CurrencyService`: fish / hearts flights (12 / 8 icons in the air at most, value split across icons, tick per arrival climbing the pentatonic scale); big kills wait for their death staging |
 | `music.ts` | `MusicService`: `battle` at run start, `boss` during boss waves, smoothed intensity, ducking, silence for victory / defeat |
 | `combat.ts` | attack cues, hits, numbers, statuses, pull, heal, shield break, strikes per source, projectile impacts, zone sounds |
@@ -32,17 +42,11 @@ Entry point `createDirector(ctx): DirectorPart` (`src/view/director/index.ts`), 
 
 ## Verified
 
-- Types: `npx tsc --noEmit` prints nothing for `src/view/director` and `tests/view.director*`.
-- Unit tests: `npx vitest run tests/view.director` = 2 files, 32 tests (gates, ladders, hit-stop spacing, number aggregation and density, flight accounting, banner queue, summon thinning, intensity smoothing, danger and overflow maths, sound rule pool, palette coverage and theme mapping).
-- Browser (Aside), real `BattleScene` at `?scene=battle&chapter=1&seed=7&sandbox=1&debug=1&runs=3`. The page's rAF is throttled under automation, so the game clock was driven by hand (`game.tick`) with `app.ticker.speed = 0.0005` so screenshots do not advance time. Looked at (PNGs in the session scratchpad `shots/director`):
-  - wave pill ("2막 · 웨이브 8", skull icon on boss waves), caption pill (synergy), awakening cut-in with portrait, name and tag, warning band with hazard stripes and boss name, inhale (caption plus wind streaks converging on the boss);
-  - boss death: flicker on the field's own boss sprite, rings, white flash, coins and fish flying, "보스 격파!", then "승리!" with confetti, then the HUD result screen. Timing from the game clock: kill 4.3 s, victory event 5.7 s, `finished` 10.4 s (the scene's own fallback would fire at 13.7 s);
-  - overflow: big "2" then "1" with the warning line, the HUD's own countdown beside it; defeat: field in greyscale, `finished` 1.1 s after the defeat event, HUD "continue?" popup;
-  - act clear ("1막 클리어!" with confetti), zap hazard (bolt from the top edge onto the cells plus caption), nine-lives rescue banner.
-  - Earlier on a throwaway harness (removed): summon reveals tier 0-3, epic and legendary merge (with snack-stick flourish), molt puff, first-run cut-in.
-- Load: 3x speed, 40 bunched enemies of nine types for 600 frames: particle objects created plateau at 114 (never grow), floating numbers stay at the tier cap, flights return to 0, banners drain to 0, timers steady. Audio: about 20 sounds started per real second at 3x, peak 21 simultaneous voices of the engine's 24, zero drops from the global voice cap (before the shared chatter pool the same run dropped 190).
+- Types: `npx tsc --noEmit` prints nothing for the whole tree. Unit tests: `npx vitest run tests/view.director` = 2 files green; `view.director.palette.test.ts` now also checks that nothing in the staging palette is purple (hue 255 to 320 with saturation over 0.2 across enemy tints, cat colours, class colours, statuses, dot numbers, summon themes, `Hue`, confetti), that the class hues are the field's four distinct papers, and that no shared hue is pure white or black.
+- Browser (Aside, `PAGE_ERRORS` `[]`), screenshots in `scratchpad/shots/field/`: `s2_boss_warning` (hazard-tape ribbon), `en_banners` and `en_tall` (wave label and warning in English at 720 x 1600), `s2_cutin_b` and `s11_cutin_hold` (awakening collage), `s9_victory_a/b` (the unrolled "victory" ribbon, confetti), `s6_defeat_a/b` (greyscale field, overflow), `s2_hazard_warn` and `s2_hazard_warn2` (hazard telegraphs), `crowd1/2` and `ch1` to `ch5` (damage and crit stickers, flights, banners on each chapter).
+- Timing and load from the earlier pass are unchanged (the same events, queues and caps); the crowded-wave frame time is in `field.md` (no change).
 
-Not verified: sound itself (the automated page cannot unlock audio in a visible way; only the engine counters), haptics, reduced motion and the low tier by eye, the three cosmetic summon themes, the blender whirl, splash and vaccinate abilities, status cues and strike shapes in close-up (they fired without errors; only the chain bolt and a stun / freeze frame were glimpsed), and the cats' defeat slump (too small to judge).
+Not verified: the banner's reduced-motion variants (fade instead of move) and the low quality tier by eye; sound itself; the awakening dim at the very first frames (the dim is `Dim.backdrop`, warm brown); the boss landing and death in close-up on the new flat bursts (they fire without errors and share the presets listed in `fx.md`).
 
 ## Known gaps
 

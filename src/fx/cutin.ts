@@ -1,12 +1,14 @@
-import { Container, FillGradient, Graphics, Sprite, Texture, type Text } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, type Text } from 'pixi.js';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import type { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
-import { TAU, clamp01, darken, lighten } from '@/core/math';
-import { Rarity } from '@/ui/theme';
-import { label, fitLabel } from '@/ui/text';
+import { TAU, clamp01, lighten, mixColor } from '@/core/math';
+import { PaperLabel } from '@/ui/paper';
+import { Color, Dim, Rarity } from '@/ui/theme';
+import { label } from '@/ui/text';
 import { backOutS } from './curves';
+import { Hue } from './palette';
 import type { FxSequence } from './handles';
 import { hash01 } from './loops';
 import { REDUCED, fxSettings } from './settings';
@@ -65,17 +67,6 @@ export function dimAmount(t: number, p: CutInPlan): number {
   return inn * inn * (3 - 2 * inn) * (1 - out);
 }
 
-/** Saturated-pastel rainbow, h in [0,1) (HSV with s = 0.6): the mythic frame's colour-shifting outline. */
-export function rainbow(h: number): number {
-  return (channel(h, 5) << 16) | (channel(h, 3) << 8) | channel(h, 1);
-}
-
-function channel(h: number, n: number): number {
-  const k = (n + h * 6) % 6;
-  const m = Math.max(0, Math.min(k, 4 - k, 1));
-  return Math.round((1 - 0.6 * m) * 255);
-}
-
 export interface AwakeningOpts {
   /** The 0.8 s version for repeats (guide: the second mythic of a run onward). */
   short?: boolean;
@@ -103,9 +94,10 @@ const BANNER_Y = 0.4;
 const SKIP_OUT_SECONDS = 0.18;
 
 /**
- * The mythic awakening cut-in (guide 2.2.3): the screen dims, speed lines race into the centre, a
- * white flash, then a slanted banner slides in carrying the unit's portrait and name, holds, and
- * slides out. Drawn on game.overlayLayer, timed on the real game clock so a hit-stop never stretches it.
+ * The mythic awakening cut-in (guide 2.2.3), a paper collage: the floor dims warm brown, paper
+ * streaks race into the centre, a warm flash, then a strip of the class colour slides across with the
+ * cat's sticker popping in front of a flat paper sunburst and its name on a torn cream label; it holds
+ * and slides out. Drawn on game.overlayLayer, timed on the real game clock so a hit-stop never stretches it.
  *
  * It never blocks: play() returns at once with a promise that settles when the cut-in is over, and
  * the game keeps running underneath. A tap anywhere skips to the exit. Only one plays at a time;
@@ -150,14 +142,12 @@ class Run {
   private readonly lines: Sprite[] = [];
   private readonly ring: Sprite;
   private readonly banner = new Container();
-  private readonly accentTop = new Sprite(Texture.WHITE);
-  private readonly accentBottom = new Sprite(Texture.WHITE);
-  private readonly halo: Sprite;
+  private readonly burst: Sprite;
   private readonly portrait: Sprite;
-  private readonly nameText: Text;
+  private readonly nameText: PaperLabel;
   private readonly tagText: Text;
   private readonly portraitBase: number;
-  private readonly nameBase: number;
+  private readonly burstSize: number;
   private readonly hit = new Sprite(Texture.WHITE);
   private readonly off: () => void;
   private readonly screen: ScreenFx;
@@ -184,7 +174,7 @@ class Run {
       this.resolve = res;
     });
 
-    this.dim.tint = 0x05020d;
+    this.dim.tint = Dim.backdrop;
     this.dim.alpha = 0;
     this.layer.addChild(this.dim);
 
@@ -193,8 +183,7 @@ class Run {
       const s = pool.get();
       s.texture = spark.texture;
       s.anchor.set(spark.ax, spark.ay);
-      s.blendMode = 'add';
-      s.tint = i % 3 === 0 ? lighten(color, 0.6) : 0xffffff;
+      s.tint = i % 3 === 0 ? lighten(color, 0.6) : Hue.cream;
       s.alpha = 0;
       s.visible = true;
       this.layer.addChild(s);
@@ -205,49 +194,36 @@ class Run {
     this.ring = pool.get();
     this.ring.texture = ringTex.texture;
     this.ring.anchor.set(ringTex.ax, ringTex.ay);
-    this.ring.blendMode = 'add';
-    this.ring.tint = lighten(color, 0.5);
+    this.ring.tint = Hue.cream;
     this.ring.alpha = 0;
     this.ring.visible = true;
     this.layer.addChild(this.ring);
 
     this.layer.addChild(this.banner);
-    const gradient = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      colorStops: [
-        { offset: 0, color: darken(color, 0.45) },
-        { offset: 1, color: darken(color, 0.82) },
-      ],
-      textureSpace: 'local',
-    });
     const left = -90;
     const right = game.w + 90;
-    const band = new Graphics()
-      .poly([left + SKEW, -BAND_H / 2, right + SKEW, -BAND_H / 2, right - SKEW, BAND_H / 2, left - SKEW, BAND_H / 2])
-      .fill(gradient);
-    this.banner.addChild(band);
-    for (const a of [this.accentTop, this.accentBottom]) {
-      a.anchor.set(0.5);
-      a.width = right - left + 2 * SKEW;
-      a.height = 8;
-      this.banner.addChild(a);
+    const strip = [left + SKEW, -BAND_H / 2, right + SKEW, -BAND_H / 2, right - SKEW, BAND_H / 2, left - SKEW, BAND_H / 2];
+    const band = new Graphics();
+    band.poly(strip.map((v, i) => (i % 2 === 1 ? v + 9 : v))).fill({ color: Color.shadow, alpha: 0.28 });
+    band.poly(strip).fill(color);
+    // Two strips of cream paper along the long edges, like the tape that holds the collage down.
+    for (const edge of [-1, 1]) {
+      const y = (edge * (BAND_H - 18)) / 2;
+      band.poly([left + SKEW * -edge + 4, y - 5, right + SKEW * -edge - 4, y - 5, right + SKEW * -edge - 4, y + 5, left + SKEW * -edge + 4, y + 5]).fill(Hue.cream);
     }
-    this.accentTop.position.set(game.w / 2, -BAND_H / 2 + 4);
-    this.accentBottom.position.set(game.w / 2, BAND_H / 2 - 4);
+    this.banner.addChild(band);
 
-    const glowTex = fxTex('glow');
-    this.halo = pool.get();
-    this.halo.texture = glowTex.texture;
-    this.halo.anchor.set(glowTex.ax, glowTex.ay);
-    this.halo.blendMode = 'add';
-    this.halo.tint = lighten(color, 0.45);
-    this.halo.alpha = 0.7;
-    this.halo.visible = true;
-    this.halo.position.set(190, -10);
-    this.halo.scale.set(400 / glowTex.w);
-    this.banner.addChild(this.halo);
+    const burstTex = fxTex('sun');
+    this.burst = pool.get();
+    this.burst.texture = burstTex.texture;
+    this.burst.anchor.set(burstTex.ax, burstTex.ay);
+    this.burst.tint = mixColor(color, Hue.cream, 0.6);
+    this.burst.alpha = 1;
+    this.burst.visible = true;
+    this.burst.position.set(190, -10);
+    this.burstSize = burstTex.w;
+    this.burst.scale.set(430 / burstTex.w);
+    this.banner.addChild(this.burst);
 
     this.portrait = new Sprite(portrait);
     this.portrait.anchor.set(0.5);
@@ -257,13 +233,11 @@ class Run {
     this.portrait.position.set(190, -14);
     this.banner.addChild(this.portrait);
 
-    this.nameText = label(name, { size: 62, color: 0xffffff, stroke: darken(color, 0.78), strokeWidth: 9 });
-    fitLabel(this.nameText, 330, 62, 0.75);
-    this.nameBase = this.nameText.scale.x;
-    this.nameText.position.set(515, 14);
+    this.nameText = new PaperLabel({ text: name, size: 58, paper: Color.paperLight, maxWidth: 380, minWidth: 220, torn: 'ends' });
+    this.nameText.position.set(520, 26);
     this.banner.addChild(this.nameText);
-    this.tagText = label(o.tag ?? '', { size: 28, color: lighten(color, 0.6), stroke: darken(color, 0.8) });
-    this.tagText.position.set(515, -42);
+    this.tagText = label(o.tag ?? '', { size: 30, onArt: true });
+    this.tagText.position.set(520, -56);
     this.tagText.visible = o.tag !== undefined && o.tag !== '';
     this.banner.addChild(this.tagText);
 
@@ -300,7 +274,7 @@ class Run {
     for (const s of this.lines) this.pool.release(s);
     this.lines.length = 0;
     this.pool.release(this.ring);
-    this.pool.release(this.halo);
+    this.pool.release(this.burst);
     this.layer.parent?.removeChild(this.layer);
     // The pooled sprites are already back in the pool; the rest (the caller's portrait texture excepted) dies with the layer.
     this.layer.destroy({ children: true });
@@ -310,7 +284,7 @@ class Run {
 
   private impact(): void {
     this.fired = true;
-    this.screen.flash(0xffffff, 0.45, 160);
+    this.screen.flash(Hue.sun, 0.45, 160);
     fxShake(Trauma.t3);
     if (this.o.haptics !== false) haptic('heavy');
     this.o.onImpact?.();
@@ -376,15 +350,17 @@ class Run {
       this.ring.alpha = 0;
     }
 
-    // Slow push-in on the portrait while the banner holds; the name stamps in with an overshoot.
-    this.portrait.scale.set(this.portraitBase * (1 + 0.04 * clamp01((t - p.impact) / (p.exitAt - p.impact))));
+    // The sticker pops in with a small overshoot and keeps creeping up while the banner holds; the
+    // sunburst turns slowly behind it and the name label is stamped on a beat later.
+    const hold = clamp01((t - p.impact) / (p.exitAt - p.impact));
+    const pop = backOutS(clamp01((t - p.impact) / 0.22), 1.4);
+    this.portrait.scale.set(this.portraitBase * (0.35 + 0.65 * pop) * (1 + 0.04 * hold));
+    this.burst.rotation = fxSettings.reducedMotion ? 0 : t * 0.5;
+    this.burst.scale.set((430 / this.burstSize) * (0.5 + 0.5 * pop));
     const np = clamp01((t - p.impact - 0.08) / 0.18);
-    this.nameText.scale.set(this.nameBase * (1.4 - 0.4 * backOutS(np, 1.7)));
+    this.nameText.scale.set(1.35 - 0.35 * backOutS(np, 1.4));
     this.nameText.alpha = clamp01(np * 5);
     this.tagText.alpha = clamp01(np * 3);
-    const hue = (t * 0.9) % 1;
-    this.accentTop.tint = rainbow(hue);
-    this.accentBottom.tint = rainbow((hue + 0.5) % 1);
   }
 }
 

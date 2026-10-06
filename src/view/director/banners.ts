@@ -1,11 +1,15 @@
 /**
- * Banners over the field: wave start, call-next, act clear, boss warning band, big celebrations and
- * small captions. Each lane owns one pooled view and a BannerQueue; nothing here pauses or blocks play.
+ * Banners over the field, all made of paper: wave start, call-next, act clear, boss warning ribbon, big
+ * celebrations and small captions. Each lane owns one pooled view and a BannerQueue; nothing here
+ * pauses or blocks play. Paper colour = the banner's accent, text = dark ink, one strip of tape at most.
  */
 import { Container, Graphics, Sprite, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
+import { mixColor } from '@/core/math';
 import { fxTexture } from '@/fx';
+import { Hue } from '@/fx/palette';
 import { drawIcon, type IconName } from '@/ui/icons';
+import { drawPaper, paperSeed, tapeStrip } from '@/ui/paper';
 import { fitWidth, label } from '@/ui/text';
 import { Color } from '@/ui/theme';
 import type { BattleLayout } from '../context';
@@ -15,7 +19,7 @@ import type { Stage } from './stage';
 export interface BannerSpec {
   title: string;
   sub?: string;
-  /** Accent colour: frame, icon glow, title tint of the big lane. */
+  /** The paper colour of the label, ribbon or band. */
   color: number;
   icon?: IconName;
 }
@@ -31,6 +35,7 @@ interface Lane {
 }
 
 const MAX_TEXT = 640;
+const INK = Color.inkDeep;
 
 /** Icons are built once per name and moved between lanes: no Graphics churn per banner. */
 class IconCache {
@@ -52,12 +57,14 @@ class IconCache {
   }
 }
 
-/** A rounded plate with an optional icon and one line of text: the wave banner and the captions. */
+/** A torn paper label with an optional icon and one line of ink: the wave banner and the captions. It drops in and settles with a small tilt. */
 class PillLane implements Lane {
   readonly root = new Container();
   readonly queue = new BannerQueue<BannerSpec>(3);
   private readonly bg = new Graphics();
   private readonly text: Text;
+  private readonly tape: Graphics | null;
+  private readonly seed = paperSeed();
   private icon: Graphics | null = null;
   private plateW = 0;
   private baseY = 0;
@@ -71,9 +78,12 @@ class PillLane implements Lane {
     private readonly height: number,
     private readonly rise: number,
     private readonly yOffset: number,
+    taped: boolean,
   ) {
-    this.text = label('', { size, color: Color.text });
+    this.text = label('', { size, color: INK });
+    this.tape = taped ? tapeStrip({ name: 'pink', pattern: 'gingham', w: 74, h: 26, angle: -8 }) : null;
     this.root.addChild(this.bg, this.text);
+    if (this.tape) this.root.addChild(this.tape);
     this.root.visible = false;
     this.root.eventMode = 'none';
   }
@@ -88,17 +98,14 @@ class PillLane implements Lane {
     const iconW = this.icon ? this.height * 0.62 + 14 : 0;
     this.plateW = t.width + iconW + 70;
     const h = this.height;
-    this.bg
-      .clear()
-      .roundRect(-this.plateW / 2, -h / 2, this.plateW, h, h / 2)
-      .fill({ color: Color.bgDeep, alpha: 0.82 })
-      .roundRect(-this.plateW / 2, -h / 2, this.plateW, h, h / 2)
-      .stroke({ width: 3, color: spec.color, alpha: 0.95 });
+    this.bg.clear();
+    drawPaper(this.bg, -this.plateW / 2, -h / 2, { w: this.plateW, h, radius: 14, fill: spec.color, seed: this.seed, torn: ['left', 'right'], shadow: 6 });
     t.x = iconW / 2;
     if (this.icon) {
       this.icon.position.set(-this.plateW / 2 + 35 + this.height * 0.31, 0);
       this.root.addChild(this.icon);
     }
+    this.tape?.position.set(-this.plateW / 2 + 46, -h / 2 + 3);
   }
 
   pose: Pose = (phase, p, age) => {
@@ -106,23 +113,25 @@ class PillLane implements Lane {
     r.visible = true;
     if (this.stage.reduced) {
       r.y = this.baseY;
+      r.rotation = 0;
       r.alpha = phase === 'in' ? p : phase === 'out' ? 1 - p : 1;
       this.text.scale.set(this.fit);
       return;
     }
     if (phase === 'in') {
       r.y = this.baseY - this.rise * (1 - Ease.cubicOut(p));
+      r.rotation = -0.06 * (1 - Ease.backOut(Math.min(1, age / 0.24)));
       r.alpha = Math.min(1, p * 3);
-      const s = 1.3 - 0.3 * Ease.backOut(Math.min(1, age / 0.2));
-      this.text.scale.set(s * this.fit);
     } else if (phase === 'hold') {
       r.y = this.baseY;
+      r.rotation = 0;
       r.alpha = 1;
-      this.text.scale.set(this.fit);
     } else {
       r.y = this.baseY - this.rise * 0.45 * Ease.cubicIn(p);
+      r.rotation = 0.03 * Ease.cubicIn(p);
       r.alpha = 1 - Ease.cubicIn(p);
     }
+    this.text.scale.set(this.fit);
   };
 
   resize(layout: BattleLayout): void {
@@ -132,7 +141,7 @@ class PillLane implements Lane {
   }
 }
 
-/** The boss / elite warning: a hazard-stripe band that slides across with an icon, the word and the name. */
+/** The boss / elite warning: a paper ribbon with hazard tape along both edges that slides across with an icon, the word and the name. */
 class BandLane implements Lane {
   readonly root = new Container();
   readonly queue = new BannerQueue<BannerSpec>(2);
@@ -140,16 +149,19 @@ class BandLane implements Lane {
   private readonly title: Text;
   private readonly sub: Text;
   private readonly icon: Graphics;
+  private readonly seed = paperSeed();
   private width = 720;
   private baseY = 0;
   private drawnW = 0;
+  private drawnColor = -1;
+  private color: number = Color.berry;
 
   constructor(
     private readonly stage: Stage,
     icons: IconCache,
   ) {
-    this.title = label('', { size: 64, color: 0xffd23f, stroke: 0x4a0d0d, strokeWidth: 8 });
-    this.sub = label('', { size: 38, color: Color.text });
+    this.title = label('', { size: 64, color: INK });
+    this.sub = label('', { size: 38, color: INK });
     this.icon = icons.get('warning', 96);
     this.title.position.set(40, -22);
     this.sub.position.set(40, 38);
@@ -164,22 +176,24 @@ class BandLane implements Lane {
     this.sub.text = spec.sub ?? '';
     fitWidth(this.sub, 520);
     fitWidth(this.title, 420);
-    this.title.style.fill = spec.color;
+    this.color = spec.color;
     this.drawBand();
   }
 
   private drawBand(): void {
-    if (this.drawnW === this.width) return;
+    if (this.drawnW === this.width && this.drawnColor === this.color) return;
     this.drawnW = this.width;
+    this.drawnColor = this.color;
     const w = this.width;
     const h = 150;
     const edge = 24;
     const g = this.bg.clear();
-    g.rect(-w / 2, -h / 2, w, h).fill({ color: 0x1c0a0e, alpha: 0.86 });
+    drawPaper(g, -w / 2 - 40, -h / 2, { w: w + 80, h, radius: 4, fill: this.color, seed: this.seed, wobble: 0.5, edge: false, shadow: 8 });
+    // Hazard tape along the long edges: ink strips with mustard slants, flat.
     for (const y of [-h / 2, h / 2 - edge]) {
-      g.rect(-w / 2, y, w, edge).fill({ color: 0x15100a });
-      for (let x = -w / 2 - edge; x < w / 2; x += edge * 2) {
-        g.poly([x, y + edge, x + edge, y, x + edge * 2, y, x + edge, y + edge]).fill({ color: 0xffc933 });
+      g.rect(-w / 2 - 40, y, w + 80, edge).fill(Color.inkDeep);
+      for (let x = -w / 2 - edge; x < w / 2 + 40; x += edge * 2) {
+        g.poly([x, y + edge, x + edge, y, x + edge * 2, y, x + edge, y + edge]).fill(Color.mustard);
       }
     }
   }
@@ -210,40 +224,44 @@ class BandLane implements Lane {
   }
 }
 
-/** Big centre-screen text with rotating rays: act clear, boss defeated, victory. */
+/** Big centre-screen paper ribbon that unrolls over a flat paper sunburst: act clear, boss defeated, victory. */
 class BigLane implements Lane {
   readonly root = new Container();
   readonly queue = new BannerQueue<BannerSpec>(3);
-  private readonly rays = new Sprite(fxTexture('starburst'));
-  /** A dark soft plate: the title stays readable on a bright floor and the rays have something to glow against. */
-  private readonly plate = new Sprite(fxTexture('glow'));
+  private readonly burst = new Sprite(fxTexture('sun'));
+  private readonly ribbon = new Container();
+  private readonly paper = new Graphics();
+  private readonly tape = tapeStrip({ name: 'sky', pattern: 'dots', w: 96, h: 32, angle: -6 });
   private readonly title: Text;
   private readonly sub: Text;
+  private readonly seed = paperSeed();
   private baseY = 0;
 
   constructor(private readonly stage: Stage) {
-    this.plate.anchor.set(0.5);
-    this.plate.tint = Color.bgDeep;
-    this.plate.alpha = 0.6;
-    this.plate.width = 760;
-    this.plate.height = 260;
-    this.rays.anchor.set(0.5);
-    this.rays.blendMode = 'add';
-    this.rays.width = this.rays.height = 560;
-    this.title = label('', { size: 84, color: Color.gold, strokeWidth: 12 });
-    this.sub = label('', { size: 34, color: Color.text });
-    this.sub.y = 68;
-    this.root.addChild(this.plate, this.rays, this.title, this.sub);
+    this.burst.anchor.set(0.5);
+    this.burst.width = this.burst.height = 600;
+    this.title = label('', { size: 84, color: INK });
+    this.sub = label('', { size: 34, color: INK });
+    this.ribbon.addChild(this.paper, this.title, this.sub, this.tape);
+    this.root.addChild(this.burst, this.ribbon);
     this.root.visible = false;
     this.root.eventMode = 'none';
   }
 
   show(spec: BannerSpec): void {
     this.title.text = spec.title;
-    this.title.style.fill = spec.color;
-    fitWidth(this.title, 660);
+    fitWidth(this.title, 600);
     this.sub.text = spec.sub ?? '';
-    this.rays.tint = spec.color;
+    const sub = this.sub.text !== '';
+    const w = Math.max(360, this.title.width + 150);
+    const h = sub ? 176 : 138;
+    this.paper.clear();
+    drawPaper(this.paper, -w / 2, -h / 2, { w, h, radius: 12, fill: spec.color, seed: this.seed, torn: ['left', 'right'], shadow: 9 });
+    this.title.y = sub ? -22 : 0;
+    this.sub.y = 46;
+    this.sub.visible = sub;
+    this.tape.position.set(-w / 2 + 70, -h / 2 + 4);
+    this.burst.tint = mixColor(spec.color, Hue.cream, 0.35);
   }
 
   pose: Pose = (phase, p, age) => {
@@ -251,26 +269,30 @@ class BigLane implements Lane {
     r.visible = true;
     r.y = this.baseY;
     if (this.stage.reduced) {
-      this.rays.visible = false;
+      this.burst.visible = false;
+      this.ribbon.scale.set(1);
       r.alpha = phase === 'in' ? p : phase === 'out' ? 1 - p : 1;
       r.scale.set(1);
       return;
     }
-    this.rays.visible = true;
-    this.rays.rotation = age * 0.35;
+    this.burst.visible = true;
+    this.burst.rotation = age * 0.25;
+    r.alpha = 1;
     if (phase === 'in') {
-      // Guide U-12: 0 -> 1.25 -> 1 with an overshoot, 400 ms.
-      r.scale.set(0.001 + Ease.backOut(p) * 1.0);
-      r.alpha = Math.min(1, p * 4);
-      this.rays.alpha = 0.55 * p;
+      // The ribbon unrolls from the middle while the sunburst pops behind it (guide U-12: 0 -> 1.25 -> 1, 400 ms).
+      this.ribbon.scale.set(Math.max(0.001, Ease.expoOut(p)), 1);
+      this.burst.scale.set((0.2 + 0.8 * Ease.backOut(p)) * (600 / this.burst.texture.width));
+      this.burst.alpha = Math.min(1, p * 3);
+      r.scale.set(1);
     } else if (phase === 'hold') {
-      r.scale.set(1 + 0.04 * p);
-      r.alpha = 1;
-      this.rays.alpha = 0.55;
+      this.ribbon.scale.set(1 + 0.02 * p, 1 + 0.02 * p);
+      this.burst.scale.set((1 + 0.03 * p) * (600 / this.burst.texture.width));
+      this.burst.alpha = 1;
+      r.scale.set(1);
     } else {
-      r.scale.set(1.04 + 0.1 * Ease.cubicIn(p));
+      this.ribbon.scale.set(1.02, 1.02);
+      r.scale.set(1 + 0.1 * Ease.cubicIn(p));
       r.alpha = 1 - Ease.cubicIn(p);
-      this.rays.alpha = 0.55 * (1 - p);
     }
   };
 
@@ -290,8 +312,8 @@ export class BannerService {
 
   constructor(stage: Stage) {
     this.lanes = {
-      top: new PillLane(stage, this.icons, 40, 78, 100, 60),
-      caption: new PillLane(stage, this.icons, 28, 54, 36, 126),
+      top: new PillLane(stage, this.icons, 40, 78, 100, 60, true),
+      caption: new PillLane(stage, this.icons, 28, 54, 36, 126, false),
       alert: new BandLane(stage, this.icons),
       big: new BigLane(stage),
     };

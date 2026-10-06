@@ -1,6 +1,7 @@
 import type { Container } from 'pixi.js';
 import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
+import { Color, TapeColors } from '@/ui';
 import { hitFlash, kickObject, punchScale, squash } from '@/fx';
 import type { BattleEvents, EnemyState } from '@/game/api';
 import type { FieldEnv } from './env';
@@ -20,7 +21,7 @@ const BOSS_HOLD = 2.6;
 export class EnemyViews {
   private readonly byUid = new Map<number, EnemyView>();
   private readonly live: EnemyView[] = [];
-  private readonly pool = new Pool<EnemyView>(() => new EnemyView());
+  private readonly pool: Pool<EnemyView>;
   private readonly offs: Array<() => void> = [];
   private frame = 0;
 
@@ -29,11 +30,12 @@ export class EnemyViews {
     private readonly layer: Container,
   ) {
     this.layer.sortableChildren = true;
+    this.pool = new Pool<EnemyView>(() => new EnemyView(env.art));
     const ev = env.battle.events;
     this.offs.push(
       ev.on('hit', (e) => this.onHit(e)),
       ev.on('enemyDie', (e) => this.onDie(e)),
-      ev.on('shieldBreak', (e) => this.flash(e.enemy.uid, 0x4ee3ff, 90)),
+      ev.on('shieldBreak', (e) => this.flash(e.enemy.uid, TapeColors.sky.base, 90)),
       ev.on('enrage', (e) => this.onEnrage(e)),
     );
   }
@@ -144,7 +146,7 @@ export class EnemyViews {
     const v = this.byUid.get(e.enemy.uid);
     if (!v) return;
     punchScale(this.env.ctx.tweens, v.body, 0.22, 220);
-    this.flash(e.enemy.uid, 0xff4d5e, 120);
+    this.flash(e.enemy.uid, Color.coral, 120);
   }
 
   destroy(): void {

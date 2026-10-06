@@ -11,7 +11,9 @@ vi.mock('pixi.js', async (importOriginal) => {
   return { ...m, BitmapFont: { install: () => undefined }, BitmapText: FakeBitmapText, FillGradient: FakeGradient };
 });
 
-import { Container } from 'pixi.js';
+vi.mock('@/fx/textures', () => ({ fxTexture: () => Texture.WHITE }));
+
+import { Container, Texture } from 'pixi.js';
 import { FloatingNumbers } from '@/fx/numbers';
 import { setFxSettings } from '@/fx/settings';
 
@@ -22,6 +24,11 @@ function make(cap = 3): FloatingNumbers {
 }
 
 const DT = 1 / 60;
+
+/** A number is a sticker: [starburst, brown edge, coloured face]; the face carries the text the player reads. */
+function textOf(c: unknown): string {
+  return ((c as Container).children[2] as unknown as { text: string }).text;
+}
 
 beforeEach(() => {
   setFxSettings({ numbers: 'full', reducedMotion: false });
@@ -47,7 +54,7 @@ describe('FloatingNumbers capacity', () => {
     n.show(0, 0, 10, 'crit');
     n.show(0, 0, 10, 'crit');
     expect(n.count).toBe(3);
-    const texts = n.layer.children.filter((c) => c.visible).map((c) => (c as unknown as { text: string }).text);
+    const texts = n.layer.children.filter((c) => c.visible).map(textOf);
     expect(texts.length).toBe(3);
     expect(texts.every((t) => t.endsWith('!'))).toBe(true);
   });
@@ -87,8 +94,7 @@ describe('FloatingNumbers behaviour', () => {
     n.show(0, 0, 50, 'damage', { key: 'orc7' });
     n.show(0, 0, 25, 'damage', { key: 'orc8' });
     expect(n.count).toBe(2);
-    const first = n.layer.children[0] as unknown as { text: string };
-    expect(first.text).toBe('150');
+    expect(textOf(n.layer.children[0])).toBe('150');
     for (let t = 0; t < 0.2; t += DT) n.update(DT);
     n.show(0, 0, 10, 'damage', { key: 'orc7' });
     expect(n.count).toBe(3);
@@ -99,7 +105,7 @@ describe('FloatingNumbers behaviour', () => {
     n.show(0, 0, 48210, 'big');
     n.show(0, 0, 386, 'heal');
     n.show(0, 0, 70, 'hurt');
-    const texts = n.layer.children.map((c) => (c as unknown as { text: string }).text);
+    const texts = n.layer.children.map(textOf);
     expect(texts).toContain('48.2K!');
     expect(texts).toContain('+386');
     expect(texts).toContain('-70');
@@ -143,6 +149,36 @@ describe('FloatingNumbers behaviour', () => {
     expect(n.count).toBe(0);
     expect(n.layer.children.every((c) => !c.visible)).toBe(true);
     n.show(0, 0, 3, 'damage');
+    expect(n.created).toBe(2);
+  });
+
+  it('a number is a sticker: crits and boss hits sit on a paper starburst, plain damage does not', () => {
+    const n = make(10);
+    n.show(0, 0, 10, 'damage');
+    n.show(0, 0, 10, 'crit');
+    n.show(0, 0, 10, 'big');
+    const burst = (i: number): boolean => ((n.layer.children[i] as Container).children[0] as Container).visible;
+    expect([burst(0), burst(1), burst(2)]).toEqual([false, true, true]);
+  });
+
+  it('a recycled sticker drops the starburst of its last life', () => {
+    const n = make(1);
+    n.show(0, 0, 10, 'crit');
+    for (let t = 0; t < 1.2; t += DT) n.update(DT);
+    // Gold shares the crit's mustard face, so it gets the same pooled sticker back.
+    n.show(0, 0, 10, 'gold');
+    expect(n.created).toBe(1);
+    expect(((n.layer.children[0] as Container).children[0] as Container).visible).toBe(false);
+  });
+
+  it('a face colour override gets its own pool: the face is baked per colour', () => {
+    const n = make(10);
+    n.show(0, 0, 10, 'dot');
+    n.show(0, 0, 10, 'dot', { color: 0x123456 });
+    expect(n.created).toBe(2);
+    for (let t = 0; t < 1; t += DT) n.update(DT);
+    n.show(0, 0, 10, 'dot');
+    n.show(0, 0, 10, 'dot', { color: 0x123456 });
     expect(n.created).toBe(2);
   });
 });

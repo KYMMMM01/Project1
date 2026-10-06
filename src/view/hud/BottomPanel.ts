@@ -1,11 +1,12 @@
 /**
- * The bottom panel: a drawn plate holding the class chips, the currency row, the action row, the
- * selection sheet (which takes over the upper rows) and the sell strip.
+ * The bottom panel: one cream paper sheet with a torn top edge rising from the bottom of the screen,
+ * holding the class chips, the currency row, the action row, the selection sheet (which takes over the
+ * upper rows) and the sell strip.
  */
-import { Container, Graphics, Rectangle } from 'pixi.js';
+import { Container, Rectangle } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import type { ClassId } from '@/game';
-import { drawIcon, drawShadow, glossGradient, motion, refreshCache, TweenBag, vGradient, Color, shade } from '@/ui';
+import { Color, motion, paperSeed, paperShape, refreshCache, TweenBag } from '@/ui';
 import type { BattleLayout } from '../context';
 import { ActionRow } from './ActionRow';
 import { ClassRow } from './ClassRow';
@@ -24,9 +25,8 @@ export class BottomPanel {
   readonly actions: ActionRow;
   readonly sheet: SelectionSheet;
   private readonly sell: SellStrip;
-  private readonly bg = new Graphics();
-  private readonly deco = new Container();
   private readonly plate = new Container();
+  private readonly seed = paperSeed();
   private readonly upper = new Container();
   private readonly bag = new TweenBag();
 
@@ -37,7 +37,6 @@ export class BottomPanel {
     this.sheet = new SelectionSheet(env);
     this.sell = new SellStrip(env);
     this.upper.addChild(this.classes.root, this.currency.root);
-    this.plate.addChild(this.bg, this.deco);
     this.root.addChild(this.plate, this.upper, this.actions.root, this.sheet.root, this.sell.root);
 
     env.on(env.ctx.events, 'select', ({ cell }) => this.onSelect(cell));
@@ -84,39 +83,23 @@ export class BottomPanel {
     const r = bottomRects(l);
     this.root.position.set(0, r.top);
     const h = r.panel.h;
-    const g = this.bg;
-    g.clear();
-    drawShadow(g, 0, 0, HUD_W, h, 40, { alpha: 0.5, spread: 18, offsetY: -8 });
-    g.roundRect(0, 0, HUD_W, h + 60, 40).fill(vGradient(shade(Color.panelLight, 0.1), Color.bg)).stroke({ width: 6, color: Color.outline, alignment: 1 });
-    g.roundRect(8, 8, HUD_W - 16, h + 60, 34).stroke({ width: 3, color: Color.neutral, alpha: 0.55, alignment: 1 });
-    g.roundRect(14, 12, HUD_W - 28, 56, 26).fill(glossGradient(0.16, 0));
+    // The sheet reaches past the screen edge on every side but the torn one, so no seam shows on any aspect ratio.
+    for (const c of this.plate.removeChildren()) c.destroy({ children: true });
+    // A strip of kraft peeks out above the cream sheet: two layers of paper torn at different places.
+    const under = paperShape({ w: HUD_W + 60, h: h + 30, radius: 0, fill: Color.kraft, torn: 'top', seed: this.seed + 1, grain: false });
+    under.position.set(HUD_W / 2, (h + 30) / 2 - 9);
+    const sheet = paperShape({ w: HUD_W + 60, h: h + 30, radius: 0, fill: Color.paper, torn: 'top', seed: this.seed });
+    sheet.position.set(HUD_W / 2, (h + 30) / 2);
+    this.plate.addChild(under, sheet);
     // The plate swallows taps so nothing behind the panel (the field's laser, a cell) reacts to a miss.
     this.plate.eventMode = 'static';
     this.plate.hitArea = new Rectangle(0, 0, HUD_W, h);
-    this.paintDeco(h);
     refreshCache(this.plate);
     this.classes.layout(r.chipsY);
     this.currency.layout(r.currencyY);
     this.actions.layout(r.summonY, r.utilY);
     this.sheet.layout(r.sheet);
     this.sell.layout(r.sell);
-  }
-
-  /** Faint paw prints on the plate so the panel is never a flat slab (it is nearly empty in the first run). */
-  private paintDeco(h: number): void {
-    for (const c of this.deco.removeChildren()) c.destroy({ children: true });
-    const spots: ReadonlyArray<readonly [number, number, number, number]> = [
-      [58, 118, 44, -0.4], [668, 96, 38, 0.5], [352, 150, 36, 0.1], [120, 236, 40, 0.3], [610, 252, 46, -0.2],
-      [250, 300, 34, -0.5], [470, 330, 38, 0.4], [60, 400, 42, 0.2], [680, 410, 36, -0.3],
-    ];
-    for (const [x, y, size, rot] of spots) {
-      if (y > h - 20) continue;
-      const paw = drawIcon('paw', size, Color.textDim);
-      paw.alpha = 0.07;
-      paw.position.set(x, y);
-      paw.rotation = rot;
-      this.deco.addChild(paw);
-    }
   }
 
   invalidate(): void {

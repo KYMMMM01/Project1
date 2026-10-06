@@ -1,4 +1,5 @@
 import { Ease, type EaseFn } from '@/core/tween';
+import { Color } from '@/ui/theme';
 
 /** A fixed number or an inclusive [lo, hi] range sampled uniformly per particle. */
 export type Range = number | readonly [number, number];
@@ -42,7 +43,7 @@ export class ColorRamp {
 
   set(stops: readonly number[], mid = 0.5): this {
     const n = stops.length > 3 ? 3 : stops.length < 1 ? 1 : stops.length;
-    const c0 = stops[0] ?? 0xffffff;
+    const c0 = stops[0] ?? Color.white;
     const c1 = n > 1 ? (stops[1] as number) : c0;
     const c2 = n > 2 ? (stops[2] as number) : c1;
     this.r0 = (c0 >> 16) & 255;

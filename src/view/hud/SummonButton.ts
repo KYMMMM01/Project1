@@ -1,7 +1,7 @@
 /**
- * The big SUMMON button: acts on pointerdown, repeats while held (after 350 ms, then every 140 ms),
- * shows the cost, turns into "no space" on a full board and answers a short purse with a shake and
- * the missing amount.
+ * The big SUMMON button, a coral piece of paper with a strip of tape: acts on pointerdown, repeats while
+ * held (after 350 ms, then every 140 ms), shows the cost, turns into "no space" on a full board and
+ * answers a short purse with a shake and the missing amount.
  */
 import { Container } from 'pixi.js';
 import { audio } from '@/audio';
@@ -34,6 +34,7 @@ export class SummonButton extends Container {
       height: SUMMON_H,
       fontSize: 58,
       radius: 46,
+      tape: 'pink',
       fireOnDown: true,
       haptic: 'medium',
       sfx: 'ui_click',
@@ -118,7 +119,7 @@ export class SummonButton extends Container {
     this.dirty = true;
   }
 
-  /** Keep the "ready" glow going for the tutorial pointer. */
+  /** Keep the button breathing while the tutorial pointer is on it. */
   attention(on: boolean): void {
     if (on) this.btn.startPulse({ times: -1 });
     else this.btn.stopPulse();

@@ -6,8 +6,10 @@
 import { TAU } from '@/core/math';
 import { Ease } from '@/core/tween';
 import type { EmitDef } from '@/fx';
+import { Hue } from '@/fx/palette';
+import { Color } from '@/ui/theme';
 
-const W = 0xffffff;
+const W = Hue.cream;
 const PI = Math.PI;
 
 // ── combat ──
@@ -19,13 +21,13 @@ export const HIT_SPARK: EmitDef = {
 };
 
 export const HIT_FLASH: EmitDef = {
-  tex: 'glow', prio: 0, count: 1, life: 0.12, size: 46, sizeEnd: 82, colors: [W], alpha: 0.8, fadeIn: 0, fadeOut: 0.85,
+  tex: 'disc', prio: 0, count: 1, life: 0.12, size: 46, sizeEnd: 82, colors: [W], alpha: 0.8, fadeIn: 0, fadeOut: 0.85,
   sizeEase: Ease.cubicOut,
 };
 
 /** Frame 1 of the muzzle cue: a round flash (guide C-01). */
 export const MUZZLE_FLASH: EmitDef = {
-  tex: 'glow', prio: 0, count: 1, life: 0.07, size: 42, sizeEnd: 18, colors: [W], alpha: 0.9, fadeIn: 0, fadeOut: 0.8,
+  tex: 'disc', prio: 0, count: 1, life: 0.07, size: 42, sizeEnd: 18, colors: [W], alpha: 0.9, fadeIn: 0, fadeOut: 0.8,
 };
 
 /** Frames 2-3: the flash stretches into the shape of the shot. */
@@ -42,7 +44,7 @@ export const CAST_RING: EmitDef = {
 
 /** Where a projectile lands: a small flash and a few motes. */
 export const IMPACT_PUFF: EmitDef = {
-  tex: 'glow', prio: 0, count: 1, life: 0.16, size: 36, sizeEnd: 78, colors: [W], alpha: 0.8, fadeIn: 0, fadeOut: 0.8,
+  tex: 'disc', prio: 0, count: 1, life: 0.16, size: 36, sizeEnd: 78, colors: [W], alpha: 0.8, fadeIn: 0, fadeOut: 0.8,
   sizeEase: Ease.cubicOut,
 };
 
@@ -53,17 +55,17 @@ export const IMPACT_MOTES: EmitDef = {
 
 /** A shot that found nothing (its target died first): a thin puff of dust. */
 export const FIZZLE: EmitDef = {
-  tex: 'smoke', blend: 'normal', prio: 0, count: 2, life: [0.25, 0.4], shape: { type: 'circle', r: 6 }, speed: [20, 60], drag: 3,
-  size: [14, 20], sizeEnd: [30, 42], rot: [0, TAU], colors: [0xd2c8dc], alpha: 0.4, fadeIn: 0.1, fadeOut: 0.6,
+  tex: 'smoke', prio: 0, count: 2, life: [0.25, 0.4], shape: { type: 'circle', r: 6 }, speed: [20, 60], drag: 3,
+  size: [14, 20], sizeEnd: [30, 42], rot: [0, TAU], colors: [Hue.dust], alpha: 0.4, fadeIn: 0.1, fadeOut: 0.6,
 };
 
-/** Cyan glance of a shield soaking a hit. */
+/** A pale blue glance of a shield soaking a hit. */
 export const SHIELD_GLANCE: EmitDef = {
   tex: 'ring', prio: 1, count: 1, life: 0.22, size: 22, sizeEnd: 70, colors: [W], alpha: 0.9, fadeIn: 0, fadeOut: 0.8,
   sizeEase: Ease.cubicOut,
 };
 
-export const SHIELD_GLINT: EmitDef = {
+export const SHIELD_SPARK: EmitDef = {
   tex: 'sparkle', prio: 0, count: 3, life: [0.25, 0.4], speed: [50, 150], drag: 3, size: [12, 20], sizeEnd: [3, 6], spin: [-4, 4],
   rot: [0, TAU], colors: [W], fadeIn: 0.1, fadeOut: 0.5,
 };
@@ -78,27 +80,27 @@ export const STAR_POP: EmitDef = {
 
 export const ICE_CRYSTALS: EmitDef = {
   tex: 'crystal', prio: 1, count: 3, life: [0.35, 0.55], shape: { type: 'circle', r: 10 }, speed: [40, 110], drag: 3, gravity: 220,
-  size: [16, 24], sizeEnd: [8, 12], spin: [-4, 4], rot: [0, TAU], colors: [W, 0xbfefff, 0x7fd6ff], fadeIn: 0, fadeOut: 0.5,
+  size: [16, 24], sizeEnd: [8, 12], spin: [-4, 4], rot: [0, TAU], colors: [W, Hue.iceLight, Hue.ice], fadeIn: 0, fadeOut: 0.5,
 };
 
 export const EMBERS: EmitDef = {
   tex: 'dot', prio: 0, count: 5, life: [0.5, 0.8], shape: { type: 'circle', r: 12 }, speed: [30, 90], dir: -PI / 2, spread: 0.6,
-  drag: 1.2, gravity: -60, size: [7, 12], sizeEnd: 2, colors: [0xffe08a, 0xff7a2a, 0xff3a1a], fadeIn: 0, fadeOut: 0.5,
+  drag: 1.2, gravity: -60, size: [7, 12], sizeEnd: 2, colors: [Hue.sun, Hue.ember, Hue.flame], fadeIn: 0, fadeOut: 0.5,
 };
 
 export const BUBBLES: EmitDef = {
   tex: 'ring', prio: 0, count: 4, life: [0.5, 0.8], shape: { type: 'circle', r: 14 }, speed: [20, 60], dir: -PI / 2, spread: 0.5,
-  size: [10, 16], sizeEnd: [16, 24], colors: [0xd8ffd0, 0x86e05a], alpha: 0.8, fadeIn: 0.1, fadeOut: 0.5,
+  size: [10, 16], sizeEnd: [16, 24], colors: [Hue.cream, Hue.heal], alpha: 0.8, fadeIn: 0.1, fadeOut: 0.5,
 };
 
 export const DRIPS: EmitDef = {
-  tex: 'droplet', blend: 'normal', prio: 0, count: 4, life: [0.4, 0.7], shape: { type: 'circle', r: 10 }, speed: [20, 70], gravity: 640,
-  size: [10, 16], sizeEnd: [6, 10], colors: [0xff6b78, 0xc4202f], fadeIn: 0, fadeOut: 0.4,
+  tex: 'droplet', prio: 0, count: 4, life: [0.4, 0.7], shape: { type: 'circle', r: 10 }, speed: [20, 70], gravity: 640,
+  size: [10, 16], sizeEnd: [6, 10], colors: [Color.berry, Color.berryDark], fadeIn: 0, fadeOut: 0.4,
 };
 
 export const CRACKS: EmitDef = {
-  tex: 'shard', blend: 'normal', prio: 1, count: 5, life: [0.35, 0.6], speed: [80, 220], gravity: 520, drag: 1, size: [10, 16],
-  sizeEnd: [6, 10], spin: [-9, 9], rot: [0, TAU], colors: [0xe6ecf4, 0x8993a3], fadeIn: 0, fadeOut: 0.4,
+  tex: 'shard', prio: 1, count: 5, life: [0.35, 0.6], speed: [80, 220], gravity: 520, drag: 1, size: [10, 16],
+  sizeEnd: [6, 10], spin: [-9, 9], rot: [0, TAU], colors: [Hue.cream, Hue.smoke], fadeIn: 0, fadeOut: 0.4,
 };
 
 export const CRACK_FLASH: EmitDef = {
@@ -109,11 +111,11 @@ export const CRACK_FLASH: EmitDef = {
 /** Little stars circling over a stunned head. */
 export const STUN_STARS: EmitDef = {
   tex: 'star', prio: 1, count: 3, life: [0.6, 0.85], shape: { type: 'ring', r: 18 }, speed: [8, 24], drag: 1, size: [16, 22],
-  sizeEnd: [10, 14], spin: [-5, 5], rot: [0, TAU], colors: [0xfff4a0, 0xffe45c], fadeIn: 0.1, fadeOut: 0.5,
+  sizeEnd: [10, 14], spin: [-5, 5], rot: [0, TAU], colors: [Hue.sun, Hue.zap], fadeIn: 0.1, fadeOut: 0.5,
 };
 
 export const VULN_PULSE: EmitDef = {
-  tex: 'ring', prio: 0, count: 1, life: 0.3, size: 20, sizeEnd: 72, colors: [0xe8c8ff, 0xb26bff], alpha: 0.8, fadeIn: 0, fadeOut: 0.7,
+  tex: 'ring', prio: 0, count: 1, life: 0.3, size: 20, sizeEnd: 72, colors: [Hue.heart, Color.berry], alpha: 0.8, fadeIn: 0, fadeOut: 0.7,
   sizeEase: Ease.cubicOut,
 };
 
@@ -138,14 +140,14 @@ export const WHIRL_LINE: EmitDef = {
 };
 
 export const SPLASH_DROPS: EmitDef = {
-  tex: 'droplet', blend: 'normal', prio: 1, count: 12, life: [0.5, 0.9], shape: { type: 'circle', r: 24 }, speed: [160, 420],
-  dir: -PI / 2, spread: 1.1, gravity: 900, drag: 0.6, size: [14, 24], sizeEnd: [8, 14], colors: [0xbfeaff, 0x62cfff], fadeIn: 0,
+  tex: 'droplet', prio: 1, count: 12, life: [0.5, 0.9], shape: { type: 'circle', r: 24 }, speed: [160, 420],
+  dir: -PI / 2, spread: 1.1, gravity: 900, drag: 0.6, size: [14, 24], sizeEnd: [8, 14], colors: [Hue.iceLight, Hue.water], fadeIn: 0,
   fadeOut: 0.4,
 };
 
 /** A weakened cat breaks into a sweat. */
 export const SWEAT: EmitDef = {
-  tex: 'droplet', blend: 'normal', prio: 0, count: 3, life: [0.4, 0.65], shape: { type: 'circle', r: 14 }, speed: [30, 90], dir: -PI / 2,
+  tex: 'droplet', prio: 0, count: 3, life: [0.4, 0.65], shape: { type: 'circle', r: 14 }, speed: [30, 90], dir: -PI / 2,
   spread: 1.1, gravity: 560, size: [10, 16], sizeEnd: [6, 10], colors: [W], fadeIn: 0, fadeOut: 0.4,
 };
 

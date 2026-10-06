@@ -1,9 +1,13 @@
 import { Container, Graphics } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { damp } from '@/core/math';
+import { Color } from '@/ui';
 import { FIELD_H, FIELD_W, cellCenterX, cellCenterY } from '@/game/geometry';
 
-const SEGMENTS = 120;
+const FILL_SEGMENTS = 96;
+const DASH = 15;
+const GAP = 11;
+const CHORDS = 3;
 
 /** Sutherland-Hodgman clip of a flat [x0, y0, x1, y1, ...] polygon against the rectangle 0..w x 0..h. */
 export function clipPolygonToRect(points: number[], w: number, h: number): number[] {
@@ -36,7 +40,7 @@ export function clipPolygonToRect(points: number[], w: number, h: number): numbe
   return poly;
 }
 
-/** Soft translucent disc with an outline marking how far a cat reaches; clipped to the field so a long range never spills over the HUD. */
+/** A dashed teal circle with a faint flat fill marking how far a cat reaches; clipped to the field so a long range never spills over the HUD. */
 export class RangeRing {
   readonly view = new Container();
   private readonly g = new Graphics();
@@ -81,22 +85,32 @@ export class RangeRing {
     g.clear();
     const cx = cellCenterX(this.cell);
     const cy = cellCenterY(this.cell);
-    const pts: number[] = [];
-    for (let i = 0; i < SEGMENTS; i++) {
-      const a = (i / SEGMENTS) * Math.PI * 2;
-      pts.push(cx + Math.cos(a) * this.range, cy + Math.sin(a) * this.range);
+    const r = this.range;
+    const fill: number[] = [];
+    for (let i = 0; i < FILL_SEGMENTS; i++) {
+      const a = (i / FILL_SEGMENTS) * Math.PI * 2;
+      fill.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
     }
-    const clipped = clipPolygonToRect(pts, FIELD_W, FIELD_H);
-    if (clipped.length >= 6) g.poly(clipped).fill({ color: 0xfff3c4, alpha: 0.075 });
+    const clipped = clipPolygonToRect(fill, FIELD_W, FIELD_H);
+    if (clipped.length >= 6) g.poly(clipped).fill({ color: Color.teal, alpha: 0.11 });
+    // Dashes of a fixed length whatever the range; a chord only counts where it lies on the field.
     const inside = (x: number, y: number): boolean => x >= 0 && x <= FIELD_W && y >= 0 && y <= FIELD_H;
-    for (let i = 0; i < SEGMENTS; i++) {
-      const ax = pts[i * 2] as number;
-      const ay = pts[i * 2 + 1] as number;
-      const bx = pts[((i + 1) % SEGMENTS) * 2] as number;
-      const by = pts[((i + 1) % SEGMENTS) * 2 + 1] as number;
-      if (i % 2 === 0 && inside(ax, ay) && inside(bx, by)) g.moveTo(ax, ay).lineTo(bx, by);
+    const dashes = Math.max(8, Math.round((Math.PI * 2 * r) / (DASH + GAP)));
+    const span = (DASH / (DASH + GAP)) * ((Math.PI * 2) / dashes);
+    for (let i = 0; i < dashes; i++) {
+      const a0 = (i / dashes) * Math.PI * 2;
+      let px = cx + Math.cos(a0) * r;
+      let py = cy + Math.sin(a0) * r;
+      for (let k = 1; k <= CHORDS; k++) {
+        const a = a0 + (span * k) / CHORDS;
+        const x = cx + Math.cos(a) * r;
+        const y = cy + Math.sin(a) * r;
+        if (inside(px, py) && inside(x, y)) g.moveTo(px, py).lineTo(x, y);
+        px = x;
+        py = y;
+      }
     }
-    g.stroke({ width: 4, color: 0xfff3c4, alpha: 0.75, cap: 'round' });
+    g.stroke({ width: 4, color: Color.tealDark, alpha: 0.85, cap: 'round', join: 'round' });
   }
 
   destroy(): void {

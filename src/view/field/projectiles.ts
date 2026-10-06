@@ -7,11 +7,10 @@ import { projectileLook, type ProjectileLook } from './projectileLooks';
 
 const SPIN_FLIP_RATE = 14;
 
-/** One shot in flight: an additive trail and glow behind a baked shape. */
+/** One shot in flight: a flat paper streak behind a baked sticker shape. */
 class ShotView {
   readonly root = new Container();
   private readonly trail = new Sprite(fxTexture('streak'));
-  private readonly glow = new Sprite(fxTexture('glow'));
   private readonly core = new Sprite();
   private look: ProjectileLook | null = null;
   uid = 0;
@@ -21,11 +20,8 @@ class ShotView {
   constructor() {
     const streak = fxTex('streak');
     this.trail.anchor.set(1, streak.ay);
-    this.trail.blendMode = 'add';
-    this.glow.anchor.set(0.5);
-    this.glow.blendMode = 'add';
     this.core.anchor.set(0.5);
-    this.root.addChild(this.trail, this.glow, this.core);
+    this.root.addChild(this.trail, this.core);
     this.root.eventMode = 'none';
   }
 
@@ -40,11 +36,7 @@ class ShotView {
     this.trail.tint = look.trail;
     this.trail.width = look.trailLength;
     this.trail.height = 9 + Math.min(8, look.size * 0.2);
-    this.trail.alpha = 0.7;
-    this.glow.visible = look.glow !== 0;
-    this.glow.tint = look.glow;
-    this.glow.width = this.glow.height = look.size * 2.4;
-    this.glow.alpha = 0.55;
+    this.trail.alpha = 0.8;
     this.root.visible = true;
   }
 
@@ -62,7 +54,6 @@ class ShotView {
       this.core.rotation = -p.angle + Math.sin(t * 9) * 0.12;
     }
     if (look.flip) this.core.scale.x = Math.cos(t * SPIN_FLIP_RATE);
-    this.glow.alpha = look.glow !== 0 ? 0.5 + 0.12 * Math.sin(t * 22) : 0;
   }
 
   reset(): void {

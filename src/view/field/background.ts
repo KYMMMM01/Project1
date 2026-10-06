@@ -2,11 +2,12 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import { tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
 import { CHAPTERS, type ChapterInfo } from '@/game';
+import { fxVignette } from '@/fx';
 import { Color } from '@/ui';
 import { backgroundPlacement } from '../layout';
 import type { BattleLayout } from '../context';
 
-const FALLBACK_EDGE = 0x3a2412;
+const FALLBACK_EDGE: number = Color.woodDark;
 
 /** A white strip that is opaque at the top and clear at the bottom; tint and flip it to make any edge gradient. */
 function fadeTexture(): Texture {
@@ -59,8 +60,9 @@ function edgeColors(art: Texture): { top: number; bottom: number } {
 
 /**
  * Chapter floor art behind the field. It keeps its natural width, is centred on the field, and
- * fades into a matching colour on screens taller than the art. The top and bottom are darkened so
- * the HUD blocks read against it.
+ * fades into a matching colour on screens taller than the art. A soft warm vignette (one stretched
+ * sprite) and a warm shade at the top and bottom calm the art behind the HUD pieces and keep the
+ * board's sheet the brightest thing on the floor.
  */
 export class Background {
   private readonly image: Sprite;
@@ -70,6 +72,7 @@ export class Background {
   private readonly blendBottom: Sprite;
   private readonly shadeTop: Sprite;
   private readonly shadeBottom: Sprite;
+  private readonly vignette = new Sprite(fxVignette());
   private readonly fade: Texture;
   private readonly edges: { top: number; bottom: number };
 
@@ -90,11 +93,13 @@ export class Background {
     this.fillBottom.tint = this.edges.bottom;
     this.blendTop.tint = this.edges.top;
     this.blendBottom.tint = this.edges.bottom;
-    this.shadeTop.tint = Color.bgDeep;
-    this.shadeBottom.tint = Color.bgDeep;
-    this.shadeTop.alpha = 0.62;
-    this.shadeBottom.alpha = 0.7;
-    layer.addChild(this.fillTop, this.fillBottom, this.image, this.blendTop, this.blendBottom, this.shadeTop, this.shadeBottom);
+    this.shadeTop.tint = Color.shadow;
+    this.shadeBottom.tint = Color.shadow;
+    this.shadeTop.alpha = 0.34;
+    this.shadeBottom.alpha = 0.4;
+    this.vignette.tint = Color.shadow;
+    this.vignette.alpha = 0.3;
+    layer.addChild(this.fillTop, this.fillBottom, this.image, this.blendTop, this.blendBottom, this.shadeTop, this.shadeBottom, this.vignette);
   }
 
   resize(layout: BattleLayout): void {
@@ -130,13 +135,15 @@ export class Background {
     this.shadeBottom.position.set(0, layout.h);
     this.shadeBottom.width = layout.w;
     this.shadeBottom.height = -bottomSpan;
+    this.vignette.width = layout.w;
+    this.vignette.height = layout.h;
     // Tall screens fill their gaps with the edge colour darkened toward the HUD tone.
     this.fillTop.tint = mixColor(this.edges.top, Color.bgDeep, 0.25);
     this.fillBottom.tint = mixColor(this.edges.bottom, Color.bgDeep, 0.25);
   }
 
   destroy(): void {
-    for (const s of [this.fillTop, this.fillBottom, this.image, this.blendTop, this.blendBottom, this.shadeTop, this.shadeBottom]) {
+    for (const s of [this.fillTop, this.fillBottom, this.image, this.blendTop, this.blendBottom, this.shadeTop, this.shadeBottom, this.vignette]) {
       this.layer.removeChild(s);
       s.destroy();
     }

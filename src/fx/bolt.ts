@@ -48,8 +48,8 @@ export function buildBolt(
 }
 
 /**
- * Draw a bolt path as a chain of stretched 'bolt' particles, a wide coloured glow pass under a
- * thin bright core, so it batches with the other effects and obeys the particle budget. Stops early
+ * Draw a bolt path as a chain of stretched 'bolt' particles, a wide coloured band under a
+ * thin cream core, so it batches with the other effects and obeys the particle budget. Stops early
  * (leaving a partial bolt) when the budget refuses.
  */
 export function strokeBolt(
@@ -71,22 +71,22 @@ export function strokeBolt(
     const by = pts[2 * i + 3] as number;
     const len = Math.hypot(bx - ax, by - ay);
     const ang = Math.atan2(by - ay, bx - ax);
-    // Glow pass first so the bright core is drawn on top of it.
+    // The wide band first so the core is drawn on top of it.
     for (let pass = 0; pass < 2; pass++) {
-      const p = ps.alloc('bolt', 'add', prio);
+      const p = ps.alloc('bolt', prio);
       if (!p) return;
-      const glowPass = pass === 0;
+      const band = pass === 0;
       p.x = ax;
       p.y = ay;
       p.rot = ang;
       p.sx0 = p.sx1 = (len + 3) / 32;
-      p.sy0 = p.sy1 = (glowPass ? thick * 3.6 : thick) / 8;
+      p.sy0 = p.sy1 = (band ? thick * 3.6 : thick) / 8;
       p.life = life;
       p.age = -delay;
-      p.alpha = glowPass ? alpha * 0.8 : alpha;
+      p.alpha = band ? alpha * 0.8 : alpha;
       p.fadeIn = 0;
       p.fadeOut = 0.5;
-      p.ramp.setSolid(glowPass ? color : core);
+      p.ramp.setSolid(band ? color : core);
       ps.commit(p);
     }
   }

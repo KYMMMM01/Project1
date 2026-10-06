@@ -1,28 +1,49 @@
 /**
- * Class sheet: what the class does, its three synergy tiers with the reached ones lit, and the class
- * upgrade button (level, cost). Opened by tapping a class chip.
+ * Class sheet: what the class does, its fixed five-rank line as a ladder of photos (owned ranks lit
+ * with their counts, merge and awaken arrows), the three synergy steps explained against that ladder,
+ * and the class upgrade button. Opened by tapping a class chip.
  */
 import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { CLASS_UPGRADE_BONUS, SYNERGY_TIER_AT, classDef, type ClassId } from '@/game';
-import { Button, Color, drawIcon, fitLabel, Panel, Popup, punch, RarityPips, TweenBag, uiLabel, vGradient, shade } from '@/ui';
+import { Button, Color, drawDashedRect, drawIcon, drawPaper, drawPaperFace, fitLabel, Panel, paperSeed, Popup, punch, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
+import { ClassLadder, LADDER_H } from '../ClassLadder';
 import { CLASS_ACCENT, CLASS_ICON, Subs } from '../kit';
+import { nextTierGoal, rankCounts } from '../planMath';
 
-const W = 620;
-const ROW_H = 92;
+const W = 672;
+const SIDE = 24;
+const ROW_H = 80;
+const LADDER_Y = 176;
+const RULE_Y = LADDER_Y + LADDER_H + 26;
+const HEAD_Y = RULE_Y + 62;
+const ROWS_Y = HEAD_Y + 42;
+const UPGRADE_Y = ROWS_Y + ROW_H * 3 + 18;
+/** Centre of the column holding each step's dots and its count. */
+const DOTS_X = 100;
+
+interface TierRow {
+  g: Graphics;
+  dots: Graphics;
+  check: Container;
+  tier: number;
+  need: number;
+}
 
 export class ClassSheet extends Popup<void> {
   private readonly subs = new Subs();
   private readonly bag = new TweenBag();
   private readonly panel: Panel;
-  private readonly pips = new RarityPips({ size: 24, gap: 12 });
+  private readonly ladder: ClassLadder;
+  private readonly goalT: Text;
   private readonly haveT: Text;
-  private readonly rows: { g: Graphics; check: Container; tier: number }[] = [];
+  private readonly rows: TierRow[] = [];
   private readonly levelT: Text;
   private readonly noteT: Text;
   private readonly upBtn: Button;
+  private readonly seed = paperSeed();
   private tierNow = -1;
 
   constructor(
@@ -32,68 +53,72 @@ export class ClassSheet extends Popup<void> {
     super({ dismissResult: undefined, priority: 1 });
     const def = classDef(classId);
     const accent = CLASS_ACCENT[classId];
+    const showUpgrade = env.reveal.classUpgrade;
 
-    const h = 130 + 150 + ROW_H * 3 + 24 + 190;
+    const h = UPGRADE_Y + (showUpgrade ? 196 : 8);
     this.panel = new Panel({ width: W, height: h, title: t(def.nameKey), onClose: () => this.close() });
     const c = this.panel.content;
 
-    // Medallion + role text.
+    // The class glyph on a round kraft patch, then what the class does.
     const med = new Graphics();
-    med.circle(0, 5, 46).fill({ color: Color.black, alpha: 0.35 });
-    med.circle(0, 0, 46).fill(vGradient(shade(Color.purple, -0.2), Color.purpleDark)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    med.circle(0, 0, 52).stroke({ width: 3, color: accent, alpha: 0.8 });
-    med.position.set(80, 118);
-    const icon = drawIcon(CLASS_ICON[classId], 64);
-    icon.position.set(80, 118);
-    const role = uiLabel(t(def.roleKey), { size: 28, wrap: 410, lineHeight: 38, align: 'left', anchorX: 0, anchorY: 0, strokeWidth: 4, shadow: false });
-    role.position.set(150, 76);
+    drawPaper(med, -44, -44, { w: 88, h: 88, kind: 'circle', fill: accent, edge: Color.kraftDark, shadow: 4, grain: false, seed: this.seed });
+    med.position.set(SIDE + 50, 112);
+    const icon = drawIcon(CLASS_ICON[classId], 60);
+    icon.position.copyFrom(med.position);
+    const role = uiLabel(t(def.roleKey), { size: 26, wrap: W - 190 - SIDE, lineHeight: 34, align: 'left', anchorX: 0, anchorY: 0.5 });
+    role.position.set(SIDE + 114, 112);
     c.addChild(med, icon, role);
 
-    // Owned rarities on the board.
-    this.pips.position.set(W / 2 - 80, 218);
-    this.haveT = uiLabel('', { size: 26, color: Color.textDim, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
-    this.haveT.position.set(W / 2 + 10, 218);
-    c.addChild(this.pips, this.haveT);
+    // The ladder and the rule it shows.
+    this.ladder = new ClassLadder(classId, W - SIDE * 2 - 8);
+    this.ladder.position.set(SIDE + 4, LADDER_Y);
+    const rule = uiLabel(t('hud.class.rule'), { size: 24, color: Color.inkSoft, wrap: W - SIDE * 2 - 20, lineHeight: 30 });
+    rule.position.set(W / 2, RULE_Y + 18);
+    c.addChild(this.ladder, rule);
 
-    // The three tiers.
+    // The synergy steps: how many different cats of the class are on the board, and what the next step asks for.
+    this.haveT = uiLabel('', { size: 26, anchorX: 0, align: 'left' });
+    this.haveT.position.set(SIDE + 4, HEAD_Y);
+    this.goalT = uiLabel('', { size: 24, color: Color.inkSoft, anchorX: 1, align: 'right' });
+    this.goalT.position.set(W - SIDE - 4, HEAD_Y);
+    c.addChild(this.haveT, this.goalT);
     for (let i = 0; i < 3; i++) {
       const tierNo = (i + 1) as 1 | 2 | 3;
-      const y = 262 + i * ROW_H;
+      const need = SYNERGY_TIER_AT[i] ?? i + 2;
+      const y = ROWS_Y + i * ROW_H;
       const g = new Graphics();
       g.position.set(0, y);
-      const need = uiLabel(t(tierNo === 3 ? 'hud.class.need.more' : 'hud.class.need', { n: SYNERGY_TIER_AT[i] ?? i + 2 }), {
-        size: 26, strokeWidth: 4, shadow: false,
-      });
-      need.position.set(86, y + ROW_H / 2 - 4);
-      fitLabel(need, 100, 26, 0.8);
-      const text = uiLabel(def.tierText(tierNo), { size: 26, wrap: 330, lineHeight: 32, align: 'left', anchorX: 0, strokeWidth: 4, shadow: false });
-      text.position.set(160, y + ROW_H / 2 - 4);
+      // The dots sit over their count, centred in a column of their own.
+      const dots = new Graphics();
+      dots.position.set(DOTS_X - (need * 22) / 2, y + ROW_H / 2 - 13);
+      const count = uiLabel(t(tierNo === 3 ? 'hud.class.need.more' : 'hud.class.need', { n: need }), { size: 24 });
+      fitLabel(count, 110, 24, 0.8);
+      count.position.set(DOTS_X, y + ROW_H / 2 + 16);
+      const text = uiLabel(def.tierText(tierNo), { size: 26, wrap: W - 190 - 90, lineHeight: 32, align: 'left', anchorX: 0 });
+      text.position.set(190, y + ROW_H / 2);
       const check = drawIcon('check', 38);
-      check.position.set(W - 52, y + ROW_H / 2 - 4);
-      c.addChild(g, need, text, check);
-      this.rows.push({ g, check, tier: tierNo });
+      check.position.set(W - SIDE - 34, y + ROW_H / 2);
+      c.addChild(g, dots, count, text, check);
+      this.rows.push({ g, dots, check, tier: tierNo, need });
     }
 
     // Upgrade.
-    const uy = 262 + ROW_H * 3 + 20;
-    this.levelT = uiLabel('', { size: 30, anchorX: 0, align: 'left', strokeWidth: 5 });
-    this.levelT.position.set(40, uy + 24);
+    this.levelT = uiLabel('', { size: 30, anchorX: 0, align: 'left' });
+    this.levelT.position.set(SIDE + 8, UPGRADE_Y + 26);
     this.noteT = uiLabel(t('hud.class.note', { n: Math.round(CLASS_UPGRADE_BONUS * 100) }), {
-      size: 24, color: Color.textDim, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false, wrap: W - 80,
+      size: 24, color: Color.inkSoft, anchorX: 0, align: 'left', wrap: W - 80,
     });
-    this.noteT.position.set(40, uy + 64);
+    this.noteT.position.set(SIDE + 8, UPGRADE_Y + 68);
     this.upBtn = new Button({ label: t('hud.upgrade'), style: 'success', width: 320, height: 96, fontSize: 38, fireOnDown: true });
-    this.upBtn.position.set(W / 2, uy + 140);
+    this.upBtn.position.set(W / 2, UPGRADE_Y + 146);
     this.upBtn.onTap(() => {
       env.ctx.command('upgradeClass', () => env.battle.upgradeClass(classId));
     });
     c.addChild(this.levelT, this.noteT, this.upBtn);
-    if (!env.reveal.classUpgrade) {
-      this.levelT.visible = this.noteT.visible = this.upBtn.visible = false;
-    }
+    if (!showUpgrade) this.levelT.visible = this.noteT.visible = this.upBtn.visible = false;
 
     this.body.addChild(this.panel);
-    this.setContentSize(W + 80, h + 100);
+    this.setContentSize(W + 24, h + 100);
 
     const ev = env.battle.events;
     for (const type of ['upgrade', 'synergy', 'summon', 'merge', 'molt', 'awaken', 'sell', 'fish'] as const) {
@@ -102,20 +127,36 @@ export class ClassSheet extends Popup<void> {
     this.refresh(false);
   }
 
+  /** Dots for the different cats of the class on the board: lit up to the count, one per kind the step asks for. */
+  private drawRow(r: TierRow, distinct: number, tier: number): void {
+    const accent = CLASS_ACCENT[this.classId];
+    const lit = r.tier <= tier;
+    const current = r.tier === tier;
+    r.check.visible = lit;
+    r.g.clear();
+    drawPaperFace(r.g, SIDE, 6, {
+      w: W - SIDE * 2, h: ROW_H - 12, radius: 20, fill: lit ? Color.paperLight : Color.paperDim,
+      edge: lit ? accent : Color.kraftDark, edgeWidth: lit ? 3 : 2, edgeAlpha: lit ? 0.95 : 0.4, grain: false, seed: this.seed + r.tier,
+    });
+    if (current) drawDashedRect(r.g, SIDE + 6, 12, W - SIDE * 2 - 12, ROW_H - 24, { radius: 14, color: accent, width: 2.5, dash: 10, gap: 7, seed: this.seed + r.tier });
+    r.dots.clear();
+    for (let i = 0; i < r.need; i++) {
+      const on = i < distinct;
+      r.dots.circle(i * 22 + 11, 0, 9).fill(on ? accent : Color.paperDim).stroke({ width: 2.5, color: on ? Color.ink : Color.kraftDark });
+    }
+  }
+
   private refresh(animate: boolean): void {
     const b = this.env.battle;
     const id = this.classId;
-    this.pips.set(b.classOwned(id), animate);
-    this.haveT.text = t('hud.class.have', { n: b.classDistinct(id) });
+    const distinct = b.classDistinct(id);
+    this.ladder.set(rankCounts(id, b.units));
+    this.haveT.text = t('hud.class.have', { n: distinct });
+    const goal = nextTierGoal(distinct);
+    this.goalT.text = goal ? t('hud.class.goal', { tier: goal.tier, n: goal.missing }) : t('hud.class.goalMax');
+    fitLabel(this.goalT, W - SIDE * 2 - 8 - this.haveT.width - 16, 24, 0.75);
     const tier = b.synergyTier(id);
-    this.rows.forEach((r) => {
-      const lit = r.tier <= tier;
-      r.check.visible = lit;
-      r.g.clear();
-      r.g.roundRect(24, 6, W - 48, ROW_H - 12, 22)
-        .fill(lit ? vGradient(shade(Color.purple, -0.12), Color.purpleDark) : { color: Color.bgDeep, alpha: 0.7 })
-        .stroke({ width: r.tier === tier ? 5 : 3, color: r.tier === tier ? CLASS_ACCENT[id] : Color.outline, alignment: 1 });
-    });
+    for (const r of this.rows) this.drawRow(r, distinct, tier);
     if (animate && tier > this.tierNow && this.tierNow >= 0) punch(this.bag, this.panel, 0.03, 0.2);
     this.tierNow = tier;
 
@@ -129,7 +170,7 @@ export class ClassSheet extends Popup<void> {
     } else {
       this.upBtn.setLabel(t('hud.upgrade'));
       this.upBtn.setSublabel(fmt(cost), 'fish');
-      this.upBtn.setStyle(b.fish >= cost ? 'success' : 'neutral');
+      this.upBtn.setStyle(b.fish >= cost ? 'success' : 'kraft');
     }
     if (animate) punch(this.bag, this.levelT, 0.18, 0.2);
   }

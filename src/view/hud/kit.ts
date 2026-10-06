@@ -1,9 +1,25 @@
-/** Small display helpers shared by the HUD components: portraits, icons, hit areas, class colours. */
+/** Small display helpers shared by the HUD components: portraits, photo frames, icons, hit areas, class colours. */
 import { Container, Graphics, Rectangle, Sprite, type DestroyOptions } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { game } from '@/core/game';
+import { mixColor } from '@/core/math';
 import type { ClassId, EnemyId, RarityId, RelicId, UnitId } from '@/game';
-import { bindPress, drawIcon, Rarity, vGradient, type IconName, type PressBinding, Color, shade } from '@/ui';
+import {
+  bindPress,
+  cacheStatic,
+  Color,
+  drawDashedRect,
+  drawIcon,
+  drawPaper,
+  drawPaperFace,
+  paperSeed,
+  Rarity,
+  shade,
+  tapeStrip,
+  type IconName,
+  type PressBinding,
+  type TapeName,
+} from '@/ui';
 
 export const CLASS_ICON: Record<ClassId, IconName> = {
   warrior: 'class_warrior',
@@ -12,12 +28,24 @@ export const CLASS_ICON: Record<ClassId, IconName> = {
   trickster: 'class_trickster',
 };
 
-/** Accent of each class: lit synergy steps and the tier-up flare. */
+/**
+ * One craft paper per class, the colour of that class's cats' clothes (red, green, blue, yellow): lit
+ * synergy steps, the owned ranks of a ladder. The mage blue is borrowed from the rare rarity mat, the
+ * only blue in the palette.
+ */
 export const CLASS_ACCENT: Record<ClassId, number> = {
-  warrior: Color.danger,
-  ranger: Color.success,
-  mage: Color.info,
-  trickster: Color.gold,
+  warrior: Color.coral,
+  ranger: Color.leaf,
+  mage: Rarity.rare.color,
+  trickster: Color.mustard,
+};
+
+/** The washi tape that goes with each class: its chip, its selection sheet. */
+export const CLASS_TAPE: Record<ClassId, TapeName> = {
+  warrior: 'pink',
+  ranger: 'green',
+  mage: 'sky',
+  trickster: 'yellow',
 };
 
 /** Stand-in icon for a toy without art: one glyph per rarity so a toy is never a blank square. */
@@ -47,7 +75,7 @@ export function unitPortrait(id: UnitId, h: number): Container {
   return c;
 }
 
-/** Enemy portrait; small balloons borrow the big balloon's art, and anything unknown becomes a plain disc. */
+/** Enemy portrait; small balloons borrow the big balloon's art, and anything unknown becomes a paper disc. */
 export function enemyPortrait(id: EnemyId, size: number): Container {
   const c = new Container();
   const key = id.startsWith('boss_') ? id : `enemy_${id}`;
@@ -55,13 +83,14 @@ export function enemyPortrait(id: EnemyId, size: number): Container {
   if (s) c.addChild(s);
   else {
     const g = new Graphics();
-    g.circle(0, 0, size * 0.38).fill(vGradient(Color.textDim, Color.neutral)).stroke({ width: 4, color: Color.outline });
+    drawPaper(g, -size * 0.38, -size * 0.38, { w: size * 0.76, h: size * 0.76, kind: 'circle', fill: Color.paperDim, shadow: 3, grain: false });
+    cacheStatic(g);
     c.addChild(g, drawIcon('skull', size * 0.5));
   }
   return c;
 }
 
-/** Toy icon: the art when it exists, otherwise a rarity-coloured medallion with a glyph. */
+/** Toy icon: the art when it exists, otherwise a paper medallion in the rarity's mat colour with a glyph. */
 export function relicIcon(id: RelicId, size: number, rarity: Exclude<RarityId, 'mythic'>): Container {
   const c = new Container();
   const s = fitSprite(`relic_${id}`, size);
@@ -71,9 +100,53 @@ export function relicIcon(id: RelicId, size: number, rarity: Exclude<RarityId, '
   }
   const r = Rarity[rarity];
   const g = new Graphics();
-  g.circle(0, size * 0.04, size * 0.46).fill({ color: Color.black, alpha: 0.35 });
-  g.circle(0, 0, size * 0.46).fill(vGradient(r.light, r.color)).stroke({ width: Math.max(3, size * 0.07), color: Color.outline });
-  c.addChild(g, drawIcon(RELIC_FALLBACK[rarity], size * 0.58));
+  drawPaper(g, -size * 0.46, -size * 0.46, { w: size * 0.92, h: size * 0.92, kind: 'circle', fill: r.color, edge: r.dark, shadow: 3, grain: false });
+  cacheStatic(g);
+  c.addChild(g, drawIcon(RELIC_FALLBACK[rarity], size * 0.5));
+  return c;
+}
+
+export interface PhotoOpts {
+  /** Side of the cream frame. */
+  size: number;
+  rarity: RarityId;
+  /** The cat in the window; null = an empty paper slot with a dashed outline. */
+  unit: UnitId | null;
+  /** One strip of tape across the top-left corner. */
+  tape?: TapeName;
+  seed?: number;
+}
+
+/**
+ * A cat as a small paper photo: cream frame, a mat in the rarity's colour, the sticker in the window.
+ * The empty variant is the slot of a rank the player does not have. Origin = centre; static art is
+ * baked once, so build one per change, not per frame.
+ */
+export function unitPhoto(o: PhotoOpts): Container {
+  const s = o.size;
+  const seed = o.seed ?? paperSeed();
+  const c = new Container();
+  const art = new Graphics();
+  if (o.unit === null) {
+    drawPaperFace(art, -s / 2, -s / 2, { w: s, h: s, radius: s * 0.2, fill: Color.paperDim, edge: Color.kraftDark, edgeAlpha: 0.35, grain: false, seed });
+    drawDashedRect(art, -s / 2 + 5, -s / 2 + 5, s - 10, s - 10, { radius: s * 0.16, color: Color.kraftDark, width: 2.5, dash: 9, gap: 7, alpha: 0.7, seed });
+    cacheStatic(art);
+    c.addChild(art);
+    return c;
+  }
+  const rar = Rarity[o.rarity];
+  const m = Math.max(4, s * 0.06);
+  drawPaper(art, -s / 2, -s / 2, { w: s, h: s, radius: s * 0.2, fill: Color.paperLight, edge: Color.kraftDark, shadow: 4, grain: false, seed });
+  drawPaperFace(art, -s / 2 + m, -s / 2 + m, { w: s - m * 2, h: s - m * 2, radius: s * 0.15, fill: rar.color, edge: rar.dark, grain: false, seed: seed + 1, wobble: 0.7 });
+  const inset = m + Math.max(3, s * 0.05);
+  drawPaperFace(art, -s / 2 + inset, -s / 2 + inset, { w: s - inset * 2, h: s - inset * 2, radius: s * 0.11, fill: mixColor(rar.light, Color.paper, 0.62), edge: rar.dark, grain: false, seed: seed + 2, wobble: 0.6 });
+  cacheStatic(art);
+  c.addChild(art, unitPortrait(o.unit, s - inset * 2 - 2));
+  if (o.tape) {
+    const tape = tapeStrip({ name: o.tape, w: s * 0.48, h: Math.max(16, s * 0.17), angle: -24, pattern: 'dots', seed });
+    tape.position.set(-s / 2 + s * 0.14, -s / 2 + 4);
+    c.addChild(tape);
+  }
   return c;
 }
 
@@ -82,13 +155,6 @@ export function tapArea(c: Container, x: number, y: number, w: number, h: number
   c.eventMode = 'static';
   c.cursor = 'pointer';
   c.hitArea = new Rectangle(x, y, w, h);
-}
-
-/** Make `c` a touch target of at least 88 x 88 centred on its origin. */
-export function tapCentered(c: Container, w: number, h: number): void {
-  const ww = Math.max(88, w);
-  const hh = Math.max(88, h);
-  tapArea(c, -ww / 2, -hh / 2, ww, hh);
 }
 
 export interface PressCardOpts {

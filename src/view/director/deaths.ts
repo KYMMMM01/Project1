@@ -14,9 +14,11 @@ import { DUCK_BY_TIER, FrameBudget } from './policy';
 import type { MusicService } from './music';
 import { SHIELD_COLOR } from './palette';
 import { Gate, enemyInfo, type Bus, type EnemyInfo, type Stage } from './stage';
+import { Hue } from '@/fx/palette';
+import { Color } from '@/ui/theme';
 
 /** Explosion colour of a boss's mini blasts and final blast. */
-const BOSS_BLAST = 0xff8a2a;
+const BOSS_BLAST = Hue.fire;
 /** Mini explosions of the finale (fx.bossDeath fires six, 90 ms apart): sounds ride three of them. */
 const MINI_SOUNDS: readonly number[] = [0.12, 0.26, 0.43];
 
@@ -111,7 +113,7 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
     stage.later(seq.impact + 0.35, () => fx.coinBurst(x, y, { count: 32, scale: 1.4 }));
     currency.claimBig(seq.impact + 0.55);
     stage.later(seq.impact + 0.5, () => {
-      banners.push('big', 'bossDown', 4, { title: t('director.bossDefeated'), color: 0xffd23f }, 1, 0.4, 0.3);
+      banners.push('big', 'bossDown', 4, { title: t('director.bossDefeated'), color: Color.mustard }, 1, 0.4, 0.3);
       stage.direct('wave_clear', 0.6);
     });
     void seq.then(() => {

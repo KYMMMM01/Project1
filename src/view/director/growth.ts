@@ -11,7 +11,7 @@ import type { ClassId, SummonSource } from '@/game';
 import { classDef, relicDef, unitClass, unitRarityIndex } from '@/game';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { IconName } from '@/ui/icons';
-import { RARITY_ORDER, Rarity } from '@/ui/theme';
+import { Color, RARITY_ORDER, Rarity } from '@/ui/theme';
 import type { SfxId } from '@/audio/api';
 import type { BannerService } from './banners';
 import { SPARKLE_UP, STAR_POP, THEME_SPRAY } from './defs';
@@ -19,9 +19,10 @@ import type { MusicService } from './music';
 import { CLASS_COLOR, themeOf } from './palette';
 import { DUCK_BY_TIER, SummonRate, summonPlan } from './policy';
 import type { Bus, Stage } from './stage';
+import { Hue } from '@/fx/palette';
 
-const W = 0xffffff;
-const GOLD = 0xffd23f;
+const W = Hue.cream;
+const GOLD = Color.mustard;
 
 const SUMMON_SFX: readonly SfxId[] = ['summon_common', 'summon_rare', 'summon_epic', 'summon_legendary', 'summon_mythic'];
 const SUMMON_VOLUME: readonly number[] = [0.55, 0.65, 0.8, 0.95, 1];
@@ -82,7 +83,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     sourceCue(e.source, x, y);
   });
 
-  /** Free summons (relic, twin bells, offer picks) get a small glint so they read as a gift. */
+  /** Free summons (relic, twin bells, offer picks) get a small sparkle so they read as a gift. */
   function sourceCue(source: SummonSource, x: number, y: number): void {
     if (source === 'button') return;
     ps.burst(SPARKLE_UP, x, y - 20, { colors: [W, GOLD], count: 0.8 });
@@ -189,7 +190,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
       if (sunlit.includes(c)) continue;
       const x = cellCenterX(c);
       const y = cellCenterY(c);
-      stage.later(fresh * 0.05, () => ps.burst(SPARKLE_UP, x, y, { colors: [W, 0xfff0a8, GOLD], count: 1.6, scale: 1.3 }));
+      stage.later(fresh * 0.05, () => ps.burst(SPARKLE_UP, x, y, { colors: [W, Hue.sun, GOLD], count: 1.6, scale: 1.3 }));
       fresh++;
     }
     sunlit = e.cells.slice();

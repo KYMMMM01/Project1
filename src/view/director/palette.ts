@@ -1,83 +1,81 @@
 /** Per-enemy, per-unit and per-status staging data: colours, shoot cues and cosmetic summon themes. Data only. */
 import type { SfxId } from '@/audio/api';
 import type { BossAbilityId, ClassId, EnemyId, StatusKind, UnitId } from '@/game/api';
+import { mixColor } from '@/core/math';
+import { CLASS_HUE, Hue } from '@/fx/palette';
 import type { FxTexId } from '@/fx/textures';
+import { Color, TapeColors } from '@/ui/theme';
 
-/** Colour of the puff and shards an enemy leaves behind. */
+/** Colour of the puff and shards an enemy leaves behind: each enemy's dominant paper, taken from its sticker. */
 export const ENEMY_TINT: Readonly<Record<EnemyId, number>> = {
-  cucumber: 0x74d45c,
-  dust: 0xb9b0a2,
-  drop: 0x6cc8ff,
-  roomba: 0xaeb9cc,
-  tangerine: 0xffa333,
-  balloon: 0xff6f8e,
-  balloon_small: 0xff93ab,
-  clock: 0xffd84a,
-  pill: 0xff8d8d,
-  cone: 0xff8a3a,
-  dryer: 0xc79bff,
-  spray: 0x6fd6ff,
-  firecracker: 0xff5a3c,
-  boss_cucumber: 0x5ec04c,
-  boss_vacuum: 0xb4bfd2,
-  boss_blender: 0xff7fb0,
-  boss_bath: 0x62cfff,
-  boss_cloud: 0xa7b3d6,
-  boss_needle: 0x80e6b8,
+  cucumber: Color.leaf,
+  dust: Hue.dust,
+  drop: TapeColors.sky.base,
+  roomba: mixColor(Color.paperDim, Color.inkSoft, 0.3),
+  tangerine: mixColor(Color.mustard, Color.coral, 0.4),
+  balloon: Color.berry,
+  balloon_small: mixColor(Color.berry, Color.paperLight, 0.3),
+  clock: Color.mustard,
+  pill: mixColor(Color.coral, Color.paperLight, 0.3),
+  cone: Hue.fire,
+  dryer: Color.teal,
+  spray: TapeColors.sky.base,
+  firecracker: Color.coralDark,
+  boss_cucumber: Color.leafDark,
+  boss_vacuum: mixColor(Color.paperDim, Color.inkSoft, 0.3),
+  boss_blender: Color.berry,
+  boss_bath: Color.teal,
+  boss_cloud: mixColor(TapeColors.sky.base, Color.paperDim, 0.5),
+  boss_needle: mixColor(Color.leaf, Color.teal, 0.5),
 };
 
-/** Effect colour of each cat's shots, sparks and impacts. */
+/** Effect colour of each cat's shots, sparks and impacts: its class paper, shifted a little per cat. */
 export const UNIT_COLOR: Readonly<Record<UnitId, number>> = {
-  w_paw: 0xffc46b,
-  w_sword: 0xe8f1ff,
-  w_viking: 0xffa24a,
-  w_samurai: 0xdfe8ff,
-  w_tiger: 0xff9a3c,
-  r_sling: 0xd6c08a,
-  r_archer: 0x9be36b,
-  r_ninja: 0xb9a6ff,
-  r_gunner: 0xffd36b,
-  r_star: 0xfff0a8,
-  m_snow: 0x9fe3ff,
-  m_fire: 0xff7a2a,
-  m_storm: 0xffe45c,
-  m_frost: 0x7fd6ff,
-  m_cosmo: 0xb26bff,
-  t_bell: 0xffe08a,
-  t_chef: 0xffb27a,
-  t_bard: 0xff8fd0,
-  t_alch: 0x86e05a,
-  t_lucky: 0xffd23f,
+  w_paw: Hue.sun,
+  w_sword: Color.paperLight,
+  w_viking: Hue.fire,
+  w_samurai: mixColor(TapeColors.sky.mark, Color.paperLight, 0.5),
+  w_tiger: Color.coral,
+  r_sling: Color.kraft,
+  r_archer: Color.leaf,
+  r_ninja: mixColor(Color.paperDim, Color.inkSoft, 0.3),
+  r_gunner: Color.mustard,
+  r_star: Hue.sun,
+  m_snow: TapeColors.sky.base,
+  m_fire: Color.coral,
+  m_storm: Color.mustard,
+  m_frost: Hue.ice,
+  m_cosmo: mixColor(Color.inkSoft, Color.teal, 0.5),
+  t_bell: Hue.sun,
+  t_chef: mixColor(Color.coral, Color.mustard, 0.6),
+  t_bard: Color.berry,
+  t_alch: Color.leaf,
+  t_lucky: Color.mustard,
 };
 
-export const CLASS_COLOR: Readonly<Record<ClassId, number>> = {
-  warrior: 0xff9a3c,
-  ranger: 0x7ddc6a,
-  mage: 0x7fb8ff,
-  trickster: 0xff7fc2,
-};
+export const CLASS_COLOR: Readonly<Record<ClassId, number>> = CLASS_HUE;
 
 export const STATUS_COLOR: Readonly<Record<StatusKind, number>> = {
-  slow: 0x9fe3ff,
-  stun: 0xffe45c,
-  freeze: 0x7fd6ff,
-  burn: 0xff7a2a,
-  poison: 0x86e05a,
-  bleed: 0xff4d5e,
-  armor_break: 0xc9d2e0,
-  vulnerable: 0xd48bff,
+  slow: TapeColors.sky.base,
+  stun: Hue.sun,
+  freeze: Hue.ice,
+  burn: Hue.ember,
+  poison: Color.leaf,
+  bleed: Color.berry,
+  armor_break: Color.paperDim,
+  vulnerable: mixColor(Color.berry, Color.paperLight, 0.3),
 };
 
-/** Tint of damage-over-time numbers. */
+/** Face colour of damage-over-time numbers. */
 export const DOT_NUMBER_COLOR: Readonly<Partial<Record<StatusKind, number>>> = {
-  burn: 0xff9a4a,
-  poison: 0x9be36b,
-  bleed: 0xff6b78,
+  burn: Hue.ember,
+  poison: Color.leafDark,
+  bleed: Color.berry,
 };
 
-export const SHIELD_COLOR = 0x7fe3ff;
+export const SHIELD_COLOR: number = TapeColors.sky.base;
 
-/** shot: a muzzle flash at the cat; swing: a slash at the target; cast: a glow ring at the cat (zones, chains). */
+/** shot: a muzzle flash at the cat; swing: a slash at the target; cast: a ring at the cat (zones, chains). */
 export type ShootStyle = 'shot' | 'swing' | 'cast';
 
 export interface ShootCue {
@@ -141,10 +139,10 @@ export interface FxThemeSpec {
 }
 
 const THEMES: readonly FxThemeSpec[] = [
-  { index: 0, tex: 'sparkle', colors: [0xffffff], count: 0, gravity: 0 },
-  { index: 1, tex: 'heart', colors: [0xffd1e3, 0xff9ec4, 0xffffff], count: 5, gravity: 120 },
-  { index: 2, tex: 'star', colors: [0x9fe8ff, 0xb8a6ff, 0xffffff], count: 6, gravity: -40 },
-  { index: 3, tex: 'paw', colors: [0xffe08a, 0xffb347, 0xffffff], count: 5, gravity: 220 },
+  { index: 0, tex: 'sparkle', colors: [Hue.cream], count: 0, gravity: 0 },
+  { index: 1, tex: 'heart', colors: [Hue.heart, Color.berry, Hue.cream], count: 5, gravity: 120 },
+  { index: 2, tex: 'star', colors: [Hue.ice, Hue.iceLight, Hue.cream], count: 6, gravity: -40 },
+  { index: 3, tex: 'paw', colors: [Hue.sun, Hue.ember, Hue.cream], count: 5, gravity: 220 },
 ];
 
 /** Cosmetic ids look like `fx_default`, `fx_gem1`..`fx_gem3`; anything unknown plays the default. */

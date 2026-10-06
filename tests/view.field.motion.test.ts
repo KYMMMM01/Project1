@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ATTACK_SECONDS, attackPose, breathe, deathScale, hopArc, makePose, stepRate, walkBob, walkTilt } from '@/view/field/motion';
-import { DEFAULT_RUG, RUG_SKINS, perimeterDashes, rugSkin, type RugPattern } from '@/view/field/rugSkins';
+import { Color, TapeColors } from '@/ui/theme';
+import { DEFAULT_RUG, RUG_SKINS, cellPaper, rugSkin, type RugPattern } from '@/view/field/rugSkins';
 
 describe('attack pose', () => {
   it('starts and ends at rest', () => {
@@ -91,29 +92,24 @@ describe('rug skins', () => {
     expect(rugSkin('rug_from_the_future').id).toBe(DEFAULT_RUG);
   });
 
-  it('keeps the pattern colour close to the field so cats stay readable', () => {
+  it('keeps every sheet light enough that a cat sticker cream border stays an edge', () => {
     const lum = (c: number): number => 0.3 * ((c >> 16) & 255) + 0.59 * ((c >> 8) & 255) + 0.11 * (c & 255);
     for (const s of RUG_SKINS) {
-      expect(s.border).not.toBe(s.base);
-      // Calendar stripes are a deliberate two-colour festive mat, the rest stay within a narrow band.
-      if (s.id !== 'rug_calendar') expect(Math.abs(lum(s.base) - lum(s.alt))).toBeLessThan(40);
+      // The darkest sheet is plain kraft paper; nothing may be darker than it.
+      expect(lum(s.paper)).toBeGreaterThanOrEqual(lum(Color.kraft) - 1);
+      // The cells are a shade darker than their sheet, never a different colour family.
+      expect(lum(cellPaper(s))).toBeLessThan(lum(s.paper));
+      expect(lum(s.paper) - lum(cellPaper(s))).toBeLessThan(40);
+      // The pattern ink differs from the paper, so it can be seen at all.
+      expect(s.mark).not.toBe(s.paper);
+      expect(Object.keys(TapeColors)).toContain(s.tape);
     }
   });
-});
 
-describe('stitching', () => {
-  it('places evenly spaced dashes of the requested length around the outline', () => {
-    const dashes = perimeterDashes(300, 200, 30, 8, 6);
-    expect(dashes.length).toBeGreaterThan(60);
-    for (const d of dashes) {
-      const len = Math.hypot(d.x1 - d.x0, d.y1 - d.y0);
-      expect(len).toBeGreaterThan(5);
-      expect(len).toBeLessThanOrEqual(8.01);
-      for (const x of [d.x0, d.x1]) {
-        expect(x).toBeGreaterThanOrEqual(-0.01);
-        expect(x).toBeLessThanOrEqual(300.01);
-      }
-    }
-    expect(dashes[0]?.y0).toBe(0);
+  it('keeps the default mat the cream sheet of the approved mock', () => {
+    const d = rugSkin(DEFAULT_RUG);
+    expect(d.paper).toBe(Color.paper);
+    expect(d.pattern).toBe('plain');
+    expect(d.dash).toBe(Color.teal);
   });
 });

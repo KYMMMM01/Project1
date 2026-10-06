@@ -3,6 +3,7 @@ import { game } from '@/core/game';
 import { Pool } from '@/core/pool';
 import { Ease, uiTweens, type Tween, type Tweener } from '@/core/tween';
 import { TAU, rand } from '@/core/math';
+import { Color } from '@/ui/theme';
 import { flightAt, flightTotal, makeFlightPlan, planFlight, type FlightPlan, type FlightState } from './flyPath';
 import { REDUCED, fxSettings } from './settings';
 
@@ -170,7 +171,7 @@ export function flyTo(o: FlyToOpts): FlyHandle {
     } else {
       const s = iconPool.get();
       s.texture = o.texture as Texture;
-      s.tint = o.tint ?? 0xffffff;
+      s.tint = o.tint ?? Color.white;
       baseScale = size / Math.max(1, s.texture.width);
       icon = s;
     }
