@@ -14,9 +14,12 @@ export interface TooltipContent {
 }
 
 export interface TooltipOpts {
-  /** Hold time before the bubble appears, seconds. Default 0.35. */
+  /** Hold time before the bubble appears, seconds (default HOLD_DELAY). */
   delay?: number;
 }
+
+/** How long a press must be held before the bubble appears; a hold this long is not a tap. */
+export const HOLD_DELAY = 0.35;
 
 const MAX_W = 460;
 const PAD = 22;
@@ -62,15 +65,18 @@ class TooltipManager {
     const g = new Graphics();
     drawShadow(g, -arrowX, bodyY, w, h, 26, { alpha: 0.4, spread: 10, offsetY: 6 });
     const dir = above ? -1 : 1;
-    g.poly([0, 0, -ARROW * 0.9, dir * -ARROW, ARROW * 0.9, dir * -ARROW])
-      .fill(vGradient(0x2d2060, 0x241a4a))
-      .stroke({ width: 5, color: Color.outline, join: 'round' });
+    // The arrow's base sits on the body edge (3 px under it so no gap shows) and its tip on the target.
+    const base = dir * ARROW;
+    const a = ARROW * 0.9;
     g.roundRect(-arrowX, bodyY, w, h, 26)
       .fill(vGradient(0x35286f, 0x241a4a))
       .stroke({ width: 5, color: Color.outline, alignment: 1 });
     g.roundRect(-arrowX + 6, bodyY + 6, w - 12, h - 12, 20).stroke({ width: 2, color: 0x8f7bd8, alpha: 0.5, alignment: 1 });
-    // cover the seam between arrow and body
-    g.rect(-ARROW * 0.9 + 3, bodyY + (above ? h - 7 : 2), ARROW * 1.8 - 6, 5).fill(0x2a1f58);
+    g.poly([-a, base + dir * 3, 0, 0, a, base + dir * 3])
+      .fill(vGradient(0x2d2060, 0x241a4a))
+      .stroke({ width: 5, color: Color.outline, join: 'round' });
+    // Paint over the body outline where the arrow joins it so the two read as one shape.
+    g.rect(-a + 3, dir < 0 ? base - 3 : base - 6, a * 2 - 6, 9).fill(0x2a1f58);
 
     const bubble = new Container();
     bubble.addChild(g);
@@ -131,7 +137,7 @@ class TooltipManager {
     if (target.eventMode === 'none' || target.eventMode === 'passive' || target.eventMode === 'auto') {
       target.eventMode = 'static';
     }
-    const delay = opts.delay ?? 0.35;
+    const delay = opts.delay ?? HOLD_DELAY;
     let timer: ReturnType<TweenBag['call']> | null = null;
     const start = (): void => {
       timer?.kill();

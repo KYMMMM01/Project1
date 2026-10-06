@@ -10,7 +10,7 @@ export type BadgeValue = number | boolean | undefined;
 
 export interface BadgeOpts {
   value?: BadgeValue;
-  /** Counts above this show as "99+". */
+  /** Counts above this show as "9+" (the house rule: one digit, then a plus). */
   maxCount?: number;
   /** Diameter of the dot; a counted badge is `size * 1.4` tall. */
   size?: number;
@@ -32,8 +32,8 @@ export class Badge extends Container {
 
   constructor(opts: BadgeOpts = {}) {
     super();
-    this.maxCount = opts.maxCount ?? 99;
-    this.size = opts.size ?? 26;
+    this.maxCount = opts.maxCount ?? 9;
+    this.size = opts.size ?? 22;
     this.addChild(this.ring, this.bg);
     this.visible = false;
     this.set(opts.value, false);

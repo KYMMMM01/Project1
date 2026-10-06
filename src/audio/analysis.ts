@@ -24,6 +24,10 @@ export interface SoundStats {
   lowFrac: number;
   /** Share of spectral energy above 4 kHz ("sparkle"). */
   highFrac: number;
+  /** Dominant amplitude-modulation rate in Hz (purr, tremolo, crackle); 0 when the envelope is flat. */
+  modHz: number;
+  /** Modulation index at `modHz`: envelope swing relative to its mean. */
+  modDepth: number;
 }
 
 const SILENT_PEAK = 0.01;
@@ -185,6 +189,67 @@ function spectrum(
   };
 }
 
+const MOD_FFT = 1024;
+/** Envelope frames per second for the modulation analysis. */
+const MOD_RATE = 1000;
+
+/**
+ * Amplitude-modulation analysis of the audible region: a rectified signal smoothed over 5 ms (which
+ * also nulls the carrier ripple at 200 Hz) gives an envelope at 1 kHz; its slow trend is removed and
+ * the spectrum between 8 and 80 Hz is searched for the strongest line. Used to prove that a purr
+ * really flutters at about 25 Hz instead of trusting the recipe's parameters.
+ */
+export function modulation(ch: readonly Float32Array[], sampleRate: number, start: number, end: number): { hz: number; depth: number } {
+  const hop = Math.max(1, Math.round(sampleRate / MOD_RATE));
+  const box = hop * 5;
+  const frames = Math.min(MOD_FFT, Math.floor((end - start - box) / hop));
+  if (frames < 128) return { hz: 0, depth: 0 };
+  const env = new Float64Array(frames);
+  let mean = 0;
+  for (let k = 0; k < frames; k++) {
+    const from = start + k * hop;
+    let sum = 0;
+    for (const c of ch) for (let i = from; i < from + box; i++) sum += Math.abs(c[i] as number);
+    env[k] = sum / (box * ch.length);
+    mean += env[k] as number;
+  }
+  mean /= frames;
+  if (mean < 1e-6) return { hz: 0, depth: 0 };
+
+  // Remove the slow trend (attack / release / decay) with a 100 ms moving average.
+  const half = 50;
+  const flat = new Float64Array(frames);
+  for (let k = 0; k < frames; k++) {
+    const lo = Math.max(0, k - half);
+    const hi = Math.min(frames - 1, k + half);
+    let sum = 0;
+    for (let j = lo; j <= hi; j++) sum += env[j] as number;
+    flat[k] = (env[k] as number) - sum / (hi - lo + 1);
+  }
+  const re = new Float64Array(MOD_FFT);
+  const im = new Float64Array(MOD_FFT);
+  let windowSum = 0;
+  for (let k = 0; k < frames; k++) {
+    const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * k) / (frames - 1));
+    re[k] = (flat[k] as number) * w;
+    windowSum += w;
+  }
+  fft(re, im);
+  const binHz = MOD_RATE / MOD_FFT;
+  let best = 0;
+  let bestMag = 0;
+  for (let k = Math.ceil(8 / binHz); k <= Math.floor(80 / binHz); k++) {
+    const mag = Math.hypot(re[k] as number, im[k] as number);
+    if (mag > bestMag) {
+      bestMag = mag;
+      best = k;
+    }
+  }
+  // A sinusoid of amplitude A through a Hann window of sum S has a spectral line of height A*S/2.
+  const amplitude = (2 * bestMag) / windowSum;
+  return { hz: best * binHz, depth: amplitude / mean };
+}
+
 export function analyse(ch: readonly Float32Array[], sampleRate: number, spectral = true): SoundStats {
   const peak = peakOf(ch);
   const len = (ch[0] as Float32Array).length;
@@ -206,6 +271,7 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number, spectra
   const n = region * ch.length;
   const window = Math.max(region, LOUD_WINDOW * sampleRate) * ch.length;
   const spec = silent || !spectral ? { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0 } : spectrum(ch, sampleRate, start, end);
+  const mod = silent || !spectral ? { hz: 0, depth: 0 } : modulation(ch, sampleRate, start, end);
 
   const first = ch.reduce((m, c) => Math.max(m, Math.abs(c[0] as number)), 0);
   const last = ch.reduce((m, c) => Math.max(m, Math.abs(c[len - 1] as number)), 0);
@@ -221,5 +287,7 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number, spectra
     silent,
     clipped: peak > CLIP_PEAK,
     ...spec,
+    modHz: mod.hz,
+    modDepth: mod.depth,
   };
 }

@@ -17,7 +17,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const BRACKET = ['pause:true', 'mute:true', 'mute:false', 'pause:false'];
+const BRACKET = ['block:true', 'pause:true', 'mute:true', 'block:false', 'mute:false', 'pause:false'];
 
 /** A ledger store that, like a real disk, keeps only what was written (deep copies). */
 function diskLedger(): IapLedgerStore & { disk: IapLedger; writes: number } {
@@ -36,10 +36,10 @@ function diskLedger(): IapLedgerStore & { disk: IapLedger; writes: number } {
 /** The game's grant function: idempotent on orderId, like docs/명세_메타.md section 7 requires. */
 function wallet() {
   const applied = new Set<string>();
-  const calls: Array<{ productId: string; orderId: string; replay: boolean }> = [];
+  const calls: Array<{ productId: string; orderId: string; replay: boolean; source: string }> = [];
   let gems = 0;
   const handler: GrantHandler = (productId, orderId, ctx) => {
-    calls.push({ productId, orderId, replay: ctx.replay });
+    calls.push({ productId, orderId, replay: ctx.replay, source: ctx.source });
     if (applied.has(orderId)) return; // profile already holds this order
     applied.add(orderId);
     gems += productId === 'gems_80' ? 80 : 0;
@@ -71,7 +71,7 @@ describe('IapService.purchase', () => {
       });
     const p = t.iap.purchase('gems_80');
     await vi.advanceTimersByTimeAsync(0);
-    expect(t.pauser.calls).toEqual(['pause:true', 'mute:true']);
+    expect(t.pauser.calls).toEqual(['block:true', 'pause:true', 'mute:true']);
     expect(t.modal.busy).toBe(true);
     finish();
     expect(await p).toBe('purchased');
@@ -166,6 +166,16 @@ describe('IapService.purchase', () => {
     expect(t.iap.priceText('premium_pass')).toBe('$7.99');
   });
 
+  it('asks the store for localised prices as soon as products are registered after boot', async () => {
+    const t = makeIap();
+    t.fake.adapter.iap!.products = async (ids) => ids.map((id) => ({ id, priceText: '₩1,600' }));
+    expect(t.iap.priceText('gems_80')).toBe('$1.29');
+    t.iap.registerProducts([{ id: 'extra', type: 'consumable', price: { ko: '', en: '$0.99' } }]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.iap.priceText('gems_80')).toBe('₩1,600');
+    expect(t.iap.priceText('extra')).toBe('₩1,600');
+  });
+
   it("emits 'iap_view' and 'iap_result'", async () => {
     const t = makeIap();
     t.iap.setGrantHandler(wallet().handler);
@@ -215,7 +225,7 @@ describe('IapService: exactly-once grants', () => {
     const boot2 = makeIap({ fake, ledger: disk });
     boot2.iap.setGrantHandler(w.handler);
     expect(await boot2.iap.recoverPending()).toBe(1);
-    expect(w.calls).toEqual([{ productId: 'gems_80', orderId: 'order-77', replay: false }]);
+    expect(w.calls).toEqual([{ productId: 'gems_80', orderId: 'order-77', replay: false, source: 'pending' }]);
     expect(w.gems()).toBe(80);
     expect(fake.state.completed).toEqual(['order-77']);
     expect(fake.state.pending).toEqual([]);
@@ -317,7 +327,7 @@ describe('IapService: exactly-once grants', () => {
     void t.iap.recoverPending(); // initPlatform(): no handler registered yet
     t.iap.setGrantHandler(w.handler); // the meta layer registers it before the boot pass has even settled
     await vi.advanceTimersByTimeAsync(0);
-    expect(w.calls).toEqual([{ productId: 'gems_80', orderId: 'order-4', replay: false }]);
+    expect(w.calls).toEqual([{ productId: 'gems_80', orderId: 'order-4', replay: false, source: 'pending' }]);
     expect(fake.state.completed).toEqual(['order-4']);
   });
 
@@ -353,6 +363,9 @@ describe('IapService ledger store', () => {
     const m = mergeLedgers(a, b);
     expect(Object.keys(m.orders).sort()).toEqual(['x', 'y', 'z']);
     expect(m.orders.x?.s).toBe('granted'); // granted beats granting
+    const r = mergeLedgers(m, { v: 1, orders: { x: { p: 'p', s: 'revoked', t: 0 } } });
+    expect(r.orders.x?.s).toBe('revoked'); // a refund is final, however old the entry
+    expect(normalizeLedger({ orders: { q: { p: 'p', s: 'revoked', t: 3 } } }).orders.q?.s).toBe('revoked');
   });
 
   it('attachLedger keeps what the old store knew', async () => {

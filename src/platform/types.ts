@@ -38,6 +38,11 @@ export interface PlatformCapabilities {
   usesPageVisibility: boolean;
   /** Links leaving the game (store pages, socials) are allowed. */
   externalLinksAllowed: boolean;
+  /**
+   * The SDK throttles interstitials itself (CrazyGames adCooldown, Poki "decides when a player is ready
+   * for another ad"): AdService must not add its own interstitial timer on top.
+   */
+  managesAdFrequency: boolean;
 }
 
 export interface PlatformLifecycle {
@@ -59,7 +64,10 @@ export interface PlatformLifecycle {
 export interface PlatformAds {
   /** Synchronous readiness check; never throws. */
   isAvailable(kind: AdKind, placement: string): boolean;
-  /** Start loading the next ad (Toss/AdMob require a preload). Never throws. */
+  /**
+   * Start loading the next ad (Toss/AdMob require a preload). Never throws. `placement` is '*' when the
+   * request is not tied to one placement (AdService preloads per kind).
+   */
   preload(kind: AdKind, placement: string): void;
   /** Show an ad. MUST settle (the AdService also enforces a 90 s watchdog). Never rejects. */
   show(kind: AdKind, placement: string): Promise<AdResult>;
@@ -82,6 +90,13 @@ export type IapOutcome = 'purchased' | 'cancelled' | 'failed' | 'unavailable';
 export interface PendingOrder {
   orderId: string;
   productId: string;
+}
+
+/** Paid and finished on the platform ('completed'), or paid and then refunded ('refunded'). */
+export type OrderStatus = 'completed' | 'refunded';
+
+export interface OrderRecord extends PendingOrder {
+  status: OrderStatus;
 }
 
 export interface StorePrice {
@@ -112,6 +127,11 @@ export interface PlatformIap {
   ): Promise<IapOutcome>;
   /** Orders paid on the platform but not yet marked complete (Toss getPendingOrders). */
   pendingOrders(): Promise<PendingOrder[]>;
+  /**
+   * Orders the platform already finished or refunded (Toss getCompletedOrRefundedOrders). Only on
+   * platforms that list them; it is what makes purchases restorable without a server.
+   */
+  completedOrders?(): Promise<OrderRecord[]>;
   /** Tell the platform the grant is done (Toss completeProductGrant). */
   complete(orderId: string): Promise<void>;
 }
@@ -149,12 +169,20 @@ export interface LocalizedText {
   en: string;
 }
 
+/** Money amount a channel charges. KRW is whole won, VAT included; USD is dollars. */
+export interface ChannelPrice {
+  currency: 'KRW' | 'USD';
+  amount: number;
+}
+
 export interface IapProductDef {
   id: string;
   type: IapProductType;
   /** Fallback price text per language, shown until/unless the store provides its own. */
   price: LocalizedText;
   name?: LocalizedText;
+  /** Per-channel price data; checked by pricing.ts (Toss: KRW, VAT included, multiple of 11). */
+  prices?: Partial<Record<PlatformId, ChannelPrice>>;
 }
 
 /** How a run ended; reported to AdService.endRun(). 'abandon' does not count as a completed run. */

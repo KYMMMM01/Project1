@@ -14,7 +14,14 @@ async function main(): Promise<void> {
   await game.init(parent);
   scenes.init();
 
-  const demo = new URLSearchParams(location.search).get('demo');
+  const params = new URLSearchParams(location.search);
+  const demo = params.get('demo');
+  // QA route: ?scene=battle&chapter=N&stake=N&seed=N&mode=...&sandbox=1 opens a battle directly.
+  if (params.get('scene') === 'battle' && debugEnabled()) {
+    const { openDebugBattle } = await import('@/view/field/debug');
+    await openDebugBattle(params);
+    return;
+  }
   if (demo && debugEnabled()) {
     const name = demo.charAt(0).toUpperCase() + demo.slice(1);
     const loader = demoLoaders[`./demo/${name}Demo.ts`];

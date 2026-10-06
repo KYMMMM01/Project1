@@ -1,0 +1,60 @@
+/** Pause menu: resume, settings, restart and quit (both ask first). */
+import { confirmDialog, Button, Color, Panel, Popup, uiLabel } from '@/ui';
+import { fmtDuration } from '@/core/format';
+import { t } from '@/core/i18n';
+import type { HudEnv } from '../env';
+
+export type PauseAction = 'resume' | 'settings' | 'restart' | 'quit';
+
+const W = 600;
+
+export class PauseMenu extends Popup<PauseAction> {
+  constructor(env: HudEnv) {
+    super({ dismissResult: 'resume', priority: 3 });
+    const b = env.battle;
+    const btnH = 104;
+    const gap = 22;
+    const top = 150;
+    const h = top + 4 * btnH + 3 * gap + 54;
+    const panel = new Panel({ width: W, height: h, title: t('hud.pause.title') });
+    const c = panel.content;
+
+    const where = b.totalWaves > 0 ? t('hud.wave', { act: Math.max(1, b.act), wave: Math.max(1, b.wave), total: b.totalWaves }) : t('hud.waveOpen', { act: Math.max(1, b.act), wave: Math.max(1, b.wave) });
+    const info = uiLabel(`${where}  ·  ${fmtDuration(b.time)}`, { size: 28, color: Color.textDim, strokeWidth: 4, shadow: false });
+    info.position.set(W / 2, 98);
+    c.addChild(info);
+
+    const add = (i: number, label: string, style: 'success' | 'info' | 'neutral' | 'danger', icon: 'play' | 'settings' | 'reroll' | 'home', run: () => void): void => {
+      const btn = new Button({ label, style, icon, width: W - 90, height: btnH, fontSize: 40 });
+      btn.position.set(W / 2, top + btnH / 2 + i * (btnH + gap));
+      btn.onTap(run);
+      c.addChild(btn);
+    };
+    add(0, t('hud.pause.resume'), 'success', 'play', () => this.close('resume'));
+    add(1, t('hud.settings'), 'info', 'settings', () => this.close('settings'));
+    add(2, t('hud.pause.restart'), 'neutral', 'reroll', () => {
+      void confirmDialog({
+        title: t('hud.pause.restart'),
+        message: t('hud.pause.restartAsk'),
+        confirmLabel: t('hud.pause.restart'),
+        cancelLabel: t('hud.cancel'),
+        danger: true,
+      }).then((ok) => {
+        if (ok) this.close('restart');
+      });
+    });
+    add(3, t('hud.pause.quit'), 'danger', 'home', () => {
+      void confirmDialog({
+        title: t('hud.pause.quit'),
+        message: t('hud.pause.quitAsk'),
+        confirmLabel: t('hud.pause.quit'),
+        cancelLabel: t('hud.cancel'),
+        danger: true,
+      }).then((ok) => {
+        if (ok) this.close('quit');
+      });
+    });
+    this.body.addChild(panel);
+    this.setContentSize(W + 80, h + 100);
+  }
+}

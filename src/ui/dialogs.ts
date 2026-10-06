@@ -56,6 +56,8 @@ class DialogPopup extends Popup<boolean> {
       panel.content.addChild(btn);
     });
     this.body.addChild(panel);
+    // Ribbon tails reach 36 px past the panel on each side and the ribbon rises above it.
+    this.setContentSize(W + 80, h + 90);
   }
 }
 

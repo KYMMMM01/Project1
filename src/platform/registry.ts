@@ -8,7 +8,9 @@ import { Analytics } from './analytics';
 import { AdService } from './adService';
 import { IapService } from './iapService';
 import { createFallbackAdapter } from './fallback';
+import { createScoreSubmitter } from './leaderboard';
 import { ModalGate, type Pauser } from './modal';
+import { PLATFORM_ID } from './resolve';
 import type { PlatformAdapter, PlatformLifecycle } from './types';
 import { Signal, safe } from './util';
 
@@ -28,13 +30,17 @@ export function setPauser(p: Pauser): void {
 const pauser: Pauser = {
   setPaused: (v) => pauserImpl.setPaused(v),
   setMuted: (v) => pauserImpl.setMuted(v),
+  setInputBlocked: (v) => pauserImpl.setInputBlocked?.(v),
 };
 
 /** Shared by ads and purchases: only one modal at a time. */
 export const modal = new ModalGate(pauser);
 
 export const ads = new AdService({ getAdapter: () => current, modal, analytics });
-export const iap = new IapService({ getAdapter: () => current, modal, analytics });
+export const iap = new IapService({ getAdapter: () => current, modal, analytics, channel: PLATFORM_ID });
+
+/** submitScore(boardId, score): forwards to the platform's leaderboard, a no-op where there is none. */
+export const submitScore = createScoreSubmitter(() => current);
 
 // Lifecycle signals survive an adapter swap: callers subscribe here once, boot forwards the adapter's.
 const pauseSignal = new Signal();

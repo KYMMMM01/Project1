@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ads, analytics, iap, lifecycleSignals, platform } from '@/platform/registry';
+import { ads, analytics, iap, lifecycleSignals, modal, platform, setPauser, submitScore } from '@/platform/registry';
 
 // registry.ts is what every module imports as { ads, iap, analytics, platform }. Before initPlatform()
 // runs (boot is browser-only) it is backed by the safe fallback adapter: nothing may throw.
@@ -21,6 +21,25 @@ describe('singletons before boot', () => {
     expect(iap.isAvailable()).toBe(false);
     await expect(iap.purchase('anything')).resolves.toBe('unavailable');
     await expect(iap.recoverPending()).resolves.toBe(0);
+    await expect(iap.restorePurchases()).resolves.toMatchObject({ ok: false, reason: 'unavailable' });
+  });
+
+  it('the shared modal gate reaches whatever pause/mute/input-block implementation boot installed', () => {
+    const calls: string[] = [];
+    setPauser({
+      setPaused: (v) => calls.push(`pause:${v}`),
+      setMuted: (v) => calls.push(`mute:${v}`),
+      setInputBlocked: (v) => calls.push(`block:${v}`),
+    });
+    modal.acquire('test')?.release();
+    expect(calls).toEqual(['block:true', 'pause:true', 'mute:true', 'block:false', 'mute:false', 'pause:false']);
+    setPauser({ setPaused: () => undefined, setMuted: () => undefined }); // an implementation without a shield is fine
+    expect(() => modal.acquire('again')?.release()).not.toThrow();
+  });
+
+  it('submitScore is a harmless no-op', async () => {
+    await expect(submitScore('main', 100)).resolves.toBeUndefined();
+    await expect(submitScore('main', Number.NaN)).resolves.toBeUndefined();
   });
 
   it('lifecycle, storage and analytics work and never throw', async () => {

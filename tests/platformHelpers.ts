@@ -8,16 +8,25 @@ import { IapService, createMemoryLedgerStore, type IapLedgerStore } from '@/plat
 import type {
   AdResult,
   IapOutcome,
+  OrderRecord,
   PendingOrder,
   PlatformAdapter,
   PlatformCapabilities,
 } from '@/platform/types';
 
-/** Records every pause/mute call in order, like game.setExternalPause + audio.setMuted would see them. */
-export function makePauser(): { pauser: Pauser; calls: string[]; depth: { paused: number; muted: number } } {
+/** Records every pause/mute/input-block call in order, like game.setExternalPause + audio.setMuted + the shield would see them. */
+export function makePauser(): {
+  pauser: Pauser;
+  calls: string[];
+  depth: { paused: number; muted: number; blocked: number };
+} {
   const calls: string[] = [];
-  const depth = { paused: 0, muted: 0 };
+  const depth = { paused: 0, muted: 0, blocked: 0 };
   const pauser: Pauser = {
+    setInputBlocked(b) {
+      calls.push(`block:${b}`);
+      depth.blocked += b ? 1 : -1;
+    },
     setPaused(p) {
       calls.push(`pause:${p}`);
       depth.paused += p ? 1 : -1;
@@ -38,6 +47,8 @@ export interface FakeAdapterState {
   pending: PendingOrder[];
   /** Orders the platform was told are complete. */
   completed: string[];
+  /** What the platform lists as completed or refunded (delete adapter.iap.completedOrders for a platform with no listing). */
+  listing: OrderRecord[];
   /** What the next purchase() flow does. */
   purchase: (onPaid: (orderId: string) => Promise<boolean>, productId: string) => Promise<IapOutcome>;
   iapAvailable: boolean;
@@ -56,6 +67,7 @@ export function fakeAdapter(caps: Partial<PlatformCapabilities> = {}): FakeAdapt
     next: { shown: true, rewarded: true },
     pending: [],
     completed: [],
+    listing: [],
     iapAvailable: true,
     purchase: async (onPaid, productId) => {
       const orderId = `order-${productId}-${state.pending.length + state.completed.length + 1}`;
@@ -75,6 +87,7 @@ export function fakeAdapter(caps: Partial<PlatformCapabilities> = {}): FakeAdapt
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: true,
+      managesAdFrequency: false,
       ...caps,
     },
     init: async () => undefined,
@@ -100,6 +113,8 @@ export function fakeAdapter(caps: Partial<PlatformCapabilities> = {}): FakeAdapt
       },
     },
   };
+  const iap = adapter.iap;
+  if (iap) iap.completedOrders = async () => state.listing.slice();
   return { adapter, state, log };
 }
 
@@ -153,6 +168,7 @@ export function makeIap(
     pauser?: ReturnType<typeof makePauser>;
     purchaseWatchdogMs?: number;
     callTimeoutMs?: number;
+    channel?: string;
   } = {},
 ) {
   const fake = opts.fake ?? fakeAdapter();
@@ -168,6 +184,7 @@ export function makeIap(
     ledger,
     now: clock.now,
     lang: () => 'en',
+    channel: opts.channel,
     purchaseWatchdogMs: opts.purchaseWatchdogMs,
     callTimeoutMs: opts.callTimeoutMs,
   });

@@ -128,6 +128,69 @@ describe('CrazyGames', () => {
     await a.init();
     expect(a.ads.isAvailable('rewarded', 'revive')).toBe(false);
   });
+
+  it('an ad request the SDK never answers stops reading as busy shortly after the 90 s watchdog', async () => {
+    sdk(() => undefined); // requestAd never calls back
+    const a = createCrazy();
+    await a.init();
+    void a.ads.show('rewarded', 'revive');
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(false);
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(false);
+    await vi.advanceTimersByTimeAsync(5_001);
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(true);
+  });
+
+  it("follows the portal's mute switch, which outranks the game's own audio setting", async () => {
+    const s = sdk(() => undefined);
+    const settings = { muteAudio: false };
+    let listener: (() => void) | undefined;
+    const remove = vi.fn();
+    Object.assign(s.game, {
+      settings,
+      addSettingsChangeListener: (l: () => void) => (listener = l),
+      removeSettingsChangeListener: remove,
+    });
+    const a = createCrazy();
+    await a.init();
+    expect(a.audio?.isSystemMuted()).toBe(false);
+    const seen: boolean[] = [];
+    const off = a.audio!.onSystemMuteChange((m) => seen.push(m));
+    settings.muteAudio = true;
+    listener?.();
+    expect(a.audio?.isSystemMuted()).toBe(true);
+    expect(seen).toEqual([true]);
+    off();
+    expect(remove).toHaveBeenCalledWith(listener);
+  });
+
+  it('copes with an SDK that has no settings object', async () => {
+    sdk(() => undefined);
+    const a = createCrazy();
+    await a.init();
+    expect(a.audio?.isSystemMuted()).toBe(false);
+    expect(() => a.audio?.onSystemMuteChange(() => undefined)()).not.toThrow();
+  });
+});
+
+describe('who throttles interstitials', () => {
+  it('CrazyGames (adCooldown) and Poki (its system decides) do, so AdService adds no timer there', () => {
+    expect(createCrazy().capabilities.managesAdFrequency).toBe(true);
+    expect(createPoki().capabilities.managesAdFrequency).toBe(true);
+  });
+
+  it('every other adapter leaves the pacing to AdService', () => {
+    for (const make of [createGd, createYt, createToss, createCap, createItch]) {
+      expect(make().capabilities.managesAdFrequency).toBe(false);
+    }
+  });
+
+  it('only portals sell interstitials: Toss, store and itch builds never do', () => {
+    expect(createToss().capabilities.interstitialAds).toBe(false);
+    expect(createCap().capabilities.interstitialAds).toBe(false);
+    expect(createItch().capabilities.interstitialAds).toBe(false);
+    for (const make of [createCrazy, createPoki, createGd, createYt]) expect(make().capabilities.interstitialAds).toBe(true);
+  });
 });
 
 describe('Poki', () => {
@@ -463,6 +526,14 @@ describe('Apps in Toss (bridge)', () => {
           return () => calls.push('buy-cleanup');
         },
         getPendingOrders: async () => ({ orders: [{ orderId: 'o1', sku: 'gems_80', paymentCompletedDate: 'x' }] }),
+        getCompletedOrRefundedOrders: async () => ({
+          hasNext: false,
+          nextKey: null,
+          orders: [
+            { orderId: 'c1', sku: 'butler_pass', status: 'COMPLETED', date: '2026-10-01T00:00:00Z' },
+            { orderId: 'c2', sku: 'gems_80', status: 'REFUNDED', date: '2026-10-02T00:00:00Z' },
+          ],
+        }),
         completeProductGrant: async ({ params }) => {
           completed.push(params.orderId);
           return true;
@@ -595,6 +666,44 @@ describe('Apps in Toss (bridge)', () => {
     expect(await a.iap!.pendingOrders()).toEqual([{ orderId: 'o1', productId: 'gems_80' }]);
     await a.iap!.complete('o1');
     expect(t.completed).toEqual(['o1']);
+  });
+
+  it('lists completed and refunded orders (first page) for the restore', async () => {
+    const { a, t } = await ready();
+    expect(await a.iap!.completedOrders!()).toEqual([
+      { orderId: 'c1', productId: 'butler_pass', status: 'completed' },
+      { orderId: 'c2', productId: 'gems_80', status: 'refunded' },
+    ]);
+    delete t.b.IAP!.getCompletedOrRefundedOrders; // older Toss apps do not have it
+    expect(await a.iap!.completedOrders!()).toEqual([]);
+    registerTossBridge(null);
+    expect(await a.iap!.completedOrders!()).toEqual([]);
+  });
+
+  it('gives up on a load that never answers and retries later', async () => {
+    const { a, t } = await ready();
+    t.b.GoogleAdMob!.loadAppsInTossAdMob = Object.assign(
+      () => {
+        t.calls.push('silent-load');
+        return () => undefined;
+      },
+      { isSupported: () => true },
+    );
+    t.onShow((cb) => cb({ type: 'dismissed' }));
+    await a.ads.show('rewarded', 'revive'); // consume the loaded ad
+    a.ads.preload('rewarded', '*');
+    expect(t.calls.filter((c) => c === 'silent-load')).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(20_000); // load timeout -> idle, retry armed
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(false);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(t.calls.filter((c) => c === 'silent-load')).toHaveLength(2);
+  });
+
+  it('never offers interstitials: the full-screen ad calls are not used', async () => {
+    const { a, t } = await ready();
+    expect(await a.ads.show('interstitial', 'run_end')).toMatchObject({ shown: false });
+    a.ads.preload('interstitial', '*');
+    expect(t.calls.filter((c) => c.startsWith('load:'))).toHaveLength(1); // only the rewarded preload from init
   });
 
   it('maps storage, identity and the leaderboard (score as a string)', async () => {
@@ -764,6 +873,13 @@ describe('Capacitor (plugins)', () => {
         products: o.productIdentifiers.map((id) => ({ identifier: id, priceString: '₩1,500' })),
       })),
       purchaseStoreProduct: vi.fn(async () => ({ transaction: { transactionIdentifier: 'tx-1' } })),
+      restorePurchases: vi.fn(async () => ({
+        nonSubscriptionTransactions: [
+          { transactionIdentifier: 'tx-1', productIdentifier: 'gems_80' },
+          { transactionId: 'tx-2', productId: 'butler_pass' },
+          { productIdentifier: 'no_transaction_id' },
+        ],
+      })),
     };
     t.p.Purchases = purchases;
     const ids: string[] = [];
@@ -780,5 +896,32 @@ describe('Capacitor (plugins)', () => {
     expect(await a.iap!.purchase('gems_80', async () => true)).toBe('failed');
     expect(await a.iap!.products!(['gems_80'])).toEqual([{ id: 'gems_80', priceText: '₩1,500' }]);
     expect(await a.iap!.pendingOrders()).toEqual([]);
+    // restore: the CustomerInfo's non-subscription transactions are the completed orders (refunds are not visible)
+    expect(await a.iap!.completedOrders!()).toEqual([
+      { orderId: 'tx-1', productId: 'gems_80', status: 'completed' },
+      { orderId: 'tx-2', productId: 'butler_pass', status: 'completed' },
+    ]);
+    purchases.restorePurchases.mockResolvedValueOnce({
+      customerInfo: { nonSubscriptionTransactions: [{ transactionIdentifier: 'tx-9', productIdentifier: 'starter_pack' }] },
+    } as never);
+    expect(await a.iap!.completedOrders!()).toEqual([{ orderId: 'tx-9', productId: 'starter_pack', status: 'completed' }]);
+  });
+
+  it('gives up on a load that never answers and retries later', async () => {
+    const { a, t } = await ready((x) => {
+      x.AdMob.prepareRewardVideoAd.mockImplementation(async () => undefined); // never fires Loaded
+    });
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(false);
+    t.AdMob.prepareRewardVideoAd.mockClear();
+    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(t.AdMob.prepareRewardVideoAd).toHaveBeenCalledTimes(1);
+  });
+
+  it('never uses AdMob interstitials: they are portal-only', async () => {
+    const { a, t } = await ready();
+    expect(await a.ads.show('interstitial', 'run_end')).toMatchObject({ shown: false });
+    expect(t.AdMob.showInterstitial).not.toHaveBeenCalled();
+    expect(t.AdMob.prepareInterstitial).not.toHaveBeenCalled();
   });
 });

@@ -2,14 +2,14 @@ import { Container, Sprite } from 'pixi.js';
 import { Pool } from '@/core/pool';
 import { TAU, rand } from '@/core/math';
 import { smoothstep01 } from './curves';
-import { fxSettings } from './settings';
+import { fxSettings, tierScale } from './settings';
 import { fxTex } from './textures';
 
 export interface RaysOpts {
   color?: number;
   /** Ray length in design px. Default 360. */
   radius?: number;
-  /** Number of rays. Default 10 (scaled by quality, minimum 5). */
+  /** Number of rays. Default 10 (scaled by quality and tier, minimum 5). */
   count?: number;
   /** Rotation speed in rad/s. Default 0.35. */
   speed?: number;
@@ -45,7 +45,7 @@ export class Rays {
     o: RaysOpts,
   ) {
     const radius = o.radius ?? 360;
-    const n = Math.max(5, Math.round((o.count ?? 10) * fxSettings.quality));
+    const n = Math.max(5, Math.round((o.count ?? 10) * fxSettings.quality * tierScale()));
     this.peak = (o.alpha ?? 0.55) * (fxSettings.reducedMotion ? 0.7 : 1);
     this.fade = o.fade ?? 0.3;
     this.duration = o.duration ?? Infinity;
@@ -123,8 +123,8 @@ export class Rays {
   }
 }
 
-/** Shared sprite pool for ray wedges: removed from its parent on release. */
-export function makeRayPool(): Pool<Sprite> {
+/** Sprite pool for ray wedges and looping zone visuals: a released sprite leaves its parent and hides. */
+export function makeSpritePool(): Pool<Sprite> {
   return new Pool<Sprite>(
     () => {
       const s = new Sprite();

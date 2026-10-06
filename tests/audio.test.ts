@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyse, audibleEnd, fft, normalisationGain, peakOf } from '@/audio/analysis';
+import { analyse, audibleEnd, fft, modulation, normalisationGain, peakOf } from '@/audio/analysis';
 import {
   SILENCE,
   adsrPoints,
@@ -132,6 +132,16 @@ describe('envelopes', () => {
     expect(duckPlan(0, 1).floor).toBe(1);
     expect(duckPlan(0.5, 1).floor).toBeCloseTo(0.5, 9);
     expect(duckPlan(Number.NaN, Number.NaN).floor).toBe(1);
+  });
+
+  it('duck recovery takes 0.5-1.2 s (three time constants) whatever the duck length, the dip about 80 ms', () => {
+    for (const seconds of [0.05, 0.3, 0.8, 1.5, 4, 30]) {
+      const p = duckPlan(0.6, seconds);
+      expect(p.releaseTc * 3, `${seconds}s`).toBeGreaterThanOrEqual(0.5 - 1e-9);
+      expect(p.releaseTc * 3, `${seconds}s`).toBeLessThanOrEqual(1.2 + 1e-9);
+      expect(p.attackTc * 3).toBeGreaterThan(0.06);
+      expect(p.attackTc * 3).toBeLessThan(0.1);
+    }
   });
 
   it('equal-power cross-fade keeps summed power constant', () => {
@@ -288,6 +298,22 @@ describe('StepClock', () => {
     barPosition(37, out);
     expect(out).toEqual({ bar: 2, step: 5 });
   });
+
+  it('finds the next beat or bar line on its own grid without advancing', () => {
+    const c = new StepClock(120, 256);
+    c.start(10);
+    // Steps 0..4 are scheduled; the next unscheduled step is index 5 at 10.625 s.
+    for (let i = 0; i < 5; i++) c.advance();
+    expect(c.nextBoundary(10.6, 4)).toBeCloseTo(11, 9);
+    // A beat that starts exactly at the next unscheduled step is returned as is.
+    expect(c.nextBoundary(10.62, 5)).toBeCloseTo(10.625, 9);
+    // The bar line (every 16 steps) of the same clock.
+    expect(c.nextBoundary(10.6, 16)).toBeCloseTo(12, 9);
+    // A moment already behind the clock never goes backwards.
+    expect(c.nextBoundary(0, 4)).toBeCloseTo(11, 9);
+    expect(c.stepIndex).toBe(5);
+    expect(c.nextTime).toBeCloseTo(10.625, 9);
+  });
 });
 
 describe('LayerMixer', () => {
@@ -401,6 +427,25 @@ describe('analysis', () => {
     expect(a.loudRms).toBeLessThan(a.rms * 0.6);
     const long = analyse([sine(440, 0.5, SR)], SR, false);
     expect(long.loudRms).toBeCloseTo(long.rms, 3);
+  });
+
+  it('finds the dominant amplitude-modulation rate and ignores a steady tone', () => {
+    const n = Math.floor(0.5 * SR);
+    const am = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = i / SR;
+      am[i] = 0.4 * (1 + 0.5 * Math.sin(2 * Math.PI * 25 * t)) * Math.sin(2 * Math.PI * 180 * t);
+    }
+    const m = modulation([am], SR, 0, n);
+    expect(m.hz).toBeGreaterThan(22);
+    expect(m.hz).toBeLessThan(28);
+    expect(m.depth).toBeGreaterThan(0.3);
+    expect(m.depth).toBeLessThan(0.7);
+    const flat = modulation([sine(180, 0.5, SR)], SR, 0, n);
+    expect(flat.depth).toBeLessThan(0.05);
+    // Too short to resolve anything: reported as flat rather than guessed.
+    expect(modulation([am], SR, 0, 2000).hz).toBe(0);
+    expect(analyse([am], SR).modHz).toBeGreaterThan(22);
   });
 
   it('finds where a sound ends', () => {

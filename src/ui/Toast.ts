@@ -22,10 +22,24 @@ interface Pending {
   kind: ToastKind;
 }
 
+const LINE_H = 38;
+const MAX_LINES = 2;
+
+/** Messages are capped at two lines: longer text is cut with an ellipsis rather than growing the pill. */
+function capLines(label: Text): void {
+  const full = label.text;
+  let keep = full.length;
+  while (label.height > LINE_H * MAX_LINES + 6 && keep > 4) {
+    keep = Math.max(4, keep - Math.max(2, Math.ceil(keep * 0.08)));
+    label.text = full.slice(0, keep).trimEnd() + '…';
+  }
+}
+
 function buildToast(text: string, kind: ToastKind): { view: Container; label: Text } {
   const k = KIND[kind];
   const pal = ButtonPalettes[k.style];
-  const label = uiLabel(text, { size: 30, stroke: pal.textStroke, strokeWidth: 6, wrap: 520, lineHeight: 38, shadow: false });
+  const label = uiLabel(text, { size: 30, stroke: pal.textStroke, strokeWidth: 6, wrap: 520, lineHeight: LINE_H, shadow: false });
+  capLines(label);
   const h = Math.max(88, label.height + 40);
   const w = Math.min(680, Math.max(380, label.width + 150));
   const art = new Container();
@@ -61,11 +75,13 @@ class ToastManager {
   private readonly bag = new TweenBag();
   private view: Container | null = null;
   private current: Pending | null = null;
+  /** True from the moment the exit animation starts: the toast can no longer be extended. */
+  private leaving = false;
   private hold: ReturnType<TweenBag['run']> | null = null;
 
   show(text: string, kind: ToastKind): void {
     const c = this.current;
-    if (c && c.text === text && c.kind === kind && this.view) {
+    if (c && c.text === text && c.kind === kind && this.view && !this.leaving) {
       // Same message again: keep the existing toast on screen a little longer instead of stacking.
       this.holdFor(text.length, true);
       return;
@@ -84,6 +100,7 @@ class ToastManager {
     this.view = null;
     this.current = null;
     this.hold = null;
+    this.leaving = false;
   }
 
   private next(): void {
@@ -93,6 +110,7 @@ class ToastManager {
       return;
     }
     this.current = item;
+    this.leaving = false;
     const { view } = buildToast(item.text, item.kind);
     this.view = view;
     view.eventMode = 'none';
@@ -137,6 +155,7 @@ class ToastManager {
   private dismiss(): void {
     const view = this.view;
     if (!view) return;
+    this.leaving = true;
     const y0 = view.y;
     const done = (): void => {
       view.destroy({ children: true });

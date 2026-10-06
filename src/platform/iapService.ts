@@ -1,38 +1,58 @@
 /**
- * IapService: purchases with exactly-once grants.
+ * IapService: purchases with exactly-once grants, restorable without a server.
  *
  * Money flow: platform confirms payment -> onPaid(orderId) -> grantOnce() -> handler(productId, orderId)
  * -> ledger marks the order granted -> adapter completes the order on the platform. The ledger is
  * persisted before AND after the handler runs, so:
  *   - app dies after payment, before the handler: the order is still pending on the platform; the next
- *     boot's recoverPending() grants it, once;
+ *     boot's sync grants it, once;
  *   - app dies after the handler, before the ledger says "granted": the entry is still "granting", the
  *     next boot calls the handler again with ctx.replay === true. The handler MUST be idempotent on
  *     orderId (docs/명세_메타.md section 7), which also makes the meta layer's own profile write atomic
  *     with the grant;
  *   - an order the ledger knows as granted is never passed to the handler again, only completed.
  *
+ * Restore (GDD 8.3): every boot, and the settings button, syncs with the platform's listings: pending
+ * orders are granted and completed, completed orders missing from the ledger are granted again
+ * (idempotently, ctx.source === 'restore'), refunded orders are reported once to the revoke handler.
+ *
  * Pure with respect to the DOM and to game/audio (they arrive through the injected ModalGate).
  */
 import { getLang, type Lang } from '@/core/i18n';
 import type { Analytics } from './analytics';
 import type { ModalGate } from './modal';
-import type { IapOutcome, IapProductDef, PendingOrder, PlatformAdapter } from './types';
+import { validateCatalogue, type PriceIssue } from './pricing';
+import type { IapOutcome, IapProductDef, OrderRecord, PendingOrder, PlatformAdapter } from './types';
 import { errorMessage, settleWithin } from './util';
+
+/** Where a grant request came from. The meta layer may treat restored consumables differently. */
+export type GrantSource = 'purchase' | 'pending' | 'restore';
 
 export interface GrantContext {
   /** true when an earlier attempt for this order may already have applied the grant. */
   replay: boolean;
+  source: GrantSource;
 }
 
-/** Grant the product. Throw (or reject) to signal failure; the order then stays pending. */
+/** Grant the product. Throw (or reject) to signal failure; the order then stays pending. Idempotent on orderId. */
 export type GrantHandler = (productId: string, orderId: string, ctx: GrantContext) => Promise<void> | void;
+
+export interface RevokeContext {
+  /** This device's ledger had granted the order: the entitlement really exists here. */
+  wasGranted: boolean;
+}
+
+/** Take the product away because the platform refunded the order. Called once per order; idempotent on orderId. */
+export type RevokeHandler = (productId: string, orderId: string, ctx: RevokeContext) => Promise<void> | void;
 
 export interface LedgerEntry {
   /** product id */
   p: string;
-  /** granting = handler started (outcome unknown after a crash), granted = handler finished */
-  s: 'granting' | 'granted';
+  /**
+   * granting = handler started (outcome unknown after a crash), granted = handler finished,
+   * revoked = refunded and reported to the revoke handler (terminal: never granted again).
+   */
+  s: 'granting' | 'granted' | 'revoked';
   /** epoch ms of the last state change */
   t: number;
 }
@@ -48,7 +68,11 @@ export interface IapLedgerStore {
   save(ledger: IapLedger): void | Promise<void>;
 }
 
-export const LEDGER_MAX_ENTRIES = 500;
+/**
+ * Oldest granted entries beyond this are dropped. Restore re-grants a completed order the ledger no
+ * longer knows, so the bound sits far above any real player's order count.
+ */
+export const LEDGER_MAX_ENTRIES = 1000;
 
 export function emptyLedger(): IapLedger {
   return { v: 1, orders: {} };
@@ -63,7 +87,7 @@ export function normalizeLedger(raw: unknown): IapLedger {
     if (!e || typeof e !== 'object') continue;
     const r = e as Record<string, unknown>;
     if (typeof r.p !== 'string') continue;
-    if (r.s !== 'granting' && r.s !== 'granted') continue;
+    if (r.s !== 'granting' && r.s !== 'granted' && r.s !== 'revoked') continue;
     out.orders[id] = { p: r.p, s: r.s, t: typeof r.t === 'number' ? r.t : 0 };
   }
   return out;
@@ -79,16 +103,32 @@ export function createMemoryLedgerStore(): IapLedgerStore {
   };
 }
 
-/** Union of two ledgers. 'granted' beats 'granting'; otherwise the newer entry wins. */
+const STATE_RANK: Record<LedgerEntry['s'], number> = { granting: 0, granted: 1, revoked: 2 };
+
+/** Union of two ledgers. The further state wins (revoked > granted > granting); equal states: the newer entry. */
 export function mergeLedgers(a: IapLedger, b: IapLedger): IapLedger {
   const out = emptyLedger();
   for (const src of [a, b]) {
     for (const [id, e] of Object.entries(src.orders)) {
       const cur = out.orders[id];
-      if (!cur || (cur.s !== 'granted' && (e.s === 'granted' || e.t > cur.t))) out.orders[id] = { ...e };
+      if (!cur || STATE_RANK[e.s] > STATE_RANK[cur.s] || (e.s === cur.s && e.t > cur.t)) out.orders[id] = { ...e };
     }
   }
   return out;
+}
+
+/** What one sync with the platform's order listings did. */
+export interface RestoreSummary {
+  /** The platform answered every listing it offers and every grant/revoke went through. */
+  ok: boolean;
+  /** Orders newly granted by this pass (paid-but-pending ones and restored ones). */
+  granted: number;
+  /** Refunded orders newly reported to the revoke handler. */
+  revoked: number;
+  /** Pending orders finished (granted if needed, then completed on the platform). */
+  finished: number;
+  /** Why nothing could be checked. */
+  reason?: 'unavailable' | 'no_handler' | 'failed';
 }
 
 export interface IapServiceDeps {
@@ -98,9 +138,11 @@ export interface IapServiceDeps {
   ledger?: IapLedgerStore;
   now?: () => number;
   lang?: () => Lang;
-  /** A purchase sheet open longer than this settles 'failed' and is left to recoverPending(). Default 5 min. */
+  /** Build channel (VITE_PLATFORM), for catalogue price checks. */
+  channel?: string;
+  /** A purchase sheet open longer than this settles 'failed' and is left to the next sync. Default 5 min. */
   purchaseWatchdogMs?: number;
-  /** Timeout for each platform call during recovery. Default 8 s. */
+  /** Timeout for each platform call during a sync. Default 8 s. */
   callTimeoutMs?: number;
 }
 
@@ -108,13 +150,16 @@ export class IapService {
   private readonly products = new Map<string, IapProductDef>();
   private readonly storePrices = new Map<string, string>();
   private handler: GrantHandler | null = null;
+  private revoker: RevokeHandler | null = null;
   private store: IapLedgerStore;
   private ledger: IapLedger;
   private readonly inflight = new Map<string, Promise<boolean>>();
-  private recovering: Promise<number> | null = null;
-  /** A recovery was requested while one was already running: run once more when it ends. */
-  private recoverAgain = false;
-  private recoverDeferred = false;
+  private syncing: Promise<RestoreSummary> | null = null;
+  private queuedFull: Promise<RestoreSummary> | null = null;
+  /** A pending-only sync was requested while another ran: run once more when it ends. */
+  private syncAgain = false;
+  /** A boot-time sync found a handler missing: run the full sync as soon as it is set. */
+  private syncDeferred = false;
   private persistQueue: Promise<void> = Promise.resolve();
   private readonly now: () => number;
   private readonly lang: () => Lang;
@@ -132,17 +177,33 @@ export class IapService {
 
   // ----- configuration ---------------------------------------------------------------------
 
-  registerProducts(defs: readonly IapProductDef[]): void {
+  /** Register the catalogue. Returns the price problems found (see pricing.ts); empty means clean. */
+  registerProducts(defs: readonly IapProductDef[]): PriceIssue[] {
     for (const d of defs) this.products.set(d.id, d);
+    const issues = validateCatalogue(defs, this.deps.channel);
+    if (issues.length > 0 && import.meta.env.DEV) {
+      console.warn('[iap] catalogue price problems:', issues);
+    }
+    void this.refreshPrices(); // boot may have asked before any product existed
+    return issues;
   }
 
   /**
-   * The one place products are granted. Must be idempotent on orderId. Setting it also triggers any
-   * recovery that boot had to defer because no handler existed yet.
+   * The one place products are granted. Must be idempotent on orderId. Setting it also runs the
+   * sync that boot had to defer because no handler existed yet.
    */
   setGrantHandler(handler: GrantHandler | null): void {
     this.handler = handler;
-    if (handler && this.recoverDeferred) void this.recoverPending();
+    if (handler && this.syncDeferred) void this.restorePurchases();
+  }
+
+  /**
+   * Where refunds go: take the entitlement away. Called once per refunded order. Setting it also runs
+   * the sync boot had to defer.
+   */
+  setRevokeHandler(handler: RevokeHandler | null): void {
+    this.revoker = handler;
+    if (handler && this.syncDeferred) void this.restorePurchases();
   }
 
   /** Persist the ledger somewhere else (the profile). Entries already known are merged into it. */
@@ -194,6 +255,7 @@ export class IapService {
     const fn = a.iap?.products;
     if (!a.iap || !fn || !this.isAvailable()) return;
     const ids = [...this.products.keys()];
+    if (ids.length === 0) return;
     const list = await settleWithin(
       Promise.resolve().then(() => fn.call(a.iap, ids)),
       this.callTimeoutMs,
@@ -240,7 +302,7 @@ export class IapService {
           productId,
           async (orderId) => {
             paid = true;
-            return this.grantOnce(productId, orderId);
+            return this.grantOnce(productId, orderId, 'purchase');
           },
           info,
         ),
@@ -257,81 +319,142 @@ export class IapService {
       finish(outcome);
     }
     // A payment that lands after the watchdog is still granted (onPaid stays live); anything the
-    // platform keeps pending is finished by recoverPending() at boot and whenever the app resumes.
+    // platform keeps pending is finished by the next sync (boot, resume, restorePurchases()).
     return outcome;
   }
 
-  // ----- recovery --------------------------------------------------------------------------
+  // ----- sync with the platform ------------------------------------------------------------
 
   /**
-   * Complete orders that were paid but never granted/completed (call at boot; boot does). Safe to call
-   * any time and concurrently. Resolves with the number of orders it finished.
+   * Finish orders that were paid but never granted/completed. Cheap (one listing): boot, resume and
+   * the dev tools use it. Safe to call any time and concurrently. Resolves with the number of
+   * pending orders it finished.
    */
   recoverPending(): Promise<number> {
-    if (this.recovering) {
-      // Single flight, but the request is not lost: whatever changed since the running pass began (a
-      // grant handler that was just set, a payment that just landed) gets one more pass afterwards.
-      this.recoverAgain = true;
-      return this.recovering;
+    return this.sync(false).then((r) => r.finished);
+  }
+
+  /**
+   * Full restore, without a server: pending orders, then the platform's completed and refunded
+   * listings (where it offers them). Anything completed that the ledger lacks is granted again,
+   * idempotently; refunded orders go to the revoke handler once. Boot calls it; settings expose it as
+   * the "restore purchases" button. Never rejects.
+   */
+  restorePurchases(): Promise<RestoreSummary> {
+    return this.sync(true);
+  }
+
+  private sync(full: boolean): Promise<RestoreSummary> {
+    const running = this.syncing;
+    if (running) {
+      if (!full) {
+        // Single flight, but the request is not lost: whatever changed since the running pass began
+        // (a handler that was just set, a payment that just landed) gets one more pass afterwards.
+        this.syncAgain = true;
+        return running;
+      }
+      // A caller that asked for the full restore must get its result, not that of a pending-only pass.
+      this.queuedFull ??= running.then(() => {
+        this.queuedFull = null;
+        return this.sync(true);
+      });
+      return this.queuedFull;
     }
-    const run = this.doRecover()
-      .catch(() => 0)
+    const run = this.doSync(full)
+      .catch((): RestoreSummary => ({ ok: false, granted: 0, revoked: 0, finished: 0, reason: 'failed' }))
       .finally(() => {
-        this.recovering = null;
-        if (this.recoverAgain) {
-          this.recoverAgain = false;
-          void this.recoverPending();
+        this.syncing = null;
+        if (this.syncAgain) {
+          this.syncAgain = false;
+          void this.sync(false);
         }
       });
-    this.recovering = run;
+    this.syncing = run;
     return run;
   }
 
-  private async doRecover(): Promise<number> {
+  private async doSync(full: boolean): Promise<RestoreSummary> {
+    const summary: RestoreSummary = { ok: true, granted: 0, revoked: 0, finished: 0 };
     const adapter = this.deps.getAdapter();
     const iap = adapter.iap;
-    if (!iap || !adapter.capabilities.iap || !this.isAvailable()) return 0;
+    if (!iap || !adapter.capabilities.iap || !this.isAvailable()) return { ...summary, ok: false, reason: 'unavailable' };
     if (!this.handler) {
-      this.recoverDeferred = true;
-      return 0;
+      this.syncDeferred = true;
+      return { ...summary, ok: false, reason: 'no_handler' };
     }
-    this.recoverDeferred = false;
-    const pending = await settleWithin<PendingOrder[]>(
+    this.syncDeferred = false;
+
+    const pending = await settleWithin<PendingOrder[] | null>(
       Promise.resolve().then(() => iap.pendingOrders()),
       this.callTimeoutMs,
-      [],
+      null,
     );
-    let done = 0;
-    for (const o of pending) {
-      if (!o || typeof o.orderId !== 'string' || typeof o.productId !== 'string') continue;
-      const ok = await this.grantOnce(o.productId, o.orderId);
-      if (!ok) continue;
-      await settleWithin(
-        Promise.resolve().then(() => iap.complete(o.orderId)),
-        this.callTimeoutMs,
-        undefined,
-      );
-      done++;
-      this.deps.analytics.track('iap_result', { product: o.productId, outcome: 'recovered', order: o.orderId });
+    if (pending === null) {
+      summary.ok = false;
+      summary.reason = 'failed';
+    } else {
+      for (const o of pending) {
+        if (!o || typeof o.orderId !== 'string' || typeof o.productId !== 'string') continue;
+        const known = this.hasGranted(o.orderId);
+        if (!(await this.grantOnce(o.productId, o.orderId, 'pending'))) {
+          summary.ok = false;
+          continue;
+        }
+        await settleWithin(Promise.resolve().then(() => iap.complete(o.orderId)), this.callTimeoutMs, undefined);
+        summary.finished++;
+        if (!known) summary.granted++;
+        this.deps.analytics.track('iap_result', { product: o.productId, outcome: 'recovered', order: o.orderId });
+      }
     }
-    return done;
+    if (!full || !iap.completedOrders) return summary;
+
+    const listing = iap.completedOrders.bind(iap);
+    const records = await settleWithin<OrderRecord[] | null>(Promise.resolve().then(listing), this.callTimeoutMs, null);
+    if (records === null) {
+      summary.ok = false;
+      summary.reason = 'failed';
+      return summary;
+    }
+    for (const o of records) {
+      if (!o || typeof o.orderId !== 'string' || typeof o.productId !== 'string') continue;
+      if (o.status === 'completed') {
+        const known = this.hasGranted(o.orderId);
+        if (await this.grantOnce(o.productId, o.orderId, 'restore')) {
+          if (!known) {
+            summary.granted++;
+            this.deps.analytics.track('iap_result', { product: o.productId, outcome: 'restored', order: o.orderId });
+          }
+        } else if (this.ledger.orders[o.orderId]?.s !== 'revoked') {
+          summary.ok = false;
+        }
+      } else if (o.status === 'refunded') {
+        const r = await this.revokeOnce(o.productId, o.orderId);
+        if (r === 'revoked') summary.revoked++;
+        else if (r === 'deferred') summary.ok = false;
+      }
+    }
+    if (summary.granted > 0 || summary.revoked > 0) {
+      this.deps.analytics.track('iap_result', { outcome: 'restore', granted: summary.granted, revoked: summary.revoked });
+    }
+    return summary;
   }
 
   // ----- the ledger ------------------------------------------------------------------------
 
-  private grantOnce(productId: string, orderId: string): Promise<boolean> {
+  private grantOnce(productId: string, orderId: string, source: GrantSource): Promise<boolean> {
     const existing = this.inflight.get(orderId);
     if (existing) return existing;
-    const p = this.doGrant(productId, orderId).finally(() => {
+    const p = this.doGrant(productId, orderId, source).finally(() => {
       this.inflight.delete(orderId);
     });
     this.inflight.set(orderId, p);
     return p;
   }
 
-  private async doGrant(productId: string, orderId: string): Promise<boolean> {
+  private async doGrant(productId: string, orderId: string, source: GrantSource): Promise<boolean> {
     const entry = this.ledger.orders[orderId];
     if (entry?.s === 'granted') return true;
+    if (entry?.s === 'revoked') return false; // refunded: never grant it again
     const handler = this.handler;
     if (!handler) return false;
     const replay = entry?.s === 'granting';
@@ -339,7 +462,7 @@ export class IapService {
     this.ledger.orders[orderId] = { p: productId, s: 'granting', t: this.now() };
     await this.persist();
     try {
-      await handler(productId, orderId, { replay });
+      await handler(productId, orderId, { replay, source });
     } catch (e) {
       this.deps.analytics.track('iap_result', {
         product: productId,
@@ -353,6 +476,34 @@ export class IapService {
     this.prune();
     await this.persist();
     return true;
+  }
+
+  /** Report one refunded order to the revoke handler, once. 'deferred': no handler yet or it failed; retried next sync. */
+  private async revokeOnce(productId: string, orderId: string): Promise<'revoked' | 'known' | 'deferred'> {
+    const entry = this.ledger.orders[orderId];
+    if (entry?.s === 'revoked') return 'known';
+    const revoker = this.revoker;
+    if (!revoker) {
+      this.syncDeferred = true;
+      return 'deferred';
+    }
+    // A grant still in flight for this order must finish first, so wasGranted tells the truth.
+    await this.inflight.get(orderId)?.catch(() => false);
+    const wasGranted = this.ledger.orders[orderId]?.s === 'granted';
+    try {
+      await revoker(productId, orderId, { wasGranted });
+    } catch (e) {
+      this.deps.analytics.track('iap_result', {
+        product: productId,
+        outcome: 'revoke_failed',
+        order: orderId,
+        why: errorMessage(e),
+      });
+      return 'deferred';
+    }
+    this.ledger.orders[orderId] = { p: productId, s: 'revoked', t: this.now() };
+    await this.persist();
+    return 'revoked';
   }
 
   private prune(): void {

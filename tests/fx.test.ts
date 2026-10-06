@@ -18,7 +18,7 @@ import { boltPointCount, buildBolt } from '@/fx/bolt';
 import { flightAt, flightTotal, makeFlightPlan, planFlight, type FlightState } from '@/fx/flyPath';
 import { TimeFreeze } from '@/fx/freeze';
 import { QualityGovernor, loadFxTier, saveFxTier } from '@/fx/governor';
-import { FX_TIERS, REDUCED, fxSettings, setFxSettings } from '@/fx/settings';
+import { FX_TIERS, FX_TIER_ORDER, REDUCED, countScale, fxSettings, onFxTierChange, setFxSettings, tierScale } from '@/fx/settings';
 
 /** Deterministic rng so jitter assertions are stable. */
 function seeded(seed: number): () => number {
@@ -528,14 +528,14 @@ describe('QualityGovernor', () => {
     return changes;
   }
 
-  it('stays put at a steady 60 fps', () => {
+  it('starts in the default tier (mid) and a short stretch of 60 fps changes nothing', () => {
     const g = new QualityGovernor();
-    expect(run(g, 60, 16.7)).toEqual([]);
-    expect(g.tier).toBe('high');
+    expect(g.tier).toBe('mid');
+    expect(run(g, 25, 16.7)).toEqual([]);
   });
 
   it('steps down one tier after about 3 s of slow frames, then again, and stops at low', () => {
-    const g = new QualityGovernor();
+    const g = new QualityGovernor({ start: 'high' });
     expect(run(g, 2.5, 28)).toEqual([]);
     expect(run(g, 1.5, 28)).toEqual(['mid']);
     // The average is judged afresh in the new tier: another few slow seconds, one more step.
@@ -550,7 +550,7 @@ describe('QualityGovernor', () => {
     g.sample(0.05);
     g.sample(0.05);
     run(g, 5, 16.7);
-    expect(g.tier).toBe('high');
+    expect(g.tier).toBe('mid');
   });
 
   it('steps back up only after 10 s of headroom and 30 s since the last change', () => {
@@ -562,9 +562,49 @@ describe('QualityGovernor', () => {
     expect(run(g, 20, 10)).toEqual(['high']);
   });
 
+  it('a 60 Hz display that holds its 60 fps can climb (the guide 14 ms threshold could not)', () => {
+    const g = new QualityGovernor();
+    expect(run(g, 40, 16.7)).toEqual(['high']);
+  });
+
   it('does not step up while frames are merely acceptable (between the thresholds)', () => {
     const g = new QualityGovernor({ start: 'low' });
-    expect(run(g, 120, 17)).toEqual([]);
+    expect(run(g, 120, 18.5)).toEqual([]);
+  });
+
+  it('never oscillates: a climb that fails is not tried again', () => {
+    const g = new QualityGovernor();
+    const log: string[] = [];
+    // Mid is comfortable (60 fps), so it climbs to high; high is too heavy (30 ms frames) and drops back.
+    log.push(...run(g, 40, 16.7));
+    expect(g.tier).toBe('high');
+    log.push(...run(g, 4, 30));
+    expect(g.tier).toBe('mid');
+    expect(g.ceiling).toBe('mid');
+    // Hours of comfortable frames afterwards: it stays in mid for good.
+    log.push(...run(g, 600, 16.7));
+    expect(log).toEqual(['high', 'mid']);
+  });
+
+  it('a step down long after the climb is a fresh slowdown, not proof the higher tier fails', () => {
+    const g = new QualityGovernor();
+    run(g, 40, 16.7);
+    expect(g.tier).toBe('high');
+    run(g, 200, 16.7);
+    expect(run(g, 4, 30)).toEqual(['mid']);
+    expect(g.ceiling).toBe('high');
+    expect(run(g, 40, 16.7)).toEqual(['high']);
+  });
+
+  it('set() adopts a tier chosen elsewhere and forgets what it learnt', () => {
+    const g = new QualityGovernor();
+    run(g, 40, 16.7);
+    run(g, 4, 30);
+    expect(g.ceiling).toBe('mid');
+    g.set('low');
+    expect(g.tier).toBe('low');
+    expect(g.ceiling).toBe('high');
+    expect(run(g, 29, 10)).toEqual([]);
   });
 
   it('persists the tier and survives broken storage', () => {
@@ -601,10 +641,53 @@ describe('fxSettings', () => {
     setFxSettings({ quality: 1, flashes: true, reducedMotion: false, numbers: 'full' });
   });
 
-  it('quality tiers get strictly cheaper from high to low', () => {
-    expect(FX_TIERS.high.particles).toBeGreaterThan(FX_TIERS.mid.particles);
-    expect(FX_TIERS.mid.particles).toBeGreaterThan(FX_TIERS.low.particles);
-    expect(FX_TIERS.high.numbers).toBeGreaterThan(FX_TIERS.low.numbers);
-    expect(FX_TIERS.high.quality).toBeGreaterThan(FX_TIERS.low.quality);
+  it('tiers are the product budgets: 400/40, 250/24 (default), 120/12', () => {
+    expect(FX_TIERS.high).toMatchObject({ particles: 400, numbers: 40 });
+    expect(FX_TIERS.mid).toMatchObject({ particles: 250, numbers: 24 });
+    expect(FX_TIERS.low).toMatchObject({ particles: 120, numbers: 12 });
+    expect(FX_TIER_ORDER).toEqual(['high', 'mid', 'low']);
+    expect(FX_TIERS.high.scale).toBeGreaterThan(FX_TIERS.mid.scale);
+    expect(FX_TIERS.mid.scale).toBeGreaterThan(FX_TIERS.low.scale);
+  });
+
+  it('defaults to the mid tier with the automatic governor on', () => {
+    const fresh = { tier: fxSettings.tier, auto: fxSettings.autoTier };
+    setFxSettings({ tier: 'mid', autoTier: true });
+    expect(fxSettings.tier).toBe('mid');
+    expect(fxSettings.autoTier).toBe(true);
+    setFxSettings({ tier: fresh.tier, autoTier: fresh.auto });
+  });
+
+  it('tells subscribers about real tier changes only, until they unsubscribe', () => {
+    setFxSettings({ tier: 'mid' });
+    const seen: string[] = [];
+    const off = onFxTierChange((t) => seen.push(t));
+    setFxSettings({ tier: 'mid' });
+    setFxSettings({ tier: 'low' });
+    setFxSettings({ tier: 'low' });
+    setFxSettings({ tier: 'high' });
+    off();
+    setFxSettings({ tier: 'mid' });
+    expect(seen).toEqual(['low', 'high']);
+  });
+
+  it('ignores an unknown tier name', () => {
+    setFxSettings({ tier: 'low' });
+    setFxSettings({ tier: 'ultra' as never });
+    expect(fxSettings.tier).toBe('low');
+    setFxSettings({ tier: 'mid' });
+  });
+
+  it('only priority 2+ bursts follow the tier; the player quality setting applies to all', () => {
+    setFxSettings({ tier: 'low', quality: 1 });
+    expect(tierScale()).toBe(FX_TIERS.low.scale);
+    expect(countScale(0)).toBe(1);
+    expect(countScale(1)).toBe(1);
+    expect(countScale(2)).toBe(FX_TIERS.low.scale);
+    expect(countScale(3)).toBe(FX_TIERS.low.scale);
+    setFxSettings({ tier: 'high', quality: 0.5 });
+    expect(countScale(1)).toBe(0.5);
+    expect(countScale(3)).toBe(0.5);
+    setFxSettings({ tier: 'mid', quality: 1 });
   });
 });

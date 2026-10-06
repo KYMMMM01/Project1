@@ -3,7 +3,7 @@ import { game } from '@/core/game';
 import { Ease, type EaseFn } from '@/core/tween';
 import { clamp, lerp } from '@/core/math';
 import { safeFlashColor } from './curves';
-import { REDUCED, fxSettings } from './settings';
+import { FX_TIERS, REDUCED, fxSettings } from './settings';
 import { TimeFreeze, type TimeFreezeOpts, type TimeScaled } from './freeze';
 import { fxVignette } from './textures';
 
@@ -14,9 +14,10 @@ import { fxVignette } from './textures';
  */
 export const Trauma = { t1: 0.33, t2: 0.47, t3: 0.62, t4: 0.82, t5: 0.94 } as const;
 
-/** Screen shake through the core trauma model, softened when reduced motion is on. */
+/** Screen shake through the core trauma model, softened by reduced motion and by the low device tier. */
 export function fxShake(trauma: number): void {
-  game.shake(fxSettings.reducedMotion ? trauma * REDUCED.shake : trauma);
+  const k = FX_TIERS[fxSettings.tier].shake * (fxSettings.reducedMotion ? REDUCED.shake : 1);
+  game.shake(trauma * k);
 }
 
 /** Hard caps from the research guide: one flash at most every 0.5 s (WCAG 2.3.1) and alpha <= 0.45. */
@@ -75,6 +76,11 @@ export class ScreenFx {
 
   /** Number of full-screen flashes actually shown (stat for tests and the gallery). */
   flashesShown = 0;
+
+  /** The overlay container holding the flash, vignette and bars (built on first use). Cut-ins stack just below it. */
+  get layer(): Container {
+    return this.ensure().layer;
+  }
 
   get dangerLevel(): number {
     return this.dangerTarget;

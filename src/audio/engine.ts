@@ -3,16 +3,20 @@
  * and stingers are baked to AudioBuffers by OfflineAudioContext (with a live-synthesis fallback),
  * music is a look-ahead sequencer. All public methods are exception-safe and silently no-op when
  * WebAudio is missing, locked, muted or rate limited.
+ *
+ * Locked means "the context is not running": one-shot calls (play, playStep, stinger, duck) made
+ * then are dropped, while state calls (music, setIntensity, volumes, mute) are remembered and take
+ * effect the moment audio can run, so a game may start its soundtrack before the first tap.
  */
 import { game } from '@/core/game';
 import type { AudioApi, MusicId, PlayOpts, SfxId, StingerId } from './api';
 import { SoundBank } from './bank';
 import { offlineSupported } from './bake';
 import { duckPlan, volumeTaper } from './envelopes';
-import { MUSIC_BASE, SFX_BASE, createGraph, type AudioGraph } from './graph';
+import { MUSIC_BASE, MUSIC_LPF_OPEN, SFX_BASE, createGraph, type AudioGraph } from './graph';
 import { MusicPlayer, type MusicStats } from './music';
 import { PRERENDER_ORDER, SOUNDS, sfxIndexOf, stingerIndexOf } from './sounds';
-import { STINGER_DUCK } from './stingers';
+import { STINGER_DUCK, STINGER_MUFFLE } from './stingers';
 import { Synth } from './synth';
 import { pentatonicSemitones, semitoneRatio } from './theory';
 import { CAT_TARGET } from './recipe';
@@ -21,8 +25,18 @@ import { GLOBAL_VOICE_CAP, VoiceLimiter } from './voices';
 const MAX_VOICE_OBJECTS = GLOBAL_VOICE_CAP + 8;
 /** A suspend/resume that has not settled by now is abandoned so later gestures can retry. */
 const RESUME_TIMEOUT_MS = 1500;
-/** A deferred first-use sound older than this is dropped instead of played late. */
+/**
+ * A first-use sound still baking is dropped instead of played late once it is this old. Frequent
+ * ids (hits, shots) are stale after 0.3 s; a big moment or stinger is rare and worth waiting for.
+ */
 const MAX_DEFER_S = 0.3;
+const MAX_DEFER_BIG_S = 2;
+/** Gestures that may (re)start a suspended context; iOS only honours touchend / pointerup / click. */
+const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+const GESTURE_OPTS = { capture: true, passive: true } as const;
+/** Ramp times of the music low-pass under a muffling stinger (in, then back out). */
+const MUFFLE_IN_S = 1.2;
+const MUFFLE_OUT_S = 0.8;
 
 type ACtor = typeof AudioContext;
 
@@ -84,6 +98,10 @@ export interface AudioStats {
   sfxDropped: { gap: number; perId: number; global: number };
   /** Current values of the bus gains (they move while ramps run), for verifying ducks and mutes. */
   gains: { sfx: number; music: number; mute: number; duck: number };
+  /** Cut-off of the music low-pass in Hz (it only moves under a muffling stinger). */
+  musicLpfHz: number;
+  /** Track the game asked for; differs from `music.track` only while the context is locked or hidden. */
+  wantedTrack: MusicId;
   music: MusicStats | null;
 }
 
@@ -110,7 +128,17 @@ export class AudioEngine implements AudioApi {
   private rebuilds = 0;
   private lastVariant: number[] = SOUNDS.map(() => -1);
   private prerenderStarted = false;
+  /** Whether the context has ever run: a hidden or shown page only suspends / resumes one that has. */
+  private everRan = false;
+  /** Suspend / resume operations run one at a time; `queued` counts those not yet settled. */
   private lifecycle: Promise<unknown> = Promise.resolve();
+  private queued = 0;
+  private watch: ReturnType<typeof setTimeout> | null = null;
+  /** Undo functions for every listener init() registered. */
+  private readonly disposers: Array<() => void> = [];
+  /** Music is state, not a one-shot: the latest request is kept and applied whenever audio can run. */
+  private wantedId: MusicId = 'none';
+  private wantedFade = 0.8;
   private duckEnd = 0;
   private duckFloor = 1;
   private played = 0;
@@ -124,14 +152,15 @@ export class AudioEngine implements AudioApi {
     if (this.inited) return;
     this.inited = true;
     try {
+      this.visible = game.visible;
       this.build();
-      game.events.on('firstInput', () => this.unlock());
-      game.events.on('visibility', ({ visible }) => this.onVisibility(visible));
+      this.disposers.push(game.events.on('firstInput', this.onGesture), game.events.on('visibility', this.onVisibility));
       // iOS Safari can drop back to 'suspended' / 'interrupted' (calls, silent switch, tab swaps) and
       // only honours touchend / pointerup / click as audio gestures: every later real gesture is a
       // fresh chance to resume, and it costs one state check.
-      for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const) {
-        window.addEventListener(type, () => this.unlock(), { capture: true, passive: true });
+      for (const type of GESTURES) {
+        window.addEventListener(type, this.onGesture, GESTURE_OPTS);
+        this.disposers.push(() => window.removeEventListener(type, this.onGesture, GESTURE_OPTS));
       }
       if (game.hasFirstInput) this.unlock();
       // Dev / ?debug=1 builds only: the report tooling is a separate lazy chunk.
@@ -142,17 +171,65 @@ export class AudioEngine implements AudioApi {
     }
   }
 
+  /** Release every listener, timer and node and forget all state; init() starts a fresh engine. */
+  dispose(): void {
+    for (const off of this.disposers) off();
+    this.disposers.length = 0;
+    this.clearWatch();
+    this.music_?.dispose();
+    this.bank?.dispose();
+    const ctx = this.ctx;
+    this.ctx = null;
+    this.graph = null;
+    this.bank = null;
+    this.music_ = null;
+    this.freeVoices.length = 0;
+    this.voiceCount = 0;
+    this.limiter.reset();
+    this.lastVariant.fill(-1);
+    this.muteCount = 0;
+    this.intensity = 0;
+    this.wantedId = 'none';
+    this.prerenderStarted = false;
+    this.rebuilds = 0;
+    this.duckEnd = 0;
+    this.everRan = false;
+    this.inited = false;
+    void ctx?.close().catch(() => undefined);
+  }
+
+  private readonly onGesture = (): void => this.unlock();
+
+  private readonly onVisibility = ({ visible }: { visible: boolean }): void => {
+    this.visible = visible;
+    const ctx = this.ctx;
+    if (!ctx) return;
+    // A context that never ran is still waiting for its first gesture; resume() outside one would
+    // only leave a hanging promise that blocks the gesture that follows.
+    if (!visible) {
+      this.music_?.pause();
+      if (this.everRan) this.chain(() => ctx.suspend());
+    } else if (this.everRan) {
+      this.chain(() => ctx.resume());
+    }
+  };
+
   /** Create the context and everything bound to it; also used to start over when iOS freezes the clock. */
   private build(): void {
     const Ctor: ACtor | undefined =
       typeof window === 'undefined' ? undefined : (window.AudioContext ?? (window as unknown as { webkitAudioContext?: ACtor }).webkitAudioContext);
     if (!Ctor) return;
+    // Let silent-switch iPhones play: the default "ambient" session is muted by the ringer switch.
+    const session = typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = 'playback';
     // No sampleRate option: forcing one makes iOS resample (and breaks after Bluetooth route changes).
     const ctx = new Ctor({ latencyHint: 'interactive' });
     this.ctx = ctx;
     this.graph = createGraph(ctx);
     this.bank = new SoundBank(ctx.sampleRate);
     this.music_ = new MusicPlayer(ctx, this.graph.musicBus, this.graph.reverbIn);
+    this.music_.setIntensity(this.intensity);
+    this.everRan = false;
     this.freeVoices.length = 0;
     this.voiceCount = 0;
     this.limiter.reset();
@@ -163,37 +240,69 @@ export class AudioEngine implements AudioApi {
     });
   }
 
-  /** (Re)start the context. Safe to call on every gesture; it only acts while the context is not running. */
+  /**
+   * (Re)start the context. Safe to call on every gesture: it only acts while the context is not
+   * running and no resume is already in flight, and resume() is called synchronously so it still
+   * counts as part of the user's gesture.
+   */
   private unlock(): void {
     const ctx = this.ctx;
-    if (!ctx || !this.visible || ctx.state === 'running') return;
+    if (!ctx || !this.visible || ctx.state === 'running' || this.queued > 0) return;
     this.chain(() => ctx.resume());
+    // The classic iOS unlock: touch the output once with a one-sample silent buffer, inside the gesture.
+    const src = ctx.createBufferSource();
+    src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    src.connect(ctx.destination);
+    src.onended = () => src.disconnect();
+    src.start(0);
   }
 
-  /** Serialise suspend/resume; a promise that never settles (iOS) must not block the queue for good. */
+  /**
+   * Serialise suspend/resume; a promise that never settles (iOS) must not block the queue for good.
+   * The first operation of an idle queue starts synchronously, later ones wait their turn.
+   */
   private chain(op: () => Promise<void>): void {
-    const guarded = () =>
-      Promise.race([op(), new Promise<void>((_, reject) => setTimeout(() => reject(new Error('audio op timeout')), RESUME_TIMEOUT_MS))]);
-    this.lifecycle = this.lifecycle.then(guarded).catch(() => undefined);
+    const guarded = (): Promise<void> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<void>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('audio op timeout')), RESUME_TIMEOUT_MS);
+      });
+      let started: Promise<void>;
+      try {
+        started = op();
+      } catch (err) {
+        started = Promise.reject(err);
+      }
+      return Promise.race([started, timeout]).finally(() => clearTimeout(timer));
+    };
+    const run = this.queued === 0 ? guarded() : this.lifecycle.then(guarded);
+    this.queued++;
+    this.lifecycle = run
+      .catch(() => undefined)
+      .then(() => {
+        this.queued--;
+      });
   }
 
   private onRunning(): void {
     const ctx = this.ctx;
     if (!ctx) return;
-    // The classic iOS unlock: touch the output once with a one-sample silent buffer.
-    const src = ctx.createBufferSource();
-    src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-    src.connect(ctx.destination);
-    src.start(0);
-    // Let silent-switch iPhones play: the default "ambient" session is muted by the ringer switch.
-    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
-    if (session) session.type = 'playback';
+    this.everRan = true;
     if (!this.prerenderStarted) {
       this.prerenderStarted = true;
       if (offlineSupported()) this.bank?.enqueue(PRERENDER_ORDER);
     }
-    if (this.visible) this.music_?.resume();
+    this.syncMusic();
     this.watchClock(ctx);
+  }
+
+  /** Bring the music player in line with what the game asked for, once audio can actually run. */
+  private syncMusic(): void {
+    const ctx = this.ctx;
+    const player = this.music_;
+    if (!ctx || !player || !this.visible || ctx.state !== 'running') return;
+    if (player.track !== this.wantedId) player.play(this.wantedId, this.wantedFade);
+    else player.resume();
   }
 
   /**
@@ -202,21 +311,29 @@ export class AudioEngine implements AudioApi {
    * frozen, start over with a fresh context (once per session so a device with no output cannot loop).
    */
   private watchClock(ctx: AudioContext): void {
+    this.clearWatch();
     const t0 = ctx.currentTime;
-    setTimeout(() => {
+    this.watch = setTimeout(() => {
+      this.watch = null;
       if (this.ctx !== ctx || ctx.state !== 'running' || !this.visible || ctx.currentTime > t0) return;
       this.chain(() => ctx.suspend().then(() => ctx.resume()));
-      setTimeout(() => {
+      this.watch = setTimeout(() => {
+        this.watch = null;
         if (this.ctx === ctx && ctx.state === 'running' && ctx.currentTime <= t0 && this.rebuilds < 1) this.rebuild();
       }, 700);
     }, 400);
   }
 
+  private clearWatch(): void {
+    if (this.watch !== null) clearTimeout(this.watch);
+    this.watch = null;
+  }
+
   private rebuild(): void {
     this.rebuilds++;
     const old = this.ctx;
-    const track = this.music_?.track ?? 'none';
-    this.music_?.pause();
+    this.music_?.dispose();
+    this.bank?.dispose();
     try {
       this.build();
     } catch {
@@ -224,22 +341,7 @@ export class AudioEngine implements AudioApi {
       return;
     }
     void old?.close().catch(() => undefined);
-    this.music_?.setIntensity(this.intensity);
-    if (track !== 'none') this.music_?.play(track, 0.3);
     this.unlock();
-  }
-
-  private onVisibility(visible: boolean): void {
-    this.visible = visible;
-    const ctx = this.ctx;
-    if (!ctx) return;
-    if (!visible) {
-      this.music_?.pause();
-      this.chain(() => ctx.suspend());
-    } else {
-      this.music_?.resume();
-      this.chain(() => ctx.resume());
-    }
   }
 
   setSfxVolume(v: number): void {
@@ -294,15 +396,21 @@ export class AudioEngine implements AudioApi {
       const def = SOUNDS[idx];
       const buf = this.bank?.get(idx)?.[0];
       const dur = buf ? buf.duration : (def?.recipe.len ?? 2) * 0.8;
-      if (this.playIndex(idx, undefined, 1)) this.duck(STINGER_DUCK[id], dur + 0.15);
+      if (this.playIndex(idx, undefined, 1)) {
+        this.duck(STINGER_DUCK[id], dur + 0.15);
+        const cutoff = STINGER_MUFFLE[id];
+        if (cutoff) this.muffleMusic(cutoff, dur);
+      }
     } catch {
       // see play()
     }
   }
 
   music(id: MusicId, fadeSeconds = 0.8): void {
+    this.wantedId = id;
+    this.wantedFade = clampNum(fadeSeconds, 0.05, 30, 0.8);
     try {
-      this.music_?.play(id, fadeSeconds);
+      this.syncMusic();
     } catch {
       // see play()
     }
@@ -310,17 +418,14 @@ export class AudioEngine implements AudioApi {
 
   setIntensity(v: number): void {
     this.intensity = clampNum(v, 0, 1, 0);
-    try {
-      this.music_?.setIntensity(this.intensity);
-    } catch {
-      // see play()
-    }
+    this.music_?.setIntensity(this.intensity);
   }
 
   duck(depth: number, seconds: number): void {
     const ctx = this.ctx;
     const g = this.graph;
-    if (!ctx || !g) return;
+    // A duck requested while locked would otherwise fire the moment the clock starts.
+    if (!ctx || !g || ctx.state !== 'running') return;
     try {
       const plan = duckPlan(depth, seconds);
       const now = ctx.currentTime;
@@ -336,6 +441,21 @@ export class AudioEngine implements AudioApi {
     } catch {
       // see play()
     }
+  }
+
+  /** Sweep the music low-pass down to `hz`, hold it for `seconds`, then open it again. */
+  private muffleMusic(hz: number, seconds: number): void {
+    const ctx = this.ctx;
+    const g = this.graph;
+    if (!ctx || !g) return;
+    const f = g.musicLpf.frequency;
+    const now = ctx.currentTime;
+    const hold = now + Math.max(seconds, MUFFLE_IN_S);
+    f.cancelScheduledValues(now);
+    f.setValueAtTime(f.value, now);
+    f.exponentialRampToValueAtTime(hz, now + MUFFLE_IN_S);
+    f.setValueAtTime(hz, hold);
+    f.exponentialRampToValueAtTime(MUSIC_LPF_OPEN, hold + MUFFLE_OUT_S);
   }
 
   /** Core of play/playStep/stinger. Returns true when a voice was started (or queued behind a first-use bake). */
@@ -358,14 +478,18 @@ export class AudioEngine implements AudioApi {
     const buffers = bank.get(idx);
     if (buffers) return this.startBuffer(ctx, idx, buffers, now + delay, rate, volume, pan);
 
-    if (!offlineSupported()) return this.playLive(ctx, idx, now + delay, rate, volume, pan);
+    if (!offlineSupported() || bank.hasFailed(idx)) return this.playLive(ctx, idx, now + delay, rate, volume, pan);
 
-    // First use: bake now (a few ms) and start as soon as it resolves; a stale request is dropped.
+    // First use: bake now (tens of ms, more for the long ones) and start as soon as it resolves.
+    const patience = def.recipe.cat === 'big' || def.stinger ? MAX_DEFER_BIG_S : MAX_DEFER_S;
     void bank.ensure(idx).then((baked) => {
-      if (!baked || ctx.state !== 'running') return;
+      if (ctx.state !== 'running' || this.ctx !== ctx) return;
       const late = ctx.currentTime - now;
-      if (late > MAX_DEFER_S) return;
-      this.startBuffer(ctx, idx, baked, ctx.currentTime + Math.max(0, delay - late), rate, volume, pan);
+      if (late > patience) return;
+      const when = ctx.currentTime + Math.max(0, delay - late);
+      // A bake that failed falls back to live synthesis for this and every later play.
+      if (baked) this.startBuffer(ctx, idx, baked, when, rate, volume, pan);
+      else this.playLive(ctx, idx, when, rate, volume, pan);
     });
     return true;
   }
@@ -425,9 +549,20 @@ export class AudioEngine implements AudioApi {
       dest = p;
     }
     dest.connect(g.sfxBus);
-    const synth = new Synth(ctx, out, when, Math.random, true);
+    let lp: BiquadFilterNode | null = null;
+    let head: AudioNode = out;
+    if (def.recipe.lp) {
+      lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = def.recipe.lp;
+      lp.Q.value = 0.6;
+      lp.connect(out);
+      head = lp;
+    }
+    const synth = new Synth(ctx, head, when, Math.random, true);
     def.recipe.build(synth, { j: () => 1 });
     synth.seal(() => {
+      lp?.disconnect();
       out.disconnect();
       if (dest !== out) dest.disconnect();
     });
@@ -459,6 +594,8 @@ export class AudioEngine implements AudioApi {
         mute: this.graph?.muteGain.gain.value ?? 0,
         duck: this.graph?.duckGain.gain.value ?? 0,
       },
+      musicLpfHz: Math.round(this.graph?.musicLpf.frequency.value ?? 0),
+      wantedTrack: this.wantedId,
       music: this.music_?.stats() ?? null,
     };
   }

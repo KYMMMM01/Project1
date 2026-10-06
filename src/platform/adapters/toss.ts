@@ -6,46 +6,34 @@
  *   ads/googleadmob.showappsintossadmob   showAppsInTossAdMob({options:{adGroupId}, onEvent, onError}) -> cleanup,
  *        events requested|show|impression|clicked|dismissed|failedToShow|userEarnedReward{unitType,unitAmount};
  *        "grant rewards only on userEarnedReward; dismissed alone cannot confirm completion"
- *   ads/googleadmob.loadappsintossadmob   loadAppsInTossAdMob(...) -> cleanup, event {type:'loaded'}, `.isSupported()`
- *   ads/loadfullscreenad, ads/showfullscreenad   integrated full-screen ad, same shapes; ads cannot be reused
- *        after display, load again
+ *   ads/googleadmob.loadappsintossadmob   loadAppsInTossAdMob(...) -> cleanup, event {type:'loaded'}, `.isSupported()`;
+ *        ads cannot be reused after display, load again
  *   iap/iap.createonetimepurchaseorder   createOneTimePurchaseOrder({options:{sku, processProductGrant},
  *        onEvent {type:'success', data:{orderId,...}}, onError}) -> cleanup; error codes USER_CANCELED,
  *        ITEM_ALREADY_OWNED, UNSUPPORTED_APP_VERSION; cleanup MUST be called when the flow ends
  *   iap/iap.getpendingorders, iap/iap.completeproductgrant   {orders:[{orderId, sku, paymentCompletedDate}]},
  *        completeProductGrant({params:{orderId}}) -> Promise<boolean>
+ *   iap/iap.getcompletedorrefundedorders   getCompletedOrRefundedOrders() -> {hasNext, nextKey, orders:[{orderId,
+ *        sku, status 'COMPLETED'|'REFUNDED', date}]}; the web SDK takes no parameters and always returns the first
+ *        page; needs Toss app 5.231.0+ (older apps throw UNSUPPORTED_APP_VERSION)
  *   storage/storage.getitem|setitem      Storage.getItem(key): Promise<string|null>, setItem(key, value)
  *   game/game.setleaderboardscore (+ common/growth/game-center)   submitGameCenterLeaderBoardScore({score: string})
  *   common/authentication/hash-key       getUserKeyForGame() -> {type:'HASH', hash} | 'INVALID_CATEGORY' | 'ERROR' | undefined
- * Ad group ids come from VITE_TOSS_REWARDED_AD_GROUP_ID / VITE_TOSS_INTERSTITIAL_AD_GROUP_ID.
+ * Interstitials are portal-only (GDD 8.1), so loadFullScreenAd/showFullScreenAd are never used here.
+ * Ad group id comes from VITE_TOSS_REWARDED_AD_GROUP_ID.
  */
-import { getTossBridge, type TossAdFn, type TossLoadAdParams, type TossShowAdParams } from '../bridges';
+import { getTossBridge } from '../bridges';
 import { createLocalStorageBackend, safeStorage } from '../storage';
-import type { AdKind, AdResult, IapOutcome, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
+import type { AdResult, IapOutcome, OrderRecord, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
 import { errorMessage, safe } from '../util';
 
-/**
- * GDD 8.1: interstitials are off by default on Toss and store builds ("전면 광고 | 기본 없음").
- * The code path below works; flip this to turn it on.
- */
-const INTERSTITIALS_ENABLED = false;
+/** A load that neither succeeded nor failed within this long is abandoned and retried. */
+const LOAD_TIMEOUT_MS = 20_000;
+const RETRY_MS = 30_000;
 
-function adGroupId(kind: AdKind): string | undefined {
-  const v: unknown =
-    kind === 'rewarded'
-      ? import.meta.env.VITE_TOSS_REWARDED_AD_GROUP_ID
-      : import.meta.env.VITE_TOSS_INTERSTITIAL_AD_GROUP_ID;
+function adGroupId(): string | undefined {
+  const v: unknown = import.meta.env.VITE_TOSS_REWARDED_AD_GROUP_ID;
   return typeof v === 'string' && v !== '' ? v : undefined;
-}
-
-function loadFn(kind: AdKind): TossAdFn<TossLoadAdParams> | undefined {
-  const b = getTossBridge();
-  return kind === 'rewarded' ? b?.GoogleAdMob?.loadAppsInTossAdMob : b?.loadFullScreenAd;
-}
-
-function showFn(kind: AdKind): TossAdFn<TossShowAdParams> | undefined {
-  const b = getTossBridge();
-  return kind === 'rewarded' ? b?.GoogleAdMob?.showAppsInTossAdMob : b?.showFullScreenAd;
 }
 
 function supported(fn: { isSupported?: () => boolean } | undefined): boolean {
@@ -60,58 +48,61 @@ function supported(fn: { isSupported?: () => boolean } | undefined): boolean {
 const isCancel = (e: unknown): boolean => errorMessage(e).includes('USER_CANCELED');
 
 export function createAdapter(): PlatformAdapter {
-  type Slot = { state: 'idle' | 'loading' | 'loaded'; retry?: ReturnType<typeof setTimeout> };
-  const slots: Record<AdKind, Slot> = { rewarded: { state: 'idle' }, interstitial: { state: 'idle' } };
+  let slot: 'idle' | 'loading' | 'loaded' = 'idle';
+  let loadTimer: ReturnType<typeof setTimeout> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const usable = (kind: AdKind): boolean =>
-    (kind === 'rewarded' || INTERSTITIALS_ENABLED) &&
-    adGroupId(kind) !== undefined &&
-    supported(loadFn(kind)) &&
-    supported(showFn(kind));
+  const usable = (): boolean => {
+    const ad = getTossBridge()?.GoogleAdMob;
+    return adGroupId() !== undefined && supported(ad?.loadAppsInTossAdMob) && supported(ad?.showAppsInTossAdMob);
+  };
 
-  const preload = (kind: AdKind): void => {
-    const slot = slots[kind];
-    const load = loadFn(kind);
-    const id = adGroupId(kind);
-    if (slot.state !== 'idle' || !load || !id || !usable(kind)) return;
-    slot.state = 'loading';
+  const preload = (): void => {
+    const load = getTossBridge()?.GoogleAdMob?.loadAppsInTossAdMob;
+    const id = adGroupId();
+    if (slot !== 'idle' || !load || !id || !usable()) return;
+    clearTimeout(retryTimer);
+    slot = 'loading';
     let cleanup: (() => void) | undefined;
     let ended = false;
     const end = (): void => {
       ended = true;
+      clearTimeout(loadTimer);
       safe(() => cleanup?.());
     };
+    const fail = (): void => {
+      if (ended) return;
+      slot = 'idle';
+      end();
+      // No fill / transient error: try again later.
+      retryTimer = setTimeout(preload, RETRY_MS);
+    };
+    loadTimer = setTimeout(fail, LOAD_TIMEOUT_MS);
     try {
       cleanup = load({
         options: { adGroupId: id },
         onEvent: (e) => {
           if (e.type === 'loaded') {
-            slot.state = 'loaded';
+            slot = 'loaded';
             end();
           }
         },
-        onError: () => {
-          slot.state = 'idle';
-          end();
-          // No fill / transient error: try again in 30 s.
-          slot.retry = setTimeout(() => preload(kind), 30_000);
-        },
+        onError: fail,
       });
       if (ended) safe(() => cleanup?.());
     } catch {
-      slot.state = 'idle';
+      fail();
     }
   };
 
-  const show = (kind: AdKind): Promise<AdResult> =>
+  const show = (): Promise<AdResult> =>
     new Promise<AdResult>((resolve) => {
-      const slot = slots[kind];
-      const fn = showFn(kind);
-      const id = adGroupId(kind);
-      if (!fn || !id || !usable(kind)) return resolve({ shown: false, error: 'unavailable' });
+      const fn = getTossBridge()?.GoogleAdMob?.showAppsInTossAdMob;
+      const id = adGroupId();
+      if (!fn || !id || !usable()) return resolve({ shown: false, error: 'unavailable' });
       // Ads must be preloaded (Toss review rule); an ad that is not loaded cannot be shown.
-      if (slot.state !== 'loaded') return resolve({ shown: false, error: 'not_loaded' });
-      slot.state = 'idle'; // an ad cannot be reused after it was displayed
+      if (slot !== 'loaded') return resolve({ shown: false, error: 'not_loaded' });
+      slot = 'idle'; // an ad cannot be reused after it was displayed
       let shown = false;
       let rewarded = false;
       let settled = false;
@@ -134,7 +125,7 @@ export function createAdapter(): PlatformAdapter {
               case 'userEarnedReward':
                 // The only reward signal; `dismissed` alone proves nothing.
                 shown = true;
-                rewarded = kind === 'rewarded';
+                rewarded = true;
                 break;
               case 'dismissed':
                 settle({ shown: true, rewarded });
@@ -241,6 +232,17 @@ export function createAdapter(): PlatformAdapter {
       const r = await api.getPendingOrders();
       return (r?.orders ?? []).map((o) => ({ orderId: o.orderId, productId: o.sku }));
     },
+    async completedOrders(): Promise<OrderRecord[]> {
+      const list = getTossBridge()?.IAP?.getCompletedOrRefundedOrders;
+      if (!list) return [];
+      // Only the first page: the web SDK takes no cursor. The local ledger covers older orders.
+      const r = await list();
+      return (r?.orders ?? []).map((o) => ({
+        orderId: o.orderId,
+        productId: o.sku,
+        status: o.status === 'REFUNDED' ? 'refunded' : 'completed',
+      }));
+    },
     async complete(orderId) {
       await getTossBridge()?.IAP?.completeProductGrant({ params: { orderId } });
     },
@@ -251,19 +253,19 @@ export function createAdapter(): PlatformAdapter {
     marker: 'platform-adapter:toss',
     capabilities: {
       rewardedAds: true,
-      interstitialAds: INTERSTITIALS_ENABLED,
+      interstitialAds: false,
       iap: true,
       adFreePurchase: true,
       leaderboard: true,
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: false,
+      managesAdFrequency: false,
     },
     async init() {
       // Nothing to await: the bridge is registered by the host app before initPlatform(). Start loading
-      // the ads now so the first offer is ready (Toss review: ads must be preloaded).
-      preload('rewarded');
-      preload('interstitial');
+      // the ad now so the first offer is ready (Toss review: ads must be preloaded).
+      preload();
     },
     lifecycle: {
       loadingStart: () => undefined,
@@ -277,9 +279,11 @@ export function createAdapter(): PlatformAdapter {
       happyMoment: () => undefined,
     },
     ads: {
-      isAvailable: (kind) => slots[kind].state === 'loaded' && usable(kind),
-      preload: (kind) => preload(kind),
-      show: (kind) => show(kind),
+      isAvailable: (kind) => kind === 'rewarded' && slot === 'loaded' && usable(),
+      preload: (kind) => {
+        if (kind === 'rewarded') preload();
+      },
+      show: async (kind) => (kind === 'rewarded' ? show() : { shown: false, error: 'unsupported' }),
     },
     storage,
     iap,
@@ -294,6 +298,7 @@ export function createAdapter(): PlatformAdapter {
         const fn = getTossBridge()?.submitGameCenterLeaderBoardScore;
         if (!fn) return;
         try {
+          // Toss takes the score as a string; the game center has one board, so the id is not used.
           await fn({ score: String(score) });
         } catch {
           /* best effort */

@@ -46,6 +46,7 @@ export interface TossIapCreateOrderParams {
   onError: (error: unknown) => void;
 }
 
+/** Mirrors the SDK surface; the adapter uses the AdMob pair (full-screen ads are portal-only, GDD 8.1). */
 export interface TossBridge {
   GoogleAdMob?: {
     loadAppsInTossAdMob: TossAdFn<TossLoadAdParams>;
@@ -57,6 +58,12 @@ export interface TossBridge {
     createOneTimePurchaseOrder: (params: TossIapCreateOrderParams) => () => void;
     getPendingOrders: () => Promise<{ orders: Array<{ orderId: string; sku: string; paymentCompletedDate?: string }> }>;
     completeProductGrant: (arg: { params: { orderId: string } }) => Promise<boolean>;
+    /** Completed and refunded orders, first page only (the web SDK takes no cursor). Toss app 5.231.0+. */
+    getCompletedOrRefundedOrders?: () => Promise<{
+      hasNext?: boolean;
+      nextKey?: string | null;
+      orders: Array<{ orderId: string; sku: string; status: 'COMPLETED' | 'REFUNDED'; date?: string }>;
+    }>;
     /** Shape not verified; used only to show localised prices when present. */
     getProductItemList?: () => Promise<{ products?: Array<{ sku: string; displayAmount?: string }> }>;
   };
@@ -110,8 +117,22 @@ export interface CapApp {
   ): Promise<CapListenerHandle> | CapListenerHandle;
 }
 
+/** Shape assumed for RevenueCat's CustomerInfo: only `nonSubscriptionTransactions` is used (UNVERIFIED item fields). */
+export interface CapCustomerInfo {
+  nonSubscriptionTransactions?: Array<{
+    transactionIdentifier?: string;
+    transactionId?: string;
+    productIdentifier?: string;
+    productId?: string;
+  }>;
+}
+
+/** `restorePurchases()` returns the CustomerInfo; some plugin versions wrap it in `{ customerInfo }`. */
+export type CapRestoreResult = CapCustomerInfo | { customerInfo: CapCustomerInfo };
+
 /** RevenueCat (@revenuecat/purchases-capacitor). Surface NOT verified against the docs, see README. */
 export interface CapPurchases {
+  restorePurchases(): Promise<CapRestoreResult>;
   getProducts(options: { productIdentifiers: string[] }): Promise<{
     products: Array<{ identifier: string; priceString?: string }>;
   }>;
@@ -135,10 +156,6 @@ export interface CapAdMobEvents {
   rewardFailedToShow: string;
   rewardDismissed: string;
   rewardRewarded: string;
-  interstitialLoaded: string;
-  interstitialFailedToLoad: string;
-  interstitialFailedToShow: string;
-  interstitialDismissed: string;
 }
 
 let capPlugins: CapacitorPlugins | null = null;

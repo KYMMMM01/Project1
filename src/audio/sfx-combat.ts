@@ -6,13 +6,14 @@ import type { SfxId } from './api';
 import { bell, blip, chime, sparkles, thump, tick, whoosh, type Recipe } from './recipe';
 import { hz } from './theory';
 
-export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
+export const COMBAT_RECIPES = {
   // ---------------------------------------------------------------- shots, one material each
   shoot_arrow: {
     cat: 'fire',
     len: 0.18,
     ms: [60, 200],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.05,
     build(s, v) {
       // Airy whip: a fast upward band-pass sweep of noise, a short string twang and a nock tick.
@@ -26,7 +27,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     cat: 'fire',
     len: 0.24,
     ms: [80, 220],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.04,
     build(s, v) {
       // Sine chirp with vibrato = a "pew" that sparkles; an octave-up copy feeds a short echo.
@@ -41,7 +43,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     trim: 3,
     len: 0.26,
     ms: [90, 220],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.04,
     build(s, v) {
       // Thump: a saturated sine drop for the barrel (harmonics keep it audible on phone speakers),
@@ -57,7 +60,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     cat: 'fire',
     len: 0.16,
     ms: [50, 150],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.04,
     build(s, v) {
       // Glassy tick: a very short inharmonic FM bell plus a high partial and an icy noise tick.
@@ -71,7 +75,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     cat: 'fire',
     len: 0.2,
     ms: [60, 200],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.04,
     build(s, v) {
       // Noisy zap: band-passed noise chopped at ~85 Hz (crackle) over a fast falling saw.
@@ -85,7 +90,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     cat: 'fire',
     len: 0.2,
     ms: [60, 200],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.04,
     build(s, v) {
       // Bubbly blip: two quick upward-gliding sine "bubbles" with a fast wobble and a wet noise puff.
@@ -99,7 +105,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     cat: 'fire',
     len: 0.18,
     ms: [50, 160],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.04,
     build(s, v) {
       // Fast swish: two overlapping high band-pass sweeps (two claws) over a short body.
@@ -115,6 +122,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     cat: 'hit',
     len: 0.1,
     ms: [45, 100],
+    lp: 5000,
     variants: 3,
     rate: 0.06,
     rule: { maxVoices: 4, minGap: 0.045, falloff: 0.2 },
@@ -130,7 +138,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     trim: 4,
     len: 0.26,
     ms: [90, 220],
-    variants: 3,
+    lp: 5000,
+    variants: 2,
     rate: 0.05,
     rule: { maxVoices: 2, minGap: 0.09, falloff: 0.15 },
     build(s, v) {
@@ -240,6 +249,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     trim: 3,
     len: 0.36,
     ms: [150, 340],
+    lp: 5000,
     variants: 3,
     rate: 0.08,
     rule: { maxVoices: 6, minGap: 0.035, falloff: 0.15 },
@@ -288,16 +298,15 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
   boss_die: {
     cat: 'big',
     trim: 0,
-    len: 2.2,
-    ms: [1000, 1950],
-    stereo: true,
+    len: 1.8,
+    ms: [1000, 1700],
     build(s) {
       // A collapsing explosion: a huge falling-low-pass blast with a sub, three smaller secondary
       // blasts, a saw that sinks from 420 to 38 Hz through a closing filter, and a debris crackle.
       s.noise({ dur: 1.3, v: 1, a: 0.005, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 7000, f2: 110, sw: 1.0, q: 0.8 } });
       s.tone({ f: 85, f2: 28, sw: 0.9, dur: 1.2, v: 0.8, a: 0.004, sat: 0.4 });
       [0.22, 0.45, 0.7].forEach((t, k) => {
-        s.noise({ at: t, dur: 0.35, v: 0.8 - k * 0.1, a: 0.003, s: 0.01, pan: k % 2 ? 0.5 : -0.5, filter: { t: 'lowpass', f: 4500, f2: 250, sw: 0.3 } });
+        s.noise({ at: t, dur: 0.35, v: 0.8 - k * 0.1, a: 0.003, s: 0.01, filter: { t: 'lowpass', f: 4500, f2: 250, sw: 0.3 } });
         thump(s, 180, 55, t, 0.3, 0.5 - k * 0.08, 0.2, 0.4);
       });
       s.tone({ w: 'sawtooth', f: 420, f2: 38, sw: 1.5, dur: 1.65, v: 0.3, a: 0.05, sat: 0.3, filter: { t: 'lowpass', f: 3000, f2: 150, sw: 1.5 } });
@@ -404,7 +413,6 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     trim: -4,
     len: 1.6,
     ms: [600, 1300],
-    stereo: true,
     build(s) {
       // Creak (vibrato saw through a rising formant), then a thump-and-puff burst and a sparkling
       // C-major bloom: arpeggio of chimes over a soft saw chord, with twinkles.
@@ -413,8 +421,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
       thump(s, 200, 60, 0.3, 0.25, 1, 0.1);
       s.noise({ at: 0.3, dur: 0.16, v: 0.6, s: 0.01, filter: { t: 'bandpass', f: 3000, f2: 500, sw: 0.15, q: 0.8 } });
       ['C6', 'E6', 'G6', 'C7'].forEach((n, k) => chime(s, hz(n), 0.32 + k * 0.06, 0.6, 0.55, { bus: e, amt: 0.5 }));
-      ['C5', 'E5', 'G5'].forEach((n, k) => {
-        s.tone({ w: 'sawtooth', f: hz(n), at: 0.36, dur: 0.65, v: 0.1, a: 0.04, uni: [-8, 8], filter: { t: 'lowpass', f: 3000 }, pan: (k - 1) * 0.4 });
+      ['C5', 'E5', 'G5'].forEach((n) => {
+        s.tone({ w: 'sawtooth', f: hz(n), at: 0.36, dur: 0.65, v: 0.1, a: 0.04, uni: [-8, 8], filter: { t: 'lowpass', f: 3000 } });
       });
       sparkles(s, 0.42, 8, 0.55, [hz('E7'), hz('G7'), hz('C7'), hz('D7'), hz('A6')], 0.2, 0.18, { bus: e, amt: 0.5 });
     },
@@ -455,25 +463,24 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
   jackpot: {
     cat: 'big',
     trim: -2,
-    len: 2.1,
-    ms: [1100, 1950],
-    stereo: true,
+    len: 1.8,
+    ms: [900, 1500],
     build(s) {
-      // Rising 7-note arpeggio, a coin shower of 22 panned blips over a metallic rattle bed, a sub hit
+      // Rising 7-note arpeggio, a coin shower of 18 blips over a metallic rattle bed, a sub hit
       // and a bright supersaw chord with bell and echo.
       const e = s.echo(0.1, 0.42, 0.3, 7500);
       ['C5', 'E5', 'G5', 'C6', 'E6', 'G6', 'C7'].forEach((n, k) => blip(s, hz(n), k * 0.06, 0.14, 0.7));
       bell(s, hz('C7'), 0.42, 0.6, 0.5, { bus: e, amt: 0.5 });
       const pool = ['E6', 'G6', 'A6', 'C7', 'D7', 'E7'];
-      for (let k = 0; k < 22; k++) {
-        const t = 0.35 + k * 0.052 + s.rand() * 0.03;
+      for (let k = 0; k < 18; k++) {
+        const t = 0.35 + k * 0.048 + s.rand() * 0.03;
         const f = hz(pool[Math.floor(s.rand() * pool.length)] as string);
-        s.tone({ w: 'triangle', f, at: t, dur: 0.1, v: Math.max(0.15, 0.55 - k * 0.015), a: 0.002, s: 0.015, pan: (s.rand() - 0.5) * 1.2 });
+        s.tone({ w: 'triangle', f, at: t, dur: 0.1, v: Math.max(0.15, 0.55 - k * 0.015), a: 0.002, s: 0.015 });
       }
-      s.noise({ at: 0.35, dur: 1.1, v: 0.1, a: 0.05, s: 0.2, r: 0.5, trem: { rate: 28, depth: 1 }, filter: { t: 'highpass', f: 6000 } });
+      s.noise({ at: 0.35, dur: 0.95, v: 0.1, a: 0.05, s: 0.2, r: 0.45, trem: { rate: 28, depth: 1 }, filter: { t: 'highpass', f: 6000 } });
       thump(s, 110, 50, 0.42, 0.3, 0.8, 0.15);
-      ['C5', 'E5', 'G5', 'C6'].forEach((n, k) => {
-        s.tone({ w: 'sawtooth', f: hz(n), at: 0.42, dur: 0.9, v: 0.09, a: 0.03, uni: [-9, 9], filter: { t: 'lowpass', f: 3500 }, pan: (k - 1.5) * 0.3, send: { bus: e, amt: 0.4 } });
+      ['C5', 'E5', 'G5', 'C6'].forEach((n) => {
+        s.tone({ w: 'sawtooth', f: hz(n), at: 0.42, dur: 0.75, v: 0.09, a: 0.03, uni: [-9, 9], filter: { t: 'lowpass', f: 3500 }, send: { bus: e, amt: 0.4 } });
       });
     },
   },
@@ -494,4 +501,4 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
       wah(hz('C4'), hz('A3'), 0.25, 0.38, 1400);
     },
   },
-};
+} satisfies Partial<Record<SfxId, Recipe>>;

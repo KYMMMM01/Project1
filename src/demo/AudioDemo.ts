@@ -17,8 +17,13 @@ const MUSIC: readonly MusicId[] = ['none', 'home', 'battle', 'boss'];
 const STINGERS: readonly StingerId[] = ['victory', 'defeat', 'boss_intro', 'mythic', 'level_up', 'jackpot'];
 const STEPS = 11;
 
+/** The v1.0 battle verbs, drawn as one teal block at the end of the grid. */
+const BATTLE_VERBS: readonly SfxId[] = ['laser_on', 'laser_off', 'molt', 'purr', 'awaken', 'call_wave', 'sunbeam', 'hazard_warn', 'splash', 'zap', 'weaken', 'shield_break'];
+const VERB_TEAL = 0x178a8f;
+
 /** Button colour per sound family, so the grid reads at a glance. */
 function familyColor(id: SfxId): number {
+  if (BATTLE_VERBS.includes(id)) return VERB_TEAL;
   if (id.startsWith('ui_') || id === 'place' || id === 'pickup') return Color.infoDark;
   if (id.startsWith('summon') || id.startsWith('merge') || id === 'upgrade' || id === 'sell') return Color.purpleDark;
   if (id.startsWith('shoot') || id.startsWith('hit') || id === 'crit' || id === 'explosion' || id.startsWith('boss') || id === 'enemy_die') return Color.dangerDark;
@@ -216,9 +221,12 @@ export default class AudioDemo extends Scene {
   override exit(): void {
     this.stopStress();
     audio.music('none', 0.2);
-    // Only undo our own mute: setMuted nests, and an ad overlay may hold one too.
+    // Leave the engine as the demo found it. Only undo our own mute: setMuted nests, and an ad overlay may hold one too.
     if (this.muted) audio.setMuted(false);
     this.muted = false;
+    audio.setIntensity(0);
+    if (this.sfxVol !== 1) audio.setSfxVolume(1);
+    if (this.musicVol !== 1) audio.setMusicVolume(1);
   }
 
   override resize(): void {
@@ -437,9 +445,13 @@ export default class AudioDemo extends Scene {
   private refreshHud(): void {
     const s = audioStats();
     const m = s.music;
+    // While locked or hidden the requested track differs from the playing one: show both.
+    const wanted = m && s.wantedTrack !== m.track ? ` (wants ${s.wantedTrack})` : '';
+    const paused = m && m.track !== 'none' && !m.running ? ' paused' : '';
     this.hud.text =
-      `${s.state}${s.muted ? ' (muted)' : ''} | baked ${s.baked}/${s.total} | sfx live ${s.sfxActive} (peak ${s.sfxActivePeak})` +
-      (m ? ` | music ${m.track} voices ${m.liveVoices}/${m.liveVoicesMax} overlap ${m.peakOverlap}` : '');
+      `${s.state}${s.muted ? ' (muted)' : ''} | baked ${s.baked}/${s.total} ${(s.bakedKB / 1024).toFixed(1)} MB | sfx live ${s.sfxActive} (peak ${s.sfxActivePeak})` +
+      (m ? ` | music ${m.track}${wanted}${paused} voices ${m.liveVoices}/${m.liveVoicesMax} overlap ${m.peakOverlap}` : '') +
+      (s.musicLpfHz < 19000 ? ` | lpf ${s.musicLpfHz} Hz` : '');
     fitWidth(this.hud, game.w - PAD * 2);
   }
 }

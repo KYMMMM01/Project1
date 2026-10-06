@@ -12,7 +12,7 @@ import { motion, shakeX, TweenBag } from './motion';
 import { clearActivePress, inScrollHost, setActivePress, type Pressable } from './press';
 import { drawBevelBase, drawBevelFace, glossGradient, refreshCache, type BevelOpts } from './shapes';
 import { fitLabel, uiLabel } from './text';
-import { ButtonPalettes, Hit, type ButtonPalette, type ButtonStyleId } from './theme';
+import { ButtonPalettes, Color, Hit, type ButtonPalette, type ButtonStyleId } from './theme';
 
 export interface ButtonOpts {
   label?: string;
@@ -31,6 +31,12 @@ export interface ButtonOpts {
   /** Fire on pointerdown instead of pointerup: gameplay buttons (summon) that must feel instant. */
   fireOnDown?: boolean;
   enabled?: boolean;
+  /**
+   * What a disabled button shows besides being greyed (colour alone must never carry "locked"):
+   * 'lock' hangs a padlock on its corner (default for labelled buttons), 'none' adds nothing
+   * (default for icon-only buttons, and right for buttons whose price already explains the state).
+   */
+  disabledMark?: 'lock' | 'none';
   /** Sound played on press; false for silence. */
   sfx?: SfxId | false;
   haptic?: HapticId | false;
@@ -78,6 +84,7 @@ export class Button extends Container implements Pressable {
   private iconG: Graphics | null = null;
   private subIconG: Graphics | null = null;
   private badgeView: Badge | null = null;
+  private lockBadge: Container | null = null;
   private spinner: LoadingSpinner | null = null;
   private shineHost: Container | null = null;
   private shineBand: Graphics | null = null;
@@ -98,6 +105,7 @@ export class Button extends Container implements Pressable {
   private isBusy = false;
   private pressed = false;
   private readonly fireOnDown: boolean;
+  private readonly disabledMark: 'lock' | 'none' | undefined;
   private readonly sfx: SfxId | false;
   private readonly hapticId: HapticId | false;
   private tapFn: (() => void) | null = null;
@@ -123,6 +131,7 @@ export class Button extends Container implements Pressable {
     this.pressDrop = Math.round(this.lip * 0.75);
     this.isEnabled = opts.enabled ?? true;
     this.fireOnDown = opts.fireOnDown ?? false;
+    this.disabledMark = opts.disabledMark;
     this.sfx = opts.sfx === undefined ? 'ui_click' : opts.sfx;
     this.hapticId = opts.haptic === undefined ? 'tap' : opts.haptic;
     this.boxH = h + this.lip;
@@ -242,12 +251,12 @@ export class Button extends Container implements Pressable {
     return this;
   }
 
-  /** Attention loop for the main call-to-action: a gentle 1.1 s breathe. `times` stops it after N beats. */
+  /** Attention loop for the main call-to-action: a gentle 1.1 s breathe, five beats by default (-1 = until stopped). */
   startPulse(opts: { amount?: number; times?: number } = {}): this {
     if (motion.reduced || this.pulsing) return this;
     this.pulsing = true;
     const amount = opts.amount ?? 0.045;
-    const times = opts.times ?? -1;
+    const times = opts.times ?? 5;
     this.bag.runKeyed(this.body, {
       duration: 0.55,
       ease: Ease.sineInOut,
@@ -367,9 +376,10 @@ export class Button extends Container implements Pressable {
   }
 
   private buildContent(): void {
-    for (const c of [this.labelT, this.subT, this.iconG, this.subIconG]) c?.destroy();
+    for (const c of [this.labelT, this.subT, this.iconG, this.subIconG, this.lockBadge]) c?.destroy({ children: true });
     this.labelT = this.subT = null;
     this.iconG = this.subIconG = null;
+    this.lockBadge = null;
 
     const w = this.boxW;
     const h = this.boxH - this.lip;
@@ -379,6 +389,19 @@ export class Button extends Container implements Pressable {
     const hasLabel = this.labelText !== '';
     const hasSub = this.subText !== '';
     const padX = 18 + this.radius * 0.35;
+
+    // A disabled button wears a padlock on its corner: greying alone is not a signal (and the badge
+    // never takes room from the label).
+    if (!this.isEnabled && (this.disabledMark ?? (hasLabel ? 'lock' : 'none')) === 'lock') {
+      const sz = Math.round(Math.max(26, Math.min(40, h * 0.36)));
+      const plate = new Graphics();
+      plate.circle(0, 0, sz * 0.68).fill(0x2a1f4a).stroke({ width: 3, color: Color.outline, alignment: 1 });
+      const badge = new Container();
+      badge.addChild(plate, drawIcon('lock', sz));
+      badge.position.set(-w / 2 + sz * 0.45 + 6, -h / 2 + sz * 0.4 + 2);
+      this.body.addChild(badge);
+      this.lockBadge = badge;
+    }
 
     let iconSize = 0;
     if (this.iconName) {
@@ -454,6 +477,7 @@ export class Button extends Container implements Pressable {
     // The visual change happens on this very frame: no tween, so the press feels instant.
     this.face.y = this.pressDrop;
     this.face.scale.set(0.97);
+    this.face.tint = 0xe9e3f7;
     if (this.hapticId) haptic(this.hapticId);
     // Inside a scroll list the click waits for the tap to be confirmed, so a drag stays silent.
     this.sfxDeferred = inScrollHost(this);
@@ -474,13 +498,14 @@ export class Button extends Container implements Pressable {
     const face = this.face;
     const y0 = face.y;
     const s0 = face.scale.x;
+    face.tint = 0xffffff;
     if (motion.reduced || y0 === 0) {
       face.y = 0;
       face.scale.set(1);
       return;
     }
     this.bag.runKeyed(face, {
-      duration: bounce ? 0.2 : 0.1,
+      duration: bounce ? 0.16 : 0.1,
       ease: Ease.linear,
       onUpdate: (k) => {
         if (!bounce) {
@@ -491,12 +516,12 @@ export class Button extends Container implements Pressable {
           // spring up past rest, overshooting scale a little...
           const e = Ease.quadOut(k / 0.45);
           face.y = lerp(y0, -2, e);
-          face.scale.set(lerp(s0, 1.045, e));
+          face.scale.set(lerp(s0, 1.06, e));
         } else {
           // ...then settle
           const e = Ease.sineInOut((k - 0.45) / 0.55);
           face.y = lerp(-2, 0, e);
-          face.scale.set(lerp(1.045, 1, e));
+          face.scale.set(lerp(1.06, 1, e));
         }
       },
       onComplete: () => {

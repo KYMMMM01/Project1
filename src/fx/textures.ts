@@ -30,6 +30,12 @@ export const FX_TEX_IDS = [
   'bolt',
   'starburst',
   'coin',
+  'beam',
+  'vortex',
+  'tuft',
+  'puddle',
+  'zapGlyph',
+  'streak',
 ] as const;
 
 export type FxTexId = (typeof FX_TEX_IDS)[number];
@@ -166,6 +172,29 @@ function star5(outer: number, inner: number): number[] {
   }
   return v;
 }
+
+
+/** Distance to a curved leaf: a quadratic curve whose radius swells to `rmax` mid-way and is pointed at both ends. */
+function sdLeaf(px: number, py: number, x0: number, y0: number, cx: number, cy: number, x1: number, y1: number, rmax: number): number {
+  const steps = 10;
+  let best = Infinity;
+  let ax = x0;
+  let ay = y0;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const u = 1 - t;
+    const bx = u * u * x0 + 2 * u * t * cx + t * t * x1;
+    const by = u * u * y0 + 2 * u * t * cy + t * t * y1;
+    const s = sdSegment(px, py, ax, ay, bx, by);
+    const tt = (i - 1 + s.t) / steps;
+    best = Math.min(best, s.d - rmax * Math.pow(Math.sin(Math.PI * tt), 0.7));
+    ax = bx;
+    ay = by;
+  }
+  return best;
+}
+
+const BOLT_GLYPH = [8, -30, -16, 6, -3, 6, -9, 30, 17, -8, 4, -8, 14, -30];
 
 const STAR = star5(52, 22);
 const SHARD = [-21, -15, 29, -1, -9, 22];
@@ -434,6 +463,89 @@ const CELLS: Cell[] = [
       const inner = 0.2 * Math.exp(-(((r - 12.5) / 2.2) ** 2));
       const hi = 0.35 * smooth(0.55, 1, 1 - len(x + 11, y + 11) / 17);
       return clamp01(0.74 + 0.26 * rim + inner + hi);
+    },
+  },
+  {
+    id: 'beam',
+    w: 64,
+    h: 256,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const u = Math.abs(x) / 32;
+      const t = (y + 128) / 256;
+      // Flat-topped with crisp edges: a shaft of light, not a smudge.
+      const across = 1 - smooth(0.62, 1, u);
+      const along = Math.pow(Math.sin(Math.PI * clamp01(t)), 0.6);
+      return clamp01(across * along * (0.7 + 0.3 * Math.exp(-u * u * 3)));
+    },
+  },
+  {
+    id: 'vortex',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const r = len(x, y) / 64;
+      const th = Math.atan2(y, x);
+      // Three logarithmic arms that thin out towards the rim, plus a hot core.
+      const arm = Math.pow(0.5 + 0.5 * Math.cos(3 * th - 7.5 * Math.log(r + 0.12)), 1.6 + 2.6 * r);
+      const body = arm * smooth(0.05, 0.22, r) * (1 - smooth(0.5, 1, r));
+      return clamp01(body + 0.75 * Math.exp(-((r * 4.2) ** 2)));
+    },
+  },
+  {
+    id: 'tuft',
+    w: 64,
+    h: 64,
+    ax: 0.5,
+    ay: 0.52,
+    paint: (x, y) => {
+      // Four curved, pointed wisps sprouting from one base: a tuft of fur.
+      const d = Math.min(
+        sdLeaf(x, y, -2, 28, -22, 6, -8, -26, 4.4),
+        sdLeaf(x, y, 0, 28, -5, 0, 10, -30, 4.8),
+        sdLeaf(x, y, 2, 28, 16, 10, 26, -10, 3.8),
+        sdLeaf(x, y, -2, 28, -26, 20, -28, 2, 3.0),
+      );
+      return aa(d);
+    },
+  },
+  {
+    id: 'puddle',
+    w: 128,
+    h: 64,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const th = Math.atan2(y * 2.2, x);
+      const edge = 1 + 0.07 * Math.sin(3 * th + 0.7) + 0.045 * Math.sin(5 * th + 2.1);
+      const e = len(x / 59, y / 27) / edge;
+      return aa((e - 1) * 24);
+    },
+    shade: (x, y) => {
+      const th = Math.atan2(y * 2.2, x);
+      const edge = 1 + 0.07 * Math.sin(3 * th + 0.7) + 0.045 * Math.sin(5 * th + 2.1);
+      const e = len(x / 59, y / 27) / edge;
+      const glint = 0.22 * Math.exp(-(((x + 20) / 15) ** 2) - (((y + 7) / 4) ** 2));
+      return clamp01(0.62 + 0.3 * smooth(0.6, 0.98, e) + glint);
+    },
+  },
+  { id: 'zapGlyph', w: 64, h: 64, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, BOLT_GLYPH) - 1.5) },
+  {
+    id: 'streak',
+    w: 256,
+    h: 16,
+    ax: 0,
+    ay: 0.5,
+    paint: (x, y) => {
+      const u = (x + 128) / 256;
+      // Pointed at both ends, fullest a little before the middle: the wake of a blade.
+      const h = 5.6 * Math.pow(Math.sin(Math.PI * Math.pow(clamp01(u), 0.72)), 0.85);
+      const core = Math.exp(-((y / (0.32 * h + 0.35)) ** 2));
+      const glow = 0.4 * Math.exp(-((y / (h + 0.8)) ** 2));
+      return clamp01(core + glow) * smooth(0, 0.03, u) * (1 - smooth(0.97, 1, u));
     },
   },
 ];

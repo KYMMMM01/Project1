@@ -1,5 +1,17 @@
 import { Text, type TextStyleOptions } from 'pixi.js';
+import { game } from '@/core/game';
+import { clamp } from '@/core/math';
 import { Color, FONT_FAMILY, MIN_FONT } from './theme';
+
+/**
+ * Raster density for a Text: device pixels per design px with a little supersampling, capped at 2.
+ * Pixi's automatic choice ignores the design-to-CSS scale, so phones (scale ~0.55) would rasterise
+ * glyphs at roughly twice the needed density while a large desktop window would upscale them.
+ */
+export function textResolution(): number {
+  const r = game.app?.renderer.resolution ?? 1;
+  return clamp(r * game.scale * 1.25, 1, 2);
+}
 
 export interface LabelOpts {
   size?: number;
@@ -54,7 +66,7 @@ export function labelStyle(o: LabelOpts = {}): TextStyleOptions {
 
 /** Standard outlined game text. Prefer this over constructing Text directly so the look stays uniform. */
 export function label(text: string | number, o: LabelOpts = {}): Text {
-  const tx = new Text({ text: String(text), style: labelStyle(o) });
+  const tx = new Text({ text: String(text), style: labelStyle(o), resolution: textResolution() });
   tx.anchor.set(o.anchorX ?? 0.5, o.anchorY ?? 0.5);
   return tx;
 }

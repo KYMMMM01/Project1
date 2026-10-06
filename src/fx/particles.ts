@@ -2,7 +2,7 @@ import { Container, Particle, ParticleContainer, Point } from 'pixi.js';
 import { TAU } from '@/core/math';
 import { ParticleBudget, scaleCount } from './budget';
 import { ColorRamp, Ease, fadeEnvelope, pick, type EaseFn, type Range } from './curves';
-import { fxSettings } from './settings';
+import { countScale, fxSettings, tierScale } from './settings';
 import { fxTex, fxTexture, type FxTexId } from './textures';
 
 /*
@@ -79,6 +79,8 @@ export interface EmitDef {
   /** Override the texture's natural anchor (0..1). */
   anchorX?: number;
   anchorY?: number;
+  /** Sideways sine wobble that does not affect the particle's travel (hearts, snow, motes): amplitude px, frequency Hz. */
+  sway?: { amp: Range; freq: Range };
 }
 
 export interface BurstMods {
@@ -134,6 +136,9 @@ export class Fp {
   hpy = 0;
   swirl = 0;
   homeEase: EaseFn = Ease.cubicIn;
+  swayAmp = 0;
+  swayFreq = 0;
+  swayPhase = 0;
   prio = 1;
   layer: Layer | null = null;
 }
@@ -249,7 +254,7 @@ export class ParticleSystem {
    */
   burst(def: EmitDef, x: number, y: number, mods?: BurstMods): number {
     const prio = def.prio ?? 1;
-    const want = scaleCount((def.count ?? 1) * (mods?.count ?? 1), fxSettings.quality, prio);
+    const want = scaleCount((def.count ?? 1) * (mods?.count ?? 1), countScale(prio), prio);
     const n = this.reserve(want, prio);
     for (let i = 0; i < n; i++) this.spawn(def, x, y, mods);
     return n;
@@ -293,6 +298,7 @@ export class ParticleSystem {
     p.stretch = 0;
     p.alignVel = false;
     p.homing = false;
+    p.swayAmp = 0;
     p.ramp.setSolid(0xffffff);
     return p;
   }
@@ -475,6 +481,7 @@ export class ParticleSystem {
       r.x = p.x;
       r.y = p.y;
     }
+    if (p.swayAmp !== 0) r.x += p.swayAmp * Math.sin(p.swayPhase + p.swayFreq * p.age);
     if (p.alignVel) {
       r.rotation = Math.atan2(p.vy, p.vx) + p.rot;
       if (p.stretch !== 0) sx *= 1 + Math.hypot(p.vx, p.vy) * p.stretch;
@@ -508,7 +515,7 @@ export class ParticleSystem {
           e.fresh = false;
         }
         e.remaining -= dt;
-        e.accum += e.rate * fxSettings.quality * dt;
+        e.accum += e.rate * fxSettings.quality * tierScale() * dt;
         const prio = e.def.prio ?? 1;
         let n = Math.floor(e.accum);
         e.accum -= n;
@@ -591,6 +598,10 @@ export class ParticleSystem {
     p.stretch = def.stretch ?? 0;
     p.flip = pick(def.flip ?? 0);
     p.flipPhase = Math.random() * TAU;
+    const sway = def.sway;
+    p.swayAmp = sway ? pick(sway.amp) * k : 0;
+    p.swayFreq = sway ? pick(sway.freq) * TAU : 0;
+    p.swayPhase = Math.random() * TAU;
     p.life = pick(def.life) * (mods?.life ?? 1);
     p.age = -(pick(def.delay ?? 0) + (mods?.delay ?? 0));
 

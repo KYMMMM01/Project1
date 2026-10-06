@@ -1,0 +1,15 @@
+import type { BattleApi } from '@/game';
+import type { Fx } from '@/fx';
+import type { BattleContext } from '../context';
+import type { FieldArt } from './art';
+
+/** What every part of the playfield shares. */
+export interface FieldEnv {
+  readonly ctx: BattleContext;
+  readonly battle: BattleApi;
+  readonly art: FieldArt;
+  /** Effects that live on the ground, under the characters (sunbeams, hazards, zones). */
+  readonly ground: Fx;
+  /** Animation clock in seconds: real time, standing still while the battle is paused. */
+  time: number;
+}

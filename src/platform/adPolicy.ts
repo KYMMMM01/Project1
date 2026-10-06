@@ -1,7 +1,8 @@
 /**
- * Ad policy: the per-placement table from docs/명세_메타.md section 8, the counters behind it, and
- * the interstitial policy. Everything here is pure (no DOM, no SDK, no timers) so it is unit-testable
- * in node. AdService wires it to a platform adapter.
+ * Ad policy: the per-placement table (docs/기획서_GDD.md section 8.2, which supersedes the older table in
+ * docs/명세_메타.md section 8), the global rules, the counters behind them and the interstitial policy.
+ * Everything here is pure (no DOM, no SDK, no timers) so it is unit-testable in node. AdService wires
+ * it to a platform adapter.
  */
 import type { RunResult } from './types';
 
@@ -15,10 +16,12 @@ export interface PlacementRule {
 }
 
 export const AD_PLACEMENT_IDS = [
+  'pre_run_snack',
   'revive',
-  'double_reward',
   'relic_reroll',
-  'start_boost',
+  'result_double',
+  'snack_box',
+  'daily_treat',
   'free_chest',
   'patrol_double',
   'shop_refresh',
@@ -26,38 +29,55 @@ export const AD_PLACEMENT_IDS = [
 
 export type AdPlacementId = (typeof AD_PLACEMENT_IDS)[number];
 
-/** Mirrors docs/명세_메타.md section 8 ("하루 상한 / 쿨다운" table). `--` cells are simply absent. */
+/** GDD 8.2 "제한" column. Cells without a limit are simply absent. */
 export const AD_PLACEMENTS: Readonly<Record<AdPlacementId, Readonly<PlacementRule>>> = {
+  pre_run_snack: { perRun: 1 },
   revive: { perRun: 1 },
-  double_reward: { perRun: 1 },
   relic_reroll: { perRun: 1 },
-  start_boost: { perRun: 1 },
+  result_double: { perRun: 1 },
+  snack_box: { daily: 3 },
+  daily_treat: { daily: 3 },
   free_chest: { daily: 4 },
   patrol_double: { daily: 3 },
   shop_refresh: { daily: 2 },
 };
 
+/**
+ * What the ad-free "Butler Pass" skips the ad for (GDD 8.3): result x2, chest wait skip, patrol x2.
+ * revive, pre_run_snack and relic_reroll stay ad-or-gems even for owners: the pass sells no in-run edge.
+ */
+const AD_FREE_PLACEMENTS: readonly AdPlacementId[] = ['result_double', 'free_chest', 'patrol_double'];
+
 export function isPlacement(id: string): id is AdPlacementId {
   return Object.prototype.hasOwnProperty.call(AD_PLACEMENTS, id);
 }
 
-/** Rewarded offers (docs/명세_메타.md section 8: "첫 판에는 어떤 광고 제안도 보이지 않는다"). */
+export function isAdFreePlacement(id: string): boolean {
+  return (AD_FREE_PLACEMENTS as readonly string[]).includes(id);
+}
+
+/** Rewarded offers (GDD 8.2: "첫 판에는 어떤 제안도 없다"). */
 export const REWARDED_RULES = {
   /** The player must have started this many runs: offers begin with the second run. */
   minRunsBegun: 2,
 } as const;
 
-/** Interstitial policy (GDD 8.2, research B-2). */
+/** Rules across all rewarded ads that really play (GDD 8.2: "광고 사이 90초 이상, 한 판에 제안은 2개까지, 하루 12회"). */
+export const GLOBAL_AD_RULES = {
+  /** Minimum gap between any two ads, rewarded or interstitial. */
+  minGapMs: 90_000,
+  /** Rewarded ads put in front of the player in one run (watched or dismissed). */
+  maxOffersPerRun: 2,
+  /** Rewarded ads completed per local day. */
+  maxRewardedPerDay: 12,
+} as const;
+
+/** Interstitial policy (GDD 8.1/8.2, research 03 section 4.5). */
 export const INTERSTITIAL_RULES = {
   /** Completed (victory or defeat) runs required first. */
   minRunsCompleted: 3,
-  /** Minimum gap since the last ad of ANY kind. */
+  /** Minimum gap since the last ad of ANY kind (unless the SDK throttles by itself). */
   minGapMs: 120_000,
-  /**
-   * Per-session cap. research B-2 suggests 2-3; portal SDKs already throttle themselves, so this is
-   * unlimited by default and exists as a knob.
-   */
-  maxPerSession: Number.POSITIVE_INFINITY,
 } as const;
 
 export interface AdCounters {
@@ -66,6 +86,8 @@ export interface AdCounters {
   day: string;
   /** Rewards granted today, by placement. */
   daily: Record<string, number>;
+  /** Rewarded ads completed today (ad-free grants excluded: no ad was shown). */
+  adsToday: number;
   /** Epoch ms of the last reward, by placement (cooldowns). */
   last: Record<string, number>;
   /** Epoch ms of the last ad of any kind (0 = never). */
@@ -89,6 +111,7 @@ export function emptyCounters(): AdCounters {
     v: 1,
     day: '',
     daily: {},
+    adsToday: 0,
     last: {},
     lastAnyAdAt: 0,
     sessions: 0,
@@ -119,6 +142,7 @@ export function normalizeCounters(raw: unknown): AdCounters {
   const r = raw as Record<string, unknown>;
   c.day = typeof r.day === 'string' ? r.day : '';
   c.daily = numRecord(r.daily);
+  c.adsToday = nonNeg(r.adsToday);
   c.last = numRecord(r.last);
   c.lastAnyAdAt = typeof r.lastAnyAdAt === 'number' && Number.isFinite(r.lastAnyAdAt) ? r.lastAnyAdAt : 0;
   c.sessions = nonNeg(r.sessions);
@@ -148,26 +172,21 @@ export function localDateKey(ms: number): string {
   return `${y}-${m < 10 ? '0' : ''}${m}-${day < 10 ? '0' : ''}${day}`;
 }
 
-export type LimitVerdict = 'ok' | 'run_cap' | 'daily_cap' | 'cooldown';
-
-export interface LimitRemaining {
-  /** Rewards left this run (Infinity when the placement has no per-run limit). */
-  perRun: number;
-  /** Rewards left today (Infinity when unlimited). */
-  daily: number;
-  /** ms until the cooldown ends (0 = none). */
-  cooldownMs: number;
-}
+export type LimitVerdict = 'ok' | 'run_cap' | 'daily_cap' | 'cooldown' | 'offer_cap' | 'day_cap' | 'gap';
 
 /**
- * Per-placement caps, per-run reset, daily rollover and cooldowns, on top of an injected persistence.
- * Daily rollover only moves FORWARD: a clock rolled back to an earlier date never refunds the caps
- * (docs/명세_메타.md section 9).
+ * Per-placement caps, global rewarded rules, per-run reset, daily rollover and cooldowns, on top of an
+ * injected persistence. Daily rollover only moves FORWARD: a clock rolled back to an earlier date never
+ * refunds the caps (docs/명세_메타.md section 9). Every query is allocation-free (UI may poll it).
  */
 export class AdLimiter {
   counters: AdCounters;
   private persistence: AdPersistence;
   private run: Record<string, number> = {};
+  private runOffers = 0;
+  /** Epoch ms window of the local day last checked: queries inside it skip the date work (no allocation). */
+  private dayStart = 0;
+  private dayEnd = 0;
 
   constructor(
     persistence: AdPersistence,
@@ -184,6 +203,7 @@ export class AdLimiter {
   attach(persistence: AdPersistence, sessionId: string): void {
     this.persistence = persistence;
     this.counters = normalizeCounters(persistence.load());
+    this.dayEnd = 0; // the new counters may belong to an older day
     if (this.counters.sessionId !== sessionId) {
       this.counters.sessions += 1;
       this.counters.sessionId = sessionId;
@@ -201,16 +221,22 @@ export class AdLimiter {
 
   /** Reset daily counts when the local date moved forward. */
   rollover(now: number): void {
+    if (now >= this.dayStart && now < this.dayEnd) return;
+    const d = new Date(now);
+    this.dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    this.dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
     const today = localDateKey(now);
     if (today > this.counters.day) {
       this.counters.day = today;
       this.counters.daily = {};
+      this.counters.adsToday = 0;
       this.save();
     }
   }
 
   beginRun(): void {
     this.run = {};
+    this.runOffers = 0;
     this.counters.runsBegun += 1;
     this.save();
   }
@@ -220,48 +246,86 @@ export class AdLimiter {
     this.save();
   }
 
-  private rule(id: string): Readonly<PlacementRule> {
-    return this.rules[id] ?? {};
+  /** Rewards left this run for the placement (Infinity = no per-run limit). */
+  perRunLeft(id: string): number {
+    const limit = this.rules[id]?.perRun;
+    return limit === undefined ? Infinity : Math.max(0, limit - (this.run[id] ?? 0));
   }
 
-  remaining(id: string, now: number): LimitRemaining {
+  /** Rewards left today for the placement (Infinity = no daily limit). */
+  dailyLeft(id: string, now: number): number {
     this.rollover(now);
-    const rule = this.rule(id);
-    const perRun = rule.perRun === undefined ? Infinity : Math.max(0, rule.perRun - (this.run[id] ?? 0));
-    const daily = rule.daily === undefined ? Infinity : Math.max(0, rule.daily - (this.counters.daily[id] ?? 0));
-    let cooldownMs = 0;
-    if (rule.cooldownSec !== undefined) {
-      const last = this.counters.last[id];
-      if (last !== undefined) {
-        // A last-reward time in the future means the clock moved back: wait one full cooldown from now.
-        const elapsed = last > now ? 0 : now - last;
-        cooldownMs = Math.max(0, rule.cooldownSec * 1000 - elapsed);
-      }
-    }
-    return { perRun, daily, cooldownMs };
+    const limit = this.rules[id]?.daily;
+    return limit === undefined ? Infinity : Math.max(0, limit - (this.counters.daily[id] ?? 0));
   }
 
-  check(id: string, now: number): LimitVerdict {
-    const r = this.remaining(id, now);
-    if (r.perRun <= 0) return 'run_cap';
-    if (r.daily <= 0) return 'daily_cap';
-    if (r.cooldownMs > 0) return 'cooldown';
+  /** ms until the placement's own cooldown ends (0 = none). */
+  cooldownMs(id: string, now: number): number {
+    const sec = this.rules[id]?.cooldownSec;
+    const last = this.counters.last[id];
+    if (sec === undefined || last === undefined) return 0;
+    // A last-reward time in the future means the clock moved back: wait one full cooldown from now.
+    if (last > now) this.counters.last[id] = now;
+    return Math.max(0, sec * 1000 - Math.max(0, now - last));
+  }
+
+  /** Rewarded ads that may still be put in front of the player in this run. */
+  offersLeft(): number {
+    return Math.max(0, GLOBAL_AD_RULES.maxOffersPerRun - this.runOffers);
+  }
+
+  /** Rewarded ads that may still complete today. */
+  adsLeftToday(now: number): number {
+    this.rollover(now);
+    return Math.max(0, GLOBAL_AD_RULES.maxRewardedPerDay - this.counters.adsToday);
+  }
+
+  /**
+   * Epoch ms of the last ad of any kind (0 = never). A timestamp in the future means the clock moved
+   * back: it is re-anchored to `now`, so the player waits one normal gap instead of until the clock
+   * catches up.
+   */
+  lastAnyAdAt(now: number): number {
+    if (this.counters.lastAnyAdAt > now) this.counters.lastAnyAdAt = now;
+    return this.counters.lastAnyAdAt;
+  }
+
+  /** ms until another ad of any kind is allowed (the 90 s rule). */
+  gapMs(now: number): number {
+    const last = this.lastAnyAdAt(now);
+    return last <= 0 ? 0 : Math.max(0, GLOBAL_AD_RULES.minGapMs - (now - last));
+  }
+
+  /**
+   * Why a rewarded offer is blocked, or 'ok'. `needsAd` false (ad-free pass on an eligible placement)
+   * skips the global rules: no ad is shown, so nothing is being rationed.
+   */
+  verdict(id: string, now: number, needsAd: boolean): LimitVerdict {
+    if (this.perRunLeft(id) <= 0) return 'run_cap';
+    if (this.dailyLeft(id, now) <= 0) return 'daily_cap';
+    if (this.cooldownMs(id, now) > 0) return 'cooldown';
+    if (!needsAd) return 'ok';
+    if (this.offersLeft() <= 0) return 'offer_cap';
+    if (this.adsLeftToday(now) <= 0) return 'day_cap';
+    if (this.gapMs(now) > 0) return 'gap';
     return 'ok';
   }
 
-  /** Count one granted reward. */
-  recordGrant(id: string, now: number): void {
+  /** Count one granted reward. `viaAd`: a real ad was completed for it (counts toward the daily 12). */
+  recordGrant(id: string, now: number, viaAd: boolean): void {
     this.rollover(now);
     this.run[id] = (this.run[id] ?? 0) + 1;
     // Counted for every placement (analytics/QA read them), enforced only where the table sets `daily`.
     this.counters.daily[id] = (this.counters.daily[id] ?? 0) + 1;
     this.counters.last[id] = now;
+    if (viaAd) this.counters.adsToday += 1;
     this.save();
   }
 
-  /** An ad of any kind was shown (interstitial spacing). */
-  noteAdShown(now: number): void {
+  /** An ad was put in front of the player (spacing for every kind, the per-run offer budget for rewarded). */
+  noteAdShown(now: number, kind: 'rewarded' | 'interstitial'): void {
     this.counters.lastAnyAdAt = now;
+    if (kind === 'rewarded') this.runOffers += 1;
     this.save();
   }
 
@@ -274,6 +338,8 @@ export class AdLimiter {
   /** Test/QA helper: forget everything except the current session. */
   reset(sessionId: string): void {
     this.run = {};
+    this.runOffers = 0;
+    this.dayEnd = 0;
     this.counters = emptyCounters();
     this.counters.sessions = 1;
     this.counters.sessionId = sessionId;
@@ -293,10 +359,12 @@ export interface InterstitialContext {
   adFree: boolean;
   /** capabilities.interstitialAds */
   platformSupports: boolean;
+  /** capabilities.managesAdFrequency: the SDK is the timer, we add none. */
+  platformThrottles: boolean;
+  /** A modal (ad or purchase sheet) is open right now. */
+  busy: boolean;
   /** adapter.ads.isAvailable('interstitial', ...) */
   platformReady: boolean;
-  /** Interstitials already shown in this session. */
-  shownThisSession: number;
 }
 
 export type InterstitialVerdict =
@@ -309,29 +377,31 @@ export type InterstitialVerdict =
         | 'first_session'
         | 'few_runs'
         | 'after_defeat'
+        | 'not_after_win'
         | 'gap'
-        | 'session_cap'
+        | 'busy'
         | 'unavailable';
     };
 
 /**
- * Interstitial policy. Never: on a platform without them, for an ad-free owner, in the first session,
- * before 3 completed runs, right after a defeat, within 120 s of any other ad, past the session cap.
+ * Interstitial policy. Only on platforms that sell them (portals), only right after a victory, never in
+ * the first session or before 3 completed runs, never to ad-free owners, never within 120 s of any other
+ * ad unless the SDK throttles by itself.
  */
 export function evaluateInterstitial(
   ctx: InterstitialContext,
-  rules: { minRunsCompleted: number; minGapMs: number; maxPerSession: number } = INTERSTITIAL_RULES,
+  rules: { minRunsCompleted: number; minGapMs: number } = INTERSTITIAL_RULES,
 ): InterstitialVerdict {
   if (!ctx.platformSupports) return { ok: false, why: 'platform' };
   if (ctx.adFree) return { ok: false, why: 'ad_free' };
   if (ctx.sessions <= 1) return { ok: false, why: 'first_session' };
   if (ctx.runsCompleted < rules.minRunsCompleted) return { ok: false, why: 'few_runs' };
   if (ctx.lastRunResult === 'defeat') return { ok: false, why: 'after_defeat' };
-  if (ctx.lastAnyAdAt > 0) {
-    const gap = ctx.now - ctx.lastAnyAdAt;
-    if (gap < rules.minGapMs) return { ok: false, why: 'gap' };
+  if (ctx.lastRunResult !== 'victory') return { ok: false, why: 'not_after_win' };
+  if (!ctx.platformThrottles && ctx.lastAnyAdAt > 0 && ctx.now - ctx.lastAnyAdAt < rules.minGapMs) {
+    return { ok: false, why: 'gap' };
   }
-  if (ctx.shownThisSession >= rules.maxPerSession) return { ok: false, why: 'session_cap' };
+  if (ctx.busy) return { ok: false, why: 'busy' };
   if (!ctx.platformReady) return { ok: false, why: 'unavailable' };
   return { ok: true };
 }

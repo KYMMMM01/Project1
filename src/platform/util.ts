@@ -41,6 +41,31 @@ export function safe(fn: () => void): void {
   }
 }
 
+/**
+ * An "ad request in flight" flag that expires. AdService's 90 s watchdog gives the game back when an SDK
+ * never answers; this keeps that same SDK from reading as busy (= no ads) for the rest of the session.
+ */
+export interface BusyFlag {
+  begin(): void;
+  end(): void;
+  readonly active: boolean;
+}
+
+export function createBusyFlag(maxMs: number, now: () => number = Date.now): BusyFlag {
+  let since = 0;
+  return {
+    begin: () => {
+      since = now();
+    },
+    end: () => {
+      since = 0;
+    },
+    get active() {
+      return since !== 0 && now() - since < maxMs;
+    },
+  };
+}
+
 /** UTF-8 byte length without TextEncoder (keeps the helper usable everywhere). */
 export function utf8Length(s: string): number {
   let n = 0;

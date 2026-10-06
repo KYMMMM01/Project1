@@ -192,3 +192,38 @@ export function anchorPosition(
   const py = top ? area.y : bottom ? area.y + area.h - box.h : area.y + (area.h - box.h) / 2;
   return { x: px - box.x + offsetX, y: py - box.y + offsetY };
 }
+
+export interface ScaffoldRects {
+  /** Full-bleed header: reaches up under the notch, so its height includes the top inset. */
+  titleBar: SafeRect;
+  /** Where the body (scroll viewport) lives: between the header and the action bar / screen bottom. */
+  body: SafeRect;
+  /** Full-bleed footer reaching down under the home indicator, or null when the screen has none. */
+  actionBar: SafeRect | null;
+  /** Extra scroll length after the last row so content clears the home indicator when there is no action bar. */
+  bottomInset: number;
+}
+
+/**
+ * Rectangles of a full-screen scaffold in design space: a header of `titleH` below the top inset, an
+ * optional footer of `actionH` above the bottom inset, and the body between them. Pure, so the
+ * safe-area rules are unit-testable.
+ */
+export function scaffoldLayout(
+  w: number,
+  h: number,
+  safeTop: number,
+  safeBottom: number,
+  titleH: number,
+  actionH: number,
+): ScaffoldRects {
+  const titleBar = { x: 0, y: 0, w, h: safeTop + titleH };
+  const actionBar = actionH > 0 ? { x: 0, y: h - actionH - safeBottom, w, h: actionH + safeBottom } : null;
+  const bodyBottom = actionBar ? actionBar.y : h;
+  return {
+    titleBar,
+    body: { x: 0, y: titleBar.h, w, h: Math.max(0, bodyBottom - titleBar.h) },
+    actionBar,
+    bottomInset: actionBar ? 0 : safeBottom,
+  };
+}

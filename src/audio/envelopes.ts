@@ -66,11 +66,15 @@ export interface DuckPlan {
   releaseTc: number;
 }
 
-/** Plan for a music duck of `depth` (0..1) lasting `seconds`; recovery takes about 3x `releaseTc`. */
+/**
+ * Plan for a music duck of `depth` (0..1) lasting `seconds`. The dip takes about 75 ms (3 x 25 ms)
+ * and the recovery 3 x `releaseTc`, which the guide asks to be 0.5-1.2 s so the music swells back
+ * instead of snapping.
+ */
 export function duckPlan(depth: number, seconds: number): DuckPlan {
   const d = Math.min(1, Math.max(0, Number.isFinite(depth) ? depth : 0));
   const len = Math.max(0.05, Number.isFinite(seconds) ? seconds : 0);
-  const releaseTc = Math.min(0.35, Math.max(0.08, len * 0.18));
+  const releaseTc = Math.min(0.4, Math.max(0.17, len * 0.25));
   return {
     floor: Math.max(0.03, 1 - d),
     attackTc: 0.025,

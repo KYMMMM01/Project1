@@ -1,0 +1,400 @@
+/**
+ * Top area: pause, enemy gauge, speed; second row with the wave label and timer, the next-wave
+ * preview strip and the owned toys. Everything except the wave timer and the overflow countdown is
+ * driven by simulation events.
+ */
+import { Container, Graphics, type Text } from 'pixi.js';
+import { t } from '@/core/i18n';
+import { Ease, type Tween } from '@/core/tween';
+import { enemyDef, relicDef, type EnemyId } from '@/game';
+import {
+  Color,
+  drawIcon,
+  fitLabel,
+  IconButton,
+  motion,
+  popIn,
+  ProgressBar,
+  punch,
+  TweenBag,
+  tooltip,
+  uiLabel,
+  vGradient,
+  type BarColor,
+} from '@/ui';
+import { profile } from '@/meta';
+import type { BattleLayout } from '../context';
+import type { HudEnv } from './env';
+import { enemyPortrait, relicIcon, tapArea } from './kit';
+import { gaugeLevel, nextSpeed, overflowLeft, speedSteps, traitOrder } from './policy';
+import { slotCentre, slotWidth, topRects, type TopRects } from './layoutMath';
+
+const SLOT_MAX = 56;
+const PREVIEW_MAX = 4;
+const TOY_MAX = 6;
+/** Seconds the picked toy's icon takes to fly from the choice screen to the row. */
+const TOY_FLIGHT = 0.6;
+
+interface Slot {
+  box: Container;
+  /** A running pop-in: it must be stopped before the box is destroyed. */
+  pop?: Tween;
+}
+
+export class TopBar {
+  readonly root = new Container();
+  readonly pauseBtn: IconButton;
+  readonly speedBtn: IconButton;
+  readonly gauge: ProgressBar;
+  readonly waveLabel: Text;
+
+  private readonly bag = new TweenBag();
+  private readonly timer: ProgressBar;
+  private readonly warn: Container;
+  readonly previewLayer = new Container();
+  readonly toyLayer = new Container();
+  private readonly more: Text;
+  private slots: Slot[] = [];
+  private toySlots: Slot[] = [];
+  private rects: TopRects;
+  private steps: readonly number[] = [1, 2];
+  private gaugeDirty = true;
+  private waveDirty = true;
+  private previewDirty = true;
+  private overflowing = false;
+  private lastTimer = -1;
+  private lastTimerText = '';
+  private timerColor: BarColor = 'blue';
+  private gaugeColor: BarColor = 'green';
+  private lastLevel = -1;
+
+  constructor(private readonly env: HudEnv) {
+    const l = env.layout();
+    this.rects = topRects(l);
+    const b = env.battle;
+
+    this.pauseBtn = new IconButton({ icon: 'pause', style: 'neutral', size: 76, fireOnDown: true, sfx: 'ui_click' });
+    this.speedBtn = new IconButton({ icon: 'speed_1', style: 'info', size: 76, fireOnDown: true });
+    this.gauge = new ProgressBar({ width: 440, height: 50, color: 'green', icon: 'skull', value: 0 });
+    this.warn = drawIcon('warning', 34);
+    this.warn.visible = false;
+    this.waveLabel = uiLabel('', { size: 28, anchorX: 0, align: 'left' });
+    this.timer = new ProgressBar({ width: 208, height: 28, color: 'blue', value: 1 });
+    this.more = uiLabel('', { size: 24, color: Color.textDim });
+    this.more.visible = false;
+
+    this.root.addChild(
+      this.pauseBtn, this.speedBtn, this.gauge, this.warn, this.waveLabel, this.timer,
+      this.previewLayer, this.toyLayer, this.more,
+    );
+    this.steps = speedSteps(this.canTriple(), env.sandbox);
+    this.pauseBtn.visible = true;
+    this.speedBtn.visible = env.reveal.speed;
+
+    this.speedBtn.onTap(() => this.cycleSpeed());
+    this.syncSpeed(env.ctx.speed, false);
+
+    env.on(env.ctx.events, 'speed', ({ speed }) => this.syncSpeed(speed, true));
+    const e = b.events;
+    env.on(e, 'enemySpawn', () => (this.gaugeDirty = true));
+    env.on(e, 'enemyDie', () => (this.gaugeDirty = true));
+    env.on(e, 'rescued', () => (this.gaugeDirty = true));
+    env.on(e, 'revive', () => (this.gaugeDirty = true));
+    env.on(e, 'danger', () => (this.gaugeDirty = true));
+    env.on(e, 'overflow', () => (this.gaugeDirty = true));
+    env.on(e, 'waveStart', () => {
+      this.waveDirty = true;
+      this.previewDirty = true;
+      this.punchWave();
+    });
+    env.on(e, 'actClear', () => (this.waveDirty = true));
+    env.on(e, 'relicGain', () => this.addToy());
+
+    this.refreshToys(false);
+    this.layout(l);
+  }
+
+  private canTriple(): boolean {
+    if (this.env.sandbox) return true;
+    return profile.data.owned.butler;
+  }
+
+  // ───────────────────────── speed ─────────────────────────
+
+  private cycleSpeed(): void {
+    this.env.ctx.setSpeed(nextSpeed(this.env.ctx.speed, this.steps));
+  }
+
+  private syncSpeed(speed: number, animate: boolean): void {
+    this.speedBtn.setIcon(speed >= 3 ? 'speed_3' : speed >= 2 ? 'speed_2' : 'speed_1');
+    this.speedBtn.setStyle(speed >= 2 ? 'primary' : 'info');
+    if (animate) punch(this.bag, this.speedBtn, 0.22, 0.2);
+  }
+
+  // ───────────────────────── gauge ─────────────────────────
+
+  private refreshGauge(): void {
+    const b = this.env.battle;
+    const count = b.enemyCount;
+    const cap = b.enemyCap;
+    const level = gaugeLevel(count, cap);
+    const color: BarColor = level === 2 ? 'red' : level === 1 ? 'gold' : 'green';
+    if (color !== this.gaugeColor) {
+      this.gaugeColor = color;
+      this.gauge.setColor(color);
+    }
+    this.gauge.setValue(cap > 0 ? count / cap : 0, this.lastLevel >= 0);
+    if (!this.overflowing) this.gauge.setLabel(t('hud.gauge', { n: count, cap }));
+    if (level !== this.lastLevel) {
+      this.lastLevel = level;
+      this.warn.visible = level >= 1;
+      if (level >= 1 && !motion.reduced) this.pulseWarn(level === 2);
+    }
+  }
+
+  private pulseWarn(fast: boolean): void {
+    this.bag.runKeyed(this.warn, {
+      duration: fast ? 0.32 : 0.55,
+      ease: Ease.sineInOut,
+      yoyo: true,
+      repeat: fast ? 29 : 15,
+      onUpdate: (k) => this.warn.scale.set(1 + 0.22 * k),
+      onComplete: () => this.warn.scale.set(1),
+    });
+  }
+
+  private updateOverflow(): void {
+    const b = this.env.battle;
+    const left = overflowLeft(b.overflowTime, b.overflowLimit);
+    const over = b.overflowTime > 0;
+    if (over) {
+      this.gauge.setLabel(t('hud.overflow', { s: left.toFixed(1) }));
+      if (!this.overflowing) {
+        this.overflowing = true;
+        this.gauge.setColor('red');
+        this.warn.visible = true;
+        if (!motion.reduced) {
+          this.bag.runKeyed(this.gauge, {
+            duration: 0.22,
+            ease: Ease.sineInOut,
+            yoyo: true,
+            repeat: -1,
+            onUpdate: (k) => this.gauge.scale.set(1 + 0.035 * k),
+          });
+        }
+      }
+    } else if (this.overflowing) {
+      this.overflowing = false;
+      this.bag.killKeyed(this.gauge);
+      this.gauge.scale.set(1);
+      this.gaugeColor = 'red';
+      this.gaugeDirty = true;
+    }
+  }
+
+  // ───────────────────────── wave row ─────────────────────────
+
+  private refreshWave(): void {
+    const b = this.env.battle;
+    let text: string;
+    if (b.wave <= 0) text = t('hud.prep');
+    else if (b.totalWaves > 0) text = t('hud.wave', { act: b.act, wave: b.wave, total: b.totalWaves });
+    else text = t('hud.waveOpen', { act: b.act, wave: b.wave });
+    this.waveLabel.text = text;
+    fitLabel(this.waveLabel, this.rects.wave.w, 28, 0.75);
+  }
+
+  private punchWave(): void {
+    punch(this.bag, this.waveLabel, 0.18, 0.22);
+  }
+
+  private updateTimer(): void {
+    const b = this.env.battle;
+    let frac: number;
+    let text: string;
+    let color: BarColor;
+    if (b.wave <= 0) {
+      const total = b.init.mode === 'tutorial' ? 1 : 3;
+      frac = b.init.mode === 'tutorial' ? 1 : Math.max(0, b.prepTime / total);
+      text = b.init.mode === 'tutorial' ? t('hud.ready') : t('hud.secs', { s: Math.ceil(b.prepTime) });
+      color = 'blue';
+    } else {
+      const total = Math.max(0.001, b.waveDuration);
+      const left = Math.max(0, total - b.waveTime);
+      frac = left / total;
+      text = t('hud.secs', { s: Math.ceil(left) });
+      color = b.waveKind !== 'normal' ? (left < 10 ? 'red' : 'gold') : 'blue';
+    }
+    if (color !== this.timerColor) {
+      this.timerColor = color;
+      this.timer.setColor(color);
+    }
+    if (Math.abs(frac - this.lastTimer) > 0.004) {
+      this.lastTimer = frac;
+      this.timer.setValue(frac, false);
+    }
+    if (text !== this.lastTimerText) {
+      this.lastTimerText = text;
+      this.timer.setLabel(text);
+    }
+  }
+
+  // ───────────────────────── preview ─────────────────────────
+
+  private refreshPreview(): void {
+    for (const s of this.slots) s.box.destroy({ children: true });
+    this.slots = [];
+    this.more.visible = false;
+    if (!this.env.reveal.preview) return;
+    const entries = this.env.battle.previewWave();
+    const shown = entries.slice(0, PREVIEW_MAX);
+    const r = this.rects.preview;
+    const slot = slotWidth(shown.length, r.w, 64);
+    shown.forEach((en, i) => {
+      const box = new Container();
+      box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 8);
+      const def = enemyDef(en.enemy);
+      const boss = def.traits.includes('boss') || def.traits.includes('elite');
+      const plate = new Graphics();
+      plate.roundRect(-26, -26, 52, 52, 14).fill(vGradient(boss ? 0x7a2a4a : 0x45357f, boss ? 0x4a1630 : 0x261a4d))
+        .stroke({ width: 4, color: Color.outline, alignment: 1 });
+      const pic = enemyPortrait(en.enemy, 46);
+      const count = uiLabel(`×${en.count}`, { size: 22, strokeWidth: 4, shadow: false });
+      count.position.set(14, 22);
+      box.addChild(plate, pic, count);
+      if (boss) {
+        const mark = drawIcon('skull', 24);
+        mark.position.set(-16, -22);
+        box.addChild(mark);
+      }
+      tapArea(box, -slot / 2, -54, slot, 96);
+      box.on('pointerdown', () => this.showEnemy(box, en.enemy));
+      this.previewLayer.addChild(box);
+      this.slots.push({ box });
+    });
+    if (entries.length > shown.length) {
+      this.more.text = `+${entries.length - shown.length}`;
+      this.more.visible = true;
+    }
+    this.layoutMore();
+  }
+
+  private showEnemy(target: Container, id: EnemyId): void {
+    const def = enemyDef(id);
+    const lines = [t(def.descKey)];
+    for (const tr of traitOrder(def.traits)) lines.push(`${t(`trait.${tr}.name`)}: ${t(`trait.${tr}.desc`)}`);
+    tooltip.show(target, { title: t(def.nameKey), text: lines.join('\n') }, 6);
+  }
+
+  // ───────────────────────── toys ─────────────────────────
+
+  private refreshToys(animateLast: boolean): void {
+    for (const s of this.toySlots) {
+      s.pop?.kill();
+      s.box.destroy({ children: true });
+    }
+    this.toySlots = [];
+    const relics = this.env.battle.relics;
+    const shown = relics.slice(0, TOY_MAX);
+    const r = this.rects.toys;
+    const slot = slotWidth(Math.max(shown.length, 1), r.w, SLOT_MAX);
+    shown.forEach((id, i) => {
+      const def = relicDef(id);
+      const box = new Container();
+      box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 4);
+      box.addChild(relicIcon(id, 46, def.rarity));
+      tapArea(box, -slot / 2, -50, slot, 96);
+      box.on('pointerdown', () => tooltip.show(box, { title: t(def.nameKey), text: def.descText() }, 6));
+      this.toyLayer.addChild(box);
+      const slotEntry: Slot = { box };
+      this.toySlots.push(slotEntry);
+      if (animateLast && i === shown.length - 1) slotEntry.pop = popIn(this.bag, box, { from: 0.2, duration: 0.3, overshoot: 3 });
+    });
+    this.more.visible = this.more.visible || relics.length > shown.length;
+    this.layoutMore();
+  }
+
+  /** The toy appears when the card's icon (flown from the choice screen) would land. */
+  private addToy(): void {
+    this.bag.call(TOY_FLIGHT, () => {
+      this.refreshToys(true);
+      this.env.hints.request('toys', this.toyLayer);
+    });
+  }
+
+  /** Where the next toy lands: the first free slot of the row. */
+  toyAnchor(): { x: number; y: number } {
+    const r = this.rects.toys;
+    const n = Math.min(this.env.battle.relics.length, TOY_MAX);
+    const slot = slotWidth(Math.max(n, 1), r.w, SLOT_MAX);
+    const x = this.toySlots.length > 0 ? slotCentre(Math.max(0, n - 1), slot, r.x) : r.x + slot / 2;
+    return { x, y: this.rects.row2Y + 4 };
+  }
+
+  private layoutMore(): void {
+    const r = this.rects.toys;
+    this.more.position.set(r.x + r.w - 10, this.rects.row2Y + 30);
+  }
+
+  // ───────────────────────── layout / frame ─────────────────────────
+
+  layout(l: BattleLayout): void {
+    this.rects = topRects(l);
+    const r = this.rects;
+    this.pauseBtn.position.set(r.pause.x, r.pause.y);
+    this.speedBtn.position.set(r.speed.x, r.speed.y);
+    this.gauge.position.set(r.gauge.x + r.gauge.w / 2, r.gauge.y + r.gauge.h / 2);
+    this.warn.position.set(r.gauge.x + r.gauge.w - 34, r.gauge.y + r.gauge.h / 2);
+    this.waveLabel.position.set(r.wave.x, r.row2Y - 18);
+    this.timer.position.set(r.wave.x + r.wave.w / 2, r.row2Y + 18);
+    this.refreshPreview();
+    this.refreshToys(false);
+    this.refreshWave();
+  }
+
+  update(): void {
+    if (this.waveDirty) {
+      this.waveDirty = false;
+      this.refreshWave();
+    }
+    if (this.previewDirty) {
+      this.previewDirty = false;
+      this.refreshPreview();
+    }
+    this.updateOverflow();
+    if (this.gaugeDirty && !this.overflowing) {
+      this.gaugeDirty = false;
+      this.refreshGauge();
+    } else if (this.gaugeDirty) {
+      this.gaugeDirty = false;
+      this.lastLevel = -1;
+    }
+    this.updateTimer();
+  }
+
+  /** Re-read everything from the simulation (after the clock jumped, e.g. a debug fast-forward). */
+  invalidate(): void {
+    this.gaugeDirty = true;
+    this.waveDirty = true;
+    this.previewDirty = true;
+    this.lastLevel = -1;
+    this.refreshToys(false);
+  }
+
+  /** The speed steps may change when the Butler Pass is bought mid-session; cheap to recompute on demand. */
+  refreshSteps(): void {
+    this.steps = speedSteps(this.canTriple(), this.env.sandbox);
+  }
+
+  anchorOf(name: 'enemyGauge' | 'wave' | 'relics'): { x: number; y: number } {
+    const r = this.rects;
+    if (name === 'enemyGauge') return { x: r.gauge.x + r.gauge.w / 2, y: r.gauge.y + r.gauge.h / 2 };
+    if (name === 'wave') return { x: r.wave.x + r.wave.w / 2, y: r.row2Y };
+    return this.toyAnchor();
+  }
+
+  destroy(): void {
+    this.bag.killAll();
+    this.root.destroy({ children: true });
+  }
+}

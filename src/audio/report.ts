@@ -37,6 +37,11 @@ export interface ReportRow {
   brightHz: number;
   lowFrac: number;
   highFrac: number;
+  /** Dominant amplitude-modulation rate (Hz) and index: proves a purr flutters at about 25 Hz. */
+  modHz: number;
+  modDepth: number;
+  /** Decoded size of every variant at the report's sample rate, in bytes (float32 PCM). */
+  bytes: number;
   /** Normalisation gain applied to the raw synth output. */
   gainDb: number;
   ok: boolean;
@@ -49,10 +54,22 @@ export interface Check {
   detail: string;
 }
 
+export interface MemorySummary {
+  sampleRate: number;
+  /** Decoded bytes of all pre-rendered SFX variants and of all stingers, at `sampleRate`. */
+  sfxBytes: number;
+  stingerBytes: number;
+  /** Everything the bank holds, scaled to a 48 kHz device (the worst common case). */
+  totalMBAt48k: number;
+  /** The same total for 44.1 kHz. */
+  totalMBAt44k: number;
+}
+
 export interface SoundReport {
   sampleRate: number;
   sfx: ReportRow[];
   stingers: ReportRow[];
+  memory: MemorySummary;
   checks: Check[];
   failing: string[];
   /** The same rows as a printable ASCII table. */
@@ -61,17 +78,23 @@ export interface SoundReport {
 }
 
 const DC_LIMIT = 0.02;
+/** Decimal megabytes, the stricter reading of the budget. */
+const MB = 1_000_000;
+/** Budget for every pre-rendered buffer (SFX variants plus stingers); music is live-synthesised and costs none. */
+const MEMORY_BUDGET_MB = 8;
 
 async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
   const n = def.recipe.variants ?? 1;
   const all: SoundStats[] = [];
   let gainDb = 0;
   let truncated = false;
+  let bytes = 0;
   for (let v = 0; v < n; v++) {
     const baked = await bakeVariant(def.recipe, def.key, v, sampleRate, true);
     all.push(baked.stats);
     gainDb = baked.gainDb;
     truncated ||= baked.truncated;
+    bytes += baked.buffer.length * baked.buffer.numberOfChannels * 4;
   }
   const max = (f: (s: SoundStats) => number) => all.reduce((m, s) => Math.max(m, f(s)), -Infinity);
   const mean = (f: (s: SoundStats) => number) => all.reduce((m, s) => m + f(s), 0) / all.length;
@@ -104,6 +127,9 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
     brightHz: Math.round(mean((s) => s.brightHz)),
     lowFrac: round(mean((s) => s.lowFrac), 3),
     highFrac: round(mean((s) => s.highFrac), 3),
+    modHz: round(mean((s) => s.modHz), 1),
+    modDepth: round(mean((s) => s.modDepth), 2),
+    bytes,
     gainDb: round(gainDb, 1),
     ok: issues.length === 0,
     issues,
@@ -170,6 +196,26 @@ function designChecks(rows: ReportRow[]): Check[] {
   );
   const stingers = rows.filter((x) => x.kind === 'stinger');
   check('stingers are 1-2.3 s', stingers.every((x) => x.durationMs >= 1000 && x.durationMs <= 2300), stingers.map((x) => `${x.id} ${x.durationMs}`).join(', '));
+
+  // v1.0 battle verbs: each one is checked against the property its design leans on.
+  check('laser_on is a bright pew and laser_off is the shorter blip', r('laser_on').centroidHz > 1000 && r('laser_off').durationMs < r('laser_on').durationMs, `${r('laser_on').centroidHz} Hz; ${r('laser_off').durationMs} < ${r('laser_on').durationMs} ms`);
+  check('molt is a soft puff (little energy above 4 kHz)', r('molt').highFrac < 0.2, `${r('molt').highFrac}`);
+  check('purr flutters at about 25 Hz', Math.abs(r('purr').modHz - 25) <= 4 && r('purr').modDepth > 0.2, `${r('purr').modHz} Hz, index ${r('purr').modDepth}`);
+  check('purr is low-end warm and quieter than the combat tier', r('purr').lowFrac > 0.3 && r('purr').loudRms < r('merge').loudRms, `low ${r('purr').lowFrac}, ${r('purr').loudRms} < ${r('merge').loudRms}`);
+  const others = rows.filter((x) => x.kind === 'sfx' && x.id !== 'awaken');
+  const mythic = by.get('stinger:mythic') as ReportRow;
+  check(
+    'awaken is the biggest battle sound (peak and loudness) and sits within 3 dB of the mythic stinger',
+    others.every((x) => x.peak <= r('awaken').peak + 0.001 && x.loudRms <= r('awaken').loudRms / 0.97) && Math.abs(gainToDb(r('awaken').loudRms) - gainToDb(mythic.loudRms)) < 3,
+    `peak ${r('awaken').peak}, loud ${r('awaken').loudRms} vs mythic ${mythic.loudRms}`,
+  );
+  check('call_wave is a bright brass stab (over 1.2 kHz, twice as bright as the warm wave_start horn)', r('call_wave').centroidHz > 1200 && r('call_wave').centroidHz > r('wave_start').centroidHz * 2, `${r('call_wave').centroidHz} vs ${r('wave_start').centroidHz} Hz`);
+  check('sunbeam is warm and airy, not shrill', r('sunbeam').highFrac < 0.15 && r('sunbeam').centroidHz > 600 && r('sunbeam').centroidHz < 3500, `${r('sunbeam').centroidHz} Hz, high ${r('sunbeam').highFrac}`);
+  check('hazard_warn is shorter than danger_alarm', r('hazard_warn').durationMs < r('danger_alarm').durationMs, `${r('hazard_warn').durationMs} < ${r('danger_alarm').durationMs} ms`);
+  check('splash is broadband water noise', r('splash').centroidHz > 900, `${r('splash').centroidHz} Hz`);
+  check('zap is a bright crack', r('zap').brightHz > 2000 && r('zap').durationMs < 300, `${r('zap').brightHz} Hz, ${r('zap').durationMs} ms`);
+  check('weaken is dull and droopy (darker than a coin)', r('weaken').centroidHz < 1500 && r('weaken').centroidHz < r('coin').centroidHz, `${r('weaken').centroidHz} Hz`);
+  check('shield_break is glassy (high-frequency share, brighter than freeze)', r('shield_break').highFrac > 0.25 && r('shield_break').centroidHz > r('freeze').centroidHz, `high ${r('shield_break').highFrac}, ${r('shield_break').centroidHz} vs ${r('freeze').centroidHz} Hz`);
   return checks;
 }
 
@@ -178,16 +224,30 @@ export async function runReport(sampleRate: number): Promise<SoundReport> {
   const rows: ReportRow[] = [];
   for (const def of SOUNDS) rows.push(await rowFor(def, sampleRate));
   const checks = designChecks(rows);
+  const sfx = rows.filter((x) => x.kind === 'sfx');
+  const stingers = rows.filter((x) => x.kind === 'stinger');
+  const sum = (list: readonly ReportRow[]) => list.reduce((n, x) => n + x.bytes, 0);
+  const memory: MemorySummary = {
+    sampleRate,
+    sfxBytes: sum(sfx),
+    stingerBytes: sum(stingers),
+    totalMBAt48k: round((sum(rows) * 48000) / sampleRate / MB, 2),
+    totalMBAt44k: round((sum(rows) * 44100) / sampleRate / MB, 2),
+  };
+  checks.push({
+    name: `pre-rendered SFX stay under ${MEMORY_BUDGET_MB} MB decoded (worst case 48 kHz, stingers included)`,
+    ok: memory.totalMBAt48k <= MEMORY_BUDGET_MB,
+    detail: `${memory.totalMBAt48k} MB at 48 kHz, ${memory.totalMBAt44k} MB at 44.1 kHz`,
+  });
   const failing = [
     ...rows.filter((x) => !x.ok).map((x) => `${x.kind}:${x.id} ${x.issues.join(', ')}`),
     ...checks.filter((c) => !c.ok).map((c) => `check: ${c.name} (${c.detail})`),
   ];
-  const sfx = rows.filter((x) => x.kind === 'sfx');
-  const stingers = rows.filter((x) => x.kind === 'stinger');
   return {
     sampleRate,
     sfx,
     stingers,
+    memory,
     checks,
     failing,
     table: `${formatTable(sfx)}
@@ -199,7 +259,7 @@ ${formatTable(stingers)}`,
 }
 
 function formatTable(rows: readonly ReportRow[]): string {
-  const head = 'id                 var  ms    peak  rms    loud   dc      0 end  cent  bright low   high  gain  ok';
+  const head = 'id                 var  ms    peak  rms    loud   dc      0 end  cent  bright low   high  mod   KB    gain  ok';
   const lines = rows.map((x) =>
     [
       x.id.padEnd(18),
@@ -215,6 +275,8 @@ function formatTable(rows: readonly ReportRow[]): string {
       String(x.brightHz).padStart(6),
       x.lowFrac.toFixed(2),
       x.highFrac.toFixed(2),
+      (x.modDepth > 0.15 ? String(Math.round(x.modHz)) : '-').padStart(3),
+      String(Math.round(x.bytes / 1024)).padStart(5),
       x.gainDb.toFixed(1).padStart(5),
       x.ok ? 'ok' : x.issues.join(';'),
     ].join(' '),
@@ -311,6 +373,7 @@ function bigEvents(): MixEvent[] {
     { at: 1.3, id: 'boss_roar' },
     { at: 1.4, id: 'jackpot' },
     { at: 1.5, id: 'summon_legendary' },
+    { at: 1.6, id: 'awaken' },
   ];
   return [...battleEvents(5), ...big].sort((a, b) => a.at - b.at);
 }

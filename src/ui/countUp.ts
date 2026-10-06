@@ -1,4 +1,5 @@
-import { clamp, formatNumber } from '@/core/math';
+import { fmt } from '@/core/format';
+import { clamp } from '@/core/math';
 
 /** Pure number count-up helpers (no Pixi) so the maths is unit-testable. */
 
@@ -23,13 +24,13 @@ export function countUpValue(from: number, to: number, k: number): number {
   return Math.round(clamp(v, lo, hi));
 }
 
-/** Text shown while counting: thousands separators below 10K, then K/M/B suffixes. */
+/** Text shown while counting: full digits with separators up to 9,999, then 만/억/조 (ko) or K/M/B/T (en). */
 export function formatCount(n: number): string {
-  return formatNumber(n);
+  return fmt(n);
 }
 
 /** "+120" / "-30" style delta text for floating change callouts. */
 export function formatDelta(delta: number): string {
-  const body = formatNumber(Math.abs(delta));
+  const body = fmt(Math.abs(delta));
   return delta < 0 ? '-' + body : '+' + body;
 }

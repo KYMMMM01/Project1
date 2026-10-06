@@ -57,7 +57,7 @@ class Tab extends Container {
     this.featured = featured;
     this.icon = drawIcon(def.icon, ICON);
     this.lockIcon = drawIcon('lock', 28);
-    this.text = uiLabel(def.label, { size: 22, color: 0xffffff, strokeWidth: 4, shadow: false });
+    this.text = uiLabel(def.label, { size: 24, color: 0xffffff, strokeWidth: 4, shadow: false });
     this.text.tint = DIM;
     this.indicator.roundRect(-20, -4, 40, 8, 4).fill(vGradient(0xffe27a, 0xff9f1c));
     this.indicator.alpha = 0;
@@ -98,6 +98,7 @@ export class TabBar extends Container {
   private w = 720;
   private selectFn: ((id: string, prev: string) => void) | null = null;
   private lockedFn: ((id: string) => void) | null = null;
+  private reselectFn: ((id: string) => void) | null = null;
   private pressedTab: Tab | null = null;
 
   constructor(opts: TabBarOpts) {
@@ -114,6 +115,7 @@ export class TabBar extends Container {
       tab.on('pointerup', () => this.onUp(tab));
       tab.on('pointerupoutside', () => this.cancel(tab));
       tab.on('pointerleave', () => this.cancel(tab));
+      tab.on('pointercancel', () => this.cancel(tab));
       this.tabs.push(tab);
       this.addChild(tab);
     });
@@ -140,6 +142,12 @@ export class TabBar extends Container {
 
   onSelect(fn: ((id: string, prev: string) => void) | null): this {
     this.selectFn = fn;
+    return this;
+  }
+
+  /** Called when the already-selected tab is tapped again (the convention: scroll that screen back to the top). */
+  onReselect(fn: ((id: string) => void) | null): this {
+    this.reselectFn = fn;
     return this;
   }
 
@@ -200,7 +208,7 @@ export class TabBar extends Container {
       t.position.set(cell * (i + 0.5), 0);
       t.iconWrap.x = 0;
       t.text.position.set(0, LABEL_Y);
-      fitLabel(t.text, cell - 12, 22);
+      fitLabel(t.text, cell - 12, 24);
       t.indicator.position.set(0, LABEL_Y + 22);
       t.badge.position.set(ICON * 0.5 + 6, 34);
       t.hitArea = new Rectangle(-cell / 2, t.featured ? -34 : -4, cell, barH + (t.featured ? 34 : 4));
@@ -212,6 +220,7 @@ export class TabBar extends Container {
     this.bag.killAll();
     this.selectFn = null;
     this.lockedFn = null;
+    this.reselectFn = null;
     super.destroy(options);
   }
 
@@ -269,6 +278,10 @@ export class TabBar extends Container {
       audio.play('ui_error', { volume: 0.5 });
       shakeX(this.bag, tab.iconWrap, 0, 7, 3, 0.2);
       this.lockedFn?.(tab.def.id);
+      return;
+    }
+    if (tab.def.id === this.selected) {
+      this.reselectFn?.(tab.def.id);
       return;
     }
     this.select(tab.def.id);

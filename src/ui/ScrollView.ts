@@ -14,6 +14,8 @@ export interface ScrollViewOpts {
   horizontal?: boolean;
   /** Space kept around the content inside the view. */
   padding?: number;
+  /** Extra space after the last row (home-indicator clearance); defaults to `padding`. */
+  paddingBottom?: number;
   /** Thin scroll indicator that fades after a moment (default true). */
   indicator?: boolean;
   /** Rubber-band overscroll (default true). */
@@ -38,6 +40,7 @@ export class ScrollView extends Container implements ScrollHost {
   private viewW: number;
   private viewH: number;
   private readonly padding: number;
+  private paddingBottom: number;
   private readonly vertical: boolean;
   private readonly horizontal: boolean;
   private readonly ay = new ScrollAxis();
@@ -67,6 +70,7 @@ export class ScrollView extends Container implements ScrollHost {
     this.viewW = opts.width;
     this.viewH = opts.height;
     this.padding = opts.padding ?? 0;
+    this.paddingBottom = opts.paddingBottom ?? this.padding;
     this.vertical = opts.vertical ?? true;
     this.horizontal = opts.horizontal ?? false;
     this.ay.elastic = this.ax.elastic = opts.elastic ?? true;
@@ -139,6 +143,13 @@ export class ScrollView extends Container implements ScrollHost {
     this.refresh();
   }
 
+  /** Change the space after the last row (the safe-area inset can change on rotation). */
+  setBottomPadding(v: number): void {
+    if (v === this.paddingBottom) return;
+    this.paddingBottom = v;
+    this.refresh();
+  }
+
   /** Force the scrollable size instead of measuring children (virtualised lists). */
   setContentSize(w?: number, h?: number): void {
     this.explicitW = w;
@@ -157,7 +168,7 @@ export class ScrollView extends Container implements ScrollHost {
       ch ??= Math.max(0, b.maxY);
     }
     this.ax.setMax(this.horizontal ? cw + this.padding * 2 - this.viewW : 0);
-    this.ay.setMax(this.vertical ? ch + this.padding * 2 - this.viewH : 0);
+    this.ay.setMax(this.vertical ? ch + this.padding + this.paddingBottom - this.viewH : 0);
     this.apply();
   }
 
@@ -197,6 +208,10 @@ export class ScrollView extends Container implements ScrollHost {
   }
 
   override destroy(options?: DestroyOptions): void {
+    // Destroying the children fires childRemoved on `content`; without this the handler would
+    // schedule a re-measure of a view that no longer exists.
+    this.content.off('childAdded', this.markDirty);
+    this.content.off('childRemoved', this.markDirty);
     this.releaseStage();
     this.stopLoop?.();
     this.stopLoop = null;
@@ -333,7 +348,7 @@ export class ScrollView extends Container implements ScrollHost {
   }
 
   private markDirty = (): void => {
-    if (this.dirty) return;
+    if (this.dirty || this.destroyed) return;
     this.dirty = true;
     this.bag.call(0, () => {
       if (this.dirty) this.refresh();

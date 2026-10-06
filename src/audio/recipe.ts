@@ -31,8 +31,8 @@ export interface Recipe {
   variants?: number;
   /** Acceptable audible duration range in ms; the quality report flags anything outside it. */
   ms: readonly [number, number];
-  /** Render two channels (wide big moments); everything else is mono and panned at play time. */
-  stereo?: boolean;
+  /** Low-pass (Hz) applied to the finished render: rapid-fire ids keep hiss out of the 4-8 kHz region. */
+  lp?: number;
   /** Extra level in dB on top of the category target, used to order escalating sounds. */
   trim?: number;
   /** Per-play playbackRate randomisation (+/- fraction), for ids heard many times per second. */

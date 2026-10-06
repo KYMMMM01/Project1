@@ -50,6 +50,19 @@ export class StepClock {
   }
 
   /**
+   * Context time of the first step at or after `after` whose index is a multiple of `every`
+   * (every = 4 gives the next beat, 16 the next bar). Nothing is advanced: callers use it to line
+   * a new track or a layer change up with this clock's grid.
+   */
+  nextBoundary(after: number, every: number): number {
+    const ahead = Math.max(0, Math.ceil((after - this.nextTime) / this.stepDur - 1e-9));
+    let index = this.stepIndex + ahead;
+    const rem = index % every;
+    if (rem !== 0) index += every - rem;
+    return this.nextTime + (index - this.stepIndex) * this.stepDur;
+  }
+
+  /**
    * After a stall (throttled timer, hidden tab, long GC) jump over steps that are already in the
    * past instead of firing them all at once. Returns how many steps were skipped.
    */

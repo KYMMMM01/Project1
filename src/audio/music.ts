@@ -1,8 +1,9 @@
 /**
  * Look-ahead music sequencer. A 25 ms timer asks each running track which steps start within the
  * next 120 ms of ctx.currentTime and hands those notes to WebAudio with exact start times, so timing
- * never depends on the timer's jitter. Tracks cross-fade with equal-power curves; the battle
- * track's four intensity layers fade smoothly on their own gain nodes.
+ * never depends on the timer's jitter. Tracks cross-fade with equal-power curves, entering on the
+ * next beat of the outgoing one; the battle track's four intensity layers fade smoothly on their
+ * own gain nodes, starting on a bar line.
  */
 import type { MusicId } from './api';
 import { equalPowerCurve } from './envelopes';
@@ -18,6 +19,11 @@ const TRACK_LEVEL: Record<string, number> = { home: 0.8, battle: 0.85, boss: 0.8
 const TRACK_VERB: Record<string, number> = { home: 0.4, battle: 0.14, boss: 0.24 };
 const MAX_RUNS = 3;
 const FADE_POINTS = 48;
+const STEPS_PER_BEAT = 4;
+/** A track change waits for the next beat only when that is not further away than this. */
+const MAX_BEAT_WAIT_S = 0.7;
+/** Fade a run is given when too many are alive at once (rapid track switching). */
+const HURRY_FADE_S = 0.04;
 
 interface Run {
   score: Score;
@@ -29,12 +35,16 @@ interface Run {
   verb: GainNode;
   layers: GainNode[];
   mixer: LayerMixer;
+  /** Intensity the layer gains were last set for; a differing target is applied at the next bar line. */
+  applied: number;
   /** Context time at which the run is retired (Infinity while it is the live track). */
   stopAt: number;
 }
 
 export interface MusicStats {
   track: MusicId;
+  /** The scheduler timer is active (it stops while the tab is hidden and when nothing is playing). */
+  running: boolean;
   intensity: number;
   runs: number;
   /** Voices scheduled and not yet ended (includes the look-ahead window). */
@@ -94,6 +104,15 @@ export class MusicPlayer implements NoteSink {
     const len = Math.max(0.05, fade);
     this.current = id;
 
+    // Entering a new track on the outgoing track's next beat keeps the pulse unbroken through the
+    // cross-fade. Fading to silence, or starting from silence, does not wait.
+    let at = now;
+    const outgoing = id === 'none' ? undefined : this.runs.find((r) => r.stopAt === Infinity);
+    if (outgoing) {
+      const beat = outgoing.clock.nextBoundary(now + 0.03, STEPS_PER_BEAT);
+      if (beat - now <= MAX_BEAT_WAIT_S) at = beat;
+    }
+
     for (const run of this.runs) {
       if (run.stopAt !== Infinity) continue;
       const g = run.fade.gain;
@@ -102,16 +121,21 @@ export class MusicPlayer implements NoteSink {
       for (let i = 0; i < curve.length; i++) curve[i] = (curve[i] as number) * cur;
       g.cancelScheduledValues(now);
       g.setValueAtTime(cur, now);
-      g.setValueCurveAtTime(curve, now, len);
-      run.stopAt = now + len + 0.1;
+      g.setValueCurveAtTime(curve, at, len);
+      run.stopAt = at + len + 0.1;
     }
-    while (this.runs.length >= MAX_RUNS) this.retire(this.runs.shift() as Run);
+    // Rapid switching can stack fade-outs: the oldest slow one is shortened (not cut) so it never
+    // clicks. Runs that were already hurried retire on their own within a few frames.
+    if (this.runs.length >= MAX_RUNS) {
+      const slow = this.runs.find((r) => r.stopAt > now + HURRY_FADE_S + 0.05);
+      if (slow) this.hurry(slow, now);
+    }
 
     if (id !== 'none') {
       const score = SCORES[id];
       const fadeGain = ctx.createGain();
       fadeGain.gain.setValueAtTime(0, now);
-      fadeGain.gain.setValueCurveAtTime(equalPowerCurve(FADE_POINTS, true), now, len);
+      fadeGain.gain.setValueCurveAtTime(equalPowerCurve(FADE_POINTS, true), at, len);
       const level = ctx.createGain();
       level.gain.value = TRACK_LEVEL[id] ?? 0.8;
       fadeGain.connect(level);
@@ -132,23 +156,16 @@ export class MusicPlayer implements NoteSink {
         layers.push(lg);
       }
       const clock = new StepClock(score.bpm, score.bars * STEPS);
-      clock.start(now + 0.06);
-      this.runs.push({ score, clock, fade: fadeGain, level, verb, layers, mixer, stopAt: Infinity });
+      clock.start(at > now ? at : now + 0.06);
+      this.runs.push({ score, clock, fade: fadeGain, level, verb, layers, mixer, applied: this.intensity, stopAt: Infinity });
     }
     this.start();
     this.pump(LOOKAHEAD_S);
   }
 
+  /** Target intensity 0..1. The layer gains follow on the next bar line, so a new layer enters on a downbeat. */
   setIntensity(v: number): void {
     this.intensity = Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
-    const now = this.ctx.currentTime;
-    for (const run of this.runs) {
-      if (run.stopAt !== Infinity) continue;
-      run.mixer.setIntensity(this.intensity);
-      for (let l = 1; l < run.layers.length; l++) {
-        (run.layers[l] as GainNode).gain.setTargetAtTime(run.mixer.targets[l] as number, now, run.mixer.tc);
-      }
-    }
   }
 
   /** Stop the scheduler (tab hidden). Voices already handed to WebAudio finish on their own. */
@@ -171,6 +188,7 @@ export class MusicPlayer implements NoteSink {
   stats(): MusicStats {
     return {
       track: this.current,
+      running: this.running,
       intensity: this.intensity,
       runs: this.runs.length,
       liveVoices: this.live,
@@ -196,11 +214,38 @@ export class MusicPlayer implements NoteSink {
     this.timer = setInterval(() => this.pump(LOOKAHEAD_S), TIMER_MS);
   }
 
+  /** Stop the scheduler and release every run; the player is unusable afterwards. */
+  dispose(): void {
+    this.pause();
+    for (const run of this.runs) this.retire(run);
+    this.runs.length = 0;
+    this.current = 'none';
+  }
+
   private retire(run: Run): void {
     run.fade.disconnect();
     run.level.disconnect();
     run.verb.disconnect();
     for (const l of run.layers) l.disconnect();
+  }
+
+  /** Cut a run's remaining fade short with a 40 ms ramp; pump() retires it once that has played. */
+  private hurry(run: Run, now: number): void {
+    const g = run.fade.gain;
+    const cur = g.value;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(cur, now);
+    g.linearRampToValueAtTime(0, now + HURRY_FADE_S);
+    run.stopAt = now + HURRY_FADE_S + 0.02;
+  }
+
+  /** Point a live run's layer gains at the current intensity, starting exactly at `time` (a bar line). */
+  private applyIntensity(run: Run, time: number): void {
+    run.applied = this.intensity;
+    run.mixer.setIntensity(this.intensity);
+    for (let l = 1; l < run.layers.length; l++) {
+      (run.layers[l] as GainNode).gain.setTargetAtTime(run.mixer.targets[l] as number, time, run.mixer.tc);
+    }
   }
 
   /**
@@ -228,6 +273,7 @@ export class MusicPlayer implements NoteSink {
         barPosition(clock.loopStep, this.pos);
         this.stepInBar = this.pos.step;
         this.stepTime = clock.nextTime;
+        if (this.stepInBar === 0 && run.stopAt === Infinity && run.applied !== this.intensity) this.applyIntensity(run, this.stepTime);
         run.score.fill(this.pos.bar, this.pos.step, this);
         clock.advance();
       }

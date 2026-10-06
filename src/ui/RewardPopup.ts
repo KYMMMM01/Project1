@@ -26,6 +26,14 @@ export interface RewardDesc {
 
 export type RewardChoice = 'claim' | 'double';
 
+/** Where a reward tile sits on screen when the player chooses: the origin for a fly-to-HUD effect. */
+export interface RewardTilePoint {
+  reward: RewardDesc;
+  /** Pixi global (screen) coordinates of the tile centre; convert with game.overlayLayer.toLocal(). */
+  x: number;
+  y: number;
+}
+
 export interface RewardPopupOpts {
   title: string;
   rewards: readonly RewardDesc[];
@@ -34,14 +42,49 @@ export interface RewardPopupOpts {
   doubleLabel?: string;
   /** Smaller line under the title. */
   subtitle?: string;
+  /**
+   * Called once, on the frame the popup is dismissed (a button, Escape or Back), while the tiles are
+   * still on screen: start the fly-to-HUD from their positions here.
+   */
+  onChoose?: (choice: RewardChoice, tiles: readonly RewardTilePoint[]) => void;
 }
 
 const TILE = 148;
 const GAP = 22;
 const PANEL_W = 640;
 
+const rayGradients = new Map<number, FillGradient>();
+
+/**
+ * Radial fade for the sunburst. The gradient texture is shared per radius and never destroyed:
+ * destroying it while a batch still references it makes Pixi warn, and only a handful of radii exist.
+ */
+function rayGradient(r: number): FillGradient {
+  const key = Math.round(r);
+  let g = rayGradients.get(key);
+  if (!g) {
+    // Global-space radial so every wedge fades out with distance from the centre.
+    g = new FillGradient({
+      type: 'radial',
+      center: { x: 0, y: 0 },
+      innerRadius: 0,
+      outerCenter: { x: 0, y: 0 },
+      outerRadius: key,
+      colorStops: [
+        { offset: 0, color: 'rgba(255,226,122,0.85)' },
+        { offset: 0.55, color: 'rgba(255,200,90,0.35)' },
+        { offset: 1, color: 'rgba(255,190,80,0)' },
+      ],
+      textureSpace: 'global',
+    });
+    rayGradients.set(key, g);
+  }
+  return g;
+}
+
 interface Tile {
   view: Container;
+  desc: RewardDesc;
   reveal: () => void;
 }
 
@@ -58,10 +101,13 @@ function sfxFor(r: RewardDesc): SfxId {
 export class RewardPopup extends Popup<RewardChoice> {
   private readonly bag = new TweenBag();
   private readonly rays = new Graphics();
-  private rayFill: FillGradient | null = null;
+  private tiles: Tile[] = [];
+  private chooseFn: RewardPopupOpts['onChoose'];
+  private chosen = false;
 
   constructor(opts: RewardPopupOpts) {
     super({ dismissResult: 'claim', backdropClose: false, priority: 1, dim: 1.1 });
+    this.chooseFn = opts.onChoose;
     const n = opts.rewards.length;
     const cols = n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3;
     const rows = Math.ceil(n / cols);
@@ -75,6 +121,7 @@ export class RewardPopup extends Popup<RewardChoice> {
     this.drawRays(Math.max(PANEL_W, h) * 0.62);
     this.rays.position.set(0, -h / 2 + 120);
     this.body.addChild(this.rays, panel);
+    this.setContentSize(PANEL_W + 80, h + 90);
 
     if (opts.subtitle) {
       const sub = uiLabel(opts.subtitle, { size: 28, color: 0xcabfee, stroke: Color.outline, strokeWidth: 5, shadow: false });
@@ -117,30 +164,36 @@ export class RewardPopup extends Popup<RewardChoice> {
     } else {
       claim.position.set(PANEL_W / 2, by);
     }
+    this.tiles = tiles;
     this.sequence(tiles, buttons);
+  }
+
+  /** Every way out of the popup funnels through here so onChoose fires exactly once. */
+  override close(result?: RewardChoice): void {
+    const choice = result ?? this.dismissResult;
+    if (!this.chosen) {
+      this.chosen = true;
+      const fn = this.chooseFn;
+      this.chooseFn = undefined;
+      if (fn) {
+        const points = this.tiles.map((t) => {
+          const g = t.view.getGlobalPosition();
+          return { reward: t.desc, x: g.x, y: g.y };
+        });
+        fn(choice, points);
+      }
+    }
+    super.close(choice);
   }
 
   private drawRays(r: number): void {
     const g = this.rays;
     const rays = 12;
-    // Global-space radial gradient so every wedge fades out with distance from the centre.
-    this.rayFill = new FillGradient({
-      type: 'radial',
-      center: { x: 0, y: 0 },
-      innerRadius: 0,
-      outerCenter: { x: 0, y: 0 },
-      outerRadius: r,
-      colorStops: [
-        { offset: 0, color: 'rgba(255,226,122,0.85)' },
-        { offset: 0.55, color: 'rgba(255,200,90,0.35)' },
-        { offset: 1, color: 'rgba(255,190,80,0)' },
-      ],
-      textureSpace: 'global',
-    });
+    const fill = rayGradient(r);
     for (let i = 0; i < rays; i++) {
       const a0 = (i / rays) * TAU;
       const a1 = a0 + (TAU / rays) * 0.42;
-      g.poly([0, 0, Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r]).fill(this.rayFill);
+      g.poly([0, 0, Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r]).fill(fill);
     }
     drawGlow(g, 0, 0, r * 0.5, 0xffd45e, 0.5);
     g.blendMode = 'add';
@@ -214,7 +267,7 @@ export class RewardPopup extends Popup<RewardChoice> {
         },
       });
     };
-    return { view: tile, reveal };
+    return { view: tile, desc: r, reveal };
   }
 
   private sequence(tiles: Tile[], buttons: Button[]): void {
@@ -240,10 +293,9 @@ export class RewardPopup extends Popup<RewardChoice> {
 
   override destroy(options?: DestroyOptions): void {
     this.bag.killAll();
+    this.tiles = [];
+    this.chooseFn = undefined;
     super.destroy(options);
-    // The gradient owns a GPU texture and is not shared, so it is released with the popup.
-    this.rayFill?.destroy();
-    this.rayFill = null;
   }
 }
 

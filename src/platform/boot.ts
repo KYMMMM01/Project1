@@ -10,6 +10,7 @@ import { audio } from '@/audio';
 import { normalizeCounters, type AdCounters } from './adPolicy';
 import { createFallbackAdapter } from './fallback';
 import { normalizeLedger, type IapLedger } from './iapService';
+import { setInputShield } from './inputShield';
 import type { Pauser } from './modal';
 import { resolveAdapter, PLATFORM_ID } from './resolve';
 import { preparePlatformRuntime } from './runtime';
@@ -41,8 +42,10 @@ export function getPauseState(): Readonly<PauseState> {
 }
 
 // The real pause/mute: game.setExternalPause + audio.setMuted, with counters so QA can see them.
-// Ads, purchase sheets, platform pause signals and the system mute all go through it.
+// Ads, purchase sheets, platform pause signals and the system mute all go through it; only modals
+// (ads, purchase sheets) also raise the input shield.
 const realPauser: Pauser = {
+  setInputBlocked: setInputShield,
   setPaused(paused) {
     pauseState.pausedDepth = Math.max(0, pauseState.pausedDepth + (paused ? 1 : -1));
     game.setExternalPause(paused);
@@ -120,9 +123,10 @@ async function doInit(): Promise<PlatformServices> {
   iap.attachLedger(ledgerStore);
 
   ads.warm();
-  // Finish orders paid before the last shutdown. Deferred until a grant handler exists; not awaited so
-  // a slow platform call can never delay the first frame.
-  void iap.recoverPending();
+  // Restore purchases without a server: finish pending orders, re-grant completed ones the ledger lacks,
+  // report refunds. Deferred until a grant handler exists; not awaited so a slow platform call can
+  // never delay the first frame.
+  void iap.restorePurchases();
   void iap.refreshPrices();
 
   debugExpose('analytics', analytics.debugApi());

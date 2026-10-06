@@ -8,6 +8,9 @@ export * from './numbers';
 export * from './countUp';
 export * from './layout';
 export * from './scrollPhysics';
+export * from './oddsMath';
+export * from './prefs';
+export { rarityName } from './rarity';
 export { Button, type ButtonOpts } from './Button';
 export { IconButton, type IconButtonOpts } from './IconButton';
 export { Panel, type PanelOpts } from './Panel';
@@ -31,10 +34,15 @@ export {
   showRewards,
   type RewardDesc,
   type RewardChoice,
+  type RewardTilePoint,
   type RewardPopupOpts,
 } from './RewardPopup';
 export { toast, clearToasts, type ToastKind } from './Toast';
 export { CurrencyPill, TopBar, type CurrencyPillOpts, type TopBarOpts } from './CurrencyPill';
-export { tooltip, attachTooltip, type TooltipContent, type TooltipOpts } from './Tooltip';
+export { tooltip, attachTooltip, HOLD_DELAY, type TooltipContent, type TooltipOpts } from './Tooltip';
 export { CardFrame, type CardFrameOpts, type CardSize } from './CardFrame';
-export { cancelActivePress } from './press';
+export { RarityPips, type RarityPipsOpts } from './RarityPips';
+export { ClassChip, CLASS_CHIP_H, CLASS_CHIP_W, CLASS_TIERS, type ClassChipOpts } from './ClassChip';
+export { OddsTable, type OddsRow, type OddsTableOpts } from './OddsTable';
+export { ScreenScaffold, type ScreenScaffoldOpts } from './ScreenScaffold';
+export { bindPress, cancelActivePress, type PressBinding, type PressHandlers } from './press';

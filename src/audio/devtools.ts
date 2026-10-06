@@ -1,6 +1,6 @@
 /**
  * Dev hooks on window.__dbg.audio (installed only when debug is enabled; lazy chunk):
- *   report()          bake + measure every SFX and stinger          -> SoundReport (incl. .table)
+ *   report()          bake + measure every SFX and stinger          -> SoundReport (incl. .table, .memory)
  *   music(track, i, s) offline-render a track and measure it        -> MusicRow
  *   mix('battle'|'big') offline-render a pile-up with/without the limiter -> MixRow
  *   wave(key, variant, half) baked samples of one sound ("sfx:coin")  -> {sampleRate, channels}

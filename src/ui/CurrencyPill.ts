@@ -1,4 +1,5 @@
 import { Container, Graphics, Point, type BitmapText, type DestroyOptions } from 'pixi.js';
+import { audio, type SfxId } from '@/audio';
 import { game } from '@/core/game';
 import { mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
@@ -19,9 +20,15 @@ export interface CurrencyPillOpts {
   plus?: boolean;
   onPlus?: () => void;
   iconColor?: number;
+  /** Tick played while a sizeable roll-up runs (<= 20 per second, rising a step each tick); false for silence. */
+  tickSfx?: SfxId | false;
 }
 
 const H = 72;
+/** Rolls smaller than this stay silent: a single kill's worth of fish must not rattle. */
+const TICK_MIN_DELTA = 25;
+const TICK_GAP = 0.05;
+const TICK_MAX_STEP = 8;
 
 /**
  * HUD currency chip: coin-like icon, rolling number, optional "+" shop button. Origin = centre.
@@ -38,12 +45,16 @@ export class CurrencyPill extends Container {
   private readonly bag = new TweenBag();
   private w: number;
   private current: number;
+  private readonly tickSfx: SfxId | false;
+  private tickStep = 0;
+  private tickAt = 0;
   private fitArea = { x0: 0, x1: 0 };
 
   constructor(opts: CurrencyPillOpts) {
     super();
     this.w = opts.width ?? 208;
     this.current = Math.round(opts.amount ?? 0);
+    this.tickSfx = opts.tickSfx === undefined ? 'reel_tick' : opts.tickSfx;
     this.uiBox = { x: -this.w / 2 - 8, y: -H / 2 - 4, w: this.w + 8, h: H + 14 };
 
     this.iconHolder.addChild(drawIcon(opts.icon, 66, opts.iconColor));
@@ -80,7 +91,7 @@ export class CurrencyPill extends Container {
 
   /** Change the shown amount; the number rolls up (or down) unless animate is false. */
   setAmount(value: number, animate = true): void {
-    const to = Math.round(value);
+    const to = Number.isFinite(value) ? Math.round(value) : 0;
     const from = this.current;
     this.current = to;
     this.bag.killKeyed(this.num);
@@ -90,12 +101,23 @@ export class CurrencyPill extends Container {
       return;
     }
     const shown = this.num;
+    const ticking = this.tickSfx !== false && Math.abs(to - from) >= TICK_MIN_DELTA;
+    this.tickStep = 0;
+    let last = from;
     this.bag.runKeyed(shown, {
       duration: countUpDuration(to - from),
       ease: Ease.cubicOut,
       onUpdate: (k) => {
-        shown.text = formatCount(countUpValue(from, to, k));
+        const v = countUpValue(from, to, k);
+        // Easing leaves many frames on the same integer: skip the glyph relayout for those.
+        if (v === last) return;
+        last = v;
+        shown.text = formatCount(v);
         this.fitNumber();
+        if (ticking && game.time - this.tickAt >= TICK_GAP) {
+          this.tickAt = game.time;
+          if (this.tickSfx) audio.playStep(this.tickSfx, Math.min(TICK_MAX_STEP, this.tickStep++), { volume: 0.5 });
+        }
       },
       onComplete: () => {
         shown.text = formatCount(to);

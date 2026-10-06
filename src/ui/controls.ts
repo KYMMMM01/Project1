@@ -234,7 +234,7 @@ export class Slider extends Container {
 
   /** Set without firing callbacks. */
   setValue(v: number): void {
-    this.val = this.snap(clamp01(v));
+    this.val = this.snap(Number.isFinite(v) ? clamp01(v) : 0);
     this.render();
   }
 
@@ -266,6 +266,7 @@ export class Slider extends Container {
     stage.on('pointermove', this.onMove);
     stage.on('pointerup', this.onUp);
     stage.on('pointerupoutside', this.onUp);
+    stage.on('pointercancel', this.onUp);
     this.bag.runKeyed(this.knob, {
       duration: 0.12,
       ease: Ease.quadOut,
@@ -296,6 +297,7 @@ export class Slider extends Container {
     stage.off('pointermove', this.onMove);
     stage.off('pointerup', this.onUp);
     stage.off('pointerupoutside', this.onUp);
+    stage.off('pointercancel', this.onUp);
   }
 
   private render(): void {
@@ -400,6 +402,7 @@ export class Stepper extends Container {
     btn.on('pointerup', stop);
     btn.on('pointerupoutside', stop);
     btn.on('pointerleave', stop);
+    btn.on('pointercancel', stop);
   }
 
   private tickHold(dt: number): void {

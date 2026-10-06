@@ -4,32 +4,33 @@
  * registerCapacitorPlugins()) and degrades to "unavailable" when a plugin is missing.
  * Docs relied on (fetched 2026-10-06):
  *   https://github.com/capacitor-community/admob   AdMob.initialize, prepareRewardVideoAd/showRewardVideoAd
- *        (-> AdMobRewardItem {type, amount}), prepareInterstitial/showInterstitial, addListener, AdOptions
- *        {adId, isTesting}
+ *        (-> AdMobRewardItem {type, amount}), addListener, AdOptions {adId, isTesting}
  *   RewardAdPluginEvents (raw file src/reward/reward-ad-plugin-events.enum.ts): Loaded 'onRewardedVideoAdLoaded',
  *        FailedToLoad ..'FailedToLoad', FailedToShow ..'FailedToShow', Dismissed ..'Dismissed', Rewarded 'onRewardedVideoAdReward'
- *   InterstitialAdPluginEvents (raw file): 'interstitialAdLoaded' / 'FailedToLoad' / 'FailedToShow' / 'Dismissed'
  *   https://capacitorjs.com/docs/apis/preferences  Preferences.get/set/remove({key, value})
  *   https://capacitorjs.com/docs/apis/app          App.addListener('appStateChange', ({isActive}) => ...)
- * NOT confirmed (see README / final report): RevenueCat's Capacitor surface (getProducts,
- * purchaseStoreProduct, transaction.transactionIdentifier, userCancelled) and that
- * `Capacitor.Plugins.<Name>` exposes plugins that the app code never imported.
- * Ad unit ids: VITE_ADMOB_REWARDED_ID / VITE_ADMOB_INTERSTITIAL_ID; VITE_ADMOB_TESTING=1 or a dev
- * build uses AdMob test mode. EEA consent (UMP) is NOT handled here.
+ *   https://www.revenuecat.com/docs/getting-started/restoring-purchases   `const customerInfo = await Purchases.restorePurchases()`
+ *   https://www.revenuecat.com/docs/customers/customer-info   CustomerInfo has `nonSubscriptionTransactions`
+ * NOT confirmed (see README / final report): the item fields of nonSubscriptionTransactions, whether it lists
+ * consumables and non-consumables, whether refunds leave it, RevenueCat's getProducts / purchaseStoreProduct /
+ * transaction.transactionIdentifier / userCancelled, and that `Capacitor.Plugins.<Name>` exposes plugins the
+ * app code never imported.
+ * Interstitials are portal-only (GDD 8.1), so the AdMob interstitial calls are never used here.
+ * Ad unit id: VITE_ADMOB_REWARDED_ID; VITE_ADMOB_TESTING=1 or a dev build uses AdMob test mode.
+ * EEA consent (UMP) is NOT handled here.
  */
 import {
   getCapacitorAdMobEvents,
   getCapacitorPlugins,
   type CapAdMobEvents,
+  type CapCustomerInfo,
   type CapListenerHandle,
+  type CapRestoreResult,
   type CapacitorPlugins,
 } from '../bridges';
 import { createLocalStorageBackend, safeStorage } from '../storage';
-import type { AdKind, AdResult, IapOutcome, PlatformAdapter, PlatformIap } from '../types';
+import type { AdResult, IapOutcome, OrderRecord, PlatformAdapter, PlatformIap } from '../types';
 import { errorMessage, safe, Signal } from '../util';
-
-/** GDD 8.1: interstitials are off by default on store builds. Flip to enable. */
-const INTERSTITIALS_ENABLED = false;
 
 const DEFAULT_EVENTS: CapAdMobEvents = {
   rewardLoaded: 'onRewardedVideoAdLoaded',
@@ -37,18 +38,17 @@ const DEFAULT_EVENTS: CapAdMobEvents = {
   rewardFailedToShow: 'onRewardedVideoAdFailedToShow',
   rewardDismissed: 'onRewardedVideoAdDismissed',
   rewardRewarded: 'onRewardedVideoAdReward',
-  interstitialLoaded: 'interstitialAdLoaded',
-  interstitialFailedToLoad: 'interstitialAdFailedToLoad',
-  interstitialFailedToShow: 'interstitialAdFailedToShow',
-  interstitialDismissed: 'interstitialAdDismissed',
 };
+
+/** A load that neither succeeded nor failed within this long is abandoned and retried. */
+const LOAD_TIMEOUT_MS = 20_000;
+const RETRY_MS = 30_000;
 
 const events = (): CapAdMobEvents => ({ ...DEFAULT_EVENTS, ...getCapacitorAdMobEvents() });
 const plugins = (): CapacitorPlugins | null => getCapacitorPlugins();
 
-function adUnitId(kind: AdKind): string | undefined {
-  const v: unknown =
-    kind === 'rewarded' ? import.meta.env.VITE_ADMOB_REWARDED_ID : import.meta.env.VITE_ADMOB_INTERSTITIAL_ID;
+function adUnitId(): string | undefined {
+  const v: unknown = import.meta.env.VITE_ADMOB_REWARDED_ID;
   return typeof v === 'string' && v !== '' ? v : undefined;
 }
 
@@ -69,38 +69,43 @@ function removeAll(bucket: CapListenerHandle[]): void {
   for (const h of bucket.splice(0)) safe(() => void h.remove());
 }
 
+function customerInfo(r: CapRestoreResult): CapCustomerInfo {
+  return 'customerInfo' in r ? r.customerInfo : r;
+}
+
 export function createAdapter(): PlatformAdapter {
-  type Slot = { state: 'idle' | 'loading' | 'loaded' };
-  const slots: Record<AdKind, Slot> = { rewarded: { state: 'idle' }, interstitial: { state: 'idle' } };
+  let slot: 'idle' | 'loading' | 'loaded' = 'idle';
+  let loadTimer: ReturnType<typeof setTimeout> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
   const permanent: CapListenerHandle[] = [];
   const pauseSignal = new Signal();
   const resumeSignal = new Signal();
 
-  const enabled = (kind: AdKind): boolean =>
-    (kind === 'rewarded' || INTERSTITIALS_ENABLED) && plugins()?.AdMob !== undefined && adUnitId(kind) !== undefined;
+  const enabled = (): boolean => plugins()?.AdMob !== undefined && adUnitId() !== undefined;
 
-  const preload = (kind: AdKind): void => {
-    const AdMob = plugins()?.AdMob;
-    const adId = adUnitId(kind);
-    const slot = slots[kind];
-    if (!AdMob || !adId || !enabled(kind) || slot.state !== 'idle') return;
-    slot.state = 'loading';
-    const fail = (): void => {
-      slot.state = 'idle';
-      setTimeout(() => preload(kind), 30_000);
-    };
-    const opts = { adId, isTesting: testing() };
-    const p = kind === 'rewarded' ? AdMob.prepareRewardVideoAd(opts) : AdMob.prepareInterstitial(opts);
-    // The Loaded / FailedToLoad listeners set the slot; a rejected prepare call also means "no ad".
-    Promise.resolve(p).catch(fail);
+  const retryLater = (): void => {
+    slot = 'idle';
+    clearTimeout(loadTimer);
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(preload, RETRY_MS);
   };
 
-  const show = async (kind: AdKind): Promise<AdResult> => {
+  function preload(): void {
     const AdMob = plugins()?.AdMob;
-    const slot = slots[kind];
-    if (!AdMob || !enabled(kind)) return { shown: false, error: 'unavailable' };
-    if (slot.state !== 'loaded') return { shown: false, error: 'not_loaded' };
-    slot.state = 'idle'; // consumed by this show
+    const adId = adUnitId();
+    if (!AdMob || !adId || slot !== 'idle') return;
+    clearTimeout(retryTimer);
+    slot = 'loading';
+    // The Loaded / FailedToLoad listeners settle the slot; a rejected prepare call or silence also means "no ad".
+    loadTimer = setTimeout(retryLater, LOAD_TIMEOUT_MS);
+    Promise.resolve(AdMob.prepareRewardVideoAd({ adId, isTesting: testing() })).catch(retryLater);
+  }
+
+  const show = async (): Promise<AdResult> => {
+    const AdMob = plugins()?.AdMob;
+    if (!AdMob || !enabled()) return { shown: false, error: 'unavailable' };
+    if (slot !== 'loaded') return { shown: false, error: 'not_loaded' };
+    slot = 'idle'; // consumed by this show
     const ev = events();
     const bucket: CapListenerHandle[] = [];
     return new Promise<AdResult>((resolve) => {
@@ -112,21 +117,16 @@ export function createAdapter(): PlatformAdapter {
         removeAll(bucket);
         resolve(r);
       };
-      const rewardedKind = kind === 'rewarded';
-      const dismissed = rewardedKind ? ev.rewardDismissed : ev.interstitialDismissed;
-      const failedToShow = rewardedKind ? ev.rewardFailedToShow : ev.interstitialFailedToShow;
       const setup = async (): Promise<void> => {
-        await listen(dismissed, () => settle({ shown: true, rewarded }), bucket);
-        await listen(failedToShow, () => settle({ shown: false, error: 'failedToShow' }), bucket);
+        await listen(ev.rewardDismissed, () => settle({ shown: true, rewarded }), bucket);
+        await listen(ev.rewardFailedToShow, () => settle({ shown: false, error: 'failedToShow' }), bucket);
         // The plugin's Rewarded event: the SDK's own completion signal.
-        if (rewardedKind) await listen(ev.rewardRewarded, () => (rewarded = true), bucket);
+        await listen(ev.rewardRewarded, () => (rewarded = true), bucket);
         if (settled) removeAll(bucket);
-        const out = rewardedKind ? await AdMob.showRewardVideoAd() : await AdMob.showInterstitial();
+        const out = await AdMob.showRewardVideoAd();
         // showRewardVideoAd() resolves with the AdMobRewardItem once the reward is earned: the same
         // signal as the Rewarded event, accepted too so a renamed event string cannot lose a reward.
-        if (rewardedKind && out && typeof (out as { amount?: unknown }).amount === 'number') rewarded = true;
-        // Interstitials resolve after the ad; rewarded ads are settled by the Dismissed event.
-        if (!rewardedKind) settle({ shown: true });
+        if (out && typeof (out as { amount?: unknown }).amount === 'number') rewarded = true;
       };
       setup().catch((e: unknown) => settle({ shown: false, rewarded: false, error: errorMessage(e) }));
     });
@@ -181,6 +181,18 @@ export function createAdapter(): PlatformAdapter {
     },
     // The store plugin finishes transactions itself and has no "pending orders" list.
     pendingOrders: async () => [],
+    async completedOrders(): Promise<OrderRecord[]> {
+      const P = plugins()?.Purchases;
+      if (!P) return [];
+      const info = customerInfo(await P.restorePurchases());
+      const out: OrderRecord[] = [];
+      for (const t of info.nonSubscriptionTransactions ?? []) {
+        const orderId = t.transactionIdentifier ?? t.transactionId;
+        const productId = t.productIdentifier ?? t.productId;
+        if (orderId && productId) out.push({ orderId, productId, status: 'completed' });
+      }
+      return out;
+    },
     complete: async () => undefined,
   };
 
@@ -189,13 +201,14 @@ export function createAdapter(): PlatformAdapter {
     marker: 'platform-adapter:capacitor',
     capabilities: {
       rewardedAds: true,
-      interstitialAds: INTERSTITIALS_ENABLED,
+      interstitialAds: false,
       iap: true,
       adFreePurchase: true,
       leaderboard: false,
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: true,
+      managesAdFrequency: false,
     },
     async init() {
       const p = plugins();
@@ -203,31 +216,16 @@ export function createAdapter(): PlatformAdapter {
         try {
           await p.AdMob.initialize({ initializeForTesting: testing() });
           const ev = events();
-          const setSlot = (kind: AdKind, state: Slot['state']) => () => {
-            slots[kind].state = state;
-          };
-          await listen(ev.rewardLoaded, setSlot('rewarded', 'loaded'), permanent);
           await listen(
-            ev.rewardFailedToLoad,
+            ev.rewardLoaded,
             () => {
-              slots.rewarded.state = 'idle';
-              setTimeout(() => preload('rewarded'), 30_000);
+              clearTimeout(loadTimer);
+              slot = 'loaded';
             },
             permanent,
           );
-          if (INTERSTITIALS_ENABLED) {
-            await listen(ev.interstitialLoaded, setSlot('interstitial', 'loaded'), permanent);
-            await listen(
-              ev.interstitialFailedToLoad,
-              () => {
-                slots.interstitial.state = 'idle';
-                setTimeout(() => preload('interstitial'), 30_000);
-              },
-              permanent,
-            );
-          }
-          preload('rewarded');
-          preload('interstitial');
+          await listen(ev.rewardFailedToLoad, retryLater, permanent);
+          preload();
         } catch {
           /* AdMob failed to initialise: ads stay unavailable, the game still starts */
         }
@@ -256,9 +254,11 @@ export function createAdapter(): PlatformAdapter {
       happyMoment: () => undefined,
     },
     ads: {
-      isAvailable: (kind) => slots[kind].state === 'loaded' && enabled(kind),
-      preload: (kind) => preload(kind),
-      show: (kind) => show(kind),
+      isAvailable: (kind) => kind === 'rewarded' && slot === 'loaded' && enabled(),
+      preload: (kind) => {
+        if (kind === 'rewarded') preload();
+      },
+      show: async (kind) => (kind === 'rewarded' ? show() : { shown: false, error: 'unsupported' }),
     },
     storage,
     iap,

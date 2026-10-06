@@ -4,6 +4,7 @@
  */
 import { SFX_IDS, type SfxId, type StingerId } from './api';
 import type { Cat, Recipe } from './recipe';
+import { BATTLE_RECIPES } from './sfx-battle';
 import { COMBAT_RECIPES } from './sfx-combat';
 import { UI_RECIPES } from './sfx-ui';
 import { STINGER_RECIPES } from './stingers';
@@ -30,7 +31,11 @@ const CAT_RULE: Record<Cat, VoiceRule> = {
   stinger: { maxVoices: 1, minGap: 0.5, falloff: 0 },
 };
 
-const ALL: Partial<Record<SfxId, Recipe>> = { ...UI_RECIPES, ...COMBAT_RECIPES };
+/**
+ * The three recipe files each cover a slice of the ids. Typing the merge as a full Record makes the
+ * compiler prove the slices add up: a new id in SFX_IDS without a recipe stops the build here.
+ */
+const ALL: Record<SfxId, Recipe> = { ...UI_RECIPES, ...COMBAT_RECIPES, ...BATTLE_RECIPES };
 
 export const SOUNDS: SoundDef[] = [];
 const sfxIndex = new Map<string, number>();
@@ -49,10 +54,7 @@ function add(id: string, recipe: Recipe, stinger: boolean): void {
   (stinger ? stingerIndex : sfxIndex).set(id, index);
 }
 
-for (const id of SFX_IDS) {
-  const r = ALL[id];
-  if (r) add(id, r, false);
-}
+for (const id of SFX_IDS) add(id, ALL[id], false);
 for (const id of Object.keys(STINGER_RECIPES) as StingerId[]) add(id, STINGER_RECIPES[id], true);
 
 /** Catalogue index of an SFX id, or -1 when it has no recipe. */

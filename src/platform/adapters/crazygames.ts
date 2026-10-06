@@ -3,17 +3,23 @@
  * Docs relied on (fetched 2026-10-06):
  *   https://docs.crazygames.com/sdk/intro/        script tag, `await window.CrazyGames.SDK.init()`, `.environment`
  *   https://docs.crazygames.com/sdk/video-ads     `ad.requestAd("midgame" | "rewarded", {adStarted, adFinished, adError})`,
- *                                                  error codes, `ad.hasAdblock()`, "give reward in adFinished only"
- *   https://docs.crazygames.com/sdk/game/         `game.loadingStart/loadingStop/gameplayStart/gameplayStop/happytime`
+ *                                                  error codes (adCooldown: the SDK itself enforces ~3 min between
+ *                                                  midgame ads, so capabilities.managesAdFrequency = true),
+ *                                                  `ad.hasAdblock()`, "give reward in adFinished only"
+ *   https://docs.crazygames.com/sdk/game/         `game.loadingStart/loadingStop/gameplayStart/gameplayStop/happytime`,
+ *                                                  `game.settings.muteAudio` + `add/removeSettingsChangeListener`
+ *                                                  ("takes priority over your in-game audio settings")
  *   https://docs.crazygames.com/sdk/data/         `data.getItem/setItem/removeItem/clear` (localStorage API, 1 MB limit)
  * The SDK script is the ONLY external request, and only in the crazygames build.
  */
 import { loadScript } from '../sdkLoader';
 import { createLocalStorageBackend, safeStorage } from '../storage';
 import type { AdKind, AdResult, PlatformAdapter, PlatformStorage } from '../types';
-import { errorMessage, safe } from '../util';
+import { createBusyFlag, errorMessage, safe } from '../util';
 
 const SDK_URL = 'https://sdk.crazygames.com/crazygames-sdk-v3.js';
+/** A bit over AdService's 90 s watchdog. */
+const AD_BUSY_MAX_MS = 95_000;
 
 interface AdCallbacks {
   adStarted?: () => void;
@@ -30,6 +36,9 @@ interface CrazySdk {
     gameplayStart(): void;
     gameplayStop(): void;
     happytime(): void;
+    settings?: { muteAudio?: boolean };
+    addSettingsChangeListener?(listener: () => void): void;
+    removeSettingsChangeListener?(listener: () => void): void;
   };
   ad: {
     requestAd(type: 'midgame' | 'rewarded', callbacks: AdCallbacks): void;
@@ -50,7 +59,7 @@ function sdk(): CrazySdk | undefined {
 export function createAdapter(): PlatformAdapter {
   let ready = false;
   let adblock = false;
-  let inFlight = false;
+  const inFlight = createBusyFlag(AD_BUSY_MAX_MS);
 
   // Before the SDK is up (or if it is disabled on this domain) fall back to plain localStorage.
   const local = createLocalStorageBackend();
@@ -80,7 +89,7 @@ export function createAdapter(): PlatformAdapter {
       const settle = (r: AdResult): void => {
         if (settled) return;
         settled = true;
-        inFlight = false;
+        inFlight.end();
         resolve(r);
       };
       const s = sdk();
@@ -88,7 +97,7 @@ export function createAdapter(): PlatformAdapter {
         settle({ shown: false, error: 'sdk_not_ready' });
         return;
       }
-      inFlight = true;
+      inFlight.begin();
       try {
         s.ad.requestAd(kind === 'rewarded' ? 'rewarded' : 'midgame', {
           adStarted: () => {
@@ -118,6 +127,7 @@ export function createAdapter(): PlatformAdapter {
       cloudSave: true,
       usesPageVisibility: true,
       externalLinksAllowed: false,
+      managesAdFrequency: true,
     },
     async init() {
       await loadScript(SDK_URL, { isLoaded: () => sdk() !== undefined });
@@ -148,10 +158,22 @@ export function createAdapter(): PlatformAdapter {
       happyMoment: () => safe(() => sdk()?.game.happytime()),
     },
     ads: {
-      isAvailable: () => ready && !adblock && !inFlight,
+      isAvailable: () => ready && !adblock && !inFlight.active,
       preload: () => undefined,
       show: (kind) => requestAd(kind),
     },
     storage,
+    audio: {
+      // The portal's mute switch outranks the game's own audio settings.
+      isSystemMuted: () => sdk()?.game.settings?.muteAudio === true,
+      onSystemMuteChange(cb) {
+        const game = sdk()?.game;
+        if (!game?.addSettingsChangeListener) return () => undefined;
+        // Read the live setting instead of trusting the listener's argument shape.
+        const listener = (): void => cb(game.settings?.muteAudio === true);
+        game.addSettingsChangeListener(listener);
+        return () => safe(() => game.removeSettingsChangeListener?.(listener));
+      },
+    },
   };
 }

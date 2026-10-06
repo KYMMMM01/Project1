@@ -6,8 +6,9 @@ import { debugExpose } from '@/core/debug';
 import { label } from '@/ui/text';
 import { Color, Rarity, RARITY_ORDER } from '@/ui/theme';
 import {
+  FX_TIER_ORDER,
   Fx,
-  bindQualityGovernor,
+  awakeningCutIn,
   createHitStop,
   flyIconCount,
   flyTo,
@@ -27,8 +28,8 @@ import {
   shakeObject,
   squash,
   wobbleRotation,
-  type BoundGovernor,
   type FxHandle,
+  type FxRect,
   type LoopHandle,
   type NumbersMode,
   type NumStyle,
@@ -108,12 +109,12 @@ export default class FxDemo extends Scene {
   private freezeStep = 0;
   private letterboxOn = false;
   private manual = false;
-  private gov: BoundGovernor | null = null;
+  private moltStep = 0;
 
   constructor() {
     super();
-    // The gallery shows full-strength effects; the Reduced button flips the OS-derived default.
-    setFxSettings({ reducedMotion: false });
+    // The gallery shows full-strength effects on a fixed tier; the Gov button hands the tier to the governor.
+    setFxSettings({ reducedMotion: false, autoTier: false, tier: 'high', quality: 1 });
     this.fx = new Fx(this, this.tweens);
     // Default options on purpose: the gallery shows the real caps and cooldown.
     this.hitStop = createHitStop([this.spinTw]);
@@ -127,10 +128,15 @@ export default class FxDemo extends Scene {
       names: this.entries.map((e) => e.name),
       play: (name: string) => this.playByName(name),
       playAt: (name: string, x: number, y: number) => this.playByName(name, x, y),
+      where: (name: string) => {
+        const c = this.find(name);
+        return c ? { x: c.cx, y: c.cy } : null;
+      },
       playAll: () => this.playAll(),
       stats: () => this.stats(),
       page: (n: number) => this.showPage(n),
       settings: (patch: Record<string, unknown>) => setFxSettings(patch),
+      tier: (t: string) => setFxSettings({ tier: FX_TIER_ORDER.find((x) => x === t) ?? 'mid' }),
       clear: () => this.fx.clear(),
       chrome: (on: boolean) => {
         this.pagesLayer.visible = on;
@@ -139,9 +145,10 @@ export default class FxDemo extends Scene {
       manual: (on: boolean) => this.setManual(on),
       advance: (sec: number) => this.advance(sec),
       fx: this.fx,
+      cutin: awakeningCutIn,
+      portrait: () => this.avatarOf(this.cells[0] as CellView).texture,
       screen: screenFx,
       freeze: this.hitStop.freeze,
-      gov: () => this.gov?.governor ?? null,
     });
   }
 
@@ -177,7 +184,6 @@ export default class FxDemo extends Scene {
   }
 
   override exit(): void {
-    this.gov?.dispose();
     this.hitStop.dispose();
     this.fx.destroy();
     screenFx.clear();
@@ -203,9 +209,9 @@ export default class FxDemo extends Scene {
       b.on('pointerdown', fn);
       return b;
     };
-    const qual = mk('Quality', 76, () => {
-      const q = fxSettings.quality;
-      setFxSettings({ quality: q > 0.9 ? 0.5 : q > 0.4 ? 0.25 : 1 });
+    const qual = mk('Tier', 76, () => {
+      const next = FX_TIER_ORDER[(FX_TIER_ORDER.indexOf(fxSettings.tier) + 1) % FX_TIER_ORDER.length] ?? 'mid';
+      setFxSettings({ tier: next, autoTier: false });
       this.refreshSettingsLabel();
     });
     const fl = mk('Flashes', 189, () => {
@@ -221,7 +227,10 @@ export default class FxDemo extends Scene {
       setFxSettings({ numbers: order[(order.indexOf(fxSettings.numbers) + 1) % order.length] ?? 'full' });
       this.refreshSettingsLabel();
     });
-    const gv = mk('Gov', 528, () => this.toggleGovernor());
+    const gv = mk('Auto', 528, () => {
+      setFxSettings({ autoTier: !fxSettings.autoTier });
+      this.refreshSettingsLabel();
+    });
     const clr = mk('Clear', 641, () => this.fx.clear());
     this.hud.addChild(this.title, this.pageLabel, this.settingsLabel, prev, next, qual, fl, rm, nm, gv, clr);
 
@@ -258,23 +267,8 @@ export default class FxDemo extends Scene {
   }
 
   private refreshSettingsLabel(): void {
-    const gov = this.gov ? ` gov ${this.gov.governor.tier}` : '';
     this.settingsLabel.text =
-      `q ${fxSettings.quality}  flash ${fxSettings.flashes ? 'on' : 'off'}  reduced ${fxSettings.reducedMotion ? 'on' : 'off'}  nums ${fxSettings.numbers}${gov}`;
-  }
-
-  /** Adaptive quality: on, the governor watches real frame times and re-applies the tier on change. */
-  private toggleGovernor(): void {
-    if (this.gov) {
-      this.gov.dispose();
-      this.gov = null;
-    } else {
-      this.gov = bindQualityGovernor((tier) => {
-        this.fx.applyTier(tier);
-        this.refreshSettingsLabel();
-      });
-    }
-    this.refreshSettingsLabel();
+      `tier ${fxSettings.tier}${fxSettings.autoTier ? ' (auto)' : ''}  flash ${fxSettings.flashes ? 'on' : 'off'}  reduced ${fxSettings.reducedMotion ? 'on' : 'off'}  nums ${fxSettings.numbers}`;
   }
 
   private layoutAll(): void {
@@ -375,6 +369,7 @@ export default class FxDemo extends Scene {
       ...this.fx.stats(),
       numbersStats: this.fx.numbers.stats(),
       quality: fxSettings.quality,
+      tier: fxSettings.tier,
       coins: this.coins,
     };
   }
@@ -500,6 +495,33 @@ export default class FxDemo extends Scene {
       e('ambientTwinkle', (c) =>
         this.toggle(c, () => fx.ambientTwinkle(c.cx, c.cy, c.w - 30, c.h - 70, { rate: 9 })),
       ),
+      e('sunbeamCell', (c) => this.toggle(c, () => fx.sunbeamCell(this.cellRect(c)))),
+      e('laserDot', (c) => this.laserDemo(c)),
+      e('hazardWarn wet', (c) => fx.hazardWarn(this.cellRect(c), 'wet')),
+      e('hazardWarn zap', (c) => fx.hazardWarn(this.cellRect(c), 'zap')),
+      e('wetPuddle', (c) => this.toggle(c, () => fx.wetPuddle(this.cellRect(c)))),
+      e('zapCell', (c) => this.toggle(c, () => fx.zapCell(this.cellRect(c)))),
+      e('weakenSwirl', (c) => {
+        const av = this.avatarOf(c);
+        this.toggle(c, () => fx.weakenSwirl(c.cx, c.cy, { follow: av, scale: 0.9 }));
+      }),
+      e('blizzardZone', (c) => this.toggle(c, () => fx.blizzardZone(c.cx, c.cy, 78))),
+      e('potionCloud', (c) => this.toggle(c, () => fx.potionCloud(c.cx, c.cy, 78))),
+      e('blackHole', (c) => this.toggle(c, () => fx.blackHole(c.cx, c.cy, 80))),
+      e('slashLine', (c) => fx.slashLine(c.cx - 95, c.cy + 50, c.cx + 95, c.cy - 55)),
+      e('shieldBreak', (c) => fx.shieldBreak(c.cx, c.cy)),
+      e('moltPuff', (c) => {
+        const colors = [0xffb35c, 0xf1f4f8, 0x9fd0ff, 0xc9a0ff];
+        const av = this.avatarOf(c);
+        const t = fx.moltPuff(c.cx, c.cy, { color: colors[this.moltStep++ % colors.length] });
+        tw.call(t.impact, () => squash(tw, av, 1.2, 0.85, 240));
+      }),
+      e('purrHearts', (c) => fx.purrHearts(c.cx, c.cy - 10)),
+      e('coinRain', () => fx.coinRain()),
+      e('meteor', (c) => fx.meteor(c.cx, c.cy + 30, { scale: 0.8 })),
+      e('shootingStar', (c) => fx.shootingStar(c.cx, c.cy + 30, { scale: 0.8 })),
+      e('awakening', (c) => void fx.awakening(this.avatarOf(c).texture, '수호신 방울냥', { tag: 'MYTHIC' })),
+      e('awakening short', (c) => void fx.awakening(this.avatarOf(c).texture, 'Guardian Bell', { short: true, tag: 'MYTHIC' })),
       e('numbers', (c) => {
         const style = NUM_CYCLE[this.numCursor++ % NUM_CYCLE.length] as NumStyle;
         const v = style === 'big' ? 48210 : style === 'crit' ? 2140 : style === 'dot' ? 12 : 386;
@@ -571,6 +593,23 @@ export default class FxDemo extends Scene {
       e('screenShake', () => fxShake(0.6)),
     ];
     return list;
+  }
+
+  /** The cell's central 150 x 150 area as a board-cell rectangle. */
+  private cellRect(c: CellView): FxRect {
+    return { x: c.cx - 75, y: c.cy - 75, w: 150, h: 150 };
+  }
+
+  /** Show the laser dot following a point that wanders around the cell, then end it. */
+  private laserDemo(c: CellView): void {
+    const { cx, cy, w, h } = c;
+    const dot = this.fx.laserDot(cx, cy);
+    this.tweens.run({
+      duration: 3,
+      ease: Ease.linear,
+      onUpdate: (k) => dot.moveTo(cx + Math.sin(k * 9) * w * 0.3, cy + Math.sin(k * 6 + 1) * h * 0.2),
+      onComplete: () => dot.stop(),
+    });
   }
 
   /** Orbit a marker around the cell for a few seconds with a trail attached. */

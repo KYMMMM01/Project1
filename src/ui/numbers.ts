@@ -6,7 +6,7 @@ import { labelStyle } from './text';
  * change; a BitmapText only rewrites a few quads, so numbers use pre-baked glyph atlases (one per
  * size). The atlas is rendered from labelStyle(), so it matches every other label in the game.
  */
-const CHARS = '0123456789 ,.+-x×/%:KMBTQai';
+const CHARS = '0123456789 ,.+-x×/%:KMBTQai만억조';
 const installed = new Set<number>();
 
 function fontName(size: number): string {

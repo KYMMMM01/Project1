@@ -191,7 +191,7 @@ export class ProgressBar extends Container {
 
   /** Move to `v` (0..1). Animated by default; pass animate=false to jump (initial layout, reset). */
   setValue(v: number, animate = true): void {
-    const next = clamp01(v);
+    const next = Number.isFinite(v) ? clamp01(v) : 0;
     const prev = this.target;
     this.target = next;
     if (this.format) this.setLabel(this.format(next));
@@ -212,7 +212,7 @@ export class ProgressBar extends Container {
       });
       const gFrom = this.ghostShown;
       this.bag.run({
-        duration: 0.28,
+        duration: 0.25,
         delay: 0.4,
         ease: Ease.cubicOut,
         onUpdate: (k) => this.setGhost(lerp(gFrom, next, k)),
@@ -382,7 +382,7 @@ export class CooldownRing extends Container {
 
   /** 0 = empty, 1 = full circle. Allocation-free: rewrites the mesh's vertex array. */
   setProgress(p: number): void {
-    this.progress = clamp01(p);
+    this.progress = Number.isFinite(p) ? clamp01(p) : 0;
     const v = this.mesh.vertices;
     for (let i = 0; i <= SEGMENTS; i++) {
       const t = Math.min(i / SEGMENTS, this.progress);

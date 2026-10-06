@@ -6,7 +6,7 @@
  *                                            paid-but-ungranted order that recoverPending() must finish
  */
 import { createLocalStorageBackend, safeStorage } from '../storage';
-import type { AdResult, IapOutcome, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
+import type { AdResult, IapOutcome, OrderRecord, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
 import { Signal } from '../util';
 import { isOverlayOpen, overlayLeftovers, showInterstitialCard, showPurchaseSheet, showRewardedCard } from './devOverlay';
 
@@ -29,6 +29,7 @@ function flags(): DevFlags {
 }
 
 const PENDING_KEY = 'platform.dev.pendingOrders';
+const COMPLETED_KEY = 'platform.dev.completedOrders';
 
 export function createAdapter(): PlatformAdapter {
   const raw = createLocalStorageBackend();
@@ -41,21 +42,23 @@ export function createAdapter(): PlatformAdapter {
     if (calls.length > 100) calls.shift();
   };
 
-  const readPending = async (): Promise<PendingOrder[]> => {
+  const readRaw = async (key: string): Promise<unknown[]> => {
     try {
-      const text = await raw.get(PENDING_KEY);
+      const text = await raw.get(key);
       const j: unknown = text ? JSON.parse(text) : [];
-      return Array.isArray(j)
-        ? j.filter(
-            (o): o is PendingOrder =>
-              !!o && typeof o.orderId === 'string' && typeof o.productId === 'string',
-          )
-        : [];
+      return Array.isArray(j) ? (j as unknown[]) : [];
     } catch {
       return [];
     }
   };
-  const writePending = (list: PendingOrder[]): Promise<void> => raw.set(PENDING_KEY, JSON.stringify(list));
+  const isOrder = (o: unknown): o is PendingOrder =>
+    typeof o === 'object' && o !== null && typeof (o as PendingOrder).orderId === 'string' && typeof (o as PendingOrder).productId === 'string';
+  const readPending = async (): Promise<PendingOrder[]> => (await readRaw(PENDING_KEY)).filter(isOrder);
+  const readCompleted = async (): Promise<OrderRecord[]> =>
+    (await readRaw(COMPLETED_KEY)).filter(
+      (o): o is OrderRecord => isOrder(o) && ((o as OrderRecord).status === 'completed' || (o as OrderRecord).status === 'refunded'),
+    );
+  const write = (key: string, list: readonly object[]): Promise<void> => raw.set(key, JSON.stringify(list));
 
   const iap: PlatformIap = {
     async purchase(productId, onPaid, info): Promise<IapOutcome> {
@@ -73,18 +76,36 @@ export function createAdapter(): PlatformAdapter {
       if (result === 'failed') return 'failed';
       // From here the "store" has taken the money: the order is pending until it is completed.
       const orderId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-      await writePending([...(await readPending()), { orderId, productId }]);
+      await write(PENDING_KEY, [...(await readPending()), { orderId, productId }]);
       if (result === 'crashed') return 'failed'; // the app "died": nothing was granted, recovery will
       const granted = await onPaid(orderId);
       if (!granted) return 'failed';
       await iap.complete(orderId);
       return 'purchased';
     },
-    pendingOrders: () => readPending(),
+    pendingOrders: readPending,
     async complete(orderId) {
-      await writePending((await readPending()).filter((o) => o.orderId !== orderId));
+      const pending = await readPending();
+      const done = pending.find((o) => o.orderId === orderId);
+      await write(
+        PENDING_KEY,
+        pending.filter((o) => o.orderId !== orderId),
+      );
+      if (done) await write(COMPLETED_KEY, [...(await readCompleted()), { ...done, status: 'completed' }]);
       note(`iap:complete:${orderId}`);
     },
+    completedOrders: readCompleted,
+  };
+
+  /** QA: the store refunds the newest completed order (the next sync reports it to the revoke handler). */
+  const refundLast = async (): Promise<string> => {
+    const list = await readCompleted();
+    const target = [...list].reverse().find((o) => o.status === 'completed');
+    if (!target) return '';
+    target.status = 'refunded';
+    await write(COMPLETED_KEY, list);
+    note(`iap:refund:${target.orderId}`);
+    return target.orderId;
   };
 
   return {
@@ -99,6 +120,7 @@ export function createAdapter(): PlatformAdapter {
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: true,
+      managesAdFrequency: false,
     },
     init: async () => undefined,
     lifecycle: {
@@ -143,6 +165,8 @@ export function createAdapter(): PlatformAdapter {
       overlayLeftovers: () => overlayLeftovers(),
       triggerPause: () => pauseSignal.emit(),
       triggerResume: () => resumeSignal.emit(),
+      refundLast,
+      completedOrders: readCompleted,
     },
   };
 }

@@ -25,7 +25,7 @@ import {
   squash,
   wobbleRotation,
 } from '@/fx/juice';
-import { Rays, makeRayPool } from '@/fx/rays';
+import { Rays, makeSpritePool } from '@/fx/rays';
 import { ScreenFx } from '@/fx/screen';
 import { fxSettings, setFxSettings } from '@/fx/settings';
 
@@ -358,7 +358,7 @@ describe('hitFlash', () => {
 describe('Rays', () => {
   it('moveTo and setColor are safe after the rays expired', () => {
     const root = new Container();
-    const r = new Rays(makeRayPool(), 0, 0, root, { duration: 0.2 });
+    const r = new Rays(makeSpritePool(), 0, 0, root, { duration: 0.2 });
     r.update(0.5);
     expect(r.alive).toBe(false);
     expect(() => {
@@ -370,7 +370,7 @@ describe('Rays', () => {
   });
 
   it('moveTo works while alive', () => {
-    const r = new Rays(makeRayPool(), 0, 0, new Container(), {});
+    const r = new Rays(makeSpritePool(), 0, 0, new Container(), {});
     r.moveTo(40, 50);
     expect(r.container.x).toBe(40);
     expect(r.container.y).toBe(50);

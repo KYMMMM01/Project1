@@ -1,15 +1,19 @@
 import { Container, Graphics, Sprite, type DestroyOptions, type Text, type Texture } from 'pixi.js';
 import { lerp } from '@/core/math';
 import { Ease } from '@/core/tween';
+import { chamferPoints, flamePoints, roundedPolyPath, wingPoints } from './cardShapes';
 import { hsvToColor, shade } from './colors';
 import { drawIcon } from './icons';
 import type { Box } from './layoutMath';
 import { motion, TweenBag } from './motion';
+import { uiPrefs } from './prefs';
 import { ProgressBar } from './ProgressBar';
+import { rarityName } from './rarity';
+import { RarityPips } from './RarityPips';
 import { cacheStatic, drawGlow, drawShadow, glossGradient, vGradient } from './shapes';
 import { Tag } from './Tag';
 import { fitLabel, uiLabel } from './text';
-import { Color, Rarity, rarityIndex, type RarityId } from './theme';
+import { Color, Rarity, rarityIndex, RARITY_ORDER, type RarityId } from './theme';
 
 export type CardSize = 'small' | 'medium' | 'large';
 
@@ -22,22 +26,25 @@ interface Metrics {
   bar: number;
   plate: number;
   pip: number;
+  /** How far wings / flame tips reach past the plate sideways. */
+  over: number;
+  /** How far the crown / star / flame crest reaches above the plate. */
+  crest: number;
 }
 
 const METRICS: Record<CardSize, Metrics> = {
-  small: { w: 150, h: 200, radius: 20, name: 22, level: 20, bar: 24, plate: 74, pip: 4.5 },
-  medium: { w: 220, h: 292, radius: 26, name: 28, level: 24, bar: 28, plate: 88, pip: 5.5 },
-  large: { w: 320, h: 424, radius: 34, name: 38, level: 30, bar: 34, plate: 116, pip: 7 },
+  small: { w: 150, h: 200, radius: 20, name: 22, level: 20, bar: 24, plate: 74, pip: 11, over: 9, crest: 20 },
+  medium: { w: 220, h: 292, radius: 26, name: 28, level: 24, bar: 28, plate: 88, pip: 13, over: 14, crest: 30 },
+  large: { w: 320, h: 424, radius: 34, name: 38, level: 30, bar: 34, plate: 116, pip: 17, over: 20, crest: 44 },
 };
 
 export interface CardFrameOpts {
   rarity: RarityId;
   size?: CardSize;
-  /** Artwork: a display object (animated sprite, vector drawing) or a texture. It is fitted into the window. */
+  /** Artwork: a display object (animated sprite, vector drawing) or a texture. It is fitted into the window and owned by the card (destroyed with it). */
   portrait?: Container | Texture;
   name?: string;
-  level?: number;
-  /** "Lv." prefix etc. are the caller's job: pass the exact text to show on the level badge. */
+  /** Exact text for the level badge ("Lv.5"); the caller owns the "Lv." prefix. */
   levelText?: string;
   /** Copies owned / copies needed for the next upgrade; shows the small progress bar. */
   owned?: number;
@@ -47,10 +54,11 @@ export interface CardFrameOpts {
 }
 
 /**
- * Unit card plate. Origin = centre. The rarity decides everything visual: gradient and border from
- * the Rarity tokens, extra ornament per tier (inner line, corner gems, crown, star), a slow shine on
- * legendary and a colour-cycling border on mythic. Pip count under the window repeats the tier so the
- * rarity is never conveyed by colour alone.
+ * Unit card plate. Origin = centre of the plate; `uiBox` also covers the ornaments that overhang it.
+ * Rarity changes the frame itself, not just its colour: plain thin border (common), double line
+ * (rare), chamfered corners with jewels (epic), wings and a crown (legendary), a flame crest and a
+ * star with a colour-cycling border (mythic). The five-pip row under the window repeats the tier, and
+ * with uiPrefs.colorAssist the themed rarity name is printed too, so colour is never the only cue.
  */
 export class CardFrame extends Container {
   readonly uiBox: Box;
@@ -77,7 +85,7 @@ export class CardFrame extends Container {
     this.rarity = opts.rarity;
     const m = METRICS[this.size];
     this.m = m;
-    this.uiBox = { x: -m.w / 2, y: -m.h / 2, w: m.w, h: m.h };
+    this.uiBox = { x: -m.w / 2 - m.over, y: -m.h / 2 - m.crest, w: m.w + m.over * 2, h: m.h + m.crest + 6 };
     const wx = -m.w / 2 + 11;
     const wy = -m.h / 2 + 11;
     this.windowRect = { x: wx, y: wy, w: m.w - 22, h: m.h - m.plate - 11 - 6 };
@@ -87,8 +95,8 @@ export class CardFrame extends Container {
     mask.roundRect(this.windowRect.x, this.windowRect.y, this.windowRect.w, this.windowRect.h, m.radius * 0.6).fill(0xffffff);
     this.portraitHost.mask = mask;
     this.addChild(this.art, this.portraitHost, mask, this.overlay);
-    this.drawPips();
-    this.buildOverlay();
+    this.buildPips();
+    this.buildShine();
 
     if (opts.portrait) this.setPortrait(opts.portrait);
     this.setName(opts.name ?? '');
@@ -172,9 +180,18 @@ export class CardFrame extends Container {
     this.newTag?.destroy();
     this.newTag = null;
     if (!label) return;
-    const t = new Tag({ text: label, style: 'danger', shape: 'flag', fontSize: this.size === 'small' ? 20 : 24, tilt: 0.14 });
-    // Hangs over the top-right corner so it never covers the level badge.
-    t.position.set(this.m.w / 2 + 10 - t.uiBox.w / 2, -this.m.h / 2 + 30);
+    const small = this.size === 'small';
+    // A compact capsule on small cards keeps clear of the level badge; a swallow-tail flag elsewhere.
+    const t = new Tag({
+      text: label,
+      style: 'danger',
+      shape: small ? 'pill' : 'flag',
+      fontSize: small ? 20 : 24,
+      tilt: small ? 0.1 : 0.14,
+    });
+    const m = this.m;
+    if (small) t.position.set(m.w / 2 - t.uiBox.w / 2 - 2, -m.h / 2 + 4);
+    else t.position.set(m.w / 2 + 10 - t.uiBox.w / 2, -m.h / 2 + 30);
     this.overlay.addChild(t);
     this.newTag = t;
     t.pop();
@@ -194,14 +211,32 @@ export class CardFrame extends Container {
     const g = new Graphics();
     const x = -m.w / 2;
     const y = -m.h / 2;
+    const chamfer = m.radius * 0.9;
 
     if (idx >= 1) drawGlow(g, 0, 0, m.w * (0.62 + idx * 0.06), rar.glow, 0.16 + idx * 0.07);
+
+    // Legendary wings sit behind the plate; only their outer feathers show.
+    if (idx === 3) {
+      const gold = vGradient(rar.light, rar.dark);
+      for (const side of [-1, 1] as const) {
+        roundedPolyPath(g, wingPoints(side, side * (m.w / 2), y + m.h * 0.4, m.over + 6, m.h / 292), 2);
+        g.fill(gold).stroke({ width: 4, color: Color.outline, join: 'round' });
+      }
+    }
+
     drawShadow(g, x, y, m.w, m.h, m.radius, { alpha: 0.42, spread: 12, offsetY: 8 });
-    // Plate: tier colour, lit from the top.
-    g.roundRect(x, y, m.w, m.h, m.radius)
-      .fill(vGradient(rar.light, rar.dark))
-      .stroke({ width: 5, color: Color.outline, alignment: 1, join: 'round' });
-    g.roundRect(x + 5, y + 5, m.w - 10, m.h - 10, m.radius - 4).stroke({ width: 3, color: 0xffffff, alpha: 0.4, alignment: 1 });
+    // Plate silhouette: tier colour, lit from the top.
+    if (idx === 2) roundedPolyPath(g, chamferPoints(x, y, m.w, m.h, chamfer), 6);
+    else if (idx === 4) roundedPolyPath(g, flamePoints(x, y, m.w, m.h, chamfer, m.over), 4);
+    else g.roundRect(x, y, m.w, m.h, m.radius);
+    g.fill(vGradient(rar.light, rar.dark)).stroke({ width: 5, color: Color.outline, alignment: 1, join: 'round' });
+
+    // Inner line: plain cards stay single-bordered, every higher tier gets a second line.
+    if (idx >= 1) {
+      if (idx === 2 || idx === 4) roundedPolyPath(g, chamferPoints(x + 7, y + 7, m.w - 14, m.h - 14, chamfer - 4), 4);
+      else g.roundRect(x + 7, y + 7, m.w - 14, m.h - 14, m.radius - 5);
+      g.stroke({ width: 3, color: rar.light, alpha: 0.85, alignment: 1, join: 'round' });
+    }
 
     // Portrait window: a dark well with a soft tier-coloured spotlight.
     const wr = this.windowRect;
@@ -218,46 +253,53 @@ export class CardFrame extends Container {
       .stroke({ width: 4, color: Color.outline, alignment: 1 });
     g.roundRect(x + 12, py + 4, m.w - 24, 5, 2.5).fill({ color: rar.color, alpha: 0.9 });
 
-    // Tier ornament
+    // Epic jewels sit in the four cut corners.
     if (idx === 2) {
       for (const sx of [-1, 1]) {
         for (const sy of [-1, 1]) {
-          const cx = sx * (m.w / 2 - 9);
-          const cy = sy * (m.h / 2 - 9);
-          g.poly([cx, cy - 9, cx + 9, cy, cx, cy + 9, cx - 9, cy]).fill(rar.light).stroke({ width: 3, color: Color.outline, join: 'round' });
+          const cx = sx * (m.w / 2 - chamfer / 2 + 1);
+          const cy = sy * (m.h / 2 - chamfer / 2 + 1);
+          const r = m.radius * 0.36;
+          g.poly([cx, cy - r, cx + r, cy, cx, cy + r, cx - r, cy]).fill(vGradient(0xfff0ff, rar.color)).stroke({ width: 3, color: Color.outline, join: 'round' });
         }
       }
     }
     this.art.addChild(g);
     if (idx >= 3) {
       const ic = drawIcon(idx === 3 ? 'crown' : 'star', m.w * 0.27);
-      ic.position.set(0, y + 2);
+      ic.position.set(0, y + (idx === 3 ? 2 : -4));
       this.art.addChild(ic);
     }
     cacheStatic(this.art);
   }
 
-  /** Tier pips sit on top of the artwork: the count repeats the rarity so colour is never the only cue. */
-  private drawPips(): void {
+  /** Tier pips sit on the artwork: the lit count repeats the rarity so colour is never the only cue. */
+  private buildPips(): void {
     const m = this.m;
-    const rar = Rarity[this.rarity];
     const wr = this.windowRect;
-    const pips = rarityIndex(this.rarity) + 1;
-    const y = wr.y + wr.h - m.pip - 5;
-    const g = new Graphics();
-    for (let i = 0; i < pips; i++) {
-      const px = (i - (pips - 1) / 2) * (m.pip * 2.9);
-      g.circle(px, y, m.pip + 1.5).fill(Color.outline);
-      g.circle(px, y, m.pip).fill(rar.light);
+    const idx = rarityIndex(this.rarity);
+    const pips = new RarityPips({ owned: RARITY_ORDER.map((_, i) => i <= idx), size: m.pip, gap: Math.round(m.pip * 0.38) });
+    const y = wr.y + wr.h - m.pip - 3;
+    const back = new Graphics();
+    const b = pips.uiBox;
+    back.roundRect(b.x - 5, -m.pip * 0.95, b.w + 10, m.pip * 1.9, m.pip * 0.95).fill({ color: 0x07030f, alpha: 0.5 });
+    back.position.set(0, y);
+    pips.position.set(0, y);
+    this.overlay.addChild(back, pips);
+
+    if (uiPrefs.colorAssist) {
+      const name = uiLabel(rarityName(this.rarity), { size: Math.max(20, Math.round(m.name * 0.78)), strokeWidth: 4 });
+      fitLabel(name, wr.w - 12, 22);
+      name.position.set(0, y - m.pip - name.height / 2 - 2);
+      this.overlay.addChild(name);
     }
-    this.overlay.addChild(g);
   }
 
-  private buildOverlay(): void {
+  /** Legendary and mythic plates glint now and then; mythic also cycles its border through the spectrum. */
+  private buildShine(): void {
     const m = this.m;
     const idx = rarityIndex(this.rarity);
     if (motion.reduced || idx < 3) return;
-    // Slow diagonal shine over the whole plate (legendary and mythic).
     const host = new Container();
     const mask = new Graphics();
     mask.roundRect(-m.w / 2, -m.h / 2, m.w, m.h, m.radius).fill(0xffffff);
@@ -270,7 +312,10 @@ export class CardFrame extends Container {
     host.addChild(band);
     host.mask = mask;
     host.eventMode = 'none';
-    this.addChild(host, mask);
+    // Under the overlay: the glint and the border must never cover the name, level badge or NEW tag.
+    const top = this.getChildIndex(this.overlay);
+    this.addChildAt(host, top);
+    this.addChildAt(mask, top);
     this.bag.runKeyed(band, {
       duration: 3.6,
       ease: Ease.linear,
@@ -283,12 +328,15 @@ export class CardFrame extends Container {
     });
 
     if (idx >= 4) {
-      // Mythic: the border cycles through the spectrum.
       const ring = new Graphics();
-      ring.roundRect(-m.w / 2, -m.h / 2, m.w, m.h, m.radius).stroke({ width: 7, color: 0xffffff, alignment: 1 });
-      ring.roundRect(-m.w / 2 + 7, -m.h / 2 + 7, m.w - 14, m.h - 14, m.radius - 6).stroke({ width: 3, color: 0xffffff, alpha: 0.7, alignment: 1 });
+      const x = -m.w / 2;
+      const y = -m.h / 2;
+      roundedPolyPath(ring, flamePoints(x, y, m.w, m.h, m.radius * 0.9, m.over), 4);
+      ring.stroke({ width: 6, color: 0xffffff, alignment: 1, join: 'round' });
+      roundedPolyPath(ring, chamferPoints(x + 7, y + 7, m.w - 14, m.h - 14, m.radius * 0.9 - 4), 4);
+      ring.stroke({ width: 3, color: 0xffffff, alpha: 0.7, alignment: 1 });
       ring.eventMode = 'none';
-      this.addChild(ring);
+      this.addChildAt(ring, this.getChildIndex(this.overlay));
       this.bag.runKeyed(ring, {
         duration: 4,
         ease: Ease.linear,

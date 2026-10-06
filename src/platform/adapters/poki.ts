@@ -4,6 +4,8 @@
  *   script https://game-cdn.poki.com/scripts/v2/poki-sdk.js, `PokiSDK.init().then/.catch`,
  *   `gameLoadingFinished()`, `gameplayStart()/gameplayStop()`,
  *   `commercialBreak(onStart).then(...)`, `rewardedBreak(onStart).then(success => ...)`.
+ * "Not every commercialBreak() triggers an ad. Poki's system decides when a player is ready for another ad":
+ * capabilities.managesAdFrequency = true (AdService adds no interstitial timer).
  * `happyTime(intensity 0..1)` is not on that page (seen in Poki's engine wrappers): called only if present.
  * The SDK script is the ONLY external request, and only in the poki build. Poki blocks every other
  * external request by default and wants localStorage inside try/catch (safeStorage does that).
@@ -11,9 +13,11 @@
 import { loadScript } from '../sdkLoader';
 import { createLocalStorageBackend, safeStorage } from '../storage';
 import type { AdKind, AdResult, PlatformAdapter } from '../types';
-import { errorMessage, safe } from '../util';
+import { createBusyFlag, errorMessage, safe } from '../util';
 
 const SDK_URL = 'https://game-cdn.poki.com/scripts/v2/poki-sdk.js';
+/** A bit over AdService's 90 s watchdog. */
+const AD_BUSY_MAX_MS = 95_000;
 
 interface PokiSdk {
   init(): Promise<void>;
@@ -33,12 +37,12 @@ export function createAdapter(): PlatformAdapter {
   let ready = false;
   /** init() rejected ("Initialized, something went wrong, load your game anyway"): usually an ad blocker. */
   let adsBroken = false;
-  let inFlight = false;
+  const inFlight = createBusyFlag(AD_BUSY_MAX_MS);
 
   const show = async (kind: AdKind): Promise<AdResult> => {
     const s = sdk();
     if (!ready || !s || adsBroken) return { shown: false, error: 'sdk_not_ready' };
-    inFlight = true;
+    inFlight.begin();
     let started = false;
     const onStart = (): void => {
       started = true;
@@ -55,7 +59,7 @@ export function createAdapter(): PlatformAdapter {
     } catch (e) {
       return { shown: started, rewarded: false, error: errorMessage(e) };
     } finally {
-      inFlight = false;
+      inFlight.end();
     }
   };
 
@@ -71,6 +75,7 @@ export function createAdapter(): PlatformAdapter {
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: false,
+      managesAdFrequency: true,
     },
     async init() {
       await loadScript(SDK_URL, { isLoaded: () => sdk() !== undefined });
@@ -95,7 +100,7 @@ export function createAdapter(): PlatformAdapter {
       happyMoment: (intensity = 0.5) => safe(() => sdk()?.happyTime?.(Math.min(1, Math.max(0, intensity)))),
     },
     ads: {
-      isAvailable: () => ready && !adsBroken && !inFlight,
+      isAvailable: () => ready && !adsBroken && !inFlight.active,
       preload: () => undefined,
       show,
     },

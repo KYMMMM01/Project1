@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest';
+import { FIELD_H, PATH_LENGTH, cellCenterX, cellCenterY, pathPoint } from '@/game/geometry';
+import {
+  DRAG_THRESHOLD,
+  barSegments,
+  classifyPoint,
+  decideRelease,
+  decideTap,
+  dropLook,
+  isDrag,
+  isSellZone,
+  pathDistance,
+  unitTint,
+} from '@/view/field/policy';
+
+describe('drag threshold', () => {
+  it('treats small jitter as a tap and a real move as a drag', () => {
+    expect(isDrag(3, 4)).toBe(false);
+    expect(isDrag(DRAG_THRESHOLD, 0)).toBe(false);
+    expect(isDrag(DRAG_THRESHOLD + 1, 0)).toBe(true);
+    expect(isDrag(8, 8)).toBe(true);
+  });
+
+  it('sells only below the field edge', () => {
+    expect(isSellZone(FIELD_H)).toBe(false);
+    expect(isSellZone(FIELD_H + 1)).toBe(true);
+  });
+});
+
+describe('field areas', () => {
+  it('measures zero distance on the enemy loop', () => {
+    for (let s = 0; s < PATH_LENGTH; s += 37) {
+      const p = pathPoint(s);
+      expect(pathDistance(p.x, p.y)).toBeLessThan(0.01);
+    }
+  });
+
+  it('grows with the offset from the loop, inside and outside', () => {
+    const p = pathPoint(300);
+    expect(pathDistance(p.x, p.y + 20)).toBeCloseTo(20, 4);
+    expect(pathDistance(p.x, p.y - 20)).toBeCloseTo(20, 4);
+  });
+
+  it('classifies board, walkway, floor and outside', () => {
+    expect(classifyPoint(cellCenterX(7), cellCenterY(7))).toBe('board');
+    const lane = pathPoint(500);
+    expect(classifyPoint(lane.x, lane.y)).toBe('walkway');
+    expect(classifyPoint(2, 2)).toBe('floor');
+    expect(classifyPoint(300, FIELD_H + 40)).toBe('outside');
+    expect(classifyPoint(-5, 100)).toBe('outside');
+  });
+});
+
+describe('tap decisions', () => {
+  it('selects an occupied cell when nothing is selected and ignores an empty one', () => {
+    expect(decideTap(null, 3, true, null)).toEqual({ kind: 'select', cell: 3 });
+    expect(decideTap(null, 3, false, null)).toEqual({ kind: 'none' });
+  });
+
+  it('deselects when the selected cell is tapped again', () => {
+    expect(decideTap(4, 4, true, null)).toEqual({ kind: 'deselect' });
+  });
+
+  it('drops the selected unit on any cell it can act on', () => {
+    expect(decideTap(4, 9, false, 'move')).toEqual({ kind: 'drop', from: 4, to: 9 });
+    expect(decideTap(4, 9, true, 'swap')).toEqual({ kind: 'drop', from: 4, to: 9 });
+    expect(decideTap(4, 9, true, 'merge')).toEqual({ kind: 'drop', from: 4, to: 9 });
+  });
+
+  it('moves the selection to another unit when the drop would do nothing, else deselects', () => {
+    expect(decideTap(4, 9, true, 'none')).toEqual({ kind: 'select', cell: 9 });
+    expect(decideTap(4, 9, false, 'none')).toEqual({ kind: 'deselect' });
+  });
+});
+
+describe('release decisions', () => {
+  it('sells over the sell zone regardless of the cell', () => {
+    expect(decideRelease(2, 7, true, 'move')).toEqual({ kind: 'sell' });
+  });
+
+  it('drops onto a valid cell and cancels everywhere else', () => {
+    expect(decideRelease(2, 7, false, 'merge')).toEqual({ kind: 'drop', to: 7 });
+    expect(decideRelease(2, 2, false, null)).toEqual({ kind: 'cancel' });
+    expect(decideRelease(2, -1, false, null)).toEqual({ kind: 'cancel' });
+    expect(decideRelease(2, 7, false, 'none')).toEqual({ kind: 'cancel' });
+  });
+});
+
+describe('cell looks and tints', () => {
+  it('maps drop actions to looks with a distinct blocked state', () => {
+    expect(dropLook('move')).toBe('move');
+    expect(dropLook('swap')).toBe('swap');
+    expect(dropLook('merge')).toBe('merge');
+    expect(dropLook('none')).toBe('blocked');
+  });
+
+  it('leaves a rested unit untinted and darkens a blocked one', () => {
+    expect(unitTint(0, 0, 0)).toBe(0xffffff);
+    expect(unitTint(1, 0, 0)).not.toBe(0xffffff);
+    // A fully blocked unit reads as slumped whatever else applies.
+    expect(unitTint(1, 1, 1)).toBe(unitTint(1, 0, 0));
+  });
+
+  it('splits the bar between health and shield', () => {
+    const out = { hp: 0, shield: 0 };
+    barSegments(50, 100, 20, 40, out);
+    expect(out.hp).toBeCloseTo(50 / 140);
+    expect(out.shield).toBeCloseTo(20 / 140);
+    barSegments(0, 0, 0, 0, out);
+    expect(out.hp + out.shield).toBe(0);
+  });
+});

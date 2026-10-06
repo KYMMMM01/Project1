@@ -3,22 +3,29 @@ import { Scene } from '@/core/scene';
 import { uiTweens } from '@/core/tween';
 import { game } from '@/core/game';
 import { debugExpose } from '@/core/debug';
+import { addStrings, getLang, setLang, t, type Lang } from '@/core/i18n';
 import { Badge } from '@/ui/Badge';
 import { Button } from '@/ui/Button';
 import { CardFrame, type CardSize } from '@/ui/CardFrame';
+import { ClassChip } from '@/ui/ClassChip';
 import { Divider, LoadingSpinner, Stars } from '@/ui/Decor';
 import { IconButton } from '@/ui/IconButton';
 import { ICON_NAMES, drawIcon, type IconName } from '@/ui/icons';
 import { grid, hstack, toDesign } from '@/ui/layout';
+import { motion } from '@/ui/motion';
+import { OddsTable } from '@/ui/OddsTable';
 import { Panel } from '@/ui/Panel';
 import { popups } from '@/ui/Popup';
+import { uiPrefs } from '@/ui/prefs';
+import { RarityPips } from '@/ui/RarityPips';
+import { ScreenScaffold } from '@/ui/ScreenScaffold';
 import { CooldownRing, ProgressBar } from '@/ui/ProgressBar';
 import { ScrollView } from '@/ui/ScrollView';
 import { vGradient } from '@/ui/shapes';
 import { SegmentTabs, TabBar } from '@/ui/TabBar';
 import { Tag } from '@/ui/Tag';
 import { uiLabel } from '@/ui/text';
-import { Color, type RarityId } from '@/ui/theme';
+import { Color, RARITY_ORDER, type RarityId } from '@/ui/theme';
 import { toast, type ToastKind } from '@/ui/Toast';
 import { CurrencyPill, TopBar } from '@/ui/CurrencyPill';
 import { Slider, Stepper, Toggle } from '@/ui/controls';
@@ -26,12 +33,43 @@ import { attachTooltip } from '@/ui/Tooltip';
 import { alertDialog, confirmDialog } from '@/ui/dialogs';
 import { showRewards } from '@/ui/RewardPopup';
 
+// The game's own tables register the same keys; the gallery carries copies so it never depends on them.
+addStrings('ko', {
+  'rarity.common': '꼬마',
+  'rarity.rare': '동네',
+  'rarity.epic': '골목대장',
+  'rarity.legendary': '대왕',
+  'rarity.mythic': '수호신',
+  'class.warrior.name': '전사',
+  'class.ranger.name': '사수',
+  'class.mage.name': '마법',
+  'class.trickster.name': '재주',
+});
+addStrings('en', {
+  'rarity.common': 'Kitten',
+  'rarity.rare': 'Street',
+  'rarity.epic': 'Alley Boss',
+  'rarity.legendary': 'King',
+  'rarity.mythic': 'Guardian',
+  'class.warrior.name': 'Warrior',
+  'class.ranger.name': 'Ranger',
+  'class.mage.name': 'Mage',
+  'class.trickster.name': 'Trickster',
+});
+
 interface PageDef {
   title: string;
   build: (host: Container) => void;
 }
 
-const RARITIES: RarityId[] = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+const RARITIES: RarityId[] = [...RARITY_ORDER];
+const ODDS: readonly (readonly [RarityId, number])[] = [
+  ['common', 0.6],
+  ['rare', 0.28],
+  ['epic', 0.09],
+  ['legendary', 0.027],
+  ['mythic', 0.003],
+];
 
 /** Gallery of every UI component: ?demo=ui&page=N. */
 export default class UiDemo extends Scene {
@@ -44,6 +82,9 @@ export default class UiDemo extends Scene {
   private tapCount = 0;
   private pageBar: TabBar | null = null;
   private scrollView: ScrollView | null = null;
+  private cardSize: CardSize = 'small';
+  private refillCards: (() => void) | null = null;
+  private scaffold: ScreenScaffold | null = null;
 
   private readonly pages: PageDef[] = [
     { title: 'Buttons', build: (h) => this.pageButtons(h) },
@@ -53,6 +94,7 @@ export default class UiDemo extends Scene {
     { title: 'Icons', build: (h) => this.pageIcons(h) },
     { title: 'Scroll list', build: (h) => this.pageScroll(h) },
     { title: 'Tab bar', build: (h) => this.pageTabs(h) },
+    { title: 'Odds / Classes', build: (h) => this.pageOdds(h) },
   ];
 
   override enter(): void {
@@ -65,6 +107,8 @@ export default class UiDemo extends Scene {
       show: (i: number) => this.show(i),
       /** Design-space centre of a named element, for synthetic taps. */
       where: (name: string) => this.where(name),
+      /** The named element itself, for inspecting internals from scripts. */
+      node: (name: string) => this.named.get(name) ?? null,
       confirm: () => this.openConfirm(false),
       danger: () => this.openConfirm(true),
       alert: () => this.openAlert(),
@@ -75,7 +119,24 @@ export default class UiDemo extends Scene {
       tabs: () => this.pageBar,
       /** Live UI tweens: must return to its idle baseline after a page is torn down. */
       tweenCount: () => uiTweens.count,
+      uiTweens,
+      motion,
       scrollTo: (y: number, animated: boolean) => this.scrollView?.scrollTo(y, animated),
+      scaffold: () => this.openScaffold(),
+      closeScaffold: () => this.closeScaffold(),
+      scaffoldInfo: () => {
+        const sc = this.scaffold;
+        if (!sc) return null;
+        return { body: sc.bodyRect, contentWidth: sc.contentWidth, maxScroll: sc.scroller?.maxScrollY ?? 0, scrollY: sc.scroller?.scrollY ?? 0 };
+      },
+      colorAssist: (v: boolean) => {
+        uiPrefs.colorAssist = v;
+        this.refillCards?.();
+      },
+      lang: (l: Lang) => {
+        setLang(l);
+        this.show(this.pageIndex);
+      },
     });
   }
 
@@ -90,6 +151,7 @@ export default class UiDemo extends Scene {
     this.named.clear();
     this.pageBar = null;
     this.scrollView = null;
+    this.refillCards = null;
     for (const c of this.host.removeChildren()) c.destroy({ children: true });
     this.navTitle.text = `${i + 1}/${this.pages.length}  ${this.pages[i]?.title ?? ''}`;
     this.pages[i]?.build(this.host);
@@ -438,56 +500,79 @@ export default class UiDemo extends Scene {
     };
     const fill = (size: CardSize): void => {
       for (const c of holder.removeChildren()) c.destroy({ children: true });
-      const top = this.top() + 90;
+      const top = this.top() + 84;
       if (size === 'small') {
-        const row1 = RARITIES.map((r, i) => sample(r, 'small', i));
-        row1.forEach((c) => c.scale.set(0.86));
-        row1.forEach((c) => holder.addChild(c));
-        const g = hstack(row1, { gap: 8, x: (game.w - (150 * 0.86 * 5 + 32)) / 2, y: top });
-        const row2 = [...RARITIES].reverse().map((r, i) => sample(r, 'small', i + 2));
-        row2.forEach((c) => c.scale.set(0.86));
-        row2.forEach((c) => holder.addChild(c));
-        hstack(row2, { gap: 8, x: (game.w - (150 * 0.86 * 5 + 32)) / 2, y: top + g.h + 30 });
+        const place = (order: RarityId[], offset: number, y: number): number => {
+          const row = order.map((r, i) => sample(r, 'small', i + offset));
+          row.forEach((c) => {
+            c.scale.set(0.8);
+            holder.addChild(c);
+          });
+          return hstack(row, { gap: 4, x: (game.w - 5 * 133 - 16) / 2, y }).h;
+        };
+        const h1 = place(RARITIES, 0, top);
+        place([...RARITIES].reverse(), 2, top + h1 + 10);
       } else if (size === 'medium') {
         const cards = RARITIES.map((r, i) => sample(r, 'medium', i));
-        cards.forEach((c) => holder.addChild(c));
-        grid(cards, { cols: 3, gapX: 20, gapY: 28, x: (game.w - (220 * 3 + 40)) / 2, y: top });
+        cards.forEach((c) => {
+          c.scale.set(0.9);
+          holder.addChild(c);
+        });
+        grid(cards, { cols: 3, gapX: 6, gapY: 6, x: (game.w - 3 * 218 - 12) / 2, y: top });
       } else {
         const cards = [sample('legendary', 'large', 3), sample('mythic', 'large', 4)];
-        cards.forEach((c) => holder.addChild(c));
-        hstack(cards, { gap: 24, x: (game.w - (320 * 2 + 24)) / 2, y: top + 10 });
+        cards.forEach((c) => {
+          c.scale.set(0.94);
+          holder.addChild(c);
+        });
+        hstack(cards, { gap: 2, x: (game.w - 2 * 331 - 2) / 2, y: top + 10 });
       }
+      this.cardSize = size;
     };
+    this.refillCards = (): void => fill(this.cardSize);
     fill('small');
     seg.onSelect((id) => fill(id as CardSize));
+    this.caption(host, 'colour assist (spells the rarity out)', game.w / 2 - 60, game.h - 150 - game.safeBottom);
+    const assist = new Toggle({ value: uiPrefs.colorAssist });
+    assist.position.set(game.w / 2 + 190, game.h - 150 - game.safeBottom);
+    assist.onChange((v) => {
+      uiPrefs.colorAssist = v;
+      this.refillCards?.();
+    });
+    this.mark('assist', assist);
+    host.addChild(assist);
   }
 
   /* ------------------------------------------------------------ page 4 */
 
   private pageIcons(host: Container): void {
-    const cols = 6;
-    const cell = 112;
+    const cols = 7;
+    const cell = 100;
     const x0 = (game.w - cols * cell) / 2 + cell / 2;
-    const y0 = this.top() + 56;
+    const y0 = this.top() + 44;
     ICON_NAMES.forEach((n, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
       const tile = new Graphics();
-      tile.roundRect(-52, -52, 104, 104, 22).fill(vGradient(0x6a56b6, 0x4a3a8c)).stroke({ width: 4, color: Color.outline, alignment: 1 });
-      const ic = drawIcon(n, 70);
-      ic.position.y = -6;
-      const cap = uiLabel(n.replace('_', ' '), { size: 20, color: 0xffffff, strokeWidth: 4, shadow: false });
-      if (cap.width > 98) cap.scale.set(98 / cap.width);
-      cap.position.y = 36;
+      tile.roundRect(-46, -46, 92, 92, 20).fill(vGradient(0x6a56b6, 0x4a3a8c)).stroke({ width: 4, color: Color.outline, alignment: 1 });
+      const ic = drawIcon(n, 60);
+      ic.position.y = -8;
+      const cap = uiLabel(n.replace(/_/g, ' '), { size: 20, color: 0xffffff, strokeWidth: 4, shadow: false });
+      if (cap.width > 88) cap.scale.set(88 / cap.width);
+      cap.position.y = 32;
       const c = new Container();
       c.addChild(tile, ic, cap);
-      c.position.set(x0 + col * cell, y0 + row * (cell + 14));
+      c.position.set(x0 + col * cell, y0 + row * (cell + 4));
       host.addChild(c);
       this.mark('icon_' + n, c);
     });
-    const big = drawIcon('reroll', 220);
-    big.position.set(game.w / 2, y0 + 7 * (cell + 14) + 130);
-    host.addChild(big);
+    const rows = Math.ceil(ICON_NAMES.length / cols);
+    const bigY = y0 + rows * (cell + 4) + 80;
+    for (const [i, n] of (['purr', 'laser', 'class_mage'] as const).entries()) {
+      const big = drawIcon(n, 150);
+      big.position.set(game.w / 2 + (i - 1) * 200, bigY);
+      host.addChild(big);
+    }
   }
 
   /* ------------------------------------------------------------ page 5 */
@@ -567,5 +652,143 @@ export default class UiDemo extends Scene {
     host.addChild(bar);
     this.mark('tabbar', bar);
     this.pageBar = bar;
+  }
+
+  /* ------------------------------------------------------------ page 7 */
+
+  private pageOdds(host: Container): void {
+    let y = this.top() + 2;
+    this.caption(host, 'RarityPips: lit = owned, hollow = missing', game.w / 2, y);
+    y += 50;
+    const pips = new RarityPips({ owned: [true, true, false, false, false], size: 30 });
+    pips.position.set(game.w / 2 - 110, y);
+    this.mark('pips', pips);
+    const next = new Button({ label: 'Next', style: 'info', width: 170, height: 76, fontSize: 30 });
+    next.position.set(game.w / 2 + 190, y - 2);
+    next.onTap(() => {
+      const flags = pips.owned.slice();
+      const i = flags.indexOf(false);
+      if (i < 0) pips.set([false, false, false, false, false], false);
+      else {
+        flags[i] = true;
+        pips.set(flags);
+      }
+    });
+    this.mark('pips_next', next);
+    host.addChild(pips, next);
+    y += 62;
+
+    this.caption(host, 'ClassChip: tap = next synergy tier, hold = tooltip', game.w / 2, y);
+    y += 58;
+    const classes: [IconName, string, boolean[], number][] = [
+      ['class_warrior', 'warrior', [true, true, true, false, false], 1],
+      ['class_ranger', 'ranger', [true, false, false, false, false], 0],
+      ['class_mage', 'mage', [true, true, true, true, false], 2],
+      ['class_trickster', 'trickster', [true, true, true, true, true], 3],
+    ];
+    const chips = classes.map(([icon, id, owned, tier], i) => {
+      const chip = new ClassChip({ icon, owned, tier });
+      chip.onTap(() => chip.setTier((chip.tier + 1) % 4));
+      attachTooltip(chip, () => ({ title: t('class.' + id + '.name'), text: `Synergy tier ${chip.tier} / 3` }));
+      this.mark('chip' + i, chip);
+      host.addChild(chip);
+      return chip;
+    });
+    grid(chips, { cols: 2, gapX: 28, gapY: 18, x: (game.w - (168 * 2 + 28)) / 2, y: y - 38 });
+    y += 178;
+
+    this.caption(host, 'OddsTable with a pity footnote', game.w / 2, y);
+    y += 24;
+    const rows = ODDS.map(([rarity, value]) => ({ rarity, value }));
+    const table = new OddsTable({
+      width: 660,
+      rows,
+      footnote: '10회 안에 골목대장 이상이 반드시 나와요. 등급이 나오면 보장 횟수는 처음부터 다시 세요.',
+    });
+    table.position.set((game.w - 660) / 2, y);
+    this.mark('odds', table);
+    host.addChild(table);
+    y += table.tableHeight + 36;
+
+    const replay = new Button({ label: 'Reveal', style: 'primary', width: 200, height: 84, fontSize: 32 });
+    const full = new Button({ label: 'Full screen', style: 'purple', width: 260, height: 84, fontSize: 32 });
+    const lang = new Button({ label: getLang() === 'ko' ? 'EN' : 'KO', style: 'neutral', width: 120, height: 84, fontSize: 32 });
+    replay.onTap(() => table.setRows(rows, true));
+    full.onTap(() => this.openScaffold());
+    lang.onTap(() => {
+      const next: Lang = getLang() === 'ko' ? 'en' : 'ko';
+      setLang(next);
+      lang.setLabel(next === 'ko' ? 'EN' : 'KO');
+      this.show(this.pageIndex);
+    });
+    this.mark('reveal', replay);
+    this.mark('full', full);
+    this.mark('lang', lang);
+    host.addChild(replay, full, lang);
+    hstack([replay, full, lang], { gap: 22, x: (game.w - (200 + 260 + 120 + 44)) / 2, y: y });
+    y += 124;
+    this.caption(host, 'wrapped labels: Korean breaks at spaces, English at words', game.w / 2, y);
+    const ko = uiLabel('이 문장은 어절 단위로 줄바꿈되어야 해요. 긴 설명도 읽기 편하게 이어져요.', { size: 28, wrap: 320, lineHeight: 40, stroke: Color.outline, strokeWidth: 4, shadow: false });
+    const en = uiLabel('Wrapped English text breaks between words, never in the middle of one.', { size: 28, wrap: 320, lineHeight: 40, stroke: Color.outline, strokeWidth: 4, shadow: false });
+    ko.position.set(190, y + 40 + ko.height / 2);
+    en.position.set(530, y + 40 + en.height / 2);
+    host.addChild(ko, en);
+  }
+
+  /** A full screen with inline rewarded-ad card, odds and an action bar: the replacement for stacked popups. */
+  private openScaffold(): void {
+    if (this.scaffold) return;
+    const sc = new ScreenScaffold({ title: 'Free Gems', onBack: () => this.closeScaffold(), actionBarHeight: 148 });
+    const w = sc.contentWidth;
+    const card = new Panel({ width: w, height: 230, variant: 'gold' });
+    card.position.set(w / 2, 115);
+    const icon = drawIcon('gem', 120);
+    icon.position.set(110, 100);
+    const head = uiLabel('Watch a short ad', { size: 36, anchorX: 0 });
+    head.position.set(200, 52);
+    const sub = uiLabel('+30 gems, once an hour', { size: 26, color: 0xcabfee, anchorX: 0, stroke: Color.outline, shadow: false });
+    sub.position.set(200, 94);
+    const watch = new Button({ label: 'Watch', sublabel: '+30', sublabelIcon: 'gem', icon: 'ad', style: 'success', width: 300, height: 92, fontSize: 36 });
+    watch.position.set(w - 190, 160);
+    watch.onTap(() => {
+      watch.setBusy(true);
+      this.tweens.call(1.2, () => {
+        if (!watch.destroyed) watch.setBusy(false);
+      });
+    });
+    card.content.addChild(icon, head, sub, watch);
+    const odds = new OddsTable({
+      width: w,
+      rows: ODDS.map(([rarity, value]) => ({ rarity, value })),
+      footnote: 'Pity: an Alley Boss or better is guaranteed within 10 draws.',
+    });
+    odds.position.set(0, 260);
+    sc.content.addChild(card, odds);
+    for (let i = 0; i < 12; i++) {
+      const row = new Container();
+      const rowBg = new Graphics();
+      rowBg.roundRect(0, 0, w, 90, 22).fill(vGradient(i % 2 ? 0x45357f : 0x3b2c6e, 0x2a1f52)).stroke({ width: 4, color: Color.outline, alignment: 1 });
+      const lbl = uiLabel(`Daily offer ${i + 1}`, { size: 30, anchorX: 0 });
+      lbl.position.set(28, 45);
+      row.addChild(rowBg, lbl);
+      row.position.set(0, 260 + odds.tableHeight + 24 + i * 106);
+      sc.content.addChild(row);
+    }
+    sc.refresh();
+    const claim = new Button({ label: 'Claim all', style: 'primary', width: 380, height: 112, fontSize: 42 });
+    claim.onTap(() => toast('Claimed', 'success'));
+    sc.actionBar.addChild(claim);
+    const gems = new CurrencyPill({ icon: 'gem', amount: 320, width: 190 });
+    sc.addTitleAction(gems);
+    this.addChild(sc);
+    this.scaffold = sc;
+    void sc.show();
+  }
+
+  private closeScaffold(): void {
+    const sc = this.scaffold;
+    if (!sc) return;
+    this.scaffold = null;
+    void sc.hide().then(() => sc.destroy({ children: true }));
   }
 }

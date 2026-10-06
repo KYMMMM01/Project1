@@ -32,6 +32,7 @@ export const NO_ADS_CAPABILITIES: PlatformCapabilities = {
   cloudSave: false,
   usesPageVisibility: true,
   externalLinksAllowed: true,
+  managesAdFrequency: false,
 };
 
 export function createFallbackAdapter(id: AdapterId = 'fallback', marker = 'platform-adapter:fallback'): PlatformAdapter {

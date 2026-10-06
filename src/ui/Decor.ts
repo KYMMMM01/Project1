@@ -114,6 +114,8 @@ export class Stars extends Container {
   private readonly slots: { full: Container; ring: Graphics }[] = [];
   private readonly bag = new TweenBag();
   private shown = 0;
+  /** Stars currently on screen (lags `shown` while the pops play). */
+  private landed = 0;
 
   constructor(opts: StarsOpts = {}) {
     super();
@@ -153,25 +155,28 @@ export class Stars extends Container {
    */
   async setEarned(n: number, animate = true): Promise<void> {
     const target = Math.max(0, Math.min(this.slots.length, Math.floor(n)));
-    const from = this.shown;
+    // A call that lands mid-animation must not leave the earlier call's pending pops to fire afterwards.
+    this.bag.killAll();
     this.shown = target;
-    if (!animate || motion.reduced) {
-      this.slots.forEach((s, i) => {
-        s.full.visible = i < target;
-        s.full.scale.set(1);
-        s.ring.visible = false;
-      });
-      return;
-    }
+    const animated = animate && !motion.reduced;
+    // Stars that already landed stay; the rest are laid out fresh.
+    const from = animated ? Math.min(this.landed, target) : target;
+    this.landed = from;
     this.slots.forEach((s, i) => {
-      if (i >= target) s.full.visible = false;
+      s.full.visible = i < from;
+      s.full.scale.set(1);
+      s.full.rotation = 0;
+      s.full.alpha = 1;
+      s.ring.visible = false;
     });
+    if (!animated) return;
     for (let i = from; i < target; i++) {
       const slot = this.slots[i];
       if (!slot) continue;
       const delay = (i - from) * 0.35;
       this.bag.call(delay, () => {
         slot.full.visible = true;
+        this.landed = i + 1;
         audio.playStep('star', i);
         haptic('light');
         this.bag.run({

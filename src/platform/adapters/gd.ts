@@ -98,6 +98,7 @@ export function createAdapter(): PlatformAdapter {
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: false,
+      managesAdFrequency: false,
     },
     async init() {
       const gameId = import.meta.env.VITE_GD_GAME_ID as string | undefined;

@@ -19,11 +19,13 @@
 import { loadScript } from '../sdkLoader';
 import { safeStorage } from '../storage';
 import type { PlatformAdapter, PlatformStorage } from '../types';
-import { errorMessage, safe } from '../util';
+import { createBusyFlag, errorMessage, safe } from '../util';
 
 const SDK_URL = 'https://www.youtube.com/game_api/v1';
 /** saveData accepts a well-formed UTF-16 string of at most 3 MiB. */
 const MAX_BLOB_BYTES = 3 * 1024 * 1024;
+/** A bit over AdService's 90 s watchdog. */
+const AD_BUSY_MAX_MS = 95_000;
 
 interface YtSdk {
   IN_PLAYABLES_ENV?: boolean;
@@ -139,7 +141,7 @@ function createBlobBackend(): { backend: PlatformStorage; flush: () => Promise<v
 
 export function createAdapter(): PlatformAdapter {
   let ready = false;
-  let inFlight = false;
+  const inFlight = createBusyFlag(AD_BUSY_MAX_MS);
   let firstFrame = false;
   let gameReady = false;
   const blob = createBlobBackend();
@@ -157,6 +159,7 @@ export function createAdapter(): PlatformAdapter {
       // Page Visibility is forbidden here; the SDK's onPause/onResume are the only signals.
       usesPageVisibility: false,
       externalLinksAllowed: false,
+      managesAdFrequency: false,
     },
     async init() {
       await loadScript(SDK_URL, { isLoaded: () => yt() !== undefined });
@@ -195,12 +198,12 @@ export function createAdapter(): PlatformAdapter {
       happyMoment: () => undefined,
     },
     ads: {
-      isAvailable: () => ready && !inFlight,
+      isAvailable: () => ready && !inFlight.active,
       preload: () => undefined,
       async show(kind, placement) {
         const y = yt();
         if (!ready || !y) return { shown: false, error: 'sdk_not_ready' };
-        inFlight = true;
+        inFlight.begin();
         try {
           if (kind === 'rewarded') {
             // The promise value is YouTube's own "user met the conditions to receive a reward".
@@ -214,7 +217,7 @@ export function createAdapter(): PlatformAdapter {
         } catch (e) {
           return { shown: false, error: errorMessage(e) };
         } finally {
-          inFlight = false;
+          inFlight.end();
         }
       },
     },

@@ -25,7 +25,9 @@ export interface PopupOpts<R> {
  */
 export abstract class Popup<R = void> extends Container {
   readonly backdrop = new Graphics();
-  /** Animated root of the popup body, centred on screen. */
+  /** Animated root (open / close pop), centred on screen. Subclasses never touch it: build in `body`. */
+  readonly shell = new Container();
+  /** Where the subclass builds its look; origin = screen centre. Scaled down by layout() when it would not fit. */
   readonly body = new Container();
   readonly priority: number;
   readonly dismissResult: R;
@@ -34,6 +36,8 @@ export abstract class Popup<R = void> extends Container {
   private readonly dimScale: number;
   private w = 0;
   private h = 0;
+  private contentW = 0;
+  private contentH = 0;
 
   constructor(opts: PopupOpts<R>) {
     super();
@@ -46,7 +50,8 @@ export abstract class Popup<R = void> extends Container {
     this.backdrop.on('pointertap', () => {
       if (this.backdropClose && popups.top === this) this.close();
     });
-    this.addChild(this.backdrop, this.body);
+    this.shell.addChild(this.body);
+    this.addChild(this.backdrop, this.shell);
   }
 
   /** Close with a result; without one the dismissResult is used. */
@@ -54,12 +59,24 @@ export abstract class Popup<R = void> extends Container {
     popups.close(this, result);
   }
 
+  /**
+   * Declare the footprint of the popup's artwork (centred on the body origin, ribbons and tails
+   * included) so layout() can shrink it to fit a short screen or a long message.
+   */
+  protected setContentSize(w: number, h: number): void {
+    this.contentW = w;
+    this.contentH = h;
+  }
+
   /** Re-fit to the screen. Subclasses may override to move things, but should call super. */
   layout(w: number, h: number): void {
     this.w = w;
     this.h = h;
     this.backdrop.clear().rect(0, 0, w, h).fill({ color: Dim.backdrop, alpha: Dim.backdropAlpha * this.dimScale });
-    this.body.position.set(w / 2, h / 2);
+    this.shell.position.set(w / 2, h / 2);
+    const fitW = this.contentW > 0 ? (w - 16) / this.contentW : 1;
+    const fitH = this.contentH > 0 ? (h - 48) / this.contentH : 1;
+    this.body.scale.set(Math.min(1, fitW, fitH));
   }
 
   /** Called once the open animation has started and the popup is on screen. */
@@ -211,8 +228,8 @@ export class PopupManager {
   private animateOpen(popup: Popup<unknown>): void {
     if (motion.reduced) return;
     popup.backdrop.alpha = 0;
-    popup.body.alpha = 0;
-    popup.body.scale.set(0.82);
+    popup.shell.alpha = 0;
+    popup.shell.scale.set(0.82);
     this.bag.runKeyed(popup.backdrop, {
       duration: OPEN_TIME,
       ease: Ease.linear,
@@ -224,16 +241,16 @@ export class PopupManager {
       },
     });
     const pop = backOut(1.70158);
-    this.bag.runKeyed(popup.body, {
+    this.bag.runKeyed(popup.shell, {
       duration: OPEN_TIME,
       ease: Ease.linear,
       onUpdate: (k) => {
-        popup.body.scale.set(0.82 + 0.18 * pop(k));
-        popup.body.alpha = Math.min(1, k * 3);
+        popup.shell.scale.set(0.82 + 0.18 * pop(k));
+        popup.shell.alpha = Math.min(1, k * 3);
       },
       onComplete: () => {
-        popup.body.scale.set(1);
-        popup.body.alpha = 1;
+        popup.shell.scale.set(1);
+        popup.shell.alpha = 1;
       },
     });
   }
@@ -244,8 +261,8 @@ export class PopupManager {
       return;
     }
     const a0 = popup.backdrop.alpha;
-    const b0 = popup.body.alpha;
-    const s0 = popup.body.scale.x;
+    const b0 = popup.shell.alpha;
+    const s0 = popup.shell.scale.x;
     this.bag.runKeyed(popup.backdrop, {
       duration: CLOSE_TIME,
       ease: Ease.cubicIn,
@@ -253,12 +270,12 @@ export class PopupManager {
         popup.backdrop.alpha = a0 * (1 - k);
       },
     });
-    this.bag.runKeyed(popup.body, {
+    this.bag.runKeyed(popup.shell, {
       duration: CLOSE_TIME,
       ease: Ease.cubicIn,
       onUpdate: (k) => {
-        popup.body.alpha = b0 * (1 - k);
-        popup.body.scale.set(s0 * (1 - 0.08 * k));
+        popup.shell.alpha = b0 * (1 - k);
+        popup.shell.scale.set(s0 * (1 - 0.08 * k));
       },
       onComplete: done,
     });

@@ -40,7 +40,6 @@ interface Voice {
   sat?: number;
   /** Amplitude wobble. */
   trem?: { rate: number; depth: number };
-  pan?: number;
   /** Extra copy of the signal into an echo / reverb bus. */
   send?: { bus: Send; amt: number };
   /** Output override (defaults to the synth's out). */
@@ -214,7 +213,7 @@ export class Synth {
     return f;
   }
 
-  /** Wire filters -> shaper -> envelope -> tremolo -> pan -> out/sends and return the head node. */
+  /** Wire filters -> shaper -> envelope -> tremolo -> out/sends and return the head node. */
   private chain(o: Voice, t: number): AudioNode {
     const ctx = this.ctx;
     const dur = o.dur;
@@ -243,12 +242,6 @@ export class Synth {
       lg.connect(tg.gain);
       tail.connect(tg);
       tail = tg;
-    }
-    if (o.pan && typeof ctx.createStereoPanner === 'function') {
-      const p = this.keep(ctx.createStereoPanner());
-      p.pan.value = Math.max(-1, Math.min(1, o.pan));
-      tail.connect(p);
-      tail = p;
     }
     tail.connect(o.to ?? this.out);
     if (o.send) {

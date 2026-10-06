@@ -8,6 +8,8 @@ export const ICON_NAMES = [
   'play', 'pause', 'fast_forward', 'info', 'question', 'home', 'cards', 'shop', 'trophy', 'mission',
   'gift', 'star', 'crown', 'paw', 'heart', 'clock', 'ad', 'coin', 'gem', 'energy',
   'arrow_up', 'swords', 'shield', 'reroll', 'sell', 'skull', 'chest', 'fish', 'lucky_clover', 'dice', 'warning',
+  'purr', 'laser', 'sun', 'molt', 'wave_call', 'class_warrior', 'class_ranger', 'class_mage', 'class_trickster',
+  'target', 'sweep', 'ticket', 'calendar', 'wardrobe', 'share', 'code', 'speed_1', 'speed_2', 'speed_3', 'eye',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -301,6 +303,60 @@ function leafPath(p: Pen): void {
     .close();
 }
 
+function heartPath(p: Pen): void {
+  p.m(0, 38)
+    .c(-12, 30, -42, 12, -42, -12)
+    .c(-42, -31, -13, -39, 0, -19)
+    .c(13, -39, 42, -31, 42, -12)
+    .c(42, 12, 12, 30, 0, 38)
+    .close();
+}
+
+/** The cat paw print: one pad and four toes. */
+function pawShape(p: Pen): void {
+  p.ellipse(0, 15, 25, 20);
+  p.ellipse(-31, -5, 9.5, 12.5, -0.5);
+  p.ellipse(-12, -26, 10, 13, -0.15);
+  p.ellipse(12, -26, 10, 13, 0.15);
+  p.ellipse(31, -5, 9.5, 12.5, 0.5);
+}
+
+/** Ticket outline: a rectangle with a half-circle bitten out of each short side. */
+function ticketPoints(): number[] {
+  const pts: number[] = [-44, -28, 44, -28, 44, -9];
+  const steps = 8;
+  for (let i = 1; i < steps; i++) {
+    const a = -PI / 2 - (i / steps) * PI;
+    pts.push(44 + Math.cos(a) * 9, Math.sin(a) * 9);
+  }
+  pts.push(44, 9, 44, 28, -44, 28, -44, 9);
+  for (let i = 1; i < steps; i++) {
+    const a = PI / 2 - (i / steps) * PI;
+    pts.push(-44 + Math.cos(a) * 9, Math.sin(a) * 9);
+  }
+  pts.push(-44, -9);
+  return pts;
+}
+
+/** Right-pointing chevrons merged under one outline; more chevrons = faster. */
+function chevrons(n: number): IconDraw {
+  return (k, c) => {
+    const step = 23;
+    const x0 = -((n - 1) * step) / 2;
+    k.line(
+      c,
+      13,
+      (p) => {
+        for (let i = 0; i < n; i++) {
+          const x = x0 + i * step;
+          p.m(x - 11, -29).l(x + 11, 0).l(x - 11, 29);
+        }
+      },
+      { hi: true },
+    );
+  };
+}
+
 function speaker(k: Ink, c: number): void {
   k.solid(tone(c), (p) => p.rpoly([-40, -12, -26, -12, -6, -30, -6, 30, -26, 12, -40, 12], 4));
 }
@@ -565,28 +621,14 @@ const ICONS: Record<IconName, IconDef> = {
   paw: {
     color: 0xffc94a,
     draw: (k, c) => {
-      k.solid(tone(c), (p) => {
-        p.ellipse(0, 15, 25, 20);
-        p.ellipse(-31, -5, 9.5, 12.5, -0.5);
-        p.ellipse(-12, -26, 10, 13, -0.15);
-        p.ellipse(12, -26, 10, 13, 0.15);
-        p.ellipse(31, -5, 9.5, 12.5, 0.5);
-      });
+      k.solid(tone(c), pawShape);
       gloss(k, (p) => p.ellipse(-9, 8, 9, 5, -0.5));
     },
   },
   heart: {
     color: 0xff4d6a,
     draw: (k, c) => {
-      k.solid(tone(c), (p) =>
-        p
-          .m(0, 38)
-          .c(-12, 30, -42, 12, -42, -12)
-          .c(-42, -31, -13, -39, 0, -19)
-          .c(13, -39, 42, -31, 42, -12)
-          .c(42, 12, 12, 30, 0, 38)
-          .close(),
-      );
+      k.solid(tone(c), heartPath);
       gloss(k, (p) => p.ellipse(-23, -19, 9, 5, -0.75));
     },
   },
@@ -759,6 +801,232 @@ const ICONS: Record<IconName, IconDef> = {
         p.rrect(-4.5, -9, 9, 26, 4.5);
         p.circle(0, 25, 5);
       });
+    },
+  },
+  purr: {
+    color: 0xff6fae,
+    draw: (k, c) => {
+      k.solid(tone(c), heartPath);
+      gloss(k, (p) => p.ellipse(-24, -20, 8, 4.4, -0.75));
+      k.pen.at(0, 3, 0, 0.4);
+      k.detail([0xffffff, 0xffd9ea], pawShape, 0.96);
+      k.pen.at();
+    },
+  },
+  laser: {
+    color: 0xff3b4a,
+    draw: (k, c) => {
+      k.line(
+        c,
+        8,
+        (p) => {
+          p.arc(0, 0, 27, 0, PI * 2);
+          p.m(0, -48).l(0, -32);
+          p.m(0, 32).l(0, 48);
+          p.m(-48, 0).l(-32, 0);
+          p.m(32, 0).l(48, 0);
+        },
+        { hi: true },
+      );
+      k.solid([shade(c, 0.4), shade(c, -0.12)], (p) => p.circle(0, 0, 13));
+      gloss(k, (p) => p.ellipse(-4, -5, 4.6, 2.8, -0.5));
+    },
+  },
+  sun: {
+    color: 0xffc83a,
+    draw: (k, c) => {
+      for (let i = 0; i < 8; i++) {
+        k.pen.at(0, 0, (i * PI) / 4);
+        k.solid([0xffe27a, 0xf5a81c], (p) => p.rpoly([-9, -26, 0, -47, 9, -26], 3));
+      }
+      k.pen.at();
+      k.solid([shade(c, 0.4), shade(c, -0.12)], (p) => p.circle(0, 0, 26));
+      gloss(k, (p) => p.ellipse(-9, -11, 10, 5, -0.6));
+    },
+  },
+  molt: {
+    color: 0xffb36b,
+    draw: (k, c) => {
+      k.line(
+        c,
+        12,
+        (p) => {
+          const n = 36;
+          for (let i = 0; i <= n; i++) {
+            const t = i / n;
+            const a = -PI / 2 + t * PI * 2.6;
+            const r = 6 + t * 30;
+            if (i === 0) p.m(Math.cos(a) * r, Math.sin(a) * r);
+            else p.l(Math.cos(a) * r, Math.sin(a) * r);
+          }
+        },
+        { hi: true },
+      );
+      for (const [x, y, rot] of [[33, -27, 0.75], [-35, -6, -0.95], [8, 38, 2.5]] as const) {
+        k.solid([shade(c, 0.4), shade(c, -0.08)], (p) => p.ellipse(x, y, 5.5, 11, rot));
+      }
+    },
+  },
+  wave_call: {
+    color: 0xffc93a,
+    draw: (k, c) => {
+      k.line(WHITE, 6, (p) => {
+        p.arc(10, 0, 28, -0.55, 0.55);
+        p.arc(10, 0, 42, -0.5, 0.5);
+      });
+      k.solid([shade(c, 0.4), shade(c, -0.18)], (p) => p.rpoly([-46, -9, -24, -9, 6, -31, 6, 31, -24, 9, -46, 9], 5));
+      k.solid([shade(c, -0.05), shade(c, -0.35)], (p) => p.ellipse(6, 0, 9, 31));
+      k.detail(Color.outline, (p) => p.ellipse(6, 0, 4.5, 24), 0.55);
+      gloss(k, (p) => p.rrect(-38, -5, 28, 4, 2));
+    },
+  },
+  class_warrior: {
+    color: 0xe9eefb,
+    draw: (k, c) => {
+      sword(k, PI / 4, c);
+      k.detail([0xffe27a, 0xf0a21e], (p) => p.star(-28, -28, 10, 4, 4, 1));
+    },
+  },
+  class_ranger: {
+    color: 0xc98a4a,
+    draw: (k, c) => {
+      k.line(c, 10, (p) => p.m(10, -45).c(-38, -30, -38, 30, 10, 45), { hi: true });
+      k.line(0xfff3d6, 3.4, (p) => p.m(10, -45).l(10, 45), { outline: false });
+      k.line(0xe8d3a2, 6, (p) => p.m(-26, 0).l(34, 0));
+      k.solid([0xf2f6ff, 0x9aa6c0], (p) => p.rpoly([32, -11, 53, 0, 32, 11], 2.5));
+      k.solid([0x7aea8a, 0x1f9d3e], (p) => {
+        p.poly([-35, -12, -22, -12, -15, 0, -28, 0]);
+        p.poly([-35, 12, -22, 12, -15, 0, -28, 0]);
+      });
+    },
+  },
+  class_mage: {
+    color: 0xa767ff,
+    draw: (k, c) => {
+      k.solid(tone(c), (p) => p.bar(-32, 38, 6, 0, 12));
+      k.solid([0xffe27a, 0xd98a0a], (p) => p.bar(-36, 42, -28, 34, 14));
+      k.solid([0xffe27a, 0xf0a21e], (p) => p.star(20, -22, 28, 13, 5, 3));
+      gloss(k, (p) => p.ellipse(13, -31, 6, 3.2, -0.7));
+      k.detail(WHITE, (p) => p.star(-14, -30, 10, 3.5, 4, 1), 0.95);
+      k.detail(WHITE, (p) => p.star(40, 20, 8, 3, 4, 1), 0.95);
+    },
+  },
+  class_trickster: {
+    color: 0xffc83a,
+    draw: (k, c) => {
+      k.solid([0xff7a8a, 0xe0243f], (p) => {
+        p.ellipse(-15, -37, 14, 8, -0.45);
+        p.ellipse(15, -37, 14, 8, 0.45);
+      });
+      k.solid([0xff7a8a, 0xe0243f], (p) => p.circle(0, -33, 6));
+      k.solid([shade(c, 0.45), shade(c, -0.14)], (p) => p.circle(0, 9, 32));
+      gloss(k, (p) => p.ellipse(-12, -6, 9, 5, -0.7));
+      k.detail(Color.outline, (p) => p.rrect(-27, 14, 54, 5, 2.5), 0.5);
+      k.detail(Color.outline, (p) => {
+        p.circle(0, 28, 4.6);
+        p.rrect(-2.3, 27, 4.6, 12, 2.3);
+      });
+    },
+  },
+  target: {
+    color: 0xff4d5e,
+    draw: (k, c) => {
+      k.solid([0xffffff, 0xddd5f0], (p) => p.circle(0, 0, 42));
+      k.detail([shade(c, 0.2), shade(c, -0.15)], (p) => p.circle(0, 0, 33));
+      k.detail(WHITE, (p) => p.circle(0, 0, 23));
+      k.detail([shade(c, 0.2), shade(c, -0.15)], (p) => p.circle(0, 0, 13));
+      gloss(k, (p) => p.ellipse(-15, -27, 11, 4.2, -0.6));
+    },
+  },
+  sweep: {
+    color: 0xe0b25a,
+    draw: (k, c) => {
+      k.pen.at(2, 0, 0.55);
+      k.solid([0xc98a4a, 0x8a5424], (p) => p.rrect(-4, -50, 8, 56, 3));
+      k.solid([shade(c, 0.35), shade(c, -0.22)], (p) => p.rpoly([-11, 8, 11, 8, 27, 46, -27, 46], 5));
+      for (const x of [-9, -3, 3, 9]) k.stroke(shade(c, -0.45), 2.4, (p) => p.m(x * 0.55, 18).l(x * 2.2, 44), 0.75);
+      k.solid([0xff6b8a, 0xd02a50], (p) => p.rrect(-14, 2, 28, 12, 4));
+      k.pen.at();
+    },
+  },
+  ticket: {
+    color: 0xffc83a,
+    draw: (k, c) => {
+      k.pen.at(0, 0, -0.16);
+      k.solid(tone(c), (p) => p.rpoly(ticketPoints(), 2.5));
+      for (let y = -20; y < 22; y += 10) k.stroke(Color.outline, 3, (p) => p.m(-17, y).l(-17, y + 5), 0.55);
+      k.detail(WHITE, (p) => p.star(13, 0, 17, 8, 5, 2));
+      gloss(k, (p) => p.rrect(-38, -23, 14, 4, 2));
+      k.pen.at();
+    },
+  },
+  calendar: {
+    color: 0xfff6dc,
+    draw: (k, c) => {
+      k.solid(tone(c), (p) => p.rrect(-39, -32, 78, 76, 11));
+      k.solid([0xff7a8a, 0xe0243f], (p) => p.rpoly([-39, -32, 39, -32, 39, -9, -39, -9], 9));
+      k.solid([0xe4eafa, 0x8f9bbb], (p) => {
+        p.rrect(-24, -42, 9, 20, 4);
+        p.rrect(15, -42, 9, 20, 4);
+      });
+      for (let r = 0; r < 2; r++) {
+        for (let col = 0; col < 3; col++) {
+          const x = -27 + col * 20;
+          const y = 2 + r * 19;
+          if (r === 1 && col === 2) k.detail([0xffd25a, 0xf0a21e], (p) => p.rrect(x, y, 15, 14, 4));
+          else k.detail(0x9a86b6, (p) => p.rrect(x, y, 15, 14, 4), 0.85);
+        }
+      }
+    },
+  },
+  wardrobe: {
+    color: 0xc98a4a,
+    draw: (k, c) => {
+      k.line(0xd5dded, 7, (p) => p.m(0, -7).l(0, -17).c(0, -41, 24, -41, 24, -26).c(24, -19, 17, -16, 10, -16), { hi: true });
+      k.line(c, 10, (p) => p.m(-43, 22).l(0, -6).l(43, 22).close(), { hi: true });
+      k.detail([0xffe27a, 0xf0a21e], (p) => p.star(0, 12, 11, 5, 5, 1.5));
+    },
+  },
+  share: {
+    color: 0x4da6ff,
+    draw: (k, c) => {
+      k.line(WHITE, 7, (p) => {
+        p.m(-26, 0).l(26, -28);
+        p.m(-26, 0).l(26, 28);
+      });
+      k.solid(tone(c), (p) => {
+        p.circle(-26, 0, 16);
+        p.circle(26, -28, 16);
+        p.circle(26, 28, 16);
+      });
+      gloss(k, (p) => p.ellipse(-30, -6, 6, 3, -0.7));
+    },
+  },
+  code: {
+    color: 0xffc93a,
+    draw: (k, c) => {
+      k.pen.at(0, 0, -PI / 4, 1.1);
+      k.solid(tone(c), (p) => {
+        p.circle(0, -28, 18);
+        p.rrect(-5, -16, 10, 62, 3);
+        p.rrect(5, 21, 13, 8, 2);
+        p.rrect(5, 34, 10, 8, 2);
+      });
+      k.detail(Color.outline, (p) => p.circle(0, -28, 8));
+      gloss(k, (p) => p.ellipse(-8, -37, 5, 3, -0.5));
+      k.pen.at();
+    },
+  },
+  speed_1: { color: 0xfff3d6, draw: chevrons(1) },
+  speed_2: { color: 0xffe27a, draw: chevrons(2) },
+  speed_3: { color: 0xffb629, draw: chevrons(3) },
+  eye: {
+    color: 0x4da6ff,
+    draw: (k, c) => {
+      k.solid([0xffffff, 0xe4defa], (p) => p.m(-45, 0).c(-22, -36, 22, -36, 45, 0).c(22, 36, -22, 36, -45, 0).close());
+      k.detail([shade(c, 0.35), shade(c, -0.2)], (p) => p.circle(0, 0, 20));
+      k.detail(Color.outline, (p) => p.circle(0, 0, 9.5));
+      k.detail(WHITE, (p) => p.circle(-6.5, -7, 5.2), 0.95);
     },
   },
   dice: {

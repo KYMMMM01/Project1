@@ -6,7 +6,7 @@ import {
   createStoragePersistence,
   safeStorage,
 } from '@/platform/storage';
-import { settleWithin, utf8Length } from '@/platform/util';
+import { createBusyFlag, settleWithin, utf8Length } from '@/platform/util';
 import { ModalGate } from '@/platform/modal';
 import { makePauser } from './platformHelpers';
 
@@ -166,6 +166,21 @@ describe('storage never throws and always settles', () => {
     expect(p.load()).toEqual({ n: 0 }); // corrupt data degrades to defaults
   });
 
+  it('createBusyFlag expires so a silent SDK cannot disable ads for the whole session', () => {
+    let t = 1_000;
+    const f = createBusyFlag(500, () => t);
+    expect(f.active).toBe(false);
+    f.begin();
+    expect(f.active).toBe(true);
+    t += 499;
+    expect(f.active).toBe(true);
+    t += 1;
+    expect(f.active).toBe(false);
+    f.begin();
+    f.end();
+    expect(f.active).toBe(false);
+  });
+
   it('settleWithin never rejects', async () => {
     await expect(settleWithin(Promise.reject(new Error('x')), 10, 'fb')).resolves.toBe('fb');
     await expect(settleWithin(Promise.resolve('ok'), 10, 'fb')).resolves.toBe('ok');
@@ -181,10 +196,14 @@ describe('ModalGate', () => {
     expect(gate.acquire('b')).toBeNull();
     a?.release();
     a?.release();
-    expect(p.calls).toEqual(['pause:true', 'mute:true', 'mute:false', 'pause:false']);
+    // input is blocked first and released first; pause and mute mirror each other
+    expect(p.calls).toEqual(['block:true', 'pause:true', 'mute:true', 'block:false', 'mute:false', 'pause:false']);
     expect(gate.busy).toBe(false);
 
     const angry = new ModalGate({
+      setInputBlocked: () => {
+        throw new Error('b');
+      },
       setPaused: () => {
         throw new Error('p');
       },
@@ -195,5 +214,12 @@ describe('ModalGate', () => {
     const l = angry.acquire('x');
     expect(() => l?.release()).not.toThrow();
     expect(angry.busy).toBe(false);
+  });
+
+  it('works with a pauser that has no input shield', () => {
+    const calls: string[] = [];
+    const gate = new ModalGate({ setPaused: (v) => calls.push(`p${v}`), setMuted: (v) => calls.push(`m${v}`) });
+    gate.acquire('a')?.release();
+    expect(calls).toEqual(['ptrue', 'mtrue', 'mfalse', 'pfalse']);
   });
 });

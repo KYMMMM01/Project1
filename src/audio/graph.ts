@@ -3,7 +3,7 @@
  * quality report), so what the report measures is what the player hears.
  *
  *   sfxBus ----------------------------------> master
- *   musicBus -> duckGain --------------------> master
+ *   musicBus -> musicLpf -> duckGain --------> master
  *   reverbIn -> convolver -> musicBus (wet)
  *   master -> muteGain -> limiter (DynamicsCompressor) -> destination
  */
@@ -13,12 +13,16 @@ import { impulseBuffer } from './synth';
 export const SFX_BASE = 1;
 export const MUSIC_BASE = 0.22;
 const MASTER_GAIN = 0.85;
+/** Fully open setting of the music low-pass: transparent, so only a defeat muffle ever moves it. */
+export const MUSIC_LPF_OPEN = 20000;
 
 export interface AudioGraph {
   master: GainNode;
   sfxBus: GainNode;
   musicBus: GainNode;
   duckGain: GainNode;
+  /** Muffles the music under a defeat; reverb returns pass through it too. */
+  musicLpf: BiquadFilterNode;
   muteGain: GainNode;
   limiter: DynamicsCompressorNode;
   reverbIn: GainNode;
@@ -33,6 +37,10 @@ export function createGraph(ctx: BaseAudioContext): AudioGraph {
   musicBus.gain.value = MUSIC_BASE;
   const duckGain = ctx.createGain();
   const muteGain = ctx.createGain();
+  const musicLpf = ctx.createBiquadFilter();
+  musicLpf.type = 'lowpass';
+  musicLpf.frequency.value = MUSIC_LPF_OPEN;
+  musicLpf.Q.value = 0.5;
 
   // Safety limiter, not a mastering compressor: the baked levels leave headroom, so it only acts on
   // pile-ups. A higher threshold with a hard ratio pumped less than -12 dB / 8:1 in the offline
@@ -45,7 +53,8 @@ export function createGraph(ctx: BaseAudioContext): AudioGraph {
   limiter.release.value = 0.14;
 
   sfxBus.connect(master);
-  musicBus.connect(duckGain);
+  musicBus.connect(musicLpf);
+  musicLpf.connect(duckGain);
   duckGain.connect(master);
   master.connect(muteGain);
   muteGain.connect(limiter);
@@ -57,5 +66,5 @@ export function createGraph(ctx: BaseAudioContext): AudioGraph {
   reverbIn.connect(convolver);
   convolver.connect(musicBus);
 
-  return { master, sfxBus, musicBus, duckGain, muteGain, limiter, reverbIn };
+  return { master, sfxBus, musicBus, duckGain, musicLpf, muteGain, limiter, reverbIn };
 }

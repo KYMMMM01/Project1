@@ -1,12 +1,17 @@
 /**
  * ModalGate: the single place that pauses the game and mutes audio for an ad or a purchase sheet and
  * guarantees the matching restore. Ads and IAP share one gate, so they can never overlap.
- * Pure: the actual pause/mute implementation is injected (boot wires game.setExternalPause and
- * audio.setMuted).
+ * Pure: the actual pause/mute implementation is injected (boot wires game.setExternalPause,
+ * audio.setMuted and an input shield).
  */
 export interface Pauser {
   setPaused(paused: boolean): void;
   setMuted(muted: boolean): void;
+  /**
+   * Swallow taps on the game while a modal is open (research C-7.1 #7: pause + mute + input block).
+   * Only modals use it; platform pause signals do not.
+   */
+  setInputBlocked?(blocked: boolean): void;
 }
 
 export interface ModalLease {
@@ -43,7 +48,12 @@ export class ModalGate {
         if (released) return;
         released = true;
         if (gate.current === lease) gate.current = null;
-        // Restore both even if the first throws; the order mirrors acquire in reverse.
+        // Restore everything even if one step throws; the order mirrors acquire in reverse.
+        try {
+          gate.pauser.setInputBlocked?.(false);
+        } catch {
+          /* keep going */
+        }
         try {
           gate.pauser.setMuted(false);
         } catch {
@@ -57,6 +67,11 @@ export class ModalGate {
       },
     };
     this.current = lease;
+    try {
+      this.pauser.setInputBlocked?.(true);
+    } catch {
+      /* keep going */
+    }
     try {
       this.pauser.setPaused(true);
     } catch {

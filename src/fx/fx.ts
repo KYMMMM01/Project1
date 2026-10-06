@@ -1,19 +1,24 @@
-import { Container, type Sprite } from 'pixi.js';
+import { Container, type Sprite, type Texture } from 'pixi.js';
 import { game } from '@/core/game';
 import { haptic, type HapticId } from '@/core/haptics';
-import { Ease, type Tween, type Tweener } from '@/core/tween';
+import { Ease, type Tween, type TweenOpts, type Tweener } from '@/core/tween';
 import { TAU, darken, lighten, rand } from '@/core/math';
 import { Color, RARITY_ORDER, Rarity } from '@/ui/theme';
-import { buildBolt, boltPointCount } from './bolt';
+import { buildBolt, boltPointCount, strokeBolt } from './bolt';
+import { awakeningCutIn, type AwakeningOpts } from './cutin';
 import type { TimeFreeze } from './freeze';
+import { startFxGovernor } from './governor';
 import { FloatingNumbers, type NumStyle, type NumberOpts } from './numbers';
-import { EmitterGroup, type FxHandle } from './handles';
+import { EmitterGroup, type FxHandle, type FxSequence, type FxTimeline } from './handles';
+import { Loop, type FxEnv, type FxRect, type ZoneHandle } from './loops';
 import { ParticleSystem, type BurstMods, type EmitDef } from './particles';
 import { hitFlash } from './juice';
-import { Rays, makeRayPool, type RaysOpts } from './rays';
-import { FX_TIERS, REDUCED, fxSettings, motionSeconds, setFxSettings, type FxTier } from './settings';
+import { Rays, makeSpritePool, type RaysOpts } from './rays';
+import { FX_TIERS, REDUCED, fxSettings, motionSeconds, tierScale } from './settings';
 import { ScreenFx, Trauma, fxShake, screenFx } from './screen';
 import { ensureFxTextures } from './textures';
+import * as zones from './zones';
+import type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
 
 const W = 0xffffff;
 const PI = Math.PI;
@@ -65,14 +70,6 @@ export interface SummonOpts extends FxOpts {
   quick?: boolean;
 }
 
-/** When a composite effect peaks and when it is over, in seconds from the call. */
-export interface FxTimeline {
-  /** Moment of impact: reveal the unit, drop the loot, hide the boss. */
-  impact: number;
-  /** Seconds until the effect has fully played out. */
-  duration: number;
-}
-
 export type SummonTimeline = FxTimeline;
 
 export interface BossDeathOpts extends FxOpts {
@@ -87,6 +84,28 @@ export interface BossDeathOpts extends FxOpts {
 export interface WaveClearOpts {
   /** Peggle-style finish: half-speed gameplay for 0.2 s after the last kill. */
   slowMo?: boolean;
+}
+
+export interface SlashLineOpts extends FxOpts {
+  /** Blade thickness multiplier. Default 1. */
+  thickness?: number;
+}
+
+export interface CoinRainOpts {
+  /** Coins at full quality. Default 48 (scaled by tier). */
+  count?: number;
+  /** Centre and width of the strip the coins fall from. Default the whole design width. */
+  x?: number;
+  width?: number;
+  /** How far down they fall, design px. Default the design height. */
+  height?: number;
+}
+
+export interface SkyStrikeOpts extends FxOpts {
+  /** Direction of travel in radians (default steeply down-right: it comes in from the upper left). */
+  angle?: number;
+  /** Fired at the moment of impact: apply the damage visuals, shake the target. */
+  onImpact?: () => void;
 }
 
 export interface ConfettiOpts {
@@ -107,8 +126,6 @@ export interface LightningOpts extends FxOpts {
 }
 
 export interface FxCreateOpts {
-  /** Live particle cap. Default 700. */
-  budget?: number;
   /** Screen effects used by the big reveals. Default the shared instance. */
   screen?: ScreenFx;
   /** Hit-stop used by tier 3+ reveals and the boss / wave presets; omit for none. */
@@ -116,6 +133,9 @@ export interface FxCreateOpts {
   /** Vibrate (Android) on big moments, per the guide's per-event patterns. Default true. */
   haptics?: boolean;
 }
+
+/** Where along a slash line sparks fly off, alternating sides. */
+const SLASH_SPARKS: readonly number[] = [0.3, 0.45, 0.65, 0.8, 0.97];
 
 const CONFETTI_PALETTE: readonly number[] = [0xff4d7a, 0xffd23f, 0x4ee3ff, 0xb26bff, 0x7dff6b, 0xffffff];
 
@@ -133,15 +153,19 @@ export class Fx {
   readonly root = new Container();
   readonly ps: ParticleSystem;
   readonly numbers: FloatingNumbers;
-  private readonly back = new Container();
-  private readonly rayPool = makeRayPool();
+  /** Ground layer under the particles: looping zone sprites and god-rays live here. */
+  private readonly ground = new Container();
+  private readonly spritePool = makeSpritePool();
   private readonly rayList: Rays[] = [];
+  private readonly loops: Loop[] = [];
   private readonly timers: Tween[] = [];
   private readonly screen: ScreenFx;
   private readonly freeze: TimeFreeze | undefined;
   private readonly haptics: boolean;
   private readonly bolt = new Float32Array(2 * boltPointCount(4));
   private readonly boltB = new Float32Array(2 * boltPointCount(3));
+  private readonly env: FxEnv;
+  private tierApplied = fxSettings.tier;
 
   constructor(
     target: Container,
@@ -152,21 +176,40 @@ export class Fx {
     this.root.label = 'fx';
     this.root.eventMode = 'none';
     target.addChild(this.root);
-    this.root.addChild(this.back);
-    this.ps = new ParticleSystem(this.root, o.budget ?? 700);
-    this.numbers = new FloatingNumbers(this.root);
+    this.root.addChild(this.ground);
+    this.ps = new ParticleSystem(this.root, FX_TIERS[fxSettings.tier].particles);
+    this.numbers = new FloatingNumbers(this.root, FX_TIERS[fxSettings.tier].numbers);
     this.screen = o.screen ?? screenFx;
     this.freeze = o.freeze;
     this.haptics = o.haptics ?? true;
+    this.env = {
+      ps: this.ps,
+      ground: this.ground,
+      sprites: this.spritePool,
+      run: (opts) => this.run(opts),
+      burst: (def, x, y, mods) => this.burst(def, x, y, mods),
+      add: (loop) => this.loops.push(loop),
+    };
+    startFxGovernor();
   }
 
+  /**
+   * Advance every live effect. Call it once per frame from the scene with the real frame time:
+   * particles and floating numbers are not meant to be slowed by hit-stop.
+   */
   update(dt: number): void {
+    if (this.tierApplied !== fxSettings.tier) this.syncTier();
     this.ps.update(dt);
     this.numbers.update(dt);
     for (let i = this.rayList.length - 1; i >= 0; i--) {
       const r = this.rayList[i] as Rays;
       r.update(dt);
       if (!r.alive) this.rayList.splice(i, 1);
+    }
+    for (let i = this.loops.length - 1; i >= 0; i--) {
+      const l = this.loops[i] as Loop;
+      l.update(dt);
+      if (!l.alive) this.loops.splice(i, 1);
     }
   }
 
@@ -176,6 +219,8 @@ export class Fx {
     this.numbers.clear();
     for (const r of this.rayList) r.dispose();
     this.rayList.length = 0;
+    for (const l of this.loops.slice()) l.dispose();
+    this.loops.length = 0;
     for (const t of this.timers) t.kill();
     this.timers.length = 0;
   }
@@ -184,17 +229,25 @@ export class Fx {
     this.clear();
     this.numbers.destroy();
     this.ps.destroy();
+    this.spritePool.drain((s) => s.destroy());
     this.root.destroy({ children: true });
   }
 
-  stats(): ReturnType<ParticleSystem['stats']> & { numbers: number; rays: number; timers: number } {
-    return { ...this.ps.stats(), numbers: this.numbers.count, rays: this.rayList.length, timers: this.timers.length };
+  stats(): ReturnType<ParticleSystem['stats']> & { numbers: number; rays: number; loops: number; timers: number; tier: string } {
+    return {
+      ...this.ps.stats(),
+      numbers: this.numbers.count,
+      rays: this.rayList.length,
+      loops: this.loops.length,
+      timers: this.timers.length,
+      tier: fxSettings.tier,
+    };
   }
 
-  /** Apply a device quality tier: particle multiplier plus this Fx's particle and number caps. */
-  applyTier(tier: FxTier): void {
-    const t = FX_TIERS[tier];
-    setFxSettings({ quality: t.quality });
+  /** Re-read `fxSettings.tier`: particle and number caps follow it (the count multiplier is read per call). */
+  private syncTier(): void {
+    this.tierApplied = fxSettings.tier;
+    const t = FX_TIERS[fxSettings.tier];
     this.ps.budget.cap = t.particles;
     this.numbers.cap = t.numbers;
   }
@@ -204,9 +257,25 @@ export class Fx {
     this.numbers.show(x, y, value, style, o);
   }
 
-  private after(seconds: number, fn: () => void): void {
+  /** A tween on the scene clock that clear() cancels. Settled ones are dropped lazily. */
+  private run(opts: TweenOpts): Tween {
     for (let i = this.timers.length - 1; i >= 0; i--) if (!(this.timers[i] as Tween).alive) this.timers.splice(i, 1);
-    this.timers.push(this.tweens.call(seconds, fn));
+    const t = this.tweens.run(opts);
+    this.timers.push(t);
+    return t;
+  }
+
+  private after(seconds: number, fn: () => void): void {
+    this.run({ duration: 0, delay: seconds, onComplete: fn });
+  }
+
+  /** `tl` as a promise that settles when it is over, or when the scene clock is cleared. */
+  private sequence(tl: FxTimeline): FxSequence {
+    const end = this.run({ duration: 0, delay: tl.duration });
+    return Object.assign(
+      end.finished.then(() => undefined),
+      tl,
+    );
   }
 
   private burst(def: EmitDef, x: number, y: number, mods?: BurstMods): void {
@@ -837,9 +906,10 @@ export class Fx {
    * Boss death (B-04): a hit-stop into slow motion, six small blasts scattering over the boss with a
    * shake that ramps up, then the final blast (flash, shockwaves, T5 shake, 120+ particles) at
    * `timeline.impact`. The boss sprite, when given, flickers white and red until then and `onFinal`
-   * should hide it. Drop the loot and start the victory fanfare at `impact`.
+   * should hide it. Drop the loot and start the victory fanfare at `impact` (or in `onFinal`).
+   * Returns at once; the result may be awaited for the end of the whole sequence.
    */
-  bossDeath(x: number, y: number, o: BossDeathOpts = {}): FxTimeline {
+  bossDeath(x: number, y: number, o: BossDeathOpts = {}): FxSequence {
     const s = o.scale ?? 1;
     const c = o.color ?? 0xff8a2a;
     const r = (o.radius ?? 80) * s;
@@ -872,7 +942,7 @@ export class Fx {
       this.bossFinalBlast(x, y, c, s);
       o.onFinal?.();
     });
-    return { impact: final, duration: final + 1.7 };
+    return this.sequence({ impact: final, duration: final + 1.7 });
   }
 
   /** The big blast that ends a boss: 120+ particles, two shockwaves, spawned all at once at the impact moment. */
@@ -967,7 +1037,7 @@ export class Fx {
         speed: [120, 380], dir: PI / 2, spread: 0.45, gravity: 260, drag: 0.5, flip: [7, 15], spin: [-6, 6], rot: [0, TAU], size: [15, 24],
         palette: o.palette ?? CONFETTI_PALETTE, colors: [W], fadeIn: 0, fadeOut: 0.18,
       },
-      x, y, { count: k },
+      x, y, { count: k * tierScale() },
     );
   }
 
@@ -1051,7 +1121,7 @@ export class Fx {
     ];
     for (const [delay, life, a] of strikes) {
       const n = buildBolt(this.bolt, x0, y0, x1, y1, 4, 0.2, Math.random);
-      this.boltStrip(this.bolt, n, thick, c, hi, delay, life, a);
+      strokeBolt(this.ps, this.bolt, n, thick, c, hi, delay, life, a, 2);
       const dx = x1 - x0;
       const dy = y1 - y0;
       for (let b = 0; b < branches; b++) {
@@ -1061,7 +1131,7 @@ export class Fx {
         const ang = Math.atan2(dy, dx) + (Math.random() < 0.5 ? -1 : 1) * rand(0.45, 0.95);
         const len = Math.hypot(dx, dy) * rand(0.18, 0.32);
         const nb = buildBolt(this.boltB, bx, by, bx + Math.cos(ang) * len, by + Math.sin(ang) * len, 3, 0.22, Math.random);
-        this.boltStrip(this.boltB, nb, thick * 0.55, c, hi, delay, life * 0.9, a * 0.8);
+        strokeBolt(this.ps, this.boltB, nb, thick * 0.55, c, hi, delay, life * 0.9, a * 0.8, 2);
       }
     }
     const m: BurstMods = { scale: s };
@@ -1071,35 +1141,6 @@ export class Fx {
       { tex: 'spark', prio: 0, count: 5, life: [0.12, 0.22], speed: [180, 420], drag: 4, alignVel: true, stretch: 0.002, size: [18, 28], sizeEnd: 6, colors: [W, hi, c], fadeIn: 0 },
       x1, y1, m,
     );
-  }
-
-  private boltStrip(pts: Float32Array, n: number, thick: number, c: number, hi: number, delay: number, life: number, alpha: number): void {
-    for (let i = 0; i < n - 1; i++) {
-      const ax = pts[2 * i] as number;
-      const ay = pts[2 * i + 1] as number;
-      const bx = pts[2 * i + 2] as number;
-      const by = pts[2 * i + 3] as number;
-      const len = Math.hypot(bx - ax, by - ay);
-      const ang = Math.atan2(by - ay, bx - ax);
-      // Glow pass first so the white core is drawn on top of it.
-      for (let pass = 0; pass < 2; pass++) {
-        const p = this.ps.alloc('bolt', 'add', 2);
-        if (!p) return;
-        const glowPass = pass === 0;
-        p.x = ax;
-        p.y = ay;
-        p.rot = ang;
-        p.sx0 = p.sx1 = (len + 3) / 32;
-        p.sy0 = p.sy1 = (glowPass ? thick * 3.6 : thick) / 8;
-        p.life = life;
-        p.age = -delay;
-        p.alpha = glowPass ? alpha * 0.8 : alpha;
-        p.fadeIn = 0;
-        p.fadeOut = 0.5;
-        p.ramp.setSolid(glowPass ? c : hi);
-        this.ps.commit(p);
-      }
-    }
   }
 
   healPlus(x: number, y: number, o: FxOpts = {}): void {
@@ -1215,7 +1256,7 @@ export class Fx {
 
   /** Slowly rotating god-rays; keep the handle to stop or move them. */
   rays(x: number, y: number, o: RaysOpts = {}): Rays {
-    const r = new Rays(this.rayPool, x, y, o.parent ?? this.back, o);
+    const r = new Rays(this.spritePool, x, y, o.parent ?? this.ground, o);
     this.rayList.push(r);
     return r;
   }
@@ -1263,5 +1304,341 @@ export class Fx {
       x, y, o.rate ?? 5,
     );
     return new EmitterGroup([e]);
+  }
+
+  /* ---- looping cell hazards and zones (zones.ts) -------------------------------------------- */
+
+  /** Warm diagonal light shaft with slow dust motes over a board cell; loops until stopped. */
+  sunbeamCell(rect: FxRect, o?: ZoneOpts): ZoneHandle {
+    return zones.sunbeamCell(this.env, rect, o);
+  }
+
+  /** Pulsing red laser-pointer dot with a thin ring; call moveTo() on the handle to make it follow. */
+  laserDot(x: number, y: number, o?: ZoneOpts): ZoneHandle {
+    return zones.laserDot(this.env, x, y, o);
+  }
+
+  /** Cell hazard telegraph: a blinking outline that fills up over `duration` seconds (0.8 by default), then pops. */
+  hazardWarn(rect: FxRect, kind: HazardKind, o?: HazardWarnOpts): ZoneHandle {
+    return zones.hazardWarn(this.env, rect, kind, o);
+  }
+
+  /** Looping `wet` hazard: a rippling puddle with leaping droplets. */
+  wetPuddle(rect: FxRect, o?: ZoneOpts): ZoneHandle {
+    return zones.wetPuddle(this.env, rect, o);
+  }
+
+  /** Looping `zap` hazard: flickering glow with crackling yellow arcs. */
+  zapCell(rect: FxRect, o?: ZoneOpts): ZoneHandle {
+    return zones.zapCell(this.env, rect, o);
+  }
+
+  /** Looping droopy blue spiral above a weakened unit. Pass `follow` to ride along with the unit. */
+  weakenSwirl(x: number, y: number, o?: ZoneOpts): ZoneHandle {
+    return zones.weakenSwirl(this.env, x, y, o);
+  }
+
+  /** Looping blizzard zone of the given radius. */
+  blizzardZone(x: number, y: number, radius: number, o?: ZoneOpts): ZoneHandle {
+    return zones.blizzardZone(this.env, x, y, radius, o);
+  }
+
+  /** Looping potion mist zone of the given radius. */
+  potionCloud(x: number, y: number, radius: number, o?: ZoneOpts): ZoneHandle {
+    return zones.potionCloud(this.env, x, y, radius, o);
+  }
+
+  /** Looping black hole of the given pull radius. */
+  blackHole(x: number, y: number, radius: number, o?: ZoneOpts): ZoneHandle {
+    return zones.blackHole(this.env, x, y, radius, o);
+  }
+
+  /* ---- one-shot specials -------------------------------------------------------------------- */
+
+  /**
+   * A long, fast katana streak from (x0,y0) to (x1,y1): the bright blade sweeps along the segment in
+   * about 70 ms over a wide soft wake, with sparks thrown off to both sides and a flare at the end.
+   */
+  slashLine(x0: number, y0: number, x1: number, y1: number, o: SlashLineOpts = {}): void {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    if (len < 4) return;
+    const ang = Math.atan2(y1 - y0, x1 - x0);
+    const c = o.color ?? 0xffffff;
+    const tint = lighten(c, 0.35);
+    const th = (o.thickness ?? 1) * (o.scale ?? 1);
+    this.burst(
+      { tex: 'streak', prio: 1, count: 1, life: 0.34, size: len, sizeY: 30 * th, sizeYEnd: 4 * th, rot: ang, colors: [tint, c], alpha: 0.55, fadeIn: 0, fadeOut: 0.9 },
+      x0, y0,
+    );
+    this.burst(
+      {
+        tex: 'streak', prio: 1, count: 1, life: 0.26, size: 16, sizeEnd: len, sizeY: 17 * th, sizeEase: Ease.expoOut, rot: ang,
+        colors: [W, tint], fadeIn: 0, fadeOut: 0.55,
+      },
+      x0, y0,
+    );
+    const spark: EmitDef = {
+      tex: 'spark', prio: 0, count: 2, life: [0.14, 0.26], speed: [180, 420], spread: 0.5, drag: 4, alignVel: true, stretch: 0.002, size: [18, 30], sizeEnd: 6,
+      colors: [W, tint], fadeIn: 0, fadeOut: 0.5,
+    };
+    // Sparks leave the blade at staggered points, a different set on each side.
+    for (let i = 0; i < SLASH_SPARKS.length; i++) {
+      const t = SLASH_SPARKS[i] as number;
+      this.burst(spark, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, { dir: ang + (i % 2 === 0 ? PI / 2 : -PI / 2) });
+    }
+    this.burst(
+      { tex: 'starburst', prio: 1, count: 1, life: 0.16, delay: 0.05, size: 54, sizeEnd: 120, rot: [0, TAU], colors: [W, tint], fadeIn: 0, fadeOut: 0.7, sizeEase: Ease.cubicOut },
+      x1, y1,
+    );
+  }
+
+  /** A shield (barrier) bursting: glassy shards and crystals, a pale ring and glints. */
+  shieldBreak(x: number, y: number, o: FxOpts = {}): void {
+    const c = o.color ?? 0x8fe3ff;
+    const hi = lighten(c, 0.75);
+    const s = o.scale ?? 1;
+    const m: BurstMods = { scale: s };
+    this.burst(
+      { tex: 'glow', prio: 1, count: 1, life: 0.2, size: 44, sizeEnd: 160, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'starburst', prio: 1, count: 1, life: 0.14, size: 60, sizeEnd: 130, rot: [0, TAU], colors: [W, hi], fadeIn: 0, fadeOut: 0.7, sizeEase: Ease.cubicOut },
+      x, y, m,
+    );
+    this.shockwave(x, y, { color: c, radius: 95, scale: s });
+    this.burst(
+      {
+        tex: 'shard', prio: 1, count: 12, life: [0.5, 0.9], speed: [200, 520], gravity: 760, drag: 0.7, size: [16, 30], sizeEnd: [8, 14], spin: [-10, 10], rot: [0, TAU],
+        colors: [W, hi, c], alpha: 0.95, fadeIn: 0, fadeOut: 0.4,
+      },
+      x, y, m,
+    );
+    this.burst(
+      {
+        tex: 'crystal', prio: 1, count: 3, life: [0.6, 0.95], speed: [120, 300], gravity: 520, drag: 1, size: [22, 34], sizeEnd: [12, 18], spin: [-5, 5], rot: [0, TAU],
+        colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.4,
+      },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'sparkle', prio: 1, count: 8, life: [0.4, 0.75], speed: [60, 230], drag: 2.4, size: [14, 26], sizeEnd: [3, 7], spin: [-3, 3], rot: [0, TAU], colors: [W, hi], fadeIn: 0.1, fadeOut: 0.5 },
+      x, y, m,
+    );
+  }
+
+  /**
+   * Moulting: fur tufts swirl in from a ring, the unit changes at `impact`, then the tufts pop out
+   * and drift down in a puff of the same colour. `color` is the fur / class colour.
+   */
+  moltPuff(x: number, y: number, o: FxOpts = {}): FxTimeline {
+    const c = o.color ?? 0xffb35c;
+    const hi = lighten(c, 0.5);
+    const lo = darken(c, 0.25);
+    const s = o.scale ?? 1;
+    const m: BurstMods = { scale: s };
+    const suck = 0.3;
+    this.burst(
+      {
+        tex: 'tuft', blend: 'normal', prio: 1, count: 9, life: [0.22, suck], shape: { type: 'ring', r: 85, width: 30 }, size: [24, 32], sizeEnd: [10, 14], spin: [-6, 6],
+        rot: [0, TAU], colors: [hi, c], fadeIn: 0.1, fadeOut: 0.15, converge: { swirl: 36, ease: Ease.cubicIn },
+      },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'glow', prio: 1, count: 1, life: suck, size: 20, sizeEnd: 90, colors: [hi, c], alpha: 0.7, sizeEase: Ease.quadIn, fadeIn: 0.2, fadeOut: 0.05 },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'glow', prio: 1, count: 1, life: 0.22, delay: suck, size: 40, sizeEnd: 150, colors: [hi, c], alpha: 0.6, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      x, y, m,
+    );
+    this.shockwave(x, y, { color: c, radius: 100, scale: s, delay: suck });
+    this.burst(
+      {
+        tex: 'tuft', blend: 'normal', prio: 1, count: 12, life: [0.7, 1.1], delay: suck, speed: [150, 340], drag: 2.8, gravity: 140, size: [26, 40], sizeEnd: [18, 28],
+        spin: [-9, 9], rot: [0, TAU], colors: [hi, c, lo], fadeIn: 0, fadeOut: 0.45,
+      },
+      x, y, m,
+    );
+    this.burst(
+      {
+        tex: 'smoke', blend: 'normal', prio: 1, count: 4, life: [0.4, 0.7], delay: suck, shape: { type: 'circle', r: 14 }, speed: [30, 90], drag: 3, size: [34, 48],
+        sizeEnd: [70, 96], rot: [0, TAU], colors: [lighten(c, 0.6), c], alpha: 0.45, fadeIn: 0.1, fadeOut: 0.6,
+      },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'sparkle', prio: 1, count: 6, life: [0.4, 0.7], delay: suck, speed: [60, 200], drag: 2.4, size: [14, 24], sizeEnd: [3, 6], spin: [-3, 3], rot: [0, TAU], colors: [W, hi], fadeIn: 0.1, fadeOut: 0.5 },
+      x, y, m,
+    );
+    return { impact: suck, duration: 1.4 };
+  }
+
+  /** Two or three small hearts float up from a purring cat. */
+  purrHearts(x: number, y: number, o: FxOpts = {}): void {
+    const c = o.color ?? 0xff7fa8;
+    const m: BurstMods = { scale: o.scale ?? 1 };
+    this.burst(
+      {
+        tex: 'heart', blend: 'normal', prio: 1, count: 3, life: [1.0, 1.4], delay: [0, 0.35], shape: { type: 'circle', r: 22 }, speed: [55, 95], dir: -PI / 2, spread: 0.45,
+        drag: 0.5, gravity: -14, size: [10, 14], sizeEnd: [24, 32], sizeEase: Ease.backOut, rot: [-0.25, 0.25], colors: [lighten(c, 0.35), c], fadeIn: 0, fadeOut: 0.45,
+        sway: { amp: [8, 16], freq: [0.8, 1.4] },
+      },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'sparkle', prio: 1, count: 3, life: [0.4, 0.7], speed: [20, 70], drag: 2, size: [10, 18], sizeEnd: [3, 6], spin: [-3, 3], rot: [0, TAU], colors: [W, lighten(c, 0.5)], fadeIn: 0.1, fadeOut: 0.5 },
+      x, y, m,
+    );
+  }
+
+  /**
+   * Coins pour down across the whole field for about a second, tumbling, with glints among them.
+   * The count scales with the tier.
+   */
+  coinRain(o: CoinRainOpts = {}): FxTimeline {
+    const w = o.width ?? game.w;
+    const x = o.x ?? game.w / 2;
+    const h = o.height ?? game.h;
+    // Fall time from v0 = 900 px/s under 600 px/s^2 gravity, so the coins are near the bottom as they fade.
+    const g = 600;
+    const v0 = 900;
+    const fall = (Math.sqrt(v0 * v0 + 2 * g * h) - v0) / g;
+    const k = tierScale();
+    const gold = Color.gold;
+    this.burst(
+      {
+        tex: 'coin', blend: 'normal', prio: 1, count: o.count ?? 48, life: [fall * 0.95, fall * 1.1], delay: [0, 0.45], shape: { type: 'rect', w, h: 30 }, speed: [v0 * 0.9, v0 * 1.1],
+        dir: PI / 2, spread: 0.1, gravity: g, drag: 0, flip: [9, 17], spin: [-2, 2], size: [30, 42], colors: [lighten(gold, 0.25), gold], fadeIn: 0, fadeOut: 0.2,
+      },
+      x, -40, { count: k },
+    );
+    this.burst(
+      {
+        tex: 'sparkle', prio: 1, count: 18, life: [fall * 0.7, fall * 0.95], delay: [0, 0.5], shape: { type: 'rect', w, h: 30 }, speed: [v0 * 0.8, v0], dir: PI / 2, spread: 0.12,
+        gravity: g, size: [14, 24], sizeEnd: [4, 8], spin: [-4, 4], rot: [0, TAU], colors: [W, lighten(gold, 0.5)], fadeIn: 0.05, fadeOut: 0.4,
+      },
+      x, -40, { count: k },
+    );
+    return { impact: 0, duration: fall + 0.55 };
+  }
+
+  /**
+   * A fiery meteor falls from above and slams into (x,y): a long burning streak with a smoky trail,
+   * a growing shadow on the ground, then an explosion, shake and dust at `timeline.impact`.
+   */
+  meteor(x: number, y: number, o: SkyStrikeOpts = {}): FxTimeline {
+    return this.skyStrike(x, y, o, false);
+  }
+
+  /** A shooting star: a bright glittering streak that ends in a soft burst of stars at (x,y). */
+  shootingStar(x: number, y: number, o: SkyStrikeOpts = {}): FxTimeline {
+    return this.skyStrike(x, y, o, true);
+  }
+
+  private skyStrike(x: number, y: number, o: SkyStrikeOpts, star: boolean): FxTimeline {
+    const s = o.scale ?? 1;
+    const ang = o.angle ?? (star ? 1.0 : 1.25);
+    const c = o.color ?? (star ? 0xfff0a8 : 0xff8a2a);
+    const hi = lighten(c, 0.6);
+    const dx = Math.cos(ang);
+    const dy = Math.sin(ang);
+    // Start above the top edge: far enough that the streak enters from outside the screen.
+    const dist = Math.max(360, (y + 100) / Math.max(0.35, dy));
+    const fall = Math.max(0.3, dist / (star ? 1500 : 1800));
+    const loop = new Loop(this.env, x, y, { fadeIn: fall * 0.6, fadeOut: 0.25, life: fall });
+    const shadow = loop.sprite('glow', 'normal', 0x000000);
+    const head = new Container();
+    loop.own(head);
+    const m: BurstMods = { scale: s };
+    loop.emit(
+      {
+        tex: 'spark', prio: 1, life: 0.09, size: (star ? 220 : 340) * s, sizeY: (star ? 22 : 46) * s, rot: ang, anchorX: 1,
+        colors: star ? [W, hi, c] : [hi, c, 0xd8431a], alpha: 0.95, fadeIn: 0, fadeOut: 0.8,
+      },
+      70, 0, 0, undefined, head,
+    );
+    loop.emit(
+      { tex: 'spark', prio: 1, life: 0.07, size: (star ? 140 : 230) * s, sizeY: (star ? 12 : 16) * s, rot: ang, anchorX: 1, colors: [W, hi], alpha: 1, fadeIn: 0, fadeOut: 0.7 },
+      70, 0, 0, undefined, head,
+    );
+    loop.emit(
+      { tex: star ? 'star' : 'glow', prio: 1, life: 0.07, size: (star ? 46 : 110) * s, spin: star ? [-8, 8] : 0, colors: [W, hi], alpha: 0.95, fadeIn: 0, fadeOut: 0.6 },
+      60, 0, 0, undefined, head,
+    );
+    if (star) {
+      loop.emit(
+        {
+          tex: 'sparkle', prio: 1, life: [0.4, 0.7], speed: [10, 50], drag: 1, size: [14, 24], sizeEnd: [3, 6], spin: [-4, 4], rot: [0, TAU], colors: [W, hi, c], fadeIn: 0.05,
+          fadeOut: 0.5,
+        },
+        60, 0, 0, m, head,
+      );
+    } else {
+      loop.emit(
+        {
+          tex: 'smoke', blend: 'normal', prio: 1, life: [0.4, 0.7], shape: { type: 'circle', r: 8 }, speed: [10, 40], drag: 1.5, size: [30, 44], sizeEnd: [70, 100], rot: [0, TAU],
+          colors: [0x6a5a70, 0x2a2133], alpha: 0.5, fadeIn: 0.1, fadeOut: 0.6,
+        },
+        40, 0, 0, m, head,
+      );
+      loop.emit(
+        {
+          tex: 'dot', prio: 1, life: [0.3, 0.6], speed: [30, 120], dir: ang + PI, spread: 0.6, gravity: 220, size: [5, 9], sizeEnd: 2, colors: [W, 0xffc34a, 0xff4a1a],
+          fadeIn: 0, fadeOut: 0.5,
+        },
+        50, 0, 0, m, head,
+      );
+    }
+    let landed = false;
+    loop.step = (age) => {
+      const p = Math.min(1, age / fall);
+      const away = 1 - p * p;
+      head.position.set(-dx * dist * away, -dy * dist * away);
+      loop.fit(shadow, 'glow', (60 + 90 * p) * s, (26 + 34 * p) * s);
+      shadow.alpha = 0.5 * p;
+      if (landed || age < fall) return;
+      landed = true;
+      this.skyImpact(x, y, c, s, star);
+      o.onImpact?.();
+    };
+    return { impact: fall, duration: fall + (star ? 0.9 : 1.2) };
+  }
+
+  private skyImpact(x: number, y: number, c: number, s: number, star: boolean): void {
+    if (star) {
+      const hi = lighten(c, 0.6);
+      const m: BurstMods = { scale: s };
+      fxShake(Trauma.t1);
+      this.buzz('light');
+      this.burst(
+        { tex: 'glow', prio: 2, count: 1, life: 0.26, size: 50, sizeEnd: 190, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+        x, y, m,
+      );
+      this.shockwave(x, y, { color: c, radius: 120, scale: s });
+      this.burst(
+        { tex: 'star', prio: 2, count: 9, life: [0.5, 0.85], speed: [180, 460], drag: 2.8, size: [22, 40], sizeEnd: [5, 9], spin: [-6, 6], rot: [0, TAU], colors: [W, hi, c], fadeIn: 0, fadeOut: 0.5 },
+        x, y, m,
+      );
+      this.burst(
+        { tex: 'sparkle', prio: 2, count: 10, life: [0.6, 1.0], speed: [60, 230], drag: 2.2, size: [16, 28], sizeEnd: [4, 8], spin: [-3, 3], rot: [0, TAU], colors: [W, hi], fadeIn: 0.1, fadeOut: 0.5 },
+        x, y, m,
+      );
+      return;
+    }
+    fxShake(Trauma.t3);
+    this.buzz('medium');
+    this.explosion(x, y, { color: c, scale: s * 1.1 });
+    this.dustPuff(x, y + 8, { scale: 1.5 * s });
+  }
+
+  /**
+   * Mythic awakening cut-in on the overlay layer: dim, converging speed lines, a flash, then a banner
+   * slides in with the portrait and the name and slides out again, 1.6 s in all (0.8 s with
+   * `short`). A tap skips it. Returns at once; await the result only if something must follow it.
+   */
+  awakening(portrait: Texture, name: string, o: AwakeningOpts = {}): FxSequence {
+    return awakeningCutIn.play(portrait, name, { screen: this.screen, haptics: this.haptics, ...o });
   }
 }

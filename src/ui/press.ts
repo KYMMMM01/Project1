@@ -37,3 +37,63 @@ export function inScrollHost(obj: Container): boolean {
   }
   return false;
 }
+
+export interface PressHandlers {
+  /** The pointer went down on the target: change the visuals on this very frame. */
+  down(): void;
+  /** The press ended. `fire` is true for a real tap (released inside), false for a cancel. */
+  up(fire: boolean): void;
+}
+
+export interface PressBinding {
+  /** Abort a press in progress without firing. */
+  cancel(): void;
+  /** Remove every listener; call from the owner's destroy(). */
+  dispose(): void;
+}
+
+/**
+ * Pointer plumbing shared by small pressable widgets: down/up/cancel with scroll-view cancellation
+ * (via the active-press registry) and leave/cancel handling. Buttons have richer rules and keep their own.
+ */
+export function bindPress(target: Container, h: PressHandlers): PressBinding {
+  let pressed = false;
+  const self: Pressable = {
+    cancelPress: () => {
+      if (!pressed) return;
+      pressed = false;
+      clearActivePress(self);
+      h.up(false);
+    },
+  };
+  const onDown = (): void => {
+    if (pressed) return;
+    pressed = true;
+    setActivePress(self);
+    h.down();
+  };
+  const onUp = (): void => {
+    if (!pressed) return;
+    pressed = false;
+    clearActivePress(self);
+    h.up(true);
+  };
+  const cancel = (): void => self.cancelPress();
+  target.on('pointerdown', onDown);
+  target.on('pointerup', onUp);
+  target.on('pointerupoutside', cancel);
+  target.on('pointerleave', cancel);
+  target.on('pointercancel', cancel);
+  return {
+    cancel,
+    dispose: () => {
+      target.off('pointerdown', onDown);
+      target.off('pointerup', onUp);
+      target.off('pointerupoutside', cancel);
+      target.off('pointerleave', cancel);
+      target.off('pointercancel', cancel);
+      pressed = false;
+      clearActivePress(self);
+    },
+  };
+}

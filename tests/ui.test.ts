@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { setLang } from '@/core/i18n';
 import { countUpDuration, countUpValue, formatCount, formatDelta } from '@/ui/countUp';
 import { desaturate, hsvToColor, luma, shade } from '@/ui/colors';
 import { anchorPosition, gridLayout, safeRect, stackLayout, type Box } from '@/ui/layoutMath';
@@ -248,18 +249,41 @@ describe('count-up', () => {
     expect(countUpValue(1000, 0, 1)).toBe(0);
   });
 
-  it('formats with separators, then K/M suffixes', () => {
-    expect(formatCount(0)).toBe('0');
-    expect(formatCount(1234)).toBe('1,234');
-    expect(formatCount(9999)).toBe('9,999');
-    expect(formatCount(12_345)).toBe('12.3K');
-    expect(formatCount(1_234_567)).toBe('1.23M');
-  });
+  describe('locale-aware text', () => {
+    beforeAll(() => {
+      // setLang writes <html lang>; the node environment has no document.
+      vi.stubGlobal('document', { documentElement: { lang: '' } });
+    });
+    afterAll(() => {
+      setLang('ko');
+      vi.unstubAllGlobals();
+    });
 
-  it('shows signed deltas', () => {
-    expect(formatDelta(120)).toBe('+120');
-    expect(formatDelta(-30)).toBe('-30');
-    expect(formatDelta(15_000)).toBe('+15.0K');
+    it('English: separators up to 9,999, then K/M/B', () => {
+      setLang('en');
+      expect(formatCount(0)).toBe('0');
+      expect(formatCount(1234)).toBe('1,234');
+      expect(formatCount(9999)).toBe('9,999');
+      expect(formatCount(12_345)).toBe('12.3K');
+      expect(formatCount(1_234_567)).toBe('1.23M');
+    });
+
+    it('Korean: separators up to 9,999, then 만/억 units', () => {
+      setLang('ko');
+      expect(formatCount(9999)).toBe('9,999');
+      expect(formatCount(12_345)).toBe('1.23만');
+      expect(formatCount(1_234_567)).toBe('123만');
+      expect(formatCount(250_000_000)).toBe('2.5억');
+    });
+
+    it('shows signed deltas in the active language', () => {
+      setLang('en');
+      expect(formatDelta(120)).toBe('+120');
+      expect(formatDelta(-30)).toBe('-30');
+      expect(formatDelta(15_000)).toBe('+15K');
+      setLang('ko');
+      expect(formatDelta(15_000)).toBe('+1.5만');
+    });
   });
 });
 
