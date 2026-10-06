@@ -11,6 +11,7 @@ import {
   promoVisible,
   selectionAfterRun,
   stakePlayable,
+  stakeTagState,
   sweepable,
 } from '@/screens/battle/model';
 
@@ -101,5 +102,21 @@ describe('battle tab cards', () => {
     expect(cupProgress(62.5, tiers).fraction).toBeCloseTo(0.5, 5);
     expect(cupProgress(200, tiers)).toEqual({ next: null, fraction: 1 });
     expect(cupProgress(5, [])).toEqual({ next: null, fraction: 1 });
+  });
+});
+
+describe('butler-level tags', () => {
+  it('marks the picked tag, cleared tags, tags that can be tried and locked tags', () => {
+    const cleared = [3, 0, 0, 0, 0];
+    expect(stakeTagState(cleared, 1, 1, 3)).toBe('cleared');
+    expect(stakeTagState(cleared, 1, 3, 3)).toBe('selected');
+    expect(stakeTagState(cleared, 1, 3, 1)).toBe('open');
+    expect(stakeTagState(cleared, 1, 4, 3)).toBe('locked');
+  });
+
+  it('keeps every level of a locked chapter locked and offers the base level of the first one', () => {
+    expect(stakeTagState(FRESH, 2, 0, 0)).toBe('locked');
+    expect(stakeTagState(FRESH, 1, 0, 0)).toBe('selected');
+    expect(stakeTagState(FRESH, 1, 1, 0)).toBe('locked');
   });
 });

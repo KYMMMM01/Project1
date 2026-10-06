@@ -13,9 +13,9 @@ const BTN_W = 252;
 
 /** Patrol: gold the cats collected while the player was away, claimed for free or doubled by an ad. */
 export class PatrolCard extends HomeCard {
-  private readonly amount = uiLabel('0', { size: 56, anchorX: 0, strokeWidth: 8 });
+  private readonly amount = uiLabel('0', { size: 56, anchorX: 0 });
   private readonly bar: ProgressBar;
-  private readonly note = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, color: Color.textDim, stroke: false, shadow: false, align: 'left', wrap: 340 });
+  private readonly note = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, color: Color.inkSoft, align: 'left', wrap: 340 });
   private readonly collect: Button;
   private readonly double: Button;
   private clock = 0;
@@ -25,7 +25,7 @@ export class PatrolCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, t('battle.patrol.title'), 'paw');
+    super(w, H, t('battle.patrol.title'), 'paw', { tape: 'sky' });
     const left = CARD_PAD;
     const coin = drawIcon('coin', 64);
     coin.position.set(left + 32, this.contentTop + 40);
@@ -36,7 +36,7 @@ export class PatrolCard extends HomeCard {
     this.body.addChild(coin, this.amount, this.bar, this.note);
 
     const x = w - CARD_PAD - BTN_W / 2;
-    this.collect = new Button({ label: t('battle.patrol.collect'), icon: 'coin', style: 'primary', width: BTN_W, height: 92, fontSize: 38 });
+    this.collect = new Button({ label: t('battle.patrol.collect'), icon: 'coin', style: 'primary', width: BTN_W, height: 92, fontSize: 38, disabledMark: 'none' });
     this.collect.position.set(x, this.contentTop + 60);
     this.collect.onTap(() => void this.take(false));
     this.double = new Button({ label: t('battle.patrol.double'), icon: 'ad', style: 'success', width: BTN_W, height: 92, fontSize: 32, disabledMark: 'none' });

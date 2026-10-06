@@ -14,12 +14,12 @@ const BTN_W = 232;
 
 /** The daily challenge: today's code and rule, the best wave so far, and the weekly cup with its prizes. */
 export class DailyCard extends HomeCard {
-  private readonly rule = uiLabel('', { size: 30, anchorX: 0, color: Color.primary });
-  private readonly ruleText = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, stroke: false, shadow: false, align: 'left', wrap: 360 });
-  private readonly best = uiLabel('', { size: 26, anchorX: 0, color: Color.textDim, stroke: false, shadow: false });
+  private readonly rule = uiLabel('', { size: 30, anchorX: 0 });
+  private readonly ruleText = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, align: 'left', wrap: 360 });
+  private readonly best = uiLabel('', { size: 26, anchorX: 0, color: Color.inkSoft });
   private readonly code: Tag;
   private readonly cup: ProgressBar;
-  private readonly cupNote = uiLabel('', { size: 24, anchorX: 0, color: Color.textDim, stroke: false, shadow: false });
+  private readonly cupNote = uiLabel('', { size: 24, anchorX: 0, color: Color.inkSoft });
   private readonly play: Button;
   private readonly claimCup: Button;
   private codeText = '';
@@ -28,14 +28,14 @@ export class DailyCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, t('battle.daily.title'), 'trophy');
+    super(w, H, t('battle.daily.title'), 'trophy', { tape: 'sky' });
     const left = CARD_PAD;
     this.rule.position.set(left, this.contentTop + 22);
     this.ruleText.position.set(left, this.contentTop + 46);
     this.best.position.set(left, this.contentTop + 128);
     this.code = new Tag({ text: '-', style: 'info', shape: 'pill', fontSize: 24 });
     this.body.addChild(this.code, this.rule, this.ruleText, this.best);
-    this.cup = new ProgressBar({ width: 372, height: 36, color: 'purple', label: '' });
+    this.cup = new ProgressBar({ width: 372, height: 36, color: 'blue', label: '' });
     this.cup.position.set(left + 186, this.contentTop + 190);
     this.cupNote.position.set(left, this.contentTop + 236);
     this.body.addChild(this.cup, this.cupNote);
@@ -44,7 +44,7 @@ export class DailyCard extends HomeCard {
     this.play = new Button({ label: t('battle.daily.play'), icon: 'play', style: 'primary', width: BTN_W, height: 96, fontSize: 40 });
     this.play.position.set(x, this.contentTop + 56);
     this.play.onTap(() => void this.shell.startRun({ mode: 'daily' }));
-    this.claimCup = new Button({ label: t('battle.cup.claim'), icon: 'gift', style: 'success', width: BTN_W, height: 96, fontSize: 28 });
+    this.claimCup = new Button({ label: t('battle.cup.claim'), icon: 'gift', style: 'success', width: BTN_W, height: 96, fontSize: 28, disabledMark: 'none' });
     this.claimCup.position.set(x, this.contentTop + 56 + 96 + 14);
     this.claimCup.onTap(() => void this.takeCup());
     this.body.addChild(this.play, this.claimCup);

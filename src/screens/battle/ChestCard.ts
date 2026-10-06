@@ -28,7 +28,7 @@ export class ChestCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, t('battle.chest.title'), 'chest');
+    super(w, H, t('battle.chest.title'), 'chest', { tape: 'yellow' });
     const cx = w / 2;
     if (this.art instanceof Sprite) {
       this.art.anchor.set(0.5);
@@ -51,10 +51,10 @@ export class ChestCard extends HomeCard {
     this.open = new Button({ label: t('battle.chest.open'), icon: 'chest', style: 'primary', width: bw, height: 92, fontSize: 40 });
     this.open.position.set(cx, y);
     this.open.onTap(() => void this.take());
-    this.ad = new Button({ label: t('battle.treat.watch'), icon: 'ad', style: 'success', width: half, height: 92, fontSize: 32, disabledMark: 'none' });
+    this.ad = new Button({ label: t('battle.treat.watch'), icon: 'ad', style: 'success', width: half, height: 92, fontSize: 26, disabledMark: 'none' });
     this.ad.position.set(CARD_PAD + half / 2, y);
     this.ad.onTap(() => void this.take('ad'));
-    this.gems = new Button({ label: fmt(profile.freeChestView().skipGems), icon: 'gem', style: 'info', width: half, height: 92, fontSize: 36 });
+    this.gems = new Button({ label: fmt(profile.freeChestView().skipGems), icon: 'gem', style: 'info', width: half, height: 92, fontSize: 30 });
     this.gems.position.set(CARD_PAD + half + 12 + half / 2, y);
     this.gems.onTap(() => void this.take('gems'));
     this.body.addChild(this.open, this.ad, this.gems);

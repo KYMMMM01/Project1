@@ -12,13 +12,13 @@ const H = 252;
 /** The first-purchase pack, shown as a card on the tab (never a popup) while its 72-hour window is open. */
 export class PromoCard extends HomeCard {
   private readonly price: Button;
-  private readonly contents = uiLabel('', { size: 26, anchorX: 0, anchorY: 0, stroke: false, shadow: false, align: 'left', wrap: 330 });
+  private readonly contents = uiLabel('', { size: 26, anchorX: 0, anchorY: 0, align: 'left', wrap: 330 });
 
   constructor(
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, iap.productName(PROMO_PRODUCT), 'gift', 'gold');
+    super(w, H, iap.productName(PROMO_PRODUCT), 'gift', { tape: 'yellow', featured: true });
     const gift = drawIcon('gift', 104);
     gift.position.set(CARD_PAD + 52, this.contentTop + 78);
     this.contents.position.set(CARD_PAD + 124, this.contentTop + 8);

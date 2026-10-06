@@ -76,7 +76,7 @@ export class SceneManager {
   private drawCover(): void {
     const g = this.cover;
     g.clear();
-    g.rect(0, 0, game.w, game.h).fill(0x120b24);
+    g.rect(0, 0, game.w, game.h).fill(0x3b2418);
     if (this.irisActive && this.irisR > 0.5) {
       g.circle(game.w / 2, game.h / 2, this.irisR).cut();
     }

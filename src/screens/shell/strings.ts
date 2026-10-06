@@ -7,10 +7,10 @@ addStrings('ko', {
   'shell.tab.battle': '출동',
   'shell.tab.missions': '미션',
   'shell.tab.pass': '패스',
-  'shell.level': '레벨 {n}',
+  'shell.lv': 'Lv',
   'shell.xp': '{a} / {b}',
-  'shell.settings': '설정',
-  'shell.locked': '아직 열리지 않았어요.',
+  'shell.logo': '냥이 수비대',
+  'shell.logo.ready': '준비됐어요',
 
   'shell.pre.title': '출동 준비',
   'shell.pre.chapter': '챕터 {n}',
@@ -23,6 +23,10 @@ addStrings('ko', {
   'shell.pre.daily.rules': '오늘의 규칙',
   'shell.pre.endless.rules': '끝없이 밀려와요. 얼마나 버티는지 겨뤄 보세요.',
   'shell.pre.boss': '이 챕터의 보스',
+  'shell.pre.lines': '합성 줄',
+  'shell.pre.lines.hint': '같은 고양이 둘을 합치면 같은 줄의 다음 등급이 돼요.',
+  'shell.pre.lines.merge': '합성',
+  'shell.pre.lines.awaken': '각성',
   'shell.pre.snack': '출발 간식',
   'shell.pre.snack.hint': '하나만 고를 수 있어요. 고르면 바로 출발해요.',
   'shell.pre.snack.fish': '생선 {n}마리',
@@ -37,8 +41,8 @@ addStrings('ko', {
   'shell.pre.go': '출발!',
 
   'shell.cont.title': '이어서 할까요?',
-  'shell.cont.body': '끝내지 못한 판이 있어요. {chapter} {wave}웨이브부터 이어서 할 수 있어요.',
-  'shell.cont.body.noWave': '끝내지 못한 판이 있어요. 이어서 할 수 있어요.',
+  'shell.cont.body': '끝내지 못한 판이 있어요. 이어서 할 수 있어요.',
+  'shell.cont.wave': '{n}웨이브',
   'shell.cont.yes': '이어서',
   'shell.cont.no': '그만두기',
   'shell.cont.giveup.title': '정말 그만둘까요?',
@@ -49,7 +53,6 @@ addStrings('ko', {
 
   'shell.boot.warn.platform': '광고와 결제를 불러오지 못했어요. 게임은 그대로 즐길 수 있어요.',
   'shell.boot.warn.meta': '저장된 데이터를 불러오지 못했어요. 새로 시작해요.',
-  'shell.boot.failed': '시작하지 못했어요. 다시 열어 주세요.',
 });
 
 addStrings('en', {
@@ -58,10 +61,10 @@ addStrings('en', {
   'shell.tab.battle': 'Battle',
   'shell.tab.missions': 'Missions',
   'shell.tab.pass': 'Pass',
-  'shell.level': 'Level {n}',
+  'shell.lv': 'Lv',
   'shell.xp': '{a} / {b}',
-  'shell.settings': 'Settings',
-  'shell.locked': 'Not unlocked yet.',
+  'shell.logo': 'Meow Guard',
+  'shell.logo.ready': 'Ready',
 
   'shell.pre.title': 'Get ready',
   'shell.pre.chapter': 'Chapter {n}',
@@ -74,6 +77,10 @@ addStrings('en', {
   'shell.pre.daily.rules': "Today's rule",
   'shell.pre.endless.rules': 'They never stop. See how long you last.',
   'shell.pre.boss': 'Chapter boss',
+  'shell.pre.lines': 'Merge lines',
+  'shell.pre.lines.hint': 'Two identical cats merge into the next rank of the same line.',
+  'shell.pre.lines.merge': 'Merge',
+  'shell.pre.lines.awaken': 'Awaken',
   'shell.pre.snack': 'Starter snack',
   'shell.pre.snack.hint': 'Pick one. The run starts right away.',
   'shell.pre.snack.fish': '{n} fish',
@@ -88,8 +95,8 @@ addStrings('en', {
   'shell.pre.go': 'Go!',
 
   'shell.cont.title': 'Continue?',
-  'shell.cont.body': 'A run was left unfinished. You can pick it up at {chapter}, wave {wave}.',
-  'shell.cont.body.noWave': 'A run was left unfinished. You can pick it up.',
+  'shell.cont.body': 'A run was left unfinished. You can pick it up.',
+  'shell.cont.wave': 'Wave {n}',
   'shell.cont.yes': 'Continue',
   'shell.cont.no': 'Give up',
   'shell.cont.giveup.title': 'Give up this run?',
@@ -100,5 +107,4 @@ addStrings('en', {
 
   'shell.boot.warn.platform': "Ads and purchases couldn't load. You can still play.",
   'shell.boot.warn.meta': "Saved data couldn't be loaded. Starting fresh.",
-  'shell.boot.failed': "Couldn't start. Please reopen the game.",
 });

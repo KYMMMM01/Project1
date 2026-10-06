@@ -1,13 +1,18 @@
 import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
+import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { Color, TweenBag, cacheStatic, motion, punch, uiLabel, vGradient } from '@/ui';
+import { Color, TweenBag, cacheStatic, drawPaper, fitWidth, motion, paperSeed, punch, uiLabel } from '@/ui';
 import { xpFraction } from './layoutMath';
 
-const R_DISC = 34;
-const R_RING = 43;
+export const BADGE_R = 50;
+const R_RING = 40;
 const RING_W = 9;
+const NUMBER_MAX_W = 2 * R_RING - 22;
 
-/** Account level in a round badge; the ring around it fills with the XP earned toward the next level. Origin = centre. */
+/**
+ * The account level as a round paper sticker; a painted ring around its edge fills with the XP earned
+ * toward the next level. Origin = centre.
+ */
 export class LevelBadge extends Container {
   private readonly ring = new Graphics();
   private readonly numberT: Text;
@@ -18,13 +23,14 @@ export class LevelBadge extends Container {
   constructor() {
     super();
     const base = new Graphics();
-    base.circle(0, 5, R_RING + 4).fill({ color: Color.black, alpha: 0.3 });
-    base.circle(0, 0, R_RING + 4).fill(Color.outline);
-    base.circle(0, 0, R_RING).stroke({ width: RING_W, color: Color.panelDark });
-    base.circle(0, 0, R_DISC).fill(vGradient(Color.panelLight, Color.panelDark)).stroke({ width: 4, color: Color.outline });
+    drawPaper(base, -BADGE_R, -BADGE_R, { w: BADGE_R * 2, h: BADGE_R * 2, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, grain: false, seed: paperSeed() });
+    base.circle(0, 0, R_RING).stroke({ width: RING_W, color: Color.track });
     cacheStatic(base);
-    this.numberT = uiLabel('1', { size: 40, strokeWidth: 6 });
-    this.addChild(base, this.ring, this.numberT);
+    const lv = uiLabel(t('shell.lv'), { size: 20, color: Color.inkSoft });
+    lv.position.set(0, -20);
+    this.numberT = uiLabel('1', { size: 34 });
+    this.numberT.position.set(0, 8);
+    this.addChild(base, this.ring, lv, this.numberT);
   }
 
   /** Show `level` and the share of the next level already earned. Animates the ring and punches on a level up. */
@@ -34,7 +40,7 @@ export class LevelBadge extends Container {
     if (level !== this.level) {
       this.level = level;
       this.numberT.text = String(level);
-      this.numberT.scale.set(this.numberT.width > 2 * R_DISC - 10 ? (2 * R_DISC - 10) / this.numberT.width : 1);
+      fitWidth(this.numberT, NUMBER_MAX_W);
       if (leveled && animate && !motion.reduced) punch(this.bag, this, 0.18, 0.3);
     }
     const from = this.fraction;
@@ -68,10 +74,10 @@ export class LevelBadge extends Container {
     g.clear();
     if (fraction <= 0.001) return;
     if (fraction >= 0.999) {
-      g.circle(0, 0, R_RING).stroke({ width: RING_W, color: Color.primary });
+      g.circle(0, 0, R_RING).stroke({ width: RING_W, color: Color.teal });
       return;
     }
     const start = -Math.PI / 2;
-    g.arc(0, 0, R_RING, start, start + fraction * Math.PI * 2).stroke({ width: RING_W, color: Color.primary, cap: 'round' });
+    g.arc(0, 0, R_RING, start, start + fraction * Math.PI * 2).stroke({ width: RING_W, color: Color.teal, cap: 'round' });
   }
 }

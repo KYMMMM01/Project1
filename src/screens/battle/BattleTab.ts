@@ -2,8 +2,9 @@ import { Container } from 'pixi.js';
 import { audio } from '@/audio';
 import { t } from '@/core/i18n';
 import { featureHint, profile, type FeatureId } from '@/meta';
-import { Button, ScrollView, toast } from '@/ui';
+import { Button, ScrollView, TweenBag, toast } from '@/ui';
 import { services, type ContentArea, type Shell, type TabScreen } from '../contract';
+import { startBob, stopBob } from '../shell/bob';
 import { ChapterCard, CHAPTER_CARD_H } from './ChapterCard';
 import { ChestCard } from './ChestCard';
 import { DailyCard } from './DailyCard';
@@ -62,6 +63,10 @@ export class BattleTab implements TabScreen {
   private readonly scroll = new ScrollView({ width: 720, height: 800, indicator: true });
   private readonly chapter: ChapterCard;
   private readonly start: Button;
+  /** The start button sits in `bobber` (which moves) inside `startSlot` (which the layout places). */
+  private readonly startSlot = new Container();
+  private readonly bobber = new Container();
+  private readonly bag = new TweenBag();
   private readonly entries: Entry[] = [];
   private readonly sweep: SweepCard;
   private promo: PromoCard | null = null;
@@ -79,13 +84,15 @@ export class BattleTab implements TabScreen {
       onChange: (sel) => this.onSelect(sel),
       onCalendar: () => services.openCalendar(),
     });
-    this.start = new Button({ label: t('battle.start'), icon: 'play', style: 'primary', width: 600, height: START_H, fontSize: 64 });
+    this.start = new Button({ label: t('battle.start'), icon: 'play', style: 'primary', width: 600, height: START_H, fontSize: 64, tape: 'pink' });
     this.start.onTap(() => this.go());
     this.start.onDisabledTap(() => {
       toast(t('battle.chapter.locked'), 'info');
       audio.play('ui_error');
     });
-    content.addChild(this.chapter, this.start);
+    this.bobber.addChild(this.start);
+    this.startSlot.addChild(this.bobber);
+    content.addChild(this.chapter, this.startSlot);
 
     this.sweep = new SweepCard(HALF_W, shell);
     this.entries.push(
@@ -115,11 +122,11 @@ export class BattleTab implements TabScreen {
       this.applySelection(selectionAfterRun(profile.data.cleared, last, this.chapter.selection), true);
     }
     this.syncAll();
-    this.start.startPulse({ times: -1 });
+    startBob(this.bag, this.bobber);
   }
 
   hide(): void {
-    this.start.stopPulse();
+    stopBob(this.bag, this.bobber);
   }
 
   resize(area: ContentArea): void {
@@ -147,6 +154,7 @@ export class BattleTab implements TabScreen {
 
   destroy(): void {
     this.off();
+    this.bag.killAll();
     this.view.destroy({ children: true });
   }
 
@@ -213,7 +221,7 @@ export class BattleTab implements TabScreen {
     let y = MARGIN - 8;
     this.chapter.position.set(x, y);
     y += CHAPTER_CARD_H + GAP;
-    this.start.position.set(this.area.w / 2, y + START_H / 2);
+    this.startSlot.position.set(this.area.w / 2, y + START_H / 2);
     y += START_H + GAP + 8;
     if (showCards) {
       if (this.promo) {

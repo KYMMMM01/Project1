@@ -1,14 +1,13 @@
-import { Container, Graphics, Sprite } from 'pixi.js';
 import { audio } from '@/audio';
-import { hasTex, tex } from '@/core/assets';
 import { debugExpose } from '@/core/debug';
 import { game } from '@/core/game';
 import { i18nEvents, t } from '@/core/i18n';
 import { Scene, scenes } from '@/core/scene';
 import type { Tweener } from '@/core/tween';
 import { profile, featureHint, type FeatureId } from '@/meta';
-import { TabBar, Color, toast, vGradient, type TabDef } from '@/ui';
+import { TabBar, toast, type TabDef } from '@/ui';
 import { shell, type HomeSurface } from '@/screens/shell/controller';
+import { HomeFloor } from '@/screens/shell/HomeFloor';
 import { HomeTopBar } from '@/screens/shell/HomeTopBar';
 import { shellLayout } from '@/screens/shell/layoutMath';
 import { TabHost } from '@/screens/shell/TabHost';
@@ -37,14 +36,12 @@ export function markUnlocksSeen(): void {
 }
 
 /**
- * The home screen: key-art background, the top bar (level, currencies, settings), the five tabs and
+ * The home screen: the wooden floor, the top bar (level, currencies, settings), the five tabs and
  * the bottom tab bar. It is rebuilt every time the player comes back from a battle; the `shell`
  * singleton forwards tab and system-screen requests to whichever home scene is on screen.
  */
 export class HomeScene extends Scene implements HomeSurface {
-  private readonly background = new Container();
-  private readonly shade = new Graphics();
-  private art: Sprite | null = null;
+  private readonly floor = new HomeFloor();
   private readonly topBar: HomeTopBar;
   private readonly tabBar: TabBar;
   private readonly host: TabHost;
@@ -56,7 +53,6 @@ export class HomeScene extends Scene implements HomeSurface {
   constructor(opts: HomeOptions = {}) {
     super();
     this.rect = shellLayout(game.w, game.h, game.safeTop, game.safeBottom).area;
-    this.buildBackground();
     this.topBar = new HomeTopBar({
       onPlus: (kind) => services.openShop(SHOP_SECTION[kind]),
       onSettings: () => services.openSettings(),
@@ -66,7 +62,7 @@ export class HomeScene extends Scene implements HomeSurface {
     this.tabBar = new TabBar({ tabs: this.tabDefs(), selected: first, featured: TAB_ORDER.indexOf('battle') });
     this.tabBar.onSelect((id) => this.host.select(id as TabId));
     this.tabBar.onLockedTap((id) => this.explainLock(id as TabId));
-    this.addChild(this.background, this.host.layer, this.topBar, this.tabBar);
+    this.addChild(this.floor, this.host.layer, this.topBar, this.tabBar);
   }
 
   get ui(): Tweener {
@@ -177,37 +173,14 @@ export class HomeScene extends Scene implements HomeSurface {
     void scenes.goto(() => new HomeScene({ tab }), 'none');
   }
 
-  private buildBackground(): void {
-    if (hasTex('keyart_title')) {
-      this.art = new Sprite(tex('keyart_title'));
-      this.art.anchor.set(0.5);
-      this.art.alpha = 0.6;
-      this.background.addChild(this.art);
-    }
-    this.background.addChild(this.shade);
-  }
-
   private relayout(): void {
     const w = game.w;
     const h = game.h;
     const rects = shellLayout(w, h, game.safeTop, game.safeBottom);
     this.rect = rects.area;
-    this.drawBackground(w, h);
+    this.floor.resize(w, h);
     this.topBar.layout(w);
     this.tabBar.layout(w, h);
     this.host.resize(this.rect);
-  }
-
-  private drawBackground(w: number, h: number): void {
-    const art = this.art;
-    if (art) {
-      const s = Math.max(w / art.texture.width, h / art.texture.height);
-      art.scale.set(s);
-      art.position.set(w / 2, h / 2);
-    }
-    const g = this.shade;
-    g.clear();
-    g.rect(0, 0, w, h).fill(vGradient(Color.bgDeep, Color.bg));
-    g.alpha = art ? 0.55 : 1;
   }
 }

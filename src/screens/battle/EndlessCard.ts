@@ -12,7 +12,7 @@ const BTN_W = 232;
 /** Endless mode: the best wave reached, this week's progress toward the prizes, and the way in. */
 export class EndlessCard extends HomeCard {
   private readonly best = uiLabel('', { size: 34, anchorX: 0 });
-  private readonly week = uiLabel('', { size: 26, anchorX: 0, color: Color.textDim, stroke: false, shadow: false });
+  private readonly week = uiLabel('', { size: 26, anchorX: 0, color: Color.inkSoft });
   private readonly bar: ProgressBar;
   private readonly play: Button;
   private readonly claimPrize: Button;
@@ -21,7 +21,7 @@ export class EndlessCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, t('battle.endless.title'), 'skull');
+    super(w, H, t('battle.endless.title'), 'skull', { tape: 'pink' });
     this.best.position.set(CARD_PAD, this.contentTop + 22);
     this.week.position.set(CARD_PAD, this.contentTop + 66);
     this.bar = new ProgressBar({ width: 372, height: 36, color: 'red', label: '' });
@@ -32,7 +32,7 @@ export class EndlessCard extends HomeCard {
     this.play = new Button({ label: t('battle.endless.play'), icon: 'play', style: 'primary', width: BTN_W, height: 88, fontSize: 38 });
     this.play.position.set(x, this.contentTop + 52);
     this.play.onTap(() => void this.shell.startRun({ mode: 'endless' }));
-    this.claimPrize = new Button({ label: t('battle.endless.claim'), icon: 'gift', style: 'success', width: BTN_W, height: 88, fontSize: 26 });
+    this.claimPrize = new Button({ label: t('battle.endless.claim'), icon: 'gift', style: 'success', width: BTN_W, height: 88, fontSize: 26, disabledMark: 'none' });
     this.claimPrize.position.set(x, this.contentTop + 52 + 88 + 12);
     this.claimPrize.onTap(() => void this.takePrize());
     this.body.addChild(this.play, this.claimPrize);

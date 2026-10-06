@@ -1,0 +1,76 @@
+# Handoff: shell (app flow, home screen, battle tab, pre-run page), paper scrapbook restyle
+
+Date 2026-10-06. Paths: `src/app/**`, `src/scenes/HomeScene.ts`, `src/scenes/BootScene.ts`, `src/screens/shell/**`, `src/screens/battle/**`, `src/main.ts`, `public/manifest.webmanifest`, `public/icons/**`, `index.html` (icon link only), `tests/screens.shell*.test.ts`.
+Everything is drawn from the kit (`@/ui`): no hex literals in these paths, no glow, gloss or stroked text, no purple.
+
+## Audit against the original SHELL specification
+
+| # | Requirement | State |
+|---|---|---|
+| 1 | HomeScene at `?scene=home` and as the normal landing scene; top bar below the safe area (level + XP ring, gold / gems / tickets with "+" -> `services.openShop`, settings -> `services.openSettings`); five tabs in `TAB_ORDER`, battle in the centre and emphasised, badges from `badge()`; content area passed through `resize(area)`; cross-fade, tab state kept, `show()/hide()`, only the visible tab updated; `Shell` (ui clock, area, goTab, currencyAnchor, refresh, startRun); music `home`; `debugExpose('home')` and `debugExpose('meta')` cheats | done (restyled) |
+| 2 | One async boot: platform -> meta -> saved settings -> lifecycle signals -> first scene (new player: tutorial; returning: home; `pendingRun`: "continue?"); platform / meta failure degrades with one toast; CSS splash stays until the first scene is ready | done; new: the title moment (below) |
+| 3 | `Shell.startRun` -> pre-run page (chapter, stake rules, boss, three snack offers by ad or gems, or none) -> `profile.prepareRun` -> `BattleScene`; exit returns to the battle tab; retry restarts the same request; wave-start snapshot saved | done (pre-run page rebuilt) |
+| 4 | Battle tab: chapter card with prev / next and 0..5 stake selector, big START, cards for patrol, free chest, today's treats, daily + weekly cup, endless, sweep, calendar dot, first-purchase offer; hidden or locked with a hint per `featureUnlocked`; every claim flies currency to `currencyAnchor` and calls `refresh()`; `badge()` | done (all restyled) |
+| 5 | Loop verified in the browser | done, see Verified |
+
+Defects found and fixed on the way: `xpFraction(NaN, n)` returned NaN (the failing unit test; the code is fixed, the test is untouched); runs started from the home screen had no `window.__dbg.battle` hooks; the meta-clock cheat froze every time reward after a reload (see Cheats); the continue prompt was a bare text dialog; locked cards were rebuilt on every profile change.
+
+## The look, piece by piece
+
+- **Home floor** (`shell/HomeFloor.ts`): the kit's `drawFloor` plus flat pale window panes and a trail of paw prints, one Graphics built per size. Home and battle lie on the same boards. The key art is only used for the title moment and as the chapter-1 photo.
+- **Top bar** (`shell/HomeTopBar.ts`, `LevelBadge.ts`): the account level is a round paper sticker (`Lv` over the number) with a painted teal XP ring (animated, punch on level-up), a kit `ProgressBar` beside it with `a / b`, a round cream settings `IconButton`, and three kit `CurrencyPill`s (teal torn strip, round "+"). The top bar has no plate of its own: the pieces lie on the floor.
+- **Tab bar**: the kit `TabBar` (kraft strip with torn edge, cream tab held by tape, coral hero button, berry badges). Locked tabs keep the kit's padlock.
+- **Chapter card** (`battle/ChapterCard.ts`, `ChapterPhoto.ts`): a cream sheet with a teal dashed cut line. The chapter is a taped photo (a crop of the chapter background, or of the key art for chapter 1; `coverCrop` in `layoutMath.ts`, cropped textures cached per picture and size), the chapter name on a mustard `PaperLabel`, the chapter number on a teal one, the best-stake pill, the boss as a sticker (white-bordered art, flat shadow, a tilt; a flat silhouette while the chapter is locked), previous / next as round cream buttons (also swipe), five page dots, the calendar button with the kit dot. Butler levels are six paper tags: coral = picked, mustard = can be tried, cream = cleared (green check stamp on the corner), kraft + lock = locked (`stakeTagState` in `model.ts`, tested). The picked level's rule is written in a speech bubble whose tail points at its tag. A locked chapter gets a kraft veil with the reason on a cream label.
+- **START**: the coral kit `Button` with tape; `shell/bob.ts` lifts it 7 px and tilts it 0.8 degrees on a 1.25 s sine loop (killed in `hide()`, skipped under reduced motion). The kit press feedback is untouched.
+- **Home cards** (`battle/HomeCard.ts`): cream sheet, a paper disc with the card's icon, title above a dashed rule, one tape strip each (colour per card, position from the card's seed), buttons / bars / pills from the kit. Locked cards are a kraft sheet with a dashed line, the lock and the unlock hint. The first-purchase card has a mustard backing. Treats are three cream wells.
+- **Pre-run page** (`shell/PreRunScreen.ts`, `ClassLine.ts`): a scrapbook page on the kit scaffold: the chapter photo with name, mode label, stake flag, the boss sticker with a "chapter boss" caption, a "rules this run" sheet (teal title), the four class lines (every cat of a class in rank order with merge / awaken arrows: what two identical cats become, hidden for the tutorial, shown for chapter, daily and endless), and the three snack offers on cream sheets (ad button green, gem button teal). The big START is coral with tape and bobs.
+- **Continue prompt** (`shell/ContinuePrompt.ts`): a popup sheet with the chapter photo, the chapter name and a coral "N waves" label from the snapshot, then "continue" (coral) / "give up" (cream). The give-up confirmation and the settle rewards are the kit dialogs.
+- **Logo** (`shell/Logo.ts`): drawn in code, the title by language ("냥이 수비대" / "Meow Guard") on a large cream torn label with a teal cut line, a gingham tape strip and a mustard paw sticker; `play()` drops it on with an overshoot and waves the paw. Used by the title moment and by `BootScene`'s "ready" card.
+- **Title moment** (`scenes/BootScene.ts`, `main.ts`): on a real launch, once the services are up, the splash gives way to the key art with the logo on its calm top third for at least 1.1 s (a tap skips), then fades into the first scene. QA routes skip it (`?scene=...`, `?notitle=1`); `?titlems=N` stretches it for screenshots.
+- **Toasts / dialogs**: the kit's.
+- **App icons**: `public/icons/icon-192.png`, `icon-512.png`, `icon-maskable-512.png` (cat at 62 % inside a safe disc), `apple-touch-icon.png` (180): `art/units_v2/unit_w_paw.png` as a sticker on a cream disc over coral paper, flat shadow, generated with PIL (one 40-line script, not kept in the repo). `public/manifest.webmanifest`: background `#fbf3e2` (cream), theme `#c48f50` (wood, same as the `index.html` meta), portrait, standalone. `index.html` links the 180 px icon for iOS.
+
+There is no local palette. `ClassLine` and the pre-run photos reuse `unitPhoto` and `CLASS_ACCENT` from `@/view/hud/kit` (read-only imports, so the class colours and cat photos match the battle HUD); its arrows are filled with the class accent and outlined in ink, a drawn mark like the speech-bubble line. `HomeFloor` and `HomeCard` use only tokens.
+
+## Wiring (unchanged unless noted)
+
+- `main.ts` -> `createApp()` (`app/boot.ts`) -> `BootScene(first scene, services, onShown, titleMs)` -> `HomeScene` / `BattleScene`. `app/flow.ts` owns `startRun`, `offerContinue`, retry, wave-start snapshots, the exit callback (`setBattleExit(homeScene('battle'))`), and now also installs the battle debug hooks on runs started from home (debug builds only).
+- `shell` (`shell/controller.ts`) is the single `Shell` object; the home scene attaches and detaches itself.
+- `TabHost` builds the five tabs once per home scene.
+
+## Cheats and debug routes (debug builds and `?debug=1`)
+
+`?scene=home[&tab=cats]`, `?fresh=1` (empty save and real clock), `?lang=ko|en` (after the settings are applied), `?notitle=1`, `?titlems=N`.
+`window.__dbg.home = { shell, scene, goTab }`; `window.__dbg.meta = { profile, addGold, addGems, addTickets, addCards, addChest, finishRuns, unlockAll, advance({hours, days}), startPending(chapter), reset }`; `window.__dbg.battle` (from the battle scene) now also exists after a start from the home screen.
+`advance` moves the meta wall clock and the offset is kept in `localStorage` (`meowguard.debug.clockShift`) and applied before the profile loads: without that, a reload read as "clock set back" and froze patrol, chest and calendar (`profile.frozen`, "기기 시계가 바뀐 것 같아요"). `?fresh=1` and `reset()` clear it.
+`window.__dbg.home.scene.host.tabs.battle.scroll.scrollTo(y, false)` scrolls the battle tab deterministically for screenshots (a drag keeps its inertia).
+
+## Verified
+
+`npx tsc --noEmit`: nothing printed for the whole tree. `npx vitest run tests/screens.shell tests/ui`: 5 files, 96 tests green (new: `coverCrop` x4, `stakeTagState` x2; the xp ring test now passes).
+Aside runs, `PAGE_ERRORS []` on all of them except the chest reveal (see REQUESTS 2). Screenshots are in `scratchpad/shots/shell/` (the folder of this session):
+
+- `before_home.png`, `before_home_unlocked.png`: the old look, for comparison.
+- `h1.png` (first home after the tutorial, top), `sa1.png`/`sa2.png` (the same home scrolled: only patrol and chest open, the rest kraft with hints), `sd1.png`-`sd3.png` (every card waiting or claimable: promo, patrol, free chest, sweep, treats, daily + cup, locked endless), `r1.png`/`r2.png`, `cn1.png`/`cn2.png` (patrol claim with coins flying to the bar, badge going 5 -> 4), `fin_en_1280.png`, `fin_en_1600.png`, `fin_en_1600_b.png` (English, 1280 and 1600 tall), `chapters.png` (chapters 3, 4 and the locked 5 with tags, dots, stamp, bosses).
+- Pre-run: `h2.png` (top, chapter 1 with the key-art photo), `daily2.png` (daily rules + the four class lines), `sc1.png`/`sc2.png` (snack rows), `d2.png`/`en2.png` (English).
+- Continue prompt: `p1.png` (with the "1웨이브" label and the key-art photo), `t1.png` (at 1600 tall).
+- Title moment: `e2.png` (ko), `title_en_tall.png` (en, 1600 tall).
+- Loop: `e3.png` -> tutorial -> `f1.png`/`g3.png` -> result `l2.png` -> home `h1.png`; chapter run from the home `n0.png` (pre-run) -> `m1.png` -> `m2.png` (home after a win: chapter 3 selected, level-up popup, gold 1,517 -> 2,128, `cleared` [1,1,...]); pending run -> `pc1.png` -> continue into the battle (scene `BattleScene`).
+- `icons.png`: the four app icons.
+
+Loop numbers (from the run logs): fresh profile -> tutorial win -> `runs 1`, gold 190, 26/120 XP, home shows chapter 1; a chapter-2 win from the home (the frontier) -> `cleared [1,1,0,0,0]`, gold +611, XP +58, the card selection moves on to chapter 3; patrol claim +672 gold with the badge dropping by one; free chest claim -> reveal opens and 5 cards land; killed mid-run -> next boot offers "continue" and resumes.
+
+## Known gaps
+
+- The Aside tab renders about 2 fps, so motion (bob, logo drop, tab fade, coin flights) was checked by stills and by state, not by feel.
+- Currency, chest and toy icons are the old art until the redrawn ones arrive under the same keys: `ChestCard` uses `icon_chest_wood`, `claim.ts` flies `icon_gold` / `icon_gem`; both go through `hasTex` with a drawn fallback and need no change.
+- Sweep was restyled but not re-run through a real tap (the logic is unchanged and was exercised through the profile).
+- The wooden floor has no real window artwork; the pale panes are flat shapes at 10 % opacity.
+- A tablet / desktop landscape layout does not exist (the portrait stage is centred), as before.
+
+## REQUESTS (outside my paths)
+
+1. `src/meta` `featureHint`: the locked-card text reads "주방을(를) 클리어하면 열려요." (a chapter name with the particle written as "을(를)"). A phrasing without a particle ("클리어하면 열려요: 주방") or a particle-aware helper would read better on every locked card and tab toast.
+2. `src/screens/shop/ChestReveal.ts` (`buildCards`, reached from the free-chest card through `services.revealChest`) writes a `console.warn` when a free chest with cards is opened (it shows in `window.__errors`), and the reveal screen is still the old dark purple scene.
+3. `src/core/scene.ts` `drawCover` fills the transition cover with `0x120b24` (dark purple), so the iris into a battle and the fade out of a splash are purple; `src/core/game.ts` creates the Pixi application with `backgroundColor: 0x1b1233`. Both should be warm brown (`Dim.backdrop`, `Color.woodDark`).
+4. `npm run font`: the Hangul subset predates the strings added here ("합성 줄", "합성", "각성", "N웨이브"); they render today through the fallback font.

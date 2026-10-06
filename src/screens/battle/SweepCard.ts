@@ -13,9 +13,9 @@ const H = 376;
 
 /** Sweep: spend a ticket to collect the reward of a cleared level without playing it. Tickets can be topped up right here. */
 export class SweepCard extends HomeCard {
-  private readonly count = uiLabel('', { size: 44, anchorX: 0, strokeWidth: 7 });
-  private readonly target = uiLabel('', { size: 26, anchorX: 0, anchorY: 0, color: Color.textDim, stroke: false, shadow: false });
-  private readonly note = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, color: Color.textDim, stroke: false, shadow: false, align: 'left', wrap: 276 });
+  private readonly count = uiLabel('', { size: 44, anchorX: 0 });
+  private readonly target = uiLabel('', { size: 26, anchorX: 0, anchorY: 0, color: Color.inkSoft });
+  private readonly note = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, color: Color.inkSoft, align: 'left', wrap: 276 });
   private readonly go: Button;
   private readonly ad: Button;
   private readonly gems: Button;
@@ -25,7 +25,7 @@ export class SweepCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, t('battle.sweep.title'), 'sweep');
+    super(w, H, t('battle.sweep.title'), 'sweep', { tape: 'green' });
     const icon = drawIcon('ticket', 60);
     icon.position.set(CARD_PAD + 30, this.contentTop + 40);
     this.count.position.set(CARD_PAD + 72, this.contentTop + 40);
@@ -39,10 +39,10 @@ export class SweepCard extends HomeCard {
     this.go = new Button({ label: t('battle.sweep.go'), icon: 'sweep', style: 'primary', width: bw, height: 92, fontSize: 38 });
     this.go.position.set(w / 2, y);
     this.go.onTap(() => void this.sweep());
-    this.ad = new Button({ label: `+${TICKET_AD_AMOUNT}`, icon: 'ad', style: 'success', width: half, height: 92, fontSize: 36, disabledMark: 'none' });
+    this.ad = new Button({ label: `+${TICKET_AD_AMOUNT}`, icon: 'ad', style: 'success', width: half, height: 92, fontSize: 28, disabledMark: 'none' });
     this.ad.position.set(CARD_PAD + half / 2, y);
     this.ad.onTap(() => void this.topUp('ad'));
-    this.gems = new Button({ label: '', sublabel: '+1', icon: 'gem', style: 'info', width: half, height: 92, fontSize: 34 });
+    this.gems = new Button({ label: '', sublabel: '+1', icon: 'gem', style: 'info', width: half, height: 92, fontSize: 28 });
     this.gems.position.set(CARD_PAD + half + 12 + half / 2, y);
     this.gems.onTap(() => void this.topUp('gems'));
     this.body.addChild(this.go, this.ad, this.gems);

@@ -1,33 +1,38 @@
 /**
- * The full-screen "get ready" page between the battle tab and the battle: what is about to be played
- * (chapter, butler level and its rules, the boss), and the starter snack offer. Picking a snack by ad or
- * gems starts the run at once; the big button starts without one.
+ * The full-screen "get ready" page between the battle tab and the battle, a page of a scrapbook: the
+ * chapter as a taped photo with its boss as a sticker, the rules this run adds, the four class lines
+ * (what two identical cats become), and the starter snack offers. Picking a snack by ad or gems starts
+ * the run at once; the big button starts without one.
  */
-import { Container, Graphics, Sprite, type Text } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import { audio } from '@/audio';
-import { hasTex, tex } from '@/core/assets';
 import { fmt } from '@/core/format';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
-import { CHAPTERS, modifierName, modifierText, stakeText, type EnemyId } from '@/game';
+import { modifierName, modifierText, stakeText, type ClassId } from '@/game';
 import { OFFERS, SNACKS, profile, type SnackId } from '@/meta';
+import { SNACK_FISH, SNACK_PURR } from '@/meta/data/economy';
 import { ads } from '@/platform';
 import {
   Button,
   Color,
+  PaperLabel,
   Panel,
   ScreenScaffold,
   Tag,
+  TweenBag,
   drawIcon,
+  drawPaper,
   fitLabel,
-  gradient,
-  rgba,
+  paperSeed,
   uiLabel,
   type IconName,
 } from '@/ui';
-import { SNACK_FISH, SNACK_PURR } from '@/meta/data/economy';
+import { ChapterPhoto, bossSticker, chapterInfo } from '../battle/ChapterPhoto';
 import type { StartRunRequest } from '../contract';
+import { startBob } from './bob';
+import { CLASS_LINE_H, ClassLine } from './ClassLine';
 import { planRun, type RunPlan } from './runPlan';
 import './strings';
 
@@ -46,8 +51,15 @@ export interface PreRunHandle {
   destroy(): void;
 }
 
-const HERO_H = 340;
+const PHOTO_H = 340;
+const PHOTO_TOP = 14;
+const BOSS_BOX = 230;
+/** Space a panel's straddling title label takes above its top edge. */
+const TITLE_ROOM = 52;
 const SNACK_ICON: Record<SnackId, IconName> = { fish: 'fish', purr: 'purr', rare_summon: 'dice' };
+const CLASS_ICON: Record<ClassId, IconName> = { warrior: 'class_warrior', ranger: 'class_ranger', mage: 'class_mage', trickster: 'class_trickster' };
+const CLASSES: readonly ClassId[] = ['warrior', 'ranger', 'mage', 'trickster'];
+const ICON_SLOT = 76;
 
 function snackName(id: SnackId): string {
   switch (id) {
@@ -82,61 +94,29 @@ function modeLabel(plan: RunPlan): string {
   return t('shell.pre.mode.' + (plan.mode === 'tutorial' ? 'chapter' : plan.mode));
 }
 
+/** The photo, the boss sticker, and the labels that name the chapter and the mode. Height: the photo plus the sticker's overhang and caption. */
 function buildHero(plan: RunPlan, w: number): Container {
-  const info = CHAPTERS[plan.chapter - 1] ?? CHAPTERS[0];
   const root = new Container();
-  const mask = new Graphics().roundRect(0, 0, w, HERO_H, 36).fill(Color.white);
-  const art = new Container();
-  const base = new Graphics().roundRect(0, 0, w, HERO_H, 36).fill(Color.panelDark);
-  art.addChild(base);
-  if (info && hasTex(info.background)) {
-    const bg = new Sprite(tex(info.background));
-    const s = Math.max(w / bg.texture.width, HERO_H / bg.texture.height);
-    bg.scale.set(s);
-    bg.anchor.set(0.5);
-    bg.position.set(w / 2, HERO_H * 0.5);
-    art.addChild(bg);
-  }
-  const shade = new Graphics()
-    .rect(0, 0, w, HERO_H)
-    .fill(gradient([[0, rgba(Color.black, 0.78)], [0.62, rgba(Color.black, 0.25)], [1, rgba(Color.black, 0)]], true));
-  const floor = new Graphics()
-    .rect(0, HERO_H - 90, w, 90)
-    .fill(gradient([[0, rgba(Color.black, 0)], [1, rgba(Color.black, 0.55)]]));
-  art.addChild(shade, floor);
-  art.mask = mask;
-  root.addChild(art, mask);
+  const photo = new ChapterPhoto({ w, h: PHOTO_H, chapter: plan.chapter, tape: 'sky', tilt: 0.008 });
+  photo.position.set(0, PHOTO_TOP);
+  root.addChild(photo);
 
-  const bossId: EnemyId | undefined = info?.boss;
-  if (bossId && hasTex(bossId)) {
-    const boss = new Sprite(tex(bossId));
-    boss.anchor.set(0.5, 1);
-    boss.scale.set(Math.min(300 / boss.texture.height, 330 / boss.texture.width));
-    boss.position.set(w - 150, HERO_H - 8);
-    root.addChild(boss);
-  } else {
-    const skull = drawIcon('skull', 150);
-    skull.position.set(w - 150, HERO_H / 2);
-    root.addChild(skull);
-  }
+  const kickerText = plan.mode === 'daily' || plan.mode === 'endless'
+    ? `${modeLabel(plan)} · ${t('shell.pre.chapter', { n: plan.chapter })}`
+    : t('shell.pre.chapter', { n: plan.chapter });
+  const kicker = new PaperLabel({ text: kickerText, size: 28, paper: 'info', padX: 24, padY: 9, maxWidth: w * 0.6 });
+  kicker.position.set(26 - kicker.uiBox.x, PHOTO_TOP + 46);
+  const name = new PaperLabel({ text: t(chapterInfo(plan.chapter).nameKey), size: 56, paper: 'mustard', padX: 34, padY: 12, maxWidth: w * 0.52 });
+  name.position.set(22 - name.uiBox.x, PHOTO_TOP + PHOTO_H - 56);
+  const boss = bossSticker(plan.chapter, BOSS_BOX, BOSS_BOX, false);
+  boss.position.set(w - BOSS_BOX / 2 - 14, PHOTO_TOP + PHOTO_H + 28);
+  const caption = new PaperLabel({ text: t('shell.pre.boss'), size: 24, paper: 'kraft', padX: 20, padY: 6, maxWidth: BOSS_BOX });
+  caption.position.set(boss.x, PHOTO_TOP + PHOTO_H + 58);
+  root.addChild(kicker, name, boss, caption);
 
-  const mode = new Tag({ text: modeLabel(plan), style: 'info', shape: 'pill', fontSize: 26 });
-  mode.position.set(24 + mode.uiBox.w / 2, 36);
-  const name = uiLabel(t(info?.nameKey ?? 'chapter.1.name'), { size: 64, strokeWidth: 9, anchorX: 0, anchorY: 0.5 });
-  name.position.set(28, HERO_H - 120);
-  fitLabel(name, w * 0.5, 64);
-  const subtitle: Text = uiLabel(t('shell.pre.chapter', { n: plan.chapter }), {
-    size: 28,
-    anchorX: 0,
-    anchorY: 0.5,
-    color: Color.textDim,
-  });
-  subtitle.position.set(30, HERO_H - 64);
-  fitLabel(subtitle, w * 0.5, 28);
-  root.addChild(mode, name, subtitle);
   if (plan.mode === 'chapter' && plan.stake > 0) {
-    const stake = new Tag({ text: t('shell.pre.stake', { n: plan.stake }), style: 'danger', shape: 'flag', fontSize: 26 });
-    stake.position.set(w - 24 - stake.uiBox.w / 2, 40);
+    const stake = new Tag({ text: t('shell.pre.stake', { n: plan.stake }), style: 'danger', shape: 'flag', fontSize: 28 });
+    stake.position.set(w - 28 - stake.uiBox.w / 2, PHOTO_TOP + 54);
     root.addChild(stake);
   }
   return root;
@@ -145,19 +125,16 @@ function buildHero(plan: RunPlan, w: number): Container {
 function buildRules(plan: RunPlan, w: number): Panel {
   const lines = ruleLines(plan);
   const title = plan.mode === 'daily' ? t('shell.pre.daily.rules') : t('shell.pre.rules');
-  const texts = lines.map((line) => uiLabel(line, { size: 28, wrap: w - 130, align: 'left', anchorX: 0, anchorY: 0, stroke: false, shadow: false }));
-  let y = 84;
+  const texts = lines.map((line) => uiLabel(line, { size: 28, wrap: w - 130, align: 'left', anchorX: 0, anchorY: 0 }));
+  let y = 62;
   const rows = texts.map((tx) => {
     const top = y;
     y += Math.max(48, tx.height) + 14;
     return top;
   });
-  const h = y + 12;
-  const panel = new Panel({ width: w, height: h, variant: 'inset', cache: false });
+  const h = y + 10;
+  const panel = new Panel({ width: w, height: h, variant: 'default', title, ribbon: 'info', cache: false });
   panel.position.set(w / 2, h / 2);
-  const head = uiLabel(title, { size: 32, anchorX: 0 });
-  head.position.set(28, 44);
-  panel.content.addChild(head);
   texts.forEach((tx, i) => {
     const top = rows[i] as number;
     const bullet = drawIcon(plan.mode === 'daily' ? 'sun' : plan.stake > 0 ? 'warning' : 'check', 38);
@@ -168,23 +145,50 @@ function buildRules(plan: RunPlan, w: number): Panel {
   return panel;
 }
 
+/** The four class lines: what two identical cats of a class become, rank by rank. */
+function buildLines(w: number): Panel {
+  const lineW = w - 40 - ICON_SLOT;
+  const rowH = CLASS_LINE_H + 10;
+  const hint = uiLabel(t('shell.pre.lines.hint'), { size: 24, wrap: w - 80, color: Color.inkSoft, anchorY: 0 });
+  const h = 62 + CLASSES.length * rowH + hint.height + 22;
+  const panel = new Panel({ width: w, height: h, variant: 'default', title: t('shell.pre.lines'), ribbon: 'primary', cache: false });
+  panel.position.set(w / 2, h / 2);
+  CLASSES.forEach((c, i) => {
+    const top = 62 + i * rowH;
+    const medal = new Graphics();
+    drawPaper(medal, 20, top + 8, { w: 60, h: 60, kind: 'circle', fill: Color.paperDim, edge: Color.kraftDark, shadow: 3, grain: false, seed: paperSeed() });
+    const icon = drawIcon(CLASS_ICON[c], 42);
+    icon.position.set(50, top + 38);
+    const line = new ClassLine(c, lineW);
+    line.position.set(20 + ICON_SLOT, top);
+    panel.content.addChild(medal, icon, line);
+  });
+  hint.position.set(w / 2, 62 + CLASSES.length * rowH + 4);
+  panel.content.addChild(hint);
+  return panel;
+}
+
 interface SnackRow {
   panel: Panel;
   buttons: Button[];
 }
 
 function buildSnackRow(id: SnackId, w: number, onPick: (via: 'ad' | 'gems') => void): SnackRow {
-  const h = 214;
+  const h = 236;
   const panel = new Panel({ width: w, height: h, variant: 'default', cache: false });
   panel.position.set(w / 2, h / 2);
-  const icon = drawIcon(SNACK_ICON[id], 84);
-  icon.position.set(24 + 42, 28 + 42);
+  const seed = paperSeed();
+  const disc = new Graphics();
+  drawPaper(disc, 24, 24, { w: 92, h: 92, kind: 'circle', fill: Color.paperDim, edge: Color.kraftDark, shadow: 3, grain: false, seed });
+  const icon = drawIcon(SNACK_ICON[id], 64);
+  icon.position.set(24 + 46, 24 + 46);
+  const textLeft = 24 + 92 + 20;
   const name = uiLabel(snackName(id), { size: 34, anchorX: 0 });
-  name.position.set(24 + 84 + 20, 28 + 16);
-  fitLabel(name, w - 24 - 84 - 20 - 24, 34);
-  const desc = uiLabel(snackDesc(id), { size: 26, anchorX: 0, anchorY: 0, color: Color.textDim, stroke: false, shadow: false, align: 'left', wrap: w - 24 - 84 - 20 - 24 });
-  desc.position.set(24 + 84 + 20, 28 + 40);
-  panel.content.addChild(icon, name, desc);
+  name.position.set(textLeft, 24 + 18);
+  fitLabel(name, w - textLeft - 24, 34);
+  const desc = uiLabel(snackDesc(id), { size: 26, anchorX: 0, anchorY: 0, color: Color.inkSoft, align: 'left', wrap: w - textLeft - 24 });
+  desc.position.set(textLeft, 24 + 46);
+  panel.content.addChild(disc, icon, name, desc);
 
   const bw = (w - 24 * 2 - 16) / 2;
   const adReady = ads.canOffer(OFFERS.start_snack.ad);
@@ -220,6 +224,7 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
   game.popupLayer.addChild(scaffold);
   const w = scaffold.contentWidth;
   const content = scaffold.content;
+  const bag = new TweenBag();
   let alive = true;
   let busy = false;
   const locks: Button[] = [];
@@ -242,20 +247,27 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
 
   const hero = buildHero(plan, w);
   content.addChild(hero);
-  let y = HERO_H + 20;
+  let y = PHOTO_TOP + PHOTO_H + 78;
 
   const rules = buildRules(plan, w);
-  rules.y += y;
+  rules.y += y + TITLE_ROOM;
   content.addChild(rules);
-  y += rules.panelH + 20;
+  y += TITLE_ROOM + rules.panelH + 24;
+
+  if (plan.mode !== 'tutorial') {
+    const lines = buildLines(w);
+    lines.y += y + TITLE_ROOM;
+    content.addChild(lines);
+    y += TITLE_ROOM + lines.panelH + 24;
+  }
 
   if (plan.snackAllowed) {
-    const head = uiLabel(t('shell.pre.snack'), { size: 36, anchorX: 0 });
-    head.position.set(8, y + 22);
-    const hint = uiLabel(t('shell.pre.snack.hint'), { size: 24, anchorX: 0, anchorY: 0, color: Color.textDim, stroke: false, shadow: false, align: 'left', wrap: w - 16 });
-    hint.position.set(8, y + 52);
+    const head = new PaperLabel({ text: t('shell.pre.snack'), size: 36, paper: 'mustard', padX: 34, padY: 10 });
+    head.position.set(-head.uiBox.x, y + 30);
+    const hint = uiLabel(t('shell.pre.snack.hint'), { size: 24, anchorX: 0, anchorY: 0, onArt: true, align: 'left', wrap: w - 16 });
+    hint.position.set(8, y + 78);
     content.addChild(head, hint);
-    y += 52 + hint.height + 14;
+    y += 78 + hint.height + 18;
     for (const id of SNACKS) {
       const row = buildSnackRow(id, w, (via) => {
         const source = row.buttons[via === 'ad' ? 0 : 1] as Button;
@@ -264,16 +276,16 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
       row.panel.y += y;
       content.addChild(row.panel);
       locks.push(...row.buttons);
-      y += row.panel.panelH + 16;
+      y += row.panel.panelH + 18;
     }
   }
   scaffold.refresh();
 
-  const go = new Button({ label: plan.snackAllowed ? t('shell.pre.start') : t('shell.pre.go'), icon: 'play', style: 'primary', width: 600, height: 124, fontSize: 48 });
+  const go = new Button({ label: plan.snackAllowed ? t('shell.pre.start') : t('shell.pre.go'), icon: 'play', style: 'primary', width: 600, height: 124, fontSize: 48, tape: 'pink' });
   go.onTap(() => void run(undefined, go));
   locks.push(go);
   scaffold.actionBar.addChild(go);
-  go.startPulse({ times: -1 });
+  startBob(bag, go);
 
   void scaffold.show(true);
   audio.play('whoosh');
@@ -283,6 +295,7 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
     destroy: () => {
       if (!alive) return;
       alive = false;
+      bag.killAll();
       scaffold.destroy({ children: true });
     },
   };

@@ -17,7 +17,7 @@ import '@/screens/shell/strings';
 import { installSystemScreens } from '@/screens/system';
 import { toast } from '@/ui';
 import { currentSettings, ensureSettings } from '@/view/hud/settings';
-import { installCheats } from './cheats';
+import { installCheats, installClockShift } from './cheats';
 import { afterFirstScene, chooseFirstScene, homeScene, installFlow } from './flow';
 
 const REFRESH_MS = 60_000;
@@ -63,6 +63,7 @@ export function createApp(): App {
         for (const key of SAVE_KEYS) await getStorageBackend().remove(key);
       });
     }
+    installClockShift();
     await attempt('meta', async () => {
       await initMeta();
       setInterval(() => profile.refresh(), REFRESH_MS);

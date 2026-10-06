@@ -26,6 +26,15 @@ export function stakePlayable(cleared: readonly number[], chapter: number, stake
   return canPlayStake(cleared, chapter, stake);
 }
 
+export type StakeTagState = 'selected' | 'cleared' | 'open' | 'locked';
+
+/** How one butler-level tag is drawn: the picked one, a cleared one (check stamp), one that can be tried, or one still locked. */
+export function stakeTagState(cleared: readonly number[], chapter: number, stake: number, selected: number): StakeTagState {
+  if (!stakePlayable(cleared, chapter, stake)) return 'locked';
+  if (stake === selected) return 'selected';
+  return stake < (cleared[chapter - 1] ?? 0) ? 'cleared' : 'open';
+}
+
 /** A stake can be swept once it is cleared (the ticket pays 60% of a win). */
 export function sweepable(cleared: readonly number[], chapter: number, stake: number): boolean {
   return stake >= 0 && stake < (cleared[chapter - 1] ?? 0) && chapterUnlocked(cleared, chapter);

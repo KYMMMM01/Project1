@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TAB_BAR_H, TOP_BAR_CONTENT_H, pillWidth, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
+import { TAB_BAR_H, TOP_BAR_CONTENT_H, coverCrop, pillWidth, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
 import { planRun } from '@/screens/shell/runPlan';
 
 describe('shell layout', () => {
@@ -42,6 +42,36 @@ describe('shell layout', () => {
     expect(xpFraction(-5, 120)).toBe(0);
     expect(xpFraction(10, 0)).toBe(0);
     expect(xpFraction(Number.NaN, 120)).toBe(0);
+  });
+});
+
+describe('photo crop', () => {
+  it('fills a wide box from a tall picture without distortion', () => {
+    const c = coverCrop(720, 1287, 600, 300, 0.5);
+    expect(c.w).toBe(720);
+    expect(c.w / c.h).toBeCloseTo(2, 5);
+    expect(c.x).toBe(0);
+    expect(c.y).toBeCloseTo((1287 - c.h) / 2, 5);
+  });
+
+  it('moves the window with the focus and keeps it inside the picture', () => {
+    const top = coverCrop(720, 1287, 600, 300, 0);
+    const bottom = coverCrop(720, 1287, 600, 300, 1);
+    expect(top.y).toBe(0);
+    expect(bottom.y + bottom.h).toBeCloseTo(1287, 5);
+    expect(coverCrop(720, 1287, 600, 300, -4).y).toBe(0);
+    expect(coverCrop(720, 1287, 600, 300, 9).y).toBeCloseTo(bottom.y, 5);
+  });
+
+  it('crops the sides when the picture is wider than the box', () => {
+    const c = coverCrop(1000, 500, 300, 300);
+    expect(c.h).toBe(500);
+    expect(c.w).toBe(500);
+    expect(c.x).toBe(250);
+  });
+
+  it('falls back to the whole picture for a degenerate box', () => {
+    expect(coverCrop(720, 1287, 0, 300)).toEqual({ x: 0, y: 0, w: 720, h: 1287 });
   });
 });
 

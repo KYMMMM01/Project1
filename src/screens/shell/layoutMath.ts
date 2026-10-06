@@ -4,10 +4,10 @@ import type { ContentArea } from '../contract';
 /** Visible height of the bottom tab bar above the home-indicator inset (matches ui/TabBar). */
 export const TAB_BAR_H = 128;
 /** Height of the top bar's own rows: level row, gap, currency row, bottom padding, top padding. */
-export const TOP_ROW_H = 88;
+export const TOP_ROW_H = 92;
 export const TOP_PILL_H = 72;
 export const TOP_PAD_TOP = 8;
-export const TOP_ROW_GAP = 6;
+export const TOP_ROW_GAP = 12;
 export const TOP_PAD_BOTTOM = 12;
 export const TOP_BAR_CONTENT_H = TOP_PAD_TOP + TOP_ROW_H + TOP_ROW_GAP + TOP_PILL_H + TOP_PAD_BOTTOM;
 
@@ -32,6 +32,26 @@ export function pillWidth(w: number, margin: number, gap: number, count: number)
 
 /** Share of the account level already earned, 0..1, safe against a zero-sized level. */
 export function xpFraction(into: number, need: number): number {
-  if (!(need > 0)) return 0;
+  if (!(need > 0) || Number.isNaN(into)) return 0;
   return Math.min(1, Math.max(0, into / need));
+}
+
+export interface Crop {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The part of a `srcW x srcH` picture that fills a `boxW x boxH` box without distortion: centred
+ * across, and `focus` (0 = top, 1 = bottom) of the way down the spare height. A "photo" of a background.
+ */
+export function coverCrop(srcW: number, srcH: number, boxW: number, boxH: number, focus = 0.5): Crop {
+  if (!(srcW > 0 && srcH > 0 && boxW > 0 && boxH > 0)) return { x: 0, y: 0, w: Math.max(0, srcW), h: Math.max(0, srcH) };
+  const scale = Math.max(boxW / srcW, boxH / srcH);
+  const w = boxW / scale;
+  const h = boxH / scale;
+  const f = Math.min(1, Math.max(0, focus));
+  return { x: (srcW - w) / 2, y: (srcH - h) * f, w, h };
 }

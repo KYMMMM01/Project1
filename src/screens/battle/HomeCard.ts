@@ -1,47 +1,83 @@
-import { Container, Graphics, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import { audio } from '@/audio';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
 import { errorKey, type Result } from '@/meta';
-import { Button, Color, Panel, TweenBag, drawIcon, fitLabel, toast, uiLabel, type IconName, type PanelVariant } from '@/ui';
+import {
+  Button,
+  Color,
+  cacheStatic,
+  drawDashedLine,
+  drawDashedRect,
+  drawIcon,
+  drawPaper,
+  fitLabel,
+  paperSeed,
+  tapeStrip,
+  toast,
+  uiLabel,
+  type IconName,
+  type TapeName,
+} from '@/ui';
 
 const PAD = 24;
 const TITLE_H = 64;
+const RADIUS = 30;
+
+interface CardOpts {
+  /** The one piece of washi tape this card carries. */
+  tape: TapeName;
+  /** A card the shop wants noticed: cream paper on a mustard backing. */
+  featured?: boolean;
+}
 
 /**
- * Base of every card on the battle tab: a panel with an icon and a title, a body the subclass fills,
- * and a locked state (dimmed, padlock and the unlock hint) used when the feature is not open yet.
- * Origin = top-left of the card.
+ * Base of every card on the battle tab: a cream sheet with a taped corner, an icon and a title above
+ * a dashed rule, a body the subclass fills, and a locked state (kraft paper with the unlock hint)
+ * for a feature that is not open yet. Origin = top-left of the card.
  */
 export abstract class HomeCard extends Container {
   readonly cardW: number;
   readonly cardH: number;
-  protected readonly bag = new TweenBag();
   /** Add widgets here; origin = top-left of the card. */
-  protected readonly body: Container;
-  private readonly panel: Panel;
+  protected readonly body = new Container();
   private readonly veil = new Container();
-  private isLocked = false;
+  private readonly seed = paperSeed() >>> 0;
+  /** The hint the veil is built for; null = the card is open. */
+  private lockHint: string | null = null;
   private working = false;
 
-  protected constructor(w: number, h: number, title: string, icon: IconName, variant: PanelVariant = 'default') {
+  protected constructor(w: number, h: number, title: string, icon: IconName, opts: CardOpts) {
     super();
     this.cardW = w;
     this.cardH = h;
-    this.panel = new Panel({ width: w, height: h, variant, blockInput: false });
-    this.panel.position.set(w / 2, h / 2);
-    this.body = this.panel.content;
-    this.addChild(this.panel, this.veil);
-    const ic = drawIcon(icon, 44);
-    ic.position.set(PAD + 22, TITLE_H / 2 + 6);
+
+    const art = new Container();
+    const sheet = new Graphics();
+    if (opts.featured) {
+      drawPaper(sheet, 0, 0, { w, h, radius: RADIUS, fill: Color.mustard, edge: Color.mustardDark, seed: this.seed });
+      drawPaper(sheet, 9, 9, { w: w - 18, h: h - 18, radius: RADIUS - 8, fill: Color.paper, seed: this.seed + 1, shadow: false });
+    } else {
+      drawPaper(sheet, 0, 0, { w, h, radius: RADIUS, fill: Color.paper, seed: this.seed });
+    }
+    drawDashedLine(sheet, PAD, TITLE_H, w - PAD, TITLE_H, { seed: this.seed });
+    const disc = new Graphics();
+    drawPaper(disc, PAD, 10, { w: 52, h: 52, kind: 'circle', fill: Color.paperDim, edge: Color.kraftDark, shadow: 3, grain: false, seed: this.seed + 2 });
+    const tape = tapeStrip({ name: opts.tape, pattern: this.seed % 2 === 0 ? 'dots' : 'gingham', w: 84, h: 26, angle: (this.seed % 5) - 2, seed: this.seed });
+    tape.position.set(w * 0.5 + ((this.seed >>> 4) % 90) - 45, 3);
+    art.addChild(sheet, disc, tape);
+    cacheStatic(art);
+
+    const ic = drawIcon(icon, 38);
+    ic.position.set(PAD + 26, 36);
     const head = uiLabel(title, { size: 32, anchorX: 0 });
-    head.position.set(PAD + 56, TITLE_H / 2 + 6);
-    fitLabel(head, w - PAD * 2 - 56, 32);
-    this.body.addChild(ic, head);
+    head.position.set(PAD + 66, 37);
+    fitLabel(head, w - PAD * 2 - 66, 32);
+    this.addChild(art, ic, head, this.body, this.veil);
   }
 
   get locked(): boolean {
-    return this.isLocked;
+    return this.lockHint !== null;
   }
 
   /** Bottom edge of the title row: where the card's own content may start. */
@@ -57,22 +93,24 @@ export abstract class HomeCard extends Container {
 
   /** Show the locked state with `hint`, or the live card with null. */
   setLocked(hint: string | null): void {
+    if (hint === this.lockHint) return;
+    this.lockHint = hint;
     const locked = hint !== null;
-    this.panel.content.interactiveChildren = !locked;
-    this.veil.removeChildren().forEach((c) => c.destroy({ children: true }));
-    this.isLocked = locked;
-    if (!locked) {
-      this.veil.visible = false;
-      return;
-    }
-    this.veil.visible = true;
-    const dim = new Graphics().roundRect(0, 0, this.cardW, this.cardH, 36).fill({ color: Color.bgDeep, alpha: 0.78 });
-    dim.eventMode = 'static';
+    this.body.interactiveChildren = !locked;
+    for (const c of this.veil.removeChildren()) c.destroy({ children: true });
+    this.veil.visible = locked;
+    if (hint === null) return;
+    const { cardW: w, cardH: h } = this;
+    const sheet = new Graphics();
+    drawPaper(sheet, 0, 0, { w, h, radius: RADIUS, fill: Color.kraft, edge: Color.kraftDark, seed: this.seed });
+    drawDashedRect(sheet, 14, 14, w - 28, h - 28, { radius: RADIUS - 8, color: Color.kraftDark, seed: this.seed });
+    cacheStatic(sheet);
+    sheet.eventMode = 'static';
     const lock = drawIcon('lock', 64);
-    lock.position.set(this.cardW / 2, this.cardH / 2 - 26);
-    const text = uiLabel(hint, { size: 26, wrap: this.cardW - 64, color: Color.textDim, strokeWidth: 4 });
-    text.position.set(this.cardW / 2, this.cardH / 2 + 44);
-    this.veil.addChild(dim, lock, text);
+    lock.position.set(w / 2, h / 2 - 28);
+    const text = uiLabel(hint, { size: 26, wrap: w - 72 });
+    text.position.set(w / 2, h / 2 + 44);
+    this.veil.addChild(sheet, lock, text);
   }
 
   /**
@@ -97,10 +135,6 @@ export abstract class HomeCard extends Container {
     return r;
   }
 
-  override destroy(options?: DestroyOptions): void {
-    this.bag.killAll();
-    super.destroy(options);
-  }
 }
 
 export const CARD_PAD = PAD;

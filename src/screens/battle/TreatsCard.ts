@@ -2,7 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { bundleParts, describeBundle, profile, type Bundle, type BundlePart } from '@/meta';
 import { ads } from '@/platform';
-import { Button, Color, drawIcon, uiLabel, type IconName } from '@/ui';
+import { Button, Color, drawIcon, drawPaper, paperSeed, uiLabel, type IconName } from '@/ui';
 import { services, type Shell } from '../contract';
 import { CARD_PAD, HomeCard } from './HomeCard';
 import { playClaim } from './claim';
@@ -41,18 +41,20 @@ export class TreatsCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, t('battle.treat.title'), 'gift');
+    super(w, H, t('battle.treat.title'), 'gift', { tape: 'pink' });
     const rewards = profile.treatView();
     const slotW = (w - CARD_PAD * 2 - GAP * (rewards.length - 1)) / rewards.length;
     const top = this.contentTop - 4;
+    const seed = paperSeed();
     const slotH = H - top - CARD_PAD;
     rewards.forEach((row, i) => {
       const root = new Container();
       root.position.set(CARD_PAD + i * (slotW + GAP), top);
-      const bg = new Graphics().roundRect(0, 0, slotW, slotH, 28).fill({ color: Color.panelDark, alpha: 0.9 });
+      const bg = new Graphics();
+      drawPaper(bg, 0, 0, { w: slotW, h: slotH, radius: 26, fill: Color.paperDim, seed, shadow: 3, grain: false });
       const icon = drawIcon(iconOf(row.reward), 70);
       icon.position.set(slotW / 2, 52);
-      const text = uiLabel(describeBundle(row.reward).join(' '), { size: 24, wrap: slotW - 20, stroke: false, shadow: false, anchorY: 0 });
+      const text = uiLabel(describeBundle(row.reward).join(' '), { size: 24, wrap: slotW - 20, anchorY: 0 });
       text.position.set(slotW / 2, 100);
       const button = new Button({ label: t('battle.treat.watch'), icon: 'ad', style: 'success', width: slotW - 20, height: 88, fontSize: 30, disabledMark: 'none' });
       button.position.set(slotW / 2, slotH - 10 - 44);

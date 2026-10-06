@@ -3,6 +3,7 @@
  * opening the battle scene, wave-start saves, retry, returning home, and picking a run up again after
  * the app was killed.
  */
+import { debugEnabled } from '@/core/debug';
 import { t } from '@/core/i18n';
 import { Scene, scenes, type TransitionKind } from '@/core/scene';
 import type { BattleInit, BattleSnapshot } from '@/game';
@@ -11,6 +12,7 @@ import { BattleScene, setBattleCreatedHook, setBattleExit } from '@/scenes/Battl
 import { HomeScene } from '@/scenes/HomeScene';
 import { services, type StartRunRequest, type TabId } from '@/screens/contract';
 import { shell } from '@/screens/shell/controller';
+import { continuePrompt } from '@/screens/shell/ContinuePrompt';
 import { openPreRun, type PreRunHandle, type SnackChoice } from '@/screens/shell/PreRunScreen';
 import '@/screens/shell/strings';
 import { confirmDialog, toast } from '@/ui';
@@ -48,6 +50,8 @@ function runConfig(init: BattleInit, snapshot?: BattleSnapshot | null): RunConfi
 /** Per-battle wiring that has no setter on the battle scene: platform signals, wave-start saves, retry through the meta layer. */
 function onBattleCreated(scene: BattleScene): void {
   const { run, battle, ctx } = scene;
+  // QA: the battle's own hooks (`window.__dbg.battle`: win, lose, skipToWave ...) also exist in runs started from the home screen.
+  if (debugEnabled()) void import('@/view/field/debug').then((m) => m.installBattleDebug(scene));
   if (run.sandbox) return;
   gameplayStart();
   battle.events.on('waveStart', () => {
@@ -140,14 +144,7 @@ export async function offerContinue(): Promise<void> {
   for (;;) {
     const pending = profile.pendingRun;
     if (!pending) return;
-    const chapter = t('chapter.' + pending.init.chapter + '.name');
-    const wave = pending.snapshot?.wave;
-    const resume = await confirmDialog({
-      title: t('shell.cont.title'),
-      message: wave ? t('shell.cont.body', { chapter, wave }) : t('shell.cont.body.noWave'),
-      confirmLabel: t('shell.cont.yes'),
-      cancelLabel: t('shell.cont.no'),
-    });
+    const resume = await continuePrompt(pending.init.chapter, pending.snapshot?.wave);
     if (resume) {
       const make = battleScene(runConfig(pending.init, pending.snapshot));
       if (!(await gotoWhenIdle(make, 'iris'))) toast(t('meta.err.unavailable'), 'warning');

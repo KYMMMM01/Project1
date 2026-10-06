@@ -71,7 +71,7 @@ export class Game {
     await app.init({
       width: DESIGN_W,
       height: DESIGN_MIN_H,
-      backgroundColor: 0x1b1233,
+      backgroundColor: 0xa06a33,
       antialias: true,
       autoDensity: true,
       resolution: 1,

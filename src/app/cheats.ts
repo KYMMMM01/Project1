@@ -9,8 +9,32 @@ import { BASE_UNITS, profile, systemClock, type ChestKind } from '@/meta';
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
-/** Wall-clock offset added to the meta clock. */
+const SHIFT_KEY = 'meowguard.debug.clockShift';
+
+/**
+ * Wall-clock offset added to the meta clock. It is kept across reloads: the save remembers the
+ * latest time it saw, so a page that came back on the real clock would read as "clock set back" and
+ * freeze every time reward. `?fresh=1` and `reset()` clear it together with the save.
+ */
 let clockShift = 0;
+
+function loadShift(): number {
+  if (new URLSearchParams(location.search).has('fresh')) return 0;
+  try {
+    return Number(localStorage.getItem(SHIFT_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function storeShift(): void {
+  try {
+    if (clockShift === 0) localStorage.removeItem(SHIFT_KEY);
+    else localStorage.setItem(SHIFT_KEY, String(clockShift));
+  } catch {
+    // Private mode: the shift then lasts for this page load only.
+  }
+}
 
 function changed(): void {
   profile.events.emit('change', null);
@@ -25,11 +49,17 @@ function fakeStats(chapter: number, stake: number, victory: boolean): RunStats {
   };
 }
 
-export function installCheats(): void {
+/** Put the saved clock offset on the meta clock. Boot calls this before the profile loads, so the load already sees the shifted time. */
+export function installClockShift(): void {
   if (!debugEnabled()) return;
   const realWall = systemClock.wall.bind(systemClock);
+  clockShift = loadShift();
+  storeShift();
   systemClock.wall = () => realWall() + clockShift;
+}
 
+export function installCheats(): void {
+  if (!debugEnabled()) return;
   debugExpose('meta', {
     profile,
     addGold(n = 1000) {
@@ -67,6 +97,7 @@ export function installCheats(): void {
     /** Move the meta clock forward (like waiting): free chest, patrol, calendar, daily limits. */
     advance(o: { hours?: number; days?: number } = {}) {
       clockShift += (o.hours ?? 0) * HOUR_MS + (o.days ?? 0) * DAY_MS;
+      storeShift();
       profile.resume();
     },
     /** Pretend the app was killed mid-run: the next boot offers "continue". */
@@ -74,7 +105,7 @@ export function installCheats(): void {
       const r = await profile.prepareRun({ mode: 'chapter', chapter, stake: 0 });
       return r.ok;
     },
-    /** Reload with an empty save (`?fresh=1` clears it at boot). */
+    /** Reload with an empty save and the real clock (`?fresh=1` clears both at boot). */
     reset() {
       location.search = '?fresh=1&debug=1';
     },
