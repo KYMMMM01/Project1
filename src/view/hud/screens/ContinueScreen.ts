@@ -7,7 +7,7 @@ import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { errorKey, profile } from '@/meta';
 import { ads } from '@/platform';
-import { Button, Color, drawGlow, drawIcon, motion, ScreenScaffold, toast, TweenBag, uiLabel } from '@/ui';
+import { Button, Color, drawGlow, drawIcon, motion, ScreenScaffold, toast, TweenBag, uiLabel, shade } from '@/ui';
 import { Ease } from '@/core/tween';
 import type { HudEnv } from '../env';
 import { offerRoute } from '../policy';
@@ -46,7 +46,7 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
 
   const c = scaffold.content;
   const glow = new Graphics();
-  drawGlow(glow, 0, 0, 190, 0xff7a88, 0.7);
+  drawGlow(glow, 0, 0, 190, shade(Color.danger, 0.3), 0.7);
   glow.position.set(w / 2, 150);
   glow.blendMode = 'add';
   const heart = drawIcon('heart', 170);
@@ -59,7 +59,7 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
   });
   why.position.set(w / 2, 380);
   const fix = uiLabel(t(reason === 'boss_timeout' ? 'hud.cont.fix.boss' : 'hud.cont.fix.over'), {
-    size: 32, wrap: w - 40, lineHeight: 42, color: 0xffd54a, strokeWidth: 5, shadow: false,
+    size: 32, wrap: w - 40, lineHeight: 42, color: Color.gold, strokeWidth: 5, shadow: false,
   });
   fix.position.set(w / 2, 480);
   c.addChild(glow, heart, where, why, fix);

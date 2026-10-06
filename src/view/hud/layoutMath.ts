@@ -33,6 +33,10 @@ export interface TopRects {
   preview: Rect;
   /** Row of owned toys. */
   toys: Rect;
+  /** Boss / elite strip: takes over the preview and toy area while one is alive. */
+  boss: Rect;
+  /** The wave timer bar (centre-origin bar of this size sits in it). */
+  timer: Rect;
   /** Vertical centre of the second row. */
   row2Y: number;
 }
@@ -51,6 +55,8 @@ export function topRects(l: BattleLayout): TopRects {
     wave: { x: SIDE, y: row2Y - rowH / 2, w: 212, h: rowH },
     preview: { x: 236, y: row2Y - rowH / 2, w: 208, h: rowH },
     toys: { x: 452, y: row2Y - rowH / 2, w: HUD_W - SIDE - 452, h: rowH },
+    boss: { x: 240, y: row2Y - 34, w: HUD_W - SIDE - 240, h: 66 },
+    timer: { x: SIDE, y: row2Y + 4, w: 212, h: 28 },
     row2Y,
   };
 }
@@ -101,13 +107,6 @@ function sellRect(l: BattleLayout, panelTop: number): Rect {
   const fieldBottom = l.fieldY + FIELD_H;
   const y = Math.max(-SELL_REACH, Math.min(0, fieldBottom - panelTop));
   return { x: 0, y, w: HUD_W, h: 112 - y };
-}
-
-/** Boss bar: tucked into the slack between the top area and the field when there is room, else just under the top area. */
-export function bossBarY(l: BattleLayout, barH: number): number {
-  const under = l.safeTop + l.topH + 4;
-  const fit = l.fieldY - barH - 4;
-  return Math.max(under, fit);
 }
 
 /** Slot width for `n` items in a strip `w` wide: each item gets up to `max`, shrinking to fit. */

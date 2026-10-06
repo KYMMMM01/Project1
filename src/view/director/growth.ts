@@ -3,14 +3,14 @@
  * moulting, the guardian awakening cut-in, synergy and upgrade sparkles, sunbeam sparkle, and the
  * flourish of a new toy flying to the HUD.
  */
-import { hasTex, tex } from '@/core/assets';
+import { tex } from '@/core/assets';
 import { t } from '@/core/i18n';
 import { audio } from '@/audio';
-import { awakeningCutIn, flyTo, type EmitDef, type FlyHandle } from '@/fx';
+import { awakeningCutIn, type EmitDef } from '@/fx';
 import type { ClassId, SummonSource } from '@/game';
 import { classDef, relicDef, unitClass, unitRarityIndex } from '@/game';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
-import { drawIcon, type IconName } from '@/ui/icons';
+import type { IconName } from '@/ui/icons';
 import { RARITY_ORDER, Rarity } from '@/ui/theme';
 import type { SfxId } from '@/audio/api';
 import type { BannerService } from './banners';
@@ -44,7 +44,6 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   let lastBig = -99;
   let awakenCount = 0;
   let sunlit: readonly number[] = [];
-  const relicFlights: FlyHandle[] = [];
 
   /** Cosmetic summon-effect theme: extra pieces on top of the rarity colours, never instead of them. */
   const themeBurst = (x: number, y: number, tier: number): void => {
@@ -197,17 +196,8 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     if (fresh > 0) stage.direct('sunbeam', 0.5);
   });
 
+  // The toy's icon flies from the choice card (the HUD owns that flight), so only the caption and the sound live here.
   on('relicGain', (e) => {
-    const l = ctx.layout;
-    const from = { x: l.w / 2, y: l.fieldY + 312 };
-    const key = `relic_${e.relic}`;
-    const o = { from, to: ctx.anchor('relics'), count: 1, parent: ctx.layers.overlay, tweens: ctx.ui, hang: [0.4, 0.5] as const, flight: [0.5, 0.6] as const, burstRadius: [1, 2] as const, bulge: [50, 70] as const };
-    const h = hasTex(key)
-      ? flyTo({ ...o, texture: tex(key), size: 108 })
-      : flyTo({ ...o, make: () => drawIcon('gift', 90) });
-    if (relicFlights.length >= 4) relicFlights.shift();
-    relicFlights.push(h);
-    ps.burst(SPARKLE_UP, stage.fieldX(from.x), stage.fieldY(from.y), { colors: [W, GOLD], count: 2.5, scale: 1.6 });
     stage.direct('relic_pick', 0.8);
     banners.push('caption', 'relic', 1, { title: t('director.relic', { name: t(relicDef(e.relic).nameKey) }), color: GOLD }, 1.1, 0.15, 0.2);
   });
@@ -232,8 +222,6 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   });
 
   stage.onDestroy(() => {
-    for (const h of relicFlights) h.cancel();
-    relicFlights.length = 0;
     if (awakeningCutIn.playing) awakeningCutIn.destroy();
   });
 }

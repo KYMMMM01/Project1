@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BattleLayout } from '@/view/context';
-import { bossBarY, bottomRects, fitScale, slotCentre, slotWidth, topRects } from '@/view/hud/layoutMath';
+import { bottomRects, fitScale, slotCentre, slotWidth, topRects } from '@/view/hud/layoutMath';
 
 function layout(h: number, safeTop = 0, safeBottom = 0): BattleLayout {
   const slack = Math.round((h - safeTop - safeBottom - 168 - 452 - 624) / 2);
@@ -83,12 +83,16 @@ describe('sell strip', () => {
   });
 });
 
-describe('boss bar', () => {
-  it('sits right above the field when there is slack, else just under the top area', () => {
-    const tall = layout(1600);
-    expect(bossBarY(tall, 84)).toBe(tall.fieldY - 84 - 4);
-    const tight = layout(1280);
-    expect(bossBarY(tight, 84)).toBe(tight.safeTop + tight.topH + 4);
+describe('boss strip', () => {
+  it('replaces the preview and toy area of the second row and never reaches the field', () => {
+    for (const h of [1280, 1600]) {
+      const l = layout(h);
+      const r = topRects(l);
+      expect(r.boss.x).toBeGreaterThanOrEqual(r.wave.x + r.wave.w);
+      expect(r.boss.x + r.boss.w).toBeLessThanOrEqual(720);
+      expect(r.boss.y + r.boss.h).toBeLessThanOrEqual(l.safeTop + l.topH);
+      expect(r.timer.x + r.timer.w).toBeLessThanOrEqual(r.boss.x);
+    }
   });
 });
 

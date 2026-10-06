@@ -11,14 +11,14 @@ export class Hand extends Container {
   constructor() {
     super();
     const g = new Graphics();
-    const skin = 0xfff6e6;
+    const skin = Color.white;
     const line = { width: 5, color: Color.outline, join: 'round' as const };
     // Curled fingers, palm, thumb, then the pointing finger on top: the fingertip sits at (0, 0).
     g.roundRect(-4, 38, 66, 70, 26).fill(skin).stroke(line);
     for (let i = 0; i < 3; i++) g.roundRect(12 + i * 15, 30 - i * 2, 18, 34, 9).fill(skin).stroke({ ...line, width: 4 });
     g.roundRect(-36, 54, 24, 48, 12).fill(skin).stroke({ ...line, width: 4 });
     g.roundRect(-9, 0, 24, 74, 12).fill(skin).stroke(line);
-    g.roundRect(-3, 6, 7, 40, 3.5).fill({ color: 0xffffff, alpha: 0.7 });
+    g.roundRect(-3, 6, 7, 40, 3.5).fill({ color: Color.white, alpha: 0.7 });
     this.art.addChild(g);
     this.ring.alpha = 0;
     this.addChild(this.ring, this.art);
@@ -41,7 +41,7 @@ export class Hand extends Container {
         const r = k > 0.26 && k < 0.7 ? (k - 0.26) / 0.44 : -1;
         this.ring.clear();
         if (r >= 0) {
-          this.ring.circle(0, 0, 14 + r * 40).stroke({ width: 5, color: 0xffffff, alpha: 0.9 * (1 - r) });
+          this.ring.circle(0, 0, 14 + r * 40).stroke({ width: 5, color: Color.white, alpha: 0.9 * (1 - r) });
           this.ring.alpha = 1;
         }
       },

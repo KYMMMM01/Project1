@@ -44,6 +44,9 @@ class Hud implements HudPart {
   private pick: SummonPickPopup | null = null;
   private result: ResultHandle | null = null;
   private offLang: () => void;
+  private readonly onKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && !e.repeat && this.env.modalCount === 0) void this.openPause();
+  };
   private summons = 0;
   private lastTime = 0;
   private dragging = false;
@@ -59,6 +62,7 @@ class Hud implements HudPart {
     this.root.eventMode = 'passive';
     ctx.layers.hud.addChild(this.root);
     this.build();
+    window.addEventListener('keydown', this.onKey);
     // A language switch rebuilds every label; the handler that changed it must finish first.
     this.offLang = i18nEvents.on('change', () =>
       queueMicrotask(() => {
@@ -78,7 +82,7 @@ class Hud implements HudPart {
     const env = this.env;
     this.top = new TopBar(env);
     this.bottom = new BottomPanel(env);
-    this.boss = new BossBar(env);
+    this.boss = new BossBar(env, this.top);
     this.root.addChild(this.top.root, this.bottom.root, this.boss.root);
     this.top.pauseBtn.onTap(() => void this.openPause());
     this.layoutAll(ctx.layout);
@@ -132,7 +136,7 @@ class Hud implements HudPart {
   private layoutAll(l: BattleLayout): void {
     this.top.layout(l);
     this.bottom.layout(l);
-    this.boss.layout(l);
+    this.boss.layout();
   }
 
   // ───────────────────────── choices ─────────────────────────
@@ -249,15 +253,18 @@ class Hud implements HudPart {
     this.top.update();
     this.boss.update();
     this.bottom.update(dt);
-    this.tutorial?.update();
+    this.tutorial?.update(dt);
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.
     if (this.pick && this.env.battle.pending?.kind !== 'summon') this.pick.close();
-    const quiet = this.env.modalCount === 0 && !this.dragging && !this.pauseOpen && !this.ending && !(this.tutorial?.flow.holding ?? false);
-    this.hints.update(dt, quiet);
+    // A bubble never shows over a popup, a staged moment or a drag; while a cat is selected only the selection bar's own hints may.
+    const quiet =
+      !this.ctx.paused && this.env.modalCount === 0 && !this.dragging && !this.pauseOpen && !this.ending && !(this.tutorial?.flow.holding ?? false);
+    this.hints.update(dt, quiet, this.ctx.selected !== null);
   }
 
   destroy(): void {
     this.destroyed = true;
+    window.removeEventListener('keydown', this.onKey);
     this.offLang();
     this.teardown();
     this.relic?.destroy();

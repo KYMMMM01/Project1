@@ -6,7 +6,7 @@ import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { CLASS_UPGRADE_BONUS, SYNERGY_TIER_AT, classDef, type ClassId } from '@/game';
-import { Button, Color, drawIcon, fitLabel, Panel, Popup, punch, RarityPips, TweenBag, uiLabel, vGradient } from '@/ui';
+import { Button, Color, drawIcon, fitLabel, Panel, Popup, punch, RarityPips, TweenBag, uiLabel, vGradient, shade } from '@/ui';
 import type { HudEnv } from '../env';
 import { CLASS_ACCENT, CLASS_ICON, Subs } from '../kit';
 
@@ -39,8 +39,8 @@ export class ClassSheet extends Popup<void> {
 
     // Medallion + role text.
     const med = new Graphics();
-    med.circle(0, 5, 46).fill({ color: 0x07030f, alpha: 0.35 });
-    med.circle(0, 0, 46).fill(vGradient(0x6a56b6, 0x34256b)).stroke({ width: 5, color: Color.outline, alignment: 1 });
+    med.circle(0, 5, 46).fill({ color: Color.black, alpha: 0.35 });
+    med.circle(0, 0, 46).fill(vGradient(shade(Color.purple, -0.2), Color.purpleDark)).stroke({ width: 5, color: Color.outline, alignment: 1 });
     med.circle(0, 0, 52).stroke({ width: 3, color: accent, alpha: 0.8 });
     med.position.set(80, 118);
     const icon = drawIcon(CLASS_ICON[classId], 64);
@@ -113,7 +113,7 @@ export class ClassSheet extends Popup<void> {
       r.check.visible = lit;
       r.g.clear();
       r.g.roundRect(24, 6, W - 48, ROW_H - 12, 22)
-        .fill(lit ? vGradient(0x6a4fc0, 0x3e2b82) : { color: 0x1a1034, alpha: 0.7 })
+        .fill(lit ? vGradient(shade(Color.purple, -0.12), Color.purpleDark) : { color: Color.bgDeep, alpha: 0.7 })
         .stroke({ width: r.tier === tier ? 5 : 3, color: r.tier === tier ? CLASS_ACCENT[id] : Color.outline, alignment: 1 });
     });
     if (animate && tier > this.tierNow && this.tierNow >= 0) punch(this.bag, this.panel, 0.03, 0.2);

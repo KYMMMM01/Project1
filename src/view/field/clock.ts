@@ -21,6 +21,11 @@ export class BattleClock {
     return this.reasons.size > 0;
   }
 
+  /** The pause reasons currently held (QA hooks report them). */
+  get held(): PauseReason[] {
+    return [...this.reasons];
+  }
+
   get frozen(): boolean {
     return this.freezeLeft > 0;
   }

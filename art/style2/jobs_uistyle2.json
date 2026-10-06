@@ -1,0 +1,10 @@
+[
+ {
+  "name": "uistyle_craft",
+  "ref": [
+   "art/style2/tone_day.png"
+  ],
+  "ref_note": "Image 1 is a mock-up of a mobile game battle screen. This is a UI RESTYLE task: keep the layout, the warm cream / wood / coral / teal palette, every element's position and size, the cats, the floor background, the icons, numbers and Korean text; change ONLY how the user-interface pieces are drawn (buttons, panels, chips, bars, the tooltip).",
+  "prompt": "Use case: ui-mockup\nAsset type: mobile game UI style mockup, portrait 9:16\nPrimary request: redraw the UI pieces of image 1 in this style: COZY CRAFT KIT: panels are cream cards with a thick two-tone frame (dark wood-brown outside, warm orange inside) and a thin dashed stitch line just inside the frame; the bottom panel is one such card with an orange header tab; buttons are chunky flat pills with a thick dark-brown outline and a small solid offset shadow underneath (flat colour with at most one thin lighter strip at the top, no glassy shine): coral for the main Summon button, leaf-green for confirm-type buttons, teal for secondary; round icon buttons are discs with a wooden ring; counters are rounded plates with a round icon badge overlapping the left end; bars sit in dark-brown rounded tracks; the tooltip is a cream speech card with the same brown-and-orange frame; text is cream-white with a dark-brown outline on buttons and dark brown on cream surfaces.\nConstraints: same composition as image 1, crisp readable Korean text exactly as in image 1, no purple, no new elements, no watermark."
+ }
+]

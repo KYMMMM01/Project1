@@ -3,10 +3,10 @@
  * preview strip and the owned toys. Everything except the wave timer and the overflow countdown is
  * driven by simulation events.
  */
-import { Container, Graphics, type Text } from 'pixi.js';
+import { Container, Graphics, Rectangle, type FederatedPointerEvent, type Text } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { Ease, type Tween } from '@/core/tween';
-import { enemyDef, relicDef, type EnemyId } from '@/game';
+import { enemyDef, relicDef, type EnemyId, type RelicId } from '@/game';
 import {
   Color,
   drawIcon,
@@ -21,19 +21,23 @@ import {
   uiLabel,
   vGradient,
   type BarColor,
+  shade,
 } from '@/ui';
 import { profile } from '@/meta';
 import type { BattleLayout } from '../context';
 import type { HudEnv } from './env';
-import { enemyPortrait, relicIcon, tapArea } from './kit';
+import { enemyPortrait, relicIcon } from './kit';
 import { gaugeLevel, nextSpeed, overflowLeft, speedSteps, traitOrder } from './policy';
-import { slotCentre, slotWidth, topRects, type TopRects } from './layoutMath';
+import { slotCentre, slotWidth, topRects, type Rect, type TopRects } from './layoutMath';
 
 const SLOT_MAX = 56;
 const PREVIEW_MAX = 4;
 const TOY_MAX = 6;
 /** Seconds the picked toy's icon takes to fly from the choice screen to the row. */
 const TOY_FLIGHT = 0.6;
+
+/** Touch targets are at least 88 wide, so a strip is one target and the tap picks the icon nearest to the finger. */
+const STRIP_H = 96;
 
 interface Slot {
   box: Container;
@@ -51,11 +55,14 @@ export class TopBar {
   private readonly bag = new TweenBag();
   private readonly timer: ProgressBar;
   private readonly warn: Container;
+  private readonly row2Right = new Container();
   readonly previewLayer = new Container();
   readonly toyLayer = new Container();
   private readonly more: Text;
   private slots: Slot[] = [];
   private toySlots: Slot[] = [];
+  private previewIds: EnemyId[] = [];
+  private toyIds: RelicId[] = [];
   private rects: TopRects;
   private steps: readonly number[] = [1, 2];
   private gaugeDirty = true;
@@ -83,10 +90,12 @@ export class TopBar {
     this.more = uiLabel('', { size: 24, color: Color.textDim });
     this.more.visible = false;
 
-    this.root.addChild(
-      this.pauseBtn, this.speedBtn, this.gauge, this.warn, this.waveLabel, this.timer,
-      this.previewLayer, this.toyLayer, this.more,
-    );
+    this.previewLayer.eventMode = 'static';
+    this.toyLayer.eventMode = 'static';
+    this.previewLayer.on('pointerdown', (e: FederatedPointerEvent) => this.tapPreview(e));
+    this.toyLayer.on('pointerdown', (e: FederatedPointerEvent) => this.tapToy(e));
+    this.row2Right.addChild(this.previewLayer, this.toyLayer, this.more);
+    this.root.addChild(this.pauseBtn, this.speedBtn, this.gauge, this.warn, this.waveLabel, this.timer, this.row2Right);
     this.steps = speedSteps(this.canTriple(), env.sandbox);
     this.pauseBtn.visible = true;
     this.speedBtn.visible = env.reveal.speed;
@@ -244,19 +253,21 @@ export class TopBar {
   private refreshPreview(): void {
     for (const s of this.slots) s.box.destroy({ children: true });
     this.slots = [];
+    this.previewIds = [];
     this.more.visible = false;
     if (!this.env.reveal.preview) return;
     const entries = this.env.battle.previewWave();
     const shown = entries.slice(0, PREVIEW_MAX);
     const r = this.rects.preview;
     const slot = slotWidth(shown.length, r.w, 64);
+    this.previewIds = shown.map((en) => en.enemy);
     shown.forEach((en, i) => {
       const box = new Container();
       box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 8);
       const def = enemyDef(en.enemy);
       const boss = def.traits.includes('boss') || def.traits.includes('elite');
       const plate = new Graphics();
-      plate.roundRect(-26, -26, 52, 52, 14).fill(vGradient(boss ? 0x7a2a4a : 0x45357f, boss ? 0x4a1630 : 0x261a4d))
+      plate.roundRect(-26, -26, 52, 52, 14).fill(vGradient(boss ? shade(Color.danger, -0.5) : Color.panelLight, boss ? shade(Color.dangerDark, -0.5) : Color.panelDark))
         .stroke({ width: 4, color: Color.outline, alignment: 1 });
       const pic = enemyPortrait(en.enemy, 46);
       const count = uiLabel(`×${en.count}`, { size: 22, strokeWidth: 4, shadow: false });
@@ -267,8 +278,6 @@ export class TopBar {
         mark.position.set(-16, -22);
         box.addChild(mark);
       }
-      tapArea(box, -slot / 2, -54, slot, 96);
-      box.on('pointerdown', () => this.showEnemy(box, en.enemy));
       this.previewLayer.addChild(box);
       this.slots.push({ box });
     });
@@ -277,6 +286,29 @@ export class TopBar {
       this.more.visible = true;
     }
     this.layoutMore();
+  }
+
+  /** Index of the icon under the finger in a strip of `n` equal slots starting at `r.x`. */
+  private slotUnder(e: FederatedPointerEvent, layer: Container, r: Rect, n: number): number {
+    if (n <= 0) return -1;
+    const slot = Math.min(r.w / n, layer === this.previewLayer ? 64 : SLOT_MAX);
+    return Math.min(n - 1, Math.max(0, Math.floor((layer.toLocal(e.global).x - r.x) / slot)));
+  }
+
+  private tapPreview(e: FederatedPointerEvent): void {
+    const i = this.slotUnder(e, this.previewLayer, this.rects.preview, this.previewIds.length);
+    const id = this.previewIds[i];
+    const box = this.slots[i]?.box;
+    if (id && box) this.showEnemy(box, id);
+  }
+
+  private tapToy(e: FederatedPointerEvent): void {
+    const i = this.slotUnder(e, this.toyLayer, this.rects.toys, this.toyIds.length);
+    const id = this.toyIds[i];
+    const box = this.toySlots[i]?.box;
+    if (!id || !box) return;
+    const def = relicDef(id);
+    tooltip.show(box, { title: t(def.nameKey), text: def.descText() }, 6);
   }
 
   private showEnemy(target: Container, id: EnemyId): void {
@@ -296,6 +328,7 @@ export class TopBar {
     this.toySlots = [];
     const relics = this.env.battle.relics;
     const shown = relics.slice(0, TOY_MAX);
+    this.toyIds = shown.slice();
     const r = this.rects.toys;
     const slot = slotWidth(Math.max(shown.length, 1), r.w, SLOT_MAX);
     shown.forEach((id, i) => {
@@ -303,8 +336,6 @@ export class TopBar {
       const box = new Container();
       box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 4);
       box.addChild(relicIcon(id, 46, def.rarity));
-      tapArea(box, -slot / 2, -50, slot, 96);
-      box.on('pointerdown', () => tooltip.show(box, { title: t(def.nameKey), text: def.descText() }, 6));
       this.toyLayer.addChild(box);
       const slotEntry: Slot = { box };
       this.toySlots.push(slotEntry);
@@ -345,6 +376,8 @@ export class TopBar {
     this.speedBtn.position.set(r.speed.x, r.speed.y);
     this.gauge.position.set(r.gauge.x + r.gauge.w / 2, r.gauge.y + r.gauge.h / 2);
     this.warn.position.set(r.gauge.x + r.gauge.w - 34, r.gauge.y + r.gauge.h / 2);
+    this.previewLayer.hitArea = new Rectangle(r.preview.x, r.row2Y - STRIP_H / 2 - 4, r.preview.w, STRIP_H);
+    this.toyLayer.hitArea = new Rectangle(r.toys.x, r.row2Y - STRIP_H / 2 - 4, r.toys.w, STRIP_H);
     this.waveLabel.position.set(r.wave.x, r.row2Y - 18);
     this.timer.position.set(r.wave.x + r.wave.w / 2, r.row2Y + 18);
     this.refreshPreview();
@@ -379,6 +412,25 @@ export class TopBar {
     this.previewDirty = true;
     this.lastLevel = -1;
     this.refreshToys(false);
+  }
+
+  /** A boss or elite strip takes over the right half of the second row (preview strip and toys). */
+  setBossMode(on: boolean): void {
+    const layer = this.row2Right;
+    this.bag.killKeyed(layer);
+    const from = layer.alpha;
+    const to = on ? 0 : 1;
+    if (!on) layer.visible = true;
+    if (motion.reduced) {
+      layer.alpha = to;
+      layer.visible = !on;
+      return;
+    }
+    this.bag.runKeyed(layer, {
+      duration: 0.18,
+      onUpdate: (k) => (layer.alpha = from + (to - from) * k),
+      onComplete: () => (layer.visible = !on),
+    });
   }
 
   /** The speed steps may change when the Butler Pass is bought mid-session; cheap to recompute on demand. */

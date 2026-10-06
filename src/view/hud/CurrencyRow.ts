@@ -5,7 +5,7 @@
 import { Container, Graphics, Point, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import type { CurrencyReason } from '@/game';
-import { Button, Color, CurrencyPill, drawIcon, motion, popIn, TweenBag, uiLabel, vGradient } from '@/ui';
+import { Button, Color, CurrencyPill, drawIcon, motion, popIn, TweenBag, uiLabel, vGradient, shade } from '@/ui';
 import type { HudEnv } from './env';
 import { tapArea } from './kit';
 import { pityVisible } from './policy';
@@ -48,6 +48,9 @@ class Counter {
   }
 }
 
+/** Right edge of the pity chip: 8 px clear of the odds button. */
+const PITY_RIGHT = 592;
+
 export class CurrencyRow {
   readonly root = new Container();
   readonly fish: CurrencyPill;
@@ -57,6 +60,7 @@ export class CurrencyRow {
   private readonly bag = new TweenBag();
   private readonly pity = new Container();
   private readonly pityText: Text;
+  private readonly pityStar: Container;
   private readonly pityBg = new Graphics();
   private readonly odds: Button;
   private pityShown = false;
@@ -69,22 +73,20 @@ export class CurrencyRow {
     const b = env.battle;
     const r = env.reveal;
     this.fish = new CurrencyPill({ icon: 'fish', amount: b.fish, width: 224, tickSfx: false });
-    this.purr = new CurrencyPill({ icon: 'purr', amount: b.purr, width: 170, tickSfx: false });
+    this.purr = new CurrencyPill({ icon: 'purr', amount: b.purr, width: 156, tickSfx: false });
     this.fishCounter = new Counter(this.fish, this.bag, b.fish);
     this.purrCounter = new Counter(this.purr, this.bag, b.purr);
     this.fish.position.set(r.purr ? 152 : 360, 0);
-    this.purr.position.set(384, 0);
+    this.purr.position.set(380, 0);
     this.purr.visible = r.purr;
 
-    this.pityBg.roundRect(-46, -34, 92, 68, 34).fill(vGradient(0x6a4fc0, 0x3e2b82)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    const star = drawIcon('star', 30);
-    star.position.set(-22, 0);
+    this.pityStar = drawIcon('star', 30);
     this.pityText = uiLabel('', { size: 26, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
-    this.pityText.position.set(-2, 1);
-    this.pity.addChild(this.pityBg, star, this.pityText);
-    this.pity.position.set(540, 0);
+    this.pity.addChild(this.pityBg, this.pityStar, this.pityText);
+    // The chip grows leftwards from its right edge so a long "10/12" never runs into the odds button.
+    this.pity.position.set(PITY_RIGHT, 0);
     this.pity.visible = false;
-    tapArea(this.pity, -46, -44, 92, 88);
+    this.drawPity();
     this.pity.on('pointerup', openOdds);
 
     this.odds = new Button({ label: '%', style: 'info', width: 92, height: 76, fontSize: 40, radius: 'pill' });
@@ -113,12 +115,21 @@ export class CurrencyRow {
     const p = this.env.battle.pity();
     const show = pityVisible(p);
     this.pityText.text = p.epicBonus > 0 ? `+${Math.round(p.epicBonus * 100)}%` : `${p.epicDry}/${p.epicDryLimit}`;
+    this.drawPity();
     if (show !== this.pityShown) {
       this.pityShown = show;
       this.pity.visible = show;
       if (show && !motion.reduced) popIn(this.bag, this.pity, { from: 0.3, duration: 0.3, overshoot: 3 });
     }
     if (show) this.pulse(p.epicBonus > 0);
+  }
+
+  private drawPity(): void {
+    const w = Math.max(100, 64 + this.pityText.width);
+    this.pityBg.clear().roundRect(-w, -34, w, 68, 34).fill(vGradient(shade(Color.purple, -0.12), Color.purpleDark)).stroke({ width: 5, color: Color.outline, alignment: 1 });
+    this.pityStar.position.set(-w + 32, 0);
+    this.pityText.position.set(-w + 52, 1);
+    tapArea(this.pity, -w, -44, w, 88);
   }
 
   private pulse(on: boolean): void {

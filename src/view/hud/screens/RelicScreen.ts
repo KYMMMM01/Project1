@@ -25,6 +25,7 @@ import {
   toast,
   uiLabel,
   vGradient,
+  shade,
 } from '@/ui';
 import type { HudEnv } from '../env';
 import { PressCard, relicIcon } from '../kit';
@@ -46,6 +47,7 @@ export class RelicScreen {
   private busy = false;
   private closed = false;
   private optionKey = '';
+  private readonly offResize: () => void;
 
   constructor(
     private readonly env: HudEnv,
@@ -54,6 +56,7 @@ export class RelicScreen {
     this.scaffold = new ScreenScaffold({ title: t('hud.relic.title'), scroll: false, actionBarHeight: 150, padding: 24 });
     game.popupLayer.addChild(this.scaffold);
     this.release = env.holdPause();
+    this.offResize = game.events.on('resize', () => this.render());
     void this.scaffold.show(true);
     this.render();
   }
@@ -79,10 +82,14 @@ export class RelicScreen {
     this.cards = [];
     this.head?.destroy({ children: true });
 
+    // Tall screens: the stack sits a little above the middle instead of leaving a hole under the last card.
+    const spare = Math.max(0, this.scaffold.viewportHeight - 48 - (TOP + 3 * CARD_H + 2 * GAP));
+    const dy = Math.round(spare * 0.4);
     const head = new Container();
+    head.y = dy;
     const act = this.env.battle.act;
     const line = p.picksLeft > 1 ? t('hud.relic.many', { n: p.picksLeft }) : t('hud.relic.one');
-    const a = uiLabel(t('hud.relic.cleared', { act }), { size: 40, color: 0xffd54a, strokeWidth: 6 });
+    const a = uiLabel(t('hud.relic.cleared', { act }), { size: 40, color: Color.gold, strokeWidth: 6 });
     a.position.set(this.scaffold.contentWidth / 2, 30);
     const b = uiLabel(line, { size: 28, wrap: this.scaffold.contentWidth - 20, strokeWidth: 4, shadow: false });
     b.position.set(this.scaffold.contentWidth / 2, 78);
@@ -95,11 +102,11 @@ export class RelicScreen {
       const def = relicDef(id);
       const r = Rarity[def.rarity];
       const card = new PressCard(CARD_W, CARD_H, () => this.pick(i), { holdLimit: Infinity });
-      card.position.set(this.scaffold.contentWidth / 2, TOP + CARD_H / 2 + i * (CARD_H + GAP));
+      card.position.set(this.scaffold.contentWidth / 2, dy + TOP + CARD_H / 2 + i * (CARD_H + GAP));
       const g = new Graphics();
-      g.roundRect(-CARD_W / 2, -CARD_H / 2 + 8, CARD_W, CARD_H, 34).fill({ color: 0x07030f, alpha: 0.4 });
+      g.roundRect(-CARD_W / 2, -CARD_H / 2 + 8, CARD_W, CARD_H, 34).fill({ color: Color.black, alpha: 0.4 });
       g.roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 34)
-        .fill(vGradient(0x4a3a90, 0x2a1d58))
+        .fill(vGradient(shade(Color.panelLight, 0.06), Color.panel))
         .stroke({ width: 7, color: r.color, alignment: 1 });
       g.roundRect(-CARD_W / 2 + 9, -CARD_H / 2 + 9, CARD_W - 18, CARD_H - 18, 26).stroke({ width: 3, color: Color.outline, alpha: 0.8, alignment: 1 });
       const glow = new Graphics();
@@ -119,9 +126,9 @@ export class RelicScreen {
       desc.position.set(-CARD_W / 2 + 206, -30);
       card.addChild(g, glow, icon, name, tag, desc);
       if (this.env.tutorial && i === best) {
-        const rec = uiLabel(t('hud.recommend'), { size: 24, color: 0x2a1746, stroke: false, shadow: false });
+        const rec = uiLabel(t('hud.recommend'), { size: 24, color: Color.textDark, stroke: false, shadow: false });
         const pill = new Graphics();
-        pill.roundRect(-52, -18, 104, 36, 18).fill(0xffd54a).stroke({ width: 4, color: Color.outline });
+        pill.roundRect(-52, -18, 104, 36, 18).fill(Color.gold).stroke({ width: 4, color: Color.outline });
         const tagc = new Container();
         tagc.addChild(pill, rec);
         tagc.position.set(-CARD_W / 2 + 112, -CARD_H / 2 + 6);
@@ -257,6 +264,7 @@ export class RelicScreen {
   private close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.offResize();
     this.release();
     this.bag.killAll();
     this.onClose();
@@ -266,6 +274,7 @@ export class RelicScreen {
   destroy(): void {
     if (!this.closed) {
       this.closed = true;
+      this.offResize();
       this.release();
     }
     this.bag.killAll();

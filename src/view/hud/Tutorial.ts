@@ -10,7 +10,7 @@ import { t } from '@/core/i18n';
 import type { UnitId } from '@/game';
 import { cellCenterX, cellCenterY, CELL_H, CELL_W } from '@/game/geometry';
 import { Ease } from '@/core/tween';
-import { motion, tooltip, TweenBag } from '@/ui';
+import { motion, tooltip, TweenBag, Color } from '@/ui';
 import type { BattleLayout } from '../context';
 import type { HudEnv } from './env';
 import { Hand } from './Hand';
@@ -20,6 +20,10 @@ import { TUTORIAL_SUMMONS, TutorialFlow, findMergePair } from './tutorialFlow';
 /** How long the clock runs after a tap so the new kitten can pop in before the next prompt. */
 const BREATH = 0.75;
 const MARGIN = 18;
+/** Seconds of unspent fish before the free-play nudge points at the summon button, how long it stays, and how often it may come back. */
+const NUDGE_AFTER = 6;
+const NUDGE_FOR = 5;
+const NUDGE_MAX = 3;
 
 export class Tutorial {
   readonly flow = new TutorialFlow();
@@ -29,6 +33,7 @@ export class Tutorial {
   private readonly blockers: Container[] = [];
   private readonly anchor = new Graphics();
   private readonly hand = new Hand();
+  private readonly nudgeHand = new Hand();
   private readonly bag = new TweenBag();
   private target: (() => Rect | null) | null = null;
   private text = '';
@@ -36,6 +41,9 @@ export class Tutorial {
   private held = false;
   private shown = false;
   private paintedKey = '';
+  private idle = 0;
+  private nudgeLeft = 0;
+  private nudges = 0;
   private layout: BattleLayout;
 
   constructor(
@@ -51,11 +59,12 @@ export class Tutorial {
       b.eventMode = 'static';
       this.blockers.push(b);
     }
-    this.anchor.rect(-2, -2, 4, 4).fill({ color: 0xffffff, alpha: 0.01 });
+    this.anchor.rect(-2, -2, 4, 4).fill({ color: Color.white, alpha: 0.01 });
     this.anchor.eventMode = 'none';
     this.layer.addChild(this.dim, ...this.blockers, this.ring, this.anchor, this.hand);
     this.layer.visible = false;
-    parent.addChild(this.layer);
+    this.nudgeHand.visible = false;
+    parent.addChild(this.layer, this.nudgeHand);
 
     const b = env.battle;
     if (b.wave > 0 || b.getStats().summons > 0) {
@@ -66,6 +75,8 @@ export class Tutorial {
     env.on(b.events, 'summon', ({ source }) => {
       if ((source === 'button' || source === 'script') && this.flow.step === 'summon') this.onSummon();
       else if (source === 'choice') this.flow.onPicked();
+      this.idle = 0;
+      this.endNudge();
     });
     env.on(b.events, 'merge', () => {
       if (this.flow.onMerge()) this.end();
@@ -188,9 +199,9 @@ export class Tutorial {
     const h = r.h + MARGIN * 2;
     const W = this.layout.w;
     const H = this.layout.h;
-    this.dim.clear().rect(0, 0, W, H).fill({ color: 0x0b0618, alpha: 0.68 });
+    this.dim.clear().rect(0, 0, W, H).fill({ color: Color.bgDeep, alpha: 0.68 });
     this.dim.roundRect(x, y, w, h, 32).cut();
-    this.ring.clear().roundRect(x, y, w, h, 32).stroke({ width: 7, color: 0xffd54a });
+    this.ring.clear().roundRect(x, y, w, h, 32).stroke({ width: 7, color: Color.gold });
     const rects: Array<[number, number, number, number]> = [
       [0, 0, W, y],
       [0, y + h, W, Math.max(0, H - (y + h))],
@@ -202,13 +213,12 @@ export class Tutorial {
       b.hitArea = new Rectangle(bx, by, bw, bh);
     });
     this.anchor.position.set(x + w / 2, y + h / 2);
-    this.say(x + w / 2, y, y + h);
+    this.say(x + w / 2, y);
   }
 
-  /** The speech bubble hangs off an invisible marker above (or below) the hole. */
-  private say(cx: number, top: number, bottom: number): void {
-    const above = top > this.layout.h * 0.45;
-    this.anchor.position.set(cx, above ? top : bottom);
+  /** The speech bubble hangs off an invisible marker on the hole's top edge (the tooltip flips below it when there is no room above). */
+  private say(cx: number, top: number): void {
+    this.anchor.position.set(cx, top);
     tooltip.show(this.anchor, { text: this.text });
   }
 
@@ -227,7 +237,41 @@ export class Tutorial {
     if (this.shown) this.paint();
   }
 
-  update(): void {
+  /** Between the merge and the scripted pick the player plays freely: point at the button when fish pile up unspent. */
+  private nudge(dt: number): void {
+    const { battle, ctx } = this.env;
+    const idle = this.flow.step === 'free' && !this.flow.offered && !ctx.paused && battle.fish >= battle.summonCost();
+    if (!idle) {
+      this.idle = 0;
+      this.endNudge();
+      return;
+    }
+    if (this.nudgeLeft > 0) {
+      this.nudgeLeft -= dt;
+      if (this.nudgeLeft <= 0) this.endNudge();
+      return;
+    }
+    this.idle += dt;
+    if (this.idle < NUDGE_AFTER || this.nudges >= NUDGE_MAX) return;
+    this.nudges++;
+    this.nudgeLeft = NUDGE_FOR;
+    const r = this.summonTarget();
+    this.nudgeHand.position.set(r.x + r.w * 0.62, r.y + r.h * 0.55);
+    this.nudgeHand.visible = true;
+    this.nudgeHand.tap();
+    tooltip.show(this.nudgeHand, { text: t('hud.tut.more') }, NUDGE_FOR);
+  }
+
+  private endNudge(): void {
+    this.idle = 0;
+    if (!this.nudgeHand.visible) return;
+    this.nudgeHand.visible = false;
+    this.nudgeLeft = 0;
+    if (tooltip.target === this.nudgeHand) tooltip.hide();
+  }
+
+  update(dt: number): void {
+    this.nudge(dt);
     if (!this.shown) return;
     if (this.drag && this.flow.step === 'merge') {
       // The player may have broken the pair up; point at the next one.
@@ -248,7 +292,9 @@ export class Tutorial {
   destroy(): void {
     this.bag.killAll();
     this.hold(false);
+    this.endNudge();
     if (tooltip.target === this.anchor) tooltip.hide();
     this.layer.destroy({ children: true });
+    this.nudgeHand.destroy({ children: true });
   }
 }

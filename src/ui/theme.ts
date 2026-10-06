@@ -147,3 +147,88 @@ export const ButtonPalettes: Record<ButtonStyleId, ButtonPalette> = {
 
 /** Z-order inside game.popupLayer / game.overlayLayer is by add order; these are the shared fades. */
 export const Dim = { backdrop: 0x0b0618, backdropAlpha: 0.66 } as const;
+
+// ───────────────────────── palette previews (QA) ─────────────────────────
+// `?theme=<name>` swaps the colour tokens before any UI is built, so alternative looks can be
+// reviewed on the real screens. Only token values change; nothing else reads this.
+
+type Tokens = Record<keyof typeof Color, number>;
+
+function mixHex(a: number, b: number, t: number): number {
+  const ch = (s: number) => Math.round(((a >> s) & 0xff) + (((b >> s) & 0xff) - ((a >> s) & 0xff)) * t);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+/** Derive a full chunky-button palette from one base colour (same lightness structure as the hand-tuned ones). */
+function buttonFrom(base: number): ButtonPalette {
+  return {
+    top: mixHex(base, 0xffffff, 0.38),
+    base,
+    bottom: mixHex(base, 0x000000, 0.1),
+    rimTop: mixHex(base, 0xffffff, 0.72),
+    rimBottom: mixHex(base, 0x000000, 0.22),
+    lip: mixHex(base, 0x000000, 0.38),
+    textStroke: mixHex(base, 0x000000, 0.62),
+    glow: mixHex(base, 0xffffff, 0.3),
+  };
+}
+
+interface PalettePreview {
+  tokens: Partial<Tokens>;
+  /** Base colour per button style; unspecified styles keep their tuned palette. */
+  buttons: Partial<Record<ButtonStyleId, number>>;
+  backdrop: number;
+}
+
+export const PALETTE_PREVIEWS: Record<string, PalettePreview> = {
+  // Sunny home: cream panels, wood-brown outlines, coral call-to-action, teal secondary.
+  day: {
+    tokens: {
+      bgDeep: 0xcdb48a, bg: 0xe9d6b0, panel: 0xfff1d6, panelLight: 0xfffaf0, panelDark: 0xe6d2ab, outline: 0x4a2c1a,
+      textDim: 0x9a7b5f, textDark: 0x4a2c1a,
+      primary: 0xff8347, primaryDark: 0xd9541e, info: 0x2bb8b0, infoDark: 0x16857f, success: 0x6cc24a, successDark: 0x3f8f25,
+      danger: 0xe9524a, dangerDark: 0xa82b25, purple: 0xc0739a, purpleDark: 0x8a4368, neutral: 0xbba383, neutralDark: 0x86704f,
+      gold: 0xffc93c, gem: 0x3fc7e8,
+    },
+    buttons: { primary: 0xff8347, info: 0x2bb8b0, success: 0x6cc24a, danger: 0xe9524a, purple: 0xc0739a, neutral: 0xbba383 },
+    backdrop: 0x2a1a10,
+  },
+  // Deep teal: dark like today but sea-green instead of purple, coral call-to-action.
+  teal: {
+    tokens: {
+      bgDeep: 0x0b1f2a, bg: 0x10303f, panel: 0x16465a, panelLight: 0x1f5d75, panelDark: 0x0f3344, outline: 0x06161f,
+      textDim: 0x9cc9d6, textDark: 0x0f3344,
+      primary: 0xff7a59, primaryDark: 0xd94f2e, info: 0x4cc9f0, infoDark: 0x1f8fb8, purple: 0x54c6a9, purpleDark: 0x26917a,
+      neutral: 0x6f95a3, neutralDark: 0x41616d,
+    },
+    buttons: { primary: 0xff7a59, info: 0x4cc9f0, purple: 0x54c6a9, neutral: 0x6f95a3 },
+    backdrop: 0x04121a,
+  },
+  // Houseplant green: deep leaf-green panels, butter-yellow call-to-action, terracotta accents.
+  leaf: {
+    tokens: {
+      bgDeep: 0x14261b, bg: 0x1d3626, panel: 0x2a4d36, panelLight: 0x3a6648, panelDark: 0x1e3a29, outline: 0x0c1a11,
+      textDim: 0xb7d6bf, textDark: 0x1e3a29,
+      primary: 0xffd166, primaryDark: 0xd9a020, info: 0x6bc5d2, infoDark: 0x3a8f9c, purple: 0xe07a5f, purpleDark: 0xb0503a,
+      neutral: 0x7fa089, neutralDark: 0x4f6b58,
+    },
+    buttons: { primary: 0xffc94d, info: 0x6bc5d2, purple: 0xe07a5f, neutral: 0x7fa089 },
+    backdrop: 0x08130c,
+  },
+};
+
+export function applyPalettePreview(name: string): boolean {
+  const p = PALETTE_PREVIEWS[name];
+  if (!p) return false;
+  Object.assign(Color as unknown as Tokens, p.tokens);
+  for (const id of Object.keys(p.buttons) as ButtonStyleId[]) {
+    ButtonPalettes[id] = buttonFrom(p.buttons[id] as number);
+  }
+  (Dim as { backdrop: number }).backdrop = p.backdrop;
+  return true;
+}
+
+if (typeof location !== 'undefined') {
+  const requested = new URLSearchParams(location.search).get('theme');
+  if (requested) applyPalettePreview(requested);
+}

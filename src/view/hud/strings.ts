@@ -13,6 +13,7 @@ addStrings('ko', {
   'hud.est': '예상 {s}초',
   'hud.est.wait': '계산 중',
   'hud.est.none': '예상 불가',
+  'hud.est.far': '예상 99초 이상',
 
   // bottom panel
   'hud.summon': '소환',
@@ -149,6 +150,7 @@ addStrings('ko', {
   // tutorial
   'hud.tut.summon': '버튼을 눌러 고양이를 불러요! ({n}/{total})',
   'hud.tut.merge': '같은 고양이끼리 끌어서 합쳐요!',
+  'hud.tut.more': '물고기가 모이면 고양이를 더 불러요!',
 
   // laser
   'hud.laser.hint': '길 위를 눌러 빨간 점을 찍어요.',
@@ -213,6 +215,7 @@ addStrings('en', {
   'hud.est': 'Est. {s}s',
   'hud.est.wait': 'Estimating',
   'hud.est.none': 'No damage',
+  'hud.est.far': 'Est. 99s+',
 
   'hud.summon': 'Summon',
   'hud.free': 'Free',
@@ -236,7 +239,7 @@ addStrings('en', {
 
   'hud.odds.title': 'Summon odds',
   'hud.odds.grade': 'Summon grade {lv}',
-  'hud.odds.status': 'Summons without Alley Boss+: {n}/{limit} · bonus +{bonus}%p',
+  'hud.odds.status': 'Summons without Alley Boss+: {n}/{limit} · bonus +{bonus} pts',
   'hud.odds.rule': 'If {limit} summons in a row give no Alley Boss or better, every summon from the {next}th adds to the chance until one shows up. The table above is exactly what the next summon rolls on.',
   'hud.odds.tutorial': 'The first three summons are scripted for the tutorial. After that, the table above is what you get.',
 
@@ -339,6 +342,7 @@ addStrings('en', {
 
   'hud.tut.summon': 'Tap to summon a cat! ({n}/{total})',
   'hud.tut.merge': 'Drag one cat onto its twin to merge!',
+  'hud.tut.more': 'Got fish? Summon more cats!',
 
   'hud.laser.hint': 'Tap the walkway to place the red dot.',
   'hud.laser.active': 'The laser is on. Drag the dot to move it.',

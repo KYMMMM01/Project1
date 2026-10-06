@@ -20,21 +20,22 @@ export class OddsPopup extends Popup<void> {
     super({ dismissResult: undefined, priority: 1 });
     this.table = new OddsTable({ width: TABLE_W, rows: [] });
     this.gradeT = uiLabel('', { size: 28, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
-    this.status = uiLabel('', { size: 28, anchorX: 0, anchorY: 0, align: 'left', color: 0xffd54a, strokeWidth: 4, shadow: false, wrap: TABLE_W });
+    this.status = uiLabel('', { size: 28, anchorX: 0, anchorY: 0, align: 'left', color: Color.gold, strokeWidth: 4, shadow: false, wrap: TABLE_W });
     this.rule = uiLabel('', {
       size: 24, anchorX: 0, anchorY: 0, align: 'left', color: Color.textDim, wrap: TABLE_W, lineHeight: 32, strokeWidth: 4, shadow: false,
     });
-    this.panel = new Panel({ width: W, height: 600, title: t('hud.odds.title'), onClose: () => this.close() });
-    const c = this.panel.content;
     this.gradeT.position.set(40, 100);
     this.table.position.set((W - TABLE_W) / 2, 130);
-    c.addChild(this.gradeT, this.table, this.status, this.rule);
+    // Measure first: the rule text is longer in English, so the panel is as tall as its content.
+    this.refresh(false);
+    const h = Math.round(this.rule.y + this.rule.height + 52);
+    this.panel = new Panel({ width: W, height: h, title: t('hud.odds.title'), onClose: () => this.close() });
+    this.panel.content.addChild(this.gradeT, this.table, this.status, this.rule);
     this.body.addChild(this.panel);
 
     const e = env.battle.events;
     for (const type of ['pity', 'upgrade', 'summon'] as const) this.subs.add(e.on(type, () => this.refresh(true)));
-    this.refresh(false);
-    this.setContentSize(W + 60, 700);
+    this.setContentSize(W + 60, h + 100);
   }
 
   private refresh(animate: boolean): void {

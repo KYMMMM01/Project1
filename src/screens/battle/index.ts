@@ -1,8 +1,5 @@
-import { Container } from 'pixi.js';
 import type { TabFactory } from '../contract';
+import { BattleTab } from './BattleTab';
 
-/** Entry point of the "battle" tab. Placeholder until the tab is implemented. */
-export const createBattleTab: TabFactory = () => {
-  const view = new Container();
-  return { view, show() {}, hide() {}, resize() {}, update() {}, badge: () => false, destroy: () => view.destroy({ children: true }) };
-};
+/** Entry point of the "battle" tab: chapter card, start button and the home cards. */
+export const createBattleTab: TabFactory = (shell) => new BattleTab(shell);

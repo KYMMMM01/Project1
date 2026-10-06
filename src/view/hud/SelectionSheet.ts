@@ -23,6 +23,7 @@ import {
   uiLabel,
   vGradient,
   type IconName,
+  shade,
 } from '@/ui';
 import type { Rect } from './layoutMath';
 import type { HudEnv } from './env';
@@ -53,7 +54,7 @@ export class SelectionSheet {
   private cell: number | null = null;
   private dirty = false;
   private rect: Rect = { x: 12, y: 6, w: 696, h: 270 };
-  private accent = 0x8f7bd8;
+  private accent: number = Color.neutral;
   private fullSkill = '';
 
   constructor(private readonly env: HudEnv) {
@@ -98,8 +99,8 @@ export class SelectionSheet {
   private drawBg(): void {
     const { w, h } = this.rect;
     this.bg.clear();
-    this.bg.roundRect(0, 6, w, h, 34).fill({ color: 0x07030f, alpha: 0.4 });
-    this.bg.roundRect(0, 0, w, h, 34).fill(vGradient(0x4a3a90, 0x2a1d58)).stroke({ width: 6, color: Color.outline, alignment: 1 });
+    this.bg.roundRect(0, 6, w, h, 34).fill({ color: Color.black, alpha: 0.4 });
+    this.bg.roundRect(0, 0, w, h, 34).fill(vGradient(shade(Color.panelLight, 0.06), Color.panel)).stroke({ width: 6, color: Color.outline, alignment: 1 });
     this.bg.roundRect(6, 6, w - 12, h - 12, 28).stroke({ width: 3, color: this.accent, alpha: 0.85, alignment: 1 });
   }
 
@@ -146,9 +147,9 @@ export class SelectionSheet {
         this.root.alpha = 1;
       },
     });
-    if (this.env.reveal.molt) this.env.hints.request('molt', this.molt);
-    if (this.env.reveal.awaken) this.env.hints.request('awaken', this.awaken);
-    if (this.env.reveal.sellHint) this.env.hints.request('sell', this.sell);
+    if (this.env.reveal.molt) this.env.hints.request('molt', this.molt, true);
+    if (this.env.reveal.awaken) this.env.hints.request('awaken', this.awaken, true);
+    if (this.env.reveal.sellHint) this.env.hints.request('sell', this.sell, true);
   }
 
   private hide(): void {
@@ -177,7 +178,7 @@ export class SelectionSheet {
 
     const plate = new Graphics();
     plate.roundRect(14, 12, 88, 88, 24).fill(vGradient(rar.light, rar.color)).stroke({ width: 5, color: Color.outline, alignment: 1 });
-    plate.roundRect(20, 18, 76, 76, 18).fill({ color: 0x1a1034, alpha: 0.3 });
+    plate.roundRect(20, 18, 76, 76, 18).fill({ color: Color.bgDeep, alpha: 0.3 });
     const pic = unitPortrait(u.id, 82);
     pic.position.set(58, 58);
     d.addChild(plate, pic);
@@ -188,7 +189,7 @@ export class SelectionSheet {
     d.addChild(name);
 
     d.addChild(this.pill(118, 66, rarityName(def.rarity), rar.color, rar.light, null));
-    d.addChild(this.pill(this.lastPillEnd + 10, 66, t(classDef(def.classId).nameKey), 0x6a56b6, 0xffffff, CLASS_ICON[def.classId]));
+    d.addChild(this.pill(this.lastPillEnd + 10, 66, t(classDef(def.classId).nameKey), Color.purpleDark, Color.white, CLASS_ICON[def.classId]));
 
     const interval = (Math.round(u.stats.interval * 100) / 100).toString();
     let sx = 118;

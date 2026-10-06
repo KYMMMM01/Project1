@@ -5,7 +5,7 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import type { ClassId } from '@/game';
-import { drawIcon, drawShadow, glossGradient, motion, refreshCache, TweenBag, vGradient } from '@/ui';
+import { drawIcon, drawShadow, glossGradient, motion, refreshCache, TweenBag, vGradient, Color, shade } from '@/ui';
 import type { BattleLayout } from '../context';
 import { ActionRow } from './ActionRow';
 import { ClassRow } from './ClassRow';
@@ -87,8 +87,8 @@ export class BottomPanel {
     const g = this.bg;
     g.clear();
     drawShadow(g, 0, 0, HUD_W, h, 40, { alpha: 0.5, spread: 18, offsetY: -8 });
-    g.roundRect(0, 0, HUD_W, h + 60, 40).fill(vGradient(0x4a3896, 0x1d1340)).stroke({ width: 6, color: 0x140a2e, alignment: 1 });
-    g.roundRect(8, 8, HUD_W - 16, h + 60, 34).stroke({ width: 3, color: 0x8f7bd8, alpha: 0.55, alignment: 1 });
+    g.roundRect(0, 0, HUD_W, h + 60, 40).fill(vGradient(shade(Color.panelLight, 0.1), Color.bg)).stroke({ width: 6, color: Color.outline, alignment: 1 });
+    g.roundRect(8, 8, HUD_W - 16, h + 60, 34).stroke({ width: 3, color: Color.neutral, alpha: 0.55, alignment: 1 });
     g.roundRect(14, 12, HUD_W - 28, 56, 26).fill(glossGradient(0.16, 0));
     // The plate swallows taps so nothing behind the panel (the field's laser, a cell) reacts to a miss.
     this.plate.eventMode = 'static';
@@ -111,7 +111,7 @@ export class BottomPanel {
     ];
     for (const [x, y, size, rot] of spots) {
       if (y > h - 20) continue;
-      const paw = drawIcon('paw', size, 0xb9a6ff);
+      const paw = drawIcon('paw', size, Color.textDim);
       paw.alpha = 0.07;
       paw.position.set(x, y);
       paw.rotation = rot;

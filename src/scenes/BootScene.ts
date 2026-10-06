@@ -9,8 +9,16 @@ import { Color } from '@/ui/theme';
 
 /** Loads fonts and images behind the CSS splash, then hands over to the first real scene. */
 export class BootScene extends Scene {
-  /** @param next Scene to open once loading finishes. Without it a "ready" card is shown. */
-  constructor(private readonly next?: () => Scene) {
+  /**
+   * @param next Scene to open once loading finishes. Without it a "ready" card is shown.
+   * @param ready Services still starting (platform, meta, settings): the CSS splash stays until it settles and the scene is up.
+   * @param onShown Fires once the first scene is on screen and the splash is gone.
+   */
+  constructor(
+    private readonly next?: () => Scene,
+    private readonly ready?: Promise<void>,
+    private readonly onShown?: () => void,
+  ) {
     super();
   }
 
@@ -19,6 +27,8 @@ export class BootScene extends Scene {
     const setBar = (p: number) => {
       if (bar) bar.style.width = Math.round(p * 100) + '%';
     };
+    const hideSplash = () => document.getElementById('boot')?.classList.add('hide');
+    const { next, ready, onShown } = this;
     setBar(0.05);
     audio.init();
     await Promise.all([
@@ -26,20 +36,29 @@ export class BootScene extends Scene {
       document.fonts.load('32px GameKR', '가'),
     ]).catch(() => undefined);
     setBar(0.2);
-    await loadImages((p) => setBar(0.2 + p * 0.8));
-    document.getElementById('boot')?.classList.add('hide');
+    await loadImages((p) => setBar(0.2 + p * 0.75));
+    await ready;
+    setBar(1);
 
-    if (this.next) {
-      const make = this.next;
+    if (next) {
+      // The real boot keeps the splash up until the first scene is in place, so nothing half-built is ever seen.
+      if (!ready) hideSplash();
       // The scene manager is still mid-transition while enter() runs, so hand over once it is idle.
       const tryGo = () => {
-        if (scenes.transitioning) setTimeout(tryGo, 16);
-        else void scenes.goto(make, 'fade');
+        if (scenes.transitioning) {
+          setTimeout(tryGo, 16);
+          return;
+        }
+        void scenes.goto(next, ready ? 'none' : 'fade').then(() => {
+          if (ready) hideSplash();
+          onShown?.();
+        });
       };
       setTimeout(tryGo, 0);
       return;
     }
 
+    hideSplash();
     const g = new Graphics()
       .roundRect(-260, -90, 520, 180, 36)
       .fill(Color.panel)

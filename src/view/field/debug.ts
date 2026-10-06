@@ -3,12 +3,14 @@
  * and the QA hooks on `window.__dbg.battle`. Loaded lazily from main.ts, never part of the normal flow.
  */
 import { debugExpose } from '@/core/debug';
+import { setLang } from '@/core/i18n';
 import { scenes } from '@/core/scene';
 import { BootScene } from '@/scenes/BootScene';
 import { BattleScene, setBattleCreatedHook } from '@/scenes/BattleScene';
-import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId } from '@/game';
+import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId, type UnitId } from '@/game';
 import { createBot } from '@/game/sim/bots';
 import { spawnEnemy, killEnemy, removeEnemy } from '@/game/sim/enemies';
+import { makeUnit, refresh } from '@/game/sim/board';
 import { addFish, addPurr } from '@/game/sim/economy';
 import { Sim } from '@/game/sim/sim';
 import { audio } from '@/audio';
@@ -45,6 +47,8 @@ export function runFromQuery(params: URLSearchParams): RunConfig {
 }
 
 export async function openDebugBattle(params: URLSearchParams): Promise<void> {
+  const lang = params.get('lang');
+  if (lang === 'ko' || lang === 'en') setLang(lang);
   const run = runFromQuery(params);
   setBattleCreatedHook(installBattleDebug);
   await scenes.goto(() => new BootScene(() => new BattleScene(run)), 'none');
@@ -125,6 +129,13 @@ export function installBattleDebug(scene: BattleScene): void {
         ev.emit = emit;
       }
     },
+    /** Replace the board with `{ cell: unitId }` (stats refreshed; the field shows it on the next frame). */
+    board(units: Record<number, UnitId>): void {
+      const s = need();
+      s.units.fill(null);
+      for (const [cell, id] of Object.entries(units)) s.units[Number(cell)] = makeUnit(s, id, Number(cell), 0);
+      refresh(s);
+    },
     spawn(id: EnemyId, count = 1, from = 220): void {
       const s = need();
       for (let i = 0; i < count; i++) spawnEnemy(s, id, from + i * 30, s.baseHp(), false, id.startsWith('boss_') ? s.baseHp() * 400 : 0);
@@ -141,6 +152,13 @@ export function installBattleDebug(scene: BattleScene): void {
     },
     setSpeed(n: number): void {
       scene.ctx.setSpeed(n);
+    },
+    lang(l: 'ko' | 'en'): void {
+      setLang(l);
+    },
+    /** Pause reasons held right now (a reason that stays after every popup closed is a bug). */
+    pauseReasons(): string[] {
+      return scene.pauseReasons();
     },
   });
 }

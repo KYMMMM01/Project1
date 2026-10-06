@@ -64,9 +64,3 @@ export function killTone(estimate: number, timeLeft: number): KillTone {
   if (ratio < 11 / 12) return 'amber';
   return 'red';
 }
-
-/** Marker position on the time bar (which fills as time passes): where the bar will stand when the boss dies, 0..1 of the limit. */
-export function markerPos(estimate: number, elapsed: number, limit: number): number {
-  if (limit <= 0 || !Number.isFinite(estimate)) return 1;
-  return Math.min(1, Math.max(0, (elapsed + estimate) / limit));
-}

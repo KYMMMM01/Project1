@@ -235,6 +235,11 @@ export class BattleScene extends Scene {
     return layers;
   }
 
+  /** Pause reasons currently held (debug hooks only). */
+  pauseReasons(): string[] {
+    return this.context.clock.held;
+  }
+
   override resize(w: number, h: number): void {
     const layout = computeBattleLayout(w, h, game.safeTop, game.safeBottom);
     this.context.layout = layout;

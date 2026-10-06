@@ -1,0 +1,18 @@
+[
+ {
+  "name": "uistyle_felt",
+  "ref": [
+   "art/style2/tone_day.png"
+  ],
+  "ref_note": "Image 1 is a mock-up of a mobile game battle screen. This is a UI RESTYLE task: keep the layout, the colours' overall warm cream / wood / coral / teal palette, every element's position and size, the cats, the floor background, the icons, numbers and Korean text; change ONLY how the user-interface pieces are drawn (buttons, panels, chips, bars, the tooltip).",
+  "prompt": "Use case: ui-mockup\nAsset type: mobile game UI style mockup, portrait 9:16\nPrimary request: redraw the UI pieces of image 1 in this style: FELT AND STITCH: every button is a matte felt patch (flat colour, soft fabric texture, no gloss, no gradient) with a cream dashed stitch line running just inside its edge and a soft drop shadow instead of a hard 3D lip; panels are linen cards with stitched borders; counters are small fabric labels; the main Summon button is a big coral felt patch with cream stitches; icon buttons look like round sewing buttons; text is dark brown without outlines.\nConstraints: same composition as image 1, crisp readable Korean text exactly as in image 1, no glossy plastic buttons, no thick dark game-style outlines around UI, no purple, no new elements, no watermark."
+ },
+ {
+  "name": "uistyle_paper",
+  "ref": [
+   "art/style2/tone_day.png"
+  ],
+  "ref_note": "Image 1 is a mock-up of a mobile game battle screen. This is a UI RESTYLE task: keep the layout, the colours' overall warm cream / wood / coral / teal palette, every element's position and size, the cats, the floor background, the icons, numbers and Korean text; change ONLY how the user-interface pieces are drawn (buttons, panels, chips, bars, the tooltip).",
+  "prompt": "Use case: ui-mockup\nAsset type: mobile game UI style mockup, portrait 9:16\nPrimary request: redraw the UI pieces of image 1 in this style: PAPER SCRAPBOOK: every button is a flat paper sticker with a thin dark-brown pencil outline and a tiny offset paper shadow (no gloss, no gradient, no 3D lip); panels are cream note-paper cards, some held by short strips of patterned masking tape at the top; counters are small paper tags with a punched hole; the main Summon button is a coral paper label with a slightly hand-cut edge; icon buttons are round paper stickers; text is dark brown hand-lettered-looking rounded type without outlines.\nConstraints: same composition as image 1, crisp readable Korean text exactly as in image 1, no glossy plastic buttons, no thick dark game-style outlines around UI, no purple, no new elements, no watermark."
+ }
+]

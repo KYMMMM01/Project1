@@ -1,0 +1,26 @@
+[
+ {
+  "name": "tone_day",
+  "ref": [
+   "art/style2/base_battle.png"
+  ],
+  "ref_note": "Image 1 is a screenshot of a mobile game battle screen. This is a RECOLOUR task: keep the layout and every element exactly where it is and at the same size (the cats, the wooden floor background, icons, numbers, Korean text, button shapes, bars), and change ONLY the colour theme of the user-interface chrome (top bar elements, the bottom panel, chips, counters, buttons, the tooltip bubble) and of the board mat under the cats.",
+  "prompt": "Use case: ui-mockup\nAsset type: mobile game UI colour-theme mockup, portrait 9:16\nPrimary request: recolour the UI of image 1 to this theme: SUNNY HOME: warm cream and ivory panels with soft wood-brown outlines, the bottom panel like a light wooden tray, a coral-orange main button, teal secondary buttons and accents, mustard highlights; the board mat is a cream rug with a teal stitched border; bright cosy daytime mood, no purple anywhere.\nConstraints: same composition and proportions as image 1, same chunky rounded shapes with a darker lip under buttons, crisp readable Korean text exactly as in image 1, no new elements, no watermark."
+ },
+ {
+  "name": "tone_teal",
+  "ref": [
+   "art/style2/base_battle.png"
+  ],
+  "ref_note": "Image 1 is a screenshot of a mobile game battle screen. This is a RECOLOUR task: keep the layout and every element exactly where it is and at the same size (the cats, the wooden floor background, icons, numbers, Korean text, button shapes, bars), and change ONLY the colour theme of the user-interface chrome (top bar elements, the bottom panel, chips, counters, buttons, the tooltip bubble) and of the board mat under the cats.",
+  "prompt": "Use case: ui-mockup\nAsset type: mobile game UI colour-theme mockup, portrait 9:16\nPrimary request: recolour the UI of image 1 to this theme: DEEP TEAL: dark sea-teal and navy panels with near-black teal outlines, a coral main button, sky-blue and mint secondary accents; the board mat is a soft teal-grey rug with a lighter stitched border; calm evening-by-the-sea mood, no purple anywhere.\nConstraints: same composition and proportions as image 1, same chunky rounded shapes with a darker lip under buttons, crisp readable Korean text exactly as in image 1, no new elements, no watermark."
+ },
+ {
+  "name": "tone_leaf",
+  "ref": [
+   "art/style2/base_battle.png"
+  ],
+  "ref_note": "Image 1 is a screenshot of a mobile game battle screen. This is a RECOLOUR task: keep the layout and every element exactly where it is and at the same size (the cats, the wooden floor background, icons, numbers, Korean text, button shapes, bars), and change ONLY the colour theme of the user-interface chrome (top bar elements, the bottom panel, chips, counters, buttons, the tooltip bubble) and of the board mat under the cats.",
+  "prompt": "Use case: ui-mockup\nAsset type: mobile game UI colour-theme mockup, portrait 9:16\nPrimary request: recolour the UI of image 1 to this theme: HOUSEPLANT GREEN: deep leaf-green panels with dark forest outlines, a butter-yellow main button, terracotta and cream accents; the board mat is a pale sage-green rug with a cream stitched border; fresh indoor-garden mood, no purple anywhere.\nConstraints: same composition and proportions as image 1, same chunky rounded shapes with a darker lip under buttons, crisp readable Korean text exactly as in image 1, no new elements, no watermark."
+ }
+]

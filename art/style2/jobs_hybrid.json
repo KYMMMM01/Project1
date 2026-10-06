@@ -1,0 +1,38 @@
+[
+ {
+  "name": "h_w_sword",
+  "ref": [
+   "art/raw/unit_w_sword.png",
+   "art/style2/s1_mascot_sword.png"
+  ],
+  "ref_note": "Image 1 is the character to keep. Image 2 shows the FACE STYLE to use. Redraw the character of image 1 exactly as it is (same body shape and proportions, same pose, same fur colours and markings, same outfit and held items, same thick dark outline and white sticker border, same flat cel shading) and change ONLY the face so it is drawn in the simple style of image 2.",
+  "prompt": "Use case: identity-preserve edit\nAsset type: mobile game unit sprite shown small (about 90 px)\nPrimary request: same character as image 1 with the simple dot-eye face of image 2.\nFace: two small solid black dot eyes set apart (no iris, no highlights, no sparkles, no eyelashes), a tiny pink nose, a small closed 'w' mouth; keep the same head shape, ears, cheeks and whiskers as image 1; calm happy expression.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, full body, centred, generous padding, no text, no watermark, nothing cropped."
+ },
+ {
+  "name": "h_m_snow",
+  "ref": [
+   "art/raw/unit_m_snow.png",
+   "art/style2/s1_mascot_sword.png"
+  ],
+  "ref_note": "Image 1 is the character to keep. Image 2 shows the FACE STYLE to use. Redraw the character of image 1 exactly as it is (same body shape and proportions, same pose, same fur colours and markings, same outfit and held items, same thick dark outline and white sticker border, same flat cel shading) and change ONLY the face so it is drawn in the simple style of image 2.",
+  "prompt": "Use case: identity-preserve edit\nAsset type: mobile game unit sprite shown small (about 90 px)\nPrimary request: same character as image 1 with the simple dot-eye face of image 2.\nFace: two small solid black dot eyes set apart (no iris, no highlights, no sparkles, no eyelashes), a tiny pink nose, a small closed 'w' mouth; keep the same head shape, ears, cheeks and whiskers as image 1; calm happy expression.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, full body, centred, generous padding, no text, no watermark, nothing cropped."
+ },
+ {
+  "name": "h_m_fire",
+  "ref": [
+   "art/raw/unit_m_fire.png",
+   "art/style2/s1_mascot_sword.png"
+  ],
+  "ref_note": "Image 1 is the character to keep. Image 2 shows the FACE STYLE to use. Redraw the character of image 1 exactly as it is (same body shape and proportions, same pose, same fur colours and markings, same outfit and held items, same thick dark outline and white sticker border, same flat cel shading) and change ONLY the face so it is drawn in the simple style of image 2.",
+  "prompt": "Use case: identity-preserve edit\nAsset type: mobile game unit sprite shown small (about 90 px)\nPrimary request: same character as image 1 with the simple dot-eye face of image 2.\nFace: two small solid black dot eyes set apart (no iris, no highlights, no sparkles, no eyelashes), a tiny pink nose, a small closed 'w' mouth; keep the same head shape, ears, cheeks and whiskers as image 1; calm happy expression.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, full body, centred, generous padding, no text, no watermark, nothing cropped."
+ },
+ {
+  "name": "h_w_tiger",
+  "ref": [
+   "art/raw/unit_w_tiger.png",
+   "art/style2/s1_mascot_sword.png"
+  ],
+  "ref_note": "Image 1 is the character to keep. Image 2 shows the FACE STYLE to use. Redraw the character of image 1 exactly as it is (same body shape and proportions, same pose, same fur colours and markings, same outfit and held items, same thick dark outline and white sticker border, same flat cel shading) and change ONLY the face so it is drawn in the simple style of image 2.",
+  "prompt": "Use case: identity-preserve edit\nAsset type: mobile game unit sprite shown small (about 90 px)\nPrimary request: same character as image 1 with the simple dot-eye face of image 2.\nFace: two small solid black dot eyes set apart (no iris, no highlights, no sparkles, no eyelashes), a tiny pink nose, a small closed 'w' mouth; keep the same head shape, ears, cheeks and whiskers as image 1; calm happy expression.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, full body, centred, generous padding, no text, no watermark, nothing cropped."
+ }
+]

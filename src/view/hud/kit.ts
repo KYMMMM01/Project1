@@ -3,7 +3,7 @@ import { Container, Graphics, Rectangle, Sprite, type DestroyOptions } from 'pix
 import { hasTex, tex } from '@/core/assets';
 import { game } from '@/core/game';
 import type { ClassId, EnemyId, RarityId, RelicId, UnitId } from '@/game';
-import { bindPress, drawIcon, Rarity, vGradient, type IconName, type PressBinding } from '@/ui';
+import { bindPress, drawIcon, Rarity, vGradient, type IconName, type PressBinding, Color, shade } from '@/ui';
 
 export const CLASS_ICON: Record<ClassId, IconName> = {
   warrior: 'class_warrior',
@@ -14,10 +14,10 @@ export const CLASS_ICON: Record<ClassId, IconName> = {
 
 /** Accent of each class: lit synergy steps and the tier-up flare. */
 export const CLASS_ACCENT: Record<ClassId, number> = {
-  warrior: 0xff7a59,
-  ranger: 0x6fdc5a,
-  mage: 0x6aa8ff,
-  trickster: 0xffd23f,
+  warrior: Color.danger,
+  ranger: Color.success,
+  mage: Color.info,
+  trickster: Color.gold,
 };
 
 /** Stand-in icon for a toy without art: one glyph per rarity so a toy is never a blank square. */
@@ -55,7 +55,7 @@ export function enemyPortrait(id: EnemyId, size: number): Container {
   if (s) c.addChild(s);
   else {
     const g = new Graphics();
-    g.circle(0, 0, size * 0.38).fill(vGradient(0xd9d0f0, 0x8678b8)).stroke({ width: 4, color: 0x140a2e });
+    g.circle(0, 0, size * 0.38).fill(vGradient(Color.textDim, Color.neutral)).stroke({ width: 4, color: Color.outline });
     c.addChild(g, drawIcon('skull', size * 0.5));
   }
   return c;
@@ -71,8 +71,8 @@ export function relicIcon(id: RelicId, size: number, rarity: Exclude<RarityId, '
   }
   const r = Rarity[rarity];
   const g = new Graphics();
-  g.circle(0, size * 0.04, size * 0.46).fill({ color: 0x07030f, alpha: 0.35 });
-  g.circle(0, 0, size * 0.46).fill(vGradient(r.light, r.color)).stroke({ width: Math.max(3, size * 0.07), color: 0x140a2e });
+  g.circle(0, size * 0.04, size * 0.46).fill({ color: Color.black, alpha: 0.35 });
+  g.circle(0, 0, size * 0.46).fill(vGradient(r.light, r.color)).stroke({ width: Math.max(3, size * 0.07), color: Color.outline });
   c.addChild(g, drawIcon(RELIC_FALLBACK[rarity], size * 0.58));
   return c;
 }
@@ -117,14 +117,14 @@ export class PressCard extends Container {
         if (!this.enabledFlag) return;
         this.dipped = true;
         this.scale.set(this.scale.x * 0.96);
-        this.tint = 0xd9d2ee;
+        this.tint = shade(Color.white, -0.15);
         this.downAt = game.time;
         if (opts.onDown) this.fire?.();
       },
       up: (released) => {
         if (this.dipped) {
           this.dipped = false;
-          this.tint = 0xffffff;
+          this.tint = Color.white;
           this.scale.set(this.scale.x / 0.96);
         }
         if (!this.enabledFlag || opts.onDown) return;

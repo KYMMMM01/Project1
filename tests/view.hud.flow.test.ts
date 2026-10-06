@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DamageWindow, killTone, markerPos } from '@/view/hud/killEstimate';
+import { DamageWindow, killTone } from '@/view/hud/killEstimate';
 import { shakeScaleOf, volumeStep } from '@/view/hud/settingsMath';
 import { TUTORIAL_SUMMONS, TutorialFlow, findMergePair } from '@/view/hud/tutorialFlow';
 
@@ -46,13 +46,6 @@ describe('kill estimate', () => {
     expect(killTone(Infinity, 30)).toBe('red');
     expect(killTone(1, 0)).toBe('red');
   });
-
-  it('places the marker where the time bar will stand when the boss dies', () => {
-    expect(markerPos(10, 20, 60)).toBeCloseTo(0.5);
-    expect(markerPos(100, 20, 60)).toBe(1);
-    expect(markerPos(Infinity, 20, 60)).toBe(1);
-    expect(markerPos(0, 0, 60)).toBe(0);
-  });
 });
 
 describe('tutorial flow', () => {
@@ -67,7 +60,9 @@ describe('tutorial flow', () => {
     expect(f.onMerge()).toBe(true);
     expect(f.step).toBe('free');
     expect(f.holding).toBe(false);
+    expect(f.offered).toBe(false);
     expect(f.onOffer()).toBe(true);
+    expect(f.offered).toBe(true);
     expect(f.step).toBe('pick');
     expect(f.holding).toBe(true);
     expect(f.onPicked()).toBe(true);

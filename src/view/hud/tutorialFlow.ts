@@ -9,6 +9,8 @@ export const TUTORIAL_SUMMONS = 3;
 export class TutorialFlow {
   step: TutorialStep = 'summon';
   summons = 0;
+  /** The scripted pick-of-three has been shown (the steps are over for good once it is answered). */
+  offered = false;
 
   /** A button summon landed. Returns true when the step changed. */
   onSummon(): boolean {
@@ -29,6 +31,7 @@ export class TutorialFlow {
   /** The scripted pick-of-three opened. */
   onOffer(): boolean {
     if (this.step === 'pick') return false;
+    this.offered = true;
     this.step = 'pick';
     return true;
   }

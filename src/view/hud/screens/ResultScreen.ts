@@ -32,6 +32,7 @@ import {
   uiLabel,
   vGradient,
   type IconName,
+  shade,
 } from '@/ui';
 import type { HudEnv } from '../env';
 import { fitSprite, unitPortrait } from '../kit';
@@ -83,10 +84,10 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
       const b = a + 0.16;
-      rays.poly([0, 0, Math.cos(a) * 330, Math.sin(a) * 330, Math.cos(b) * 330, Math.sin(b) * 330]).fill({ color: 0xffe08a, alpha: 0.2 });
+      rays.poly([0, 0, Math.cos(a) * 330, Math.sin(a) * 330, Math.cos(b) * 330, Math.sin(b) * 330]).fill({ color: shade(Color.gold, 0.4), alpha: 0.2 });
     }
   }
-  const title = uiLabel(t(victory ? 'hud.res.win' : 'hud.res.lose'), { size: victory ? 92 : 80, color: victory ? 0xffd54a : 0xd9d0f0, strokeWidth: 12 });
+  const title = uiLabel(t(victory ? 'hud.res.win' : 'hud.res.lose'), { size: victory ? 92 : 80, color: victory ? Color.gold : Color.textDim, strokeWidth: 12 });
   const near = soCloseWaves(stats.wavesCleared, stats.totalWaves, victory);
   const sub = uiLabel(near > 0 ? t('hud.res.close', { n: near }) : t(victory ? 'hud.res.winSub' : 'hud.res.loseSub'), {
     size: 30, wrap: W - 40, lineHeight: 40, strokeWidth: 5, shadow: false,
@@ -107,8 +108,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   ];
   const statH = 3 * 92 + 150;
   const plate = new Graphics();
-  plate.roundRect(0, 6, W, statH, 32).fill({ color: 0x07030f, alpha: 0.3 });
-  plate.roundRect(0, 0, W, statH, 32).fill(vGradient(0x45357f, 0x2b1d52)).stroke({ width: 5, color: Color.outline, alignment: 1 });
+  plate.roundRect(0, 6, W, statH, 32).fill({ color: Color.black, alpha: 0.3 });
+  plate.roundRect(0, 0, W, statH, 32).fill(vGradient(Color.panelLight, Color.panel)).stroke({ width: 5, color: Color.outline, alignment: 1 });
   plate.position.set(0, y);
   c.addChild(plate);
   cells.forEach((cell, i) => {
@@ -118,14 +119,14 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     icon.position.set(cx + 28, cy + 40);
     const label = uiLabel(cell.label, { size: 24, color: Color.textDim, anchorX: 0, align: 'left', strokeWidth: 4, shadow: false });
     label.position.set(cx + 70, cy + 22);
-    const value = uiLabel(cell.value, { size: 36, color: cell.color ?? 0xffffff, anchorX: 0, align: 'left', strokeWidth: 5 });
+    const value = uiLabel(cell.value, { size: 36, color: cell.color ?? Color.white, anchorX: 0, align: 'left', strokeWidth: 5 });
     value.position.set(cx + 70, cy + 58);
     fitLabel(value, W / 2 - 110, 36, 0.7);
     c.addChild(icon, label, value);
   });
   const luck = luckLine(stats.summonLuck);
   const luckT = uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), {
-    size: 28, wrap: W - 60, lineHeight: 36, color: luck.kind === 'top' ? 0xffd54a : 0xffffff, strokeWidth: 4, shadow: false,
+    size: 28, wrap: W - 60, lineHeight: 36, color: luck.kind === 'top' ? Color.gold : Color.white, strokeWidth: 4, shadow: false,
   });
   luckT.position.set(W / 2, y + 3 * 92 + 50);
   const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.textDim, strokeWidth: 4, shadow: false });
@@ -167,8 +168,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const box = new Container();
     box.position.set(x + TILE / 2, ty + TILE / 2);
     const g = new Graphics();
-    g.roundRect(-TILE / 2, -TILE / 2 + 6, TILE, TILE, 28).fill({ color: 0x07030f, alpha: 0.3 });
-    g.roundRect(-TILE / 2, -TILE / 2, TILE, TILE, 28).fill(vGradient(0x5b46a8, 0x35266b)).stroke({ width: 5, color: Color.outline, alignment: 1 });
+    g.roundRect(-TILE / 2, -TILE / 2 + 6, TILE, TILE, 28).fill({ color: Color.black, alpha: 0.3 });
+    g.roundRect(-TILE / 2, -TILE / 2, TILE, TILE, 28).fill(vGradient(shade(Color.panelLight, 0.1), Color.panelLight)).stroke({ width: 5, color: Color.outline, alignment: 1 });
     box.addChild(g);
     let art: Container | null = null;
     if (tile.kind === 'card') art = unitPortrait(tile.id as UnitId, 84);
@@ -195,8 +196,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     ry += 64;
 
     // Gold and XP counters.
-    goldT = numberText(52, 0xffd23f, '+0');
-    xpT = numberText(52, 0x9fe8ff, '+0');
+    goldT = numberText(52, Color.gold, '+0');
+    xpT = numberText(52, shade(Color.gem, 0.3), '+0');
     const rowGold = new Container();
     const rowXp = new Container();
     const goldIcon = fitSprite('icon_gold', 64) ?? drawIcon('coin', 60);
@@ -218,7 +219,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     ry += 96;
 
     if (levelAfter > levelBefore) {
-      const lv = uiLabel(t('hud.res.level', { a: levelBefore, b: levelAfter }), { size: 36, color: 0xffd54a, strokeWidth: 6 });
+      const lv = uiLabel(t('hud.res.level', { a: levelBefore, b: levelAfter }), { size: 36, color: Color.gold, strokeWidth: 6 });
       lv.position.set(W / 2, ry + 26);
       rewardLayer.addChild(lv);
       bag.call(0.5, () => {
@@ -232,7 +233,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     }
     if (reward.firstClear) {
       const fc = uiLabel(t('hud.res.firstClear', { chapter: reward.chapter, stake: reward.stake }), {
-        size: 32, color: 0x8cff8a, wrap: W - 40, strokeWidth: 5,
+        size: 32, color: Color.energy, wrap: W - 40, strokeWidth: 5,
       });
       fc.position.set(W / 2, ry + 26);
       rewardLayer.addChild(fc);
@@ -241,7 +242,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       ry += 64;
     }
     if (reward.newBest) {
-      const nb = uiLabel(t('hud.res.newBest'), { size: 32, color: 0xffd54a, strokeWidth: 5 });
+      const nb = uiLabel(t('hud.res.newBest'), { size: 32, color: Color.gold, strokeWidth: 5 });
       nb.position.set(W / 2, ry + 26);
       rewardLayer.addChild(nb);
       ry += 64;
@@ -406,7 +407,7 @@ function confetti(scaffold: ScreenScaffold, bag: TweenBag): void {
   const vx = new Float32Array(N);
   const vy = new Float32Array(N);
   const spin = new Float32Array(N);
-  const colors = [0xffd54a, 0xff7a88, 0x6aa8ff, 0x8cff8a, 0xd5acff];
+  const colors = [Color.gold, shade(Color.danger, 0.3), Color.info, Color.energy, shade(Color.purple, 0.4)];
   for (let i = 0; i < N; i++) {
     const g = new Graphics();
     g.rect(-7, -4, 14, 8).fill(colors[i % colors.length] as number);

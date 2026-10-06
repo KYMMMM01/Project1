@@ -6,7 +6,7 @@ import { Container, Graphics } from 'pixi.js';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { Color, drawIcon, fitLabel, motion, TweenBag, uiLabel, vGradient } from '@/ui';
+import { Color, drawIcon, fitLabel, motion, TweenBag, uiLabel, vGradient, shade } from '@/ui';
 import type { Text } from 'pixi.js';
 import type { HudEnv } from './env';
 import type { Rect } from './layoutMath';
@@ -41,9 +41,9 @@ export class SellStrip {
     const g = this.plate;
     g.clear();
     g.roundRect(8, 4, w - 16, h - 8, 34)
-      .fill(this.lit ? vGradient(0xff8a96, 0xe02a46) : vGradient(0x7a3a64, 0x4a1c46))
-      .stroke({ width: 6, color: this.lit ? 0xffffff : Color.outline, alignment: 1 });
-    g.roundRect(18, 14, w - 36, h - 28, 26).stroke({ width: 4, color: this.lit ? 0xffd6da : 0xff7a88, alpha: this.lit ? 1 : 0.55, alignment: 1 });
+      .fill(this.lit ? vGradient(shade(Color.danger, 0.3), Color.dangerDark) : vGradient(shade(Color.danger, -0.45), shade(Color.dangerDark, -0.45)))
+      .stroke({ width: 6, color: this.lit ? Color.white : Color.outline, alignment: 1 });
+    g.roundRect(18, 14, w - 36, h - 28, 26).stroke({ width: 4, color: this.lit ? shade(Color.danger, 0.7) : shade(Color.danger, 0.3), alpha: this.lit ? 1 : 0.55, alignment: 1 });
     this.icon.position.set(w / 2 - 188, h / 2);
     this.label.position.set(w / 2 + 28, h / 2);
   }

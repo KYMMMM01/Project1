@@ -2,7 +2,7 @@
 import { Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { CLASS_IDS, classDef, unitClass, type ClassId } from '@/game';
-import { Color, drawIcon, fitLabel, Panel, Popup, uiLabel, vGradient } from '@/ui';
+import { Color, drawIcon, fitLabel, Panel, Popup, uiLabel, vGradient, shade } from '@/ui';
 import type { HudEnv } from '../env';
 import { CLASS_ACCENT, CLASS_ICON, PressCard, unitPortrait } from '../kit';
 
@@ -19,19 +19,19 @@ export class MoltPicker extends Popup<void> {
     const b = env.battle;
     const unit = b.units[cell];
     const from = unit ? unitClass(unit.id) : null;
-    const h = 420;
+    const h = 440;
     const panel = new Panel({ width: W, height: h, title: t('hud.molt'), onClose: () => this.close() });
     const c = panel.content;
     const cost = b.moltCost();
     const left = b.moltsLeft();
 
     const info = uiLabel(t('hud.molt.info', { cost, left }), { size: 28, wrap: W - 80, strokeWidth: 4, shadow: false });
-    info.position.set(W / 2, 92);
+    info.position.set(W / 2, 96);
     c.addChild(info);
 
     if (unit) {
-      const pic = unitPortrait(unit.id, 70);
-      pic.position.set(W / 2, 148);
+      const pic = unitPortrait(unit.id, 64);
+      pic.position.set(W / 2, 170);
       c.addChild(pic);
     }
 
@@ -39,11 +39,11 @@ export class MoltPicker extends Popup<void> {
     options.forEach((id, i) => {
       const x = W / 2 + (i - (options.length - 1) / 2) * (CARD_W + 14);
       const card = new PressCard(CARD_W, CARD_H, () => this.choose(id), { onDown: true });
-      card.position.set(x, 280);
+      card.position.set(x, 304);
       const g = new Graphics();
-      g.roundRect(-CARD_W / 2, -CARD_H / 2 + 6, CARD_W, CARD_H, 28).fill({ color: 0x07030f, alpha: 0.35 });
+      g.roundRect(-CARD_W / 2, -CARD_H / 2 + 6, CARD_W, CARD_H, 28).fill({ color: Color.black, alpha: 0.35 });
       g.roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 28)
-        .fill(vGradient(0x5b46a8, 0x35266b))
+        .fill(vGradient(shade(Color.panelLight, 0.1), Color.panelLight))
         .stroke({ width: 5, color: Color.outline, alignment: 1 });
       g.roundRect(-CARD_W / 2 + 6, -CARD_H / 2 + 6, CARD_W - 12, CARD_H - 12, 22).stroke({ width: 3, color: CLASS_ACCENT[id], alpha: 0.8, alignment: 1 });
       const icon = drawIcon(CLASS_ICON[id], 84);

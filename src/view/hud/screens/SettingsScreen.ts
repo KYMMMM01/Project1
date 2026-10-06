@@ -27,8 +27,8 @@ export function openSettings(onClose: () => void): ScreenScaffold {
       const row = new Container();
       row.position.set(0, y);
       const g = new Graphics();
-      g.roundRect(0, 4, w, h, 28).fill({ color: 0x07030f, alpha: 0.3 });
-      g.roundRect(0, 0, w, h, 28).fill(vGradient(0x45357f, 0x2b1d52)).stroke({ width: 5, color: Color.outline, alignment: 1 });
+      g.roundRect(0, 4, w, h, 28).fill({ color: Color.black, alpha: 0.3 });
+      g.roundRect(0, 0, w, h, 28).fill(vGradient(Color.panelLight, Color.panel)).stroke({ width: 5, color: Color.outline, alignment: 1 });
       const text = uiLabel(label, { size: 32, anchorX: 0, align: 'left', strokeWidth: 5 });
       text.position.set(28, h > ROW_H ? 40 : h / 2);
       row.addChild(g, text);

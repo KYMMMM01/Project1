@@ -8,6 +8,8 @@ Batch (jobs run in parallel, finished ones are skipped unless --force):
     python tools/gen_image.py --batch art/jobs.json --parallel 4
 
 jobs.json: [{"name": "unit_knight", "prompt": "...", "ref": ["art/raw/style_ref.png"]}, ...]
+An optional "ref_note" replaces the default "style reference only" sentence, e.g. to describe an
+edit of the attached image instead.
 
 Output goes to art/raw/<name>.png. Codex saves into ~/.codex/generated_images/<thread>/ and prints
 the path as its final message; this script copies that file into the project.
@@ -66,11 +68,14 @@ def newest_png_since(t0: float) -> Path | None:
     return best[1] if best else None
 
 
-def generate(name: str, prompt: str, refs: list[str], out_dir: Path, timeout: int, retries: int) -> dict:
+def generate(name: str, prompt: str, refs: list[str], out_dir: Path, timeout: int, retries: int, ref_note: str | None = None) -> dict:
     out = out_dir / f"{name}.png"
     codex = find_codex()
-    ref_note = ""
-    if refs:
+    if ref_note is not None:
+        ref_note = ref_note.strip() + " "
+    elif not refs:
+        ref_note = ""
+    else:
         ref_note = (
             "The attached image(s) are STYLE REFERENCES only: match their art style, outline weight, "
             "shading and colour treatment exactly, but draw the new subject described below. "
@@ -137,7 +142,7 @@ def main() -> int:
         failed = 0
         with ThreadPoolExecutor(max_workers=max(1, args.parallel)) as pool:
             futs = [
-                pool.submit(generate, j["name"], j["prompt"], j.get("ref", []), out_dir, args.timeout, args.retries)
+                pool.submit(generate, j["name"], j["prompt"], j.get("ref", []), out_dir, args.timeout, args.retries, j.get("ref_note"))
                 for j in todo
             ]
             for f in as_completed(futs):

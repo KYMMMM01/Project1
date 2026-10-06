@@ -1,8 +1,9 @@
-import { Container } from 'pixi.js';
 import type { TabFactory } from '../contract';
+import { installServices } from './services';
+import { createShopTabView } from './ShopTab';
 
-/** Entry point of the "shop" tab. Placeholder until the tab is implemented. */
-export const createShopTab: TabFactory = () => {
-  const view = new Container();
-  return { view, show() {}, hide() {}, resize() {}, update() {}, badge: () => false, destroy: () => view.destroy({ children: true }) };
+/** Entry point of the "shop" tab. Also provides the reveal, rewards, odds, shop-jump and unit services. */
+export const createShopTab: TabFactory = (shell) => {
+  installServices(shell);
+  return createShopTabView(shell);
 };

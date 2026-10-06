@@ -1,0 +1,53 @@
+/** Player-facing lines of the missions tab, ko (해요체) and en. Keys: rt.mis.* */
+import { addStrings } from '@/core/i18n';
+import '../system/strings';
+
+addStrings('ko', {
+  'rt.mis.tab.daily': '일일',
+  'rt.mis.tab.weekly': '주간',
+  'rt.mis.daily.title': '오늘의 상자',
+  'rt.mis.daily.done': '오늘의 상자를 받았어요.',
+  'rt.mis.daily.ready': '상자가 열렸어요!',
+  'rt.mis.go': '가기',
+  'rt.mis.pts': '+{n}점',
+  'rt.mis.weekly.title': '주간 미션',
+  'rt.mis.weekly.chest': '주간 상자',
+  'rt.mis.weekly.chestDone': '이번 주 상자를 받았어요.',
+  'rt.mis.weekly.count': '{n}/{max}개 받음',
+  'rt.mis.cup.title': '주간 컵',
+  'rt.mis.cup.sub': '이번 주 일일 도전에서 하루 최고 웨이브를 더해요.',
+  'rt.mis.cup.score': '합계 {n}웨이브',
+  'rt.mis.cup.today': '오늘 최고 {n}웨이브',
+  'rt.mis.cup.play': '일일 도전하러 가기',
+  'rt.mis.endless.title': '무한 모드',
+  'rt.mis.endless.sub': '이번 주 최고 웨이브로 상자를 받아요.',
+  'rt.mis.endless.best': '역대 최고 {best}웨이브',
+  'rt.mis.endless.play': '무한 모드 가기',
+  'rt.mis.tier.progress': '{cur}/{need}',
+  'rt.mis.locked': '미션은 판을 더 하면 열려요.',
+});
+
+addStrings('en', {
+  'rt.mis.tab.daily': 'Daily',
+  'rt.mis.tab.weekly': 'Weekly',
+  'rt.mis.daily.title': 'Daily chest',
+  'rt.mis.daily.done': 'Today\'s chest is claimed.',
+  'rt.mis.daily.ready': 'The chest is open!',
+  'rt.mis.go': 'Go',
+  'rt.mis.pts': '+{n} pts',
+  'rt.mis.weekly.title': 'Weekly missions',
+  'rt.mis.weekly.chest': 'Weekly chest',
+  'rt.mis.weekly.chestDone': 'This week\'s chest is claimed.',
+  'rt.mis.weekly.count': '{n}/{max} claimed',
+  'rt.mis.cup.title': 'Weekly cup',
+  'rt.mis.cup.sub': 'Add up your best daily-challenge wave of each day this week.',
+  'rt.mis.cup.score': 'Total {n} waves',
+  'rt.mis.cup.today': 'Best today: wave {n}',
+  'rt.mis.cup.play': 'Play the daily challenge',
+  'rt.mis.endless.title': 'Endless mode',
+  'rt.mis.endless.sub': 'Your best wave this week earns chests.',
+  'rt.mis.endless.best': 'Best ever: wave {best}',
+  'rt.mis.endless.play': 'Go to endless mode',
+  'rt.mis.tier.progress': '{cur}/{need}',
+  'rt.mis.locked': 'Missions unlock after a few more runs.',
+});

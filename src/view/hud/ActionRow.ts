@@ -7,7 +7,7 @@ import { audio } from '@/audio';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { Button, CooldownRing, drawGlow, drawIcon, motion, popIn, punch, tooltip, TweenBag, uiLabel } from '@/ui';
+import { Button, CooldownRing, drawGlow, drawIcon, motion, popIn, punch, tooltip, TweenBag, uiLabel, Color } from '@/ui';
 import type { HudEnv } from './env';
 import { tapArea } from './kit';
 import { SummonButton } from './SummonButton';
@@ -60,8 +60,8 @@ export class ActionRow {
     });
     this.grade.visible = r.gradeUpgrade;
 
-    this.ring = new CooldownRing({ radius: 50, thickness: 12, color: 0xff4d5e, icon: 'laser' });
-    drawGlow(this.glow, 0, 0, 84, 0xff4d5e, 0.9);
+    this.ring = new CooldownRing({ radius: 50, thickness: 12, color: Color.danger, icon: 'laser' });
+    drawGlow(this.glow, 0, 0, 84, Color.danger, 0.9);
     this.glow.blendMode = 'add';
     this.glow.alpha = 0;
     this.ringLabel = uiLabel('', { size: 26, strokeWidth: 5 });
@@ -80,8 +80,8 @@ export class ActionRow {
 
     for (let i = 0; i < PAWS; i++) {
       // The glyph's own colour is baked in, so a lit and a dim copy are swapped instead of tinted.
-      const dim = drawIcon('paw', 32, 0x5a49a0);
-      const lit = drawIcon('paw', 32, 0xffd23f);
+      const dim = drawIcon('paw', 32, Color.neutralDark);
+      const lit = drawIcon('paw', 32, Color.gold);
       dim.position.set(i * 36 + 16, 0);
       lit.position.copyFrom(dim.position);
       this.tracker.addChild(dim, lit);
