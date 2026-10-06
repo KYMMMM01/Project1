@@ -628,6 +628,9 @@ export class ParticleSystem {
       const l = Math.hypot(dx, dy) || 1;
       p.hpx = dy / l;
       p.hpy = -dx / l;
+      // Average heading, so a streak that is posed before its first step already faces its motion.
+      p.vx = dx / p.life;
+      p.vy = dy / p.life;
       p.swirl = (cv.swirl ?? 0) * k;
       p.homeEase = cv.ease ?? Ease.cubicIn;
     } else {

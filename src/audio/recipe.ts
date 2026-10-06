@@ -9,7 +9,7 @@ import type { VoiceRule } from './voices';
 export type Cat = 'ui' | 'reward' | 'fire' | 'hit' | 'combat' | 'big' | 'stinger';
 
 export const CAT_TARGET: Record<Cat, { peak: number; rms: number }> = {
-  ui: { peak: 0.3, rms: 0.045 },
+  ui: { peak: 0.23, rms: 0.04 },
   reward: { peak: 0.38, rms: 0.06 },
   fire: { peak: 0.2, rms: 0.028 },
   hit: { peak: 0.26, rms: 0.034 },
@@ -19,9 +19,7 @@ export const CAT_TARGET: Record<Cat, { peak: number; rms: number }> = {
 };
 
 export interface Variant {
-  /** Variant index; 0 is the nominal sound the recipe was designed around. */
-  i: number;
-  /** Multiplicative jitter around 1 (1 +/- amount) for variants 1+, exactly 1 for variant 0. */
+  /** Multiplicative jitter around 1 (1 +/- amount) for variants 1+, exactly 1 for variant 0 (the nominal design). */
   j(amount: number): number;
 }
 
@@ -43,18 +41,21 @@ export interface Recipe {
   build(s: Synth, v: Variant): void;
 }
 
+/** Partials above this are dropped: inaudible to most adults and they alias on 44.1 kHz devices. */
+const PARTIAL_LIMIT = 16000;
+
 /** Soft glassy bell: a fundamental plus the inharmonic 2.76x / 5.4x partials of a struck bar. */
 export function bell(s: Synth, f: number, at: number, dur: number, v = 1, send?: { bus: Send; amt: number }): void {
   s.tone({ f, at, dur, v, a: 0.002, s: 0.01, send });
-  s.tone({ f: f * 2.76, at, dur: dur * 0.55, v: v * 0.3, a: 0.002, s: 0.01 });
-  s.tone({ f: f * 5.4, at, dur: dur * 0.3, v: v * 0.12, a: 0.002, s: 0.01 });
+  if (f * 2.76 < PARTIAL_LIMIT) s.tone({ f: f * 2.76, at, dur: dur * 0.55, v: v * 0.3, a: 0.002, s: 0.01 });
+  if (f * 5.4 < PARTIAL_LIMIT) s.tone({ f: f * 5.4, at, dur: dur * 0.3, v: v * 0.12, a: 0.002, s: 0.01 });
 }
 
 /** Warm chime: sine with a quiet octave and twelfth, for friendly (not metallic) rewards. */
 export function chime(s: Synth, f: number, at: number, dur: number, v = 1, send?: { bus: Send; amt: number }): void {
   s.tone({ f, at, dur, v, a: 0.003, s: 0.01, send });
-  s.tone({ f: f * 2, at, dur: dur * 0.7, v: v * 0.28, a: 0.003, s: 0.01 });
-  s.tone({ f: f * 3, at, dur: dur * 0.45, v: v * 0.1, a: 0.003, s: 0.01 });
+  if (f * 2 < PARTIAL_LIMIT) s.tone({ f: f * 2, at, dur: dur * 0.7, v: v * 0.28, a: 0.003, s: 0.01 });
+  if (f * 3 < PARTIAL_LIMIT) s.tone({ f: f * 3, at, dur: dur * 0.45, v: v * 0.1, a: 0.003, s: 0.01 });
 }
 
 /** Round bright blip (coin / UI note): triangle for body plus a sine an octave up for shine. */

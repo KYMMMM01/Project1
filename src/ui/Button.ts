@@ -10,7 +10,7 @@ import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { motion, shakeX, TweenBag } from './motion';
 import { clearActivePress, inScrollHost, setActivePress, type Pressable } from './press';
-import { drawBevelBase, drawBevelFace, glossGradient, type BevelOpts } from './shapes';
+import { drawBevelBase, drawBevelFace, glossGradient, refreshCache, type BevelOpts } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { ButtonPalettes, Hit, type ButtonPalette, type ButtonStyleId } from './theme';
 
@@ -361,6 +361,9 @@ export class Button extends Container implements Pressable {
     this.faceG.clear();
     drawBevelBase(this.baseG, -w / 2, -h / 2, w, h, o);
     drawBevelFace(this.faceG, -w / 2, -h / 2, w, h, o);
+    // Many buttons on screen at once: baked, each is one textured quad instead of a dozen vector batches.
+    refreshCache(this.baseG);
+    refreshCache(this.faceG);
   }
 
   private buildContent(): void {

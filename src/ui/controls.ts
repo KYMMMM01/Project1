@@ -8,7 +8,7 @@ import { drawIcon } from './icons';
 import { IconButton } from './IconButton';
 import type { Box } from './layoutMath';
 import { backOut, motion, TweenBag } from './motion';
-import { glossGradient, vGradient } from './shapes';
+import { cacheStatic, glossGradient, vGradient } from './shapes';
 import { uiLabel } from './text';
 import { Color, Hit } from './theme';
 
@@ -35,6 +35,7 @@ export class Toggle extends Container {
   private state: boolean;
   private changeFn: ((v: boolean) => void) | null;
   private pos = 0;
+  private pressed = false;
 
   constructor(opts: ToggleOpts = {}) {
     super();
@@ -58,6 +59,9 @@ export class Toggle extends Container {
     this.check = drawIcon('check', 24, 0x2fbf50);
     this.check.position.y = 1;
     this.knob.addChild(k, this.check);
+    cacheStatic(off);
+    cacheStatic(this.onLayer);
+    cacheStatic(k);
     this.addChild(off, this.onLayer, this.knob);
 
     this.pos = this.state ? 1 : 0;
@@ -65,7 +69,10 @@ export class Toggle extends Container {
     this.eventMode = 'static';
     this.cursor = 'pointer';
     this.hitArea = new Rectangle(-Math.max(TW, Hit.min) / 2, -Hit.min / 2, Math.max(TW, Hit.min), Hit.min);
-    this.on('pointertap', this.flip);
+    this.on('pointerdown', this.onDown);
+    this.on('pointerup', this.onUp);
+    this.on('pointerupoutside', this.cancel, this);
+    this.on('pointerleave', this.cancel, this);
   }
 
   get value(): boolean {
@@ -84,13 +91,32 @@ export class Toggle extends Container {
     this.slide(animate);
   }
 
-  private flip = (): void => {
+  /** The knob squashes on the pointerdown frame so the switch answers instantly. */
+  private onDown = (): void => {
+    this.pressed = true;
+    this.knob.scale.set(1.12, 0.94);
+  };
+
+  private onUp = (): void => {
+    if (!this.pressed) return;
+    this.pressed = false;
+    this.knob.scale.set(1);
+    this.flip();
+  };
+
+  private cancel(): void {
+    if (!this.pressed) return;
+    this.pressed = false;
+    this.knob.scale.set(1);
+  }
+
+  private flip(): void {
     this.state = !this.state;
     audio.play('ui_toggle');
     haptic('light');
     this.slide(true);
     this.changeFn?.(this.state);
-  };
+  }
 
   private slide(animate: boolean): void {
     const to = this.state ? 1 : 0;
@@ -180,6 +206,8 @@ export class Slider extends Container {
     k.circle(0, 5, 28).fill({ color: 0x07030f, alpha: 0.32 });
     k.circle(0, 0, 28).fill(vGradient(0xffeb9a, 0xffa820)).stroke({ width: 5, color: Color.outline, alignment: 1 });
     k.ellipse(-4, -11, 14, 7).fill(glossGradient(0.65, 0.1));
+    cacheStatic(track);
+    cacheStatic(k);
     this.knob.addChild(k);
     this.addChild(track, this.fill, this.knob);
 

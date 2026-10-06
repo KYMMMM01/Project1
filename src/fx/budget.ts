@@ -16,7 +16,12 @@ export class ParticleBudget {
   dropped = 0;
   granted = 0;
 
-  constructor(readonly cap = 700) {}
+  /** Hard ceiling; lowering it never kills live particles, it only refuses new ones. */
+  cap: number;
+
+  constructor(cap = 700) {
+    this.cap = cap;
+  }
 
   /** Slots a priority-`prio` emission may still take (never negative). */
   room(prio: number): number {

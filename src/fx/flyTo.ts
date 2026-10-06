@@ -1,4 +1,4 @@
-import { Container, Point, Sprite, type Texture } from 'pixi.js';
+import { Bounds, Container, Point, Sprite, type Texture } from 'pixi.js';
 import { game } from '@/core/game';
 import { Pool } from '@/core/pool';
 import { Ease, uiTweens, type Tween, type Tweener } from '@/core/tween';
@@ -11,7 +11,10 @@ export interface FlyPoint {
   y: number;
 }
 
-/** A point already in the parent's coordinates, or a display object whose centre is converted. */
+/**
+ * A point already in the parent's coordinates, or a display object: the centre of its bounds is the
+ * landing spot (its origin only when it has nothing to measure), whatever its anchor or pivot.
+ */
 export type FlyEnd = FlyPoint | Container;
 
 export interface FlyToOpts {
@@ -44,10 +47,13 @@ export interface FlyToOpts {
 }
 
 export interface FlyHandle {
-  /** Stop everything now without firing onArrive/onDone. */
+  /** Stop everything now without firing onArrive/onDone, and remove every icon still in flight. */
   cancel(): void;
   readonly active: boolean;
-  /** Resolves when the last icon lands or the flight is cancelled. */
+  /**
+   * Resolves when the last icon lands or the flight ends early (cancel(), or the Tweener driving it
+   * being killed, e.g. on scene exit). onDone only fires for a flight that really finished.
+   */
   readonly done: Promise<void>;
 }
 
@@ -70,10 +76,14 @@ const iconPool = new Pool<Sprite>(
 );
 
 const tmp = new Point();
+const tmpBounds = new Bounds();
 
 function resolveEnd(e: FlyEnd, parent: Container, out: FlyPoint): FlyPoint {
   if (e instanceof Container) {
-    e.getGlobalPosition(tmp);
+    const b = e.getBounds(false, tmpBounds);
+    // An empty or hidden container measures as a zero rectangle: fall back to its origin.
+    if (b.maxX > b.minX && b.maxY > b.minY) tmp.set((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2);
+    else e.getGlobalPosition(tmp);
     parent.toLocal(tmp, undefined, tmp);
     out.x = tmp.x;
     out.y = tmp.y;
@@ -107,6 +117,7 @@ export function flyTo(o: FlyToOpts): FlyHandle {
 
   const icons: (Container | null)[] = new Array<Container | null>(n).fill(null);
   const tweens: Tween[] = [];
+  const landed: boolean[] = new Array<boolean>(n).fill(false);
   let arrived = 0;
   let active = true;
   let resolveDone!: () => void;
@@ -120,6 +131,20 @@ export function flyTo(o: FlyToOpts): FlyHandle {
     icons[i] = null;
     if (o.make) c.destroy({ children: true });
     else iconPool.release(c as Sprite);
+  };
+
+  const handle: FlyHandle = {
+    get active() {
+      return active;
+    },
+    done,
+    cancel() {
+      if (!active) return;
+      active = false;
+      for (const t of tweens) t.kill();
+      for (let i = 0; i < n; i++) dropIcon(i);
+      resolveDone();
+    },
   };
 
   for (let i = 0; i < n; i++) {
@@ -158,42 +183,35 @@ export function flyTo(o: FlyToOpts): FlyHandle {
     const state: FlightState = { x: from.x, y: from.y, scale: 0 };
     const idx = i;
     const total = flightTotal(plan);
-    tweens.push(
-      tw.run({
-        duration: total,
-        delay: i * stagger,
-        ease: Ease.linear,
-        onUpdate: (k) => {
-          flightAt(state, plan, k * total);
-          icon.position.set(state.x, state.y);
-          icon.scale.set(state.scale * baseScale);
-        },
-        onComplete: () => {
-          if (!active) return;
-          dropIcon(idx);
-          arrived++;
-          o.onArrive?.(idx);
-          if (arrived === n) {
-            active = false;
-            o.onDone?.();
-            resolveDone();
-          }
-        },
-      }),
-    );
+    const tween = tw.run({
+      duration: total,
+      delay: i * stagger,
+      ease: Ease.linear,
+      onUpdate: (k) => {
+        flightAt(state, plan, k * total);
+        icon.position.set(state.x, state.y);
+        icon.scale.set(state.scale * baseScale);
+      },
+      onComplete: () => {
+        landed[idx] = true;
+        if (!active) return;
+        dropIcon(idx);
+        arrived++;
+        o.onArrive?.(idx);
+        if (arrived === n) {
+          active = false;
+          o.onDone?.();
+          resolveDone();
+        }
+      },
+    });
+    tweens.push(tween);
+    // Tween.kill and Tweener.killAll (scene exit) skip onComplete: without this the icons would stay
+    // on the overlay layer, which outlives scenes, and `done` would never settle.
+    void tween.finished.then(() => {
+      if (active && !landed[idx]) handle.cancel();
+    });
   }
 
-  return {
-    get active() {
-      return active;
-    },
-    done,
-    cancel() {
-      if (!active) return;
-      active = false;
-      for (const t of tweens) t.kill();
-      for (let i = 0; i < n; i++) dropIcon(i);
-      resolveDone();
-    },
-  };
+  return handle;
 }

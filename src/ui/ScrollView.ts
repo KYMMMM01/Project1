@@ -33,6 +33,8 @@ export class ScrollView extends Container implements ScrollHost {
   readonly isScrollHost = true as const;
   readonly content = new Container();
 
+  /** Carries the mask, so measuring `content` is never clipped by it. */
+  private readonly clip = new Container();
   private viewW: number;
   private viewH: number;
   private readonly padding: number;
@@ -69,8 +71,9 @@ export class ScrollView extends Container implements ScrollHost {
     this.horizontal = opts.horizontal ?? false;
     this.ay.elastic = this.ax.elastic = opts.elastic ?? true;
 
-    this.addChild(this.content, this.maskG);
-    this.content.mask = this.maskG;
+    this.clip.addChild(this.content);
+    this.addChild(this.clip, this.maskG);
+    this.clip.mask = this.maskG;
     if (opts.indicator ?? true) {
       this.indicator = new Graphics();
       this.indicator.roundRect(0, 0, 6, 100, 3).fill({ color: 0xffffff, alpha: 0.5 });
@@ -340,7 +343,7 @@ export class ScrollView extends Container implements ScrollHost {
   private apply(): void {
     this.content.position.set(this.padding - this.ax.pos, this.padding - this.ay.pos);
     this.updateIndicator();
-    for (const fn of this.scrollFns) fn(this.ax.pos, this.ay.pos);
+    for (let i = 0; i < this.scrollFns.length; i++) (this.scrollFns[i] as (x: number, y: number) => void)(this.ax.pos, this.ay.pos);
   }
 
   /* ------------------------------------------------------------ indicator */

@@ -23,7 +23,7 @@ export interface SoundDef {
 const CAT_RULE: Record<Cat, VoiceRule> = {
   ui: { maxVoices: 3, minGap: 0.03, falloff: 0 },
   reward: { maxVoices: 3, minGap: 0.04, falloff: 0 },
-  fire: { maxVoices: 4, minGap: 0.06, falloff: 0.15 },
+  fire: { maxVoices: 3, minGap: 0.08, falloff: 0.15 },
   hit: { maxVoices: 5, minGap: 0.04, falloff: 0.18 },
   combat: { maxVoices: 3, minGap: 0.06, falloff: 0 },
   big: { maxVoices: 2, minGap: 0.15, falloff: 0 },

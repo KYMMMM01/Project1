@@ -92,9 +92,15 @@ export function bakeResolution(): number {
   return clamp(r * game.scale * 1.25, 1, 2);
 }
 
-/** Bake a static container into one texture. Call updateCacheTexture() on it after changing children. */
+/** Bake a static container into one texture. Call refreshCache() after changing its children. */
 export function cacheStatic(c: Container): void {
   c.cacheAsTexture({ resolution: bakeResolution(), antialias: true });
+}
+
+/** Bake on first call, re-bake afterwards: for static art that is occasionally redrawn (a restyle, a resize). */
+export function refreshCache(c: Container): void {
+  if (c.isCachedAsTexture) c.updateCacheTexture();
+  else cacheStatic(c);
 }
 
 /* ------------------------------------------------------------------- shapes */

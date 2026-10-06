@@ -1,4 +1,4 @@
-import { Container, Graphics, Sprite, type DestroyOptions, type Texture } from 'pixi.js';
+import { Container, FillGradient, Graphics, Sprite, type DestroyOptions, type Texture } from 'pixi.js';
 import { audio, type SfxId } from '@/audio';
 import { haptic } from '@/core/haptics';
 import { TAU } from '@/core/math';
@@ -58,6 +58,7 @@ function sfxFor(r: RewardDesc): SfxId {
 export class RewardPopup extends Popup<RewardChoice> {
   private readonly bag = new TweenBag();
   private readonly rays = new Graphics();
+  private rayFill: FillGradient | null = null;
 
   constructor(opts: RewardPopupOpts) {
     super({ dismissResult: 'claim', backdropClose: false, priority: 1, dim: 1.1 });
@@ -71,7 +72,7 @@ export class RewardPopup extends Popup<RewardChoice> {
     const panel = new Panel({ width: PANEL_W, height: h, title: opts.title, ribbon: 'primary' });
 
     // Slowly turning sunburst behind the panel makes the screen feel like an event.
-    this.drawRays(Math.max(PANEL_W, h) * 0.78);
+    this.drawRays(Math.max(PANEL_W, h) * 0.62);
     this.rays.position.set(0, -h / 2 + 120);
     this.body.addChild(this.rays, panel);
 
@@ -121,17 +122,32 @@ export class RewardPopup extends Popup<RewardChoice> {
 
   private drawRays(r: number): void {
     const g = this.rays;
-    const rays = 14;
+    const rays = 12;
+    // Global-space radial gradient so every wedge fades out with distance from the centre.
+    this.rayFill = new FillGradient({
+      type: 'radial',
+      center: { x: 0, y: 0 },
+      innerRadius: 0,
+      outerCenter: { x: 0, y: 0 },
+      outerRadius: r,
+      colorStops: [
+        { offset: 0, color: 'rgba(255,226,122,0.85)' },
+        { offset: 0.55, color: 'rgba(255,200,90,0.35)' },
+        { offset: 1, color: 'rgba(255,190,80,0)' },
+      ],
+      textureSpace: 'global',
+    });
     for (let i = 0; i < rays; i++) {
       const a0 = (i / rays) * TAU;
-      const a1 = a0 + (TAU / rays) * 0.5;
-      g.poly([0, 0, Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r]).fill({ color: 0xffe27a, alpha: 0.2 });
+      const a1 = a0 + (TAU / rays) * 0.42;
+      g.poly([0, 0, Math.cos(a0) * r, Math.sin(a0) * r, Math.cos(a1) * r, Math.sin(a1) * r]).fill(this.rayFill);
     }
-    drawGlow(g, 0, 0, r * 0.55, 0xffd45e, 0.55);
+    drawGlow(g, 0, 0, r * 0.5, 0xffd45e, 0.5);
     g.blendMode = 'add';
+    g.alpha = 0.55;
     if (motion.reduced) return;
     this.bag.run({
-      duration: 28,
+      duration: 32,
       ease: Ease.linear,
       repeat: -1,
       onUpdate: (k) => {
@@ -225,6 +241,9 @@ export class RewardPopup extends Popup<RewardChoice> {
   override destroy(options?: DestroyOptions): void {
     this.bag.killAll();
     super.destroy(options);
+    // The gradient owns a GPU texture and is not shared, so it is released with the popup.
+    this.rayFill?.destroy();
+    this.rayFill = null;
   }
 }
 

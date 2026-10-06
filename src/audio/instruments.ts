@@ -20,7 +20,7 @@ export function voiceLength(track: MusicTrackId, inst: number, durSec: number): 
     case Inst.hat:
       return 0.06;
     case Inst.openHat:
-      return 0.24;
+      return 0.2;
     case Inst.shaker:
       return 0.1;
     case Inst.tom:
@@ -50,7 +50,8 @@ const f = midiToHz;
 
 /** Shared drum voices; the per-track kits tune them. */
 function kick(s: Synth, vel: number, f0: number, f1: number, len: number, click: number): void {
-  s.tone({ f: f0, f2: f1, sw: 0.075, dur: len, v: vel, a: 0.002, s: 0.003, r: 0.05 });
+  // Saturated so the drop has harmonics a phone speaker can actually play.
+  s.tone({ f: f0, f2: f1, sw: 0.075, dur: len, v: vel, a: 0.002, s: 0.003, r: 0.05, sat: 0.4 });
   s.noise({ dur: 0.012, v: vel * click, a: 0.001, s: 0.01, filter: { t: 'lowpass', f: 2500 } });
 }
 
@@ -76,7 +77,7 @@ function crash(s: Synth, vel: number, len: number): void {
 function homeVoice(s: Synth, inst: number, notes: readonly number[], vel: number, dur: number): void {
   switch (inst) {
     case Inst.kick:
-      kick(s, 0.75 * vel, 120, 48, 0.28, 0.1);
+      kick(s, 0.4 * vel, 130, 55, 0.26, 0.35);
       break;
     case Inst.rim:
       s.noise({ dur: 0.05, v: vel * 0.5, a: 0.001, s: 0.01, filter: { t: 'bandpass', f: 1900, q: 3 } });
@@ -90,8 +91,8 @@ function homeVoice(s: Synth, inst: number, notes: readonly number[], vel: number
       break;
     case Inst.bass: {
       const fr = f(notes[0] as number);
-      s.tone({ f: fr, dur: dur + 0.1, v: vel * 0.9, a: 0.01, d: dur * 0.6, s: 0.5, r: 0.1, filter: { t: 'lowpass', f: 900 } });
-      s.tone({ w: 'triangle', f: fr * 2, dur: dur + 0.1, v: vel * 0.2, a: 0.01, d: dur * 0.5, s: 0.3, r: 0.1 });
+      s.tone({ f: fr, dur: dur + 0.1, v: vel * 0.4, a: 0.01, d: dur * 0.6, s: 0.5, r: 0.1, sat: 0.5, filter: { t: 'lowpass', f: 900 } });
+      s.tone({ w: 'triangle', f: fr * 2, dur: dur + 0.1, v: vel * 0.3, a: 0.01, d: dur * 0.5, s: 0.3, r: 0.1 });
       break;
     }
     case Inst.chord:
@@ -130,7 +131,7 @@ function homeVoice(s: Synth, inst: number, notes: readonly number[], vel: number
 function battleVoice(s: Synth, inst: number, notes: readonly number[], vel: number, dur: number): void {
   switch (inst) {
     case Inst.kick:
-      kick(s, 1.0 * vel, 165, 46, 0.22, 0.25);
+      kick(s, 0.8 * vel, 165, 50, 0.22, 0.4);
       break;
     case Inst.snare:
       snare(s, vel * 0.9, 200, 2400);
@@ -139,7 +140,7 @@ function battleVoice(s: Synth, inst: number, notes: readonly number[], vel: numb
       hat(s, vel, 0.05, 8000);
       break;
     case Inst.openHat:
-      hat(s, vel * 0.8, 0.22, 7000);
+      hat(s, vel * 0.8, 0.18, 7000);
       break;
     case Inst.tom:
       tom(s, 0.8 * vel, notes[0] as number);
@@ -149,8 +150,8 @@ function battleVoice(s: Synth, inst: number, notes: readonly number[], vel: numb
       break;
     case Inst.bass: {
       const fr = f(notes[0] as number);
-      s.tone({ w: 'sawtooth', f: fr, dur: dur + 0.06, v: vel * 0.5, a: 0.004, d: 0.12, s: 0.45, r: 0.05, filter: { t: 'lowpass', f: 900, f2: 380, sw: 0.12, q: 1.5 } });
-      s.tone({ f: fr, dur: dur + 0.06, v: vel * 0.75, a: 0.004, s: 0.5, r: 0.05 });
+      s.tone({ w: 'sawtooth', f: fr, dur: dur + 0.06, v: vel * 0.4, a: 0.004, d: 0.12, s: 0.45, r: 0.05, filter: { t: 'lowpass', f: 1100, f2: 420, sw: 0.12, q: 1.5 } });
+      s.tone({ f: fr, dur: dur + 0.06, v: vel * 0.4, a: 0.004, s: 0.5, r: 0.05, sat: 0.4 });
       break;
     }
     case Inst.pad:
@@ -184,7 +185,7 @@ function battleVoice(s: Synth, inst: number, notes: readonly number[], vel: numb
 function bossVoice(s: Synth, inst: number, notes: readonly number[], vel: number, dur: number): void {
   switch (inst) {
     case Inst.kick:
-      kick(s, 1.1 * vel, 140, 38, 0.3, 0.3);
+      kick(s, 0.85 * vel, 140, 45, 0.28, 0.4);
       break;
     case Inst.snare:
       snare(s, vel, 170, 1800, 0.3);
@@ -202,7 +203,7 @@ function bossVoice(s: Synth, inst: number, notes: readonly number[], vel: number
       // Palm-muted chug: a saw through a fast-closing resonant lowpass, saturated, over a clean sub sine.
       const fr = f(notes[0] as number);
       s.tone({ w: 'sawtooth', f: fr, dur: dur + 0.04, v: vel * 0.55, a: 0.003, d: 0.06, s: 0.25, r: 0.03, sat: 0.3, filter: { t: 'lowpass', f: 1000, f2: 260, sw: 0.07, q: 2.5 } });
-      s.tone({ f: fr, dur: dur + 0.04, v: vel * 0.6, a: 0.003, s: 0.4, r: 0.03 });
+      s.tone({ f: fr, dur: dur + 0.04, v: vel * 0.35, a: 0.003, s: 0.4, r: 0.03, sat: 0.4 });
       break;
     }
     case Inst.stab:

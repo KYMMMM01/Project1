@@ -129,6 +129,14 @@ export function popCurve(t: number, from: number, peak: number, to: number, spli
   return peak + (to - peak) * Ease.quadOut((t - split) / (1 - split));
 }
 
+/** 0 -> 1 -> 0 impulse: a fast quadratic rise over the first 25% of `t`, then a slower decay to rest. */
+export function kickCurve(t: number): number {
+  if (t <= 0 || t >= 1) return 0;
+  if (t < 0.25) return Ease.quadOut(t / 0.25);
+  const u = 1 - (t - 0.25) / 0.75;
+  return u * u;
+}
+
 /** easeOutBack with a tunable overshoot: s=1.70158 overshoots ~10%, 2.5 ~19%, 3.0 ~25% (guide 2.0.2). */
 export function backOutS(t: number, s: number): number {
   const u = t - 1;

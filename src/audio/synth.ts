@@ -79,20 +79,22 @@ const NOISE_SECONDS = 2;
 const NOISE_RMS = 0.3;
 
 /** 2 s of looping noise, generated once per sample rate and shared by every context. */
-export function noiseBuffer(ctx: BaseAudioContext, kind: NoiseKind): AudioBuffer {
+function noiseBuffer(ctx: BaseAudioContext, kind: NoiseKind): AudioBuffer {
   const key = `${kind}:${ctx.sampleRate}`;
   const hit = noiseCache.get(key);
   if (hit) return hit;
   const n = Math.floor(ctx.sampleRate * NOISE_SECONDS);
-  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-  const d = buf.getChannelData(0);
+  // Seamless loop: generate `xf` extra samples, then fade them over the start so that the sample
+  // after the last one (index 0) continues the raw sequence instead of jumping.
+  const xf = 512;
+  const g = new Float64Array(n + xf);
   const rng = new Rng(kind === 'white' ? 0x1234567 : kind === 'pink' ? 0x7654321 : 0x2468ace);
   if (kind === 'white') {
-    for (let i = 0; i < n; i++) d[i] = rng.next() * 2 - 1;
+    for (let i = 0; i < g.length; i++) g[i] = rng.next() * 2 - 1;
   } else if (kind === 'pink') {
     // Paul Kellet's economy pink filter: -3 dB/oct, enough for wind/whoosh beds.
     let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < g.length; i++) {
       const w = rng.next() * 2 - 1;
       b0 = 0.99886 * b0 + w * 0.0555179;
       b1 = 0.99332 * b1 + w * 0.0750759;
@@ -100,25 +102,24 @@ export function noiseBuffer(ctx: BaseAudioContext, kind: NoiseKind): AudioBuffer
       b3 = 0.8665 * b3 + w * 0.3104856;
       b4 = 0.55 * b4 + w * 0.5329522;
       b5 = -0.7616 * b5 - w * 0.016898;
-      d[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362;
+      g[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362;
       b6 = w * 0.115926;
     }
   } else {
     let last = 0;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < g.length; i++) {
       last = (last + 0.02 * (rng.next() * 2 - 1)) / 1.02;
-      d[i] = last;
+      g[i] = last;
     }
   }
   let sum = 0;
-  for (let i = 0; i < n; i++) sum += (d[i] as number) ** 2;
-  const k = NOISE_RMS / Math.sqrt(sum / n);
-  for (let i = 0; i < n; i++) d[i] = (d[i] as number) * k;
-  // The loop point must be seamless: crossfade the last 256 samples into the first ones.
-  const xf = 256;
-  for (let i = 0; i < xf; i++) {
-    const t = i / xf;
-    d[n - xf + i] = (d[n - xf + i] as number) * (1 - t) + (d[i] as number) * t;
+  for (let i = 0; i < g.length; i++) sum += (g[i] as number) ** 2;
+  const k = NOISE_RMS / Math.sqrt(sum / g.length);
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) {
+    const t = i < xf ? i / xf : 1;
+    d[i] = k * (t < 1 ? (g[i] as number) * t + (g[n + i] as number) * (1 - t) : (g[i] as number));
   }
   noiseCache.set(key, buf);
   return buf;
@@ -332,7 +333,7 @@ export class Synth {
       const mg = this.keep(ctx.createGain());
       const i0 = o.fm.idx * modF;
       mg.gain.setValueAtTime(i0, t);
-      mg.gain.exponentialRampToValueAtTime(Math.max(SILENCE, (o.fm.idx2 ?? 0) * modF) || SILENCE, t + (o.fm.idxT ?? o.dur));
+      mg.gain.exponentialRampToValueAtTime(Math.max(SILENCE, (o.fm.idx2 ?? 0) * modF), t + (o.fm.idxT ?? o.dur));
       mod.connect(mg);
       for (const osc of oscs) mg.connect(osc.frequency);
     }

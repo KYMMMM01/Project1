@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Rectangle } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { Ease } from '@/core/tween';
@@ -148,7 +148,10 @@ export class PopupManager {
     const entry = this.stack.find((e) => e.popup === (popup as Popup<unknown>));
     if (!entry || entry.closing) return;
     entry.closing = true;
+    // While it fades out the popup itself keeps swallowing taps, so nothing underneath can be hit.
     popup.interactiveChildren = false;
+    popup.eventMode = 'static';
+    popup.hitArea = new Rectangle(0, 0, popup.screenW, popup.screenH);
     const value = result === undefined ? popup.dismissResult : result;
     audio.play('ui_popup_close');
     this.animateClose(popup, () => {

@@ -8,7 +8,7 @@ import { IconButton } from './IconButton';
 import type { Box } from './layoutMath';
 import { motion, punch, shakeX, TweenBag } from './motion';
 import { numberText } from './numbers';
-import { drawPill } from './shapes';
+import { drawPill, refreshCache } from './shapes';
 import { Color } from './theme';
 
 export interface CurrencyPillOpts {
@@ -150,6 +150,7 @@ export class CurrencyPill extends Container {
       rim: 0x8f7bd8,
       shadow: { alpha: 0.35, spread: 8, offsetY: 5 },
     });
+    refreshCache(this.bgG);
     this.iconHolder.position.set(-w / 2 + 12, -1);
     const plusW = this.plusBtn ? 62 : 14;
     this.fitArea = { x0: -w / 2 + 52, x1: w / 2 - plusW };

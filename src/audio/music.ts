@@ -7,7 +7,7 @@
 import type { MusicId } from './api';
 import { equalPowerCurve } from './envelopes';
 import { INST_PRIORITY, Inst, SCORES, STEPS, type NoteSink, type Score } from './scores';
-import { LOOKAHEAD_S, LayerMixer, StepClock, TIMER_MS } from './sequencer';
+import { LOOKAHEAD_S, LayerMixer, StepClock, TIMER_MS, barPosition } from './sequencer';
 import { Synth } from './synth';
 import { playVoice, voiceLength } from './instruments';
 import { VoiceBudget } from './voices';
@@ -54,7 +54,7 @@ export class MusicPlayer implements NoteSink {
   private lastTick = 0;
   private intensity = 0;
   private current: MusicId = 'none';
-  private readonly budget = new VoiceBudget(12, 14);
+  private readonly budget = new VoiceBudget(11, 12);
   private live = 0;
   private liveMax = 0;
   private created = 0;
@@ -64,6 +64,7 @@ export class MusicPlayer implements NoteSink {
   private cur: Run | null = null;
   private stepTime = 0;
   private stepInBar = 0;
+  private readonly pos = { bar: 0, step: 0 };
   private readonly one: number[] = [0];
 
   /** Shared completion callback so live-voice counting allocates nothing per note. */
@@ -224,11 +225,10 @@ export class MusicPlayer implements NoteSink {
       const clock = run.clock;
       this.cur = run;
       while (clock.due(horizon)) {
-        const loop = clock.loopStep;
-        const bar = Math.floor(loop / STEPS);
-        this.stepInBar = loop - bar * STEPS;
+        barPosition(clock.loopStep, this.pos);
+        this.stepInBar = this.pos.step;
         this.stepTime = clock.nextTime;
-        run.score.fill(bar, this.stepInBar, this);
+        run.score.fill(this.pos.bar, this.pos.step, this);
         clock.advance();
       }
     }

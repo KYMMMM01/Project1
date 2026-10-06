@@ -9,6 +9,7 @@ export { initPlatform, getPauseState, getBootResult, INIT_TIMEOUT_MS } from './b
 export type { PlatformServices, PauseState } from './boot';
 export { ads, iap, analytics, platform, modal } from './registry';
 export { PLATFORM_ID } from './resolve';
+export { preparePlatformRuntime } from './runtime';
 
 export { AdService, AD_WATCHDOG_MS } from './adService';
 export type { RewardedOutcome, PlacementStatus, OfferReason } from './adService';
@@ -56,5 +57,6 @@ export type {
   PlatformLeaderboard,
   PlatformLifecycle,
   PlatformStorage,
+  PurchaseInfo,
   RunResult,
 } from './types';

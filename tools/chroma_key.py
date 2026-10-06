@@ -6,7 +6,8 @@
 The background colour is sampled from the image border, so it works for green, magenta or any
 other flat colour. Only background-coloured regions connected to the border are removed, which
 keeps same-coloured details inside the character. Edge pixels get a soft alpha and are de-spilled
-so no coloured fringe remains.
+so no coloured fringe remains. Add --despill-all when the subject contains none of the key colour
+at all: stray key-coloured strokes inside it are then neutralised as well.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from PIL import Image
 from scipy import ndimage
 
 
-def key(src: str, dst: str, near: float = 38.0, far: float = 110.0) -> None:
+def key(src: str, dst: str, near: float = 38.0, far: float = 110.0, despill_all: bool = False) -> None:
     im = Image.open(src).convert("RGB")
     rgb = np.asarray(im).astype(np.float32)
     h, w, _ = rgb.shape
@@ -35,6 +36,14 @@ def key(src: str, dst: str, near: float = 38.0, far: float = 110.0) -> None:
     labels, n = ndimage.label(bgish)
     border = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
     outside = np.isin(labels, border[border != 0])
+    # Enclosed holes (between an arm and the body, inside a handle) are background too when they
+    # are essentially the pure key colour.
+    if n:
+        idx = np.arange(1, n + 1)
+        mean_dist = ndimage.mean(dist, labels, idx)
+        size = ndimage.sum(bgish, labels, idx)
+        holes = idx[(mean_dist < near * 0.8) & (size >= 40)]
+        outside |= np.isin(labels, holes)
     # Let the soft edge extend a couple of pixels inward from the true outside region.
     reach = ndimage.binary_dilation(outside, iterations=3)
     alpha = np.where(reach, alpha, 1.0)
@@ -44,7 +53,7 @@ def key(src: str, dst: str, near: float = 38.0, far: float = 110.0) -> None:
     others = [c for c in range(3) if c != k]
     limit = np.maximum(rgb[..., others[0]], rgb[..., others[1]])
     edge = ndimage.binary_dilation(alpha < 1.0, iterations=2)
-    spill = edge & (rgb[..., k] > limit)
+    spill = (edge | despill_all) & (rgb[..., k] > limit)
     out = rgb.copy()
     out[..., k] = np.where(spill, limit, rgb[..., k])
 
@@ -62,4 +71,4 @@ def key(src: str, dst: str, near: float = 38.0, far: float = 110.0) -> None:
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
-    key(sys.argv[1], sys.argv[2])
+    key(sys.argv[1], sys.argv[2], despill_all="--despill-all" in sys.argv)

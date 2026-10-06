@@ -5,12 +5,15 @@
  * each music track offline through the real graph to check level and polyphony. Dev tooling only:
  * it is imported lazily from devtools.ts.
  */
+import type { SfxId } from './api';
 import { analyse, type SoundStats } from './analysis';
 import { bakeVariant } from './bake';
+import { gainToDb } from './envelopes';
 import { createGraph } from './graph';
 import { MusicPlayer } from './music';
-import { SOUNDS, type SoundDef } from './sounds';
+import { SOUNDS, sfxIndexOf, type SoundDef } from './sounds';
 import type { MusicTrackId } from './scores';
+import { VoiceLimiter } from './voices';
 
 export interface ReportRow {
   id: string;
@@ -25,6 +28,7 @@ export interface ReportRow {
   loudRms: number;
   silent: boolean;
   clipped: boolean;
+  truncated: boolean;
   dcOffset: number;
   startsAtZero: boolean;
   endsNearZero: boolean;
@@ -62,10 +66,12 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
   const n = def.recipe.variants ?? 1;
   const all: SoundStats[] = [];
   let gainDb = 0;
+  let truncated = false;
   for (let v = 0; v < n; v++) {
     const baked = await bakeVariant(def.recipe, def.key, v, sampleRate, true);
     all.push(baked.stats);
     gainDb = baked.gainDb;
+    truncated ||= baked.truncated;
   }
   const max = (f: (s: SoundStats) => number) => all.reduce((m, s) => Math.max(m, f(s)), -Infinity);
   const mean = (f: (s: SoundStats) => number) => all.reduce((m, s) => m + f(s), 0) / all.length;
@@ -73,6 +79,7 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
   const issues: string[] = [];
   if (all.some((s) => s.silent)) issues.push('silent');
   if (all.some((s) => s.clipped)) issues.push('clipped');
+  if (truncated) issues.push('truncated');
   if (all.some((s) => Math.abs(s.dcOffset) > DC_LIMIT)) issues.push('dc');
   if (all.some((s) => !s.startsAtZero)) issues.push('click-start');
   if (all.some((s) => !s.endsNearZero)) issues.push('click-end');
@@ -89,6 +96,7 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
     loudRms: round(mean((s) => s.loudRms), 4),
     silent: all.some((s) => s.silent),
     clipped: all.some((s) => s.clipped),
+    truncated,
     dcOffset: round(max((s) => Math.abs(s.dcOffset)), 4),
     startsAtZero: all.every((s) => s.startsAtZero),
     endsNearZero: all.every((s) => s.endsNearZero),
@@ -126,9 +134,9 @@ function designChecks(rows: ReportRow[]): Check[] {
     ladder.map((x) => x.peak).join(' <= '),
   );
   check(
-    'summon_mythic has more low end than summon_common',
-    r('summon_mythic').lowFrac > r('summon_common').lowFrac,
-    `${r('summon_common').lowFrac} -> ${r('summon_mythic').lowFrac}`,
+    'summon escalates in low-end weight (energy below 200 Hz)',
+    ladder.every((x, i) => i === 0 || x.lowFrac >= (ladder[i - 1] as ReportRow).lowFrac),
+    ladder.map((x) => x.lowFrac).join(' <= '),
   );
   check(
     'summon_legendary/mythic carry sub weight',
@@ -190,7 +198,7 @@ ${formatTable(stingers)}`,
   };
 }
 
-export function formatTable(rows: readonly ReportRow[]): string {
+function formatTable(rows: readonly ReportRow[]): string {
   const head = 'id                 var  ms    peak  rms    loud   dc      0 end  cent  bright low   high  gain  ok';
   const lines = rows.map((x) =>
     [
@@ -256,5 +264,137 @@ export async function renderMusic(track: MusicTrackId, intensity: number, second
     peakOverlap: st.peakOverlap,
     droppedByBudget: st.droppedByBudget,
     voices: st.voicesCreated,
+  };
+}
+
+export interface MixRow {
+  scenario: string;
+  /** Output with the safety limiter acting, and the same mix with it neutralised. */
+  peakOut: number;
+  peakDry: number;
+  rmsOut: number;
+  rmsDry: number;
+  /** Level change the limiter caused, in dB (negative = pulled down). */
+  peakChangeDb: number;
+  rmsChangeDb: number;
+  /** Spread (max - min) of the limiter's gain change across 100 ms windows: large values mean audible pumping. */
+  pumpDb: number;
+  clipped: boolean;
+  voices: number;
+  dropped: number;
+}
+
+interface MixEvent {
+  at: number;
+  id: SfxId;
+  pitch?: number;
+}
+
+/** A battle's worth of overlapping effects: 16 hits/s, 4 deaths/s, 8 shots/s, 5 coins/s, a blast every 2 s. */
+function battleEvents(seconds: number): MixEvent[] {
+  const ev: MixEvent[] = [];
+  for (let t = 0.2; t < seconds; t += 1 / 16) ev.push({ at: t, id: 'hit_light' });
+  for (let t = 0.3; t < seconds; t += 0.25) ev.push({ at: t, id: 'enemy_die' });
+  for (let t = 0.1, k = 0; t < seconds; t += 1 / 8, k++) ev.push({ at: t, id: k % 2 ? 'shoot_arrow' : 'shoot_magic' });
+  for (let t = 0.4; t < seconds; t += 0.2) ev.push({ at: t, id: 'coin' });
+  for (let t = 1; t < seconds; t += 2) ev.push({ at: t, id: 'explosion' });
+  for (let t = 0.7; t < seconds; t += 1.1) ev.push({ at: t, id: 'hit_heavy' });
+  return ev.sort((a, b) => a.at - b.at);
+}
+
+/** The worst pile-up: every big moment at once, over the battle mix. */
+function bigEvents(): MixEvent[] {
+  const big: MixEvent[] = [
+    { at: 1.0, id: 'summon_mythic' },
+    { at: 1.1, id: 'merge_big' },
+    { at: 1.2, id: 'boss_die' },
+    { at: 1.3, id: 'boss_roar' },
+    { at: 1.4, id: 'jackpot' },
+    { at: 1.5, id: 'summon_legendary' },
+  ];
+  return [...battleEvents(5), ...big].sort((a, b) => a.at - b.at);
+}
+
+async function renderMixOnce(events: readonly MixEvent[], seconds: number, limiterOn: boolean, sampleRate: number) {
+  const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
+  const graph = createGraph(ctx);
+  if (!limiterOn) {
+    graph.limiter.threshold.value = 0;
+    graph.limiter.ratio.value = 1;
+    graph.limiter.knee.value = 0;
+  }
+  const player = new MusicPlayer(ctx, graph.musicBus, graph.reverbIn);
+  player.setIntensity(1);
+  player.play('battle', 0.05);
+  player.pump(seconds);
+  player.pause();
+
+  const baked = new Map<string, AudioBuffer[]>();
+  const limiter = new VoiceLimiter(SOUNDS.map((d) => d.rule));
+  let played = 0;
+  for (const e of events) {
+    const idx = sfxIndexOf(e.id);
+    const def = SOUNDS[idx];
+    if (!def) continue;
+    let list = baked.get(e.id);
+    if (!list) {
+      list = [];
+      for (let v = 0; v < (def.recipe.variants ?? 1); v++) list.push((await bakeVariant(def.recipe, def.key, v, sampleRate)).buffer);
+      baked.set(e.id, list);
+    }
+    const buf = list[played % list.length] as AudioBuffer;
+    const rate = (e.pitch ?? 1) * (def.recipe.rate ? 1 + Math.sin(played * 12.9898) * def.recipe.rate : 1);
+    const scale = limiter.request(idx, e.at, buf.duration / rate);
+    if (scale <= 0) continue;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = scale;
+    src.connect(g);
+    g.connect(graph.sfxBus);
+    src.start(e.at);
+    played++;
+  }
+  const out = await ctx.startRendering();
+  const ch = [out.getChannelData(0), out.getChannelData(1)];
+  return { stats: analyse(ch, sampleRate, false), ch, played, dropped: limiter.dropped.gap + limiter.dropped.perId + limiter.dropped.global };
+}
+
+/** Level (dB) of consecutive 100 ms windows. */
+function windowedDb(ch: readonly Float32Array[], sampleRate: number): number[] {
+  const win = Math.round(sampleRate * 0.1);
+  const out: number[] = [];
+  for (let s = 0; s + win <= (ch[0] as Float32Array).length; s += win) {
+    let sum = 0;
+    for (const c of ch) for (let i = s; i < s + win; i++) sum += (c[i] as number) ** 2;
+    out.push(gainToDb(Math.sqrt(sum / (win * ch.length))));
+  }
+  return out;
+}
+
+/** Render a mix with and without the limiter to see how hard it works (pumping shows as a large RMS drop). */
+export async function renderMix(scenario: 'battle' | 'big', sampleRate: number): Promise<MixRow> {
+  const seconds = scenario === 'battle' ? 6 : 5;
+  const events = scenario === 'battle' ? battleEvents(seconds) : bigEvents();
+  const on = await renderMixOnce(events, seconds, true, sampleRate);
+  const off = await renderMixOnce(events, seconds, false, sampleRate);
+  const a = windowedDb(on.ch, sampleRate);
+  const b = windowedDb(off.ch, sampleRate);
+  // Skip the first windows (music fade-in) and silent ones.
+  const diffs: number[] = [];
+  for (let i = 3; i < Math.min(a.length, b.length); i++) if ((b[i] as number) > -60) diffs.push((a[i] as number) - (b[i] as number));
+  return {
+    scenario,
+    peakOut: round(on.stats.peak, 3),
+    peakDry: round(off.stats.peak, 3),
+    rmsOut: round(on.stats.rms, 4),
+    rmsDry: round(off.stats.rms, 4),
+    peakChangeDb: round(gainToDb(on.stats.peak) - gainToDb(off.stats.peak), 1),
+    rmsChangeDb: round(gainToDb(on.stats.rms) - gainToDb(off.stats.rms), 1),
+    pumpDb: round(Math.max(...diffs) - Math.min(...diffs), 1),
+    clipped: on.stats.clipped,
+    voices: on.played,
+    dropped: on.dropped,
   };
 }

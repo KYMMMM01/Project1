@@ -8,7 +8,7 @@ import { Badge, type BadgeValue } from './Badge';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { backOut, motion, shakeX, TweenBag } from './motion';
-import { drawGlow, drawShadow, glossGradient, vGradient } from './shapes';
+import { cacheStatic, drawGlow, drawShadow, glossGradient, refreshCache, vGradient } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { ButtonPalettes, Color, Hit } from './theme';
 
@@ -72,6 +72,8 @@ class Tab extends Container {
     this.plateOn.circle(0, 0, r).fill(vGradient(pal.rimTop, pal.rimBottom)).stroke({ width: 5, color: Color.outline, alignment: 1 });
     this.plateOn.circle(0, 0, r - 8).fill(vGradient(pal.top, pal.bottom));
     this.plateOn.ellipse(-r * 0.12, -r * 0.5, r * 0.58, r * 0.26).fill(glossGradient(0.5, 0.05));
+    cacheStatic(this.plateOn);
+    cacheStatic(this.plateOff);
     this.plateOn.alpha = 0;
     this.plateOff.visible = featured;
 
@@ -192,6 +194,7 @@ export class TabBar extends Container {
     this.bg.rect(0, 0, w, 6).fill(Color.outline);
     this.bg.rect(0, 6, w, 3).fill({ color: 0x8f7bd8, alpha: 0.7 });
     this.bg.rect(0, 9, w, 18).fill(glossGradient(0.1, 0));
+    refreshCache(this.bg);
     const cell = w / this.tabs.length;
     this.tabs.forEach((t, i) => {
       t.position.set(cell * (i + 0.5), 0);
@@ -322,6 +325,8 @@ export class SegmentTabs extends Container {
     const ph = h - 14;
     this.hi.roundRect(-this.cellW / 2, -ph / 2, this.cellW, ph, ph / 2).fill(vGradient(pal.top, pal.bottom)).stroke({ width: 4, color: Color.outline, alignment: 1 });
     this.hi.roundRect(-this.cellW / 2 + 8, -ph / 2 + 5, this.cellW - 16, ph * 0.38, ph * 0.19).fill(glossGradient(0.5, 0.06));
+    cacheStatic(track);
+    cacheStatic(this.hi);
     this.addChild(track, this.hi);
 
     opts.tabs.forEach((d, i) => {

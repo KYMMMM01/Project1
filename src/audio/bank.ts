@@ -27,6 +27,12 @@ export class SoundBank {
     return n;
   }
 
+  get bytes(): number {
+    let n = 0;
+    for (const list of this.ready) if (list) for (const b of list) n += b.length * b.numberOfChannels * 4;
+    return n;
+  }
+
   get pending(): number {
     return this.queue.length + this.jobs.size;
   }

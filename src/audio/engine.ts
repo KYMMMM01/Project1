@@ -14,11 +14,13 @@ import { MusicPlayer, type MusicStats } from './music';
 import { PRERENDER_ORDER, SOUNDS, sfxIndexOf, stingerIndexOf } from './sounds';
 import { STINGER_DUCK } from './stingers';
 import { Synth } from './synth';
-import { MAX_STEP_SEMITONES, pentatonicSemitones, semitoneRatio } from './theory';
+import { pentatonicSemitones, semitoneRatio } from './theory';
 import { CAT_TARGET } from './recipe';
 import { GLOBAL_VOICE_CAP, VoiceLimiter } from './voices';
 
 const MAX_VOICE_OBJECTS = GLOBAL_VOICE_CAP + 8;
+/** A suspend/resume that has not settled by now is abandoned so later gestures can retry. */
+const RESUME_TIMEOUT_MS = 1500;
 /** A deferred first-use sound older than this is dropped instead of played late. */
 const MAX_DEFER_S = 0.3;
 
@@ -74,10 +76,14 @@ export interface AudioStats {
   total: number;
   bakePending: number;
   bakeMs: number;
+  /** Memory held by baked buffers. */
+  bakedKB: number;
   sfxActive: number;
   sfxActivePeak: number;
   sfxPlayed: number;
   sfxDropped: { gap: number; perId: number; global: number };
+  /** Current values of the bus gains (they move while ramps run), for verifying ducks and mutes. */
+  gains: { sfx: number; music: number; mute: number; duck: number };
   music: MusicStats | null;
 }
 
@@ -100,6 +106,8 @@ export class AudioEngine implements AudioApi {
   private muteCount = 0;
   private sfxVol = 1;
   private musicVol = 1;
+  private intensity = 0;
+  private rebuilds = 0;
   private lastVariant: number[] = SOUNDS.map(() => -1);
   private prerenderStarted = false;
   private lifecycle: Promise<unknown> = Promise.resolve();
@@ -116,37 +124,43 @@ export class AudioEngine implements AudioApi {
     if (this.inited) return;
     this.inited = true;
     try {
-      this.setup();
+      this.build();
+      game.events.on('firstInput', () => this.unlock());
+      game.events.on('visibility', ({ visible }) => this.onVisibility(visible));
+      // iOS Safari can drop back to 'suspended' / 'interrupted' (calls, silent switch, tab swaps) and
+      // only honours touchend / pointerup / click as audio gestures: every later real gesture is a
+      // fresh chance to resume, and it costs one state check.
+      for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const) {
+        window.addEventListener(type, () => this.unlock(), { capture: true, passive: true });
+      }
+      if (game.hasFirstInput) this.unlock();
+      // Dev / ?debug=1 builds only: the report tooling is a separate lazy chunk.
+      if (window.__dbg) void import('./devtools').then((m) => m.installAudioDebug(this)).catch(() => undefined);
     } catch {
       // No WebAudio (or construction refused): every method below checks `ctx` and stays silent.
       this.ctx = null;
     }
   }
 
-  private setup(): void {
+  /** Create the context and everything bound to it; also used to start over when iOS freezes the clock. */
+  private build(): void {
     const Ctor: ACtor | undefined =
       typeof window === 'undefined' ? undefined : (window.AudioContext ?? (window as unknown as { webkitAudioContext?: ACtor }).webkitAudioContext);
     if (!Ctor) return;
+    // No sampleRate option: forcing one makes iOS resample (and breaks after Bluetooth route changes).
     const ctx = new Ctor({ latencyHint: 'interactive' });
     this.ctx = ctx;
     this.graph = createGraph(ctx);
     this.bank = new SoundBank(ctx.sampleRate);
     this.music_ = new MusicPlayer(ctx, this.graph.musicBus, this.graph.reverbIn);
+    this.freeVoices.length = 0;
+    this.voiceCount = 0;
+    this.limiter.reset();
+    this.prerenderStarted = false;
     this.applyVolumes();
-
     ctx.addEventListener('statechange', () => {
-      if (ctx.state === 'running') this.onRunning();
+      if (this.ctx === ctx && ctx.state === 'running') this.onRunning();
     });
-    game.events.on('firstInput', () => this.unlock());
-    game.events.on('visibility', ({ visible }) => this.onVisibility(visible));
-    // iOS Safari can drop back to 'suspended' / 'interrupted' (calls, silent switch, tab swaps);
-    // any later real gesture is a fresh chance to resume.
-    for (const type of ['pointerdown', 'touchend', 'keydown'] as const) {
-      window.addEventListener(type, () => this.unlock(), { capture: true, passive: true });
-    }
-    if (game.hasFirstInput) this.unlock();
-    // Dev / ?debug=1 builds only: the report tooling is a separate lazy chunk.
-    if (window.__dbg) void import('./devtools').then((m) => m.installAudioDebug(this)).catch(() => undefined);
   }
 
   /** (Re)start the context. Safe to call on every gesture; it only acts while the context is not running. */
@@ -156,8 +170,11 @@ export class AudioEngine implements AudioApi {
     this.chain(() => ctx.resume());
   }
 
+  /** Serialise suspend/resume; a promise that never settles (iOS) must not block the queue for good. */
   private chain(op: () => Promise<void>): void {
-    this.lifecycle = this.lifecycle.then(op).catch(() => undefined);
+    const guarded = () =>
+      Promise.race([op(), new Promise<void>((_, reject) => setTimeout(() => reject(new Error('audio op timeout')), RESUME_TIMEOUT_MS))]);
+    this.lifecycle = this.lifecycle.then(guarded).catch(() => undefined);
   }
 
   private onRunning(): void {
@@ -168,10 +185,48 @@ export class AudioEngine implements AudioApi {
     src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
     src.connect(ctx.destination);
     src.start(0);
+    // Let silent-switch iPhones play: the default "ambient" session is muted by the ringer switch.
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = 'playback';
     if (!this.prerenderStarted) {
       this.prerenderStarted = true;
       if (offlineSupported()) this.bank?.enqueue(PRERENDER_ORDER);
     }
+    if (this.visible) this.music_?.resume();
+    this.watchClock(ctx);
+  }
+
+  /**
+   * WebKit can report 'running' while currentTime is frozen after returning from the background.
+   * If the clock has not moved shortly after running, nudge it with suspend/resume; if it is still
+   * frozen, start over with a fresh context (once per session so a device with no output cannot loop).
+   */
+  private watchClock(ctx: AudioContext): void {
+    const t0 = ctx.currentTime;
+    setTimeout(() => {
+      if (this.ctx !== ctx || ctx.state !== 'running' || !this.visible || ctx.currentTime > t0) return;
+      this.chain(() => ctx.suspend().then(() => ctx.resume()));
+      setTimeout(() => {
+        if (this.ctx === ctx && ctx.state === 'running' && ctx.currentTime <= t0 && this.rebuilds < 1) this.rebuild();
+      }, 700);
+    }, 400);
+  }
+
+  private rebuild(): void {
+    this.rebuilds++;
+    const old = this.ctx;
+    const track = this.music_?.track ?? 'none';
+    this.music_?.pause();
+    try {
+      this.build();
+    } catch {
+      this.ctx = null;
+      return;
+    }
+    void old?.close().catch(() => undefined);
+    this.music_?.setIntensity(this.intensity);
+    if (track !== 'none') this.music_?.play(track, 0.3);
+    this.unlock();
   }
 
   private onVisibility(visible: boolean): void {
@@ -182,7 +237,8 @@ export class AudioEngine implements AudioApi {
       this.music_?.pause();
       this.chain(() => ctx.suspend());
     } else {
-      this.chain(() => ctx.resume().then(() => this.music_?.resume()));
+      this.music_?.resume();
+      this.chain(() => ctx.resume());
     }
   }
 
@@ -222,8 +278,8 @@ export class AudioEngine implements AudioApi {
 
   playStep(id: SfxId, step: number, opts?: PlayOpts): void {
     try {
-      const semis = Math.min(MAX_STEP_SEMITONES, pentatonicSemitones(step));
-      this.playIndex(sfxIndexOf(id), opts, semitoneRatio(semis));
+      // pentatonicSemitones already caps the climb at +24 semitones.
+      this.playIndex(sfxIndexOf(id), opts, semitoneRatio(pentatonicSemitones(step)));
     } catch {
       // see play()
     }
@@ -253,8 +309,9 @@ export class AudioEngine implements AudioApi {
   }
 
   setIntensity(v: number): void {
+    this.intensity = clampNum(v, 0, 1, 0);
     try {
-      this.music_?.setIntensity(clampNum(v, 0, 1, 0));
+      this.music_?.setIntensity(this.intensity);
     } catch {
       // see play()
     }
@@ -291,7 +348,9 @@ export class AudioEngine implements AudioApi {
 
     let rate = clampNum(pitchMul * clampNum(opts?.pitch, 0.1, 8, 1), 0.1, 8, 1);
     if (def.recipe.rate) rate *= 1 + (Math.random() * 2 - 1) * def.recipe.rate;
-    const volume = clampNum(opts?.volume, 0, 4, 1);
+    let volume = clampNum(opts?.volume, 0, 4, 1);
+    // +/-1 dB level jitter on the ids that repeat constantly, on top of the pitch and variant rotation.
+    if (def.recipe.rate) volume *= 1 + (Math.random() * 2 - 1) * 0.12;
     const pan = clampNum(opts?.pan, -1, 1, 0);
     const now = ctx.currentTime;
     const delay = clampNum(opts?.delay, 0, 30, 0);
@@ -342,8 +401,8 @@ export class AudioEngine implements AudioApi {
   }
 
   private acquireVoice(ctx: AudioContext, dest: AudioNode): SfxVoice | undefined {
-    const free = this.freeVoices.pop();
-    if (free) return free;
+    // Voices that ended after a context rebuild belong to the dead context: drop them.
+    for (let v = this.freeVoices.pop(); v; v = this.freeVoices.pop()) if (v.gain.context === ctx) return v;
     if (this.voiceCount >= MAX_VOICE_OBJECTS) return undefined;
     this.voiceCount++;
     return new SfxVoice(ctx, dest, this.freeVoices);
@@ -367,7 +426,7 @@ export class AudioEngine implements AudioApi {
     }
     dest.connect(g.sfxBus);
     const synth = new Synth(ctx, out, when, Math.random, true);
-    def.recipe.build(synth, { i: 0, j: () => 1 });
+    def.recipe.build(synth, { j: () => 1 });
     synth.seal(() => {
       out.disconnect();
       if (dest !== out) dest.disconnect();
@@ -389,10 +448,17 @@ export class AudioEngine implements AudioApi {
       total: SOUNDS.length,
       bakePending: this.bank?.pending ?? 0,
       bakeMs: Math.round(this.bank?.bakeMs ?? 0),
+      bakedKB: Math.round((this.bank?.bytes ?? 0) / 1024),
       sfxActive: this.limiter.active(now),
       sfxActivePeak: this.activePeak,
       sfxPlayed: this.played,
       sfxDropped: { ...this.limiter.dropped },
+      gains: {
+        sfx: this.graph?.sfxBus.gain.value ?? 0,
+        music: this.graph?.musicBus.gain.value ?? 0,
+        mute: this.graph?.muteGain.gain.value ?? 0,
+        duck: this.graph?.duckGain.gain.value ?? 0,
+      },
       music: this.music_?.stats() ?? null,
     };
   }

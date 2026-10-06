@@ -3,6 +3,7 @@ export * from './budget';
 export * from './curves';
 export * from './flyPath';
 export * from './freeze';
+export * from './governor';
 export * from './bolt';
 export * from './textures';
 export * from './particles';

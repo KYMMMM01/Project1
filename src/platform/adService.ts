@@ -283,6 +283,11 @@ export class AdService {
     this.safePreload('interstitial', 'interstitial');
   }
 
+  /** QA/dev only: set lifetime progress, e.g. { sessions: 2, runsBegun: 2, runsCompleted: 3 } skips the FTUE guards. */
+  qaSetProgress(p: Partial<Pick<AdCounters, 'sessions' | 'runsBegun' | 'runsCompleted' | 'lastAnyAdAt'>>): void {
+    this.limiter.patch(p);
+  }
+
   /** QA: forget counters (keeps the session). */
   resetCounters(): void {
     this.limiter.reset(this.sessionId);

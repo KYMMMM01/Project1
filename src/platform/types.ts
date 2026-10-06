@@ -89,6 +89,12 @@ export interface StorePrice {
   priceText: string;
 }
 
+/** What a purchase sheet should show (only the dev mock draws its own sheet; real platforms ignore it). */
+export interface PurchaseInfo {
+  name: string;
+  priceText: string;
+}
+
 export interface PlatformIap {
   /** false while the platform bridge is missing; IapService then reports 'unavailable'. */
   isAvailable?(): boolean;
@@ -99,7 +105,11 @@ export interface PlatformIap {
    * and only treat the order as complete if it resolves true (Toss processProductGrant). Resolves
    * 'purchased' only after a successful grant.
    */
-  purchase(productId: string, onPaid: (orderId: string) => Promise<boolean>): Promise<IapOutcome>;
+  purchase(
+    productId: string,
+    onPaid: (orderId: string) => Promise<boolean>,
+    info?: PurchaseInfo,
+  ): Promise<IapOutcome>;
   /** Orders paid on the platform but not yet marked complete (Toss getPendingOrders). */
   pendingOrders(): Promise<PendingOrder[]>;
   /** Tell the platform the grant is done (Toss completeProductGrant). */

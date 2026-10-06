@@ -1,7 +1,7 @@
 import { Graphics } from 'pixi.js';
 import { Color } from './theme';
 import { shade } from './colors';
-import { vGradient } from './shapes';
+import { cacheStatic, vGradient } from './shapes';
 
 export const ICON_NAMES = [
   'close', 'back', 'settings', 'sound_on', 'sound_off', 'music', 'lock', 'check', 'plus', 'minus',
@@ -241,6 +241,24 @@ class Ink {
     return this;
   }
 
+  /**
+   * Stroked arcs and filled shapes merged under one outline (a refresh arrow: the arc runs straight
+   * into its head with no seam).
+   */
+  merged(fill: Fill, width: number, paths: (p: Pen) => void, shapes: (p: Pen) => void): this {
+    const u = this.pen.u;
+    paths(this.pen);
+    this.g.stroke({ width: width * u + this.ow * 2, color: this.outline, join: 'round', cap: 'round' });
+    shapes(this.pen);
+    this.g.fill(this.outline).stroke({ width: this.ow * 2, color: this.outline, join: 'round', cap: 'round' });
+    paths(this.pen);
+    const f = fillOf(fill);
+    this.g.stroke(typeof f === 'number' ? { width: width * u, color: f, join: 'round', cap: 'round' } : { width: width * u, fill: f, join: 'round', cap: 'round' });
+    shapes(this.pen);
+    this.g.fill(f);
+    return this;
+  }
+
   /** Thin stroked path without outline. */
   stroke(color: number, width: number, build: (p: Pen) => void, alpha = 1): this {
     build(this.pen);
@@ -299,21 +317,28 @@ function sword(k: Ink, rot: number, blade: number): void {
 }
 
 function reroll(k: Ink, c: number): void {
-  const r = 26;
-  const arrow = (a0: number, a1: number): void => {
-    k.line(c, 12, (p) => p.arc(0, 0, r, a0, a1), { hi: true });
-    const px = Math.cos(a1) * r;
-    const py = Math.sin(a1) * r;
-    const tx = -Math.sin(a1);
-    const ty = Math.cos(a1);
-    const nx = Math.cos(a1);
-    const ny = Math.sin(a1);
-    k.solid(tone(c), (p) =>
-      p.rpoly([px + tx * 17, py + ty * 17, px + nx * 15, py + ny * 15, px - nx * 15, py - ny * 15], 3),
-    );
-  };
-  arrow(-2.75, -0.45);
-  arrow(-2.75 + PI, -0.45 + PI);
+  const r = 27;
+  const arcs = [-3.0, -3.0 + PI];
+  const span = 2.55;
+  k.merged(
+    tone(c),
+    11,
+    (p) => {
+      for (const a0 of arcs) p.arc(0, 0, r, a0, a0 + span);
+    },
+    (p) => {
+      for (const a0 of arcs) {
+        const a1 = a0 + span;
+        const px = Math.cos(a1) * r;
+        const py = Math.sin(a1) * r;
+        const tx = -Math.sin(a1);
+        const ty = Math.cos(a1);
+        const nx = Math.cos(a1);
+        const ny = Math.sin(a1);
+        p.rpoly([px + tx * 24, py + ty * 24, px + nx * 17, py + ny * 17, px - nx * 17, py - ny * 17], 4);
+      }
+    },
+  );
 }
 
 const ICONS: Record<IconName, IconDef> = {
@@ -757,6 +782,8 @@ const ICONS: Record<IconName, IconDef> = {
 export interface IconOpts {
   /** Outline colour (default: the shared dark purple). */
   outline?: number;
+  /** Bake the vector drawing into a texture (default true): icons are static and numerous. */
+  cache?: boolean;
 }
 
 /**
@@ -768,5 +795,6 @@ export function drawIcon(name: IconName, size: number, color?: number, opts: Ico
   const def = ICONS[name];
   const ink = new Ink(g, size, opts.outline ?? Color.outline);
   def.draw(ink, color ?? def.color);
+  if (opts.cache ?? true) cacheStatic(g);
   return g;
 }

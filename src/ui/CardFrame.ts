@@ -87,6 +87,7 @@ export class CardFrame extends Container {
     mask.roundRect(this.windowRect.x, this.windowRect.y, this.windowRect.w, this.windowRect.h, m.radius * 0.6).fill(0xffffff);
     this.portraitHost.mask = mask;
     this.addChild(this.art, this.portraitHost, mask, this.overlay);
+    this.drawPips();
     this.buildOverlay();
 
     if (opts.portrait) this.setPortrait(opts.portrait);
@@ -172,7 +173,8 @@ export class CardFrame extends Container {
     this.newTag = null;
     if (!label) return;
     const t = new Tag({ text: label, style: 'danger', shape: 'flag', fontSize: this.size === 'small' ? 20 : 24, tilt: 0.14 });
-    t.position.set(this.m.w / 2 - 22 - t.uiBox.w / 2 + 12, -this.m.h / 2 + 24);
+    // Hangs over the top-right corner so it never covers the level badge.
+    t.position.set(this.m.w / 2 + 10 - t.uiBox.w / 2, -this.m.h / 2 + 30);
     this.overlay.addChild(t);
     this.newTag = t;
     t.pop();
@@ -216,15 +218,6 @@ export class CardFrame extends Container {
       .stroke({ width: 4, color: Color.outline, alignment: 1 });
     g.roundRect(x + 12, py + 4, m.w - 24, 5, 2.5).fill({ color: rar.color, alpha: 0.9 });
 
-    // Tier pips under the window: count = tier (repeats the colour for colour-blind players).
-    const pipY = wr.y + wr.h - m.pip - 4;
-    const pips = idx + 1;
-    for (let i = 0; i < pips; i++) {
-      const px = (i - (pips - 1) / 2) * (m.pip * 2.9);
-      g.circle(px, pipY, m.pip + 1.5).fill(Color.outline);
-      g.circle(px, pipY, m.pip).fill(rar.light);
-    }
-
     // Tier ornament
     if (idx === 2) {
       for (const sx of [-1, 1]) {
@@ -242,6 +235,22 @@ export class CardFrame extends Container {
       this.art.addChild(ic);
     }
     cacheStatic(this.art);
+  }
+
+  /** Tier pips sit on top of the artwork: the count repeats the rarity so colour is never the only cue. */
+  private drawPips(): void {
+    const m = this.m;
+    const rar = Rarity[this.rarity];
+    const wr = this.windowRect;
+    const pips = rarityIndex(this.rarity) + 1;
+    const y = wr.y + wr.h - m.pip - 5;
+    const g = new Graphics();
+    for (let i = 0; i < pips; i++) {
+      const px = (i - (pips - 1) / 2) * (m.pip * 2.9);
+      g.circle(px, y, m.pip + 1.5).fill(Color.outline);
+      g.circle(px, y, m.pip).fill(rar.light);
+    }
+    this.overlay.addChild(g);
   }
 
   private buildOverlay(): void {

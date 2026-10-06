@@ -112,6 +112,8 @@ export class IapService {
   private ledger: IapLedger;
   private readonly inflight = new Map<string, Promise<boolean>>();
   private recovering: Promise<number> | null = null;
+  /** A recovery was requested while one was already running: run once more when it ends. */
+  private recoverAgain = false;
   private recoverDeferred = false;
   private persistQueue: Promise<void> = Promise.resolve();
   private readonly now: () => number;
@@ -232,11 +234,16 @@ export class IapService {
     let paid = false;
     let outcome: IapOutcome;
     try {
+      const info = { name: this.productName(productId), priceText: this.priceText(productId) };
       const attempt = Promise.resolve().then(() =>
-        iap.purchase(productId, async (orderId) => {
-          paid = true;
-          return this.grantOnce(productId, orderId);
-        }),
+        iap.purchase(
+          productId,
+          async (orderId) => {
+            paid = true;
+            return this.grantOnce(productId, orderId);
+          },
+          info,
+        ),
       );
       outcome = await settleWithin<IapOutcome>(attempt, this.purchaseWatchdogMs, 'failed');
     } finally {
@@ -249,7 +256,8 @@ export class IapService {
     } else {
       finish(outcome);
     }
-    if (outcome === 'failed') void this.recoverPending();
+    // A payment that lands after the watchdog is still granted (onPaid stays live); anything the
+    // platform keeps pending is finished by recoverPending() at boot and whenever the app resumes.
     return outcome;
   }
 
@@ -260,11 +268,20 @@ export class IapService {
    * any time and concurrently. Resolves with the number of orders it finished.
    */
   recoverPending(): Promise<number> {
-    if (this.recovering) return this.recovering;
+    if (this.recovering) {
+      // Single flight, but the request is not lost: whatever changed since the running pass began (a
+      // grant handler that was just set, a payment that just landed) gets one more pass afterwards.
+      this.recoverAgain = true;
+      return this.recovering;
+    }
     const run = this.doRecover()
       .catch(() => 0)
       .finally(() => {
         this.recovering = null;
+        if (this.recoverAgain) {
+          this.recoverAgain = false;
+          void this.recoverPending();
+        }
       });
     this.recovering = run;
     return run;

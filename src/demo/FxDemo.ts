@@ -7,6 +7,7 @@ import { label } from '@/ui/text';
 import { Color, Rarity, RARITY_ORDER } from '@/ui/theme';
 import {
   Fx,
+  bindQualityGovernor,
   createHitStop,
   flyIconCount,
   flyTo,
@@ -15,17 +16,21 @@ import {
   fxShake,
   fxTexture,
   hitFlash,
+  kickObject,
   popIn,
   popOut,
   pulseLoop,
   punchScale,
+  rattleObject,
   screenFx,
   setFxSettings,
   shakeObject,
   squash,
   wobbleRotation,
+  type BoundGovernor,
   type FxHandle,
   type LoopHandle,
+  type NumbersMode,
   type NumStyle,
 } from '@/fx';
 
@@ -33,12 +38,13 @@ const COLS = 3;
 const GAP = 12;
 const CELL_H = 188;
 const TOP = 112;
-const BOTTOM = 150;
+const BOTTOM = 176;
 const SIDE = 24;
+/** Distance of the page-navigation row from the bottom edge; the toolbar sits below it. */
+const NAV_FROM_BOTTOM = 140;
 
 interface Entry {
   name: string;
-  hint: string;
   run: (c: CellView) => void;
 }
 
@@ -51,6 +57,7 @@ interface CellView {
   w: number;
   h: number;
   avatar: Sprite | null;
+  boss: Sprite | null;
   handle: FxHandle | LoopHandle | null;
   counter: number;
 }
@@ -101,13 +108,15 @@ export default class FxDemo extends Scene {
   private freezeStep = 0;
   private letterboxOn = false;
   private manual = false;
+  private gov: BoundGovernor | null = null;
 
   constructor() {
     super();
     // The gallery shows full-strength effects; the Reduced button flips the OS-derived default.
     setFxSettings({ reducedMotion: false });
     this.fx = new Fx(this, this.tweens);
-    this.hitStop = createHitStop([this.spinTw], { cooldown: 0 });
+    // Default options on purpose: the gallery shows the real caps and cooldown.
+    this.hitStop = createHitStop([this.spinTw]);
     this.entries = this.makeEntries();
     this.addChild(this.bg, this.pagesLayer, this.hud);
     // Effects render above the gallery chrome.
@@ -132,6 +141,7 @@ export default class FxDemo extends Scene {
       fx: this.fx,
       screen: screenFx,
       freeze: this.hitStop.freeze,
+      gov: () => this.gov?.governor ?? null,
     });
   }
 
@@ -167,6 +177,7 @@ export default class FxDemo extends Scene {
   }
 
   override exit(): void {
+    this.gov?.dispose();
     this.hitStop.dispose();
     this.fx.destroy();
     screenFx.clear();
@@ -176,37 +187,43 @@ export default class FxDemo extends Scene {
 
   private buildHud(): void {
     this.title.position.set(game.w / 2, 40);
-    this.pageLabel.position.set(game.w / 2, game.h - 126);
+    this.pageLabel.position.set(game.w / 2, game.h - NAV_FROM_BOTTOM);
     this.settingsLabel.position.set(game.w / 2, game.h - 30);
 
-    const prev = this.button('<', 260, game.h - 126);
-    const next = this.button('>', game.w - 260, game.h - 126);
+    const prev = this.button('<', 260, game.h - NAV_FROM_BOTTOM);
+    const next = this.button('>', game.w - 260, game.h - NAV_FROM_BOTTOM);
     prev.on('pointerdown', () => this.showPage(this.page - 1));
     next.on('pointerdown', () => this.showPage(this.page + 1));
     prev.label = 'prev';
     next.label = 'next';
 
     const mk = (text: string, x: number, fn: () => void): Container => {
-      const b = this.button(text, x, game.h - 76, 126, 54, 22);
+      const b = this.button(text, x, game.h - 76, 104, 54, 20);
       b.label = 'toolbar';
       b.on('pointerdown', fn);
       return b;
     };
-    const qual = mk('Quality', 170, () => {
+    const qual = mk('Quality', 76, () => {
       const q = fxSettings.quality;
       setFxSettings({ quality: q > 0.9 ? 0.5 : q > 0.4 ? 0.25 : 1 });
       this.refreshSettingsLabel();
     });
-    const fl = mk('Flashes', 306, () => {
+    const fl = mk('Flashes', 189, () => {
       setFxSettings({ flashes: !fxSettings.flashes });
       this.refreshSettingsLabel();
     });
-    const rm = mk('Reduced', 442, () => {
+    const rm = mk('Reduced', 302, () => {
       setFxSettings({ reducedMotion: !fxSettings.reducedMotion });
       this.refreshSettingsLabel();
     });
-    const clr = mk('Clear', 578, () => this.fx.clear());
-    this.hud.addChild(this.title, this.pageLabel, this.settingsLabel, prev, next, qual, fl, rm, clr);
+    const nm = mk('Numbers', 415, () => {
+      const order: readonly NumbersMode[] = ['full', 'brief', 'off'];
+      setFxSettings({ numbers: order[(order.indexOf(fxSettings.numbers) + 1) % order.length] ?? 'full' });
+      this.refreshSettingsLabel();
+    });
+    const gv = mk('Gov', 528, () => this.toggleGovernor());
+    const clr = mk('Clear', 641, () => this.fx.clear());
+    this.hud.addChild(this.title, this.pageLabel, this.settingsLabel, prev, next, qual, fl, rm, nm, gv, clr);
 
     // HUD chip: target for the fly-to demo.
     const chipBg = new Graphics().roundRect(-90, -30, 180, 60, 30).fill(Color.panel).stroke({ width: 4, color: Color.outline });
@@ -241,7 +258,23 @@ export default class FxDemo extends Scene {
   }
 
   private refreshSettingsLabel(): void {
-    this.settingsLabel.text = `quality ${fxSettings.quality}  flashes ${fxSettings.flashes ? 'on' : 'off'}  reduced ${fxSettings.reducedMotion ? 'on' : 'off'}`;
+    const gov = this.gov ? ` gov ${this.gov.governor.tier}` : '';
+    this.settingsLabel.text =
+      `q ${fxSettings.quality}  flash ${fxSettings.flashes ? 'on' : 'off'}  reduced ${fxSettings.reducedMotion ? 'on' : 'off'}  nums ${fxSettings.numbers}${gov}`;
+  }
+
+  /** Adaptive quality: on, the governor watches real frame times and re-applies the tier on change. */
+  private toggleGovernor(): void {
+    if (this.gov) {
+      this.gov.dispose();
+      this.gov = null;
+    } else {
+      this.gov = bindQualityGovernor((tier) => {
+        this.fx.applyTier(tier);
+        this.refreshSettingsLabel();
+      });
+    }
+    this.refreshSettingsLabel();
   }
 
   private layoutAll(): void {
@@ -279,13 +312,13 @@ export default class FxDemo extends Scene {
       view.addChild(panel, name);
       view.eventMode = 'static';
       view.hitArea = { contains: (px: number, py: number) => px >= 0 && py >= 0 && px <= cellW && py <= CELL_H };
-      const cell: CellView = { entry, view, panel, cx: x + cellW / 2, cy: y + CELL_H / 2 - 12, w: cellW, h: CELL_H, avatar: null, handle: null, counter: 0 };
+      const cell: CellView = { entry, view, panel, cx: x + cellW / 2, cy: y + CELL_H / 2 - 12, w: cellW, h: CELL_H, avatar: null, boss: null, handle: null, counter: 0 };
       view.on('pointerdown', () => this.runCell(cell));
       (this.pageContainers[page] as Container).addChild(view);
       this.cells.push(cell);
     });
-    for (const c of this.hud.children) if (c.label === 'prev' || c.label === 'next') c.y = h - 126;
-    this.pageLabel.position.set(w / 2, h - 126);
+    for (const c of this.hud.children) if (c.label === 'prev' || c.label === 'next') c.y = h - NAV_FROM_BOTTOM;
+    this.pageLabel.position.set(w / 2, h - NAV_FROM_BOTTOM);
     this.settingsLabel.position.set(w / 2, h - 30);
     for (const c of this.hud.children) if (c.label === 'toolbar') c.y = h - 76;
     this.showPage(Math.min(this.page, pages - 1));
@@ -358,6 +391,21 @@ export default class FxDemo extends Scene {
     return s;
   }
 
+  /** A larger, purple stand-in for a boss. */
+  private bossOf(c: CellView): Sprite {
+    if (c.boss) return c.boss;
+    this.avatarTex ??= avatarTexture();
+    const s = new Sprite(this.avatarTex);
+    s.anchor.set(0.5);
+    s.scale.set(1.15);
+    s.tint = 0xc9a0ff;
+    s.position.set(c.w / 2, c.h / 2 - 12);
+    s.visible = false;
+    c.view.addChild(s);
+    c.boss = s;
+    return s;
+  }
+
   /** Toggle a looping effect on a cell: start it, or stop it when a handle already exists. */
   private toggle(c: CellView, start: () => FxHandle | LoopHandle): void {
     if (c.handle?.alive) {
@@ -371,29 +419,29 @@ export default class FxDemo extends Scene {
   private makeEntries(): Entry[] {
     const fx = this.fx;
     const tw = this.tweens;
-    const e = (name: string, hint: string, run: (c: CellView) => void): Entry => ({ name, hint, run });
+    const e = (name: string, run: (c: CellView) => void): Entry => ({ name, run });
     const list: Entry[] = [
-      e('hitSpark', '', (c) => fx.hitSpark(c.cx, c.cy)),
-      e('hitSparkAimed', '', (c) => fx.hitSpark(c.cx, c.cy, { angle: -0.6, color: 0x9fe8ff })),
-      e('critBurst', '', (c) => fx.critBurst(c.cx, c.cy)),
-      e('slashArc', '', (c) => fx.slashArc(c.cx, c.cy)),
-      e('shockwave', '', (c) => fx.shockwave(c.cx, c.cy, { color: 0x9fd0ff })),
-      e('explosion', '', (c) => fx.explosion(c.cx, c.cy)),
-      e('deathPuff', '', (c) => fx.deathPuff(c.cx, c.cy, { color: 0x9ad06a })),
-      e('coinBurst', '', (c) => fx.coinBurst(c.cx, c.cy + 20)),
-      e('mergeBurst', '', (c) => {
+      e('hitSpark', (c) => fx.hitSpark(c.cx, c.cy)),
+      e('hitSparkAimed', (c) => fx.hitSpark(c.cx, c.cy, { angle: -0.6, color: 0x9fe8ff })),
+      e('critBurst', (c) => fx.critBurst(c.cx, c.cy)),
+      e('slashArc', (c) => fx.slashArc(c.cx, c.cy)),
+      e('shockwave', (c) => fx.shockwave(c.cx, c.cy, { color: 0x9fd0ff })),
+      e('explosion', (c) => fx.explosion(c.cx, c.cy)),
+      e('deathPuff', (c) => fx.deathPuff(c.cx, c.cy, { color: 0x9ad06a })),
+      e('coinBurst', (c) => fx.coinBurst(c.cx, c.cy + 20)),
+      e('mergeBurst', (c) => {
         const col = Rarity[RARITY_ORDER[(c.counter++ % 4) + 1] as keyof typeof Rarity].color;
         fx.mergeBurst(c.cx, c.cy, col);
       }),
-      e('lightning', '', (c) => fx.lightning(c.cx - 70, c.cy - 70, c.cx + 60, c.cy + 50)),
-      e('iceShatter', '', (c) => fx.iceShatter(c.cx, c.cy)),
-      e('poisonCloud', '', (c) => this.toggle(c, () => fx.poisonCloud(c.cx, c.cy + 10, { duration: 4 }))),
-      e('healPlus', '', (c) => fx.healPlus(c.cx, c.cy + 10)),
-      e('dustPuff', '', (c) => fx.dustPuff(c.cx, c.cy + 40)),
-      e('levelUp', '', (c) => fx.levelUp(c.cx, c.cy)),
-      e('chargeUp', '', (c) => fx.chargeUp(c.cx, c.cy, { duration: 0.7 })),
+      e('lightning', (c) => fx.lightning(c.cx - 70, c.cy - 70, c.cx + 60, c.cy + 50)),
+      e('iceShatter', (c) => fx.iceShatter(c.cx, c.cy)),
+      e('poisonCloud', (c) => this.toggle(c, () => fx.poisonCloud(c.cx, c.cy + 10, { duration: 4 }))),
+      e('healPlus', (c) => fx.healPlus(c.cx, c.cy + 10)),
+      e('dustPuff', (c) => fx.dustPuff(c.cx, c.cy + 40)),
+      e('levelUp', (c) => fx.levelUp(c.cx, c.cy)),
+      e('chargeUp', (c) => fx.chargeUp(c.cx, c.cy, { duration: 0.7 })),
       ...[0, 1, 2, 3, 4].map((tier) =>
-        e(`summon${tier}`, '', (c) => {
+        e(`summon${tier}`, (c) => {
           const av = this.avatarOf(c);
           av.visible = false;
           const t = fx.summonReveal(c.cx, c.cy, tier, {
@@ -407,18 +455,52 @@ export default class FxDemo extends Scene {
           });
         }),
       ),
-      e('confettiRain', '', () => fx.confettiRain()),
-      e('buffAura', '', (c) => {
+      ...[3, 4].map((tier) =>
+        e(`summon${tier} quick`, (c) => {
+          const av = this.avatarOf(c);
+          av.visible = false;
+          const t = fx.summonReveal(c.cx, c.cy, tier, {
+            quick: true,
+            onImpact: () => {
+              av.visible = true;
+              popIn(tw, av, { ms: 240, overshoot: 2.4 });
+            },
+          });
+          tw.call(t.duration + 0.4, () => {
+            av.visible = false;
+          });
+        }),
+      ),
+      e('bossWarning', () => fx.bossWarning()),
+      e('bossLanding', (c) => {
+        const boss = this.bossOf(c);
+        const rest = c.h / 2 - 12;
+        boss.visible = true;
+        boss.alpha = 1;
+        boss.y = rest - 190;
+        tw.to(boss, { y: rest }, { duration: 0.32, ease: Ease.quadIn, onComplete: () => fx.bossLanding(c.cx, c.cy + 50) });
+      }),
+      e('bossDeath', (c) => {
+        const boss = this.bossOf(c);
+        boss.visible = true;
+        boss.alpha = 1;
+        boss.y = c.h / 2 - 12;
+        fx.bossDeath(c.cx, c.cy, { target: boss, radius: 60, onFinal: () => (boss.visible = false) });
+      }),
+      e('waveClear', () => fx.waveClear()),
+      e('waveClear slow', () => fx.waveClear({ slowMo: true })),
+      e('confettiRain', () => fx.confettiRain()),
+      e('buffAura', (c) => {
         const av = this.avatarOf(c);
         this.toggle(c, () => fx.buffAura(av, { color: Color.success, radius: 50, offsetY: 20 }));
       }),
-      e('rays', '', (c) => this.toggle(c, () => fx.rays(c.cx, c.cy, { color: 0xffe9a0, radius: 200, alpha: 0.7 }))),
-      e('sparkleTrail', '', (c) => this.orbit(c, (o) => fx.sparkleTrail(o, { color: 0xfff0a8 }))),
-      e('smokeTrail', '', (c) => this.orbit(c, (o) => fx.smokeTrail(o))),
-      e('ambientTwinkle', '', (c) =>
+      e('rays', (c) => this.toggle(c, () => fx.rays(c.cx, c.cy, { color: 0xffe9a0, radius: 200, alpha: 0.7 }))),
+      e('sparkleTrail', (c) => this.orbit(c, (o) => fx.sparkleTrail(o, { color: 0xfff0a8 }))),
+      e('smokeTrail', (c) => this.orbit(c, (o) => fx.smokeTrail(o))),
+      e('ambientTwinkle', (c) =>
         this.toggle(c, () => fx.ambientTwinkle(c.cx, c.cy, c.w - 30, c.h - 70, { rate: 9 })),
       ),
-      e('numbers', '', (c) => {
+      e('numbers', (c) => {
         const style = NUM_CYCLE[this.numCursor++ % NUM_CYCLE.length] as NumStyle;
         const v = style === 'big' ? 48210 : style === 'crit' ? 2140 : style === 'dot' ? 12 : 386;
         fx.number(c.cx, c.cy, v, style);
@@ -426,7 +508,7 @@ export default class FxDemo extends Scene {
           for (let i = 1; i < 4; i++) tw.call(i * 0.08, () => fx.number(c.cx, c.cy - 10 * i, 90 + i * 40, 'damage'));
         }
       }),
-      e('flyTo', '', (c) => {
+      e('flyTo', (c) => {
         flyTo({
           from: { x: c.cx, y: c.cy },
           to: this.chip,
@@ -442,44 +524,51 @@ export default class FxDemo extends Scene {
           },
         });
       }),
-      e('punchScale', '', (c) => punchScale(tw, this.avatarOf(c), 0.28, 150)),
-      e('squash', '', (c) => {
+      e('punchScale', (c) => punchScale(tw, this.avatarOf(c), 0.28, 150)),
+      e('squash', (c) => {
         const a = this.avatarOf(c);
         squash(tw, a, 1.25, 0.75, 300);
       }),
-      e('popOut/popIn', '', (c) => {
+      e('popOut/popIn', (c) => {
         const a = this.avatarOf(c);
         if (a.visible && a.alpha > 0.5) popOut(tw, a, { onDone: () => popIn(tw, a, { ms: 300 }) });
         else popIn(tw, a, { ms: 300 });
       }),
-      e('wobbleRotation', '', (c) => wobbleRotation(tw, this.avatarOf(c), 12)),
-      e('shakeObject', '', (c) => shakeObject(tw, this.avatarOf(c), 9, 240)),
-      e('floatBob', '', (c) => this.toggle(c, () => floatBob(tw, this.avatarOf(c), 8, 1.5))),
-      e('pulseLoop', '', (c) => this.toggle(c, () => pulseLoop(tw, this.avatarOf(c), 0.07, 1.0))),
-      e('hitFlash', '', (c) => {
+      e('wobbleRotation', (c) => wobbleRotation(tw, this.avatarOf(c), 12)),
+      e('rattle', (c) => rattleObject(tw, this.avatarOf(c), { ms: 600, amplitude: 5, degrees: 4 })),
+      e('kick', (c) => {
+        const a = this.avatarOf(c);
+        kickObject(tw, a, -16, 6, 140);
+        hitFlash(tw, a, { ms: 66 });
+      }),
+      e('shakeObject', (c) => shakeObject(tw, this.avatarOf(c), 9, 240)),
+      e('floatBob', (c) => this.toggle(c, () => floatBob(tw, this.avatarOf(c), 8, 1.5))),
+      e('pulseLoop', (c) => this.toggle(c, () => pulseLoop(tw, this.avatarOf(c), 0.07, 1.0))),
+      e('hitFlash', (c) => {
         const a = this.avatarOf(c);
         hitFlash(tw, a);
         squash(tw, a, 0.9, 1.1, 180);
         fx.hitSpark(c.cx, c.cy);
       }),
-      e('screenFlash', '', (c) => {
+      e('screenFlash', (c) => {
         screenFx.flash(c.counter++ % 2 === 0 ? 0xffffff : 0xffd45e, 0.4, 140);
       }),
-      e('dangerVignette', '', () => {
+      e('dangerVignette', () => {
         this.dangerStep = (this.dangerStep + 1) % 4;
         screenFx.setDanger(this.dangerStep / 3);
       }),
-      e('vignettePulse', '', () => screenFx.vignettePulse(0xff2a2a, 0.3, 500, 2)),
-      e('letterbox', '', () => {
+      e('vignettePulse', () => screenFx.vignettePulse(0xff2a2a, 0.3, 500, 2)),
+      e('letterbox', () => {
         this.letterboxOn = !this.letterboxOn;
         screenFx.letterbox(this.letterboxOn, { height: 150 });
       }),
-      e('timeFreeze', '', () => {
+      e('timeFreeze', () => {
         this.freezeStep++;
-        if (this.freezeStep % 2 === 1) this.hitStop.freeze.freeze(0.2, 0);
-        else this.hitStop.freeze.freeze(0.4, 0.3);
+        const f = this.hitStop.freeze;
+        if (this.freezeStep % 2 === 1) f.freeze(0.2, 0);
+        else f.freezeThenSlow(0.12, 0.4, 0.3);
       }),
-      e('screenShake', '', () => fxShake(0.6)),
+      e('screenShake', () => fxShake(0.6)),
     ];
     return list;
   }

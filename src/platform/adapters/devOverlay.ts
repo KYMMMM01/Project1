@@ -57,7 +57,7 @@ const CSS = `
   text-align:center}
 .lp-card{width:86%;border-radius:calc(var(--u)*40px);padding:calc(var(--u)*44px) calc(var(--u)*36px) calc(var(--u)*40px)}
 .lp-sheet{width:100%;border-bottom:0;border-radius:calc(var(--u)*44px) calc(var(--u)*44px) 0 0;
-  padding:calc(var(--u)*20px) calc(var(--u)*40px) calc(var(--u)*48px);animation:lp-up .18s ease-out}
+  padding:calc(var(--u)*20px) calc(var(--u)*40px) max(calc(var(--u)*48px),env(safe-area-inset-bottom));animation:lp-up .18s ease-out}
 .lp-grab{width:calc(var(--u)*120px);height:calc(var(--u)*10px);border-radius:99px;background:#4d3a86;margin:0 auto calc(var(--u)*26px)}
 .lp-tag{display:inline-block;padding:calc(var(--u)*4px) calc(var(--u)*20px);border-radius:99px;background:#140a2e;
   color:#ffcf5c;font-size:max(12px,calc(var(--u)*26px));letter-spacing:.06em;margin-bottom:calc(var(--u)*18px)}
@@ -78,7 +78,7 @@ const CSS = `
   transition:transform .06s ease,box-shadow .06s ease;-webkit-tap-highlight-color:transparent}
 .lp-btn:active:not(:disabled){transform:translateY(calc(var(--u)*6px))}
 .lp-btn:disabled{filter:grayscale(.6) brightness(.8);cursor:default}
-.lp-btn[hidden]{display:none}
+.lp-btn[hidden]{display:block;visibility:hidden}
 .lp-primary{--lp-stroke:#8a3a00;background:linear-gradient(180deg,#ffe27a 0%,#ffb629 55%,#ff9410 100%);
   box-shadow:0 calc(var(--u)*8px) 0 #bf5a05,inset 0 calc(var(--u)*5px) 0 rgba(255,255,255,.55)}
 .lp-primary:active:not(:disabled){box-shadow:0 calc(var(--u)*2px) 0 #bf5a05,inset 0 calc(var(--u)*5px) 0 rgba(255,255,255,.55)}
@@ -247,7 +247,8 @@ export function showRewardedCard(o: { seconds: number; placement: string }): Pro
     close.type = 'button';
     claim.type = 'button';
     claim.hidden = true;
-    actions.append(close, claim);
+    // Two fixed slots (claim above, close below): a button never moves under a finger mid-press.
+    actions.append(claim, close);
     ov.card.append(tag, title, sub, bar, wait, actions);
 
     const finish = (r: 'claimed' | 'closed'): void => {

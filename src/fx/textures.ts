@@ -372,9 +372,11 @@ const CELLS: Cell[] = [
     paint: (x, y) => {
       const u = x / 32;
       const t = (y + 128) / 256;
+      // Window the sides to zero so the wide halo never shows the cell's rectangular edge.
+      const side = 1 - smooth(0.35, 1, Math.abs(u));
       const core = Math.exp(-((u * 1.9) ** 2));
       const soft = 0.55 * Math.exp(-((u * 0.9) ** 2));
-      return clamp01(Math.max(core, soft) * Math.pow(t, 0.85) * (1 - smooth(0.965, 1, t)));
+      return clamp01(Math.max(core, soft) * side * Math.pow(t, 0.85) * (1 - smooth(0.965, 1, t)));
     },
   },
   {

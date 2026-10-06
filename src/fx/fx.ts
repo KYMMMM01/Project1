@@ -1,5 +1,6 @@
-import { Container } from 'pixi.js';
+import { Container, type Sprite } from 'pixi.js';
 import { game } from '@/core/game';
+import { haptic, type HapticId } from '@/core/haptics';
 import { Ease, type Tween, type Tweener } from '@/core/tween';
 import { TAU, darken, lighten, rand } from '@/core/math';
 import { Color, RARITY_ORDER, Rarity } from '@/ui/theme';
@@ -8,9 +9,10 @@ import type { TimeFreeze } from './freeze';
 import { FloatingNumbers, type NumStyle, type NumberOpts } from './numbers';
 import { EmitterGroup, type FxHandle } from './handles';
 import { ParticleSystem, type BurstMods, type EmitDef } from './particles';
+import { hitFlash } from './juice';
 import { Rays, makeRayPool, type RaysOpts } from './rays';
-import { REDUCED, fxSettings, motionSeconds } from './settings';
-import { ScreenFx, fxShake, screenFx } from './screen';
+import { FX_TIERS, REDUCED, fxSettings, motionSeconds, setFxSettings, type FxTier } from './settings';
+import { ScreenFx, Trauma, fxShake, screenFx } from './screen';
 import { ensureFxTextures } from './textures';
 
 const W = 0xffffff;
@@ -44,16 +46,47 @@ export interface CoinOpts extends FxOpts {
   count?: number;
 }
 
-export interface SummonOpts extends FxOpts {
-  /** Fired at the visual impact moment: reveal the unit here. */
-  onImpact?: () => void;
+export interface CritOpts extends FxOpts {
+  /** Target is a boss or elite: adds the small T1 camera shake (plain crits never shake the screen). */
+  strong?: boolean;
 }
 
-export interface SummonTimeline {
-  /** Seconds from the call to the impact (unit reveal) moment. */
+export interface SummonOpts extends FxOpts {
+  /**
+   * Fired at the visual impact moment: reveal the unit here. Always asynchronous: it runs at
+   * `timeline.impact` seconds on the Fx's Tweener (the next frame for tier 0), never before
+   * summonReveal returns, so `const tl = fx.summonReveal(..., { onImpact })` may use `tl` inside it.
+   */
+  onImpact?: () => void;
+  /**
+   * Short version for repeated reveals (the second mythic of a run, rapid multi-pulls): plays the
+   * epic-sized recipe in the tier's colours, with no charge-up, flash, hit-stop or big shake.
+   */
+  quick?: boolean;
+}
+
+/** When a composite effect peaks and when it is over, in seconds from the call. */
+export interface FxTimeline {
+  /** Moment of impact: reveal the unit, drop the loot, hide the boss. */
   impact: number;
   /** Seconds until the effect has fully played out. */
   duration: number;
+}
+
+export type SummonTimeline = FxTimeline;
+
+export interface BossDeathOpts extends FxOpts {
+  /** Radius of the area the mini explosions scatter over, design px. Default 80. */
+  radius?: number;
+  /** The boss sprite: it flickers white and red while it dies. */
+  target?: Sprite;
+  /** Fired at the final blast, when the boss should disappear. */
+  onFinal?: () => void;
+}
+
+export interface WaveClearOpts {
+  /** Peggle-style finish: half-speed gameplay for 0.2 s after the last kill. */
+  slowMo?: boolean;
 }
 
 export interface ConfettiOpts {
@@ -78,8 +111,10 @@ export interface FxCreateOpts {
   budget?: number;
   /** Screen effects used by the big reveals. Default the shared instance. */
   screen?: ScreenFx;
-  /** Hit-stop used by tier 3+ reveals; omit for none. */
+  /** Hit-stop used by tier 3+ reveals and the boss / wave presets; omit for none. */
   freeze?: TimeFreeze;
+  /** Vibrate (Android) on big moments, per the guide's per-event patterns. Default true. */
+  haptics?: boolean;
 }
 
 const CONFETTI_PALETTE: readonly number[] = [0xff4d7a, 0xffd23f, 0x4ee3ff, 0xb26bff, 0x7dff6b, 0xffffff];
@@ -104,6 +139,7 @@ export class Fx {
   private readonly timers: Tween[] = [];
   private readonly screen: ScreenFx;
   private readonly freeze: TimeFreeze | undefined;
+  private readonly haptics: boolean;
   private readonly bolt = new Float32Array(2 * boltPointCount(4));
   private readonly boltB = new Float32Array(2 * boltPointCount(3));
 
@@ -121,6 +157,7 @@ export class Fx {
     this.numbers = new FloatingNumbers(this.root);
     this.screen = o.screen ?? screenFx;
     this.freeze = o.freeze;
+    this.haptics = o.haptics ?? true;
   }
 
   update(dt: number): void {
@@ -154,6 +191,14 @@ export class Fx {
     return { ...this.ps.stats(), numbers: this.numbers.count, rays: this.rayList.length, timers: this.timers.length };
   }
 
+  /** Apply a device quality tier: particle multiplier plus this Fx's particle and number caps. */
+  applyTier(tier: FxTier): void {
+    const t = FX_TIERS[tier];
+    setFxSettings({ quality: t.quality });
+    this.ps.budget.cap = t.particles;
+    this.numbers.cap = t.numbers;
+  }
+
   /** Floating combat number; see FloatingNumbers.show. */
   number(x: number, y: number, value: number | string, style: NumStyle = 'damage', o?: NumberOpts): void {
     this.numbers.show(x, y, value, style, o);
@@ -166,6 +211,10 @@ export class Fx {
 
   private burst(def: EmitDef, x: number, y: number, mods?: BurstMods): void {
     this.ps.burst(def, x, y, mods);
+  }
+
+  private buzz(id: HapticId): void {
+    if (this.haptics) haptic(id);
   }
 
   /* ---- combat hits -------------------------------------------------------------------------- */
@@ -201,14 +250,15 @@ export class Fx {
     );
   }
 
-  critBurst(x: number, y: number, o: FxOpts = {}): void {
+  critBurst(x: number, y: number, o: CritOpts = {}): void {
+    if (o.strong) fxShake(Trauma.t1);
     const c = o.color ?? 0xffc933;
     const hi = lighten(c, 0.7);
     const deep = 0xff7a1a;
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
       {
-        tex: 'star', prio: 2, count: 1, life: 0.3, size: 26, sizeEnd: 112, rot: [-0.3, 0.3], spin: [-1.4, 1.4],
+        tex: 'star', prio: 2, count: 1, life: 0.24, size: 26, sizeEnd: 112, rot: [-0.3, 0.3], spin: [-1.4, 1.4],
         colors: [W, hi, c], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.45,
       },
       x, y, m,
@@ -299,7 +349,7 @@ export class Fx {
       { tex: 'starburst', prio: 2, count: 1, life: 0.18, size: 90, sizeEnd: 220, rot: [0, TAU], colors: [W, hot], alpha: 0.9, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.6 },
       x, y, m,
     );
-    this.shockwave(x, y, { color: hot, radius: 135, scale: s });
+    this.shockwave(x, y, { color: c, radius: 135, scale: s });
     // Fire: additive puffs that cool from white-yellow through orange to dark red.
     this.burst(
       {
@@ -383,11 +433,18 @@ export class Fx {
     );
   }
 
-  /** Inward suck, then an outward star burst in the merged tier's colour. */
+  /**
+   * Inward suck, then an outward star burst in the merged tier's colour, with the guide's small
+   * (3 px) board shake at the moment of impact.
+   */
   mergeBurst(x: number, y: number, color: number = Color.primary, scale = 1): void {
     const hi = lighten(color, 0.55);
     const m: BurstMods = { scale };
     const suck = 0.17;
+    this.after(suck, () => {
+      fxShake(0.41);
+      this.buzz('light');
+    });
     this.burst(
       {
         tex: 'glow', prio: 2, count: 16, life: [0.13, 0.2], shape: { type: 'ring', r: 120, width: 30 }, size: [30, 44], sizeEnd: [10, 16],
@@ -427,127 +484,197 @@ export class Fx {
 
   /**
    * Gacha / summon reveal that escalates with rarity tier 0 (common) .. 4 (mythic). The tier's colour
-   * is visible from the very first frame ("colour first, identity later"); `onImpact` fires when the
-   * unit should pop in.
+   * is visible from the very first frame ("colour first, identity later"); higher tiers then charge
+   * for longer (inward light, a swelling core) before an impact with more layers, shake, flash and
+   * hit-stop. Reveal the unit in `onImpact` / at `timeline.impact`.
    */
-  summonReveal(x: number, y: number, tier: number, o: SummonOpts = {}): SummonTimeline {
+  summonReveal(x: number, y: number, tier: number, o: SummonOpts = {}): FxTimeline {
     const t = Math.max(0, Math.min(4, Math.floor(tier)));
     const rs = tierStyle(t);
     const c = o.color ?? rs.color;
-    const hi = rs.light;
-    const glow = rs.glow;
     const s = o.scale ?? 1;
-    const m: BurstMods = { scale: s };
-    let timeline: SummonTimeline;
+    const recipe = o.quick ? Math.min(t, 2) : t;
+    let timeline: FxTimeline;
+    if (recipe === 0) timeline = this.summonCommon(x, y, c, rs.light, s);
+    else if (recipe === 1) timeline = this.summonRare(x, y, c, rs.light, rs.glow, s);
+    else if (recipe === 2) timeline = this.summonEpic(x, y, c, rs.light, rs.glow, s);
+    else if (recipe === 3) timeline = this.summonLegendary(x, y, c, rs.light, rs.glow, s);
+    else timeline = this.mythic(x, y, c, s);
 
-    if (t === 0) {
-      this.burst(
-        {
-          tex: 'smoke', blend: 'normal', prio: 1, count: 6, life: [0.32, 0.5], shape: { type: 'circle', r: 10 }, speed: [40, 120], drag: 3,
-          gravity: -30, size: [24, 34], sizeEnd: [52, 72], rot: [0, TAU], colors: [0xf1f4f8, c], alpha: 0.55, fadeIn: 0.1, fadeOut: 0.6,
-        },
-        x, y + 10, m,
-      );
-      this.burst(
-        { tex: 'ring', prio: 1, count: 1, life: 0.3, size: 20, sizeEnd: 120, colors: [W, c], alpha: 0.8, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
-        x, y, m,
-      );
-      this.burst(
-        { tex: 'dot', prio: 1, count: 6, life: [0.25, 0.4], speed: [80, 210], drag: 3, size: [5, 9], sizeEnd: 2, colors: [W, hi], fadeIn: 0 },
-        x, y, m,
-      );
-      timeline = { impact: 0, duration: 0.55 };
-    } else if (t === 1) {
-      this.groundGlow(x, y + 28, c, hi, s, 0.5, 1);
-      this.shockwave(x, y, { color: c, radius: 135, scale: s });
-      this.burst(
-        {
-          tex: 'sparkle', prio: 1, count: 11, life: [0.5, 0.9], speed: [80, 240], dir: -PI / 2, spread: 1.7, drag: 2, gravity: -30,
-          size: [16, 28], sizeEnd: [4, 8], spin: [-3, 3], rot: [0, TAU], colors: [W, glow, c], fadeIn: 0.1, fadeOut: 0.5,
-        },
-        x, y, m,
-      );
-      this.burst(
-        { tex: 'glow', prio: 1, count: 1, life: 0.16, size: 60, sizeEnd: 130, colors: [W, hi], alpha: 0.8, fadeIn: 0, fadeOut: 0.8 },
-        x, y, m,
-      );
-      timeline = { impact: 0.06, duration: 0.95 };
-    } else if (t === 2) {
-      this.groundGlow(x, y + 30, c, hi, s, 0.6, 1.2);
-      this.pillar(x, y + 34, c, glow, s, 96, 400, 0.62);
-      this.shockwave(x, y, { color: c, radius: 175, scale: s });
-      this.burst(
-        {
-          tex: 'sparkle', prio: 2, count: 16, life: [0.6, 1.1], speed: [90, 300], dir: -PI / 2, spread: 1.0, drag: 1.4, gravity: 90,
-          shape: { type: 'rect', w: 70, h: 10 }, size: [18, 32], sizeEnd: [4, 8], spin: [-3, 3], rot: [0, TAU],
-          colors: [W, glow, c], fadeIn: 0.1, fadeOut: 0.5,
-        },
-        x, y + 20, m,
-      );
-      this.burst(
-        { tex: 'glow', prio: 2, count: 1, life: 0.2, size: 70, sizeEnd: 170, colors: [W, glow, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
-        x, y, m,
-      );
-      fxShake(0.22);
-      timeline = { impact: 0.08, duration: 1.15 };
-    } else if (t === 3) {
-      this.groundGlow(x, y + 30, c, hi, s, 0.75, 1.5);
-      this.pillar(x, y + 36, c, glow, s, 140, 560, 0.8);
-      this.rays(x, y, { color: glow, radius: 440 * s, duration: 1.5, alpha: 0.5, count: 10 });
-      this.shockwave(x, y, { color: c, radius: 240, scale: s });
-      this.shockwave(x, y, { color: hi, radius: 170, scale: s, delay: 0.1 });
-      this.burst(
-        {
-          tex: 'sparkle', prio: 2, count: 28, life: [0.9, 1.7], delay: [0.1, 0.55], shape: { type: 'rect', w: 380, h: 30 }, speed: [30, 110],
-          dir: PI / 2, spread: 0.5, gravity: 130, drag: 0.5, size: [16, 34], sizeEnd: [4, 8], spin: [-3, 3], rot: [0, TAU],
-          colors: [W, glow, c], fadeIn: 0.15, fadeOut: 0.5,
-        },
-        x, y - 280 * s, m,
-      );
-      this.burst(
-        {
-          tex: 'star', prio: 2, count: 10, life: [0.55, 0.9], speed: [200, 520], drag: 2.8, size: [26, 46], sizeEnd: [6, 10], spin: [-5, 5],
-          rot: [0, TAU], colors: [W, hi, c], fadeIn: 0, fadeOut: 0.5,
-        },
-        x, y, m,
-      );
-      this.burst(
-        { tex: 'glow', prio: 2, count: 1, life: 0.28, size: 90, sizeEnd: 260, colors: [W, hi, c], alpha: 0.95, fadeIn: 0, fadeOut: 0.8 },
-        x, y, m,
-      );
-      this.screen.flash(c, 0.25, 100);
-      fxShake(0.5);
-      this.freeze?.freeze(0.05, 0);
-      timeline = { impact: 0.1, duration: 1.8 };
-    } else {
-      timeline = this.mythic(x, y, c, s);
-    }
-
-    if (o.onImpact) {
-      if (timeline.impact <= 0) o.onImpact();
-      else this.after(timeline.impact, o.onImpact);
-    }
+    if (o.quick && t >= 3) this.quickFinish(x, y, c, rs.light, s, t === 4);
+    const onImpact = o.onImpact;
+    if (onImpact) this.after(Math.max(0, timeline.impact), onImpact);
     return timeline;
   }
 
-  private mythic(x: number, y: number, c: number, s: number): SummonTimeline {
+  private summonCommon(x: number, y: number, c: number, hi: number, s: number): FxTimeline {
+    const m: BurstMods = { scale: s };
+    this.burst(
+      {
+        tex: 'smoke', blend: 'normal', prio: 1, count: 6, life: [0.32, 0.5], shape: { type: 'circle', r: 10 }, speed: [40, 120], drag: 3,
+        gravity: -30, size: [24, 34], sizeEnd: [52, 72], rot: [0, TAU], colors: [0xf1f4f8, c], alpha: 0.55, fadeIn: 0.1, fadeOut: 0.6,
+      },
+      x, y + 10, m,
+    );
+    this.burst(
+      { tex: 'ring', prio: 1, count: 1, life: 0.3, size: 20, sizeEnd: 120, colors: [W, c], alpha: 0.8, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'dot', prio: 1, count: 6, life: [0.25, 0.4], speed: [80, 210], drag: 3, size: [5, 9], sizeEnd: 2, colors: [W, hi], fadeIn: 0 },
+      x, y, m,
+    );
+    this.buzz('tap');
+    return { impact: 0, duration: 0.55 };
+  }
+
+  private summonRare(x: number, y: number, c: number, hi: number, glow: number, s: number): FxTimeline {
+    const impact = 0.06;
+    const m: BurstMods = { scale: s, delay: impact };
+    this.groundGlow(x, y + 28, c, hi, s, 0.5, 1);
+    this.shockwave(x, y, { color: c, radius: 135, scale: s, delay: impact });
+    this.burst(
+      {
+        tex: 'sparkle', prio: 1, count: 9, life: [0.5, 0.9], speed: [80, 240], dir: -PI / 2, spread: 1.7, drag: 2, gravity: -30,
+        size: [16, 28], sizeEnd: [4, 8], spin: [-3, 3], rot: [0, TAU], colors: [W, glow, c], fadeIn: 0.1, fadeOut: 0.5,
+      },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'glow', prio: 1, count: 1, life: 0.16, size: 60, sizeEnd: 130, colors: [W, hi], alpha: 0.8, fadeIn: 0, fadeOut: 0.8 },
+      x, y, m,
+    );
+    this.buzz('light');
+    return { impact, duration: 0.95 };
+  }
+
+  private summonEpic(x: number, y: number, c: number, hi: number, glow: number, s: number): FxTimeline {
+    const impact = 0.12;
+    const m: BurstMods = { scale: s, delay: impact };
+    this.groundGlow(x, y + 30, c, hi, s, 0.6, 1.2);
+    // Anticipation: a handful of motes streams in while the cell swells (the caller squashes it).
+    this.burst(
+      {
+        tex: 'glow', prio: 2, count: 8, life: [0.09, impact], shape: { type: 'ring', r: 110, width: 30 }, size: [24, 34], sizeEnd: [8, 12],
+        colors: [hi, c], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: 26, ease: Ease.cubicIn },
+      },
+      x, y, { scale: s },
+    );
+    this.pillar(x, y + 34, c, glow, s, 96, 400, 0.62, impact);
+    this.shockwave(x, y, { color: c, radius: 175, scale: s, delay: impact });
+    this.burst(
+      {
+        tex: 'sparkle', prio: 2, count: 12, life: [0.6, 1.1], speed: [90, 300], dir: -PI / 2, spread: 1.0, drag: 1.4, gravity: 90,
+        shape: { type: 'rect', w: 70, h: 10 }, size: [18, 32], sizeEnd: [4, 8], spin: [-3, 3], rot: [0, TAU],
+        colors: [W, glow, c], fadeIn: 0.1, fadeOut: 0.5,
+      },
+      x, y + 20, m,
+    );
+    this.burst(
+      { tex: 'glow', prio: 2, count: 1, life: 0.2, size: 70, sizeEnd: 170, colors: [W, glow, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
+      x, y, m,
+    );
+    this.after(impact, () => {
+      this.rays(x, y, { color: glow, radius: 250 * s, duration: 0.9, alpha: 0.45, count: 6 });
+      fxShake(Trauma.t2 * 0.9);
+      this.buzz('light');
+    });
+    return { impact, duration: 1.15 };
+  }
+
+  private summonLegendary(x: number, y: number, c: number, hi: number, glow: number, s: number): FxTimeline {
+    const impact = 0.22;
+    const m: BurstMods = { scale: s, delay: impact };
+    this.groundGlow(x, y + 30, c, hi, s, 0.75, 1.5);
+    // Anticipation: the colour is known, the cell contracts, light is sucked in, the edges warm up.
+    this.burst(
+      {
+        tex: 'glow', prio: 2, count: 12, life: [0.16, impact], shape: { type: 'ring', r: 170, width: 40 }, size: [28, 40], sizeEnd: [8, 14],
+        colors: [hi, c], alpha: 0.9, fadeIn: 0.1, fadeOut: 0.2, converge: { swirl: 40, ease: Ease.cubicIn },
+      },
+      x, y, { scale: s },
+    );
+    this.screen.vignettePulse(glow, 0.18, 500, 1);
+    this.pillar(x, y + 36, c, glow, s, 140, 560, 0.8, impact);
+    this.shockwave(x, y, { color: c, radius: 240, scale: s, delay: impact });
+    this.shockwave(x, y, { color: hi, radius: 170, scale: s, delay: impact + 0.1 });
+    this.burst(
+      {
+        tex: 'sparkle', prio: 2, count: 16, life: [0.9, 1.7], delay: [0.1, 0.55], shape: { type: 'rect', w: 380, h: 30 }, speed: [30, 110],
+        dir: PI / 2, spread: 0.5, gravity: 130, drag: 0.5, size: [16, 34], sizeEnd: [4, 8], spin: [-3, 3], rot: [0, TAU],
+        colors: [W, glow, c], fadeIn: 0.15, fadeOut: 0.5,
+      },
+      x, y - 280 * s, m,
+    );
+    this.burst(
+      {
+        tex: 'star', prio: 2, count: 8, life: [0.55, 0.9], speed: [200, 520], drag: 2.8, size: [26, 46], sizeEnd: [6, 10], spin: [-5, 5],
+        rot: [0, TAU], colors: [W, hi, c], fadeIn: 0, fadeOut: 0.5,
+      },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'glow', prio: 2, count: 1, life: 0.28, size: 90, sizeEnd: 260, colors: [W, hi, c], alpha: 0.95, fadeIn: 0, fadeOut: 0.8 },
+      x, y, m,
+    );
+    this.after(impact, () => {
+      this.rays(x, y, { color: glow, radius: 440 * s, duration: 1.5, alpha: 0.5, count: 10 });
+      this.screen.flash(c, 0.25, 100);
+      fxShake(Trauma.t3 * 0.9);
+      this.freeze?.freeze(0.05, 0);
+      this.buzz('medium');
+    });
+    return { impact, duration: 1.8 };
+  }
+
+  /** What the short version of a legendary / mythic reveal adds on top of the epic recipe. */
+  private quickFinish(x: number, y: number, c: number, hi: number, s: number, mythic: boolean): void {
+    const m: BurstMods = { scale: s, delay: 0.12 };
+    this.burst(
+      {
+        tex: 'star', prio: 2, count: 8, life: [0.5, 0.85], speed: [200, 480], drag: 2.8, size: [26, 44], sizeEnd: [6, 10], spin: [-5, 5],
+        rot: [0, TAU], colors: [W, hi, c], fadeIn: 0, fadeOut: 0.5,
+      },
+      x, y, m,
+    );
+    if (mythic) {
+      this.burst(
+        {
+          tex: 'confetti', blend: 'normal', prio: 2, count: 18, life: [0.9, 1.4], speed: [200, 560], drag: 1.7, gravity: 640, flip: [8, 16],
+          spin: [-8, 8], rot: [0, TAU], size: [14, 22], palette: CONFETTI_PALETTE, colors: [W], fadeIn: 0, fadeOut: 0.3,
+        },
+        x, y, m,
+      );
+    }
+  }
+
+  private mythic(x: number, y: number, c: number, s: number): FxTimeline {
     const rs = tierStyle(4);
     const hi = rs.light;
     const glow = rs.glow;
-    const charge = 0.4;
+    // 80 ms slow-down + 300 ms spiral charge (guide 2.2.3 S0 + S1), impact at 380 ms.
+    const charge = 0.38;
     const m: BurstMods = { scale: s };
     // Anticipation: light streams in from a wide ring while a core swells.
     this.burst(
       {
-        tex: 'glow', prio: 3, count: 20, life: [0.28, 0.36], delay: [0, 0.12], shape: { type: 'ring', r: 290, width: 70 }, size: [32, 50], sizeEnd: [10, 18],
+        tex: 'glow', prio: 3, count: 20, life: [0.26, 0.34], delay: [0, 0.04], shape: { type: 'ring', r: 290, width: 70 }, size: [32, 50], sizeEnd: [10, 18],
         colors: [hi, c, W], alpha: 0.9, fadeIn: 0.12, fadeOut: 0.2, converge: { swirl: 70, ease: Ease.cubicIn },
       },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'sparkle', prio: 3, count: 14, life: [0.26, 0.34], delay: [0.02, 0.14], shape: { type: 'ring', r: 240, width: 60 }, size: [20, 32], sizeEnd: [6, 10],
+        tex: 'sparkle', prio: 3, count: 14, life: [0.26, 0.32], delay: [0.02, 0.06], shape: { type: 'ring', r: 240, width: 60 }, size: [20, 32], sizeEnd: [6, 10],
         spin: [-6, 6], rot: [0, TAU], colors: [W, hi], fadeIn: 0.1, fadeOut: 0.15, converge: { swirl: -60, ease: Ease.cubicIn },
+      },
+      x, y, m,
+    );
+    // Radial speed lines: twelve streaks racing into the centre.
+    this.burst(
+      {
+        tex: 'spark', prio: 3, count: 12, life: [0.3, 0.36], delay: [0, 0.02], shape: { type: 'ring', r: 330, width: 50 }, size: [70, 110], sizeEnd: [24, 36],
+        alignVel: true, stretch: 0.0006, colors: [W, hi], alpha: 0.85, fadeIn: 0.1, fadeOut: 0.25, converge: { ease: Ease.cubicIn },
       },
       x, y, m,
     );
@@ -593,8 +720,9 @@ export class Fx {
     );
     this.after(charge, () => {
       this.screen.flash(W, 0.45, 160);
-      fxShake(0.85);
-      this.freeze?.freeze(0.12, 0);
+      fxShake(Trauma.t5);
+      this.freeze?.freezeThenSlow(0.12, 0.3, 0.3);
+      this.buzz('jackpot');
     });
     return { impact: charge, duration: 2.4 };
   }
@@ -629,6 +757,7 @@ export class Fx {
   }
 
   levelUp(x: number, y: number, o: FxOpts = {}): void {
+    this.buzz('medium');
     const c = o.color ?? Color.gold;
     const hi = lighten(c, 0.6);
     const m: BurstMods = { scale: o.scale ?? 1 };
@@ -660,6 +789,171 @@ export class Fx {
       { tex: 'glow', prio: 2, count: 1, life: 0.3, size: 60, sizeEnd: 200, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
+  }
+
+  /* ---- wave & boss moments ------------------------------------------------------------------ */
+
+  /**
+   * Boss warning (guide B-01): two red edge pulses at 1 Hz, about a second of low rumble and dust
+   * sifting down from the top edge. Pair it with a "WARNING" banner that stays up for `duration`.
+   */
+  bossWarning(): FxTimeline {
+    this.screen.vignettePulse(0xff2a2a, 0.3, 500, 2);
+    // game.shake decays on its own, so a steady ~2 px rumble is a stream of small top-ups.
+    for (let i = 0; i < 8; i++) this.after(i * 0.12, () => fxShake(0.2));
+    this.burst(
+      {
+        tex: 'smoke', blend: 'normal', prio: 0, count: 14, life: [0.9, 1.5], delay: [0, 0.4], shape: { type: 'rect', w: game.w, h: 24 }, speed: [30, 90],
+        dir: PI / 2, spread: 0.3, drag: 0.8, size: [30, 46], sizeEnd: [60, 90], rot: [0, TAU], spin: [-0.6, 0.6], colors: [0x8a7f99, 0x4a4258],
+        alpha: 0.35, fadeIn: 0.2, fadeOut: 0.6,
+      },
+      game.w / 2, -10,
+    );
+    this.buzz('warning');
+    return { impact: 0, duration: 2.2 };
+  }
+
+  /** Boss touching down (B-02): T3 shake, a 66 ms hit-stop, a ground ring and a cloud of dust. */
+  bossLanding(x: number, y: number, o: FxOpts = {}): FxTimeline {
+    const s = o.scale ?? 1;
+    const c = o.color ?? 0xe6d2b0;
+    fxShake(Trauma.t3);
+    this.freeze?.freeze(0.066, 0);
+    this.shockwave(x, y, { color: c, radius: 230, scale: s });
+    this.dustPuff(x, y, { color: c, scale: 1.7 * s });
+    this.burst(
+      {
+        tex: 'smoke', blend: 'normal', prio: 2, count: 12, life: [0.5, 0.9], shape: { type: 'rect', w: 160, h: 16 }, speed: [60, 190], dir: -PI / 2,
+        spread: 1.35, drag: 2.6, gravity: -20, size: [40, 60], sizeEnd: [90, 130], rot: [0, TAU], spin: [-1, 1],
+        colors: [lighten(c, 0.2), c, darken(c, 0.4)], alpha: 0.6, fadeIn: 0.08, fadeOut: 0.6,
+      },
+      x, y, { scale: s },
+    );
+    this.buzz('medium');
+    return { impact: 0, duration: 0.9 };
+  }
+
+  /**
+   * Boss death (B-04): a hit-stop into slow motion, six small blasts scattering over the boss with a
+   * shake that ramps up, then the final blast (flash, shockwaves, T5 shake, 120+ particles) at
+   * `timeline.impact`. The boss sprite, when given, flickers white and red until then and `onFinal`
+   * should hide it. Drop the loot and start the victory fanfare at `impact`.
+   */
+  bossDeath(x: number, y: number, o: BossDeathOpts = {}): FxTimeline {
+    const s = o.scale ?? 1;
+    const c = o.color ?? 0xff8a2a;
+    const r = (o.radius ?? 80) * s;
+    // Every beat is a timer on the scene clock, which a hit-stop slows: the whole sequence follows the slow motion.
+    // One cooldown after the opening freeze event ends (about 0.55 s), so the final blast may freeze again.
+    const final = 1.0;
+    this.freeze?.freezeThenSlow(0.15, 0.4, 0.3);
+    for (let i = 0; i < 6; i++) {
+      this.after(i * 0.09, () => {
+        const a = rand(0, TAU);
+        const d = r * Math.sqrt(Math.random());
+        this.miniBlast(x + Math.cos(a) * d, y + Math.sin(a) * d, c, s);
+        fxShake(0.25 + i * 0.04);
+        this.buzz('tap');
+      });
+    }
+    const target = o.target;
+    if (target) {
+      for (let i = 0; i < 7; i++) {
+        this.after(i * 0.06, () => {
+          if (!target.destroyed) hitFlash(this.tweens, target, { color: i % 2 === 0 ? 0xffffff : 0xff4d5e, ms: 60, peak: 0.8 });
+        });
+      }
+    }
+    this.after(final, () => {
+      this.screen.flash(W, 0.45, 220);
+      fxShake(Trauma.t5);
+      this.freeze?.freezeThenSlow(0.2, 0.4, 0.3);
+      this.buzz('jackpot');
+      this.bossFinalBlast(x, y, c, s);
+      o.onFinal?.();
+    });
+    return { impact: final, duration: final + 1.7 };
+  }
+
+  /** The big blast that ends a boss: 120+ particles, two shockwaves, spawned all at once at the impact moment. */
+  private bossFinalBlast(x: number, y: number, c: number, s: number): void {
+    const m: BurstMods = { scale: s };
+    const hot = lighten(c, 0.65);
+    this.burst(
+      { tex: 'glow', prio: 3, count: 1, life: 0.4, size: 120, sizeEnd: 420, colors: [W, hot, c], alpha: 1, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'starburst', prio: 3, count: 1, life: 0.3, size: 180, sizeEnd: 460, rot: [0, TAU], colors: [W, hot], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
+      x, y, m,
+    );
+    this.shockwave(x, y, { color: c, radius: 340, scale: s });
+    this.shockwave(x, y, { color: W, radius: 250, scale: s, delay: 0.15 });
+    this.burst(
+      {
+        tex: 'dot', prio: 3, count: 50, life: [0.7, 1.4], speed: [200, 760], drag: 1.5, gravity: 520, size: [7, 15], sizeEnd: 2,
+        colors: [W, 0xffc34a, 0xff4a1a], fadeIn: 0, fadeOut: 0.5,
+      },
+      x, y, m,
+    );
+    this.burst(
+      {
+        tex: 'star', prio: 3, count: 16, life: [0.6, 1.1], speed: [240, 640], drag: 2.4, size: [28, 52], sizeEnd: [8, 14], spin: [-6, 6], rot: [0, TAU],
+        colors: [W, hot, c], fadeIn: 0, fadeOut: 0.5,
+      },
+      x, y, m,
+    );
+    this.burst(
+      {
+        tex: 'shard', blend: 'normal', prio: 3, count: 14, life: [0.8, 1.3], speed: [220, 620], gravity: 900, drag: 0.6, size: [16, 28], sizeEnd: [8, 14],
+        spin: [-9, 9], rot: [0, TAU], colors: [darken(c, 0.3), darken(c, 0.65)], fadeIn: 0, fadeOut: 0.4,
+      },
+      x, y, m,
+    );
+    this.burst(
+      {
+        tex: 'smoke', blend: 'normal', prio: 2, count: 14, life: [1.0, 1.6], shape: { type: 'circle', r: 50 }, speed: [40, 150], drag: 1.6, gravity: -45,
+        size: [70, 100], sizeEnd: [150, 210], rot: [0, TAU], spin: [-0.6, 0.6], colors: [0x4a3d52, 0x2a2133], alpha: 0.6, fadeIn: 0.15, fadeOut: 0.6,
+      },
+      x, y, m,
+    );
+  }
+
+  /** One of the small blasts that precede a boss's final explosion: about twelve particles. */
+  private miniBlast(x: number, y: number, c: number, s: number): void {
+    const m: BurstMods = { scale: s };
+    this.burst(
+      { tex: 'glow', prio: 2, count: 1, life: 0.2, size: 50, sizeEnd: 120, colors: [W, lighten(c, 0.6), c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'spark', prio: 2, count: 6, life: [0.18, 0.34], speed: [200, 480], drag: 4, alignVel: true, stretch: 0.002, size: [22, 36], sizeEnd: [6, 9], colors: [W, lighten(c, 0.5), c], fadeIn: 0 },
+      x, y, m,
+    );
+    this.burst(
+      {
+        tex: 'smoke', blend: 'normal', prio: 1, count: 3, life: [0.4, 0.7], shape: { type: 'circle', r: 10 }, speed: [30, 100], drag: 3, gravity: -30,
+        size: [28, 40], sizeEnd: [60, 84], rot: [0, TAU], colors: [0x6a5a70, 0x3a2f44], alpha: 0.6, fadeIn: 0.1, fadeOut: 0.6,
+      },
+      x, y, m,
+    );
+    this.burst(
+      { tex: 'dot', prio: 1, count: 2, life: [0.3, 0.5], speed: [80, 220], drag: 3, gravity: 300, size: [6, 10], sizeEnd: 2, colors: [W, c], fadeIn: 0 },
+      x, y, m,
+    );
+  }
+
+  /**
+   * Wave cleared (W-02): twenty confetti from the top, T3 shake and a 50 ms hit-stop. With `slowMo`
+   * the finish lingers at half speed for 0.2 s. The CLEAR banner and the loot fly-to-HUD are the caller's.
+   */
+  waveClear(o: WaveClearOpts = {}): FxTimeline {
+    this.confettiRain({ count: 20 });
+    fxShake(Trauma.t3);
+    this.freeze?.freeze(0.05, 0);
+    if (o.slowMo) this.freeze?.freeze(0.2, 0.5);
+    this.buzz('medium');
+    return { impact: 0, duration: 1.4 };
   }
 
   confettiRain(o: ConfettiOpts = {}): void {

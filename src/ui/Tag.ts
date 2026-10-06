@@ -2,7 +2,7 @@ import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
 import { Color, ButtonPalettes, type ButtonStyleId } from './theme';
 import type { Box } from './layoutMath';
 import { motion, popIn, TweenBag } from './motion';
-import { cacheStatic, drawPill, glossGradient, vGradient } from './shapes';
+import { drawPill, glossGradient, refreshCache, vGradient } from './shapes';
 import { fitLabel, uiLabel } from './text';
 
 export type TagShape = 'flag' | 'pill' | 'burst';
@@ -92,8 +92,7 @@ export class Tag extends Container {
     fitLabel(t, this.uiBox.w - 26, this.fontSize);
     t.position.y = -1;
     this.art.addChild(t);
-    if (this.art.isCachedAsTexture) this.art.updateCacheTexture();
-    else cacheStatic(this.art);
+    refreshCache(this.art);
   }
 
   /** Pop the sticker onto its spot with a little overshoot. */

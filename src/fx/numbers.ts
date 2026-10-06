@@ -3,6 +3,7 @@ import { Ease } from '@/core/tween';
 import { clamp, formatNumber } from '@/core/math';
 import { Color, FONT_FAMILY } from '@/ui/theme';
 import { popCurve, springWobble } from './curves';
+import { fxSettings } from './settings';
 
 export type NumStyle = 'damage' | 'crit' | 'dot' | 'heal' | 'gold' | 'hurt' | 'big';
 
@@ -62,7 +63,7 @@ export function ensureNumberFonts(): void {
 interface StyleDef {
   font: string;
   tint: number;
-  /** Rendered glyph height in design px at magnitude 1 and at the cap. */
+  /** Rendered glyph height in design px at magnitude 1 and at magnitude 1000 (it grows with log10). */
   size: readonly [number, number];
   life: number;
   rise: number;
@@ -81,12 +82,12 @@ interface StyleDef {
 
 const STYLES: Record<NumStyle, StyleDef> = {
   damage: {
-    font: FONT_PLAIN, tint: 0xffffff, size: [30, 46], life: 0.62, rise: 44, pop: [0.55, 1.15, 1], popSeconds: 0.14,
+    font: FONT_PLAIN, tint: 0xffffff, size: [30, 48], life: 0.6, rise: 40, pop: [0.6, 1.15, 1], popSeconds: 0.14,
     tilt: 0, prio: 0, prefix: '', suffix: '', scatter: 24,
   },
   crit: {
-    font: FONT_HOT, tint: 0xffffff, size: [46, 70], life: 0.95, rise: 58, pop: [0.5, 1.55, 1.2], popSeconds: 0.18,
-    tilt: 0.09, prio: 2, prefix: '', suffix: '!', scatter: 22,
+    font: FONT_HOT, tint: 0xffffff, size: [44, 64], life: 0.9, rise: 58, pop: [0.6, 1.5, 1.2], popSeconds: 0.18,
+    tilt: 0.052, prio: 2, prefix: '', suffix: '!', scatter: 22,
   },
   dot: {
     font: FONT_PLAIN, tint: 0xa6ec5a, size: [22, 30], life: 0.55, rise: 36, pop: [0.6, 1.1, 1], popSeconds: 0.12,
@@ -141,10 +142,11 @@ class Num {
 }
 
 /**
- * Pooled floating combat text. At most `cap` are alive at once: when full, low-priority numbers
- * (plain damage, dots) are skipped while crits and boss hits evict the oldest low-priority one, so
- * the numbers that matter are never lost. Motion is analytic in update(dt): no tweens, no per-frame
- * allocation.
+ * Pooled floating combat text. At most `cap` are alive at once: when full, a new number evicts the
+ * oldest one of the lowest priority that is not more important than itself (the guide drops the
+ * oldest), so crits and boss hits are never lost to a flurry of plain hits, while a plain hit finding
+ * only important numbers on screen is the one skipped. Motion is analytic in update(dt): no tweens,
+ * no per-frame allocation.
  */
 export class FloatingNumbers {
   readonly layer = new Container();
@@ -154,10 +156,11 @@ export class FloatingNumbers {
   created = 0;
   skipped = 0;
 
-  constructor(
-    parent: Container,
-    readonly cap = 40,
-  ) {
+  /** Maximum simultaneous numbers; lowering it lets the extras finish. */
+  cap: number;
+
+  constructor(parent: Container, cap = 40) {
+    this.cap = cap;
     this.layer.label = 'fx-numbers';
     this.layer.eventMode = 'none';
     parent.addChild(this.layer);
@@ -168,8 +171,10 @@ export class FloatingNumbers {
   }
 
   show(x: number, y: number, value: number | string, style: NumStyle = 'damage', o: NumberOpts = {}): void {
-    ensureNumberFonts();
     const def = STYLES[style];
+    const mode = fxSettings.numbers;
+    if (mode === 'off' || (mode === 'brief' && def.prio < 2)) return;
+    ensureNumberFonts();
 
     if (o.key !== undefined && typeof value === 'number') {
       for (const a of this.active) {
@@ -182,17 +187,11 @@ export class FloatingNumbers {
       }
     }
 
-    let n: Num | undefined;
-    if (this.active.length >= this.cap) {
-      if (def.prio < 2) {
-        this.skipped++;
-        return;
-      }
-      let victim = this.active.findIndex((a) => a.def.prio < 2);
-      if (victim < 0) victim = 0;
-      this.recycle(this.active.splice(victim, 1)[0] as Num);
+    if (this.active.length >= this.cap && !this.evictFor(def.prio)) {
+      this.skipped++;
+      return;
     }
-    n = this.pools.get(def.font)?.pop();
+    let n = this.pools.get(def.font)?.pop();
     if (!n) {
       n = new Num(def.font);
       this.created++;
@@ -244,12 +243,33 @@ export class FloatingNumbers {
     return { alive: this.active.length, created: this.created, skipped: this.skipped };
   }
 
+  /** Free one slot for a number of priority `prio`; false when everything alive outranks it. */
+  private evictFor(prio: number): boolean {
+    const list = this.active;
+    let victim = -1;
+    let lowest = prio + 1;
+    for (let i = 0; i < list.length; i++) {
+      const p = (list[i] as Num).def.prio;
+      // Strictly lower wins, so among equals the earliest (oldest) is kept as the victim.
+      if (p < lowest) {
+        lowest = p;
+        victim = i;
+      }
+    }
+    if (victim < 0) return false;
+    this.recycle(list[victim] as Num);
+    for (let i = victim + 1; i < list.length; i++) list[i - 1] = list[i] as Num;
+    list.length--;
+    return true;
+  }
+
   private setText(n: Num, value: number | string, def: StyleDef, o: NumberOpts): void {
     const mag = typeof value === 'number' ? Math.max(1, Math.abs(value)) : 1;
     const str = typeof value === 'number' ? formatNumber(value) : value;
     n.text.text = def.prefix + str.replace(/^-/, '') + def.suffix;
-    // Size grows with log10 of the magnitude so a 5-digit hit reads bigger than a 2-digit one.
-    const k = clamp(Math.log10(mag) / 5, 0, 1);
+    // Size grows with log10 of the magnitude (guide: 30 + 6 log10 px), so a 4-digit hit reads bigger
+    // than a 2-digit one.
+    const k = clamp(Math.log10(mag) / 3, 0, 1);
     const px = def.size[0] + (def.size[1] - def.size[0]) * k;
     n.scale = (px / BAKED) * (o.scale ?? 1) * 1.28;
   }

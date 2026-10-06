@@ -78,8 +78,9 @@ export class Rays {
     }
   }
 
+  /** No-op once the rays have expired or been cleared, so owners can keep calling it from a loop. */
   moveTo(x: number, y: number): void {
-    this.container.position.set(x, y);
+    if (this.alive) this.container.position.set(x, y);
   }
 
   setColor(c: number): void {

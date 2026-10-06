@@ -265,6 +265,12 @@ export class AdLimiter {
     this.save();
   }
 
+  /** QA helper: overwrite lifetime progress counters (skip the first-session / first-run guards). */
+  patch(p: Partial<Pick<AdCounters, 'sessions' | 'runsBegun' | 'runsCompleted' | 'lastAnyAdAt'>>): void {
+    Object.assign(this.counters, p);
+    this.save();
+  }
+
   /** Test/QA helper: forget everything except the current session. */
   reset(sessionId: string): void {
     this.run = {};

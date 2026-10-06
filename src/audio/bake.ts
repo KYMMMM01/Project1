@@ -16,6 +16,8 @@ export interface Baked {
   gainDb: number;
   /** Peak of the raw synth output before normalisation. */
   rawPeak: number;
+  /** The sound was still audible when the offline render ended: a tail was cut off, so `len` is too short. */
+  truncated: boolean;
 }
 
 /** Highest peak a baked buffer may reach even after a positive trim. */
@@ -60,10 +62,7 @@ export async function bakeVariant(
 
   const rng = new Rng(hashKey(key) + variant * 7919 + 1);
   const synth = new Synth(ctx, master, 0, () => rng.next(), false);
-  recipe.build(synth, {
-    i: variant,
-    j: (amount) => (variant === 0 ? 1 : 1 + (rng.next() * 2 - 1) * amount),
-  });
+  recipe.build(synth, { j: (amount) => (variant === 0 ? 1 : 1 + (rng.next() * 2 - 1) * amount) });
   const rendered = await ctx.startRendering();
 
   const ch: Float32Array<ArrayBuffer>[] = [];
@@ -74,6 +73,7 @@ export async function bakeVariant(
   for (const c of ch) for (let i = 0; i < c.length; i++) c[i] = (c[i] as number) * gain;
 
   const end = audibleEnd(ch, END_THRESHOLD);
+  const truncated = end >= length - Math.round(0.004 * sampleRate);
   const outLen = Math.max(32, Math.min(length, end + Math.round(TAIL_PAD_S * sampleRate)));
   const fade = Math.min(Math.round(FADE_S * sampleRate), outLen >> 2);
   const out = ctx.createBuffer(channels, outLen, sampleRate);
@@ -90,5 +90,5 @@ export async function bakeVariant(
     outCh.push(dst);
   }
   const stats = analyse(outCh, sampleRate, spectral);
-  return { buffer: out, stats, gainDb: gainToDb(gain), rawPeak: raw.peak };
+  return { buffer: out, stats, gainDb: gainToDb(gain), rawPeak: raw.peak, truncated };
 }

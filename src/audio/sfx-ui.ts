@@ -103,7 +103,7 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
     ms: [100, 350],
     variants: 3,
     rate: 0.025,
-    rule: { maxVoices: 6, minGap: 0.035, falloff: 0.12 },
+    rule: { maxVoices: 6, minGap: 0.03, falloff: 0.12 },
     build(s, v) {
       // Classic B5 -> E6 two-note blip, rounded: triangle body + sine octave, plus a quiet sparkle partial.
       const p = v.j(0.02);
@@ -220,43 +220,44 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
   },
   summon_epic: {
     cat: 'combat',
-    trim: 0,
+    trim: 1.5,
     len: 0.95,
     ms: [450, 900],
     build(s) {
       // Short riser, a weighted thump on the drop, a two-note chime (E6, A6) and a twinkle tail.
       const e = s.echo(0.08, 0.38, 0.32, 7000);
       whoosh(s, 400, 3600, 0, 0.22, 0.65, 2, 0.85);
-      thump(s, 240, 78, 0.2, 0.3, 1.1, 0.14);
+      thump(s, 240, 78, 0.2, 0.3, 0.7, 0.14, 0.4);
       s.noise({ at: 0.2, dur: 0.1, v: 0.35, s: 0.01, filter: { t: 'lowpass', f: 3500, f2: 500, sw: 0.1 } });
-      bell(s, hz('E6'), 0.21, 0.45, 0.85, { bus: e, amt: 0.5 });
-      bell(s, hz('A6'), 0.3, 0.45, 0.75, { bus: e, amt: 0.5 });
-      sparkles(s, 0.32, 6, 0.3, [hz('E7'), hz('A7'), hz('B7'), hz('C7')], 0.22, 0.14, { bus: e, amt: 0.4 });
-      s.noise({ at: 0.3, dur: 0.25, v: 0.07, a: 0.02, s: 0.05, filter: { t: 'highpass', f: 7000 } });
+      bell(s, hz('E6'), 0.21, 0.45, 1.0, { bus: e, amt: 0.5 });
+      bell(s, hz('A6'), 0.3, 0.45, 0.9, { bus: e, amt: 0.5 });
+      sparkles(s, 0.32, 6, 0.3, [hz('E7'), hz('A7'), hz('B7'), hz('C7')], 0.18, 0.14, { bus: e, amt: 0.4 });
     },
   },
   summon_legendary: {
     cat: 'big',
-    trim: -1,
+    trim: 0,
     len: 1.7,
-    ms: [800, 1450],
+    ms: [800, 1550],
     stereo: true,
     build(s) {
       // Pull-in riser (noise + saw sweep), sub thump on the hit, a rising C-major arpeggio that
       // blooms into a detuned-saw chord, with a high shimmer in a short room.
       const rv = s.reverb(0.55, 0.28);
       const e = s.echo(0.09, 0.4, 0.3, 7000);
-      whoosh(s, 300, 5200, 0, 0.38, 0.8, 2.2, 0.9);
-      s.tone({ w: 'sawtooth', f: 140, f2: 620, sw: 0.38, dur: 0.4, v: 0.2, a: 0.1, filter: { t: 'lowpass', f: 600, f2: 3500, sw: 0.38 } });
+      whoosh(s, 300, 5200, 0, 0.38, 0.5, 2.2, 0.9);
+      s.tone({ w: 'sawtooth', f: 140, f2: 620, sw: 0.38, dur: 0.4, v: 0.12, a: 0.1, filter: { t: 'lowpass', f: 600, f2: 3500, sw: 0.38 } });
       thump(s, 110, 42, 0.38, 0.5, 0.9, 0.3, 0.5);
-      s.noise({ at: 0.38, dur: 0.28, v: 0.55, s: 0.01, filter: { t: 'lowpass', f: 5200, f2: 420, sw: 0.25 } });
+      s.noise({ at: 0.38, dur: 0.2, v: 0.4, s: 0.01, filter: { t: 'lowpass', f: 5200, f2: 700, sw: 0.18 } });
+      ['C7', 'E7', 'G7', 'C8'].forEach((n, k) => bell(s, hz(n), 0.38 + k * 0.04, 0.5, 0.45, { bus: e, amt: 0.5 }));
       ['C5', 'E5', 'G5', 'C6'].forEach((n, k) => {
         const at = 0.38 + k * 0.065;
-        chime(s, hz(n), at, 0.5, 0.65, { bus: rv, amt: 0.6 });
-        s.tone({ w: 'sawtooth', f: hz(n), at: at + 0.02, dur: 0.6, v: 0.09, a: 0.03, uni: [-9, 9], filter: { t: 'lowpass', f: 2600 }, pan: k % 2 ? 0.35 : -0.35 });
+        chime(s, hz(n), at, 0.5, 0.55, { bus: rv, amt: 0.6 });
+        bell(s, hz(n) * 2, at + 0.01, 0.5, 0.6, { bus: rv, amt: 0.5 });
+        s.tone({ w: 'sawtooth', f: hz(n), at: at + 0.02, dur: 0.6, v: 0.05, a: 0.03, uni: [-9, 9], filter: { t: 'lowpass', f: 1900 }, pan: k % 2 ? 0.35 : -0.35 });
       });
-      sparkles(s, 0.55, 9, 0.5, [hz('C7'), hz('E7'), hz('G7'), hz('B6'), hz('D7'), hz('C8')], 0.24, 0.18, { bus: e, amt: 0.5 });
-      s.noise({ at: 0.45, dur: 0.6, v: 0.09, a: 0.05, s: 0.05, trem: { rate: 18, depth: 0.8 }, filter: { t: 'highpass', f: 7500 } });
+      sparkles(s, 0.55, 14, 0.55, [hz('C7'), hz('E7'), hz('G7'), hz('B6'), hz('D7'), hz('C8')], 0.5, 0.2, { bus: e, amt: 0.5 });
+      s.noise({ at: 0.4, dur: 0.75, v: 0.3, a: 0.05, s: 0.05, trem: { rate: 18, depth: 0.8 }, filter: { t: 'highpass', f: 7500 } });
     },
   },
   summon_mythic: {
@@ -280,11 +281,14 @@ export const UI_RECIPES: Partial<Record<SfxId, Recipe>> = {
         const at = 0.66 + k * 0.06;
         s.tone({ w: 'sawtooth', f: hz(n), at, dur: 1.1, v: 0.085, a: 0.04, uni: [-10, 10], filter: { t: 'lowpass', f: 3500, f2: 6500, sw: 0.5 }, pan: (k - 2) * 0.3, send: { bus: rv, amt: 0.5 } });
         chime(s, hz(n) * 2, at, 0.8, 0.5, { bus: e, amt: 0.5 });
+        bell(s, hz(n) * 2, at + 0.01, 0.7, 0.4, { bus: e, amt: 0.5 });
       });
+      ['C7', 'E7', 'G7', 'C8', 'E8'].forEach((n, k) => bell(s, hz(n), 0.62 + k * 0.05, 0.7, 0.4, { bus: e, amt: 0.5 }));
       ['C7', 'E7', 'G7', 'B7', 'D8', 'E7', 'G7', 'C8', 'E8'].forEach((n, k) => {
         s.tone({ f: hz(n), at: 0.75 + k * 0.05, dur: 0.5, v: 0.25, a: 0.003, trem: { rate: 12, depth: 0.5 }, pan: k % 2 ? 0.5 : -0.5, send: { bus: e, amt: 0.6 } });
       });
-      s.noise({ at: 0.62, dur: 1.1, v: 0.1, a: 0.08, s: 0.05, trem: { rate: 16, depth: 0.8 }, filter: { t: 'highpass', f: 8000 } });
+      s.noise({ at: 0.62, dur: 1.1, v: 0.2, a: 0.08, s: 0.05, trem: { rate: 16, depth: 0.8 }, filter: { t: 'highpass', f: 8000 } });
+      sparkles(s, 0.7, 14, 0.8, [hz('C8'), hz('E8'), hz('G7'), hz('B7'), hz('D8')], 0.3, 0.2, { bus: e, amt: 0.5 });
     },
   },
 

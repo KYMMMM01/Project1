@@ -17,7 +17,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     build(s, v) {
       // Airy whip: a fast upward band-pass sweep of noise, a short string twang and a nock tick.
       const p = v.j(0.06);
-      whoosh(s, 1500 * p, 5200 * p, 0, 0.1, 0.9, 1.8, 0.25);
+      whoosh(s, 1200 * p, 4200 * p, 0, 0.1, 0.9, 1.8, 0.25);
       s.tone({ w: 'triangle', f: 300 * p, f2: 255 * p, sw: 0.04, dur: 0.06, v: 0.4 });
       tick(s, 0, 3200, 0.008, 0.45, 2);
     },
@@ -62,9 +62,9 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     build(s, v) {
       // Glassy tick: a very short inharmonic FM bell plus a high partial and an icy noise tick.
       const p = v.j(0.05);
-      s.tone({ f: 3136 * p, fm: { ratio: 2.4, idx: 1.6, idx2: 0, idxT: 0.05 }, dur: 0.11, v: 0.7, s: 0.01 });
-      s.tone({ f: 4699 * p, dur: 0.05, v: 0.22 });
-      tick(s, 0, 6500, 0.008, 0.55, 2);
+      s.tone({ f: 2349 * p, fm: { ratio: 2.4, idx: 1.6, idx2: 0, idxT: 0.05 }, dur: 0.11, v: 0.7, s: 0.01 });
+      s.tone({ f: 3520 * p, dur: 0.05, v: 0.22 });
+      tick(s, 0, 4000, 0.008, 0.55, 2);
     },
   },
   shoot_lightning: {
@@ -104,8 +104,8 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     build(s, v) {
       // Fast swish: two overlapping high band-pass sweeps (two claws) over a short body.
       const p = v.j(0.06);
-      whoosh(s, 2400 * p, 6500 * p, 0, 0.065, 0.9, 1.4, 0.3);
-      whoosh(s, 3000 * p, 7000 * p, 0.045, 0.075, 0.8, 1.4, 0.3);
+      whoosh(s, 1400 * p, 3600 * p, 0, 0.065, 0.9, 1.3, 0.3);
+      whoosh(s, 1700 * p, 4000 * p, 0.045, 0.075, 0.8, 1.3, 0.3);
       s.tone({ w: 'triangle', f: 520 * p, f2: 260, sw: 0.05, dur: 0.06, v: 0.18 });
     },
   },
@@ -117,7 +117,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     ms: [45, 100],
     variants: 3,
     rate: 0.06,
-    rule: { maxVoices: 5, minGap: 0.045, falloff: 0.2 },
+    rule: { maxVoices: 4, minGap: 0.045, falloff: 0.2 },
     build(s, v) {
       // Must be pleasant at 15+/s: very short, band limited (no sub, no air), low level.
       const p = v.j(0.08);
@@ -132,7 +132,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     ms: [90, 220],
     variants: 3,
     rate: 0.05,
-    rule: { maxVoices: 4, minGap: 0.06, falloff: 0.15 },
+    rule: { maxVoices: 2, minGap: 0.09, falloff: 0.15 },
     build(s, v) {
       // Weight: low sine drop + triangle body, a mid noise slap and a click for definition.
       const p = v.j(0.06);
@@ -166,7 +166,7 @@ export const COMBAT_RECIPES: Partial<Record<SfxId, Recipe>> = {
     len: 1.0,
     ms: [300, 900],
     variants: 2,
-    rule: { maxVoices: 3, minGap: 0.08, falloff: 0.1 },
+    rule: { maxVoices: 3, minGap: 0.12, falloff: 0.1 },
     build(s, v) {
       // Noise burst through a falling low-pass (fireball), brown rumble, sub sine drop, mid crackle.
       const p = v.j(0.08);

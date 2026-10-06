@@ -16,7 +16,7 @@ export interface VoiceRule {
   falloff: number;
 }
 
-export const DENSITY_WINDOW = 0.25;
+const DENSITY_WINDOW = 0.25;
 const RING = 16;
 export const GLOBAL_VOICE_CAP = 24;
 

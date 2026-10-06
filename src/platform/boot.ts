@@ -12,6 +12,7 @@ import { createFallbackAdapter } from './fallback';
 import { normalizeLedger, type IapLedger } from './iapService';
 import type { Pauser } from './modal';
 import { resolveAdapter, PLATFORM_ID } from './resolve';
+import { preparePlatformRuntime } from './runtime';
 import { ads, analytics, iap, installAdapter, lifecycleSignals, platform, setPauser } from './registry';
 import { createStoragePersistence } from './storage';
 import type { PlatformAdapter } from './types';
@@ -63,7 +64,16 @@ export function getBootResult(): 'ok' | 'fallback' | null {
 
 /** Idempotent: every caller gets the same promise. Never rejects. */
 export function initPlatform(): Promise<PlatformServices> {
-  booting ??= doInit();
+  booting ??= doInit().catch((e: unknown) => {
+    // Unreachable in practice (every step above is guarded); the game must start no matter what.
+    try {
+      console.warn('[platform] boot failed, running on the safe fallback:', e);
+    } catch {
+      /* ignore */
+    }
+    bootResult = 'fallback';
+    return { platform, ads, iap, analytics };
+  });
   return booting;
 }
 
@@ -83,6 +93,8 @@ async function loadAndInit(): Promise<PlatformAdapter | null> {
 }
 
 async function doInit(): Promise<PlatformServices> {
+  // Best effort and idempotent; ideally main.ts already awaited it before game.init() (README).
+  await preparePlatformRuntime().catch(() => undefined);
   let adapter = await settleWithin<PlatformAdapter | null>(loadAndInit(), INIT_TIMEOUT_MS, null);
   if (adapter) {
     bootResult = 'ok';

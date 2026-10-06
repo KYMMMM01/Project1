@@ -1,5 +1,6 @@
 import { Container, Graphics, Point } from 'pixi.js';
 import { Scene } from '@/core/scene';
+import { uiTweens } from '@/core/tween';
 import { game } from '@/core/game';
 import { debugExpose } from '@/core/debug';
 import { Badge } from '@/ui/Badge';
@@ -42,6 +43,7 @@ export default class UiDemo extends Scene {
   private navTitle = uiLabel('', { size: 32 });
   private tapCount = 0;
   private pageBar: TabBar | null = null;
+  private scrollView: ScrollView | null = null;
 
   private readonly pages: PageDef[] = [
     { title: 'Buttons', build: (h) => this.pageButtons(h) },
@@ -69,6 +71,11 @@ export default class UiDemo extends Scene {
       rewards: (double: boolean) => this.openRewards(double),
       toast: (kind: ToastKind, text?: string) => toast(text ?? `Toast ${kind}`, kind),
       popups,
+      scrollInfo: () => (this.scrollView ? { y: this.scrollView.scrollY, max: this.scrollView.maxScrollY, dragging: this.scrollView.isDragging } : null),
+      tabs: () => this.pageBar,
+      /** Live UI tweens: must return to its idle baseline after a page is torn down. */
+      tweenCount: () => uiTweens.count,
+      scrollTo: (y: number, animated: boolean) => this.scrollView?.scrollTo(y, animated),
     });
   }
 
@@ -82,6 +89,7 @@ export default class UiDemo extends Scene {
     this.pageIndex = i;
     this.named.clear();
     this.pageBar = null;
+    this.scrollView = null;
     for (const c of this.host.removeChildren()) c.destroy({ children: true });
     this.navTitle.text = `${i + 1}/${this.pages.length}  ${this.pages[i]?.title ?? ''}`;
     this.pages[i]?.build(this.host);
@@ -198,6 +206,13 @@ export default class UiDemo extends Scene {
     const small = (['pause', 'fast_forward', 'question', 'check'] as IconName[]).map((n, i) => new IconButton({ icon: n, style: i % 2 ? 'success' : 'neutral', size: 64, shape: i < 2 ? 'round' : 'square' }));
     small.forEach((b) => host.addChild(b));
     hstack(small, { gap: 20, x: (game.w - (64 * 4 + 60)) / 2, y });
+    y += 86;
+    this.caption(host, 'long labels shrink to fit (never below 70%), then truncate', game.w / 2, y);
+    y += 22;
+    const fitA = new Button({ label: 'An extremely long English label', style: 'info', width: 330, height: 88, fontSize: 34 });
+    const fitB = new Button({ label: '아주아주 긴 한국어 버튼 이름입니다', style: 'purple', width: 330, height: 88, fontSize: 34 });
+    host.addChild(fitA, fitB);
+    hstack([fitA, fitB], { gap: 20, x: (game.w - 680) / 2, y });
   }
 
   /* ------------------------------------------------------------ page 1 */
@@ -343,24 +358,27 @@ export default class UiDemo extends Scene {
     const tg2 = new Toggle({ value: false });
     const slider = new Slider({ width: 380, value: 0.65 });
     this.mark('slider', slider);
+    tg1.position.set(96, y);
+    tg2.position.set(236, y);
+    slider.position.set(510, y);
+    host.addChild(tg1, tg2, slider);
+    y += 112;
+
     const stepper = new Stepper({ value: 3, min: 1, max: 9, width: 300 });
-    tg1.position.set(100, y);
-    tg2.position.set(240, y);
-    slider.position.set(520, y);
-    stepper.position.set(190, y + 100);
-    host.addChild(tg1, tg2, slider, stepper);
-    const stars = new Stars({ size: 92 });
-    stars.position.set(540, y + 118);
+    stepper.position.set(190, y);
+    host.addChild(stepper);
+    const stars = new Stars({ size: 84 });
+    stars.position.set(535, y + 14);
     host.addChild(stars);
-    const replay = new Button({ label: 'Stars', style: 'primary', width: 140, height: 56, fontSize: 24 });
-    replay.position.set(660, y + 60);
+    const replay = new Button({ label: 'Stars', style: 'primary', width: 150, height: 60, fontSize: 26 });
+    replay.position.set(190, y + 86);
     replay.onTap(() => {
       void stars.setEarned(0, false).then(() => stars.setEarned(3));
     });
     this.mark('stars_btn', replay);
     host.addChild(replay);
     void stars.setEarned(2, false);
-    y += 210;
+    y += 196;
 
     const tags = [
       new Tag({ text: 'NEW', style: 'danger', shape: 'pill' }),
@@ -369,20 +387,21 @@ export default class UiDemo extends Scene {
       new Tag({ text: '-30%', style: 'purple', shape: 'burst', tilt: 0.1 }),
     ];
     tags.forEach((t) => host.addChild(t));
-    hstack(tags, { gap: 34, x: 42, y: y - 50 });
-    const dots: Badge[] = [new Badge({ value: true }), new Badge({ value: 3 }), new Badge({ value: 28 }), new Badge({ value: 340 })];
-    dots.forEach((b, i) => {
-      const ic = drawIcon(['mission', 'gift', 'cards', 'shop'][i] as IconName, 56);
+    hstack(tags, { gap: 34, x: 40, y: y - 40 });
+    y += 120;
+
+    const badgeIcons: IconName[] = ['mission', 'gift', 'cards', 'shop'];
+    [true, 3, 28, 340].forEach((v, i) => {
       const c = new Container();
-      c.addChild(ic, b);
-      b.position.set(30, -26);
+      c.addChild(drawIcon(badgeIcons[i] as IconName, 60), new Badge({ value: v }));
+      (c.children[1] as Badge).position.set(30, -28);
+      c.position.set(66 + i * 96, y);
       host.addChild(c);
-      c.position.set(100 + i * 110, y + 80);
     });
-    const div = new Divider({ width: 300, label: 'Divider' });
-    div.position.set(540, y + 66);
+    const div = new Divider({ width: 280, label: 'Divider' });
+    div.position.set(570, y - 14);
     const spin = new LoadingSpinner({ size: 64 });
-    spin.position.set(540, y + 128);
+    spin.position.set(570, y + 50);
     host.addChild(div, spin);
   }
 
@@ -422,13 +441,13 @@ export default class UiDemo extends Scene {
       const top = this.top() + 90;
       if (size === 'small') {
         const row1 = RARITIES.map((r, i) => sample(r, 'small', i));
-        row1.forEach((c) => c.scale.set(0.93));
+        row1.forEach((c) => c.scale.set(0.86));
         row1.forEach((c) => holder.addChild(c));
-        const g = hstack(row1, { gap: 10, x: (game.w - (150 * 0.93 * 5 + 40)) / 2, y: top });
+        const g = hstack(row1, { gap: 8, x: (game.w - (150 * 0.86 * 5 + 32)) / 2, y: top });
         const row2 = [...RARITIES].reverse().map((r, i) => sample(r, 'small', i + 2));
-        row2.forEach((c) => c.scale.set(0.93));
+        row2.forEach((c) => c.scale.set(0.86));
         row2.forEach((c) => holder.addChild(c));
-        hstack(row2, { gap: 10, x: (game.w - (150 * 0.93 * 5 + 40)) / 2, y: top + g.h + 30 });
+        hstack(row2, { gap: 8, x: (game.w - (150 * 0.86 * 5 + 32)) / 2, y: top + g.h + 30 });
       } else if (size === 'medium') {
         const cards = RARITIES.map((r, i) => sample(r, 'medium', i));
         cards.forEach((c) => holder.addChild(c));
@@ -478,9 +497,10 @@ export default class UiDemo extends Scene {
     const view = new ScrollView({ width: 680, height: game.h - top - 40 - game.safeBottom, padding: 8 });
     view.position.set(20, top);
     const frame = new Graphics();
-    frame.roundRect(0, 0, 680, view.viewHeight, 28).fill({ color: 0x000000, alpha: 0.25 });
+    frame.roundRect(14, top - 6, 692, view.viewHeight + 12, 28).fill({ color: 0x000000, alpha: 0.28 });
     host.addChild(frame, view);
     this.mark('scroll', view);
+    this.scrollView = view;
     for (let i = 0; i < 30; i++) {
       const row = new Container();
       const bgR = new Graphics();
@@ -505,7 +525,7 @@ export default class UiDemo extends Scene {
   /* ------------------------------------------------------------ page 6 */
 
   private pageTabs(host: Container): void {
-    const body = uiLabel('Shop', { size: 56 });
+    const body = uiLabel('battle', { size: 56 });
     body.position.set(game.w / 2, game.h * 0.36);
     host.addChild(body);
     const seg = new SegmentTabs({

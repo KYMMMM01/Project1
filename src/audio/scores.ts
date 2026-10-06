@@ -9,6 +9,7 @@
  * fill into the loop point, so the 40 s loop never repeats the same arrangement twice in a row.
  */
 import type { MusicId } from './api';
+import { STEPS_PER_BAR } from './sequencer';
 import { noteToMidi } from './theory';
 
 export type MusicTrackId = Exclude<MusicId, 'none'>;
@@ -30,24 +31,23 @@ export const Inst = {
   lead2: 13,
   stab: 14,
 } as const;
-export const INST_COUNT = 15;
 
 /** Voice-budget priority: >= 2 may use the hard polyphony cap, 0-1 are shed first. */
 export const INST_PRIORITY: readonly number[] = [
   3, // kick
   2, // snare
   0, // hat
-  0, // openHat
+  2, // openHat
   0, // shaker
-  1, // tom
-  0, // crash
+  2, // tom
+  2, // crash
   1, // rim
   3, // bass
   2, // chord
   2, // pad
   1, // arp
   2, // lead
-  1, // lead2
+  2, // lead2
   2, // stab
 ];
 
@@ -71,7 +71,7 @@ export interface Score {
   fill(bar: number, step: number, sink: NoteSink): void;
 }
 
-export const STEPS = 16;
+export const STEPS = STEPS_PER_BAR;
 const NONE = -128;
 
 // ------------------------------------------------------------------ pattern helpers
@@ -105,7 +105,7 @@ function lineOf(tuples: ReadonlyArray<readonly [step: number, value: number, dur
 }
 
 /** A multi-bar melody addressed by (bar, step). */
-export class Grid {
+class Grid {
   readonly midi: Int16Array;
   readonly dur: Uint8Array;
 
@@ -117,22 +117,12 @@ export class Grid {
   has(bar: number, step: number): boolean {
     return (this.midi[bar * STEPS + step] as number) >= 0;
   }
-
-  /** Every [midi, bar, step] in the grid, for tests and analysis. */
-  entries(): Array<{ bar: number; step: number; midi: number; dur: number }> {
-    const out: Array<{ bar: number; step: number; midi: number; dur: number }> = [];
-    for (let i = 0; i < this.midi.length; i++) {
-      const m = this.midi[i] as number;
-      if (m >= 0) out.push({ bar: Math.floor(i / STEPS), step: i % STEPS, midi: m, dur: this.dur[i] as number });
-    }
-    return out;
-  }
 }
 
 type Notes = ReadonlyArray<readonly [step: number, note: string, dur: number]>;
 
 /** Build a melody from per-bar note lists: `{ 4: [[0,'E5',3], ...], 5: [...] }`. */
-export function melody(bars: number, perBar: Readonly<Record<number, Notes>>): Grid {
+function melody(bars: number, perBar: Readonly<Record<number, Notes>>): Grid {
   const g = new Grid(bars);
   for (const key of Object.keys(perBar)) {
     const bar = Number(key);
@@ -341,7 +331,7 @@ export const BATTLE: Score = {
     } else if ((step & 1) === 0) {
       let off = BAT_BASS_OCT[step >> 1] as number;
       if (phraseEnd && step === 14) off = 7;
-      sink.note(Inst.bass, ch.bass + off, step === 0 ? 1 : 0.8, 1.6, 0);
+      sink.note(Inst.bass, ch.bass + off, step === 0 ? 1 : 0.8, 1.4, 0);
     }
     if (!breakdown) {
       const kick = bar === 11 ? BAT_KICK_BUILD8 : chorus ? BAT_KICK_CHORUS : BAT_KICK_STD;
@@ -354,7 +344,7 @@ export const BATTLE: Score = {
     if (!breakdown || (step & 1) === 0) {
       const idx = BAT_ARP_IDX[step] as number;
       const accent = BAT_ARP_VEL[step & 3] as number;
-      sink.note(Inst.arp, ch.arp[idx] as number, breakdown ? 0.5 : accent * 0.55, breakdown ? 2.5 : 1.4, 1);
+      sink.note(Inst.arp, ch.arp[idx] as number, breakdown ? 0.5 : accent * 0.55, breakdown ? 2.5 : 1.1, 1);
     }
 
     // ---- layer 2: lead hook + snare
@@ -389,11 +379,12 @@ function bossChord(bass: string, stab: readonly string[], pad: readonly string[]
   return { bass: noteToMidi(bass), stab: midis(stab), pad: midis(pad) };
 }
 
-const X_DM = bossChord('D2', ['A3', 'D4', 'F4'], ['D3', 'A3', 'D4', 'F4']);
-const X_GM = bossChord('G2', ['Bb3', 'D4', 'G4'], ['G3', 'Bb3', 'D4', 'G4']);
-const X_BB = bossChord('Bb2', ['Bb3', 'D4', 'F4'], ['F3', 'Bb3', 'D4', 'F4']);
-const X_A = bossChord('A2', ['A3', 'C#4', 'E4'], ['E3', 'A3', 'C#4', 'E4']);
-const X_C = bossChord('C3', ['G3', 'C4', 'E4'], ['G3', 'C4', 'E4', 'G4']);
+// The ostinato sits in the D3 octave (like a distorted guitar), not D2: phone speakers cannot play 73 Hz.
+const X_DM = bossChord('D3', ['A3', 'D4', 'F4'], ['D3', 'A3', 'D4', 'F4']);
+const X_GM = bossChord('G3', ['Bb3', 'D4', 'G4'], ['G3', 'Bb3', 'D4', 'G4']);
+const X_BB = bossChord('Bb3', ['Bb3', 'D4', 'F4'], ['F3', 'Bb3', 'D4', 'F4']);
+const X_A = bossChord('A3', ['A3', 'C#4', 'E4'], ['E3', 'A3', 'C#4', 'E4']);
+const X_C = bossChord('C4', ['G3', 'C4', 'E4'], ['G3', 'C4', 'E4', 'G4']);
 
 const BOSS_CHORDS: readonly BossChord[] = [
   X_DM, X_DM, X_BB, X_A,

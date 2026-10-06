@@ -26,10 +26,10 @@ export interface SoundStats {
   highFrac: number;
 }
 
-export const SILENT_PEAK = 0.01;
-export const CLIP_PEAK = 0.99;
-export const ZERO_EDGE = 0.01;
-export const END_EDGE = 0.005;
+const SILENT_PEAK = 0.01;
+const CLIP_PEAK = 0.99;
+const ZERO_EDGE = 0.01;
+const END_EDGE = 0.005;
 /** Loudness integration window in seconds. */
 const LOUD_WINDOW = 0.2;
 
@@ -132,7 +132,7 @@ export function fft(re: Float64Array, im: Float64Array): void {
 const FFT_SIZE = 2048;
 
 /** Spectral centroid and low/high energy shares over the audible region, Hann-windowed frames. */
-export function spectrum(
+function spectrum(
   ch: readonly Float32Array[],
   sampleRate: number,
   start: number,

@@ -5,7 +5,7 @@ import { Ease } from '@/core/tween';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { motion, TweenBag } from './motion';
-import { bakeResolution, gradient, glossGradient, vGradient } from './shapes';
+import { bakeResolution, cacheStatic, gradient, glossGradient, vGradient } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { Color } from './theme';
 
@@ -120,6 +120,7 @@ export class ProgressBar extends Container {
       .fill(vGradient(0x1b1036, 0x2d1f5c))
       .stroke({ width: pad, color: Color.outline, alignment: 1 });
     trough.roundRect(-w / 2 + pad, -h / 2 + pad, w - pad * 2, h * 0.28, h * 0.14).fill({ color: 0x000000, alpha: 0.35 });
+    cacheStatic(trough);
     this.addChild(trough);
 
     const slice = (tex: Texture): NineSliceSprite => {
@@ -235,6 +236,7 @@ export class ProgressBar extends Container {
   }
 
   private apply(v: number): void {
+    this.target = v;
     this.setFill(v);
     this.setGhost(v);
     if (this.format) this.setLabel(this.format(v));
@@ -340,6 +342,7 @@ export class CooldownRing extends Container {
     track.circle(0, 0, r).fill(opts.trackColor ?? 0x2d1f5c);
     track.circle(0, 0, r - th).fill(Color.outline);
     track.circle(0, 0, r - th - 3).fill(0x241748);
+    cacheStatic(track);
     this.addChild(track);
 
     const vertexCount = (SEGMENTS + 1) * 2;

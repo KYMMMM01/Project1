@@ -71,7 +71,7 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
     cat: 'stinger',
     trim: -1,
     len: 2.9,
-    ms: [1500, 2400],
+    ms: [1500, 2200],
     stereo: true,
     build(s) {
       // Dread then impact: a sub that sinks, a swelling D-minor/tritone saw pad, a rising noise
@@ -95,24 +95,24 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
   mythic: {
     cat: 'stinger',
     trim: 1,
-    len: 3.2,
-    ms: [1600, 2800],
+    len: 2.6,
+    ms: [1600, 2200],
     stereo: true,
     build(s) {
       // The summon fantasy at full size: noise + saw riser, a sub drop with a saturated burst and a
       // G6 metal ping, a C-G-C supersaw pad swelling open, a C-E-G-C chime arpeggio and a high shimmer.
-      const rv = s.reverb(1.2, 0.35);
-      const e = s.echo(0.11, 0.45, 0.32, 8000);
+      const rv = s.reverb(0.7, 0.35);
+      const e = s.echo(0.1, 0.35, 0.3, 8000);
       whoosh(s, 300, 6000, 0, 0.5, 0.9, 2, 0.9);
       s.tone({ w: 'sawtooth', f: 110, f2: 440, sw: 0.5, dur: 0.55, v: 0.3, a: 0.15, filter: { t: 'lowpass', f: 400, f2: 5000, sw: 0.5 } });
       thump(s, 70, 30, 0.5, 0.8, 1.1, 0.5, 0.5);
       s.noise({ at: 0.5, dur: 0.5, v: 0.85, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 5000, f2: 300, sw: 0.5 } });
-      bell(s, hz('G6'), 0.5, 1.0, 0.5, { bus: rv, amt: 0.5 });
+      bell(s, hz('G6'), 0.5, 0.9, 0.5, { bus: rv, amt: 0.5 });
       ['C3', 'G3', 'C4'].forEach((n, k) => {
-        s.tone({ w: 'sawtooth', f: hz(n), at: 0.45, dur: 1.8, v: 0.2, a: 0.3, s: 0.9, r: 0.6, uni: [-12, 12], filter: { t: 'lowpass', f: 900, f2: 2200, sw: 1.0 }, pan: (k - 1) * 0.35, send: { bus: rv, amt: 0.4 } });
+        s.tone({ w: 'sawtooth', f: hz(n), at: 0.45, dur: 1.4, v: 0.2, a: 0.3, s: 0.9, r: 0.5, uni: [-12, 12], filter: { t: 'lowpass', f: 900, f2: 2200, sw: 1.0 }, pan: (k - 1) * 0.35, send: { bus: rv, amt: 0.4 } });
       });
-      ['C6', 'E6', 'G6', 'C7'].forEach((n, k) => chime(s, hz(n), 0.6 + k * 0.12, 0.9, 0.5, { bus: e, amt: 0.5 }));
-      sparkles(s, 1.0, 10, 1.0, [hz('E7'), hz('G7'), hz('C7'), hz('D7'), hz('B6')], 0.17, 0.22, { bus: e, amt: 0.5 });
+      ['C6', 'E6', 'G6', 'C7'].forEach((n, k) => chime(s, hz(n), 0.6 + k * 0.12, 0.75, 0.5, { bus: e, amt: 0.5 }));
+      sparkles(s, 0.95, 10, 0.8, [hz('E7'), hz('G7'), hz('C7'), hz('D7'), hz('B6')], 0.17, 0.2, { bus: e, amt: 0.5 });
     },
   },
   level_up: {
@@ -136,7 +136,7 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
     cat: 'stinger',
     trim: 0,
     len: 3.0,
-    ms: [1500, 2500],
+    ms: [1500, 2250],
     stereo: true,
     build(s) {
       // A rising 8-note run, a coin shower of 36 panned blips over a rattle bed, a big C-major

@@ -1,7 +1,7 @@
 import { Container, Graphics, Rectangle, type Text } from 'pixi.js';
 import { IconButton } from './IconButton';
 import type { Box } from './layoutMath';
-import { cacheStatic, drawPanel, drawRibbon, PanelColors, type PanelVariant, type RibbonColors } from './shapes';
+import { drawPanel, drawRibbon, PanelColors, refreshCache, type PanelVariant, type RibbonColors } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { ButtonPalettes, type ButtonStyleId } from './theme';
 
@@ -117,8 +117,7 @@ export class Panel extends Container {
 
   private refreshCache(): void {
     if (!this.cacheArt) return;
-    if (this.art.isCachedAsTexture) this.art.updateCacheTexture();
-    else cacheStatic(this.art);
+    refreshCache(this.art);
   }
 
 }

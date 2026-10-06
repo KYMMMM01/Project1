@@ -61,19 +61,6 @@ export function hsvToColor(h: number, s: number, v: number): number {
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 }
 
-/** Multiply each channel; used to dim a whole palette without changing its hue. */
-export function scaleColor(c: number, k: number): number {
-  const r = Math.min(255, Math.round(((c >> 16) & 0xff) * k));
-  const g = Math.min(255, Math.round(((c >> 8) & 0xff) * k));
-  const b = Math.min(255, Math.round((c & 0xff) * k));
-  return (r << 16) | (g << 8) | b;
-}
-
-/** Three-stop colour ramp, t in 0..1. */
-export function ramp3(a: number, b: number, c: number, t: number): number {
-  return t < 0.5 ? mixColor(a, b, t * 2) : mixColor(b, c, (t - 0.5) * 2);
-}
-
 /** "rgba()" string for a gradient stop that needs alpha (FillGradient stops are colour strings). */
 export function rgba(c: number, alpha: number): string {
   return `rgba(${(c >> 16) & 0xff},${(c >> 8) & 0xff},${c & 0xff},${alpha})`;

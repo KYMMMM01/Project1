@@ -11,7 +11,7 @@ import { impulseBuffer } from './synth';
 
 /** Base gains: music sits well under the effects so a pile of hits is never buried. */
 export const SFX_BASE = 1;
-export const MUSIC_BASE = 0.5;
+export const MUSIC_BASE = 0.22;
 const MASTER_GAIN = 0.85;
 
 export interface AudioGraph {
@@ -34,7 +34,9 @@ export function createGraph(ctx: BaseAudioContext): AudioGraph {
   const duckGain = ctx.createGain();
   const muteGain = ctx.createGain();
 
-  // Safety limiter, not a mastering compressor: the baked levels leave headroom, so it only acts on pile-ups.
+  // Safety limiter, not a mastering compressor: the baked levels leave headroom, so it only acts on
+  // pile-ups. A higher threshold with a hard ratio pumped less than -12 dB / 8:1 in the offline
+  // pile-up test (gain swing 2-4 dB against 4-5 dB), and keeps the worst case below clipping.
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -8;
   limiter.knee.value = 6;

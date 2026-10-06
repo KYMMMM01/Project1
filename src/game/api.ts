@@ -1,12 +1,12 @@
 /**
- * Public contract of the battle simulation.
+ * Public contract of the battle simulation. Rules: docs/명세_전투규칙.md.
  *
  * The simulation (src/game/sim) is pure logic: no rendering, no audio, no DOM, no Math.random.
  * Everything it does is driven by `step(dt)` and by the command methods below, and everything the
  * presentation layer needs is either readable state on the Battle object or an event on
  * `battle.events`. The renderer never mutates simulation state directly.
  *
- * Coordinates are field-space pixels (see ./geometry.ts). Time is in seconds.
+ * Coordinates are field-space pixels (see ./geometry.ts). Time is in simulated seconds.
  */
 import type { Emitter } from '@/core/events';
 import type { RarityId } from '@/ui/theme';
@@ -29,25 +29,24 @@ export type UnitId = (typeof UNIT_IDS)[number];
 
 export const ENEMY_IDS = [
   'cucumber', 'dust', 'drop', 'roomba', 'tangerine', 'balloon', 'balloon_small',
-  'clock', 'pill', 'cone', 'flea', 'spray', 'firecracker',
+  'clock', 'pill', 'cone', 'dryer', 'spray', 'firecracker',
   'boss_cucumber', 'boss_vacuum', 'boss_blender', 'boss_bath', 'boss_cloud', 'boss_needle',
 ] as const;
 export type EnemyId = (typeof ENEMY_IDS)[number];
 
 export const RELIC_IDS = [
   // common
-  'yarn_ball', 'laser_pointer', 'cardboard_box', 'bell_collar', 'fishing_rod', 'scratcher', 'mouse_toy', 'feather_wand',
+  'yarn_ball', 'glitter_ball', 'mouse_toy', 'cardboard_box', 'bell_collar', 'fishing_rod', 'scratcher', 'feather_wand',
   // rare
-  'cat_tower', 'kneading_cushion', 'cat_tunnel', 'heating_pad', 'piggy_bank', 'snack_stick', 'tuna_cans', 'window_perch',
+  'cat_tower', 'kneading_cushion', 'cat_tunnel', 'heating_pad', 'batteries', 'snack_stick', 'tuna_cans', 'window_perch',
   // epic
-  'clover_pot', 'silvervine', 'auto_feeder', 'glass_marble', 'nap_blanket', 'twin_bells', 'lucky_coin', 'sardine_crate',
+  'purr_pillow', 'silvervine', 'auto_feeder', 'glass_marble', 'nap_blanket', 'twin_bells', 'lucky_coin', 'sardine_crate',
   // legendary
-  'maneki_bank', 'nine_lives', 'shooting_star', 'golden_catnip', 'royal_crown', 'hourglass',
+  'sunny_spot', 'nine_lives', 'shooting_star', 'golden_catnip', 'royal_crown', 'hourglass',
 ] as const;
 export type RelicId = (typeof RELIC_IDS)[number];
 
 export type DamageType = 'physical' | 'magic';
-export type TargetMode = 'first' | 'strong' | 'near';
 
 export type EnemyTrait =
   | 'armored' // takes reduced physical damage
@@ -56,9 +55,9 @@ export type EnemyTrait =
   | 'swarm'
   | 'split' // spawns smaller enemies on death
   | 'haste_aura' // speeds up nearby enemies
-  | 'heal_aura' // heals nearby enemies
-  | 'shield' // ignores the first N hits
-  | 'evasive' // chance to dodge single-target hits
+  | 'heal_aura' // heals nearby enemies and makes them immune to slows
+  | 'shield' // absorbs damage before health
+  | 'weaken' // periodically halves the attack speed of the strongest unit
   | 'elite'
   | 'boss';
 
@@ -66,17 +65,21 @@ export type StatusKind = 'slow' | 'stun' | 'freeze' | 'burn' | 'poison' | 'bleed
 
 export type BossAbilityId =
   | 'enrage' // boss_cucumber: faster as health drops
-  | 'inhale' // boss_vacuum: all units attack slower, boss gains a shield
+  | 'inhale' // boss_vacuum: all units weakened, boss takes less damage
   | 'whirl' // boss_blender: every enemy speeds up
   | 'splash' // boss_bath: spawns drops and soaks cells
-  | 'lightning' // boss_cloud: stuns a 2x2 block of cells
+  | 'lightning' // boss_cloud: zaps a 2x2 block of cells
   | 'vaccinate'; // boss_needle: enemies ignore slows, boss heals
+
+/** A cell hazard: units standing on the cell cannot attack until it ends or they are moved away. */
+export type HazardKind = 'wet' | 'zap';
 
 export type WaveKind = 'normal' | 'elite' | 'boss';
 
 export type BattleMode = 'tutorial' | 'chapter' | 'daily' | 'endless';
 
-export type DailyModifierId = 'rich' | 'swarm' | 'giants' | 'lucky_day' | 'rush' | 'glass_cannon' | 'no_rangers' | 'toy_box';
+export type DailyModifierId =
+  | 'rich' | 'swarm' | 'giants' | 'lucky_day' | 'rush' | 'glass_cannon' | 'no_rangers' | 'toy_box' | 'sunny_day' | 'long_laser';
 
 // ───────────────────────────── static data shapes ─────────────────────────────
 
@@ -96,8 +99,8 @@ export interface UnitStats {
 /** A permanent bonus a unit gains from its collection level (levels 4, 7 and 10). */
 export interface UnitPerk {
   level: number;
-  /** i18n key describing the perk in one line. */
-  textKey: string;
+  /** Ready-to-show one-line description in the current language (built from data values). */
+  text(): string;
 }
 
 export interface UnitDef {
@@ -105,14 +108,13 @@ export interface UnitDef {
   classId: ClassId;
   rarity: RarityId;
   damageType: DamageType;
-  /** i18n keys: `unit.<id>.name`, `unit.<id>.desc` (one line), `unit.<id>.skill` (what makes it special). */
+  /** i18n keys: `unit.<id>.name`, `unit.<id>.desc` (flavour line). */
   nameKey: string;
   descKey: string;
-  skillKey: string;
+  /** What makes the unit special, in the current language, with its real numbers. */
+  skillText(): string;
   /** Level-1 stats before any modifier. */
   base: UnitStats;
-  /** True when the unit never attacks by itself (pure aura). */
-  passiveOnly: boolean;
   /** Projectile flight speed in px/s, or 0 for attacks that land instantly. */
   projectileSpeed: number;
   perks: UnitPerk[];
@@ -142,33 +144,26 @@ export interface RelicDef {
   id: RelicId;
   rarity: Exclude<RarityId, 'mythic'>;
   nameKey: string;
-  descKey: string;
-}
-
-export interface SynergyTierDef {
-  /** Units of the class needed on the board. */
-  need: number;
-  /** i18n key of the bonus description for this tier. */
-  textKey: string;
+  /** Description in the current language with the real numbers filled in. */
+  descText(): string;
 }
 
 export interface ClassDef {
   id: ClassId;
   nameKey: string;
   roleKey: string;
-  tiers: [SynergyTierDef, SynergyTierDef, SynergyTierDef];
+  /** Bonus description for synergy tiers 1..3 in the current language. */
+  tierText(tier: 1 | 2 | 3): string;
 }
 
 // ───────────────────────────── run setup ─────────────────────────────
 
 /** What the player brings into a run from the meta game. */
 export interface Loadout {
-  /** Collection level 1..10 per unit. Missing entries count as level 1. */
+  /** Collection level 1..10 per base unit. Missing entries count as level 1. Mythics use their class legendary's level. */
   unitLevels: Partial<Record<UnitId, number>>;
   /** Training-ground levels by id (see game/data/training). Missing = 0. */
   training: Record<string, number>;
-  /** Mythic units the player may awaken into. */
-  unlockedMythics: UnitId[];
   /** Relics that may be offered this run. */
   relicPool: RelicId[];
 }
@@ -178,13 +173,21 @@ export interface BattleInit {
   mode: BattleMode;
   /** 1-based chapter number. */
   chapter: number;
-  /** 0 normal, 1 hard, 2 nightmare. */
-  difficulty: number;
+  /** 0..5 — cumulative difficulty rules ("stakes"). */
+  stake: number;
   loadout: Loadout;
   modifiers?: DailyModifierId[];
-  /** Pre-run boosts (rewarded-ad start bonus). */
+  /** Pre-run snack: extra starting fish / purr, or a guaranteed rare-or-better first summon. */
   bonusFish?: number;
-  bonusClover?: number;
+  bonusPurr?: number;
+  firstSummonRarePlus?: boolean;
+}
+
+/** Opaque wave-start save produced by `snapshot()` and accepted by `createBattle(init, snapshot)`. */
+export interface BattleSnapshot {
+  simVersion: number;
+  wave: number;
+  data: string;
 }
 
 // ───────────────────────────── live state ─────────────────────────────
@@ -195,14 +198,19 @@ export interface UnitState {
   cell: number;
   /** Progress toward the next attack, 0 (just fired) .. 1 (ready). */
   charge: number;
-  /** Seconds this unit remains unable to act (soaked / stunned by a boss). 0 when active. */
-  disabled: number;
-  targetMode: TargetMode;
+  /** True while the unit stands on a hazard cell and cannot attack. */
+  blocked: boolean;
+  /** Seconds of "weakened" (half attack speed) left; 0 when normal. */
+  weakened: number;
+  /** True while the unit stands on a sunbeam cell. */
+  sunlit: boolean;
   /** Final stats after level, synergies, relics, upgrades and aura buffs. Refreshed by the sim. */
   stats: UnitStats;
-  /** Sum of adjacency/aura attack-speed and damage bonuses currently received (for buff icons). */
+  /** Aura bonuses currently received from neighbours (for buff icons), as fractions. */
   buffAttackSpeed: number;
   buffDamage: number;
+  /** True when a neighbouring bell kitten shields this cell from hazards. */
+  shielded: boolean;
   kills: number;
   damageDealt: number;
 }
@@ -210,7 +218,7 @@ export interface UnitState {
 export interface EnemyState {
   readonly uid: number;
   readonly id: EnemyId;
-  /** Distance travelled along the loop since spawn (keeps growing; position uses it modulo lap). */
+  /** Distance travelled along the loop since spawn (position uses it modulo one lap). */
   travelled: number;
   x: number;
   y: number;
@@ -218,11 +226,11 @@ export interface EnemyState {
   angle: number;
   hp: number;
   maxHp: number;
-  /** Hits the shield will still absorb (0 = no shield). */
+  /** Remaining / initial absorb shield (0 = none). */
   shield: number;
+  maxShield: number;
   /** Current movement slow, 0..1. */
   slow: number;
-  /** Flags for status visuals. */
   stunned: boolean;
   frozen: boolean;
   burning: boolean;
@@ -231,6 +239,10 @@ export interface EnemyState {
   armorBroken: boolean;
   vulnerable: boolean;
   hasted: boolean;
+  /** True while within the laser pointer's focus radius. */
+  focused: boolean;
+  /** Bosses/elites: true once below half health. */
+  enraged: boolean;
   /** Seconds since spawn (drives walk animation phase). */
   age: number;
 }
@@ -252,18 +264,36 @@ export interface ZoneState {
   x: number;
   y: number;
   radius: number;
-  /** Seconds remaining / total. */
   timeLeft: number;
   duration: number;
+}
+
+export interface HazardState {
+  cell: number;
+  kind: HazardKind;
+  timeLeft: number;
+  duration: number;
+}
+
+export interface LaserState {
+  active: boolean;
+  x: number;
+  y: number;
+  /** Seconds of focus left while active. */
+  timeLeft: number;
+  duration: number;
+  /** Seconds until it can be used again (0 = ready). */
+  cooldown: number;
+  cooldownTotal: number;
+  /** Radius within which enemies count as focused. */
+  radius: number;
 }
 
 export type BattlePhase = 'prep' | 'wave' | 'choice' | 'won' | 'lost';
 
 export type PendingChoice =
   | { kind: 'summon'; options: UnitId[] }
-  | { kind: 'relic'; options: RelicId[]; freeRerolls: number; adRerollUsed: boolean };
-
-export type CapsuleOutcome = 'fish' | 'rare' | 'epic' | 'legendary' | 'jackpot';
+  | { kind: 'relic'; options: RelicId[]; freeRerolls: number; paidRerollUsed: boolean; picksLeft: number };
 
 export interface OddsRow<K extends string> {
   key: K;
@@ -272,13 +302,10 @@ export interface OddsRow<K extends string> {
 }
 
 export interface PityInfo {
-  /** Consecutive commons so far / how many trigger the guarantee. */
-  commonStreak: number;
-  commonLimit: number;
-  /** Summons since the last epic-or-better / threshold after which the bonus starts growing. */
+  /** Summons since the last epic-or-better / the count at which the bonus starts growing. */
   epicDry: number;
   epicDryLimit: number;
-  /** Extra epic-or-better chance currently added by the soft pity (0..1). */
+  /** Extra epic-or-better chance currently added (0..1). */
   epicBonus: number;
 }
 
@@ -290,7 +317,7 @@ export interface WavePreviewEntry {
 export interface RunStats {
   mode: BattleMode;
   chapter: number;
-  difficulty: number;
+  stake: number;
   seed: number;
   victory: boolean;
   /** Highest wave fully cleared. */
@@ -300,6 +327,7 @@ export interface RunStats {
   bossesKilled: number;
   summons: number;
   merges: number;
+  molts: number;
   awakenings: number;
   relics: RelicId[];
   /** Highest rarity the player owned at any point. */
@@ -308,6 +336,11 @@ export interface RunStats {
   /** Simulated seconds played. */
   duration: number;
   revived: boolean;
+  /**
+   * How lucky the paid summons were, 0..1: the share of equally long summon sequences that would
+   * have rolled worse (0.5 = average). Shown on the result screen so bad luck reads as luck.
+   */
+  summonLuck: number;
   /** Damage dealt per unit type over the run. */
   damageByUnit: Partial<Record<UnitId, number>>;
 }
@@ -315,7 +348,7 @@ export interface RunStats {
 /** Why a command was refused. `null` from a command means it succeeded. */
 export type Fail =
   | 'not_enough_fish'
-  | 'not_enough_clover'
+  | 'not_enough_purr'
   | 'board_full'
   | 'choice_pending'
   | 'not_in_battle'
@@ -324,7 +357,9 @@ export type Fail =
   | 'max_level'
   | 'not_legendary'
   | 'synergy_too_low'
-  | 'mythic_locked'
+  | 'molt_limit'
+  | 'on_cooldown'
+  | 'not_available'
   | 'already_used'
   | 'nothing_to_do';
 
@@ -333,11 +368,11 @@ export type DropAction = 'move' | 'swap' | 'merge' | 'none';
 
 // ───────────────────────────── events ─────────────────────────────
 
-export type SummonSource = 'button' | 'choice' | 'capsule' | 'relic' | 'twin' | 'script';
+export type SummonSource = 'button' | 'choice' | 'relic' | 'twin' | 'script';
 
 export type CurrencyReason =
-  | 'start' | 'kill' | 'wave' | 'act' | 'boss' | 'sell' | 'relic' | 'capsule' | 'interest' | 'unit'
-  | 'summon' | 'upgrade' | 'awaken';
+  | 'start' | 'kill' | 'wave' | 'call' | 'act' | 'boss' | 'sell' | 'relic' | 'unit'
+  | 'summon' | 'upgrade' | 'awaken' | 'molt';
 
 export interface StrikePoint {
   x: number;
@@ -355,15 +390,17 @@ export interface BattleEvents {
   swap: { a: UnitState; b: UnitState };
   /** `consumed` were removed; `result` now stands in `cell`. `jumped` = skipped a rarity (snack stick). */
   merge: { consumed: [UnitState, UnitState]; result: UnitState; cell: number; fromCell: number; jumped: boolean };
+  /** A unit changed class at the same rarity. */
+  molt: { from: UnitState; result: UnitState; cell: number };
   awaken: { from: UnitState; result: UnitState; cell: number };
-  sell: { unit: UnitState; cell: number; fish: number; clover: number };
+  sell: { unit: UnitState; cell: number; fish: number; purr: number };
 
   /** A unit started an attack. `projectile` is set for travelling shots. */
   attack: { unit: UnitState; targetUid: number; tx: number; ty: number; projectile: ProjectileState | null };
   /**
    * An instant multi-target effect to draw (cleave arc, chain lightning, piercing line, roar,
-   * explosion, meteor...). `unitId` tells the renderer which visual to use; damage arrives as
-   * separate `hit` events.
+   * explosion, coin rain, shooting star...). `unitId` / `relic` tell the renderer which visual to
+   * use; damage arrives as separate `hit` events.
    */
   strike: { unitId: UnitId | null; relic: RelicId | null; x: number; y: number; radius: number; points: StrikePoint[] };
   projectileEnd: { projectile: ProjectileState; x: number; y: number; hit: boolean };
@@ -378,35 +415,49 @@ export interface BattleEvents {
     /** Unit type that caused it, or null for relic / damage-over-time ticks. */
     unitId: UnitId | null;
     dot: StatusKind | null;
+    /** Part of `amount` that was soaked by a shield. */
+    absorbed: number;
     killed: boolean;
   };
   status: { enemy: EnemyState; kind: StatusKind; duration: number };
   /** Enemy was dragged backwards along the path by `distance` px. */
   pull: { enemy: EnemyState; distance: number };
-  shieldHit: { enemy: EnemyState; left: number };
-  evade: { enemy: EnemyState };
+  shieldBreak: { enemy: EnemyState };
   heal: { enemy: EnemyState; amount: number };
+  enrage: { enemy: EnemyState };
 
   enemySpawn: { enemy: EnemyState };
-  enemyDie: { enemy: EnemyState; x: number; y: number; fish: number; clover: number; killer: UnitState | null };
-  bossAbility: { enemy: EnemyState; ability: BossAbilityId; cells: number[]; duration: number };
-  /** A unit was soaked/stunned (boss ability or elite) or recovered (`duration` 0). */
-  unitDisabled: { unit: UnitState; duration: number };
+  enemyDie: { enemy: EnemyState; x: number; y: number; fish: number; purr: number; killer: UnitState | null };
+  bossAbility: { enemy: EnemyState; ability: BossAbilityId; duration: number };
+  /** Cells that will become hazardous after `delay` seconds (telegraph). */
+  hazardWarn: { cells: number[]; kind: HazardKind; delay: number };
+  hazard: { cells: number[]; kind: HazardKind; duration: number };
+  hazardEnd: { cells: number[]; kind: HazardKind };
+  /** A unit was weakened (half attack speed) for `duration` seconds. */
+  weaken: { unit: UnitState; duration: number; by: EnemyState | null };
+  /** The sunbeam cells moved (act change, relic). */
+  sunbeams: { cells: number[] };
+  laser: { state: LaserState };
+  laserEnd: { state: LaserState };
 
   waveStart: { wave: number; act: number; kind: WaveKind; duration: number };
-  waveEnd: { wave: number; fish: number };
-  actClear: { act: number; clover: number; fish: number };
-  relicOffer: { options: RelicId[]; freeRerolls: number };
+  waveEnd: { wave: number; fish: number; called: boolean };
+  actClear: { act: number; purr: number; fish: number };
+  relicOffer: { options: RelicId[]; freeRerolls: number; picksLeft: number };
   relicGain: { relic: RelicId };
 
   fish: { total: number; delta: number; reason: CurrencyReason; x?: number; y?: number };
-  clover: { total: number; delta: number; reason: CurrencyReason; x?: number; y?: number };
-  synergy: { classId: ClassId; tier: number; previous: number; count: number };
-  upgrade: { kind: 'class' | 'luck'; classId: ClassId | null; level: number };
-  capsule: { outcome: CapsuleOutcome; unit: UnitState | null; fish: number; clover: number };
+  purr: { total: number; delta: number; reason: CurrencyReason; x?: number; y?: number };
+  /** `distinct` = number of different unit types of the class on the board. */
+  synergy: { classId: ClassId; tier: number; previous: number; distinct: number };
+  upgrade: { kind: 'class' | 'summon'; classId: ClassId | null; level: number };
   pity: PityInfo;
   /** 0 calm, 1 caution, 2 danger — thresholds on the enemy count. */
   danger: { level: number; count: number; cap: number };
+  /** The field is over the cap; defeat follows unless it drops back within `grace` seconds. `grace` 0 = recovered. */
+  overflow: { grace: number };
+  /** A relic saved the run once (nine lives). */
+  rescued: { removed: number };
   defeat: { reason: 'overrun' | 'boss_timeout' };
   revive: { removed: number };
   victory: { stats: RunStats };
@@ -426,79 +477,95 @@ export interface BattleApi {
   readonly enemies: ReadonlyArray<EnemyState>;
   readonly projectiles: ReadonlyArray<ProjectileState>;
   readonly zones: ReadonlyArray<ZoneState>;
+  readonly hazards: ReadonlyArray<HazardState>;
+  /** Cells currently in a sunbeam. */
+  readonly sunbeams: ReadonlyArray<number>;
+  readonly laser: Readonly<LaserState>;
   readonly relics: ReadonlyArray<RelicId>;
 
   readonly fish: number;
-  readonly clover: number;
+  readonly purr: number;
   /** 1-based current wave (0 during prep before wave 1). */
   readonly wave: number;
   readonly totalWaves: number;
   /** 1-based act of the current wave. */
   readonly act: number;
   readonly waveKind: WaveKind;
-  /** Seconds elapsed in / total length of the current wave (boss waves: the time limit). */
+  /** Seconds elapsed in / total length of the current wave (elite/boss waves: the time limit). */
   readonly waveTime: number;
   readonly waveDuration: number;
   /** Seconds left before the first wave starts (prep phase). */
   readonly prepTime: number;
   readonly enemyCount: number;
   readonly enemyCap: number;
+  /** Seconds the field has been over the cap (0 when under) / seconds allowed. */
+  readonly overflowTime: number;
+  readonly overflowLimit: number;
+  /** The living boss or elite of this wave, if any. */
+  readonly boss: EnemyState | null;
   /** Simulated seconds since the run started. */
   readonly time: number;
 
   // ── driving ──
-  /** Advance by real `dt` seconds (already multiplied by game speed). No-op while a choice is pending or the run is over. */
+  /** Advance by `dt` seconds (already multiplied by game speed). No-op while a choice is pending or the run is over. */
   step(dt: number): void;
 
   // ── commands: return null on success, a reason on refusal ──
   summon(): Fail | null;
   pickSummon(index: number): Fail | null;
-  /** Drag-drop: moves, swaps or merges depending on what is in `to` (see dropAction). */
+  /** Drag-drop or tap-tap: moves, swaps or merges depending on what is in `to` (see dropAction). */
   drop(from: number, to: number): Fail | null;
   sell(cell: number): Fail | null;
+  /** Change the unit in `cell` to the same rarity of another class (costs purr, limited per run). */
+  molt(cell: number, classId: ClassId): Fail | null;
   awaken(cell: number): Fail | null;
-  setTargetMode(cell: number, mode: TargetMode): Fail | null;
   upgradeClass(classId: ClassId): Fail | null;
-  upgradeLuck(): Fail | null;
-  spinCapsule(): Fail | null;
+  /** Raise the summon grade (better rarity odds). */
+  upgradeSummon(): Fail | null;
+  /** Place / move the laser pointer dot (field coordinates). */
+  setLaser(x: number, y: number): Fail | null;
+  /** End a normal wave early for bonus fish. */
+  callNextWave(): Fail | null;
   pickRelic(index: number): Fail | null;
-  /** `paid` = the player watched a rewarded ad for it (allowed once per run). */
+  /** `paid` = the player paid (ad or gems) for it; allowed once per run. */
   rerollRelics(paid: boolean): Fail | null;
-  /** Rewarded-ad revive after a defeat: clears half the enemies and resumes. Once per run. */
+  /** Continue after a defeat. Once per run. */
   revive(): Fail | null;
-  /** End the run now (quit from pause). Emits `defeat`-less result: stats via getStats(). */
+  /** End the run now (quit from pause); `getStats()` then reports a defeat at the current wave. */
   abandon(): void;
 
   // ── queries for HUD and popups ──
   dropAction(from: number, to: number): DropAction;
   summonCost(): number;
-  /** Current summon odds by rarity (common..legendary) after luck upgrades, relics and soft pity. */
+  /** Odds of the NEXT summon by rarity (common..legendary), after grade, relics and soft pity. */
   summonOdds(): OddsRow<RarityId>[];
   pity(): PityInfo;
-  /** Summons made toward the next pick-1-of-3 offer / how many are needed. */
+  /** Paid summons made toward the next pick-1-of-3 / how many are needed (0/0 when disabled). */
   summonOfferProgress(): { count: number; every: number };
-  classCount(classId: ClassId): number;
+  /** Number of different unit types of the class on the board. */
+  classDistinct(classId: ClassId): number;
+  /** Which of the class's five rarities are present on the board (index = rarity order). */
+  classOwned(classId: ClassId): boolean[];
   /** 0 = none, 1..3 = active synergy tier. */
   synergyTier(classId: ClassId): number;
-  /** Head-count needed for tiers 1..3 this run (relics can lower it). */
-  synergyNeeds(classId: ClassId): [number, number, number];
   classUpgradeLevel(classId: ClassId): number;
   /** Cost of the next class upgrade, or -1 at max level. */
   classUpgradeCost(classId: ClassId): number;
-  luckLevel(): number;
-  luckCost(): number;
-  capsuleCost(): number;
-  capsuleOdds(): OddsRow<CapsuleOutcome>[];
-  /** Capsule spins since the last epic-or-better / spins that trigger the guarantee. */
-  capsulePity(): { dry: number; limit: number };
+  summonGrade(): number;
+  /** Cost of the next summon-grade upgrade, or -1 at max. */
+  summonGradeCost(): number;
+  moltCost(): number;
+  moltsLeft(): number;
   awakenCost(): number;
   /** null when the unit in `cell` can awaken now, otherwise why not. */
   canAwaken(cell: number): Fail | null;
-  /** What `cell`'s unit would become when awakened, or null. */
-  awakenResult(cell: number): UnitId | null;
-  sellValue(cell: number): { fish: number; clover: number };
+  sellValue(cell: number): { fish: number; purr: number };
+  /** Bonus fish `callNextWave()` would pay right now, or -1 when it is not available. */
+  callBonus(): number;
   /** Enemies of the given wave (default: the next one) for the preview strip. */
   previewWave(wave?: number): WavePreviewEntry[];
   canRevive(): boolean;
   getStats(): RunStats;
+  /** Wave-start save for "continue after the app was closed", or null when not supported in this mode. */
+  snapshot(): BattleSnapshot | null;
 }
