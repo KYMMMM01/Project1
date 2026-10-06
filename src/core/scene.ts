@@ -89,6 +89,7 @@ export class SceneManager {
   private async close(kind: TransitionKind): Promise<void> {
     const g = this.cover;
     g.visible = true;
+    g.eventMode = 'static';
     if (kind === 'iris') {
       this.irisActive = true;
       g.alpha = 1;
@@ -113,6 +114,8 @@ export class SceneManager {
 
   private async open(kind: TransitionKind): Promise<void> {
     const g = this.cover;
+    // The new scene is already built and showing through: a tap during the reveal belongs to it.
+    g.eventMode = 'none';
     if (kind === 'iris') {
       this.irisActive = true;
       const max = this.maxIris();
