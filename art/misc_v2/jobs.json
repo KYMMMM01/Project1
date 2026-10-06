@@ -1,0 +1,21 @@
+[
+ {
+  "name": "keyart_title",
+  "ref": [
+   "art/units_v2/unit_w_paw.png",
+   "art/units_v2/unit_r_archer.png",
+   "art/units_v2/unit_m_snow.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached images are approved characters of our game. They must appear in the illustration exactly as designed (same breeds, outfits, faces with dot eyes and eyebrows) and the whole picture must use their rendering: thick dark-brown outlines and matte flat colours.",
+  "prompt": "Use case: stylized-concept\nAsset type: portrait key art for a mobile game title screen (9:16)\nScene: a sunny living room by day seen from a low angle: warm wooden floor, a teal sofa edge, a monstera plant, window light falling in soft flat stripes. On a cream rug in the lower-middle, the four attached cats stand shoulder to shoulder as a tiny brave guard squad, looking determined and a little funny. From the right, a comic parade of household nuisances marches toward them: three small grumpy cucumbers with stubby legs, a round robot vacuum with flat red light eyes, and a red party balloon. Mood: cosy, bright, playful, never scary.\nStyle: 2D cartoon illustration with thick dark-brown outlines. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. The characters keep a thin white sticker border so they pop from the background.\nComposition: portrait 9:16; keep the top third calm (wall and window light only) so a title can be placed there; the cats are the focus; nothing important within 8% of the edges.\nConstraints: no text, no letters, no numbers, no logo, no watermark, no UI."
+ },
+ {
+  "name": "icon_purr",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game currency icon shown very small (about 40 px)\nSubject: a 'purr' token: one plump soft-pink heart with a darker pink cat paw-pad print in its centre and two tiny curved purr-vibration lines beside it.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple shape that reads at thumbnail size.\nComposition: centred, generous padding.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no text, no letters, no watermark."
+ }
+]

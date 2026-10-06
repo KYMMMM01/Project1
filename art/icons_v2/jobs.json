@@ -1,0 +1,352 @@
+[
+ {
+  "name": "icon_fish",
+  "ref": [
+   "art/raw/icon_fish.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a small blue-silver fish treat (a whole little sardine) with a round dot eye.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_gold",
+  "ref": [
+   "art/raw/icon_gold.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a thick gold coin embossed with a cat paw print.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_gem",
+  "ref": [
+   "art/raw/icon_gem.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a faceted pink gemstone shaped like a cat head with pointy ears, facets drawn as flat tones.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_wood",
+  "ref": [
+   "art/raw/icon_chest_wood.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a small closed wooden treasure chest with iron bands and a paw-print lock.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_silver",
+  "ref": [
+   "art/raw/icon_chest_silver.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a closed silver treasure chest with blue gem inlay and a paw-print lock.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_gold",
+  "ref": [
+   "art/raw/icon_chest_gold.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: an ornate closed golden treasure chest with red gems and cat-ear shaped lid corners.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_card",
+  "ref": [
+   "art/raw/icon_card.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a single collectible card seen at a slight angle, teal back with a cream cat paw emblem.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_xp",
+  "ref": [
+   "art/raw/icon_xp.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a blue star badge with a small upward arrow shape embossed.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_clover",
+  "ref": [
+   "art/raw/icon_clover.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a lucky four-leaf clover with heart-shaped green leaves.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_capsule",
+  "ref": [
+   "art/raw/icon_capsule.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a round capsule toy, top half pink and bottom half white, with a tiny star inside.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_nap_blanket",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a folded fluffy soft-blue blanket with a crescent moon pattern.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_twin_bells",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: two golden jingle bells joined by a red ribbon bow.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_lucky_coin",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: an old gold coin with a square hole in the middle and a red tassel, no characters on it.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_sardine_crate",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a small wooden crate packed with silver sardines on ice.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_sunny_spot",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a warm patch of golden sunlight in the shape of a window pane on a floor, with a small smiling sun above it.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_nine_lives",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a red heart with a white cat silhouette inside and two tiny wings.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_shooting_star",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a yellow shooting star with a flat rainbow tail.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_golden_catnip",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a sprig of golden catnip leaves tied with a small ribbon.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_royal_crown",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a tiny golden royal crown with red gems and cat-ear shaped points.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_hourglass",
+  "ref": [
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a brass hourglass with blue sand flowing.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_yarn_ball",
+  "ref": [
+   "art/raw/relic_yarn_ball.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a red ball of yarn with a loose strand.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_glitter_ball",
+  "ref": [
+   "art/raw/relic_glitter_ball.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a bouncy cat toy ball with colourful flat confetti dots and tiny stars inside.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_cardboard_box",
+  "ref": [
+   "art/raw/relic_cardboard_box.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: an open brown cardboard box with flaps up.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_bell_collar",
+  "ref": [
+   "art/raw/relic_bell_collar.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a red pet collar with a golden bell.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_fishing_rod",
+  "ref": [
+   "art/raw/relic_fishing_rod.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a cat teaser fishing-rod toy with a dangling felt fish.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_scratcher",
+  "ref": [
+   "art/raw/relic_scratcher.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a cardboard cat scratcher pad with claw marks.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_mouse_toy",
+  "ref": [
+   "art/raw/relic_mouse_toy.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a grey plush toy mouse with a pink string tail.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_feather_wand",
+  "ref": [
+   "art/raw/relic_feather_wand.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a cat wand toy with colourful feathers on the tip.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_cat_tower",
+  "ref": [
+   "art/raw/relic_cat_tower.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a small carpeted cat tree tower with two platforms and a hanging pom-pom.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_kneading_cushion",
+  "ref": [
+   "art/raw/relic_kneading_cushion.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a soft plump pink cushion with paw-shaped dents pressed into it.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_cat_tunnel",
+  "ref": [
+   "art/raw/relic_cat_tunnel.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a collapsible striped fabric cat tunnel with a round opening.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_heating_pad",
+  "ref": [
+   "art/raw/relic_heating_pad.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a cosy orange heated pet mat with a power cord and three small warmth waves.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_batteries",
+  "ref": [
+   "art/raw/relic_batteries.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: two cartoon AA batteries side by side, one yellow and one blue, with a small lightning bolt symbol and no lettering.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_snack_stick",
+  "ref": [
+   "art/raw/relic_snack_stick.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a tube of creamy cat treat paste: a plain orange squeeze pouch with the tip torn open, no label text.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_tuna_cans",
+  "ref": [
+   "art/raw/relic_tuna_cans.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a stack of three round tuna cans with plain blue labels and a fish silhouette.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_window_perch",
+  "ref": [
+   "art/raw/relic_window_perch.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a small suction-cup window hammock bed for cats in beige fabric.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_purr_pillow",
+  "ref": [
+   "art/raw/relic_purr_pillow.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a plump round pink cushion with a sleeping cat face embroidered on it and little vibration lines around it.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_silvervine",
+  "ref": [
+   "art/raw/relic_silvervine.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a bundle of silvervine sticks tied with a red ribbon, with green leaves.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_auto_feeder",
+  "ref": [
+   "art/raw/relic_auto_feeder.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: an automatic pet food dispenser with a clear kibble container and a bowl.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "relic_glass_marble",
+  "ref": [
+   "art/raw/relic_glass_marble.png",
+   "art/units_v2/unit_t_bell.png"
+  ],
+  "ref_note": "Image 1 is the CURRENT icon from our game: keep the same object, shape idea and main colours, but redraw it from scratch in the rendering of image 2, an approved character from the same game (image 2 is a RENDERING reference only: do not draw a cat). Do NOT copy image 1's glossy highlights, glow or sparkles.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon shown small (about 56 px)\nSubject: a swirled blue-and-white glass marble drawn with flat tones.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, three-quarter view where it helps, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no face unless described, no text, no letters, no numbers, no watermark, nothing cropped."
+ }
+]
