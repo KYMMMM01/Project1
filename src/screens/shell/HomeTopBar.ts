@@ -11,7 +11,7 @@ import { BADGE_R, LevelBadge } from './LevelBadge';
 const SIDE = 24;
 /** The kit's coin sticker sticks out this far past its pill's left end; the gap after a pill must clear the next sticker. */
 const PILL_OVERHANG = 21;
-const PILL_GAP = 28;
+const PILL_GAP = 33;
 const BADGE_SLOT = BADGE_R * 2 + 12;
 const SETTINGS_SLOT = 88;
 const KINDS: readonly CurrencyKind[] = ['gold', 'gems', 'tickets'];

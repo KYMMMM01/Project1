@@ -29,8 +29,8 @@ interface LookStyle {
 const STYLE: Record<Exclude<CellLook, null>, LookStyle> = {
   selected: { color: Color.teal, glyph: null, idle: [0.16, 1, 0], hot: [0.16, 1, 0] },
   origin: { color: Color.kraftDark, glyph: null, idle: [0.2, 0.9, 0], hot: [0.2, 0.9, 0] },
-  // A cat is selected (tap-tap): tapping another cat swaps with it, so those cells say so out loud.
-  pick: { color: Color.mustardDark, glyph: 'swap', idle: [0.14, 0.9, 0.9], hot: [0.2, 1, 1] },
+  // A cat is selected: a tap on an empty cell moves it there, so those cells say so (a drag keeps its quiet look).
+  pick: { color: Color.teal, glyph: 'move', idle: [0.1, 0.6, 0.8], hot: [0.16, 1, 0.9] },
   move: { color: Color.teal, glyph: 'move', idle: [0.05, 0.26, 0], hot: [0.16, 1, 0.9] },
   swap: { color: Color.mustardDark, glyph: 'swap', idle: [0.06, 0.32, 0], hot: [0.2, 1, 1] },
   merge: { color: Color.leaf, glyph: 'merge', idle: [0.22, 0.95, 1], hot: [0.3, 1, 1] },
@@ -154,7 +154,7 @@ export class CellLayer {
       n.ring.scale.set(1 + 0.05 * h - 0.03 * lit + 0.022 * beat);
       const bob = merge ? Math.sin(time * 8) * 3 : 0;
       n.glyph.alpha = n.glyphA;
-      n.glyph.scale.set((n.look === 'swap' || n.look === 'pick' ? 0.9 : 0.8) * (1 + 0.28 * h));
+      n.glyph.scale.set((n.look === 'swap' ? 0.9 : 0.8) * (1 + 0.28 * h));
       n.glyph.y = GLYPH_Y + bob;
     }
   }

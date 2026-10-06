@@ -1,0 +1,232 @@
+[
+ {
+  "id": "qa-code-chest-reveal-no-resize",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Chest reveal ignores resizes: its floor stops short and the shop page below stays visible and tappable",
+  "where": "src/screens/shop/ChestReveal.ts constructor (computeArea(), drawFloor(W,H), floor.hitArea fixed to the design size at construction; no game 'resize' handling)",
+  "repro": "Shop > open any chest, and while the cards fly change the viewport height (rotation, keyboard, address bar). Aside: ?scene=home&tab=shop&fresh=1&debug=1&lang=en; __dbg.meta.unlockAll(); addChest('wooden',1); r=await profile.openChest('wooden'); __dbg.collection.revealChest(r.value); wait 2.5 s; Object.defineProperty(window,'visualViewport',{value:{width:420,height:900,addEventListener(){},removeEventListener(){}},configurable:true}); __dbg.game.layout().",
+  "evidence": "reveal_after_resize.png (game.h 1280 -> 1543): the reveal floor ends about 260 design px above the bottom; below it the shop's '500 Buy and open' button and the tab bar show through and are not covered by the reveal's hit area. Chest and card slots keep the old layout.",
+  "suggestion": "Handle 'resize' (recompute area, redraw floor/hitArea, relayout slots) or build the reveal on Popup/ScreenScaffold."
+ },
+ {
+  "id": "qa-code-shop-free-timer-frozen",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Shop free-chest countdown freezes (or stays blank) after leaving and re-entering the Shop tab",
+  "where": "src/screens/shop/ShopTab.ts hide() sets freeTimer = null and show() only calls checkSignatures(); trackFreeTimer is only called inside blocksChests.buildFree (src/screens/shop/blocksChests.ts:59), whose status label is built with '' text",
+  "repro": "?scene=home&tab=shop&fresh=1&debug=1&lang=en, __dbg.meta.unlockAll(); profile.claimFreeChest(); wait until the line reads 'Next chest in 3:59:5x'; goTab('cats'); __dbg.meta.advance({hours:1}); goTab('shop'). The signature (ready flag) did not change so the block is not rebuilt and ShopTab.freeTimer stays null: the label never updates again. On a first build the line is also empty until the first 0.5 s update tick.",
+  "evidence": "shop_timer_b.png shows 'Next chest in 3:59:55' after the 1 h advance (real remaining wait about 3:00:00; with a 2 h advance profile.freeChestView().waitMs was 7,194,679). Probe read __dbg.home.scene.host.tabs.shop.freeTimer === null after the return. shop_timer_a.png shows the blank status line right after the claim.",
+  "suggestion": "Re-attach freeTimer in show() (keep the text object and clear it only on destroy), and give the label its text at build time."
+ },
+ {
+  "id": "qa-collection-claim-flight-gems-huge",
+  "area": "collection",
+  "severity": "major",
+  "title": "Currency flight after Claim draws the gem/coin stickers at full texture size (~190 px) instead of 48 px",
+  "where": "Reward popup, press Claim (any gold/gems reward). src/screens/shop/rewards.ts:184 + src/fx/flyTo.ts icon.scale.set(state.scale*baseScale)",
+  "repro": "?scene=home&tab=shop&fresh=1 -> __dbg.meta.unlockAll(); addGems(100). __dbg.shop.actions.buyProduct('gems_260'), click Pay in the dev sheet (button.lp-primary), then tap Claim (받기) in the reward popup and step __dbg.game.tick(0.05) four times, screenshot. Same for any gold/gems bundle (daily buy, starter pack).",
+  "evidence": "p_claim_fly.png and its crop z7.png: a pile of about 7 pink gem stickers, each roughly 190 px wide, covers the middle of the popup and the popup title, where a 48 px icon was intended. Cause in code: rewards.ts passes make: () => currencyArt(kind, 48); art.ts fitted() sets the sprite scale to size/texWidth, then flyTo sets icon.scale to state.scale*baseScale with baseScale = 1 when make is used, which overwrites that fit. (tickets use a Graphics icon so they are unaffected.)",
+  "suggestion": "Wrap the fitted sprite in a Container inside make() (or have flyTo multiply by the made icon's own scale) so the flight is 48 px."
+ },
+ {
+  "id": "qa-collection-line-tags-cover-portraits",
+  "area": "collection",
+  "severity": "major",
+  "title": "Merge / Awaken arrow tags cover a large part of the neighbouring portraits (worse in English and in the unit-screen mini row)",
+  "where": "Cats tab class lines (LineRow.ts) and the unit screen merge line",
+  "repro": "?scene=home&tab=cats&fresh=1 + unlockAll/addGold/addCards, scroll to the Warrior and Trickster pages; open __dbg.collection.openUnit('t_alch') and scroll to the merge-line page; repeat with &lang=en and the 1600 viewport (visualViewport override 405x900).",
+  "evidence": "a_mixed_top.png and the crop z2.png: the coral '합성' tag hides the right side of the Viking cat (axe/shield) and the left edge of the Samurai; the mustard '각성' tag covers the left third of the Tiger. u_t_alch_a.png and u_w_paw_b.png (mini row): the '각성' tag hides about half of 연금술사냥 and the '합성' tag hides the Sword Cat's sword. en_cats_tall_a.png: 'Merge' (57 px label) and 'Awaken' (70 px label) tags reach 27-33 px into each 105 px frame. Numbers: pitch 134 px, plate 105, gap 29, tag width = label + 26 (66 ko / 83 en Merge / 96 en Awaken), so every tag covers 18-33 px of each frame.",
+  "suggestion": "Make the tags no wider than the gap (arrow-only chevron with the word under/over the row, or a 20 px label), or move them to the name row so portraits stay clear."
+ },
+ {
+  "id": "qa-collection-damage-delta-vs-rounded",
+  "area": "collection",
+  "severity": "major",
+  "title": "Stat card shows rounded numbers next to an unrounded difference: '14 -> 15 (+1.4)', '22 -> 28 (+6.9)'",
+  "where": "Unit screen, Stats page, damage row (cats/unitStats.ts statText / deltaText)",
+  "repro": "__dbg.collection.openUnit('w_sword') at level 1 (default). Programmatic sweep of 16 cats x levels 1-10 (set __dbg.meta.profile.data.levels, read the dump of Stat texts) found 14 mismatching rows: w_sword L2/4/7/9, r_sling L3/8/9, r_archer L6, t_chef L7/9, t_bard L3/8.",
+  "evidence": "en_unit_tall_a.png bottom row: 'Damage 14 -> 15  +1.4' (14 x 1.1 = 15.4 shows as 15, delta stays 1.4). Sweep output examples: 'r_sling L9: 22 | 28 | +6.9', 't_bard L3: 50 | 55 | +4.2', 'w_sword L4: 18 | 20 | +1.4'. All other stats (interval, range, crit), the card counts and the gold costs matched the game data for all 160 cases (checked against unitSpec, CARD_BASE/GOLD_BASE and rarity factors).",
+  "suggestion": "Compute the pill from the displayed (rounded) values, or show one decimal on both sides whenever the delta is below 10."
+ },
+ {
+  "id": "qa-collection-en-pack-contents-under-button",
+  "area": "collection",
+  "severity": "major",
+  "title": "English one-time pack contents wrap to a second line that is cut off by the price button",
+  "where": "Shop > Gems and packs, Kitten Pack and Starter Pack coupons, English (blocksStore.ts packCoupon: contents at y 88, button at h-56)",
+  "repro": "?scene=home&tab=shop&fresh=1&lang=en, unlockAll, jump to the gems section (__dbg.shop.jumpTo('gems')) and screenshot.",
+  "evidence": "e_gems.png and crop z8.png: 'Kitten Pack: 180 gems · 1 x Silver chest · Kitten' with the word 'rug' half hidden behind the Rs1,100 button; Starter Pack '5,000 gold · 300 gems · 1 x Gold' with 'chest' cut the same way. Korean fits on one line (p_gems_after_starter.png) so it was not caught there.",
+  "suggestion": "Let the coupon height follow the wrapped text (as the Butler coupon already does) or shorten the English bundle text."
+ },
+ {
+  "id": "qa-collection-free-chest-ad-label-truncated",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Free-chest ad button label is cut to '광고 보고…' and shrunk",
+  "where": "Shop > Chests, free wooden chest while waiting (blocksChests.ts buildFree, half-width button 189 px, fontSize 26)",
+  "repro": "?scene=home&tab=shop&fresh=1, tap Open for free (claim the first free chest), skip, OK, scroll to the chests section. (English not checked.)",
+  "evidence": "z_free_waiting.png / text dump: label '광고 보고…' (88x24) over '오늘 4번 남음' next to '바로 열기 20'; the full string is '광고 보고 바로 열기' so the 'open now' part is lost.",
+  "suggestion": "Shorten the label ('광고로 열기'), allow two lines, or give the ad button more than half the row."
+ },
+ {
+  "id": "qa-collection-en-class-names-truncated",
+  "area": "collection",
+  "severity": "minor",
+  "title": "English cat names are ellipsized under the portraits in the class lines",
+  "where": "Cats tab, English, Ranger line (LineFrame name fitLabel(cellW - 12, 24), min scale 0.7)",
+  "repro": "?scene=home&tab=cats&fresh=1&lang=en, unlockAll, screenshot the Ranger page.",
+  "evidence": "en_cats_tall_a.png: 'Gunslinger…' and 'Starlight Ar…' (the Trickster name 'Alchemist Cat' is squeezed to a smaller size too). Korean names all fit (a_mixed_top.png).",
+  "suggestion": "Allow a second name line or abbreviate the two long names in the compact frame."
+ },
+ {
+  "id": "qa-collection-pity-label-and-target",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Gold chest pity label reads as 'remaining' and the target cat is dropped exactly when the bonus is due",
+  "where": "Shop > Chests, gold chest card (blocksChests.ts: 'shop.chest.pity' and 'pityNow')",
+  "repro": "unlockAll, __dbg.meta.profile.data.goldOpened = 9 (and add a gold chest), open the shop chests section; also compare with __dbg.collection.openOdds('gold').",
+  "evidence": "r_shop_gold_pity.png and e_chests_b.png: bar label '보너스까지 9/10' / 'Bonus in 9/10' (9 is the number opened, so 'in 9' reads wrong) and the caption under it is 'This chest adds 8 bonus cards!' with no 'Target: ...' line; only the odds screen (e_odds_gold.png) names the cat (Samurai Cat). The bonus did go to the right cat when opened (lowest-level king, tie broken by fewer cards: 얼음 여왕 x8 with a 'bonus' tag in r_g_summary.png).",
+  "suggestion": "Label it 'Chests opened 9/10' (or '1 more chest') and keep 'Target: <cat>' next to the 'bonus now' line."
+ },
+ {
+  "id": "qa-collection-balance-updates-before-claim",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Top-bar balances already include the reward while the popup is still open, so the claim flight lands on a finished number",
+  "where": "ShopTab.buyProduct / buySlot / buyCosmetic / buyTicket call shell.refresh() before showRewards; rewards.ts calls refresh again after the flight",
+  "repro": "Shop, balance 400 gems: buyProduct('gems_260') and pay; look at the top bar behind the open popup, then press Claim.",
+  "evidence": "p_reward_b.png: bar already shows 660 gems (it was 400) with the popup still unclaimed; p_claim_fly.png and p_after_claim.png: nothing changes when the icons land. Same for daily buy (gold 1,200 -> 600 under the popup).",
+  "suggestion": "Defer the displayed balance until the flight lands (refresh only in the onDone callback) so the counting feels earned."
+ },
+ {
+  "id": "qa-collection-reveal-card-flash-top-left",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Each card back flashes at the top-left corner for a frame before it flies out of the chest",
+  "where": "ChestReveal.launch(): holder.visible = true without setting its position; the arc tween only joins the next frame",
+  "repro": "Open any chest (shop action openChest('gold')), step __dbg.game.tick(0.05) through the flight phase and screenshot.",
+  "evidence": "r_g_flight.png and crop z4.png: a kraft card back with a paw print sits at (0,0)-(65,85) in the corner while three other backs are mid-arc. At 60 fps this is a one-frame flicker per stack (8-24 per chest).",
+  "suggestion": "In launch() set holder.position to the chest home and scale 0.35 before making it visible."
+ },
+ {
+  "id": "qa-collection-reveal-count-pill-over-dots",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Reveal card count pill ('x14', 'x4') sits on top of the rarity dot row",
+  "where": "ChestReveal grid cards (badge at hw/2 - 38, hh/2 - 120 over the CardFrame dot row)",
+  "repro": "Open a gold chest and skip (or let it finish), look at the summary grid.",
+  "evidence": "z6.png (crop of r_g_summary.png): on every card the pill hides dots 4-5 of the five-dot tier ladder (e.g. 'x14' leaves 3 dots), so the colour-free tier cue is partly unreadable; also r_g_flight2.png.",
+  "suggestion": "Move the pill above the dots or to the name line."
+ },
+ {
+  "id": "qa-collection-ticket-ad-ignores-ad-policy",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Sweep-ticket ad button is drawn enabled while the ad policy blocks it",
+  "where": "blocksStyle.ts:204 ad.setEnabled(v.adsLeft > 0) (the daily refresh and free-chest buttons also check ads.canOffer)",
+  "repro": "?adfast=1, unlockAll, play __dbg.platform ads begin/end run twice, watch the daily refresh ad, then within 90 s tap the ticket ad button in the tickets section.",
+  "evidence": "w_ticket_ad.png: button is bright teal '광고 보고 2장 / 오늘 2번 남음'; at that moment ads.status('sweep_ticket') = {canOffer:false, reason:'gap', cooldownMs:56576}; no overlay opened and tickets stayed 3 (S5 dump). I did not check whether a toast was shown. On a profile with fewer than 2 begun runs the policy says 'first_run' for the same button. Also the block signature does not include canOffer, so it would not refresh when the gap ends.",
+  "suggestion": "Use ads.canOffer('sweep_ticket') like the other ad buttons and add it to the block signature."
+ },
+ {
+  "id": "qa-collection-en-grammar-counts",
+  "area": "collection",
+  "severity": "minor",
+  "title": "English strings ignore plurals and drop nouns",
+  "where": "cats.line.merge, meta.reward.card/chest, cats.unit.cardsLine",
+  "repro": "lang=en: unit screen of any cat; Shop > Daily.",
+  "evidence": "en_unit_tall_a.png: 'Two Sword Cat merge into Viking Cat.' (should be 'Two Sword Cats merge into a Viking Cat.'); e_daily.png: '1 Alchemist Cat cards', '1 x Silver chest', '4 wild cards (Alley Boss)'; unit cards page: 'You have 60 · need 2' with no noun.",
+  "suggestion": "Add plural forms (one/other) and 'cards' to the unit line."
+ },
+ {
+  "id": "qa-collection-unit-cards-page-spare-band",
+  "area": "collection",
+  "severity": "polish",
+  "title": "The 'Upgrade cards' page keeps an empty band under the card line when there is no wild-card line",
+  "where": "UnitScreen.cardsPage (page height 48+14+34+30+14 regardless of text)",
+  "repro": "openUnit of any non-guardian cat with no wild cards of its rarity, scroll to the bottom.",
+  "evidence": "u_w_paw_c.png and u_r_ninja_c.png: about 55 px of blank cream under '가진 카드 60장 · 필요 2장' before the page edge.",
+  "suggestion": "Shrink the page when wildLine is empty."
+ },
+ {
+  "id": "qa-look-ko-particle-rug",
+  "area": "collection",
+  "severity": "major",
+  "title": "Korean particle is wrong on every locked rug card: '챕터 2을 깨면 열려요'",
+  "where": "Shop > 꾸미기 (cosmetics) rug cards; src/screens/shop/strings.ts:71 'shop.cos.chapter': '챕터 {n}을 깨면 열려요'",
+  "repro": "?scene=home&tab=shop&lang=ko&fresh=1&debug=1&notitle=1, __dbg.home.shell and __dbg.meta.unlockAll() not needed; tap the 꾸미기 segment (or __dbg.shop.jumpTo('cosmetics')) and read the locked rug cards.",
+  "evidence": "m_shopK_67.png (right panel) / shopK_7.png: '챕터 2을 깨면', '챕터 3을 깨면', '챕터 4을 깨면', '챕터 5을 깨면'. Only 1 and 3 are right (일, 삼 end in a consonant); 2, 4, 5 need '를'. The commit that added the Korean particle resolver is not used for this key.",
+  "suggestion": "Use the particle resolver (or phrase it without a particle: '챕터 {n} 클리어 시 열려요'); grep other strings with '{x}을/를/은/는' placeholders (shop.chest.confirmTitle '{chest}를' is fine only because chest names end in a vowel)."
+ },
+ {
+  "id": "qa-look-chest-reveal-names",
+  "area": "collection",
+  "severity": "major",
+  "title": "Chest reveal card names are 16-18 px",
+  "where": "Chest reveal grid (gold chest, 20+ cards), card name captions; src/screens/shop/ChestReveal.ts",
+  "repro": "?scene=home&tab=shop&lang=ko&fresh=1&debug=1&notitle=1, __dbg.meta.unlockAll(); __dbg.meta.addGems(800); __dbg.shop.actions.buyChest('gold'); tap the green '500개로 사기' button at design (499,830); step the game 3 s and screenshot.",
+  "evidence": "ch3_2.png and ch3_4.png (m_ch3a.png): the names under the cards read at about 16-18 px; the text walk reports '솜방망이' 18.1, '새총냥' 18.1, '불꽃냥' 16, '꼬마 만능' 18.1, '동네 만능' 18.1, '만능' 19.7 (log AUD ch3_2). The reveal is the biggest payoff moment of the shop and the names are the smallest text in the game; there is also a wide empty wooden band below the grid until the confirm button.",
+  "suggestion": "Show fewer, larger cards per row (3 per row, scrolling) or group duplicates; names at 24 px minimum, shorten with two lines instead of shrinking."
+ },
+ {
+  "id": "qa-look-en-truncated-names",
+  "area": "collection",
+  "severity": "major",
+  "title": "English unit names are shrunk and cut with an ellipsis on the cats ladder",
+  "where": "Cats tab, class line cards, English; src/screens/cats/LineFrame.ts (label at size 22, fitted)",
+  "repro": "?scene=home&tab=cats&lang=en&fresh=1&debug=1&notitle=1, scroll the cats tab (__dbg.home.scene.host.tabs.cats.scroll.scrollTo(0..)) and read the names under the five cards of each class.",
+  "evidence": "m_en1.png middle panel / en_cats_1.png: 'Gunslinger…', 'Starlight Ar…', 'Snowball Ki…', and 'Samurai Cat' 23 px, 'General Tiger' 21 px, 'Paw Puncher' 21.8 px (log AUD en_cats_0, en_cats_1). The arrow tags 'Merge' / 'Awaken' are 20 px. Korean names fit; English loses the unit name, which is the thing the screen is for.",
+  "suggestion": "Let the name wrap to two lines under the card (the row has vertical room), or widen the card gap by moving the arrow tags onto the connector; never ellipsize a unit name."
+ },
+ {
+  "id": "qa-look-confirm-dialog",
+  "area": "collection",
+  "severity": "minor",
+  "title": "Chest purchase dialog is a wall of centred text with a unit-less price button and a green confirm",
+  "where": "Shop > chests > buy gold chest confirm dialog; src/screens/shop/strings.ts ('shop.chest.confirm*')",
+  "repro": "?scene=home&tab=shop&lang=ko&fresh=1&debug=1&notitle=1, __dbg.meta.addGems(800); __dbg.shop.actions.buyChest('gold').",
+  "evidence": "ch2_1.png: seven centred lines ('금 상자, 카드 60장. 꼬마 40% · 동네 30% · 골목대장 20% ... (0/10) 확률표 v1') then buttons '취소' and green '500개로 사기'. The button says 500 with the counter 개 and no gem icon (the shop cards beside it show a gem icon + '150 사서 열기'). The confirm is green while every other primary action (continue prompt '이어서', START) is coral.",
+  "suggestion": "Short two-line summary with the gem icon on the confirm button ('◆ 500 사기'), odds behind the existing 확률 button, use one confirm colour for purchases."
+ },
+ {
+  "id": "qa-look-price-controls",
+  "area": "collection",
+  "severity": "minor",
+  "title": "The buy/price control is drawn three different ways in the shop and a fourth on the home promo",
+  "where": "Shop chests/daily vs gem packs vs packages/passes; home promo card",
+  "repro": "?scene=home&tab=shop&lang=ko&fresh=1&debug=1&notitle=1, __dbg.meta.unlockAll(), scroll the shop (tabs.shop.scroll.scrollTo(0, 1000, 2000)).",
+  "evidence": "shopK_0.png / shopK_1.png: coral tag with a string hole ('150 사서 열기', '600', '1,000'); m_shopK_345.png: green leaf pills for gem packs ('2,200원') and coral pills for packages ('3,300원', '9,900원'); home_battle_ko_scrolled.png: a plain coral rounded rect ('1,100원') on the first-purchase card. Same job, different shape and colour, and green also means 'free' in the same screen ('무료로 열기', '무료' tag).",
+  "suggestion": "One price component: the tag for gold/gem prices, the same coral pill for real money everywhere; keep green only for free or claim."
+ },
+ {
+  "id": "qa-look-violet-leftovers",
+  "area": "collection",
+  "severity": "polish",
+  "title": "Violet craft paper is the one purple left in the shop",
+  "where": "src/screens/shop/blocksStore.ts:229 (ribbon: 'purple' for the pass section), wild-card tiles",
+  "repro": "?scene=home&tab=shop&lang=ko&fresh=1&debug=1&notitle=1, __dbg.meta.unlockAll(), scroll to the pass section and to the 'today' tiles.",
+  "evidence": "m_shopK_345.png (right edge, '패스' section label is violet); shopK_2.png: the '만능 카드' tiles are lavender with a violet frame, the only lavender on screens that are otherwise cream, coral, teal and mustard.",
+  "suggestion": "Use mustard or berry for the pass section label and a kraft or teal mat for wild cards; keep violet only for the epic rarity mat."
+ },
+ {
+  "id": "qa-look-ladder-arrows",
+  "area": "collection",
+  "severity": "polish",
+  "title": "Merge / awaken arrow tags overlap the neighbouring cards' art",
+  "where": "Cats tab class lines (src/screens/cats/LineRow.ts, LineFrame.ts) and the unit screen merge line",
+  "repro": "?scene=home&tab=cats&lang=ko&fresh=1&debug=1&notitle=1 (all unlocked) and __dbg.collection.openUnit('w_paw').",
+  "evidence": "catsK_0.png / unitK_0.png: the '합성' tags sit across the right edge of one card and the left edge of the next, hiding the cat's weapon and ears; the tag labels are about 18-20 px.",
+  "suggestion": "Widen the gaps between the five cards (or drop to a 3 + 2 layout) so the arrow tag sits in the gap, not on the art."
+ },
+ {
+  "id": "qa-flow-chest-reveal-title-offcentre",
+  "area": "collection",
+  "severity": "polish",
+  "title": "Chest reveal: title sits left of centre with an empty right half once the skip button is gone",
+  "where": "src/screens/shop/ChestReveal.ts (title centred in the space left of the 220 px skip button), after the reveal finished",
+  "repro": "?scene=home&fresh=1, finishRuns(3), unlockAll(), advance({hours:30}), dismiss popups, scroll the battle tab to y 700 and tap \"열기\" on the free chest card; wait for the reveal to complete.",
+  "evidence": "w_e_chest_reveal_b.png (identical in w_d_chest_reveal_a.png): \"나무 상자\" label at x about 255 of 760, nothing in the top-right, big empty band between title and cards.",
+  "suggestion": "Centre the title on the screen when the skip button is hidden."
+ }
+]

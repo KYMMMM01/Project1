@@ -6,6 +6,7 @@ import { Color, TapeColors, paintTexture } from '@/ui';
 import { popIn } from '@/fx';
 import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
+import { FIELD_W } from '@/game/geometry';
 import type { FieldArt, StatusSticker } from './art';
 import { barSegments, type BarSegments } from './policy';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
@@ -21,6 +22,8 @@ const SCORCH = mixColor(Color.white, Color.coral, 0.5);
 const TOXIC = mixColor(Color.white, Color.leaf, 0.6);
 const RAGE = mixColor(Color.white, Color.berry, 0.6);
 const BAR_H = 6;
+/** Gap kept between a drawn sprite and the screen edge: a boss on the outer lane would otherwise be cut by it. */
+const EDGE_GAP = 6;
 
 /** Texture key of an enemy: bosses use their own id, the small balloon borrows the big one's art. */
 export function enemyTextureKey(id: EnemyId): string {
@@ -181,8 +184,14 @@ export class EnemyView {
     this.lean.rotation = 0;
     this.x = enemy.x;
     this.y = enemy.y;
-    this.root.position.set(this.x, this.y);
+    this.root.position.set(this.drawX(), this.y);
     this.root.zIndex = this.y + this.size * 0.3;
+  }
+
+  /** The sprite's x: the simulation's, pulled in just far enough that a big body stays on the screen. */
+  private drawX(): number {
+    const half = this.size / 2 + EDGE_GAP;
+    return clamp(this.x, half, FIELD_W - half);
   }
 
   appear(tweens: Tweener): void {
@@ -206,7 +215,7 @@ export class EnemyView {
       this.updateStatus(dt, time, enemy);
       this.updateBar(dt, enemy);
     }
-    this.root.position.set(this.x, this.y);
+    this.root.position.set(this.drawX(), this.y);
     this.root.zIndex = this.y + this.size * 0.3;
     this.sprite.scale.x = this.spriteScale * this.facing;
     this.aura.alpha = this.aura.visible ? 0.8 + 0.12 * Math.sin(time * 3.2) : 0;

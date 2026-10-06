@@ -3,7 +3,7 @@
  * localStorage is blocked (private mode, sandboxed iframe) or an SDK never answers.
  * Pure: no module-level DOM access, safe in node.
  */
-import type { StorageBackend } from '@/core/save';
+import { reportStorageVolatile, type StorageBackend } from '@/core/save';
 import type { PlatformStorage } from './types';
 import { settleWithin, utf8Length } from './util';
 
@@ -23,10 +23,13 @@ export function createMemoryBackend(): StorageBackend {
 /**
  * window.localStorage with an in-memory fallback. Never throws, works with no `window` at all. A write
  * localStorage refuses (quota, Safari private mode) is kept in memory and read back from there, so the
- * session never sees stale data; the next write tries localStorage again.
+ * session never sees stale data; the next write tries localStorage again. While a value lives only in
+ * memory `volatile()` is true and the loss has been reported, so the player is told and the SaveStore retries.
  */
 export function createLocalStorageBackend(): StorageBackend {
   const mem = createMemoryBackend();
+  /** Keys whose newest value never reached localStorage. */
+  const lost = new Set<string>();
   let warned = false;
   const ls = (): Storage | null => {
     try {
@@ -36,6 +39,7 @@ export function createLocalStorageBackend(): StorageBackend {
     }
   };
   return {
+    volatile: () => lost.size > 0,
     async get(key) {
       // A value localStorage refused is newer than whatever it still holds.
       const kept = await mem.get(key);
@@ -54,6 +58,7 @@ export function createLocalStorageBackend(): StorageBackend {
         if (s) {
           s.setItem(key, value);
           await mem.remove(key);
+          lost.delete(key);
           return;
         }
       } catch {
@@ -66,6 +71,8 @@ export function createLocalStorageBackend(): StorageBackend {
           }
         }
       }
+      lost.add(key);
+      reportStorageVolatile();
       await mem.set(key, value);
     },
     async remove(key) {
@@ -75,6 +82,7 @@ export function createLocalStorageBackend(): StorageBackend {
       } catch {
         /* ignore */
       }
+      lost.delete(key);
       await mem.remove(key);
     },
   };
@@ -137,8 +145,18 @@ export function safeStorage(raw: StorageBackend, o: SafeStorageOptions): Platfor
     return typeof r === 'string' ? r : null;
   };
 
+  /** A value that stays in memory: the session still reads it back, but it will not survive the tab. */
+  const keepInMemory = (key: string, value: string | null): void => {
+    dirty.set(key, value);
+    reportStorageVolatile();
+  };
+
   return {
     maxBytes: o.maxBytes,
+    volatile() {
+      for (const v of dirty.values()) if (v !== null) return true;
+      return raw.volatile?.() ?? false;
+    },
     async get(key) {
       if (dirty.has(key) && !unread.has(key)) return dirty.get(key) ?? null;
       const r = await read(key);
@@ -153,18 +171,18 @@ export function safeStorage(raw: StorageBackend, o: SafeStorageOptions): Platfor
     async set(key, value) {
       if (utf8Length(value) > o.maxBytes) {
         warnOnce(`value for "${key}" exceeds ${o.maxBytes} bytes`);
-        dirty.set(key, value);
+        keepInMemory(key, value);
         return;
       }
       if (unread.has(key) && (await read(key)) !== null) {
-        dirty.set(key, value);
+        keepInMemory(key, value);
         return;
       }
       unread.delete(key);
       const r = await call(() => raw.set(key, value));
       if (r === FAILED) {
         warnOnce('write failed');
-        dirty.set(key, value);
+        keepInMemory(key, value);
       } else {
         dirty.delete(key);
       }

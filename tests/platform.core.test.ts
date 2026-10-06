@@ -167,6 +167,72 @@ describe('storage never throws and always settles', () => {
     await expect(b.get('k')).resolves.toBeNull();
   });
 
+  it('tells the SaveStore and the player when a write only reached memory, and stops once it reaches disk again', async () => {
+    // The report is once per session, so each case needs its own copy of the modules.
+    vi.resetModules();
+    const save = await import('@/core/save');
+    const storage = await import('@/platform/storage');
+    const told = vi.fn();
+    save.onStorageVolatile(told);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const disk = new Map<string, string>();
+    let full = true;
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (k: string) => disk.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          if (full) throw new Error('QuotaExceededError');
+          disk.set(k, v);
+        },
+        removeItem: (k: string) => void disk.delete(k),
+      },
+    });
+    const backend = storage.safeStorage(storage.createLocalStorageBackend(), { maxBytes: 1000 });
+    save.setStorageBackend(backend);
+    expect(backend.volatile?.()).toBe(false);
+
+    const store = new save.SaveStore({ key: 'p', version: 1, defaults: () => ({ n: 0 }) });
+    await store.load();
+    store.data.n = 5;
+    store.save();
+    await store.flush();
+    expect(told).toHaveBeenCalledOnce();
+    expect(save.isStorageVolatile()).toBe(true);
+    expect(backend.volatile?.()).toBe(true);
+    expect(disk.size).toBe(0);
+
+    full = false;
+    await vi.advanceTimersByTimeAsync(2000); // the SaveStore's retry
+    expect(JSON.parse(disk.get('p') ?? 'null')).toMatchObject({ data: { n: 5 } });
+    expect(backend.volatile?.()).toBe(false);
+    expect(told).toHaveBeenCalledOnce();
+  });
+
+  it('safeStorage reports a value it could not write or may not send, and clears it when a later write lands', async () => {
+    vi.resetModules();
+    const save = await import('@/core/save');
+    const storage = await import('@/platform/storage');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let broken = true;
+    const raw = createMemoryBackend();
+    const flaky: StorageBackend = {
+      get: (k) => raw.get(k),
+      set: (k, v) => (broken ? Promise.reject(new Error('quota')) : raw.set(k, v)),
+      remove: (k) => raw.remove(k),
+    };
+    const s = storage.safeStorage(flaky, { maxBytes: 10 });
+    expect(save.isStorageVolatile()).toBe(false);
+    await s.set('k', 'v');
+    expect(save.isStorageVolatile()).toBe(true);
+    expect(s.volatile?.()).toBe(true);
+    broken = false;
+    await s.set('k', 'w');
+    expect(s.volatile?.()).toBe(false);
+    await s.set('big', 'x'.repeat(11));
+    expect(s.volatile?.()).toBe(true);
+  });
+
   it('counts UTF-8 bytes', () => {
     expect(utf8Length('abc')).toBe(3);
     expect(utf8Length('가')).toBe(3);

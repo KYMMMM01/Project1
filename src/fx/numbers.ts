@@ -1,41 +1,23 @@
 import { BitmapFont, BitmapText, Container, Sprite } from 'pixi.js';
 import { Ease } from '@/core/tween';
-import { clamp, formatNumber } from '@/core/math';
+import { clamp, formatNumber, mixColor } from '@/core/math';
 import { Color, FONT_FAMILY } from '@/ui/theme';
 import { popCurve, springWobble } from './curves';
-import { Hue } from './palette';
 import { fxSettings } from './settings';
 import { fxTexture } from './textures';
 
 export type NumStyle = 'damage' | 'crit' | 'dot' | 'heal' | 'gold' | 'hurt' | 'big';
 
-const FONT_EDGE = 'FxNumEdge';
 const BAKED = 64;
+/** How far a face colour is lightened toward cream: on artwork the digits are light with a brown stroke (kit rule), the hue still says the kind. */
+const FACE_LIGHT = 0.3;
+/** Width of the brown stroke at the baked size (the fill covers its inner half). */
+const STROKE = 12;
 const CHARS = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×'];
 
 const faces = new Map<number, string>();
-let edgeReady = false;
 
-function installEdge(): void {
-  if (edgeReady) return;
-  edgeReady = true;
-  // The thin brown rim of the sticker, with a flat warm offset shadow under it.
-  BitmapFont.install({
-    name: FONT_EDGE,
-    chars: CHARS,
-    resolution: 2,
-    padding: 10,
-    style: {
-      fontFamily: FONT_FAMILY,
-      fontSize: BAKED,
-      fill: Color.ink,
-      stroke: { color: Color.ink, width: 14, join: 'round' },
-      dropShadow: { color: Hue.shadow, alpha: 0.32, blur: 0, angle: Math.PI / 2, distance: 5 },
-    },
-  });
-}
-
-/** The bitmap font of one face colour: flat fill and a cream outline, laid over the edge font. Baked once per colour. */
+/** The bitmap font of one face colour: the paper tone lightened toward cream, inside one flat brown stroke. Baked once per colour. */
 function faceFont(color: number): string {
   let name = faces.get(color);
   if (name) return name;
@@ -46,18 +28,22 @@ function faceFont(color: number): string {
     chars: CHARS,
     resolution: 2,
     padding: 10,
-    style: { fontFamily: FONT_FAMILY, fontSize: BAKED, fill: color, stroke: { color: Color.paperLight, width: 8, join: 'round' } },
+    style: {
+      fontFamily: FONT_FAMILY,
+      fontSize: BAKED,
+      fill: mixColor(color, Color.paperLight, FACE_LIGHT),
+      stroke: { color: Color.ink, width: STROKE, join: 'round' },
+    },
   });
   return name;
 }
 
 /**
- * Bake the edge font and the face fonts of the stock styles once. Call after the game fonts are loaded
- * (BootScene does this before any scene starts); show() calls it lazily too. A number is a sticker:
- * a flat face colour by kind, a cream outline, a thin brown edge and a flat shadow.
+ * Bake the face fonts of the stock styles once. Call after the game fonts are loaded (BootScene does this
+ * before any scene starts); show() calls it lazily too. A number floats over artwork, so it is light digits
+ * (tinted by kind) inside one brown stroke, with no shadow and no second outline.
  */
 export function ensureNumberFonts(): void {
-  installEdge();
   for (const def of Object.values(STYLES)) faceFont(def.face);
 }
 
@@ -125,11 +111,10 @@ export interface NumberOpts {
   noScatter?: boolean;
 }
 
-/** One sticker: an optional paper starburst, the brown edge and the coloured face, drawn as one object. */
+/** One number: an optional paper starburst behind the stroked digits, drawn as one object. */
 class Num {
   readonly root = new Container();
   readonly face: BitmapText;
-  private readonly edge: BitmapText;
   private readonly burst: Sprite;
   style: NumStyle = 'damage';
   def: StyleDef = STYLES.damage;
@@ -139,24 +124,24 @@ class Num {
   scale = 1;
   tiltAmp = 0;
   value = 0;
+  /** Half the width of the digits at scale 1. */
+  half = 0;
   key: string | number | undefined;
   constructor(readonly font: string) {
     this.burst = new Sprite(fxTexture('starburst'));
     this.burst.anchor.set(0.5);
     this.burst.width = this.burst.height = BAKED * 2.1;
     this.burst.visible = false;
-    this.edge = new BitmapText({ text: '', style: { fontFamily: FONT_EDGE, fontSize: BAKED } });
     this.face = new BitmapText({ text: '', style: { fontFamily: font, fontSize: BAKED } });
-    this.edge.anchor.set(0.5);
     this.face.anchor.set(0.5);
-    this.root.addChild(this.burst, this.edge, this.face);
+    this.root.addChild(this.burst, this.face);
     this.root.visible = false;
     this.root.eventMode = 'none';
   }
 
   setText(text: string): void {
-    this.edge.text = text;
     this.face.text = text;
+    this.half = this.face.width / 2;
   }
 
   setBurst(color: number | null): void {
@@ -184,6 +169,9 @@ export class FloatingNumbers {
   cap: number;
   /** A number never rises above this y (layer space): the scene sets it to the edge of the HUD so no hit is drawn under a pill. */
   minY = -Infinity;
+  /** Its digits never cross these x (layer space): the screen edges, so a hit on the outer lane is not cut in half. */
+  minX = -Infinity;
+  maxX = Infinity;
 
   constructor(parent: Container, cap = 40) {
     this.cap = cap;
@@ -308,7 +296,8 @@ export class FloatingNumbers {
     const s = n.scale * pop;
     const root = n.root;
     root.scale.set(s);
-    root.position.set(n.x, Math.max(this.minY, n.y - d.rise * Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9)))));
+    const reach = n.half * s;
+    root.position.set(clamp(n.x, this.minX + reach, this.maxX - reach), Math.max(this.minY, n.y - d.rise * Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9)))));
     root.rotation = n.tiltAmp === 0 ? 0 : springWobble(n.age, n.tiltAmp, 3.2, 3.5);
     // Hold fully opaque for the first 70% of life, then fade out.
     root.alpha = t < 0.7 ? 1 : 1 - Ease.quadIn((t - 0.7) / 0.3);

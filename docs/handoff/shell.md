@@ -74,3 +74,29 @@ Loop numbers (from the run logs): fresh profile -> tutorial win -> `runs 1`, gol
 2. `src/screens/shop/ChestReveal.ts` (`buildCards`, reached from the free-chest card through `services.revealChest`) writes a `console.warn` when a free chest with cards is opened (it shows in `window.__errors`), and the reveal screen is still the old dark purple scene.
 3. `src/core/scene.ts` `drawCover` fills the transition cover with `0x120b24` (dark purple), so the iris into a battle and the fade out of a splash are purple; `src/core/game.ts` creates the Pixi application with `backgroundColor: 0x1b1233`. Both should be warm brown (`Dim.backdrop`, `Color.woodDark`).
 4. `npm run font`: the Hangul subset predates the strings added here ("합성 줄", "합성", "각성", "N웨이브"); they render today through the fallback font.
+
+## 2026-10-07 QA fixes
+
+Six testers' reports (`docs/qa/findings_shell.json`, 17 items) went through one by one; each was confirmed first (browser or code), then fixed at its root and checked again the same way. Aside runs ended with `PAGE_ERRORS []`; shots are in `scratchpad/shots/fix-shell/`. `npx tsc --noEmit` prints nothing for these paths, `npx vitest run tests/screens.shell` is green (4 files, 45 tests).
+
+- **Restart from the pause menu** (`app/flow.ts` `retry`): the run in progress is still the pending one, so `prepareRun` refused it. `retry` now calls `profile.discardPendingRun()` (no reward, no run counted) first; after a result nothing is pending and that is a no-op. The wave-start save of the old battle is ignored once its run is no longer the pending one (the old battle stays on screen for the length of the transition). Checked in a real run: new scene, new seed, `stats.runs` unchanged.
+- **Platform play signals**: `gameplayStart` again after a `revive`; `HomeScene.enter` calls `gameplayStop`, so quitting from the pause menu cannot leave "playing" on in the menus. Open: after Pause > Quit the portal still sees play until Home is tapped (see REQUESTS 1).
+- **Killed tutorial** (`dropInterruptedTutorial`): a pending tutorial run is discarded without counting as a run at boot, in `startRun` and in `offerContinue`; a new player gets the tutorial again instead of a "continue / give up" prompt that paid it out. Checked: kill in the tutorial, reopen: `BattleScene`, mode `tutorial`, `runs` 0.
+- **Chest reveal cut short**: `afterFirstScene` replays `profile.data.reveals` (oldest first, only over the home scene) through `services.revealChest` before it offers a left-over run; the reveal acknowledges itself when it ends. Checked: open a chest, close the tab, reopen: the reveal plays again, `reveals` goes 1 -> 0.
+- **Rewards that are already in the profile no longer ask to be "claimed"**: sweep and the give-up settle fly the currency to the top bar through `playClaim` and show a toast; only cards and chests get a sheet. Checked both in the browser (bar 1,410 -> 1,692 gold after a sweep, no sheet).
+- **First-purchase card**: the reward sheet no longer depends on the card still existing (the grant makes it go away before the store call returns), and cancelled / failed / unavailable outcomes toast like the shop does. The contents are one row per prize behind a coral dot (no more "180" running into "은 상자"). Checked with the dev store sheet: pay -> reward sheet.
+- **Pre-run snack buttons** (`shell/LockSet.ts`): buttons that go quiet while a start is in flight come back to their own availability, so an ad that is not ready stays grey after a refused gem purchase (tests in `screens.shell.lockset.test.ts`; checked: "Not enough gems." and the ad buttons stay grey).
+- **Class lines** (`ClassLine.ts`, `layoutMath.ts` `classLineSlots` / `captionRooms`): the merge arrows are plain (the panel's hint says what they mean), only the awakening arrow carries its caption in a gap of its own, and each rank name may use the room up to its neighbours' names ("Alley Boss" is no longer cut). The photos get a pre-reduced copy (`shell/thumb.ts`, exact 2x2 halvings, cached per size) instead of a 10x GPU minification, so they are clean stickers.
+- **Home cards**: the daily tag shows the date ("Oct 8" / "10월 8일", `dailyDateLabel`) instead of the ruleset key; locked cards keep their icon and title above the veil; a locked chapter's veil shows only the lock (the reason is written once, in the speech bubble, "Clear the previous chapter first."); the English claim buttons are "Cup prize" / "Weekly prize" at one size, both columns 248 wide.
+- **Top bar**: 24 px gutters, the coin sticker's overhang counted (`pillRow`), 33 px between pills.
+- **Continue prompt**: it reads "From wave N" / "N웨이브부터", which is what happens (a wave save is taken as the wave starts and a restore starts in the prep before it).
+- **First-win toasts**: `HomeScene` no longer toasts unlocks (and `markUnlocksSeen` is gone): the unlock note of `screens/system/autoPopups.ts` is decided from the profile and lists them once.
+- `npm run font` was re-run (new Hangul in the strings).
+
+Rejected: none. Forwarded: see REQUESTS.
+
+### REQUESTS (outside my paths)
+
+1. `src/view/hud/index.ts` `afterPause('quit')`: `battle.abandon()` emits nothing, so the context never announces `finished` and the platform keeps believing the player is in play on the result screen. Emitting `ctx.events.emit('finished', { victory: false })` there (the flow's `gameplayStop` listens to it) would close the gap.
+2. `src/ui` `CurrencyPill`: the round "+" is leaf green on a teal strip; cream or mustard would read better (QA polish, `qa-look-pills-cramped`).
+3. `src/meta/strings.ts`: `meta.toast.unlock` is no longer used by anything.

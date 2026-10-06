@@ -73,6 +73,25 @@ export function classLineSlots(width: number, count: number, photo: number, gap:
   return { centres, arrows, lastGap: gaps[gaps.length - 1] ?? 0 };
 }
 
+/**
+ * Room each caption under a row of photos may use: its own natural width, or less when it would run
+ * into a neighbour's caption (kept at its natural width, `gap` apart) or out of the row. A caption keeps
+ * the centre of its photo, so it can use twice the distance to the nearest neighbouring edge.
+ */
+export function captionRooms(centres: readonly number[], widths: readonly number[], rowWidth: number, gap: number): number[] {
+  const at = (i: number): number => {
+    const w = widths[i] as number;
+    return Math.min(rowWidth - w / 2, Math.max(w / 2, centres[i] as number));
+  };
+  return centres.map((cx, i) => {
+    const w = widths[i] as number;
+    let room = Math.min(w, rowWidth);
+    if (i > 0) room = Math.min(room, 2 * (cx - (at(i - 1) + (widths[i - 1] as number) / 2 + gap)));
+    if (i < centres.length - 1) room = Math.min(room, 2 * (at(i + 1) - (widths[i + 1] as number) / 2 - gap - cx));
+    return Math.max(0, room);
+  });
+}
+
 /** Share of the account level already earned, 0..1, safe against a zero-sized level. */
 export function xpFraction(into: number, need: number): number {
   if (!(need > 0) || Number.isNaN(into)) return 0;

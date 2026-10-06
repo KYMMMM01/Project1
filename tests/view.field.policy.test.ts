@@ -63,10 +63,13 @@ describe('tap decisions', () => {
     expect(decideTap(4, 4, true, null)).toEqual({ kind: 'deselect' });
   });
 
-  it('drops the selected unit on any cell it can act on', () => {
+  it('finishes a move or a merge with a tap', () => {
     expect(decideTap(4, 9, false, 'move')).toEqual({ kind: 'drop', from: 4, to: 9 });
-    expect(decideTap(4, 9, true, 'swap')).toEqual({ kind: 'drop', from: 4, to: 9 });
     expect(decideTap(4, 9, true, 'merge')).toEqual({ kind: 'drop', from: 4, to: 9 });
+  });
+
+  it('never swaps on a tap: another cat is selected so its sheet can be read', () => {
+    expect(decideTap(4, 9, true, 'swap')).toEqual({ kind: 'select', cell: 9 });
   });
 
   it('moves the selection to another unit when the drop would do nothing, else deselects', () => {

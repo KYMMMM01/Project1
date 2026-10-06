@@ -14,6 +14,12 @@ import { FRAME_H, NAME_LINE, NAME_PAD, type CardProgress } from './collection';
 
 export type FrameMode = keyof typeof FRAME_H;
 
+/** "have/needed" while it fits the small bar (five characters), else only the count held; the unit screen has both numbers. */
+function barText(p: CardProgress): string {
+  const full = `${p.have}/${p.needed}`;
+  return full.length <= 5 ? full : String(p.have);
+}
+
 export interface FrameState {
   level: number;
   /** Null for a guardian: it has no cards of its own. */
@@ -141,7 +147,7 @@ export class LineFrame extends Container {
       this.bar.visible = true;
       if (p) {
         this.bar.setColor(p.maxed ? 'gold' : p.have >= p.needed ? 'green' : 'blue');
-        this.bar.setLabel(p.maxed ? t('cats.max') : `${p.have}/${p.needed}`);
+        this.bar.setLabel(p.maxed ? t('cats.max') : barText(p));
         this.bar.setValue(p.needed > 0 ? p.have / p.needed : 1, false);
       }
     }

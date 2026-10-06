@@ -101,7 +101,7 @@ export interface FieldArt {
   /** Dashed round ring and dashed ground ellipse (white, tint them). */
   ring: Texture;
   groundRing: Texture;
-  /** Flat dashed bubble over a hazard-shielded cat. */
+  /** Flat dashed ring round a hazard-shielded cat (opaque paper, like the selection and range rings). */
   shield: Texture;
   status: Record<StatusSticker, Texture>;
   mark: { elite: Texture; boss: Texture };
@@ -142,14 +142,7 @@ export function fieldArt(): FieldArt {
     ),
     ring: bake(gfx((g) => dashedEllipse(g, 0, 0, 56, 56, 12, 0.56, 6, Color.white)), 128, 128),
     groundRing: bake(gfx((g) => dashedEllipse(g, 0, 0, 62, 24, 14, 0.55, 5, Color.white)), 136, 56),
-    shield: bake(
-      gfx((g) => {
-        g.ellipse(0, 4, 46, 52).fill({ color: TapeColors.sky.base, alpha: 0.26 });
-        g.ellipse(0, 4, 46, 52).stroke({ width: 4, color: CREAM });
-      }),
-      100,
-      112,
-    ),
+    shield: bake(gfx((g) => dashedEllipse(g, 0, 4, 46, 52, 14, 0.62, 5, TapeColors.sky.base)), 100, 112),
     status: bakeStatus(),
     mark: {
       elite: bake(

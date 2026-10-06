@@ -1,12 +1,12 @@
 import { Container } from 'pixi.js';
 import { audio } from '@/audio';
 import { debugExpose } from '@/core/debug';
-import { fmt, fmtDuration } from '@/core/format';
+import { fmt } from '@/core/format';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
 import { uiTweens } from '@/core/tween';
 import { Fx } from '@/fx';
-import { errorKey, profile } from '@/meta';
+import { errorKey, profile, tn } from '@/meta';
 import { bundleParts, type BundlePart } from '@/meta/bundle';
 import { iapSpec } from '@/meta/data/catalog';
 import { CHEST_GEM_PRICE, TICKET_AD_AMOUNT } from '@/meta/data/economy';
@@ -16,7 +16,8 @@ import { THEME_SPRAY } from '@/view/director/defs';
 import { themeOf } from '@/view/director/palette';
 import { confirmDialog, ScrollView, SegmentTabs, toast, uiLabel, type SegmentDef } from '@/ui';
 import { services, type ContentArea, type Shell, type TabScreen } from '../contract';
-import { chestsBlock } from './blocksChests';
+import { chestsBlock, freeWaitText } from './blocksChests';
+import { confirmChestBuy } from './ChestConfirm';
 import { dailyBlock } from './blocksDaily';
 import { gemsBlock, passBlock } from './blocksStore';
 import { cosmeticsBlock, detachRugPreviews, disposeRugPreviews, ticketsBlock } from './blocksStyle';
@@ -210,6 +211,9 @@ class ShopTab implements TabScreen {
   show(): void {
     profile.refresh();
     this.checkSignatures();
+    // The block is not rebuilt when nothing but the clock moved while the tab was away: bring the countdown up to date.
+    const v = profile.freeChestView();
+    if (this.freeTimer && !v.ready) this.freeTimer.text = freeWaitText(v.waitMs);
     if (pending) {
       const id = pending;
       pending = null;
@@ -217,9 +221,8 @@ class ShopTab implements TabScreen {
     }
   }
 
-  hide(): void {
-    this.freeTimer = null;
-  }
+  /** Nothing to stop: update() is not called while hidden, and the countdown text lives and dies with its block. */
+  hide(): void {}
 
   resize(area: ContentArea): void {
     const widthChanged = area.w !== this.area.w;
@@ -245,7 +248,7 @@ class ShopTab implements TabScreen {
       this.freeReady = v.ready;
       this.checkNow = true;
     }
-    if (this.freeTimer && !v.ready) this.freeTimer.text = t('shop.free.wait', { time: fmtDuration(v.waitMs / 1000) });
+    if (this.freeTimer && !v.ready) this.freeTimer.text = freeWaitText(v.waitMs);
     this.checkSignatures();
   }
 
@@ -296,7 +299,7 @@ class ShopTab implements TabScreen {
       }
       void confirmDialog({
         title: t('shop.need.gemsTitle'),
-        message: t('shop.need.gems', { n: fmt(short) }),
+        message: tn('shop.need.gems', short, { n: fmt(short) }),
         confirmLabel: t('shop.need.goGems'),
         cancelLabel: t('shop.need.later'),
       }).then((go) => {
@@ -339,14 +342,8 @@ class ShopTab implements TabScreen {
       this.explainShort('gems', short);
       return;
     }
-    // The odds line is shown at the moment of purchase (GDD 8.4).
-    const ok = await confirmDialog({
-      title: t('shop.chest.confirmTitle', { chest: t('meta.chest.' + kind) }),
-      message: profile.oddsOf(kind).summary,
-      confirmLabel: t('shop.chest.confirmBuy', { n: fmt(price) }),
-      cancelLabel: t('shop.chest.cancel'),
-    });
-    if (!ok) return;
+    // The odds are shown at the moment of purchase (GDD 8.4).
+    if (!(await confirmChestBuy(kind, price))) return;
     const r = profile.buyChest(kind);
     if (!r.ok) {
       this.fail(r.error);
@@ -408,7 +405,6 @@ class ShopTab implements TabScreen {
       return;
     }
     this.feedback(offer.kind === 'free' ? 'claim' : 'purchase');
-    this.shell.refresh();
     await services.showRewards(bundleParts(r.value), t('shop.sec.daily'));
   }
 
@@ -455,10 +451,13 @@ class ShopTab implements TabScreen {
       return;
     }
     this.feedback('purchase');
-    this.shell.refresh();
     const parts: BundlePart[] = spec.grant === 'piggy' ? bundleParts({ gems: pool }) : bundleParts(spec.bundle);
-    if (parts.length > 0) await services.showRewards(parts, t(`meta.iap.${id}.name`));
-    else toast(t('shop.buy.thanks'), 'success');
+    if (parts.length > 0) {
+      await services.showRewards(parts, t(`meta.iap.${id}.name`));
+    } else {
+      this.shell.refresh();
+      toast(t('shop.buy.thanks'), 'success');
+    }
   }
 
   private claimGemPass(): void {
@@ -468,7 +467,6 @@ class ShopTab implements TabScreen {
       return;
     }
     this.feedback('claim');
-    this.shell.refresh();
     void services.showRewards(bundleParts({ gems: r.value }), t('shop.gempass.title'));
   }
 
@@ -479,7 +477,6 @@ class ShopTab implements TabScreen {
       return;
     }
     this.feedback('claim');
-    this.shell.refresh();
     void services.showRewards(bundleParts({ gems: r.value }), t('shop.sec.piggy'));
   }
 
@@ -497,7 +494,6 @@ class ShopTab implements TabScreen {
       return;
     }
     this.feedback('purchase');
-    this.shell.refresh();
     await services.showRewards(bundleParts({ cosmetics: [id] }), t('shop.sec.cosmetics'));
   }
 
@@ -538,7 +534,6 @@ class ShopTab implements TabScreen {
       return;
     }
     this.feedback('purchase');
-    this.shell.refresh();
     void services.showRewards(bundleParts({ tickets: 1 }), t('shop.sec.tickets'));
   }
 
@@ -556,7 +551,6 @@ class ShopTab implements TabScreen {
       this.busy = false;
     }
     this.feedback('claim');
-    this.shell.refresh();
     const n = profile.data.tickets - before;
     await services.showRewards(bundleParts({ tickets: Math.max(1, n || TICKET_AD_AMOUNT) }), t('shop.sec.tickets'));
   }

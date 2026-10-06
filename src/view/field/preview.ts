@@ -132,13 +132,18 @@ export class DragPreview {
     const cy = cellCenterY(cell);
     const left = clamp(cx - this.bubbleW / 2, 8, FIELD_W - this.bubbleW - 8);
     const row = cellRow(cell);
-    const flip = previewBelow(row, ROWS, this.hiddenIn(row - 1, left), this.hiddenIn(row + 1, left));
+    // The tail tip points at the cell's edge; the body sits clear of the cat inside it.
+    const yAbove = cy - CELL_H / 2 + 8 - TAIL.len - BUBBLE_H;
+    const yBelow = cy + CELL_H / 2 - 4 + TAIL.len;
+    const l = this.env.ctx.layout;
+    const roomAbove = l.fieldY + yAbove >= l.safeTop + l.topH;
+    const roomBelow = l.fieldY + yBelow + BUBBLE_H <= l.h - l.safeBottom - l.bottomH;
+    const flip = previewBelow(row, ROWS, this.hiddenIn(row - 1, left), this.hiddenIn(row + 1, left), roomAbove, roomBelow);
     if (flip !== this.flip) {
       this.flip = flip;
       this.draw();
     }
-    // The tail tip points at the cell's edge; the body sits clear of the cat inside it.
-    const y = flip ? cy + CELL_H / 2 - 4 + TAIL.len : cy - CELL_H / 2 + 8 - TAIL.len - BUBBLE_H;
+    const y = flip ? yBelow : yAbove;
     this.bubble.pivot.set(this.bubbleW / 2, BUBBLE_H / 2);
     this.bubble.position.set(left + this.bubbleW / 2, y + BUBBLE_H / 2);
     this.tailX = cx - left;

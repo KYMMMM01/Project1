@@ -58,7 +58,6 @@ const ko: Record<string, string> = {
   // toasts
   'meta.toast.claimed': '받았어요!',
   'meta.toast.levelUp': '{unit}이(가) {level}레벨이 됐어요!',
-  'meta.toast.unlock': '{feature}이(가) 열렸어요!',
   'meta.toast.restored': '냥이 코드를 불러왔어요.',
 
   // unlocks
@@ -200,7 +199,6 @@ const en: Record<string, string> = {
 
   'meta.toast.claimed': 'Claimed!',
   'meta.toast.levelUp': '{unit} reached level {level}!',
-  'meta.toast.unlock': 'Unlocked: {feature}!',
   'meta.toast.restored': 'Meow Code restored.',
 
   'meta.feature.speed2x': '2x speed',

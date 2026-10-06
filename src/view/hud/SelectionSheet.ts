@@ -33,7 +33,11 @@ import { BuildPlanView } from './BuildPlanView';
 import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE, tapArea, unitPhoto } from './kit';
 import { MoltPicker } from './popups/MoltPicker';
 
-const BTN_W = 212;
+/** Sell and awaken are wider than molt: a cat that also pays purr says both amounts on the sell button, and awaken carries its reason, all in 24 px text. */
+const BTN_W = 186;
+const AWAKEN_W = 214;
+const SELL_W = 240;
+const BTN_GAP = 10;
 const BTN_H = 80;
 const BTN_Y = 224;
 const PHOTO = 90;
@@ -94,10 +98,10 @@ export class SelectionSheet {
     const r = env.reveal;
     this.molt = new Button({ label: t('hud.molt'), sublabel: '', sublabelIcon: 'purr', style: 'info', width: BTN_W, height: BTN_H, fontSize: 32 });
     this.molt.onTap(() => this.openMolt());
-    this.awaken = new Button({ label: t('hud.awaken'), sublabel: '', sublabelIcon: 'purr', style: 'mustard', width: BTN_W, height: BTN_H, fontSize: 32, fireOnDown: true });
+    this.awaken = new Button({ label: t('hud.awaken'), sublabel: '', sublabelIcon: 'purr', style: 'mustard', width: AWAKEN_W, height: BTN_H, fontSize: 32, fireOnDown: true });
     this.awaken.onTap(() => this.doAwaken());
     this.awaken.onDisabledTap(() => this.explainAwaken());
-    this.sell = new Button({ label: t('hud.sell'), sublabel: '', sublabelIcon: 'fish', style: 'danger', width: BTN_W, height: BTN_H, fontSize: 32, fireOnDown: true });
+    this.sell = new Button({ label: t('hud.sell'), sublabel: '', sublabelIcon: 'fish', style: 'danger', width: SELL_W, height: BTN_H, fontSize: 32, fireOnDown: true });
     this.sell.onTap(() => this.doSell());
     this.close = new IconButton({ icon: 'close', style: 'kraft', size: 60, fireOnDown: true });
     this.close.onTap(() => env.ctx.select(null));
@@ -117,13 +121,15 @@ export class SelectionSheet {
     this.rect = rect;
     this.root.position.set(rect.x, rect.y);
     this.close.position.set(rect.w - 36, 36);
-    const first = 16 + BTN_W / 2;
-    const step = BTN_W + 10;
     const buttons = [this.molt, this.awaken, this.sell].filter((b) => b.visible);
-    const total = buttons.length;
-    // Fewer buttons are centred as a group.
-    const x0 = rect.w / 2 - ((total - 1) * step) / 2;
-    buttons.forEach((btn, i) => btn.position.set(total === 3 ? first + i * step : x0 + i * step, BTN_Y));
+    const widths = buttons.map((b) => (b === this.sell ? SELL_W : b === this.awaken ? AWAKEN_W : BTN_W));
+    // The row is centred as a group, whatever the number of buttons.
+    let x = (rect.w - widths.reduce((sum, w) => sum + w, 0) - BTN_GAP * (buttons.length - 1)) / 2;
+    buttons.forEach((btn, i) => {
+      const w = widths[i] ?? BTN_W;
+      btn.position.set(x + w / 2, BTN_Y);
+      x += w + BTN_GAP;
+    });
     this.drawBg();
     this.shownKey = '';
     this.buttonsKey = '';

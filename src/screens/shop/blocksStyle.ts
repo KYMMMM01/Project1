@@ -2,6 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { mixColor } from '@/core/math';
 import { profile } from '@/meta';
+import { ads } from '@/platform';
 import { TICKET_AD_AMOUNT } from '@/meta/data/economy';
 import type { CosmeticRow } from '@/meta/economy';
 import { buildRug, RUG_H, RUG_W } from '@/view/field/rug';
@@ -168,7 +169,7 @@ export const ticketsBlock: Block = {
   visible: () => true,
   signature: () => {
     const v = profile.ticketView();
-    return [v.count, v.stock, v.adsLeft].join('|');
+    return [v.count, v.stock, v.adsLeft, ads.canOffer('sweep_ticket')].join('|');
   },
   build(root, env): BlockBuild {
     const pageW = env.w - SIDE * 2;
@@ -201,7 +202,7 @@ export const ticketsBlock: Block = {
       { label: t('shop.tickets.ad', { n: TICKET_AD_AMOUNT }), icon: 'ad', width: bw, style: 'info', sublabel: t('shop.tickets.adLeft', { n: v.adsLeft }), fontSize: 26 },
       () => env.actions.ticketAd(),
     );
-    ad.setEnabled(v.adsLeft > 0);
+    ad.setEnabled(v.adsLeft > 0 && ads.canOffer('sweep_ticket'));
     ad.onDisabledTap(() => env.actions.ticketAd());
     ad.position.set(x0 + bw / 2, h - 60);
     c.addChild(buy, ad);

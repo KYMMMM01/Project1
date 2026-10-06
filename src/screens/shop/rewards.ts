@@ -21,6 +21,8 @@ const PANEL_W = 640;
 const SLOT_W = 188;
 const TILE_H = 248;
 const ART = 112;
+/** Amounts below this show at once: a chest or a cat card counting up from "x0" reads as nothing received. */
+const ROLL_FROM = 10;
 
 interface Tile {
   view: Container;
@@ -107,7 +109,9 @@ class RewardSheet extends Popup<void> {
 
     const strip = paperShape({ w: 128, h: 46, kind: 'pill', fill: Color.teal, edge: Color.tealDark, shadow: 3, grain: false, seed: seed + 2 });
     strip.position.set(0, 98);
-    const amount = numberText(36, Color.inkDeep, 'x0');
+    const total = partAmount(part);
+    const rolls = total >= ROLL_FROM;
+    const amount = numberText(36, Color.inkDeep, 'x' + (rolls ? '0' : formatCount(total)));
     amount.position.set(0, 100);
     const label = uiLabel(partLabel(part), { size: 24 });
     fitLabel(label, SLOT_W - 12, 24);
@@ -115,12 +119,12 @@ class RewardSheet extends Popup<void> {
     view.addChild(strip, amount, label);
     view.visible = false;
 
-    const total = partAmount(part);
     const reveal = (): void => {
       view.visible = true;
       popIn(this.bag, view, { from: 0.2, duration: 0.34, overshoot: 2.6 });
       audio.playStep(sfxFor(part), index);
       haptic('light');
+      if (!rolls) return;
       this.bag.run({
         duration: Math.max(0.35, countUpDuration(total) * 1.15),
         ease: Ease.cubicOut,

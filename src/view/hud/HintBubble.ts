@@ -10,7 +10,7 @@ import { BUBBLE_MARGIN, placeBubble, unionRect, type Weighted } from './bubbleMa
 import type { Rect } from './layoutMath';
 
 const MAX_W = 460;
-const PAD = 22;
+const PAD = 18;
 const ARROW = 20;
 
 export class HintBubble {

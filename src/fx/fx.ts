@@ -309,10 +309,6 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'disc', prio: 0, count: 1, life: 0.14, size: 54, sizeEnd: 92, colors: [W, c], alpha: 0.85, fadeIn: 0, fadeOut: 0.85, sizeEase: Ease.cubicOut },
-      x, y, m,
-    );
-    this.burst(
       { tex: 'dot', prio: 0, count: 3, life: [0.16, 0.26], speed: [60, 180], drag: 4, size: [6, 10], sizeEnd: 2, colors: [W, c], fadeIn: 0 },
       x, y, m,
     );
@@ -335,7 +331,6 @@ export class Fx {
       { tex: 'starburst', prio: 2, count: 1, life: 0.2, size: 60, sizeEnd: 170, rot: [0, TAU], colors: [W, hi], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
       x, y, m,
     );
-    this.shockwave(x, y, { color: c, radius: 100 * (o.scale ?? 1), scale: 1 });
     this.burst(
       {
         tex: 'spark', prio: 2, count: 12, life: [0.22, 0.42], speed: [340, 740], drag: 4.2, alignVel: true, stretch: 0.0022,
@@ -1176,10 +1171,10 @@ export class Fx {
     const r = (o.radius ?? 56) * (o.scale ?? 1);
     const oy = o.offsetY ?? 0;
     const handles = [
-      // A steady flat disc under the pulses so the aura reads even between rings.
+      // A steady flat ring round the target so the aura reads even between pulses: an outline, never a tinted disc.
       this.ps.emit(
         {
-          tex: 'disc', prio: 0, life: 0.9, size: r * 1.7, sizeEnd: r * 2.1, colors: [hi, c], alpha: 0.32, fadeIn: 0.4, fadeOut: 0.5,
+          tex: 'ringThick', prio: 0, life: 0.9, size: r * 1.8, sizeEnd: r * 1.95, sizeY: r * 1.8 * 0.8, sizeYEnd: r * 1.95 * 0.8, colors: [c], fadeIn: 0.15, fadeOut: 0.25,
         },
         0, 0, 2.4, { follow: target, offsetY: oy },
       ),

@@ -6,6 +6,7 @@ import { crc32, decodeBackup, encodeBackup, toBase64Url } from '@/meta/backup';
 import { attachPlatform } from '@/meta/platformLink';
 import { MIGRATIONS, PROFILE_VERSION, SAVE_KEY, defaultProfile, migrateProfile, normalizeProfile } from '@/meta/profileData';
 import { IAP_SPECS } from '@/meta/data/catalog';
+import { PASS_XP_PER_TIER } from '@/meta/data/schedule';
 import { runGold } from '@/meta/rewards';
 import { at, createTestProfile, type TestRig } from '@/meta/testing';
 import { BASE_UNITS, type ChestKind, type CurrencyId, type ProfileData, type Reason } from '@/meta/types';
@@ -410,6 +411,47 @@ describe('purchases', () => {
     expect(profile.isPurchasable('season_pass')).toBe(false);
     await profile.grantOrder('season_pass', 's2');
     expect(profile.data.gems).toBe(600);
+  });
+
+  it('pays what a season still owes when it ends: free tiers always, premium tiers only to an owner', async () => {
+    for (const owner of [false, true]) {
+      const rig = await createTestProfile({ start: at(2026, 10, 30, 9) });
+      const { profile } = rig;
+      profile.data.pass = { ...profile.data.pass, xp: 5 * PASS_XP_PER_TIER, premium: owner, claimedFree: [1], claimedPremium: owner ? [5] : [] };
+      const before = { gold: profile.data.gold, gems: profile.data.gems, wooden: profile.data.chests.wooden, silver: profile.data.chests.silver };
+      const reasons: Reason[] = [];
+      profile.events.on('currency', (e) => reasons.push(e.reason));
+
+      rig.clock.advance(24 * 3_600_000); // 2026-10-31, season 1
+      profile.refresh();
+
+      expect(profile.data.pass).toEqual({ season: 1, xp: 0, premium: false, claimedFree: [], claimedPremium: [] });
+      // free tiers 2 and 3 pay 400 gold each, tier 4 a wooden chest, tier 5 25 gems; tier 1 was taken
+      expect(profile.data.gold - before.gold).toBe(800);
+      expect(profile.data.chests.wooden - before.wooden).toBe(1);
+      expect(reasons.includes('pass_free')).toBe(true);
+      // premium tiers 1 to 4 (tier 5 was taken): 40 gems each and a silver chest on tier 4
+      expect(reasons.includes('pass_premium')).toBe(owner);
+      expect(profile.data.chests.silver - before.silver).toBe(owner ? 1 : 0);
+      expect(profile.data.gems - before.gems).toBe(25 + (owner ? 160 : 0));
+    }
+  });
+
+  it('settles every skipped season once, and nothing while the season runs', async () => {
+    const rig = await createTestProfile({ start: at(2026, 10, 6, 9) });
+    const { profile } = rig;
+    profile.data.pass = { ...profile.data.pass, xp: 2 * PASS_XP_PER_TIER };
+    const gold = profile.data.gold;
+    rig.clock.advance(10 * 24 * 3_600_000);
+    profile.refresh();
+    expect(profile.data.gold).toBe(gold);
+    expect(profile.data.pass.xp).toBe(2 * PASS_XP_PER_TIER);
+    rig.clock.advance(70 * 24 * 3_600_000); // two seasons later
+    profile.refresh();
+    expect(profile.data.gold - gold).toBe(800);
+    expect(profile.data.pass.season).toBe(2);
+    profile.refresh();
+    expect(profile.data.gold - gold).toBe(800);
   });
 
   it('knows all 11 products', () => {

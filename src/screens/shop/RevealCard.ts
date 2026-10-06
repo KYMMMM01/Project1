@@ -18,7 +18,7 @@ export class RevealCard extends Container {
   readonly back = new Container();
   readonly face = new Container();
   readonly count: ReturnType<typeof numberText>;
-  private readonly name: Text;
+  private readonly caption: Text;
 
   constructor(readonly stack: RevealStack) {
     super();
@@ -45,7 +45,7 @@ export class RevealCard extends Container {
     }
 
     // The count hangs at the foot of the frame, clear of the picture's top corners where the tag and tape sit.
-    this.count = numberText(30, Color.ink, 'x0');
+    this.count = numberText(30, Color.ink, 'x1');
     const pill = paperShape({ w: 88, h: 38, kind: 'pill', fill: Color.paperLight, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 5 });
     pill.position.set(0, h / 2 - 19);
     this.count.position.copyFrom(pill.position);
@@ -53,23 +53,23 @@ export class RevealCard extends Container {
 
     // The name sits on the wooden floor, so it is light text with a brown stroke.
     const label = unit ? t(`unit.${unit}.name`) : `${rarityName(stack.rarity)} ${t('reveal.wild')}`;
-    this.name = uiLabel(label, { size: NAME_SIZE, onArt: true, align: 'center', lineHeight: NAME_LINE, anchorY: 0, wrap: PLATE.w });
-    this.face.addChild(this.name);
+    this.caption = uiLabel(label, { size: NAME_SIZE, onArt: true, align: 'center', lineHeight: NAME_LINE, anchorY: 0, wrap: PLATE.w });
+    this.face.addChild(this.caption);
     this.face.visible = false;
     this.addChild(this.back, this.face);
   }
 
   /** Lines the name takes when its cell is `cellW` wide. */
   nameLines(cellW: number): number {
-    this.name.style.wordWrapWidth = cellW - 4;
-    return Math.max(1, Math.round(this.name.height / this.name.scale.y / NAME_LINE));
+    this.caption.style.wordWrapWidth = cellW - 4;
+    return Math.max(1, Math.round(this.caption.height / this.caption.scale.y / NAME_LINE));
   }
 
   /** Apply the layout's plate scale and cell width: the frame scales, the name keeps its size and wraps in the cell. */
   layout(scale: number, cellW: number): void {
-    this.name.scale.set(1 / scale);
-    this.name.style.wordWrapWidth = cellW - 4;
-    this.name.position.set(0, PLATE.h / 2 + NAME_GAP / scale);
+    this.caption.scale.set(1 / scale);
+    this.caption.style.wordWrapWidth = cellW - 4;
+    this.caption.position.set(0, PLATE.h / 2 + NAME_GAP / scale);
   }
 
   showFace(): void {

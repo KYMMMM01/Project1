@@ -1,0 +1,272 @@
+[
+ {
+  "id": "qa-code-quit-after-end-shows-defeat",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Pause > Quit during the victory/defeat staging shows 'Defeated' for a run that was already won",
+  "where": "src/view/hud/index.ts openPause()/afterPause('quit') (~lines 188-215): pause is allowed until ending is set by 'finished'; src/game/sim/sim.ts:464 abandon() is a no-op once phase is won/lost; openResult(env, false, true, ...)",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&debug=1&lang=en&notitle=1, __dbg.battle.win() (battle.phase becomes 'won', the victory staging is still running and 'finished' has not fired). Tap Pause > Quit > confirm Quit. In a real run the same happens if the player pauses during the 3-8 s between the last kill and the result screen.",
+  "evidence": "quit_after_win.png: Result screen titled 'Defeated' with 'You will do better next time.' while the stats beneath are those of a won run (28 summons, Seed 7) and PHASE printed 'won'. The result is built with victory=false and abandoned=true, then profile.finishRun receives the winning stats.",
+  "suggestion": "Ignore/hide the pause button once battle.phase is 'won' or 'lost', or derive victory from battle.phase in the quit path."
+ },
+ {
+  "id": "qa-code-selltag-omits-purr",
+  "area": "battle",
+  "severity": "minor",
+  "title": "The sell tag that follows a dragged cat shows only the fish, while the sell strip shows fish and purr",
+  "where": "src/view/field/input.ts:305 (sellTag.place(..., battle.sellValue(from).fish)), src/view/field/sellTag.ts place(x, y, fish); compare src/view/hud/SellStrip.ts:62-65 and SelectionSheet.ts:274",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&debug=1&lang=en&notitle=1, __dbg.battle.board({0:'w_viking'}) (an Alley Boss sells for 80 fish + 1 purr), press the cat and drag it below the field into the sell zone without releasing.",
+  "evidence": "sell_drag.png: the floating tag reads 'Sell +80' while the strip right under it reads 'Release to sell +80 . purr +1'. SELL_PURR = [0,0,1,1,3] (src/game/data/balance.ts) and cmdSell pays it.",
+  "suggestion": "Pass the whole sellValue to SellTag and reuse hud.sell.both."
+ },
+ {
+  "id": "qa-look-dmg-numbers-hud",
+  "area": "battle",
+  "severity": "major",
+  "title": "Damage numbers and hit bursts are cream-outlined arcade text, and are hidden under the HUD at the top lane",
+  "where": "Battle, enemy entrance lane under the wave label and preview chips; src/fx/numbers.ts:49 (stroke paperLight, width 8) plus the dark FxNumEdge layer",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&lang=en&debug=1&notitle=1, wait for the prep phase, __dbg.battle.give(600,6); __dbg.battle.board({0:'w_paw',1:'w_paw',4:'r_sling',7:'m_snow'}); __dbg.battle.skipToWave(2); __dbg.battle.spawn('cucumber',6,250); step the game ~4 s and screenshot the top-left. Also __dbg.battle.spawn('boss_cucumber',1,200).",
+  "evidence": "z_burst.png (crop of en_b_sel.png): yellow '24!' with a thick cream outline and dark drop layer, cut off by the '13s' prep bar, inside a translucent cream ring and star burst. z_b1_boss.png / b1_boss.png: red '255' half hidden behind the 'x17' preview chip. tall_battle_sel.png: '24!' on a jagged coral burst with white outline, '77' red with cream outline. The kit rule is no outlined or shadowed text; on artwork it should be light text with a brown stroke, and nothing should be drawn under the HUD.",
+  "suggestion": "Draw floating numbers in ink or brown-stroked light text on a flat paper sticker, clamp their spawn y below the HUD strips (or put the fx layer above the HUD), and flatten the burst (opaque shapes, no translucent rings)."
+ },
+ {
+  "id": "qa-look-selection-sheet-small",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Selection sheet: 20 px text, ellipsized skill line, and a 44 px tall tap target",
+  "where": "Battle, bottom sheet after tapping a cat; src/view/hud/SelectionSheet.ts, BuildPlanView.ts",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&lang=en&debug=1&notitle=1, __dbg.battle.give(900,9); __dbg.battle.board({0:'w_paw',1:'w_paw'}); tap design (145,311); run the text/hit-area walk.",
+  "evidence": "en_b_sel.png: 'Jabs the longest-running enemy without ever…' ellipsized, 'Merges into ▶ Sword Cat / Same cat: 2 / Drag to merge!' in 20-22 px, button subtext '1 · 6 left', 'Kings only', '+20' at 20 px (log AUD en_b_sel). The walk reports an interactive Text 506 x 44 at design (134,910) (the skill line that opens the full description), under the 88 px minimum. Korean (b2_sel.png) is just as crowded, with the sheet pushing the summon row down to y=1100.",
+  "suggestion": "Give the skill line a full-height 88 px hit box, drop the second line of the plan well or make the sheet taller, and lift the small subtext to 24 px."
+ },
+ {
+  "id": "qa-look-tooltip-over-popup",
+  "area": "battle",
+  "severity": "minor",
+  "title": "An open enemy tooltip stays on top of the next popup (odds, class sheet, pause)",
+  "where": "Battle, hint/tooltip layer above the popup layer",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&lang=ko&debug=1&notitle=1, prep phase, tap an enemy preview chip near design (360,150) so the '먼지 뭉치' bubble opens; then tap a class chip (240,880), close it, tap '%' (675,965), close, tap pause (60,50).",
+  "evidence": "b2_class.png, b2_odds.png, b2_pause.png (KO): the '먼지 뭉치' speech bubble sits on top of the popup and hides its title (pause menu heading, odds heading). en_b_pause.png (no tooltip opened first) shows the 'Paused' label correctly.",
+  "suggestion": "Close all tooltips when a popup opens (or put the tooltip layer under the popup layer)."
+ },
+ {
+  "id": "qa-look-rank-pips",
+  "area": "battle",
+  "severity": "minor",
+  "title": "A cat's rank is shown only as 1-5 tiny dots in a 28 x 14 px pill",
+  "where": "Battle board, under each cat (src/view/field unit view badge)",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&debug=1&notitle=1, __dbg.battle.board({0:'w_paw',1:'w_viking',4:'w_samurai'}), screenshot the board.",
+  "evidence": "z_pills_icons.png (crop of en_b_board.png): grey pill with one 5 px dot, blue pill with two, purple with three; the class glyph circle is about 31 design px. In b1_board.png the player cannot tell rank 2 from rank 3 at a glance, and the colour is the only strong cue.",
+  "suggestion": "Make the rank badge at least 36 px with a number or crown count, or let the sticker's size and frame colour carry the rank."
+ },
+ {
+  "id": "qa-look-tall-gap",
+  "area": "battle",
+  "severity": "minor",
+  "title": "At 720 x 1600 the field stays small and a 250 px band of bare floor opens above the HUD",
+  "where": "Battle at the tallest supported aspect (design 720 x 1600); src/view/field layout",
+  "repro": "Open ?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&debug=1&notitle=1 and override window.visualViewport to {width:405,height:900} then dispatch 'resize' (design becomes 720 x 1600, scale 0.5625); __dbg.battle.board({...}) and screenshot.",
+  "evidence": "tall_battle.png: board bottom at about 55 % of the height, class chips start at about 71 %, leaving about 250 design px of empty planks; enemy lane and board are also pinned high. tall_home_0.png and tall_cats.png are fine.",
+  "suggestion": "Centre the board in the free vertical space or scale it up to the available width/height ratio (cells to about 130 px), and put the hint bubble in that band."
+ },
+ {
+  "id": "qa-look-translucent-discs",
+  "area": "battle",
+  "severity": "polish",
+  "title": "Cats and the boss get pale translucent glass-like discs",
+  "where": "Battle board and enemy lane (shield / status ring on units; src/view/field and src/fx)",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&lang=ko&debug=1&notitle=1, __dbg.battle.board({0:'w_paw',7:'m_snow',18:'t_chef'}), __dbg.battle.skipToWave(2), __dbg.battle.spawn('boss_cucumber',1,200), step 4 s.",
+  "evidence": "z_b1_boss.png (crop of b1_boss.png): the boss stands inside a pale blue translucent bubble, the frost and chef cats sit in pale white discs with a faint rim; they read as glass bubbles on a paper table.",
+  "suggestion": "Make the shield / status marker a flat opaque dashed ring or paper sticker, as the selection and range rings already are."
+ },
+ {
+  "id": "qa-battle-tutorial-passive-loss",
+  "area": "battle",
+  "severity": "major",
+  "title": "Tutorial never tells a new player to keep summoning; a player who does only the scripted steps loses at wave 4 with fish unspent",
+  "where": "Tutorial (?fresh=1), after the merge step; src/view/hud/Tutorial.ts, src/view/hud/tutorialFlow.ts",
+  "repro": "Open ?fresh=1&lang=ko, wait for scenes.transitioning === false. Tap Summon 3 times (free), drag the two 솜방망이 together (forced merge step), then stop acting (only close hint bubbles). Step the sim with __dbg.battle.battle.step(0.05) and never summon. Log: wave 2 = 9 enemies, wave 3 = 33, wave 4 = 51 of 60, phase 'lost' at t=75 s with 197 fish unspent. Result screen says only '아쉬워요 / 다음엔 더 잘할 수 있어요' with no cause. The same flow with a natural policy (summon whenever fish >= cost, merge any pair) wins the tutorial at t=129 s, so the script itself is fine for an active player. The three forced steps end at the merge and nothing afterwards points at the Summon button; the cost label '12' has no pulse and wave 1 starts about 4.6 s after the third summon while the merge prompt is still showing, so the sim is not held (tutorialFlow.holding only suppresses hints, hud/index.ts:290).",
+  "evidence": "t09_wave3_or_choice.png (wave 3 pick popup with 35/60 enemies, only 2 cats on board, 124 fish idle); t05_after3_later.png (after the third summon only the dim 'Summon 12' button, no prompt); t3p_end_a.png and t3p_end_c.png (tutorial defeat result '아쉬워요', wave 3/8, 4 summons); numbers from the API run printed in the session log (t0 w1 en2, t10 w2 en9, t22 w3 en33, t34 w4 en51, END lost w4 t75).",
+  "suggestion": "After the merge step add a fourth soft step: when fish >= cost and the player has fewer than about 5 cats, pulse the Summon button with the pointer and a one-line bubble ('Fish ready - summon more!'). Optionally lower wave 1-3 counts in tutorial mode or give the tutorial the 'summon' reminder again at wave 2. On a tutorial defeat show the reason ('You had 197 fish left - spend them on cats')."
+ },
+ {
+  "id": "qa-battle-toplane-overlays",
+  "area": "battle",
+  "severity": "major",
+  "title": "Wave banner, synergy toast, fail toast and hint bubbles all stack on the enemy spawn lane and the next-wave preview",
+  "where": "Battle HUD, design y about 160-265 (top lane right under the wave pill), any run in the first wave",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=10&lang=ko, give(900,10), tap Summon 5 times as wave 1 starts. The one-time hint '같은 고양이 둘을 합치면...' sits over the mouse hole, the next-wave preview chips and the wave banner while the green '사수 시너지 1단계!' toast sits on the lane below it, exactly where the first cucumbers walk. Also: tap the locked Awaken button (purr < 12): the fail toast '골골이 모자라요...' covers the preview chips and the lane.",
+  "evidence": "c1_5summons.png (hint bubble + toast covering mouse hole, banner and preview); t15_pick_a.png (banner '1막 · 웨이브 3' and green synergy toast hide the cucumbers at x about 270 on the lane); d2_awaken_a.png (fail toast covering preview chips and lane); t11_summoned.png (toast overlapping walking cucumbers).",
+  "suggestion": "Move toasts and the banner to a free band (between board bottom and bottom panel, or over the board centre), never over the path; queue hint bubbles so they do not coexist with the banner, and anchor the merge hint to the pair it is about instead of the top lane."
+ },
+ {
+  "id": "qa-battle-tap-tap-moves-and-swaps",
+  "area": "battle",
+  "severity": "major",
+  "title": "With a cat selected (sheet open) tapping another cat swaps it and tapping an empty cell moves it, with no cue; reading a second cat's sheet rearranges the board",
+  "where": "src/view/field/policy.ts:78 decideTap; any selected cat",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=10, board({0:'w_paw',1:'w_sword',2:'w_samurai',5:'r_sling'}). Tap the samurai (cell 2): the sheet opens. Tap the sword cat (cell 1) to read it: units become 1:w_samurai, 2:w_sword (swap, sound 'pickup' then 'place'). Select a cat and tap an empty cell: the cat moves (sfx 'place'). Seen in three separate runs by accident while only trying to inspect cats.",
+  "evidence": "d3_awaken_d.png (king selected, sheet open), d2_molt_picker.png (board after the accidental swap, selection lost, Molt tap hit the wrong thing); run output '2:w_tiger' -> after tapping cell 1 '1:w_tiger,2:w_sword'; feedback log 'tap-empty-nothing-selected {place:1}'.",
+  "suggestion": "Make tap on another non-mergeable cat re-select it (switch sheet); keep tap-tap only for mergeable pairs, or require tap on a visible 'swap/move' glyph. At least show the swap/move glyphs loudly while a cat is selected."
+ },
+ {
+  "id": "qa-battle-tutorial-finger-over-preview",
+  "area": "battle",
+  "severity": "minor",
+  "title": "During the forced merge drag the tutorial finger covers the 'Sword Cat / rank' result bubble",
+  "where": "Tutorial merge step, drag preview bubble; src/view/hud/Tutorial.ts finger over src/view/field/preview.ts bubble",
+  "repro": "?fresh=1, 3 free summons, start dragging one 솜방망이 onto the other (real mouse down/move, hold). The result bubble '검사냥 / 동네' appears left of the target and the animated pointing hand is drawn over its second line.",
+  "evidence": "t06_drag_merge.png (bubble text '동네' hidden behind the finger at about (150,500); tutorial bubble and sell strip also on screen).",
+  "suggestion": "Hide or offset the finger once the player has picked the cat up (the drag has begun), or draw the preview bubble above the finger."
+ },
+ {
+  "id": "qa-battle-tutorial-bubble-covers-board-row",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Tutorial bubbles for the class chips and synergy sit on the bottom board row and hide cats' rank pills and badges",
+  "where": "Tutorial bubbles 'hud.hint.chips' and 'hud.hint.synergy', design y about 660-800",
+  "repro": "?fresh=1: after the forced merge the bubble '직업 칩이에요...' appears; later '시너지가 켜졌어요!'. Both are placed above the chip row, over board row 3 (cells 15-19). A cat in row 3 loses its rank pill and class badge for the 5 s the bubble shows. Same in English (3 lines tall).",
+  "evidence": "t11_summoned.png (bubble over the 검사냥 in cell 15, its pill hidden), t07_merge_c.png, j2_en_chips_hint.png (English bubble covering the whole bottom row).",
+  "suggestion": "Shorten the copy to two lines and place these bubbles below the chips or beside the fish pill, or make them non-blocking toasts."
+ },
+ {
+  "id": "qa-battle-hint-bubbles-over-hud",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Hint bubbles cover the HUD element next to the one they explain, and stay after the player acted",
+  "where": "src/view/hud/hints.ts (SHOW_FOR = 5 s), battle bottom panel",
+  "repro": "?scene=battle&chapter=1&sandbox=1&runs=10: on open the 'grade' hint covers the lower edge of the fish and purr pills; the 'purr' hint ('골골이에요...') covers the archer and mage class chips and their rank pips; tap the Lv.1 button (grade bought, Lv.2 shown) and the grade hint is still on screen 0.6 s later.",
+  "evidence": "c1_open.png (bubble over the bottom of the fish/purr pills), d4_spawn_done.png (purr bubble over two class chips), d4_grade.png (Lv.2 / 90 while the grade hint is still showing), h1_ch3_en_1280.png.",
+  "suggestion": "Dismiss a hint when its target is used; place bubbles in the empty band above the Summon row (y about 1090-1150) instead of over the chips and pills."
+ },
+ {
+  "id": "qa-battle-skill-text-truncated",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Selection sheet cuts the skill line of kings and guardians ('...') and in English cuts mid-sentence",
+  "where": "src/view/hud/SelectionSheet.ts:261 fitLine (one-line ellipsis), tooltip only on tap at lines 250-253",
+  "repro": "Select a 대왕 (w_samurai) in Korean: '대상 앞뒤 110 안의 적을 모두 베고 3초간 출혈을 입혀…'. Select a 수호신: '대상 주변 110 안의 적을 모두 쳐요. 4번째 공격마다…'. In English a Sword Cat reads 'Cuts up to 3 enemies within 70 of the target at…'. The full text is only reachable by tapping the line, which has no visible affordance.",
+  "evidence": "d2_sel_king.png (KO, ellipsis), d3_awaken_c.png (KO guardian, ellipsis), d1_sel_samurai.png (EN, 'at…').",
+  "suggestion": "Allow two lines for the skill text (there is spare height above the plan row) or add a small 'i' hint; shorten the strings for kings and guardians."
+ },
+ {
+  "id": "qa-battle-damage-numbers-layering",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Damage numbers near the spawn point are clipped behind the wave pills, and a crit burst draws on top of the timer",
+  "where": "Top-left HUD (wave pill and timer pill) over the spawn area; src/fx damage numbers vs src/view/hud/TopBar.ts",
+  "repro": "Open any battle, let the first enemies take hits next to the mouse hole. Red numbers rise into the HUD: they go under the pills (half hidden), while a crit burst ('38!') is drawn above the HUD.",
+  "evidence": "t11_summoned.png (red '19' cut by the timer pill at about (240,150)), d3_awaken_d.png (red number behind the '14초' pill at (130,185)), t12_selected.png (crit '38!' starburst covering the '7초' timer).",
+  "suggestion": "Pick one layer rule: clamp number rise to stay below y about 200 or draw all fx numbers under the HUD with a fade before they reach it."
+ },
+ {
+  "id": "qa-battle-continue-wave-number-mismatch",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Continue screen says one wave less than the HUD showed when the run ended",
+  "where": "src/view/hud/screens/ContinueScreen.ts",
+  "repro": "Boss timeout: ?scene=battle&chapter=1&seed=7&sandbox=1&runs=10&lang=ko, skipToWave(8), board({}), step 45 s of sim until the boss timer reaches 0. HUD said '2막 · 웨이브 8/24' but the continue card says '웨이브 7/24까지 왔어요'. Overflow loss at wave 12 says '웨이브 11/24까지 왔어요'.",
+  "evidence": "e1_boss_a.png (HUD wave 8/24), e1_defeat_c.png (card '웨이브 7/24까지 왔어요'), e3_overflow_a.png (HUD 12/24), e3_lost_b.png (card 11/24).",
+  "suggestion": "Show the wave the player died on, or word it as 'cleared 7 waves'."
+ },
+ {
+  "id": "qa-battle-pity-chip-unlabeled",
+  "area": "battle",
+  "severity": "minor",
+  "title": "The pity counter appears as an unlabeled yellow chip '★ 9/12' next to the % button",
+  "where": "Bottom panel, right of the purr pill, after several dry summons",
+  "repro": "skipToWave(12) in ?scene=battle&chapter=1&sandbox=1&runs=10: a yellow pill '☆ 9/12' appears left of the % chip. Nothing says it is the 골목대장-or-better pity counter; purr is 6 so it reads like a purr or awakening progress number.",
+  "evidence": "e3_overflow_a.png (chip at about (565,1022)).",
+  "suggestion": "Add a caption or icon that matches the rank-3 pip color ('천장 9/12'), or tooltip it on first appearance."
+ },
+ {
+  "id": "qa-battle-right-column-crowding",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Call-next-wave button touches the % chip above and the laser ring below and sits 9 px from the right edge",
+  "where": "Bottom panel right column (src/view/hud/ActionRow.ts callBtn at CALL_X)",
+  "repro": "?scene=battle&chapter=1&sandbox=1&runs=10, let the wave spawn finish (about 9 s sim). The green '다음 웨이브 +5' button (x 475-750 px) is flush with the % chip bottom (y 1065) and its bottom edge meets the top of the laser ring (y 1165).",
+  "evidence": "d4_spawn_done.png (right column).",
+  "suggestion": "Narrow the button or move the tracker row and call button up by about 10 px so the three controls have a gap and the same right margin as the % chip."
+ },
+ {
+  "id": "qa-battle-laser-affordance",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Laser button only shows a tooltip; the hint says 'when it is on' and the tooltip stays after the dot is placed; button is silent",
+  "where": "src/view/hud/ActionRow.ts laserBtn.onTap, hud.hint.laser",
+  "repro": "Tap the target button (nothing arms, only the tooltip '길 위를 눌러 빨간 점을 찍어요.' appears and no ui sound, only a 12 ms vibration). Tap the lane: dot placed (sfx laser_on and freeze). Tooltip is still visible 1.4 s later. The first-time hint says '켜지면 길 위를 눌러...' (when it is switched on) although there is no switch.",
+  "evidence": "d4_laser_tip.png (tooltip only), d4_laser_on_b.png (dot placed, tooltip still showing, ring 3초), feedback log 'laser-button {} vib [12]'.",
+  "suggestion": "Make the button arm a visible aim mode (reticle follows the finger) or reword the hint to 'Tap the path to drop the red dot'; dismiss the tooltip when the dot is set; play ui_click."
+ },
+ {
+  "id": "qa-battle-feedback-gaps",
+  "area": "battle",
+  "severity": "polish",
+  "title": "Some actions have weak or no sound: deselect is silent, swap sounds identical to move, laser button silent",
+  "where": "Battle sfx wiring (src/view/director, src/view/field, ActionRow)",
+  "repro": "Wrap __dbg.audio.api.play and navigator.vibrate, then: tap a cat (select: pickup, vib 8), tap it again (deselect: no sfx, vib 8); drag-move and drag-swap both give only pickup + place; tap the laser button gives only vib 12.",
+  "evidence": "Feedback log lines 'FB deselect {} vib [8]', 'FB move-drag {pickup,place}', 'FB swap-drag {pickup,place}', 'FB laser-button {} vib [12]'. Summon, merge, awaken-fail (ui_error x2 + warning haptic), grade (level_up), speed, popups all have sound ids and haptics.",
+  "suggestion": "Add a soft ui_back on deselect, a swap-specific sound or a pitch shift, and ui_click on the laser button."
+ },
+ {
+  "id": "qa-battle-chapter-bg-similar",
+  "area": "battle",
+  "severity": "polish",
+  "title": "Chapter 3 (bathroom) and chapter 5 (clinic) backgrounds are both pale teal; backgrounds are still painterly rooms next to the paper UI",
+  "where": "Battle backgrounds bg_* for chapters 1-5",
+  "repro": "?scene=battle&chapter=N&sandbox=1&runs=10 for N = 1..5 and compare.",
+  "evidence": "h3_ch3.png and h3_ch5.png (near identical teal tint and the same cream board on top); h3_ch1.png, h3_ch2.png, h3_ch4.png (distinct).",
+  "suggestion": "Shift chapter 5 to a different hue (lilac or warm grey) and flatten the painterly lighting toward the paper look when backgrounds are regenerated."
+ },
+ {
+  "id": "qa-battle-boss-clipped-left-edge",
+  "area": "battle",
+  "severity": "polish",
+  "title": "Large boss sprite is cut by the left screen edge while walking the left lane",
+  "where": "Field path left lane, boss_vacuum (any big boss)",
+  "repro": "skipToWave(8) in ?scene=battle&chapter=1&sandbox=1&runs=10&lang=ko, board({}) so the boss survives, step about 45 s: the boss reaches the left lane and its hose arm and left half are cropped at x = 0 with the red target ring half off-screen.",
+  "evidence": "e1_boss_low.png (boss at the left edge, around y 560).",
+  "suggestion": "Move the left lane centre in by about 15 px for boss-size enemies or clamp the sprite offset."
+ },
+ {
+  "id": "qa-battle-tutorial-open-polish",
+  "area": "battle",
+  "severity": "polish",
+  "title": "Tutorial opening: finger hides the 'Free' label and is cut by the bottom edge; the bottom panel is a large empty cream area",
+  "where": "Tutorial first 20 s (staged HUD reveal)",
+  "repro": "?fresh=1 first frame: the animated hand over the Summon button covers '무료' and its lower part runs off the canvas bottom. After the free summons only the fish pill and the button are visible, leaving about 300 px of blank paper (y 880-1170) above them.",
+  "evidence": "t00_open.png (finger over '무료', cut at the bottom), t03_summon3.png (empty panel).",
+  "suggestion": "Point the finger at the button's top edge so the label stays readable; move the fish pill and Summon button up or put the first-run hint text into the empty area."
+ },
+ {
+  "id": "qa-battle-merge-preview-hides-neighbours",
+  "area": "battle",
+  "severity": "polish",
+  "title": "Drag result bubble ('Sword Cat / Street') is placed over the neighbouring cat instead of flipping to free space",
+  "where": "src/view/field/preview.ts result bubble while dragging",
+  "repro": "?scene=battle&chapter=1&sandbox=1&runs=10&lang=en, board({0:'w_paw',1:'w_paw',2:'w_sword',3:'w_samurai',5:'r_sling',6:'m_snow',10:'t_bell'}), drag cell 0 onto cell 1 and hold: the bubble lands on the archer at cell 5 and hides it; after release a faded copy of the bubble (text cut '...l Car') lingers over cells 5-6 for a moment.",
+  "evidence": "d1_merge_preview.png (bubble over the 사수 at cell 5), d1_merge_fx_a.png (fading bubble remnant).",
+  "suggestion": "Choose the bubble side by free space (prefer above or over empty cells) and fade it out faster than the merge fx."
+ },
+ {
+  "id": "qa-battle-elite-warning-covers-board",
+  "area": "battle",
+  "severity": "polish",
+  "title": "Elite/boss warning stripe covers two full board rows while the elite appears",
+  "where": "Director warning banner on wave 4/8/12... start",
+  "repro": "Tutorial or ?scene=battle&chapter=1... reach wave 4: the full-width red hazard banner '경고! 대왕 오이 출현!' covers rows 1-2 (about 160 px tall) at the moment cats start fighting the elite.",
+  "evidence": "t16_wave4_a.png (banner over the middle rows, cats hidden).",
+  "suggestion": "Shorten it, make it translucent, or place it in the top lane band where the elite bar will be."
+ },
+ {
+  "id": "qa-flow-relic-screen-tween-exception",
+  "area": "battle",
+  "severity": "minor",
+  "title": "Uncaught TypeError every frame from a RelicScreen tween after the run is won with the toy offer open; the page stops rendering",
+  "where": "src/view/hud/screens/RelicScreen.ts / ScreenScaffold show-hide tween on a destroyed container (stack: set y of null at RelicScreen.ts:299, tween.ts Tween.apply). Reached through the debug win() hook, not proven for a real player.",
+  "repro": "?scene=home&fresh=1&lang=en, finishRuns(1), dismiss popups, START, Go. Wait for the battle hook, then run __dbg.battle.win() and step the game: for i<20 game.tick(0.05). Console shows TypeError: Cannot set properties of null (setting 'y') on every tick; a following page.screenshot times out.",
+  "evidence": "Aside output ADV ERR ... \"Cannot set properties of null (setting 'y')\" and PAGE_ERRORS [\"error: Uncaught TypeError: Cannot set properties of null (setting 'y') @ ParticleBuffer-...js:7696\"]; ad run B0 phase won, popupKids 2, pause [\"popup\"]. (Screenshots of the broken state could not be captured: the capture timed out.) The win() hook skips the HUD while a relic offer is open, so a real trigger may be a quick close or scene exit while the scaffold hide tween still runs; the tween should be killed with the screen.",
+  "suggestion": "Run the scaffold's show/hide tweens on a bag that is killed in destroy(), or guard the onUpdate against destroyed targets."
+ }
+]

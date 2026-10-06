@@ -8,6 +8,7 @@ import { Container, Point } from 'pixi.js';
 import { i18nEvents } from '@/core/i18n';
 import { clearToasts, popups, tooltip } from '@/ui';
 import type { UnitId } from '@/game';
+import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
 import type { BattleContext, BattleLayout, HudAnchor, HudPart } from '../context';
 import { BossBar } from './BossBar';
 import { BottomPanel } from './BottomPanel';
@@ -32,6 +33,8 @@ const TWINS_WAIT = 90;
 
 /** Seconds no hint bubble comes up after a banner or caption has taken the top of the screen. */
 const BANNER_HOLD = 2.6;
+/** How much a bubble covering the enemy lane costs next to covering a cat (3) or a pill (1.2): enough to pick the other side when it is free. */
+const LANE_WEIGHT = 1.5;
 
 /** Simulated seconds a single frame can never exceed (3x speed, 0.05 s frame cap, hit-stop aside): a bigger step means skipped events. */
 const RESYNC_JUMP = 0.5;
@@ -184,6 +187,16 @@ class Hud implements HudPart {
       const view = u ? this.ctx.unitView(u.uid) : null;
       if (view) add(view, 3);
     }
+    // The enemy lane runs round the board: a bubble over it hides the enemies the player has to watch.
+    const { fieldX, fieldY } = this.ctx.layout;
+    const half = LANE_WIDTH / 2;
+    const side = PATH_BOTTOM - PATH_TOP;
+    out.push(
+      { x: fieldX, y: fieldY + PATH_TOP - half, w: FIELD_W, h: LANE_WIDTH, weight: LANE_WEIGHT },
+      { x: fieldX, y: fieldY + PATH_BOTTOM - half, w: FIELD_W, h: LANE_WIDTH, weight: LANE_WEIGHT },
+      { x: fieldX + PATH_LEFT - half, y: fieldY + PATH_TOP, w: LANE_WIDTH, h: side, weight: LANE_WEIGHT },
+      { x: fieldX + PATH_RIGHT - half, y: fieldY + PATH_TOP, w: LANE_WIDTH, h: side, weight: LANE_WEIGHT },
+    );
     return out;
   }
 
@@ -241,13 +254,14 @@ class Hud implements HudPart {
       return;
     }
     const view = this.ctx.unitView((units[pair[0]] as NonNullable<(typeof units)[number]>).uid);
-    if (!view) {
+    const other = this.ctx.unitView((units[pair[1]] as NonNullable<(typeof units)[number]>).uid);
+    if (!view || !other) {
       this.twinsFrames--;
       return;
     }
     this.twinsFrames = 0;
-    // The one hint that explains the merge rule goes before whatever else is waiting.
-    this.env.hints.request('twins', view, false, true);
+    // The one hint that explains the merge rule goes before whatever else is waiting; it points at both cats of the pair.
+    this.env.hints.request('twins', view, false, true, other);
   }
 
   // ───────────────────────── pause ─────────────────────────
@@ -256,8 +270,13 @@ class Hud implements HudPart {
     if (this.pauseOpen || this.destroyed || !canOpenPause(this.ctx.battle.phase, this.ending)) return;
     this.pauseOpen = true;
     this.ctx.setPaused('user', true);
-    const action = await popups.open(new PauseMenu(this.env));
-    this.afterPause(action);
+    this.afterPause(await this.pauseMenu());
+  }
+
+  private pauseMenu(): Promise<PauseAction> {
+    // An enemy card the player left open must not stay on top of the menu (the kit's tooltip layer is above popups).
+    tooltip.hide();
+    return popups.open(new PauseMenu(this.env));
   }
 
   private afterPause(action: PauseAction): void {
@@ -265,7 +284,7 @@ class Hud implements HudPart {
     if (action === 'settings') {
       openSettings(() => {
         if (this.destroyed) return;
-        void popups.open(new PauseMenu(this.env)).then((a) => this.afterPause(a));
+        void this.pauseMenu().then((a) => this.afterPause(a));
       });
       return;
     }

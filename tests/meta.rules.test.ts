@@ -388,7 +388,7 @@ describe('text', () => {
     for (const r of CHEST_RARITIES) list.push('rarity.' + r);
     for (const u of BASE_UNITS) list.push(`unit.${u}.name`);
     for (let c = 1; c <= 5; c++) list.push(`chapter.${c}.name`);
-    list.push('meta.toast.claimed', 'meta.toast.levelUp', 'meta.toast.unlock', 'meta.toast.restored');
+    list.push('meta.toast.claimed', 'meta.toast.levelUp', 'meta.toast.restored');
     return list;
   }
 
@@ -445,14 +445,5 @@ describe('text', () => {
     setLang('ko');
     expect(describeBundle({ wild: { rare: 1 } })).toEqual(['만능 카드(동네) 1장']);
     expect(featureHint('cats')).toBe('1판을 마치면 열려요.');
-  });
-
-  it('announces an unlock with a text that fits every feature name, singular or plural', () => {
-    setLang('en');
-    for (const f of FEATURES) {
-      const line = t('meta.toast.unlock', { feature: t('meta.feature.' + f) });
-      expect(line, f).toMatch(/^Unlocked: .+!$/);
-    }
-    expect(t('meta.toast.unlock', { feature: t('meta.feature.missions') })).toBe('Unlocked: Missions!');
   });
 });

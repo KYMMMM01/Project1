@@ -30,6 +30,9 @@ interface StackView {
   stamp?: Container;
 }
 
+/** Width of the skip button and the gap to the title on the header row. */
+const SKIP_W = 220;
+
 const CHEST_SIZE = 330;
 
 /** Strength of each rarity's flourish (shake, haptic, sound). */
@@ -87,8 +90,11 @@ class ChestReveal {
   private readonly chestLayer = new Container();
   private readonly fxHost = new Container();
   private readonly ui = new Container();
+  private readonly floor = new Graphics();
+  private readonly title: PaperLabel;
   private readonly fx: Fx;
   private readonly offUpdate: () => void;
+  private readonly offResize: () => void;
   private readonly stacks: RevealStack[];
   private readonly best: ChestRarity;
   private readonly schedule: RevealSchedule;
@@ -115,23 +121,12 @@ class ChestReveal {
       this.resolve = r;
     });
 
-    this.computeArea();
-    this.grid = gridLayout(this.stacks.length, this.area.w, this.area.h);
-
-    const W = game.w;
-    const H = game.h;
-    const floor = new Graphics();
-    drawFloor(floor, W, H);
-    floor.eventMode = 'static';
-    floor.hitArea = new Rectangle(0, 0, W, H);
-    floor.on('pointertap', () => {
+    this.floor.eventMode = 'static';
+    this.floor.on('pointertap', () => {
       if (!this.finished) this.skipToEnd();
     });
 
-    // The title shares the header row with the skip button: it is centred in the space left of it.
-    const titleSpan = W - 24 - 220 - 16 - 24;
-    const title = new PaperLabel({ text: t('meta.chest.' + result.kind), size: 48, paper: Color.paperLight, padX: 44, maxWidth: titleSpan });
-    title.position.set(24 + titleSpan / 2, game.safeTop + 74);
+    this.title = new PaperLabel({ text: t('meta.chest.' + result.kind), size: 48, paper: Color.paperLight, padX: 44 });
 
     this.shadow.ellipse(0, CHEST_SIZE * 0.4, CHEST_SIZE * 0.44, 28).fill({ color: Color.shadow, alpha: 0.24 });
     const art = chestArt(result.kind, CHEST_SIZE);
@@ -139,22 +134,26 @@ class ChestReveal {
     ribbon.position.set(0, CHEST_SIZE * 0.1);
     this.chest.addChild(art, ribbon);
 
-    this.skip = new Button({ label: t('reveal.skip'), icon: 'fast_forward', style: 'kraft', width: 220, height: 96, fontSize: 28 });
-    this.skip.position.set(W - 24 - 110, game.safeTop + 74);
+    this.skip = new Button({ label: t('reveal.skip'), icon: 'fast_forward', style: 'kraft', width: SKIP_W, height: 96, fontSize: 28 });
     this.skip.onTap(() => this.skipToEnd());
     this.done = new Button({ label: t('reveal.done'), style: 'primary', width: 380, height: 112, fontSize: 46, tape: 'pink' });
     this.done.visible = false;
     this.done.onTap(() => this.leave());
 
     this.chestLayer.addChild(this.shadow, this.chest);
-    this.ui.addChild(title, this.summary, this.skip, this.done);
-    this.root.addChild(floor, this.raysLayer, this.gridLayer, this.chestLayer, this.fxHost, this.ui);
+    this.ui.addChild(this.title, this.summary, this.skip, this.done);
+    this.root.addChild(this.floor, this.raysLayer, this.gridLayer, this.chestLayer, this.fxHost, this.ui);
     game.popupLayer.addChild(this.root);
 
     this.fx = new Fx(this.fxHost, uiTweens);
     this.offUpdate = game.onUpdate((dt) => this.fx.update(dt));
+    this.computeArea();
     this.buildCards();
+    this.grid = this.makeGrid();
+    this.layoutFloor();
     this.layoutFixed();
+    this.applyGrid();
+    this.offResize = game.events.on('resize', () => this.relayout());
 
     this.onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
@@ -172,9 +171,22 @@ class ChestReveal {
     this.area = { x: 24, y: top, w: game.w - 48, h: Math.max(400, bottom - top) };
   }
 
+  private layoutFloor(): void {
+    const W = game.w;
+    const H = game.h;
+    this.floor.clear();
+    drawFloor(this.floor, W, H);
+    this.floor.hitArea = new Rectangle(0, 0, W, H);
+  }
+
+  /** The title shares the header row with the skip button (it is centred in the space left of it) until the button is gone. */
   private layoutFixed(): void {
     const W = game.w;
     const H = game.h;
+    const span = W - 24 - SKIP_W - 16 - 24;
+    this.title.setMaxWidth(this.finished ? W - 48 : span);
+    this.title.position.set(this.finished ? W / 2 : 24 + span / 2, game.safeTop + 74);
+    this.skip.position.set(W - 24 - SKIP_W / 2, game.safeTop + 74);
     this.done.position.set(W / 2, H - game.safeBottom - 100);
     this.summary.position.set(W / 2, H - game.safeBottom - 215);
   }
@@ -184,46 +196,46 @@ class ChestReveal {
   }
 
   private buildCards(): void {
-    const g = this.grid;
     for (const stack of this.stacks) {
-      const holder = new Container();
-      holder.visible = false;
-      const hw = g.cardW / g.scale;
-      const hh = g.cardH / g.scale;
-      const rim = Rarity[stack.rarity];
-      // The back of a card: kraft paper with a dashed line and a paw print, edged in the rarity colour.
-      const back = new Container();
-      const seed = paperSeed();
-      const sheet = paperShape({ w: hw, h: hh, radius: 26, fill: Color.kraft, edge: rim.dark, edgeWidth: 4, edgeAlpha: 0.9, shadow: 6, grain: false, seed });
-      back.addChild(sheet, drawIcon('paw', hw * 0.42, Color.kraftDark));
+      const card = new RevealCard(stack);
+      card.visible = false;
+      this.gridLayer.addChild(card);
+      this.views.push({ stack, card, shown: false, placed: false });
+    }
+  }
 
-      const unit = stack.unit;
-      const face = new Container();
-      const frame = new CardFrame({
-        rarity: stack.rarity,
-        size: g.size,
-        portrait: unit ? unitPortrait(unit, stack.rarity, 220) : wildArt(stack.rarity, 140),
-        name: unit ? t(`unit.${unit}.name`) : `${rarityName(stack.rarity)} ${t('reveal.wild')}`,
-      });
-      face.addChild(frame);
-      const tagText = stack.bonus ? t('reveal.bonus') : unit ? '' : t('reveal.wild');
-      if (tagText) {
-        const tag = new Tag({ text: tagText, style: stack.bonus ? 'success' : 'info', shape: 'pill', fontSize: 24, tilt: -0.08 });
-        tag.position.set(hw / 2 - tag.uiBox.w / 2 - 6, -hh / 2 + 10);
-        face.addChild(tag);
-      }
-      const small = g.size === 'small';
-      const count = numberText(small ? 30 : 40, Color.ink, 'x0');
-      const badge = new Container();
-      badge.addChild(paperShape({ w: small ? 80 : 112, h: small ? 42 : 56, kind: 'pill', fill: Color.paperLight, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 5 }), count);
-      badge.position.set(hw / 2 - (small ? 26 : 38), hh / 2 - (small ? 82 : 120));
-      face.addChild(badge);
-      face.visible = false;
+  /** The best layout for the cards in the current area; how many lines the names take depends on the cell width. */
+  private makeGrid(): GridLayout {
+    const views = this.views;
+    return gridLayout(views.length, this.area.w, this.area.h, (cellW) => {
+      let lines = 1;
+      for (const v of views) lines = Math.max(lines, v.card.nameLines(cellW));
+      return nameBlockOf(lines);
+    });
+  }
 
-      holder.addChild(back, face);
-      holder.scale.set(g.scale);
-      this.gridLayer.addChild(holder);
-      this.views.push({ stack, holder, back, face, count, shown: false });
+  /** Hand the grid's plate scale and cell width to every card; the ones already in their slot move with it. */
+  private applyGrid(): void {
+    const g = this.grid;
+    this.views.forEach((v, i) => {
+      v.card.layout(g.scale, g.cellW);
+      if (!v.placed) return;
+      const slot = this.slotOf(i);
+      v.card.position.set(slot.x, slot.y);
+      v.card.scale.set(g.scale);
+    });
+  }
+
+  /** The screen changed size (rotation, keyboard, address bar): refit the floor, the header and footer, the chest and every card. */
+  private relayout(): void {
+    this.layoutFloor();
+    this.layoutFixed();
+    this.computeArea();
+    this.grid = this.makeGrid();
+    this.applyGrid();
+    if (this.chestLayer.visible) {
+      const home = this.chestHome();
+      this.chestLayer.position.set(home.x, home.y);
     }
   }
 
@@ -328,12 +340,16 @@ class ChestReveal {
     const v = this.views[i];
     if (!v || v.shown) return;
     const from = this.chestHome();
-    v.holder.visible = true;
-    v.holder.alpha = 1;
     const side = i % 2 === 0 ? -1 : 1;
     const peak = Math.min(from.y, this.slotOf(i).y) - 140 - (i % 3) * 30;
     const mx = (from.x + this.slotOf(i).x) / 2 + side * 40;
-    const baseScale = this.grid.scale;
+    const pop = backOut(1.7);
+    // The back starts where the arc does: shown before the first tween frame it would flash at the corner.
+    v.card.position.set(from.x, from.y);
+    v.card.scale.set(this.grid.scale * 0.35);
+    v.card.rotation = side * 0.5;
+    v.card.alpha = 1;
+    v.card.visible = true;
     this.bag.run({
       duration: this.schedule.flight,
       ease: Ease.cubicOut,
@@ -341,16 +357,17 @@ class ChestReveal {
         const slot = this.slotOf(i);
         const u = 1 - k;
         // Quadratic arc through a raised midpoint.
-        v.holder.x = u * u * from.x + 2 * u * k * mx + k * k * slot.x;
-        v.holder.y = u * u * from.y + 2 * u * k * peak + k * k * slot.y;
-        v.holder.scale.set(baseScale * (0.35 + 0.65 * backOut(1.7)(k)));
-        v.holder.rotation = side * 0.5 * u;
+        v.card.x = u * u * from.x + 2 * u * k * mx + k * k * slot.x;
+        v.card.y = u * u * from.y + 2 * u * k * peak + k * k * slot.y;
+        v.card.scale.set(this.grid.scale * (0.35 + 0.65 * pop(k)));
+        v.card.rotation = side * 0.5 * u;
       },
       onComplete: () => {
         const slot = this.slotOf(i);
-        v.holder.position.set(slot.x, slot.y);
-        v.holder.scale.set(baseScale);
-        v.holder.rotation = 0;
+        v.card.position.set(slot.x, slot.y);
+        v.card.scale.set(this.grid.scale);
+        v.card.rotation = 0;
+        v.placed = true;
         this.flip(i);
       },
     });
@@ -362,7 +379,6 @@ class ChestReveal {
     if (!v || v.shown) return;
     v.shown = true;
     const st = v.stack;
-    const base = this.grid.scale;
     const fl = FLOURISH[st.rarity];
     const slot = this.slotOf(i);
     const isBest = i === this.views.length - 1;
@@ -371,44 +387,44 @@ class ChestReveal {
     this.bag.run({
       duration: 0.09,
       ease: Ease.quadIn,
-      onUpdate: (k) => v.holder.scale.x = base * (1 - k),
+      onUpdate: (k) => v.card.scale.x = this.grid.scale * (1 - k),
       onComplete: () => {
-        v.back.visible = false;
-        v.face.visible = true;
+        v.card.showFace();
         this.bag.run({
           duration: 0.2,
           ease: backOut(2.2),
-          onUpdate: (k) => v.holder.scale.x = base * k,
-          onComplete: () => v.holder.scale.x = base,
+          onUpdate: (k) => v.card.scale.x = this.grid.scale * k,
+          onComplete: () => v.card.scale.x = this.grid.scale,
         });
         this.flourish(i, slot.x, slot.y, isBest);
       },
     });
+    // The count rolls up from one (every stack holds at least one card), so a card never reads "x0".
     const total = st.count;
-    const dur = Math.max(0.3, countUpDuration(total));
-    this.bag.run({
-      duration: dur,
-      delay: 0.1,
-      ease: Ease.cubicOut,
-      onUpdate: (k) => {
-        v.count.text = 'x' + formatCount(countUpValue(0, total, k));
-      },
-      onComplete: () => {
-        v.count.text = 'x' + formatCount(total);
-      },
-    });
+    if (total > 1) {
+      this.bag.run({
+        duration: Math.max(0.3, countUpDuration(total)),
+        delay: 0.1,
+        ease: Ease.cubicOut,
+        onUpdate: (k) => {
+          v.card.count.text = 'x' + formatCount(countUpValue(1, total, k));
+        },
+        onComplete: () => {
+          v.card.count.text = 'x' + formatCount(total);
+        },
+      });
+    }
     haptic(fl.haptic === 'jackpot' && !isBest ? 'heavy' : fl.haptic);
   }
 
   /** A strip of tape slapped across the card's top corner. */
   private slapTape(v: StackView, animate = true): void {
     if (v.tape) return;
-    const hw = this.grid.cardW / this.grid.scale;
-    const hh = this.grid.cardH / this.grid.scale;
+    const { w, h } = PLATE;
     const spec = SLAP_TAPE[v.stack.rarity];
-    const tape = tapeStrip({ name: spec.name, pattern: spec.pattern, w: hw * 0.5, h: 34, angle: -28 });
-    tape.position.set(-hw / 2 + hw * 0.16, -hh / 2 + 12);
-    v.face.addChild(tape);
+    const tape = tapeStrip({ name: spec.name, pattern: spec.pattern, w: w * 0.5, h: 34, angle: -28 });
+    tape.position.set(-w / 2 + w * 0.16, -h / 2 + 12);
+    v.card.face.addChild(tape);
     v.tape = tape;
     if (animate && !motion.reduced) {
       tape.scale.set(1.9);
@@ -427,11 +443,10 @@ class ChestReveal {
 
   /** The rarity's name stamped on the card; it fades after a moment so the portrait is clear again. */
   private stampCard(v: StackView, hold: number): void {
-    const hw = this.grid.cardW / this.grid.scale;
     const rs = Rarity[v.stack.rarity];
-    const stamp = stampMark(rarityName(v.stack.rarity), { size: 40, color: rs.dark, maxWidth: hw * 0.92, tilt: -0.2 });
+    const stamp = stampMark(rarityName(v.stack.rarity), { size: 40, color: rs.dark, maxWidth: PLATE.w * 0.92, tilt: -0.2 });
     stamp.position.set(0, 14);
-    v.face.addChild(stamp);
+    v.card.face.addChild(stamp);
     v.stamp = stamp;
     stampIn(this.bag, stamp, 0, () => game.shake(0.1));
     this.bag.run({
@@ -472,16 +487,15 @@ class ChestReveal {
       this.fx.confettiRain({ count: 70, x, y: Math.max(40, y - 360) });
     }
     if (isBest && !motion.reduced) {
-      const base = this.grid.scale;
       this.bag.run({
         duration: this.schedule.hold + 0.25,
         ease: Ease.sineInOut,
         onUpdate: (k) => {
           const s = 1 + 0.16 * Math.sin(Math.min(1, k * 1.6) * Math.PI / 2) * (1 - 0.35 * k);
-          v.holder.scale.set(base * s);
-          v.holder.zIndex = 5;
+          v.card.scale.set(this.grid.scale * s);
+          v.card.zIndex = 5;
         },
-        onComplete: () => v.holder.scale.set(base),
+        onComplete: () => v.card.scale.set(this.grid.scale),
       });
       this.gridLayer.sortableChildren = true;
     }
@@ -492,7 +506,17 @@ class ChestReveal {
     this.finished = true;
     profile.ackReveal(this.result.id);
     this.skip.visible = false;
-    const wild = this.stacks.filter((s) => !s.unit).reduce((a, s) => a + s.count, 0);
+    // With the skip button gone the title has the whole row: it slides to the middle of the screen.
+    const fromX = this.title.x;
+    this.title.setMaxWidth(game.w - 48);
+    this.bag.run({
+      duration: motion.reduced ? 0.01 : 0.25,
+      ease: Ease.cubicOut,
+      onUpdate: (k) => {
+        this.title.x = lerp(fromX, game.w / 2, k);
+      },
+    });
+    const wild =this.stacks.filter((s) => !s.unit).reduce((a, s) => a + s.count, 0);
     const lines = [t('reveal.total', { n: totalCards(this.stacks) })];
     if (wild > 0) lines[0] += '  ·  ' + t('reveal.wildTotal', { n: wild });
     if (this.result.overflowGold > 0) lines.push(t('reveal.overflow', { n: this.result.overflowGold }));
@@ -532,14 +556,14 @@ class ChestReveal {
     this.views.forEach((v, i) => {
       const slot = this.slotOf(i);
       v.shown = true;
-      v.holder.visible = true;
-      v.holder.alpha = 1;
-      v.holder.position.set(slot.x, slot.y);
-      v.holder.scale.set(this.grid.scale);
-      v.holder.rotation = 0;
-      v.back.visible = false;
-      v.face.visible = true;
-      v.count.text = 'x' + formatCount(v.stack.count);
+      v.placed = true;
+      v.card.visible = true;
+      v.card.alpha = 1;
+      v.card.position.set(slot.x, slot.y);
+      v.card.scale.set(this.grid.scale);
+      v.card.rotation = 0;
+      v.card.showFace();
+      v.card.count.text = 'x' + formatCount(v.stack.count);
       // A skipped card keeps the tape its rarity earns but not the stamp: the summary stays readable.
       v.stamp?.destroy({ children: true });
       v.stamp = undefined;
@@ -566,10 +590,10 @@ class ChestReveal {
           const slot = this.slotOf(i);
           const d = Math.min(1, k * 1.3 - i * 0.015);
           const e = Math.max(0, d);
-          v.holder.x = lerp(slot.x, target.x, e);
-          v.holder.y = lerp(slot.y, target.y, e * e);
-          v.holder.scale.set(this.grid.scale * (1 - 0.7 * e));
-          v.holder.alpha = 1 - e;
+          v.card.x = lerp(slot.x, target.x, e);
+          v.card.y = lerp(slot.y, target.y, e * e);
+          v.card.scale.set(this.grid.scale * (1 - 0.7 * e));
+          v.card.alpha = 1 - e;
         });
         this.root.alpha = k > 0.7 ? (1 - k) / 0.3 : 1;
       },
@@ -580,6 +604,7 @@ class ChestReveal {
   private destroy(): void {
     window.removeEventListener('keydown', this.onKey);
     this.offUpdate();
+    this.offResize();
     this.bag.killAll();
     this.fx.destroy();
     this.root.destroy({ children: true });

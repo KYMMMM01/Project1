@@ -25,9 +25,9 @@ function make(cap = 3): FloatingNumbers {
 
 const DT = 1 / 60;
 
-/** A number is a sticker: [starburst, brown edge, coloured face]; the face carries the text the player reads. */
+/** A number is [starburst, stroked digits]; the digits carry the text the player reads. */
 function textOf(c: unknown): string {
-  return ((c as Container).children[2] as unknown as { text: string }).text;
+  return ((c as Container).children[1] as unknown as { text: string }).text;
 }
 
 beforeEach(() => {
@@ -180,5 +180,23 @@ describe('FloatingNumbers behaviour', () => {
     n.show(0, 0, 10, 'dot');
     n.show(0, 0, 10, 'dot', { color: 0x123456 });
     expect(n.created).toBe(2);
+  });
+});
+
+describe('FloatingNumbers bounds', () => {
+  it('keeps a number under the HUD edge and between the screen sides, wherever it was fired', () => {
+    const n = make();
+    n.minY = 100;
+    n.minX = 20;
+    n.maxX = 200;
+    n.show(4, 60, 12, 'damage', { noScatter: true });
+    n.show(640, 400, 12, 'damage', { noScatter: true });
+    n.update(DT);
+    const [left, right] = n.layer.children.filter((c) => c.visible);
+    expect(left?.x).toBe(20);
+    expect(left?.y).toBeGreaterThanOrEqual(100);
+    expect(right?.x).toBe(200);
+    expect(right?.y).toBeLessThanOrEqual(400);
+    expect(right?.y).toBeGreaterThanOrEqual(100);
   });
 });

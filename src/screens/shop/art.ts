@@ -19,12 +19,17 @@ const CHEST_FALLBACK: Record<ChestKind, number> = {
   gold: Color.mustard,
 };
 
-/** Fit a texture into a square of `size` around the origin. */
-function fitted(texture: Texture, size: number): Sprite {
+/**
+ * Fit a texture into a square of `size` around the origin. The sprite sits in a container so the fit stays its own
+ * scale: a caller that scales the picture (a flying icon) would otherwise overwrite it and show the full texture.
+ */
+function fitted(texture: Texture, size: number): Container {
   const s = new Sprite(texture);
   s.anchor.set(0.5);
   s.scale.set(Math.min(size / Math.max(1, texture.width), size / Math.max(1, texture.height)));
-  return s;
+  const c = new Container();
+  c.addChild(s);
+  return c;
 }
 
 /** A cat's portrait: its picture, or a paper disc in the rarity colour with the class badge when the picture is missing. */

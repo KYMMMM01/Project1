@@ -1,0 +1,172 @@
+[
+ {
+  "id": "qa-code-pause-restart-blocked",
+  "area": "shell",
+  "severity": "major",
+  "title": "Pause > Restart in a real run only toasts \"There is a run that has not finished.\" and never restarts",
+  "where": "src/app/flow.ts:103 retry() -> begin() -> profile.prepareRun (src/meta/profile.ts:122 returns run_active while data.pending is set); caller src/view/hud/index.ts afterPause('restart') -> ctx.retry()",
+  "repro": "Home > battle tab > Start > \"Start without snack\" (or ?scene=home&tab=battle&fresh=1&debug=1&lang=en, __dbg.meta.unlockAll(), profile.data.stats.runs=3, __dbg.home.shell.startRun({mode:'chapter',chapter:1,stake:0}), press \"Start without snack\"). In the battle tap Pause (top left) > Restart > confirm Restart (\"This run will be lost and a new one starts. Sure?\"). Result: the warning toast above, the same BattleScene instance and the same seed (1158881027 before and after), the run simply goes on. Sandbox runs are not affected because they use BattleScene.restart.",
+  "evidence": "restart_after.png (battle still on 'Get ready', warning toast 'There is a run that has not finished.'). Probe printed AFTER_RESTART {scene:'BattleScene', seed:1158881027 (unchanged), sameScene:true, paused:false}. Cause in code: flow.onBattleCreated replaces ctx.retry with retry(run); the current run is still data.pending (only finishRun / discardPendingRun clear it), so prepareRun refuses.",
+  "suggestion": "In flow.retry (or in Hud.afterPause 'restart') call profile.discardPendingRun() (no reward) before begin(); keep the confirm text honest about losing the run."
+ },
+ {
+  "id": "qa-code-promo-card-reward-skipped",
+  "area": "shell",
+  "severity": "minor",
+  "title": "First-purchase pack: reward popup skipped (and failures silent) because the card is destroyed while the purchase resolves",
+  "where": "src/screens/battle/PromoCard.ts buy() (`if (this.destroyed) return;`, `if (outcome !== 'purchased') return;`); src/screens/battle/BattleTab.ts syncAll() destroys the card when promoActive() (src/screens/battle/promo.ts, profile.isPurchasable) turns false",
+  "repro": "Buy baby_cat_pack with an adapter whose purchase() resolves a few frames after calling onPaid (any real store: acknowledge / consume is a network call). The grant emits a profile change, BattleTab.update() runs syncAll() on the next frame and destroys the PromoCard, then purchase() resolves: no reward popup, no shell.refresh(), no profile.flush(). A 'failed' or 'unavailable' outcome also shows no toast at all (ShopTab.buyProduct and PassTab.buy both toast).",
+  "evidence": "Code only: src/platform/adapters/dev.ts:81-84 finishes within microtasks, so the dev adapter does not reproduce it. Compare ShopTab.buyProduct, which never gates the reward on the screen still existing.",
+  "suggestion": "Do not gate the reward popup on destroyed (services.showRewards works without the card); add toasts for failed/unavailable."
+ },
+ {
+  "id": "qa-code-gameplay-lifecycle-holes",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Platform gameplayStart/Stop go out of sync after a revive and when quitting from the pause menu",
+  "where": "src/app/flow.ts:56-61 (gameplayStart once per battle, gameplayStop only on ctx 'finished'); src/app/lifecycle.ts; src/scenes/BattleScene.ts exit()",
+  "repro": "(a) Lose after wave 10 and take 'Continue': 'finished' calls gameplayStop(), the revive resumes play, nothing calls gameplayStart again, so the portal believes the player is idle during the rest of the run. (b) Pause > Quit: the result screen opens at once without 'finished'; tap Home before the director/8 s fallback emits 'finished': BattleScene.exit() destroys the context, gameplayStop() is never called and `playing` stays true while the player is in the menus.",
+  "evidence": "grep -rn \"gameplayStart|gameplayStop\" src: only flow.ts:56 (start) and flow.ts:61 (stop on 'finished') call them; src/platform only forwards. Browser trace of platform.lifecycle was not collected (the tool call that would have read it was denied), so this is proven from code.",
+  "suggestion": "Call gameplayStart after a successful revive and gameplayStop from BattleScene.exit/Hud.onFinished/abandon as well."
+ },
+ {
+  "id": "qa-code-chest-reveal-never-replayed",
+  "area": "shell",
+  "severity": "minor",
+  "title": "A chest reveal interrupted by closing/killing the app is never replayed; unacknowledged results pile up in the save",
+  "where": "src/meta/economy.ts:223 pushes every ChestResult into data.reveals (cap 20) and :237 ackReveal removes it; ackReveal is only called from src/screens/shop/ChestReveal.ts:490 finish(); no code reads data.reveals at boot or on the shop tab",
+  "repro": "Open a chest (cards are credited and the save is flushed inside profile.openChest), close or reload the tab during the first seconds of the reveal, relaunch: the player never sees which cards the chest gave; data.reveals keeps the stale ChestResult(s) in the save forever.",
+  "evidence": "grep -rn \"reveals\" src shows no reader outside src/meta (only push/ack/trim). docs/handoff/meta.md says 'reveal queue survives a restart', which nothing consumes. Browser confirmation (reload and inspect popupLayer) was not collected because the tool call reading that probe output was denied.",
+  "suggestion": "After the first scene is shown, replay profile.data.reveals[0] through services.revealChest and ack it."
+ },
+ {
+  "id": "qa-code-prerun-lines-labels-clipped",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Pre-run 'Merge lines': English arrow labels sit on the tiles and the last one is cut to 'Awa...'",
+  "where": "src/screens/shell/ClassLine.ts:42-44 (fitLabel(label, gap + 8, 24, 0.7) with a tile gap of only about 22 px)",
+  "repro": "?scene=home&tab=battle&fresh=1&debug=1&lang=en, set profile.data.stats.runs=3, __dbg.home.shell.startRun({mode:'chapter',chapter:1,stake:0}) and look at the 'Merge lines' panel (any class row).",
+  "evidence": "prerun_busy_b.png: every 'Merge' label overlaps the neighbouring cat tile edges and the awakening arrow reads 'Awa...'. fitLabel cannot shrink below 0.7 so the word is wider than the gap. Korean ('합성', '각성') is short enough to fit.",
+  "suggestion": "Put the labels under the arrows with their own width budget, or use an icon-only arrow plus a legend."
+ },
+ {
+  "id": "qa-look-home-card-strings",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Home cards leak an internal id and show an unseparated list",
+  "where": "Battle tab: daily challenge card tag (src/meta/daily.ts:21 builds 'D-YYYYMMDD-rN'), first-purchase card contents",
+  "repro": "?scene=home&tab=battle&lang=en&fresh=1&debug=1&notitle=1, __dbg.meta.unlockAll(), tabs.battle.scroll.scrollTo(1800,false) for the daily card; scrollTo(900,false) for the promo in Korean.",
+  "evidence": "en_home_2.png: the teal tag on 'Daily Challenge' reads 'D-20261007-r1'. home_battle_ko_scrolled.png: first-purchase card lists '보석 180 / 은 상자 1개 / 아기 고양이 러그' on three lines without separators and with a large empty gap to the gift icon, so it reads as '180은'; the shop's version of the same pack uses ' · ' separators (shopK_2.png).",
+  "suggestion": "Show the date ('Oct 7') or nothing in the tag, not the ruleset key; reuse the shop's separated one-line list on the promo card."
+ },
+ {
+  "id": "qa-look-pills-cramped",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Top bar currency pills touch each other and the left screen edge",
+  "where": "Home top bar (src/screens/shell/HomeTopBar.ts, kit CurrencyPill)",
+  "repro": "?scene=home&tab=battle&lang=ko&debug=1&notitle=1 at 720 x 1280.",
+  "evidence": "z_pills.png (crop of home_battle_ko_a.png): the coin icon starts about 6 px from the screen edge while the ticket pill ends about 33 px from the right edge; the gem pill's torn right end runs into the ticket icon; green '+' discs on a teal strip have little contrast. The three pills read as one long ribbon.",
+  "suggestion": "Equal 20 px side gutters and a 12 px gap between pills, '+' in cream or mustard instead of leaf green."
+ },
+ {
+  "id": "qa-flow-prerun-adbtn-reenabled",
+  "area": "shell",
+  "severity": "major",
+  "title": "Pre-run snack page: a refused gem purchase turns the greyed \"No ad now\" buttons into live green buttons",
+  "where": "Pre-run page (chapter run), snack rows; src/screens/shell/PreRunScreen.ts setBusy() (about line 232) and buildSnackRow() adBtn",
+  "repro": "Open ?scene=home&fresh=1, run window.__dbg.meta.finishRuns(1) (gems become 12), dismiss the unlock popup, tap START on the battle tab. Scroll the pre-run page to the snack rows: the three ad buttons read \"광고 없음\" and are grey. Tap any gem button (15 gems, not enough): toast \"보석이 모자라요.\". The ad buttons are now green and look tappable. Tap one: toast \"지금은 할 수 없어요. 잠시 뒤에 다시 해 보세요.\" and nothing starts.",
+  "evidence": "y_c_prerun_resized_1280.png (before: grey disabled ad buttons) vs l_b_after_gem_tap_12gems.png and m_a_after_ad_tap.png (after the failed gem tap: green \"광고 없음\" buttons, then the error toast). Code: setBusy(false) calls b.setEnabled(true) on every button in `locks`, including adBtn which was created with enabled: adReady (false), so any failed or cancelled start re-enables unavailable ad offers.",
+  "suggestion": "Remember each button's own availability and restore that in setBusy(false) (only toggle the buttons that were enabled before), or keep ad buttons out of `locks` when !adReady."
+ },
+ {
+  "id": "qa-flow-tutorial-giveup-skips-ftue",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Killing the app in the tutorial and tapping \"그만두기\" on the continue prompt skips the tutorial for good and pays it out as a finished run",
+  "where": "Boot of a profile whose pendingRun.init.mode === 'tutorial'; src/app/flow.ts offerContinue(), afterFirstScene(), chooseFirstScene()",
+  "repro": "Open ?fresh=1&notitle=1 (tutorial battle starts, pendingRun saved), close the tab, open ?notitle=1 again: home appears with the generic \"이어서 할까요?\" sheet showing the chapter-1 photo. Tap \"그만두기\", then \"그만둘래요\". Settle sheet \"판을 정리했어요. x40 골드\" appears; profile.stats.runs is now 1, gold 40, lastRun.mode 'tutorial', 4 features unlocked, pendingRun cleared. A brand-new player never gets the forced summon/merge/pick steps again.",
+  "evidence": "ah_a_prompt_tutorial_pending.png, ah_c_after_giveup.png (settle popup) and ah_d_home_after_tut_giveup.png (home with 40 gold, 10/120 XP, patrol card open). Console state after give-up: {\"runs\":1,\"gold\":40,\"last\":{\"mode\":\"tutorial\",\"victory\":false,\"gold\":40,\"xp\":10}}.",
+  "suggestion": "For a pending tutorial run, do not offer \"give up\": either resume it silently or discard it without counting a run so chooseFirstScene() starts the tutorial again."
+ },
+ {
+  "id": "qa-flow-endless-claim-label-truncated-en",
+  "area": "shell",
+  "severity": "minor",
+  "title": "English claim buttons are cut off or shrunk: \"Claim weekly...\" ends in an ellipsis, \"Claim cup prize\" is visibly smaller than the \"Play\" button above it",
+  "where": "Battle tab, Endless card (EndlessCard claimPrize, 232 px wide, fontSize 26) and Daily card (claimCup, fontSize 28); English",
+  "repro": "?scene=home&fresh=1&lang=en, then in the console: await __dbg.meta.finishRuns(3); __dbg.meta.unlockAll(); __dbg.meta.advance({hours:30}); const p=__dbg.meta.profile; p.data.cup.days[p.today()]=50; p.data.endless.best=45; p.data.endless.weekBest=45;  Dismiss popups, scroll the battle tab to the bottom (home.scene.host.tabs.battle.scroll.scrollTo(2300,false)).",
+  "evidence": "aa_b_scroll_2300.png: the green button on the Endless card reads \"Claim weekly...\" with an ellipsis; the Daily card's \"Claim cup prize\" is set noticeably smaller than \"Play\". aa_b_scroll_1700.png shows the same.",
+  "suggestion": "Shorten the English strings (\"Weekly prize\", \"Cup prize\") or let the button grow / wrap to two lines; use one font size for the paired buttons."
+ },
+ {
+  "id": "qa-flow-locked-card-untitled",
+  "area": "shell",
+  "severity": "minor",
+  "title": "A locked home card hides its own title and icon: only an anonymous padlock and \"주방을 클리어하면 열려요.\" remain",
+  "where": "Battle tab, locked cards (HomeCard.setLocked veil covers the whole card including the title row)",
+  "repro": "?scene=home&fresh=1, await __dbg.meta.finishRuns(3); __dbg.meta.advance({hours:30}); dismiss popups; scroll the battle tab to the bottom at 1600 tall (resize) or at 1280 with scrollTo(2000,false). The Endless card is a kraft sheet with a lock and the hint only.",
+  "evidence": "x_c_home_1600_bottom.png: the bottom card has no name (nothing says Endless / what opens), just the lock and the hint sentence. Code: HomeCard.setLocked() draws a full-size kraft sheet over `art`, icon, head and body.",
+  "suggestion": "Keep the title row (icon + name) visible above the veil, or print the feature name in the hint (\"끝없는 모드: 주방을 클리어하면 열려요\")."
+ },
+ {
+  "id": "qa-flow-locked-chapter-label-clipped",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Locked chapter photo: the reason label runs under the boss sticker and repeats the speech bubble below it",
+  "where": "Battle tab chapter card on a locked chapter (ChapterCard buildArt veil label, 520 px max width); English shows it worst",
+  "repro": "?scene=home&fresh=1&lang=en, await __dbg.meta.finishRuns(3); dismiss popups; tap the next-chapter arrow twice (chapter 3, Bathroom is locked).",
+  "evidence": "z_b_ch3_locked_en.png: the label \"Clear the chapter before it first.\" is cut by the boss sticker at its right end (the final word is partly hidden under the bathtub boss) and the identical sentence is written again in the bubble under the stake tags; z_c_start_locked_toast.png shows a third copy as the toast when tapping the disabled Go! button. The phrase itself reads wrongly in English.",
+  "suggestion": "Limit the label width to the space left of the sticker (or move it up), show the reason once, and reword (\"Clear the previous chapter first.\")."
+ },
+ {
+  "id": "qa-flow-classline-en-overflow",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Pre-run \"Merge lines\" rows in English: arrow captions collide with the thumbnails and \"Awaken\" is truncated to \"Awa...\"",
+  "where": "Pre-run page, ClassLine rows (src/screens/shell/ClassLine.ts), lang=en",
+  "repro": "?scene=home&fresh=1&lang=en, await __dbg.meta.finishRuns(3); dismiss popups; select chapter 1 stake 1 (chip \"1\"), tap Go!. Look at the Merge lines panel.",
+  "evidence": "z_e_prerun_stake1_en.png: \"Merge Merge Merge Awa...\" captions touch the neighbouring cat frames, the last caption is cut with an ellipsis, and the rank names (\"Alley Boss\", \"Guardian\") run right up to the panel edge. The Korean version (y_a_prerun_1600_top.png) fits.",
+  "suggestion": "Make the arrow caption an icon only, or size the slots from the longest English strings; do not ellipsize a label that explains the arrow."
+ },
+ {
+  "id": "qa-flow-classline-thumb-noise",
+  "area": "shell",
+  "severity": "minor",
+  "title": "Class-line thumbnails look speckled (hard aliasing) instead of clean stickers",
+  "where": "Pre-run page, ClassLine unit frames (unitPhoto sprites scaled down by a large factor)",
+  "repro": "?scene=home&fresh=1, finishRuns(3), dismiss popups, tap START. Look at the four class rows at a phone-width viewport (360 px wide window, 1600 tall: use the Aside window at that size) or zoom into the screenshot.",
+  "evidence": "crop_classlines.png (3x crop of y_a_prerun_1600_top.png): all 20 portraits show salt-and-pepper dots and broken white borders inside their frames; also visible in y_c_prerun_resized_1280.png. The same art in the chapter card and the battle HUD is smooth.",
+  "suggestion": "Use pre-reduced thumbnails or enable mipmaps / linear filtering on the unit-photo textures used at about 80 px."
+ },
+ {
+  "id": "qa-flow-claim-popup-after-apply",
+  "area": "shell",
+  "severity": "polish",
+  "title": "Reward sheets ask the player to \"Claim\" something that is already in the top bar",
+  "where": "Sweep result (SweepCard.sweep -> services.showRewards) and continue-prompt give-up settle sheet (flow.offerContinue)",
+  "repro": "?scene=home&fresh=1&lang=en, finishRuns(3), unlockAll(), advance({hours:30}), dismiss popups, scroll battle tab to y 1700 and tap Sweep. Or kill a run (see qa-flow-tutorial-giveup-skips-ftue) and give up.",
+  "evidence": "ab_c_sweep_popup.png: behind the dim the gold bar already reads 1,692 and tickets 8 while the sheet says \"Swept! XP +34 / x277 Gold / Claim\"; ah_c_after_giveup.png: bar already 40 gold while the sheet says x40 with \"받기\". The popup then flies the coins to the bar a second time.",
+  "suggestion": "Either pay on the sheet's button (like the treats and patrol claims) or label it as a receipt (\"OK\") and skip the second flight."
+ },
+ {
+  "id": "qa-flow-continue-wave-mismatch",
+  "area": "shell",
+  "severity": "polish",
+  "title": "Continue prompt says \"3웨이브\" but the resumed battle shows wave 2/24 counting down",
+  "where": "ContinuePrompt wave label vs resumed BattleScene HUD",
+  "repro": "?scene=home&fresh=1, finishRuns(1), dismiss popups, START, Go. In the battle: await __dbg.battle.skipToWave(3); await __dbg.meta.profile.saveSnapshot(__dbg.battle.battle.snapshot()); close the tab and open ?notitle=1. Prompt label shows 3웨이브; tap 이어서.",
+  "evidence": "u_a_prompt.png (label \"3웨이브\") and u_b_after_continue.png (HUD \"1막 · 웨이브 2/24\", \"1초\" prep timer; console: wave 2, phase prep).",
+  "suggestion": "Print the wave the player will actually be on (snapshot wave - 1 while in prep) or restore straight into the saved wave."
+ },
+ {
+  "id": "qa-routine-unlock-toast-over-note",
+  "area": "shell",
+  "severity": "minor",
+  "title": "First win: three \"X이 열렸어요!\" toasts queue over the \"새로 열렸어요!\" note and repeat what it lists",
+  "where": "Home scene right after the first (tutorial) run: src/scenes/HomeScene.ts announceUnlocks() (toast per unlocked feature) together with src/screens/system/autoPopups.ts unlock() (the note)",
+  "repro": "In a clean profile (localStorage.clear() once, then open http://127.0.0.1:5173/?scene=battle&mode=tutorial&fresh=1&debug=1&notitle=1). __dbg.battle.win(); advance ~12 s; tap the Home button on the result screen (design 104,1189). Watch the first 2 s on the home screen.",
+  "evidence": "scratchpad/shots/qa-routine/z5_home_early.png: the toast \"2배속이 열렸어요!\" is drawn straight on top of the note's top ribbon (the note \"새로 열렸어요!\" lists 고양이, 순찰, 2배속) while the home screen is dimmed behind; cats and patrol toasts follow. Log: NoticePopup count 1 at t=1.0 s together with the toast.",
+  "suggestion": "Skip the per-feature toasts when the unlock note is going to show them (one announcement per unlock), or delay the toasts until the note is closed."
+ }
+]

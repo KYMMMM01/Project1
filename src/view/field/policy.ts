@@ -70,22 +70,25 @@ const DESELECT: TapDecision = { kind: 'deselect' };
 
 /**
  * What releasing a press that never became a drag means. `action` is what dropping the selected unit
- * on the pressed cell would do (null when nothing is selected).
+ * on the pressed cell would do (null when nothing is selected). A tap finishes a merge or a move, but
+ * never a swap: tapping a second cat is how a player reads its sheet, and that must not shuffle the
+ * board. Swapping is a drag.
  */
 export function decideTap(selected: number | null, cell: number, occupied: boolean, action: DropAction | null): TapDecision {
   if (selected === null) return occupied ? { kind: 'select', cell } : NONE;
   if (selected === cell) return DESELECT;
-  if (action === 'move' || action === 'swap' || action === 'merge') return { kind: 'drop', from: selected, to: cell };
+  if (action === 'move' || action === 'merge') return { kind: 'drop', from: selected, to: cell };
   return occupied ? { kind: 'select', cell } : DESELECT;
 }
 
 /**
  * Which side of the target cell the merge bubble takes: over the row above or under the row below, whichever hides fewer
- * cats. The top row has nothing above it but the enemy lane and the bottom row nothing below, so they take the other side.
+ * cats. The top row has no cats above it (only the enemy lane and the free band under the HUD) and the bottom row none
+ * below, so each takes that side whenever the bubble fits there, and the other side only when it does not.
  */
-export function previewBelow(row: number, rows: number, hiddenAbove: number, hiddenBelow: number): boolean {
-  if (row <= 0) return true;
-  if (row >= rows - 1) return false;
+export function previewBelow(row: number, rows: number, hiddenAbove: number, hiddenBelow: number, roomAbove: boolean, roomBelow: boolean): boolean {
+  if (row <= 0) return !roomAbove;
+  if (row >= rows - 1) return roomBelow;
   return hiddenBelow < hiddenAbove;
 }
 

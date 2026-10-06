@@ -1,0 +1,82 @@
+[
+ {
+  "id": "qa-code-domfield-stale-after-resize",
+  "area": "routine",
+  "severity": "major",
+  "title": "The Meow Code text area keeps its old position after a resize and floats over the popup text",
+  "where": "src/screens/system/domField.ts (constructor registers game.events 'resize' -> place()); src/ui/Popup.ts PopupManager.attach() registers its own resize listener later (inside popups.open); used by CodeExportPopup / CodeImportPopup in src/screens/system/backupPopups.ts",
+  "repro": "Home > Settings > 'Export code' (or 'Import code'), wait for the text area to appear, then change the viewport height (rotate the phone, soft keyboard opening on the import field, address bar collapsing). Aside repro: ?scene=home&tab=shop&fresh=1&debug=1&lang=en, __dbg.routine.openSettings(), tap Export code, wait ~3 s, then Object.defineProperty(window,'visualViewport',{value:{width:420,height:900,addEventListener(){},removeEventListener(){}},configurable:true}); __dbg.game.layout().",
+  "evidence": "export_after_resize.png: the textarea sits on the help sentence and the paper well below it is empty. Numbers: before resize textarea top 384 == well top 384; after resize (game.h 1280 -> 1543) textarea top 319 vs well top 395, i.e. 76 CSS px too high. Emitter order: DomTextField.place() runs before Popup.layout(), so it measures the popup's stale getBounds().",
+  "suggestion": "Re-place the field after the popup has relaid itself (override Popup.layout to call field.place(), or defer place() one frame)."
+ },
+ {
+  "id": "qa-routine-cal-day28-wrap",
+  "area": "routine",
+  "severity": "major",
+  "title": "Claiming calendar day 28 wipes the whole page at once: day 28 is never stamped and the header reads \"1번째 달력 0/28일\"",
+  "where": "Calendar popup (src/screens/system/calendarPopup.ts sync()/claim(), src/screens/system/calendarModel.ts calendarCellState, src/meta/calendar.ts claimCalendar wraps stamp to 0)",
+  "repro": "Open http://127.0.0.1:5173/?scene=home&tab=battle&fresh=1&debug=1. In the page: __dbg.meta.unlockAll(); __dbg.routine.markSeen(); const p=__dbg.meta.profile; p.data.calendar.stamp=27; p.data.calendar.lastDate=''; p.events.emit('change',null); __dbg.routine.openCalendar(). Tap the green \"오늘 받기\" (design 360,938), then close the reward sheet that opens on top (popups.closeTop()). Look at the calendar behind it. Reopening it afterwards says \"2번째 달력 0/28일\".",
+  "evidence": "scratchpad/shots/qa-routine/u2_cal_after28_behind.png: header \"1번째 달력 0/28일\", all 28 cells plain (no check stamp on 28, no stamp on any day), button \"오늘은 받았어요\" disabled. u2_cal_reopen.png shows the same page labelled \"2번째 달력\", so the cycle label in the live popup is stale too (built once in the constructor). Cause: the meta layer sets stamp=0 and cycles+1 in the same call, so calendarCellState can never return 'claimed' for day 28 and the popup never re-reads cycles.",
+  "suggestion": "Use the claimed day returned by claimCalendar for the stamp animation (stamp cell 28, show 28/28), and only roll the page to the next calendar after the popup is closed or after a short beat. Rebuild or update the cycle label and the n/28 text from calendarView() on every sync."
+ },
+ {
+  "id": "qa-routine-import-levelup-gems",
+  "area": "routine",
+  "severity": "major",
+  "title": "After a backup import (new device, or Erase progress then import) the level-up popup claims \"보석을 받았어요 970\" and flies 970 gems, but the balance does not change; then every old unlock is announced as new",
+  "where": "Automatic popups after Settings > 코드 불러오기 (src/screens/system/autoPopups.ts levelUp()/unlock(), src/screens/system/prefs.ts seenLevel/seenUnlocked, backupPopups.ts apply)",
+  "repro": "1) ?scene=home&tab=battle&fresh=1&debug=1; __dbg.meta.unlockAll(); __dbg.routine.markSeen(); __dbg.meta.addGems(777); const code = await __dbg.meta.profile.exportCode(). 2) localStorage.removeItem('meowguard.routine') (a new device, or what Settings > Erase progress does) and reload ?scene=home&tab=battle&fresh=1&debug=1; close any popup. 3) await __dbg.meta.profile.importCode(code) (same call the \"이 코드로 바꾸기\" button makes). Wait about 1 s. Real-flow variant: Settings > 진행 상황 지우기 (two confirmations), then 코드 불러오기 with your own code.",
+  "evidence": "scratchpad/shots/qa-routine/y1_popup1.png: popup \"계정 레벨 98!\" / \"보석을 받았어요.\" / 970 over a top bar that shows 777 gems; profile gems read 777 before and after (log: popup 1 ... | gems 777; final gems 777). y1_popup2.png: \"새로 열렸어요!\" listing 고양이, 미션, 상점 and \"그리고 10가지 더\" for features the player already had. seenLevel stays 1 / seenUnlocked stays [] because reconcileSeen only trims, never raises.",
+  "suggestion": "After a successful importCode (and when the routine prefs record is missing but the profile is not new) set seenLevel and seenUnlocked to the profile's current level and unlock list so nothing is announced. The level-up popup should only show gems that were really granted in this session."
+ },
+ {
+  "id": "qa-routine-pass-days-stale",
+  "area": "routine",
+  "severity": "minor",
+  "title": "Season pass header \"N일 남았어요\" never updates after the tab is built",
+  "where": "Pass tab header tag (src/screens/pass/PassTab.ts buildHead line ~151, currentSignature line ~76, syncAll)",
+  "repro": "?scene=home&tab=battle&fresh=1&debug=1; __dbg.meta.unlockAll(); __dbg.routine.markSeen(); __dbg.home.goTab('pass') -> tag reads \"24일 남았어요\". Then __dbg.meta.advance({days:12}), wait 5 s, close any popup (comeback), switch to the battle tab and back to pass.",
+  "evidence": "Log from the run: texts [\"24일 남았어요\"] with passView().daysLeft 24; after advance +12 days (same visit) texts still \"24일 남았어요\" with daysLeft 12; after leaving and re-entering the tab still \"24일 남았어요\". Screenshot scratchpad/shots/qa-routine/w1_pass_stale_days.png. The tag is only written in buildHead and the signature (season|canSell|premium|claimAll label) does not contain daysLeft, so show() does not rebuild it. (Season rollover itself works: +25 days gave season 1, \"29일 남았어요\" in s6_day25.png.)",
+  "suggestion": "Keep the NoteTag in a field and set its text in syncAll() from v.daysLeft (and the \"마지막 날\" variant), or add daysLeft to the signature."
+ },
+ {
+  "id": "qa-routine-cal-popup-stale",
+  "area": "routine",
+  "severity": "minor",
+  "title": "Calendar popup never re-reads the profile: after midnight with the popup open the button stays \"오늘은 받았어요\" (disabled) although a day can be claimed",
+  "where": "src/screens/system/calendarPopup.ts (sync() only runs in the constructor and in claim(); no profile.subscribe)",
+  "repro": "?scene=home&tab=battle&fresh=1&debug=1; __dbg.meta.unlockAll(); __dbg.routine.markSeen(); __dbg.routine.openCalendar(); tap \"오늘 받기\" (360,938) so day 1 is stamped; without closing: __dbg.meta.advance({days:1}); wait 2 s; close the comeback popup if one appears. Compare with __dbg.meta.profile.calendarView().",
+  "evidence": "scratchpad/shots/qa-routine/c_open_after_roll.png: popup still shows day 1 stamped, \"1/28일\", disabled grey \"오늘은 받았어요\", no marker circle on day 2. Log: after rollover with popup open {next:2, canClaim:true, stamp:1}. Closing and reopening shows the correct state (u2_cal_reopen.png style).",
+  "suggestion": "Subscribe to profile changes in CalendarPopup (call sync(false) from the handler, unsubscribe in destroy) so rollover, comeback claims and imports are reflected."
+ },
+ {
+  "id": "qa-routine-pass-owned-crown",
+  "area": "routine",
+  "severity": "minor",
+  "title": "\"프리미엄 이용 중\" label: the crown icon hangs off the left edge of the mustard label and covers the first letter",
+  "where": "Pass tab, premium lane head after purchase (src/screens/pass/PassTab.ts lines ~182-187: crown at -owned.uiBox.w/2 + 6, 44 px wide, label padX 22)",
+  "repro": "?scene=home&tab=battle&fresh=1&debug=1; __dbg.meta.unlockAll(); __dbg.routine.markSeen(); __dbg.home.goTab('pass'); tap the coupon (550,438); in the dev store sheet click document.querySelector('[data-lp=\"pay\"]'); close the \"프리미엄이 열렸어요!\" note (popups.closeAll()). Zoom on the label above the premium lane.",
+  "evidence": "scratchpad/shots/qa-routine/z_owned_label.png (3x crop of p_after_buy.png): the crown starts outside the paper label and its right half sits on top of \"프\"; the same layout in n1_pass_bottom.png / p_after_buy.png. The crown is centred 6 px inside the left edge, so about 22 px of it is outside and 6 px overlaps the text start.",
+  "suggestion": "Make the icon part of the label layout (put it inside padX, e.g. increase padX on the left to 58 and place the crown at x = left + 30), or shift the text right by the icon width."
+ },
+ {
+  "id": "qa-routine-comeback-dismiss-dot",
+  "area": "routine",
+  "severity": "minor",
+  "title": "If the welcome-back gift note is dismissed (Back/Esc) the silver chest cannot be reached again this session, and the calendar dot stays lit with nothing to claim",
+  "where": "src/screens/system/autoPopups.ts comeback() + offered Set; src/screens/battle/BattleTab.ts:188 (badge = canClaim || comebackReady); CalendarPopup has no comeback claim",
+  "repro": "?scene=home&tab=battle&fresh=1&debug=1; __dbg.meta.unlockAll(); __dbg.routine.markSeen(); const p=__dbg.meta.profile; p.data.comeback={pending:true,chestClaimed:false,patrolBoost:true}; p.events.emit('change',null). When the note \"어서 와요!\" appears, close it the way Back/Esc does: __dbg.routine.popups.closeTop() (the note has one button and backdropClose is false). Wait 8 s. Then open the calendar, claim today and close it.",
+  "evidence": "Log: after dismiss {comebackReady:true, popups:0}; 8 game-seconds later still {comebackReady:true, popups:0}, no chest (chests all 0); after claiming today in the calendar comebackReady is still true. scratchpad/shots/qa-routine/h1_after_dismiss_battle_tab.png shows the red dot on the chapter card's calendar button; opening the calendar offers no way to take the chest. The note is only offered again after the next app launch.",
+  "suggestion": "Give the calendar popup a \"welcome back\" claim row (or a button on the battle tab) wired to claimComeback(), or re-offer the note the next time the home scene is shown; at least do not light the dot when nothing in the UI can claim it."
+ },
+ {
+  "id": "qa-routine-season-end-unclaimed",
+  "area": "routine",
+  "severity": "polish",
+  "title": "At season rollover all unclaimed pass rewards vanish without a warning or auto-claim",
+  "where": "Season pass rollover (profile pass slice) and the pass header, src/screens/pass/PassTab.ts",
+  "repro": "?scene=home&tab=battle&fresh=1&debug=1; __dbg.meta.unlockAll(); __dbg.routine.markSeen(); const p=__dbg.meta.profile; p.data.pass.xp=3100; p.data.pass.premium=true; p.data.pass.claimedFree=[1,2,3]; p.events.emit('change',null); __dbg.home.goTab('pass'); then __dbg.meta.advance({days:23}) (1 day left) and __dbg.meta.advance({days:2}); close the comeback note.",
+  "evidence": "Log: before {tier:30, prem:true, cf:3, badge:57}; day+23 {daysLeft:1, badge:57}; day+25 {season:1, tier:0, xp:0, prem:false, badge:0}. Screenshots s6_day23.png (one day left, 57 claimable) and s6_day25.png (new season \"참치 파티 시즌\", everything reset). The only hint on the last day is the small \"마지막 날\" tag.",
+  "suggestion": "Auto-claim or mail leftover rewards at rollover, or at least show a last-day note/popup with the number of unclaimed rewards and a Claim all button."
+ }
+]

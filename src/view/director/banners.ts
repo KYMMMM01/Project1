@@ -7,6 +7,7 @@ import { Container, Graphics, Sprite, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { mixColor } from '@/core/math';
 import { fxTexture } from '@/fx';
+import { PATH_TOP } from '@/game/geometry';
 import { Hue } from '@/fx/palette';
 import { drawIcon, type IconName } from '@/ui/icons';
 import { drawPaper, paperSeed, tapeStrip } from '@/ui/paper';
@@ -157,6 +158,10 @@ class PillLane implements Lane {
   }
 }
 
+/** The warning ribbon is a slim strip (hazard tape 16 px a side, 68 px of text between): two board rows used to disappear under the old 150 px one. */
+const BAND_H = 100;
+const BAND_EDGE = 16;
+
 /** The boss / elite warning: a paper ribbon with hazard tape along both edges that slides across with an icon, the word and the name. */
 class BandLane implements Lane {
   readonly root = new Container();
@@ -176,11 +181,12 @@ class BandLane implements Lane {
     private readonly stage: Stage,
     icons: IconCache,
   ) {
-    this.title = label('', { size: 64, color: INK });
-    this.sub = label('', { size: 38, color: INK });
+    this.title = label('', { size: 42, color: INK });
+    this.sub = label('', { size: 26, color: INK });
     this.icon = icons.get('warning', 96);
-    this.title.position.set(40, -22);
-    this.sub.position.set(40, 38);
+    this.icon.scale.set(0.68);
+    this.title.position.set(40, -13);
+    this.sub.position.set(40, 23);
     this.icon.position.set(-250, 0);
     this.root.addChild(this.bg, this.icon, this.title, this.sub);
     this.root.visible = false;
@@ -201,8 +207,8 @@ class BandLane implements Lane {
     this.drawnW = this.width;
     this.drawnColor = this.color;
     const w = this.width;
-    const h = 150;
-    const edge = 24;
+    const h = BAND_H;
+    const edge = BAND_EDGE;
     const g = this.bg.clear();
     drawPaper(g, -w / 2 - 40, -h / 2, { w: w + 80, h, radius: 4, fill: this.color, seed: this.seed, wobble: 0.5, edge: false, shadow: 8 });
     // Hazard tape along the long edges: ink strips with mustard slants, flat.
@@ -233,7 +239,8 @@ class BandLane implements Lane {
 
   resize(layout: BattleLayout): void {
     this.width = layout.w;
-    this.baseY = layout.fieldY + 236;
+    // On the enemy lane's top run: the ribbon announces what is about to walk it and keeps off the board's first row.
+    this.baseY = layout.fieldY + PATH_TOP - 6;
     this.root.y = this.baseY;
     this.icon.x = -250;
     this.drawBand();

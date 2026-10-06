@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TAB_BAR_H, TOP_BAR_CONTENT_H, classLineSlots, coverCrop, pillRow, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
+import { TAB_BAR_H, TOP_BAR_CONTENT_H, captionRooms, classLineSlots, coverCrop, pillRow, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
 import { planRun } from '@/screens/shell/runPlan';
 
 describe('shell layout', () => {
@@ -92,6 +92,29 @@ describe('class line slots', () => {
     const s = classLineSlots(400, 5, 68, 40);
     expect(s.lastGap).toBeCloseTo((400 - 340) / 4, 6);
     expect((s.centres[1] as number) - (s.centres[0] as number)).toBeCloseTo(68 + s.lastGap, 6);
+  });
+});
+
+describe('class line captions', () => {
+  const centres = [34, 142, 250, 358, 522];
+
+  it('leaves every caption its natural width while the neighbours leave the room', () => {
+    expect(captionRooms(centres, [70, 60, 118, 45, 82], 556, 6)).toEqual([70, 60, 118, 45, 82]);
+  });
+
+  it('squeezes a caption only as far as the neighbouring ones need', () => {
+    const rooms = captionRooms(centres, [70, 100, 118, 45, 82], 556, 6);
+    expect(rooms[1]).toBeLessThan(100);
+    expect(rooms[1]).toBeGreaterThan(0);
+    expect(rooms[2]).toBeLessThan(118);
+    expect(rooms[0]).toBe(70);
+    // Two touching captions never overlap once both use their room.
+    const half = (rooms[1] as number) / 2 + (rooms[2] as number) / 2;
+    expect(half).toBeLessThanOrEqual(250 - 142);
+  });
+
+  it('never gives a caption more than the row', () => {
+    expect(captionRooms([50], [900], 120, 6)).toEqual([120]);
   });
 });
 

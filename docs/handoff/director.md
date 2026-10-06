@@ -67,3 +67,7 @@ none
 **Missing haptics added** (`growth.ts`): sell (light), move and swap (tap), class and summon-grade upgrade (light). Their sounds already existed.
 
 Verified under both motion settings, see hud.md ("Aside reports prefers-reduced-motion").
+
+## 2026-10-07 QA fixes
+
+See `battle.md`. Director side: the boss / elite warning ribbon is a 100 px strip on the lane's top run (`BAND_H`, `PATH_TOP`), the swap sound is pitched a third above the move sound, hints wait for banners (`Hints.hold`, wired in `hud/index.ts` to `waveStart`, `synergy`, `relicGain`, `actClear`, `bossAbility`, `hazardWarn`, `enrage`, `rescued`).

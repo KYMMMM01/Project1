@@ -4,12 +4,12 @@
  * rank); the last one is the awakening and carries its caption, with a gap of its own wide enough for
  * the longest word. A reference card for planning a build, so every rank is lit. Origin = top-left of the row.
  */
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, type Text } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { UNIT_GRID, unitRarity, type ClassId } from '@/game';
 import { Color, RARITY_ORDER, fitLabel, paperSeed, rarityName, uiLabel } from '@/ui';
 import { CLASS_ACCENT, unitPhoto } from '@/view/hud/kit';
-import { classLineSlots } from './layoutMath';
+import { captionRooms, classLineSlots } from './layoutMath';
 import { smoothPhoto } from './thumb';
 import './strings';
 
@@ -28,16 +28,17 @@ export class ClassLine extends Container {
     const slots = classLineSlots(width, ids.length, PHOTO, ARROW_GAP);
     const cy = PHOTO / 2;
 
+    // A rank name spreads into the gaps beside its photo up to the neighbouring names, so a long one ("Alley Boss") is not cut while a short one next to it leaves room.
+    const names = ids.map((_, i) => uiLabel(rarityName(RARITY_ORDER[i] ?? 'common'), { size: 24 }));
+    const rooms = captionRooms(slots.centres, names.map((n) => n.width), width, NAME_GAP);
+
     ids.forEach((id, i) => {
       const cx = slots.centres[i] as number;
       const photo = unitPhoto({ size: PHOTO, rarity: unitRarity(id), unit: id, seed: seed + i });
       smoothPhoto(photo, `unit_${id}`);
       photo.position.set(cx, cy);
-      const name = uiLabel(rarityName(RARITY_ORDER[i] ?? 'common'), { size: 24 });
-      // A name may spread into the gaps beside its photo, up to the next name, and never past the row.
-      const left = i > 0 ? cx - (slots.centres[i - 1] as number) : Infinity;
-      const right = i < ids.length - 1 ? (slots.centres[i + 1] as number) - cx : Infinity;
-      fitLabel(name, Math.min(left, right, width) - NAME_GAP, 24);
+      const name = names[i] as Text;
+      fitLabel(name, rooms[i] as number, 24);
       name.position.set(Math.min(width - name.width / 2, Math.max(name.width / 2, cx)), PHOTO + 20);
       this.addChild(photo, name);
     });

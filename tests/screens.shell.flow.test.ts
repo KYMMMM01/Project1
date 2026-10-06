@@ -113,7 +113,7 @@ function wiredBattle(): { battle: Bus; ctx: { events: Bus; retry: () => void }; 
   const hook = h.setHook.mock.calls.at(-1)?.[0] as ((scene: unknown) => void) | undefined;
   const battle = bus();
   const ctx = { events: bus(), retry: () => undefined };
-  return { battle, ctx, fire: () => hook?.({ run: RUN, battle: { ...battle, snapshot: () => ({ wave: 3 }) }, ctx }) };
+  return { battle, ctx, fire: () => hook?.({ run: RUN, battle: { events: battle, snapshot: () => ({ wave: 3 }) }, ctx }) };
 }
 
 beforeEach(() => {

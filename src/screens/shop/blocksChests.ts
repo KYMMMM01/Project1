@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js';
 import { t } from '@/core/i18n';
-import { fmt } from '@/core/format';
+import { fmt, fmtDuration } from '@/core/format';
 import { profile } from '@/meta';
 import { CHEST_GEM_PRICE } from '@/meta/data/economy';
 import { pityTarget } from '@/meta/chests';
@@ -15,6 +15,8 @@ import { chestAction } from './shopLogic';
 
 const ART = 168;
 const COL = 236;
+/** Wide enough for the English word with its icon: the label may not be shortened or cut. */
+const ODDS_W = 176;
 
 /** A chest standing on its own little paper shelf, with the count of owned ones on a pill at its corner. */
 function chestOnShelf(card: Container, kind: ChestKind, base: number, owned: number): void {
@@ -31,29 +33,35 @@ function chestOnShelf(card: Container, kind: ChestKind, base: number, owned: num
 }
 
 function oddsButton(card: Container, w: number, kind: ChestKind, env: BlockEnv): void {
-  const b = actionButton({ label: t('shop.chest.odds'), icon: 'info', width: 150, height: 88, style: 'neutral', fontSize: 26 }, () => env.actions.openOdds(kind));
-  b.position.set(w - 18 - 75, 52);
+  const b = actionButton({ label: t('shop.chest.odds'), icon: 'info', width: ODDS_W, height: 88, style: 'neutral', fontSize: 26 }, () => env.actions.openOdds(kind));
+  b.position.set(w - 18 - ODDS_W / 2, 52);
   card.addChild(b);
 }
 
 function title(card: Container, text: string, rw: number): void {
   const tt = uiLabel(text, { size: 36, anchorX: 0 });
   tt.position.set(COL, 52);
-  fitLabel(tt, rw - 170, 36);
+  fitLabel(tt, rw - ODDS_W - 20, 36);
   card.addChild(tt);
+}
+
+/** The free-chest status line while the next one is not ready. */
+export function freeWaitText(waitMs: number): string {
+  return t('shop.free.wait', { time: fmtDuration(waitMs / 1000) });
 }
 
 function buildFree(inner: Container, y: number, w: number, env: BlockEnv): number {
   const view = profile.freeChestView();
   const owned = profile.data.chests.wooden;
-  const rows = (owned > 0 ? 1 : 0) + 1;
+  // While waiting there are two skip buttons (an ad, gems), one under the other so each label has the whole width.
+  const rows = (owned > 0 ? 1 : 0) + (view.ready ? 1 : 2);
   const h = Math.max(262, 140 + rows * 108 + 10);
   const card = subCard(inner, PAD, y, w, h);
   chestOnShelf(card, 'wooden', h - 80, owned);
   const rw = w - COL - 20;
   title(card, t('shop.free.title'), rw);
   oddsButton(card, w, 'wooden', env);
-  const status = uiLabel(view.ready ? t('shop.free.ready') : '', { size: 26, color: view.ready ? Color.leafDark : Color.inkSoft, anchorX: 0 });
+  const status = uiLabel(view.ready ? t('shop.free.ready') : freeWaitText(view.waitMs), { size: 26, color: view.ready ? Color.leafDark : Color.inkSoft, anchorX: 0 });
   status.position.set(COL, 112);
   card.addChild(status);
   env.actions.trackFreeTimer(view.ready ? null : status);
@@ -70,17 +78,16 @@ function buildFree(inner: Container, y: number, w: number, env: BlockEnv): numbe
     b.position.set(COL + rw / 2, ry + 48);
     card.addChild(b);
   } else {
-    const half = (rw - 14) / 2;
     const adOk = view.skipsLeft > 0 && ads.canOffer('free_chest');
     const ad = actionButton(
-      { label: t('shop.free.ad'), icon: 'ad', width: half, style: 'info', sublabel: t('shop.free.adLeft', { n: view.skipsLeft }), fontSize: 26 },
+      { label: t('shop.free.ad'), icon: 'ad', width: rw, style: 'info', sublabel: t('shop.free.adLeft', { n: view.skipsLeft }), fontSize: 28 },
       () => env.actions.skipFreeChest('ad'),
     );
     ad.setEnabled(adOk);
     ad.onDisabledTap(() => env.actions.skipFreeChest('ad'));
-    ad.position.set(COL + half / 2, ry + 48);
-    const gem = currencyButton(t('shop.free.gems'), view.skipGems, 'gems', half, () => env.actions.skipFreeChest('gems'), 'neutral');
-    gem.position.set(COL + half + 14 + half / 2, ry + 48);
+    ad.position.set(COL + rw / 2, ry + 48);
+    const gem = currencyButton(t('shop.free.gems'), view.skipGems, 'gems', rw, () => env.actions.skipFreeChest('gems'), 'neutral');
+    gem.position.set(COL + rw / 2, ry + 48 + 108);
     card.addChild(ad, gem);
   }
   return h;
@@ -88,16 +95,23 @@ function buildFree(inner: Container, y: number, w: number, env: BlockEnv): numbe
 
 function buildPaid(inner: Container, y: number, w: number, env: BlockEnv, kind: 'silver' | 'gold'): number {
   const owned = profile.data.chests[kind];
-  const odds = profile.oddsOf(kind);
+  const table = ODDS[kind];
   const gold = kind === 'gold';
-  const h = gold ? 372 : 296;
+  const rw = w - COL - 20;
+  // The line under the bonus bar names the cat the bonus goes to, and on the bonus chest also says it is due, so it may take two lines.
+  const pity = gold ? profile.oddsOf(kind).pity : null;
+  const target = pity ? t('shop.chest.pityTarget', { unit: pity.targetName }) : '';
+  const note = pity
+    ? uiLabel(pity.next ? `${t('shop.chest.pityNow', { n: table.pity?.bonusCards ?? 0 })}\n${target}` : target, {
+      size: 26, color: pity.next ? Color.leafDark : Color.inkSoft, anchorX: 0, anchorY: 0, wrap: rw, lineHeight: 32, align: 'left',
+    })
+    : null;
+  const h = gold ? Math.max(372, 346 + Math.ceil(note?.height ?? 0)) : 296;
   const card = subCard(inner, PAD, y, w, h);
   chestOnShelf(card, kind, h - 84, owned);
-  const rw = w - COL - 20;
   title(card, t('meta.chest.' + kind), rw);
   oddsButton(card, w, kind, env);
 
-  const table = ODDS[kind];
   const first = table.guarantees[0];
   const info = [t('shop.chest.cards', { n: fmt(table.cards) })];
   if (first) info.push(t('shop.chest.guarantee', { n: first.count, rarity: t('rarity.' + first.atLeast) }));
@@ -105,16 +119,12 @@ function buildPaid(inner: Container, y: number, w: number, env: BlockEnv, kind: 
   line.position.set(COL, 108);
   card.addChild(line);
 
-  if (gold && odds.pity) {
-    const p = odds.pity;
-    const bar = new ProgressBar({ width: rw, height: 40, color: p.next ? 'green' : 'gold', label: t('shop.chest.pity', { n: p.counter, every: p.every }) });
+  if (pity && note) {
+    const bar = new ProgressBar({ width: rw, height: 40, color: pity.next ? 'green' : 'gold', label: t('shop.chest.pity', { n: pity.counter, every: pity.every }) });
     bar.position.set(COL + rw / 2, 204);
-    bar.setValue(p.counter / p.every, false);
-    card.addChild(bar);
-    const target = p.next ? t('shop.chest.pityNow', { n: table.pity?.bonusCards ?? 0 }) : t('shop.chest.pityTarget', { unit: p.targetName });
-    const tt = uiLabel(target, { size: 26, color: p.next ? Color.leafDark : Color.inkSoft, anchorX: 0, anchorY: 0, wrap: rw, lineHeight: 32, align: 'left' });
-    tt.position.set(COL, 234);
-    card.addChild(tt);
+    bar.setValue(pity.counter / pity.every, false);
+    note.position.set(COL, 234);
+    card.addChild(bar, note);
   }
 
   const by = h - 58;

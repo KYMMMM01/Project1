@@ -24,7 +24,7 @@ import { SHOP_SLOTS } from './data/catalog';
 import { FEATURES, type FeatureId } from './data/schedule';
 import { isFeatureUnlocked } from './features';
 import { freshDay, rollWeek } from './missions';
-import { rollPass } from './pass';
+import { claimableTiers, passReward, rollPass, type PassTrack } from './pass';
 import { normalizeProfile } from './profileData';
 import { chaptersCleared } from './rewards';
 import { SessionClock, dateKey, nextLastSeen, weekKey, type ClockSource } from './time';
@@ -35,10 +35,13 @@ import {
   type ChestKind,
   type ChestRarity,
   type CurrencyId,
+  type PassSlice,
   type ProfileData,
   type ProfileEvents,
   type Reason,
 } from './types';
+
+const SEASON_TRACKS: readonly PassTrack[] = ['free', 'premium'];
 
 /** The slice of AdService the meta layer drives. */
 export interface AdsPort {
@@ -154,8 +157,22 @@ export class ProfileCore {
     d.week = rollWeek(d.week, wk);
     if (wk > d.cup.week) d.cup = { week: wk, days: {}, claimed: [] };
     if (wk > d.endless.week) d.endless = { ...d.endless, week: wk, weekBest: 0, claimed: [] };
-    d.pass = rollPass(d.pass, today);
+    const pass = rollPass(d.pass, today);
+    if (pass !== d.pass) this.settleSeason(d.pass);
+    d.pass = pass;
     if (today > d.shop.date) d.shop = { date: today, salt: 0, bought: Array.from({ length: SHOP_SLOTS }, () => false) };
+  }
+
+  /**
+   * A season's wipe must not eat what was already earned: every reached tier the player never took is
+   * paid as the season ends (the premium row only for an owner), whether or not the pass tab was opened.
+   */
+  private settleSeason(pass: PassSlice): void {
+    for (const track of SEASON_TRACKS) {
+      for (const tier of claimableTiers(pass, track)) {
+        this.applyBundle(passReward(track, tier), track === 'free' ? 'pass_free' : 'pass_premium');
+      }
+    }
   }
 
   // ───────────────────────────── unlocks ─────────────────────────────

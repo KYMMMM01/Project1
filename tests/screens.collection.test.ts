@@ -7,7 +7,7 @@ import { createTestProfile } from '@/meta/testing';
 import { BASE_UNITS } from '@/meta/types';
 import '@/meta/strings';
 import '../src/screens/cats/strings';
-import { CLASS_GROUPS, cardProgress, FRAME_W, isUpgradeReady, lineMetrics, lineOf, lineSentence, stepFrom, upgradeReadyCount, visibleGroups } from '../src/screens/cats/collection';
+import { arrowWidth, CLASS_GROUPS, cardProgress, FRAME_W, isUpgradeReady, lineMetrics, lineOf, lineSentence, stepFrom, TAG_OVERLAP, upgradeReadyCount, visibleGroups } from '../src/screens/cats/collection';
 import { deltaText, isImprovement, isUnitId, levelSource, perkRows, statText, unitStatsAt } from '../src/screens/cats/unitStats';
 
 describe('collection groups', () => {
@@ -84,7 +84,26 @@ describe('unit stats', () => {
     expect(deltaText('interval', 0.55, 0.5)).toBe('-0.05');
     expect(deltaText('range', 165, 165)).toBe('');
     expect(isImprovement('interval', -0.05)).toBe(true);
+    // The difference is taken between the numbers as they are shown: 14 -> 15 reads +1, never +1.4.
+    expect(deltaText('damage', 14, 15.4)).toBe('+1');
+    expect(deltaText('damage', 22, 28.9)).toBe('+7');
+    expect(deltaText('damage', 14.6, 14.9)).toBe('');
     expect(isImprovement('damage', -1)).toBe(false);
+  });
+
+  it('never shows a difference that does not match the two numbers beside it', () => {
+    for (const id of BASE_UNITS) {
+      for (let level = 1; level < 10; level++) {
+        const from = unitStatsAt(id, level);
+        const to = unitStatsAt(id, level + 1);
+        for (const key of ['damage', 'interval', 'range', 'crit'] as const) {
+          const text = deltaText(key, from[key], to[key]);
+          const a = parseFloat(statText(key, from[key]));
+          const b = parseFloat(statText(key, to[key]));
+          expect(text === '' ? 0 : parseFloat(text)).toBeCloseTo(b - a, 6);
+        }
+      }
+    }
   });
 
   it('only accepts real unit ids', () => {
@@ -122,7 +141,7 @@ describe('class lines', () => {
     vi.stubGlobal('document', { documentElement: {} });
     setLang('en');
     const s = lineSentence('m_snow');
-    expect(t(s.key, { a: t(`unit.${s.a}.name`), b: t(`unit.${s.b}.name`) })).toMatch(/^Two .+ merge into .+[.]$/);
+    expect(t(s.key, { a: t(`unit.${s.a}.name`), b: t(`unit.${s.b}.name`) })).toBe('Two Snowball Kittens merge into one Fire Mage.');
     setLang('ko');
   });
 
@@ -133,6 +152,9 @@ describe('class lines', () => {
       expect(m.plateW).toBeGreaterThanOrEqual(88);
       expect(m.gap).toBeGreaterThanOrEqual(24);
       expect(m.plateW * 5 + m.gap * 4).toBeLessThanOrEqual(width + 0.001);
+      // An arrow tag over a gap reaches only the cream border of each plate (the picture window starts 11 px in).
+      expect(arrowWidth(m.gap)).toBe(Math.round(m.gap + TAG_OVERLAP * 2));
+      expect(TAG_OVERLAP).toBeLessThan(11);
     }
   });
 });

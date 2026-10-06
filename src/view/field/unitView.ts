@@ -294,7 +294,7 @@ export class UnitView {
       this.lastTint = tint;
       this.sprite.tint = tint;
     }
-    this.dome.alpha = 0.9 * this.shield * (0.85 + 0.15 * Math.sin(time * 2.4 + this.phase));
+    this.dome.alpha = this.shield;
     this.noAct.alpha = this.blocked;
     this.noAct.scale.set(0.8 + 0.2 * this.blocked);
     this.noAct.position.set(0, -100 + Math.sin(time * 3 + this.phase) * 2);

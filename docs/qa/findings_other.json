@@ -1,0 +1,32 @@
+[
+ {
+  "id": "qa-look-wild-plural",
+  "area": "other",
+  "severity": "minor",
+  "title": "'1 wild cards (Street)' plural and rank naming in English reward strings",
+  "where": "src/meta/strings.ts:161 'meta.reward.wild': '{n} wild cards ({rarity})'",
+  "repro": "?scene=home&tab=battle&lang=en&fresh=1&debug=1&notitle=1, scroll the battle tab to 'Today's treats'.",
+  "evidence": "m_en1.png left panel / en_home_2.png: '1 wild cards (Street)'; the same rank is 'Alley Boss' elsewhere ('24 cards · 1 Alley Boss guaranteed', shop chest cards).",
+  "suggestion": "Pluralise by {n} and use the same rank name everywhere (Street vs Alley Boss)."
+ },
+ {
+  "id": "qa-battle-docs-drift-costs",
+  "area": "other",
+  "severity": "minor",
+  "title": "GDD still states summon cost 12 + 4n and awaken cost 3 purr; the game uses 12 + 6n and 12",
+  "where": "docs/기획서_GDD.md section 3.2 (summon cost) and 3.3 (awaken); src/game/data/balance.ts:55-57,93",
+  "repro": "Open any run: summon costs are 12, 18, 24, 30, 36, 42, 48 (observed), awaken button says '골골 12 필요' and the sheet says '골골 10/12'. The GDD and its core-loop line say 12+4n and purr 3. 명세_전투규칙.md already has the correct 12 + 6n and 12.",
+  "evidence": "balance.ts SUMMON_STEP = 6, AWAKEN_COST = 12; d2_sel_king.png (awaken needs 12); tutorial run fish log 100 -> 88 -> 70 -> 48 -> 18.",
+  "suggestion": "Update GDD sections 3.2, 3.3 and section 9 purr remarks to the spec numbers."
+ },
+ {
+  "id": "qa-flow-en-copy",
+  "area": "other",
+  "severity": "minor",
+  "title": "English copy errors: \"Missions is now unlocked!\" and \"1 wild cards (Street)\"",
+  "where": "Unlock toast (HomeScene.announceUnlocks -> meta.toast.unlock with meta.feature.*) and Today's treats card (describeBundle wild-card text)",
+  "repro": "?scene=home&fresh=1&lang=en, await __dbg.meta.finishRuns(1); dismiss popups, start a chapter run, lose it (__dbg.battle.lose()), press Home on the result: the toast reads \"Missions is now unlocked!\". For the treat text: await __dbg.meta.finishRuns(3); __dbg.meta.advance({hours:30}); scroll the battle tab to y 1700.",
+  "evidence": "af_e_home_after.png (toast \"Missions is now unlocked!\" covering the gold amount) and aa_b_scroll_1700.png (treat slot \"1 wild cards (Street)\").",
+  "suggestion": "Use a verb that works for plural feature names (\"Unlocked: Missions\") and pluralise the wild-card string by count (\"1 wild card\")."
+ }
+]

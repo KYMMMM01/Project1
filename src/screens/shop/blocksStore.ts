@@ -2,7 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { fmt } from '@/core/format';
 import { mixColor } from '@/core/math';
-import { profile } from '@/meta';
+import { profile, tn } from '@/meta';
 import { describeBundle } from '@/meta/bundle';
 import { GEM_PASS_DAILY, GEM_PASS_INSTANT, IAP_SPECS, type IapSpec } from '@/meta/data/catalog';
 import { PIGGY_CAP } from '@/meta/data/economy';
@@ -49,8 +49,10 @@ function horizontalCoupon(inner: Container, y: number, w: number, h: number, ton
 }
 
 function packCoupon(inner: Container, y: number, w: number, spec: IapSpec, env: BlockEnv): number {
-  const h = 250;
   const x0 = COUPON_STUB + 24;
+  const contents = uiLabel(describeBundle(spec.bundle).join(' · '), { size: 26, anchorX: 0, anchorY: 0, wrap: w - x0 - 24, lineHeight: 34, align: 'left' });
+  // The coupon grows with the contents (English wraps to a second line) so the price button never covers them.
+  const h = Math.max(250, Math.ceil(88 + contents.height + 118));
   const c = horizontalCoupon(inner, y, w, h, Color.mustard);
   const art = chestArt(spec.bundle.chests?.gold ? 'gold' : 'silver', 160);
   art.position.set(95, h / 2 + 4);
@@ -58,7 +60,6 @@ function packCoupon(inner: Container, y: number, w: number, spec: IapSpec, env: 
   const name = uiLabel(t(`meta.iap.${spec.id}.name`), { size: 36, anchorX: 0 });
   fitLabel(name, w - x0 - 150, 36);
   name.position.set(x0, 50);
-  const contents = uiLabel(describeBundle(spec.bundle).join(' · '), { size: 26, anchorX: 0, anchorY: 0, wrap: w - x0 - 24, lineHeight: 34, align: 'left' });
   contents.position.set(x0, 88);
   const b = actionButton({ label: iap.priceText(spec.id), width: w - x0 - 24, style: 'primary', fontSize: 34 }, () => env.actions.buyProduct(spec.id));
   b.position.set(x0 + (w - x0 - 24) / 2, h - 56);
@@ -81,7 +82,7 @@ function gemCoupon(inner: Container, x: number, y: number, w: number, h: number,
   const name = uiLabel(t(`meta.iap.${spec.id}.name`), { size: 32 });
   fitLabel(name, w - 28, 32);
   name.position.set(w / 2, 210);
-  const b = actionButton({ label: iap.priceText(spec.id), width: w - 28, height: 88, style: 'success', fontSize: 32 }, () => env.actions.buyProduct(spec.id));
+  const b = actionButton({ label: iap.priceText(spec.id), width: w - 28, height: 88, style: 'primary', fontSize: 32 }, () => env.actions.buyProduct(spec.id));
   b.position.set(w / 2, h - 54);
   c.addChild(art, name, b);
   if (bonus > 0) {
@@ -151,7 +152,7 @@ function gemPassCoupon(inner: Container, y: number, w: number, env: BlockEnv): n
   fitLabel(title, w - x0 - 24, 36);
   title.position.set(x0, 48);
   const days = Math.max(0, Math.ceil((v.until - Date.now()) / 86_400_000));
-  const sub = v.active ? t('shop.gempass.left', { days }) : t('shop.gempass.desc', { now: GEM_PASS_INSTANT, daily: GEM_PASS_DAILY });
+  const sub = v.active ? tn('shop.gempass.left', days, { days }) : t('shop.gempass.desc', { now: GEM_PASS_INSTANT, daily: GEM_PASS_DAILY });
   const desc = uiLabel(sub, { size: 26, color: Color.inkSoft, anchorX: 0, anchorY: 0, wrap: w - x0 - 24, lineHeight: 32, align: 'left' });
   desc.position.set(x0, 84);
   c.addChild(art, title, desc);
@@ -226,7 +227,7 @@ export const passBlock: Block = {
       let y = 4;
       if (open || profile.data.owned.butler) y += butlerCoupon(inner, y, w, env) + GAP;
       if (open || profile.gemPassView().active) y += gemPassCoupon(inner, y, w, env) + GAP;
-      height += mountPage(root, height, pageW, inner, y - GAP, { title: t('shop.sec.pass'), ribbon: 'purple', tape: 'yellow' }) + GAP;
+      height += mountPage(root, height, pageW, inner, y - GAP, { title: t('shop.sec.pass'), ribbon: 'mustard', tape: 'yellow' }) + GAP;
     }
     const piggyAt = height;
     const inner = new Container();

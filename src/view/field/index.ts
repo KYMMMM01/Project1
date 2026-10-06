@@ -52,8 +52,13 @@ export function createField(ctx: BattleContext): FieldPart {
   const input = new FieldInput(env, layers.floor, layers.zones, layers.projectiles, units, cells);
   /** Hits near the entrance rise toward the top HUD: they stop at its lower edge (a sticker's own half height clear) instead of vanishing under the pills. */
   const NUMBER_CLEAR = 52;
+  /** And off the screen's side edges, an 8 px margin in. */
+  const NUMBER_SIDE = 8;
   const clampNumbers = (layout: BattleLayout): void => {
-    ctx.fx.numbers.minY = layout.safeTop + layout.topH + NUMBER_CLEAR - layout.fieldY;
+    const numbers = ctx.fx.numbers;
+    numbers.minY = layout.safeTop + layout.topH + NUMBER_CLEAR - layout.fieldY;
+    numbers.minX = NUMBER_SIDE - layout.fieldX;
+    numbers.maxX = layout.w - NUMBER_SIDE - layout.fieldX;
   };
   clampNumbers(ctx.layout);
   const offRefused = ctx.events.on('refused', (e) => {
@@ -67,7 +72,8 @@ export function createField(ctx: BattleContext): FieldPart {
       let look: CellLook = null;
       if (source !== null) {
         look = c === source ? (dragging ? 'origin' : 'selected') : dropLook(battle.dropAction(source, c));
-        if (look === 'swap' && !dragging) look = 'pick';
+        // Tap-tap only moves and merges (a tap on another cat selects it), so a swap shows no cue until the cat is dragged.
+        if (!dragging) look = look === 'move' ? 'pick' : look === 'swap' ? null : look;
       }
       cells.set(c, look, dragging && input.hover === c);
     }

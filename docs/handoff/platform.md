@@ -193,5 +193,8 @@ OPEN (outside my paths; none blocks shipping):
 - `core/save.ts`: `SaveStore.load()` cannot tell "no save" from "could not read", so after a failed read the session starts from
   defaults and cannot recover without a restart. A retry or a "progress could not be loaded" notice would need the store to ask
   the backend again.
-- docs/명세_메타.md section 8 ("sweep_ticket(플랫폼 표에 아직 없음)"), the comment on `PLACEMENTS` in `src/meta/data/economy.ts` and
-  the title of the test in `tests/meta.rules.test.ts` still say the platform lacks the row; it exists now.
+
+## 2026-10-07 QA fixes
+
+- **Storage reports lost writes (`qa-code-storage-failure-silent`, kit request 2).** `createLocalStorageBackend` and `safeStorage` implement `StorageBackend.volatile()` (true while a value lives only in memory: a refused or oversized write, a write held back after a failed read, or a nested backend that says so) and call `reportStorageVolatile()` from `@/core/save` where they fall back to memory. `SaveStore.flush` then retries at 2, 4, 8 up to 30 s, the kit shows one warning toast, and `volatile()` returns to false once a write lands. A failed removal does not count (no progress is lost). Tests: `tests/platform.core.test.ts` (a localStorage that frees up again, a throwing backend, an oversized value; each case imports fresh modules because the report is once per session).
+- **Capacitor hardware Back (kit request 5): not wired.** The history entry `BackGesture` keeps while a popup or page is open already receives Android's default Back (`WebView.goBack()`); a `backButton` listener would disable that default and need `exitApp()` at the root. Needs a device test first.

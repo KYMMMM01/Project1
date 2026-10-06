@@ -9,7 +9,7 @@ import type { ChestCard, ChestKind } from '@/meta/types';
 import '@/meta/strings';
 import '../src/screens/shop/strings';
 import { couponPath, cutPoly, lowered } from '../src/screens/shop/cutMath';
-import { bestRarity, flourishOf, gridLayout, revealSchedule, ribbonDots, stacksOf, totalCards } from '../src/screens/shop/revealPlan';
+import { bestRarity, flourishOf, gridLayout, nameBlockOf, revealSchedule, ribbonDots, stacksOf, totalCards } from '../src/screens/shop/revealPlan';
 import {
   chestAction, cosmeticStatus, gemBonusPercent, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, shortBy,
 } from '../src/screens/shop/shopLogic';
@@ -60,25 +60,35 @@ describe('reveal stacks', () => {
 });
 
 describe('reveal grid', () => {
-  it('fits every card inside the area and centres the last row', () => {
-    for (const n of [1, 2, 3, 5, 8, 12, 16, 20]) {
+  it('fits every plate and its name inside the area and centres each row', () => {
+    for (const n of [1, 2, 3, 5, 8, 12, 16, 20, 24]) {
       const g = gridLayout(n, 672, 700);
       expect(g.slots).toHaveLength(n);
+      expect(g.scale).toBeLessThanOrEqual(1.5);
       for (const s of g.slots) {
-        expect(s.x - g.cardW / 2).toBeGreaterThanOrEqual(-0.5);
-        expect(s.x + g.cardW / 2).toBeLessThanOrEqual(672.5);
-        expect(s.y + g.cardH / 2).toBeLessThanOrEqual(700.5);
+        expect(s.x - g.cellW / 2).toBeGreaterThanOrEqual(-0.5);
+        expect(s.x + g.cellW / 2).toBeLessThanOrEqual(672.5);
+        expect(s.y - g.plateH / 2).toBeGreaterThanOrEqual(-0.5);
+        expect(s.y + g.plateH / 2 + g.nameBlock).toBeLessThanOrEqual(700.5);
       }
+      const lastRow = g.slots.slice((g.rows - 1) * g.cols);
+      const first = lastRow[0] as { x: number };
+      const last = lastRow[lastRow.length - 1] as { x: number };
+      expect(first.x + last.x).toBeCloseTo(672, 3);
     }
-    const g = gridLayout(5, 672, 700);
-    expect(g.cols).toBe(3);
-    const lastRow = g.slots.slice(3);
-    expect((lastRow[0] as { x: number }).x + (lastRow[1] as { x: number }).x).toBeCloseTo(672, 3);
   });
 
-  it('uses bigger cards when there are few', () => {
-    expect(gridLayout(4, 672, 700).size).toBe('medium');
-    expect(gridLayout(20, 672, 700).size).toBe('small');
+  it('uses bigger plates when there are few and keeps them readable when there are many', () => {
+    expect(gridLayout(4, 672, 700).scale).toBeGreaterThan(gridLayout(20, 672, 700).scale);
+    expect(gridLayout(20, 672, 700).scale).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it('makes room for a second name line instead of shrinking the name', () => {
+    const one = gridLayout(12, 672, 700, () => nameBlockOf(1));
+    const two = gridLayout(12, 672, 700, () => nameBlockOf(2));
+    expect(two.nameBlock).toBeGreaterThan(one.nameBlock);
+    expect(two.scale).toBeLessThanOrEqual(one.scale);
+    for (const s of two.slots) expect(s.y + two.plateH / 2 + two.nameBlock).toBeLessThanOrEqual(700.5);
   });
 });
 

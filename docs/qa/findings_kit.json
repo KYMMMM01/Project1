@@ -1,0 +1,82 @@
+[
+ {
+  "id": "qa-code-back-gesture-unwired",
+  "area": "kit",
+  "severity": "major",
+  "title": "System Back / swipe-back is not wired to popups and full-screen pages, only the Escape key is",
+  "where": "src/ui/Popup.ts:205 (handleBack doc says 'Wire window popstate to this'), src/ui/ScreenScaffold.ts:163 and :229; no pushState/popstate anywhere in src, index.html or src/main.ts",
+  "repro": "On an Android phone (Chrome tab or installed PWA) open Settings, a popup or the pre-run page and press the system Back button or use the back swipe. Nothing in the game listens to history, so the browser leaves the page / closes the PWA instead of closing the popup or going back one screen. Desktop Escape works.",
+  "evidence": "Code only (desktop Aside has no hardware Back): grep -rn \"popstate|pushState|history\\.\" over src, index.html, src/main.ts returns only the comments in Popup.ts and ScreenScaffold.ts. PopupManager.handleBack() and ScreenScaffold.handleBack() have no caller except the keydown handlers.",
+  "suggestion": "Push one history entry when the first popup/scaffold opens, call popups.handleBack() then ScreenScaffold.handleBack() on popstate, and re-push when nothing consumed it."
+ },
+ {
+  "id": "qa-code-storage-failure-silent",
+  "area": "kit",
+  "severity": "minor",
+  "title": "When localStorage writes fail the game keeps playing from memory and never tells the player their progress and purchases are not saved",
+  "where": "src/core/save.ts:20-33 LocalStorageBackend.set catches the error and writes to an in-memory map; SaveStore.flush (line ~125) therefore never sees a failure; src/app/boot.ts only warns about failed loads",
+  "repro": "Open the game where localStorage.setItem throws (Safari private mode, quota full, storage blocked), play a run and buy something, close the tab: everything is gone with no warning at any point. SaveStore.flush's own failure path sets dirty=true but schedules no retry either.",
+  "evidence": "Code only (src/core/save.ts lines quoted above); not reproduced in the browser. The platform IAP pending-order list uses the same backend, so a paid order can be lost the same way.",
+  "suggestion": "Report the memory fallback once (toast / settings line) and retry failed flushes."
+ },
+ {
+  "id": "qa-collection-popup-stack-visible",
+  "area": "kit",
+  "severity": "polish",
+  "title": "A second popup opens over an unclosed one and both sheets stay visible",
+  "where": "Popup stack (src/ui Popup, showRewardsPopup priority 1)",
+  "repro": "With the cheat profile an account-level popup ('계정 레벨 98!') is pending; run shop.actions.buyProduct('gems_260') and pay.",
+  "evidence": "p_reward_b.png and p_claim_fly.png: the reward sheet is drawn on a larger offset second sheet, the older title ribbon 'Account level 98!' peeks out above the new ribbon, and the dim doubles. In the Butler Pass and gem pass purchases only one popup was open (w_butler_popups / w_gempass_popups), so this needs a pending popup (cheat-induced here).",
+  "suggestion": "Queue popups or hide the lower one while another is open."
+ },
+ {
+  "id": "qa-look-min-font-kit",
+  "area": "kit",
+  "severity": "major",
+  "title": "Kit floors text at 20 px, and sub-24 px text ships on most screens in both languages",
+  "where": "src/ui/theme.ts:112 (MIN_FONT = 20) and src/ui/text.ts uiLabel; seen on top bar, tab badges, cats ladder, calendar, daily shop, selection sheet",
+  "repro": "Open ?scene=home&tab=battle&lang=ko&fresh=1&debug=1&notitle=1, then walk every Pixi Text under __dbg.game.root and print fontSize * worldScale. Same walk on the cats tab, the shop 'today' section, the calendar (__dbg.routine.openCalendar()) and the battle selection sheet (?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&debug=1, __dbg.battle.give(900,9), __dbg.battle.board({0:'w_paw',1:'w_paw'}), tap cell 0 at design (145,311)).",
+  "evidence": "Walk results (log lines AUD ... small=): 'Lv' 20 px and the XP label '2,120 / 4,000' 22 px on every home screen (home_battle_ko_a.png, top-left sticker and bar); tab badge numbers '2','3' 22 px (home_battle_ko_a.png, bottom bar); cats ladder '0/2' 20 px and 'Lv.1' 22 px (catsK_0.png); calendar amounts '300','10','x1' 22.2 px (calK_0.png); 'Today 2 left' 20 px (shopK_1.png); selection sheet '1 · 6 left', 'Kings only', '+20' 20 px (en_b_sel.png); 'Weekly cup: 0 pts' and 'Claim cup prize' 20 px (en_home_2.png). Cause: MIN_FONT = 20 lets any kit label go below the 24 px bar.",
+  "suggestion": "Raise MIN_FONT to 24 and fix the few spots that then need more room (resize the XP bar label, Lv sticker, badges, ladder tags) instead of shrinking the type."
+ },
+ {
+  "id": "qa-look-disabled-contrast",
+  "area": "kit",
+  "severity": "major",
+  "title": "Disabled buttons are nearly unreadable (about 1.5:1), and the price on them is the information the player needs",
+  "where": "Kit Button disabled palette, src/ui/Button.ts:50-51 (ink 0x9a846e on desaturated kraft)",
+  "repro": "Unit screen: __dbg.collection.openUnit('w_paw') with 0 cards; or home battle tab scrolled to the patrol card (__dbg.home.scene.host.tabs.battle.scroll.scrollTo(900,false)); or ?lang=en and scroll to the daily card.",
+  "evidence": "unitK_0.png: the big bottom button '레벨 업' and its cost '100' are pale grey on grey, the main action of the screen looks dead. home_battle_ko_scrolled.png: '받기' and '2배로 받기' ghosted on the patrol card. en_home_2.png: 'Claim cup prize' and the three 'Ad' buttons. Estimated contrast ink 0x9a846e on about 0xb4a696 is about 1.5:1.",
+  "suggestion": "Keep the desaturated kraft face but use a darker ink (inkSoft 0x7d5e45 or darker, at least 4.5:1) for the label and price; show the cost in full ink even when disabled."
+ },
+ {
+  "id": "qa-look-reroll-icon",
+  "area": "kit",
+  "severity": "minor",
+  "title": "Restart / reroll icon renders as a solid ink blob",
+  "where": "Kit icon 'reroll' (src/ui/icons.ts): pause menu 'Restart', toy choice 'Reroll' button",
+  "repro": "?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&lang=en&debug=1&notitle=1, tap pause (60,50); or __dbg.battle.skipToWave(3) at speed 3 until the toy choice opens.",
+  "evidence": "z_restart.png (crop of en_b_pause.png): at button size the glyph is a filled dark disc with a tiny cream hole, no arrow readable. c1_relic.png: same blob on '다시 뽑기'.",
+  "suggestion": "Redraw as an outlined circular arrow with stroke weight about 5 px at 40 px, same as 'reroll' in the gallery page p7 at larger size."
+ },
+ {
+  "id": "qa-look-hex-leftovers",
+  "area": "kit",
+  "severity": "polish",
+  "title": "A few raw hex colours in the kit sit outside the token palette",
+  "where": "src/ui/ProgressBar.ts:17-21 (green 0x84c063, red 0xe8675a, cyan 0x7ccbe0, ghost 0xfff3d6), src/ui/ClassChip.ts:45-46 (0xb8845a bronze, 0x9ea8b4 cool silver), src/ui/TabBar.ts:39 (DIM 0x6b4d38), src/ui/RewardPopup.ts:199 (additive glow, already known)",
+  "repro": "grep -rnE \"0x[0-9a-fA-F]{6}\" src --include=*.ts outside src/ui/theme.ts and icons.ts.",
+  "evidence": "Source grep: the remaining non-fx hits are the lines above; ProgressBar's green/red/cyan are near-misses of leaf, coral and sky, and ClassChip's tier-2 edge 0x9ea8b4 is a cool blue-grey that is the only cool grey in the kit. blendMode 'add' appears only at src/ui/RewardPopup.ts:200 (known); there are no BlurFilter hits; 'glow' hits in src/fx/fx.ts are names of effects, drawGlow is only used by RewardPopup.",
+  "suggestion": "Replace with Color tokens (leaf, coral, sky, kraftDark and a warm grey) so a palette change moves them too."
+ },
+ {
+  "id": "qa-flow-toast-over-currency",
+  "area": "kit",
+  "severity": "polish",
+  "title": "Toasts land exactly on the currency row and hide the amounts and the \"+\" buttons",
+  "where": "Toast placement on the home screen (top of the stage, y about 130-220)",
+  "repro": "?scene=home&fresh=1 and tap the locked Shop tab (or the locked START on a locked chapter).",
+  "evidence": "g2_c_plus_gold.png (toast \"3판을 마치면 열려요.\" over the gold, gem and ticket pills) and af_e_home_after.png (unlock toast hides the gold number \"55...\").",
+  "suggestion": "Place toasts below the top bar (over the chapter card) or at the bottom above the tab bar so currency changes stay visible."
+ }
+]
