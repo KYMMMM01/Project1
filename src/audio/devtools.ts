@@ -2,6 +2,7 @@
  * Dev hooks on window.__dbg.audio (installed only when debug is enabled; lazy chunk):
  *   report()          bake + measure every SFX and stinger          -> SoundReport (incl. .table, .memory)
  *   music(track, i, s) offline-render a track and measure it        -> MusicRow
+ *   seam(track, rate)  offline-render one loop and measure the dip at the loop point against the other bar lines -> SeamRow
  *   mix('battle'|'big') offline-render a pile-up with/without the limiter -> MixRow
  *   wave(key, variant, half) baked samples of one sound ("sfx:coin")  -> {sampleRate, channels}
  *                     `half` mixes to mono at half the rate: small enough to dump a whole family
@@ -11,7 +12,7 @@
 import { debugExpose } from '@/core/debug';
 import type { AudioEngine } from './engine';
 import { bakeVariant } from './bake';
-import { renderMix, renderMusic, runReport } from './report';
+import { renderMix, renderMusic, renderSeam, runReport } from './report';
 import { SOUNDS } from './sounds';
 import type { MusicTrackId } from './scores';
 
@@ -22,6 +23,7 @@ export function installAudioDebug(engine: AudioEngine): void {
     resetStats: () => engine.resetStats(),
     report: () => runReport(engine.sampleRate),
     music: (track: MusicTrackId, intensity = 1, seconds = 16) => renderMusic(track, intensity, seconds, engine.sampleRate),
+    seam: (track: MusicTrackId, rate = 24000) => renderSeam(track, rate),
     mix: (scenario: 'battle' | 'big' = 'battle') => renderMix(scenario, engine.sampleRate),
     wave: async (key: string, variant = 0, half = false) => {
       const def = SOUNDS.find((d) => d.key === key);

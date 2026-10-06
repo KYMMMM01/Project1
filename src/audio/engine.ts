@@ -17,8 +17,8 @@ import { MUSIC_BASE, MUSIC_LPF_OPEN, SFX_BASE, createGraph, type AudioGraph } fr
 import { MusicPlayer, type MusicStats } from './music';
 import { PRERENDER_ORDER, SOUNDS, sfxIndexOf, stingerIndexOf } from './sounds';
 import { STINGER_DUCK, STINGER_MUFFLE } from './stingers';
-import { Synth } from './synth';
-import { pentatonicSemitones, semitoneRatio } from './theory';
+import { Synth, nodeStats, resetNodeStats } from './synth';
+import { stepRatio } from './theory';
 import { CAT_TARGET } from './recipe';
 import { GLOBAL_VOICE_CAP, VoiceLimiter } from './voices';
 
@@ -96,6 +96,11 @@ export interface AudioStats {
   sfxActivePeak: number;
   sfxPlayed: number;
   sfxDropped: { gap: number; perId: number; global: number };
+  /**
+   * WebAudio nodes this engine keeps alive: the fixed graph, the pooled SFX voices (gain + panner each, one source
+   * node per sound that is playing) and the tracked music / live-synthesis nodes with the peak since the last reset.
+   */
+  nodes: { pooledVoices: number; sfxSources: number; musicLive: number; musicPeak: number; musicCreated: number };
   /** Current values of the bus gains (they move while ramps run), for verifying ducks and mutes. */
   gains: { sfx: number; music: number; mute: number; duck: number };
   /** Cut-off of the music low-pass in Hz (it only moves under a muffling stinger). */
@@ -380,8 +385,9 @@ export class AudioEngine implements AudioApi {
 
   playStep(id: SfxId, step: number, opts?: PlayOpts): void {
     try {
-      // pentatonicSemitones already caps the climb at +24 semitones.
-      this.playIndex(sfxIndexOf(id), opts, semitoneRatio(pentatonicSemitones(step)));
+      // The climb is capped at +24 semitones; a noise-based tick may ask for less.
+      const idx = sfxIndexOf(id);
+      this.playIndex(idx, opts, stepRatio(step, SOUNDS[idx]?.recipe.climb));
     } catch {
       // see play()
     }
@@ -519,6 +525,7 @@ export class AudioEngine implements AudioApi {
     if (!voice) return false;
     voice.start(ctx, buf, when, rate, volume * scale, pan);
     this.played++;
+    this.duckFor(idx);
     const active = this.limiter.active(ctx.currentTime);
     if (active > this.activePeak) this.activePeak = active;
     return true;
@@ -567,7 +574,14 @@ export class AudioEngine implements AudioApi {
       if (dest !== out) dest.disconnect();
     });
     this.played++;
+    this.duckFor(idx);
     return true;
+  }
+
+  /** A sound that takes the room (the awakening) dips the music for as long as it lasts. */
+  private duckFor(idx: number): void {
+    const d = SOUNDS[idx]?.recipe.duck;
+    if (d) this.duck(d.depth, d.seconds);
   }
 
   /** Counters for the debug hooks and the demo's HUD. */
@@ -588,6 +602,13 @@ export class AudioEngine implements AudioApi {
       sfxActivePeak: this.activePeak,
       sfxPlayed: this.played,
       sfxDropped: { ...this.limiter.dropped },
+      nodes: {
+        pooledVoices: this.voiceCount,
+        sfxSources: this.voiceCount - this.freeVoices.length,
+        musicLive: nodeStats.live,
+        musicPeak: nodeStats.peak,
+        musicCreated: nodeStats.created,
+      },
       gains: {
         sfx: this.graph?.sfxBus.gain.value ?? 0,
         music: this.graph?.musicBus.gain.value ?? 0,
@@ -604,6 +625,7 @@ export class AudioEngine implements AudioApi {
     this.activePeak = 0;
     this.played = 0;
     this.limiter.dropped = { gap: 0, perId: 0, global: 0 };
+    resetNodeStats();
     this.music_?.resetStats();
   }
 

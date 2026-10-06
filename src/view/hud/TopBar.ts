@@ -59,7 +59,6 @@ export class TopBar {
 
   private readonly bag = new TweenBag();
   private readonly timer: ProgressBar;
-  private readonly timerText: Text;
   private readonly warn: Container;
   private readonly row2Right = new Container();
   readonly previewLayer = new Container();
@@ -93,8 +92,7 @@ export class TopBar {
     this.warn = drawIcon('warning', 34);
     this.warn.visible = false;
     this.waveLabel = new PaperLabel({ text: t('hud.prep'), size: 24, paper: Color.paper, padX: 16, padY: 7, maxWidth: this.rects.wave.w + 8 });
-    this.timer = new ProgressBar({ width: this.rects.timer.w, height: this.rects.timer.h, color: 'blue', value: 1 });
-    this.timerText = uiLabel('', { size: 24 });
+    this.timer = new ProgressBar({ width: this.rects.timer.w, height: this.rects.timer.h, color: 'blue', value: 1, labelSize: 24 });
     this.more = uiLabel('', { size: 24, onArt: true });
     this.more.visible = false;
 
@@ -103,7 +101,7 @@ export class TopBar {
     this.previewLayer.on('pointerdown', (e: FederatedPointerEvent) => this.tapPreview(e));
     this.toyLayer.on('pointerdown', (e: FederatedPointerEvent) => this.tapToy(e));
     this.row2Right.addChild(this.previewLayer, this.toyLayer, this.more);
-    this.root.addChild(this.pauseBtn, this.speedBtn, this.gauge, this.warn, this.waveLabel, this.timer, this.timerText, this.row2Right);
+    this.root.addChild(this.pauseBtn, this.speedBtn, this.gauge, this.warn, this.waveLabel, this.timer, this.row2Right);
     this.steps = speedSteps(this.canTriple(), env.sandbox);
     this.pauseBtn.visible = true;
     this.speedBtn.visible = env.reveal.speed;
@@ -253,7 +251,7 @@ export class TopBar {
     }
     if (text !== this.lastTimerText) {
       this.lastTimerText = text;
-      this.timerText.text = text;
+      this.timer.setLabel(text);
     }
   }
 
@@ -392,7 +390,6 @@ export class TopBar {
     this.previewLayer.hitArea = new Rectangle(r.preview.x, r.row2Y - STRIP_H / 2 - 4, r.preview.w, STRIP_H);
     this.toyLayer.hitArea = new Rectangle(r.toys.x, r.row2Y - STRIP_H / 2 - 4, r.toys.w, STRIP_H);
     this.timer.position.set(r.timer.x + r.timer.w / 2, r.timer.y + r.timer.h / 2);
-    this.timerText.position.copyFrom(this.timer.position);
     this.refreshPreview();
     this.refreshToys(false);
     this.refreshWave();

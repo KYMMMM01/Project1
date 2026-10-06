@@ -67,7 +67,7 @@ interface Tile {
 function sfxFor(r: RewardDesc): SfxId {
   if (r.icon === 'coin') return 'coin';
   if (r.icon === 'gem') return 'gem';
-  return 'reward_claim';
+  return 'star';
 }
 
 /**

@@ -454,6 +454,45 @@ describe('AudioEngine lifecycle', () => {
     expect(floors[1]).toBeCloseTo(0.1, 6);
   });
 
+  it('dips the music when the awakening plays and for no ordinary sound', async () => {
+    vi.stubGlobal(
+      'OfflineAudioContext',
+      class {
+        constructor() {
+          throw new Error('unsupported');
+        }
+      },
+    );
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    const ctx = ctxOf();
+    const ducks = (): number => ctx.params.filter((p) => p.of('cancelScheduledValues').length > 0).length;
+    engine.play('coin');
+    engine.play('merge_big');
+    await flush();
+    expect(ducks()).toBe(0);
+    engine.play('awaken');
+    await flush();
+    expect(ducks()).toBeGreaterThan(0);
+    const duckParam = ctx.params.find((p) => p.of('cancelScheduledValues').length > 0) as FakeParam;
+    const floor = duckParam.of('setTargetAtTime').find((c) => c.args[0] !== 1)?.args[0] as number;
+    expect(floor).toBeLessThan(0.6);
+  });
+
+  it('counts the nodes the music keeps alive and lets the debug stats reset the peak', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    engine.music('home', 0.1);
+    await vi.advanceTimersByTimeAsync(300);
+    const nodes = engine.stats().nodes;
+    expect(nodes.musicCreated).toBeGreaterThan(0);
+    expect(nodes.musicPeak).toBeGreaterThanOrEqual(nodes.musicLive);
+    engine.resetStats();
+    expect(engine.stats().nodes.musicCreated).toBe(0);
+  });
+
   it('dispose() removes every listener, closes the context and lets init() start fresh', async () => {
     engine.init();
     const first = ctxOf();

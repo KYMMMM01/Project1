@@ -1,12 +1,14 @@
 /** Settings as a full screen of paper sheets: sound, screen, game, my records (the Meow Code, purchases), and a note about erasing everything. */
 import { Container, type Text } from 'pixi.js';
+import { legalLinks, openLegalLink, type LegalLink, type LegalLinkId } from '@/app/legalLinks';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { getLang, i18nEvents, t, type Lang } from '@/core/i18n';
+import { isStorageVolatile, onStorageVolatile } from '@/core/save';
 import type { NumbersMode } from '@/fx';
 import { profile } from '@/meta';
 import { iap } from '@/platform';
-import { Button, Color, fitLabel, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, uiLabel } from '@/ui';
+import { Button, Color, drawIcon, fitLabel, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, uiLabel } from '@/ui';
 import { currentSettings, ensureSettings, updateSettings } from '@/view/hud/settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '@/view/hud/settingsMath';
 import { CodeExportPopup, CodeImportPopup } from './backupPopups';
@@ -21,6 +23,13 @@ const ROW_H = 104;
 const SEG_H = 80;
 const SIDE = 28;
 const GAP = 20;
+const LINK_H = 88;
+
+const LINK_LABEL: Record<LegalLinkId, string> = {
+  privacy: 'rt.sys.link.privacy',
+  terms: 'rt.sys.link.terms',
+  support: 'rt.sys.link.support',
+};
 
 let current: ScreenScaffold | null = null;
 let dispose: (() => void) | null = null;
@@ -108,12 +117,43 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     return b;
   };
 
+  /** A quiet kraft strip: the toast that says so is shown once and a scene change can swallow it. */
+  const volatileNotice = (w: number): Container => {
+    const view = new Container();
+    const text = uiLabel(t('rt.sys.volatile'), { size: 24, wrap: w - SIDE * 2 - 52, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 30 });
+    const h = Math.max(72, Math.ceil(text.height) + 36);
+    view.addChild(paperSheet(w, h, { fill: Color.kraft, radius: 22, seed: paperSeed() }));
+    const icon = drawIcon('info', 36);
+    icon.position.set(SIDE + 18, h / 2);
+    text.position.set(SIDE + 52, (h - text.height) / 2);
+    view.addChild(icon, text);
+    return view;
+  };
+
+  const linkRow = (link: LegalLink): FormRow => ({
+    height: LINK_H + 24,
+    draw: (row, w) => {
+      const b = new Button({ label: t(LINK_LABEL[link.id]), style: 'neutral', width: w - SIDE * 2, height: LINK_H, fontSize: 32 });
+      b.onTap(() => openLegalLink(link.url));
+      b.position.set(w / 2, (LINK_H + 24) / 2);
+      row.addChild(b);
+    },
+  });
+
+  const versionLabel = (): PaperLabel => new PaperLabel({ text: t('rt.sys.version', { v: GAME_VERSION }), size: 26, paper: 'kraft', padX: 28, padY: 8 });
+
   const build = (): void => {
     for (const c of scaffold.content.removeChildren()) c.destroy({ children: true });
     scaffold.setTitle(t('rt.sys.settings'));
     const s = currentSettings();
     const w = scaffold.contentWidth;
     let y = LABEL_OVERHANG;
+    if (isStorageVolatile()) {
+      const notice = volatileNotice(w);
+      notice.position.set(0, y);
+      scaffold.content.addChild(notice);
+      y += notice.height + GAP + LABEL_OVERHANG;
+    }
     const add = (title: string, rows: readonly FormRow[]): void => {
       const sheet = formSheet(w, title, rows);
       sheet.view.position.set(0, y);
@@ -182,11 +222,27 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     note.addChild(hint, reset);
     note.position.set(0, y);
     scaffold.content.addChild(note);
-    y += noteH + 36;
+    y += noteH;
 
-    const version = new PaperLabel({ text: t('rt.sys.version', { v: GAME_VERSION }), size: 26, paper: 'kraft', padX: 28, padY: 8 });
-    version.position.set(w / 2, y + 20);
-    scaffold.content.addChild(version);
+    const links = legalLinks();
+    if (links.length > 0) {
+      y += GAP + LABEL_OVERHANG;
+      add(t('rt.sys.section.about'), [
+        ...links.map(linkRow),
+        {
+          height: 80,
+          draw: (row, rw) => {
+            const version = versionLabel();
+            version.position.set(rw / 2, 40);
+            row.addChild(version);
+          },
+        },
+      ]);
+    } else {
+      const version = versionLabel();
+      version.position.set(w / 2, y + 36 + 20);
+      scaffold.content.addChild(version);
+    }
     scaffold.refresh();
   };
 
@@ -220,10 +276,18 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     });
   });
 
+  // The notice at the top appears the moment the first write is lost, even with this screen already open.
+  const offVolatile = onStorageVolatile(() => {
+    queueMicrotask(() => {
+      if (!closed) build();
+    });
+  });
+
   const close = (): void => {
     if (closed) return;
     closed = true;
     offLang();
+    offVolatile();
     current = null;
     dispose = null;
     void scaffold.hide(true).then(() => scaffold.destroy({ children: true }));
@@ -232,6 +296,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     if (closed) return;
     closed = true;
     offLang();
+    offVolatile();
     current = null;
     dispose = null;
     scaffold.destroy({ children: true });

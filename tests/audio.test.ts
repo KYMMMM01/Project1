@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyse, audibleEnd, fft, modulation, normalisationGain, peakOf } from '@/audio/analysis';
+import { analyse, attackTime, audibleEnd, fft, modulation, normalisationGain, peakOf } from '@/audio/analysis';
 import {
   SILENCE,
   adsrPoints,
@@ -20,6 +20,7 @@ import {
   noteToMidi,
   pentatonicSemitones,
   semitoneRatio,
+  stepRatio,
 } from '@/audio/theory';
 import { VoiceBudget, VoiceLimiter, type VoiceRule } from '@/audio/voices';
 
@@ -34,6 +35,15 @@ describe('theory', () => {
     expect(pentatonicSemitones(500)).toBe(MAX_STEP_SEMITONES);
     expect(pentatonicSemitones(-1)).toBe(-3);
     expect(pentatonicSemitones(-100)).toBe(-12);
+  });
+
+  it('lets a sound cap its playStep climb below the two-octave default', () => {
+    expect(stepRatio(10)).toBeCloseTo(4, 9);
+    expect(stepRatio(10, 12)).toBeCloseTo(2, 9);
+    expect(stepRatio(10, 19)).toBeCloseTo(semitoneRatio(19), 9);
+    expect(stepRatio(2, 12)).toBeCloseTo(semitoneRatio(pentatonicSemitones(2)), 9);
+    expect(stepRatio(0, 12)).toBe(1);
+    expect(stepRatio(-3, 12)).toBeLessThan(1);
   });
 
   it('tolerates junk input', () => {
@@ -446,6 +456,31 @@ describe('analysis', () => {
     // Too short to resolve anything: reported as flat rather than guessed.
     expect(modulation([am], SR, 0, 2000).hz).toBe(0);
     expect(analyse([am], SR).modHz).toBeGreaterThan(22);
+  });
+
+  it('measures how soft the touch of the first note is, whatever comes after it', () => {
+    const SRATE = 48000;
+    const burst = (rampMs: number, bodyMs: number, level: number, out: Float32Array, at: number): void => {
+      const ramp = Math.round((rampMs / 1000) * SRATE);
+      const body = Math.round((bodyMs / 1000) * SRATE);
+      for (let i = 0; i < ramp + body; i++) {
+        const env = i < ramp ? i / ramp : Math.exp(-(i - ramp) / (SRATE * 0.02));
+        out[at + i] = (out[at + i] as number) + level * env * Math.sin((2 * Math.PI * 800 * i) / SRATE);
+      }
+    };
+    const hard = new Float32Array(SRATE / 5);
+    burst(2, 60, 0.5, hard, 100);
+    const soft = new Float32Array(SRATE / 5);
+    burst(40, 60, 0.5, soft, 100);
+    // A soft first grain followed by a louder second one 50 ms later: the touch is the first grain's.
+    const figure = new Float32Array(SRATE / 5);
+    burst(3, 40, 0.2, figure, 100);
+    burst(3, 40, 0.8, figure, 100 + Math.round(0.05 * SRATE));
+    expect(attackTime([hard], SRATE, 100, hard.length)).toBeLessThan(5);
+    expect(attackTime([soft], SRATE, 100, soft.length)).toBeGreaterThan(25);
+    expect(attackTime([figure], SRATE, 100, figure.length)).toBeLessThan(6);
+    expect(analyse([hard], SRATE, false).attackMs).toBeLessThan(5);
+    expect(attackTime([new Float32Array(1000)], SRATE, 0, 1000)).toBe(0);
   });
 
   it('finds where a sound ends', () => {

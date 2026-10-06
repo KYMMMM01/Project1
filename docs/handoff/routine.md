@@ -91,3 +91,9 @@ Checked in the browser (screens in the session scratchpad `shots/fix-routine/`, 
 The Aside tab reloads whenever someone saves a file (Vite full reload), so QA scripts should wait for `window.__dbg` before each step and retry the whole scenario.
 
 REQUESTS (outside my paths): (1) `src/meta` (`rollSeason` in `pass.ts`, the profile's pass slice): pay or mail the unclaimed free tiers, and the premium ones of an owner, when a season rolls over, instead of wiping them; the note above only warns. (2) `npm run font` once more for the new Hangul in the pass and calendar strings.
+
+## 2026-10-07 finishing pass
+
+- **Settings, storage notice**: while `isStorageVolatile()` is true the sheet starts with a quiet kraft strip with the info icon: "Progress may not be saved in this browser mode." (`rt.sys.volatile`). The one-time toast can be missed, this stays. The screen listens to `onStorageVolatile` and rebuilds when the first lost write happens with the settings already open. Checked by making `Storage.prototype.setItem` throw and saving: the strip appeared with the screen open.
+- **Settings, About** (`rt.sys.section.about`): after the erase note, a sheet with one neutral paper button per configured link and the version line as its last row; see `docs/handoff/shell.md` for the three `VITE_*_URL` variables. With none set there is no sheet and the version line sits where it always did.
+- `npm run font` was run for the new Hangul (`rt.sys.volatile`, `rt.sys.section.about`, `rt.sys.link.*`).

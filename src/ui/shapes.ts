@@ -1,94 +1,9 @@
-import { FillGradient, Container, Graphics, type Texture } from 'pixi.js';
+import { Container, Graphics, type Texture } from 'pixi.js';
 import { game } from '@/core/game';
 import { clamp, mixColor } from '@/core/math';
 import { Color } from './theme';
-import { rgba } from './colors';
 import { drawPaper, drawPaperFace, drawPaperShadow, edgeTone, type PaperOpts } from './paper';
 import { hash32, paintPath, type TornSides } from './paperMath';
-
-/* ---------------------------------------------------------------- gradients */
-
-type StopColor = number | string;
-export type GradStop = readonly [offset: number, color: StopColor];
-
-const gradientCache = new Map<string, FillGradient>();
-
-/**
- * Shared vertical/horizontal gradient. 'local' texture space stretches it over each shape's own
- * bounds, so one instance serves every size, and sharing keeps the GPU texture count tiny (each
- * FillGradient owns a texture and, per Pixi, must otherwise be destroyed by hand). The paper kit uses
- * gradients only for scene fades (a vignette over artwork), never on a piece of paper.
- */
-export function gradient(stops: readonly GradStop[], horizontal = false): FillGradient {
-  const key = (horizontal ? 'h' : 'v') + stops.map((s) => s[0] + ':' + s[1]).join('|');
-  let g = gradientCache.get(key);
-  if (!g) {
-    g = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: horizontal ? { x: 1, y: 0 } : { x: 0, y: 1 },
-      colorStops: stops.map((s) => ({ offset: s[0], color: s[1] })),
-      textureSpace: 'local',
-      textureSize: 128,
-    });
-    gradientCache.set(key, g);
-  }
-  return g;
-}
-
-export function vGradient(top: number, bottom: number): FillGradient {
-  return gradient([
-    [0, top],
-    [1, bottom],
-  ]);
-}
-
-export function vGradient3(top: number, mid: number, bottom: number, midAt = 0.5): FillGradient {
-  return gradient([
-    [0, top],
-    [midAt, mid],
-    [1, bottom],
-  ]);
-}
-
-/**
- * Retired: the kit is matte, so there is no glossy highlight to paint. Kept so older call sites still
- * compile; it returns a fully transparent gradient. Delete the highlight shape where you find one.
- */
-export function glossGradient(_topAlpha: number, _bottomAlpha?: number): FillGradient {
-  return gradient([
-    [0, rgba(Color.white, 0)],
-    [1, rgba(Color.white, 0)],
-  ]);
-}
-
-/** Radial glow: opaque colour at the centre fading to transparent at the edge. */
-export function glowGradient(color: number, centerAlpha = 1): FillGradient {
-  const key = 'r' + color + ':' + centerAlpha;
-  let g = gradientCache.get(key);
-  if (!g) {
-    g = new FillGradient({
-      type: 'radial',
-      center: { x: 0.5, y: 0.5 },
-      innerRadius: 0,
-      outerCenter: { x: 0.5, y: 0.5 },
-      outerRadius: 0.5,
-      colorStops: [
-        { offset: 0, color: rgba(color, centerAlpha) },
-        { offset: 1, color: rgba(color, 0) },
-      ],
-      textureSpace: 'local',
-      textureSize: 128,
-    });
-    gradientCache.set(key, g);
-  }
-  return g;
-}
-
-/** Soft round light over artwork or a dim (a burst behind a reward). Never on a kit component. */
-export function drawGlow(g: Graphics, cx: number, cy: number, r: number, color: number, alpha = 0.8): void {
-  g.circle(cx, cy, r).fill(glowGradient(color, alpha));
-}
 
 /* ------------------------------------------------------------------ caching */
 

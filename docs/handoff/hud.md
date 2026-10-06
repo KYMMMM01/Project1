@@ -89,3 +89,7 @@ REQUESTS: `src/core/scene.ts` `SceneManager.cover`: set `cover.eventMode = 'none
 ## 2026-10-07 QA fixes
 
 See `battle.md` for the report-by-report list. HUD side: `HintBubble.ts` + `bubbleMath.ts` (one bubble for hints and refusals, on the overlay layer under every popup; avoid weights: cats 3, summon 3, preview and wave label 2, chips 1.5, enemy lane 1.5, pills 1.2), `Hints.hold / used / explain / bind`, `canOpenPause`, `unspentFish`, `wavesReached`, `nudgeDue` (policy / tutorialFlow, tested in `tests/view.hud.qa.test.ts`), the selection sheet's button row (molt 186, awaken 214, sell 240, centred), the info mark on a cut skill line, the pity chip caption, `Hud.pauseMenu()` (hides the enemy card first), RelicScreen's keyed card tweens.
+
+## 2026-10-07 finishing pass
+
+- **Countdown bar**: the "3초" / wave seconds text is the bar's own label now (`ProgressBar` with `labelSize: 24`, `setLabel` when the text changes); the separate overlay `Text` in `TopBar` is gone.

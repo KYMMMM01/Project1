@@ -74,8 +74,3 @@ export function hsvToColor(h: number, s: number, v: number): number {
   }
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 }
-
-/** "rgba()" string for a gradient stop that needs alpha (FillGradient stops are colour strings). */
-export function rgba(c: number, alpha: number): string {
-  return `rgba(${(c >> 16) & 0xff},${(c >> 8) & 0xff},${c & 0xff},${alpha})`;
-}

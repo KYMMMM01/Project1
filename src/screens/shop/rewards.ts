@@ -34,7 +34,7 @@ interface Tile {
 function sfxFor(p: BundlePart): SfxId {
   if (p.kind === 'gold') return 'coin';
   if (p.kind === 'gems') return 'gem';
-  return 'reward_claim';
+  return 'star';
 }
 
 /**
@@ -63,7 +63,7 @@ class RewardSheet extends Popup<void> {
     const sun = paperSun(Math.max(PANEL_W, h) * 0.62, 14, mixColor(Color.paperLight, Color.mustard, 0.35), 0.2);
     sun.position.set(0, -h / 2 + 150);
     this.body.addChild(sun, panel);
-    this.setContentSize(PANEL_W + 80, h + 90);
+    this.setContentSize(PANEL_W + 48, h + 90);
     if (!motion.reduced) {
       // One whole turn of a fourteen-fold shape per 120 s: the burst turns slowly and the loop has no seam.
       this.bag.run({ duration: 120, repeat: -1, ease: Ease.linear, onUpdate: (k) => (sun.rotation = k * TAU) });

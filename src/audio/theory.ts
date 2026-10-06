@@ -27,6 +27,11 @@ export function pentatonicSemitones(step: number): number {
   return Math.min(MAX_STEP_SEMITONES, Math.max(MIN_STEP_SEMITONES, semis));
 }
 
+/** Playback-rate ratio of `step` pentatonic degrees, climbing at most `maxSemitones` (a sound may ask for less than two octaves). */
+export function stepRatio(step: number, maxSemitones = MAX_STEP_SEMITONES): number {
+  return semitoneRatio(Math.min(maxSemitones, pentatonicSemitones(step)));
+}
+
 const NOTE_BASE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
 /** "C4" -> 60, "F#3" -> 54, "Bb2" -> 46. Throws on malformed input so score typos fail loudly in tests. */

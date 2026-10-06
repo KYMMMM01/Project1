@@ -1,377 +1,349 @@
 /**
- * Recipes: UI, economy / rewards, summon and merge. Each build() says WHY its layers exist:
- * a sine pitch-drop is a round "pop", a noise tick is the touch, inharmonic partials are glass,
- * a detuned saw stack with a rising filter is "power". Levels inside a recipe are relative only;
- * the baker normalises to the category target.
+ * Recipes: UI, rewards, summon and merge. Each build() says WHY its layers exist: a noise grain is the
+ * touch, a felt pat is the landing, a wooden knock is a refusal, a stamp is a claim, a sticker pop is a
+ * small pitched glide, and every note comes from a mallet or a plucked string. Levels inside a recipe
+ * are relative only; the baker normalises to the family target.
  */
 import type { SfxId } from './api';
-import { bell, blip, chime, sparkles, thump, tick, whoosh, type Recipe } from './recipe';
+import { bell, kalimba, knock, mallet, paper, pluck, pop, puff, shake, stamp, thump, tick, whoosh, type Recipe } from './recipe';
 import { hz } from './theory';
 
 export const UI_RECIPES = {
   // ---------------------------------------------------------------- UI
   ui_click: {
     cat: 'ui',
-    len: 0.12,
-    ms: [40, 120],
-    build(s) {
-      // Down-gliding sine = soft "bloop"; an octave ghost adds air; the lowpassed tick is the fingertip.
-      thump(s, 760, 430, 0, 0.075, 1, 0.045);
-      s.tone({ f: 1500, f2: 900, sw: 0.03, dur: 0.045, v: 0.22 });
-      tick(s, 0, 2200, 0.01, 0.28, 0.7);
+    len: 0.1,
+    ms: [15, 90],
+    variants: 2,
+    rate: 0.03,
+    build(s, v) {
+      // A fingertip on paper: a band-passed noise grain is the touch, a felt pat under it is the body. Nothing rings.
+      const p = v.j(0.06);
+      paper(s, 0, 2200 * p, 1, 0.028);
+      thump(s, 320 * p, 210, 0, 0.045, 0.35, 0.025);
     },
   },
   ui_back: {
     cat: 'ui',
-    len: 0.14,
-    ms: [40, 120],
-    build(s) {
-      // Lower and slightly slower than click: the same gesture "going back".
-      thump(s, 660, 370, 0, 0.095, 1, 0.06);
-      s.tone({ w: 'triangle', f: 330, f2: 190, sw: 0.06, dur: 0.085, v: 0.32 });
-      tick(s, 0, 1500, 0.01, 0.2, 0.7);
+    len: 0.12,
+    ms: [30, 100],
+    variants: 2,
+    rate: 0.03,
+    build(s, v) {
+      // The same gesture going back: a lower grain and a slower, deeper pat.
+      const p = v.j(0.06);
+      paper(s, 0, 1500 * p, 0.9, 0.034);
+      thump(s, 260 * p, 170, 0, 0.06, 0.3, 0.035);
     },
   },
   ui_tab: {
     cat: 'ui',
-    len: 0.1,
-    ms: [40, 110],
-    build(s) {
-      // Upward blip: forward / selection.
-      blip(s, hz('B5'), 0, 0.07, 0.8, hz('D6'));
-      tick(s, 0, 3200, 0.008, 0.3, 2);
+    len: 0.14,
+    ms: [50, 125],
+    variants: 2,
+    rate: 0.03,
+    build(s, v) {
+      // A page turning: one flick rising, a second falling back (a double slide), and the leaf settling with a pat.
+      const p = v.j(0.05);
+      whoosh(s, 1200 * p, 3600 * p, 0, 0.05, 0.8, 0.8, 0.35);
+      whoosh(s, 3200 * p, 1600 * p, 0.03, 0.04, 0.45, 0.8, 0.4);
+      paper(s, 0.058, 2200 * p, 0.6, 0.02);
+      thump(s, 290 * p, 200, 0.058, 0.04, 0.3, 0.02);
     },
   },
   ui_toggle: {
     cat: 'ui',
-    len: 0.1,
-    ms: [40, 110],
+    len: 0.09,
+    ms: [25, 85],
+    rate: 0.03,
     build(s) {
-      // Mechanical "tik" plus a pip; consumers pitch it up/down for on/off.
-      tick(s, 0, 1700, 0.014, 0.9, 3);
-      s.tone({ f: 700, f2: 1000, sw: 0.03, at: 0.008, dur: 0.055, v: 0.55 });
+      // A wooden "tok", pitched so that consumers can bend it up for on, down for off, and ride it along a slider.
+      knock(s, 900, 0, 1, 0.04);
     },
   },
   ui_popup_open: {
     cat: 'ui',
     len: 0.14,
-    ms: [80, 120],
+    ms: [70, 125],
     build(s) {
-      whoosh(s, 500, 2400, 0, 0.1, 0.5, 1.1, 0.55);
-      s.tone({ f: 400, f2: 800, sw: 0.08, lin: true, dur: 0.1, v: 0.35 });
-      chime(s, hz('D6'), 0.05, 0.06, 0.3);
+      // A sheet of paper slides in (a slow-rising swish) and lands with a soft pat and a tap of its edge.
+      whoosh(s, 600, 2200, 0, 0.075, 0.8, 0.7, 0.55);
+      thump(s, 280, 190, 0.065, 0.05, 0.4, 0.025);
+      paper(s, 0.065, 1500, 0.5, 0.02);
     },
   },
   ui_popup_close: {
     cat: 'ui',
     len: 0.12,
-    ms: [60, 110],
+    ms: [45, 110],
     build(s) {
-      whoosh(s, 2000, 500, 0, 0.09, 0.45, 1.1, 0.3);
-      s.tone({ f: 700, f2: 350, sw: 0.08, dur: 0.09, v: 0.32 });
+      // The sheet slides away, quicker and lighter than it came, and the table takes it with a small pat.
+      whoosh(s, 2200, 600, 0, 0.05, 0.6, 0.7, 0.3);
+      thump(s, 260, 180, 0.04, 0.04, 0.25, 0.02);
     },
   },
   ui_error: {
     cat: 'ui',
-    len: 0.16,
-    ms: [80, 125],
+    len: 0.14,
+    ms: [70, 125],
     build(s) {
-      // Two dull buzzes: square + detuned saw (a ~9 Hz beat) through a low lowpass. The fundamental
-      // sits at 155 Hz so its 2nd/3rd harmonics still reach a phone speaker; soft attack, nothing sharp.
-      for (const at of [0, 0.06]) {
-        const filter = { t: 'lowpass' as const, f: 700, q: 0.7 };
-        s.tone({ w: 'square', f: 155, at, dur: 0.048, v: 0.5, a: 0.005, s: 0.6, r: 0.014, filter });
-        s.tone({ w: 'sawtooth', f: 164, at, dur: 0.048, v: 0.3, a: 0.005, s: 0.6, r: 0.014, filter });
-      }
+      // Never a buzzer: a dull double knock on a wooden lid, the second one lower and lighter. It says "not that", gently.
+      knock(s, 300, 0, 1, 0.055);
+      knock(s, 250, 0.058, 0.75, 0.055);
     },
   },
   ui_confirm: {
     cat: 'ui',
-    len: 0.15,
-    ms: [80, 120],
+    len: 0.14,
+    ms: [60, 125],
     build(s) {
-      // Two rising bright notes (C6 -> G6, a fifth): "done".
-      blip(s, hz('C6'), 0, 0.06, 0.75);
-      blip(s, hz('G6'), 0.045, 0.07, 0.9);
+      // Two small kalimba tines up a fifth (E5, B5): "done".
+      kalimba(s, hz('E5'), 0, 0.075, 0.8);
+      kalimba(s, hz('B5'), 0.04, 0.085, 1);
     },
   },
 
   // ---------------------------------------------------------------- economy / rewards
   coin: {
-    cat: 'reward',
-    len: 0.32,
-    ms: [100, 350],
+    cat: 'tick',
+    len: 0.26,
+    ms: [60, 230],
     variants: 3,
     rate: 0.025,
+    climb: 14,
     rule: { maxVoices: 6, minGap: 0.03, falloff: 0.12 },
     build(s, v) {
-      // Classic B5 -> E6 two-note blip, rounded: triangle body + sine octave, plus a quiet sparkle partial.
+      // One kalimba tine (G5) with a woody tick: a small soft coin, made to be heard in dozens while a count runs.
       const p = v.j(0.02);
-      blip(s, hz('B5') * p, 0, 0.055, 0.85);
-      blip(s, hz('E6') * p, 0.05, 0.17, 1);
-      s.tone({ f: hz('E6') * 3 * p, at: 0.05, dur: 0.1, v: 0.1, s: 0.01 });
+      kalimba(s, hz('G5') * p, 0, 0.2, 1);
+      tick(s, 0, 3000, 0.008, 0.18, 1);
     },
   },
   coin_many: {
     cat: 'reward',
-    len: 0.95,
-    ms: [350, 900],
+    len: 0.7,
+    ms: [250, 650],
     build(s) {
-      // A cascade: accelerating pentatonic coin blips over a metallic rattle bed, ending on a bell.
-      const seq = ['E6', 'G6', 'A6', 'C7', 'D7', 'E7', 'G6', 'C7'];
+      // A handful of coins on a wooden table: a pentatonic run of kalimba tines that speeds up, a loose rattle under it
+      // (band-passed at 2.4 kHz, never a metallic hiss) and a small hand bell for the last one.
+      const seq = ['G5', 'A5', 'C6', 'D6', 'E6', 'G6', 'E6', 'C7'];
       let t = 0;
-      for (let k = 0; k < 9; k++) {
-        const f = hz(seq[k % seq.length] as string) * (1 + (s.rand() - 0.5) * 0.01);
-        blip(s, f, t, 0.1, 0.5 + k * 0.05);
-        t += 0.062 - k * 0.003;
-      }
-      s.noise({ at: 0.02, dur: 0.5, v: 0.1, a: 0.04, s: 0.2, r: 0.2, trem: { rate: 32, depth: 0.9 }, filter: { t: 'highpass', f: 6500 } });
-      bell(s, hz('E7'), 0.5, 0.3, 0.45);
+      seq.forEach((n, k) => {
+        kalimba(s, hz(n) * (1 + (s.rand() - 0.5) * 0.01), t, 0.14, 0.5 + k * 0.05);
+        t += 0.06 - k * 0.003;
+      });
+      s.noise({ at: 0.02, dur: 0.38, v: 0.1, a: 0.04, s: 0.2, r: 0.15, trem: { rate: 26, depth: 0.9 }, filter: { t: 'bandpass', f: 2400, q: 0.8 } });
+      bell(s, hz('G6'), 0.34, 0.26, 0.4);
     },
   },
   gem: {
-    cat: 'reward',
-    len: 0.9,
-    ms: [250, 800],
+    cat: 'tick',
+    len: 0.45,
+    ms: [100, 420],
+    climb: 12,
     build(s) {
-      // Glass: struck-bar partials (1, 2.76, 5.4) plus an FM overtone with an inharmonic 3.5 ratio, in an echo.
-      const e = s.echo(0.075, 0.35, 0.35, 7000);
-      bell(s, hz('G6'), 0, 0.5, 1, { bus: e, amt: 0.5 });
-      s.tone({ f: hz('D7'), fm: { ratio: 3.5, idx: 1.4, idx2: 0, idxT: 0.3 }, at: 0.03, dur: 0.4, v: 0.3, send: { bus: e, amt: 0.5 } });
+      // A small hand bell (E6) in a short wooden room: brighter and longer than a coin, but never a glass shimmer.
+      const e = s.echo(0.055, 0.2, 0.22, 4500);
+      bell(s, hz('E6'), 0, 0.32, 1, { bus: e, amt: 0.35 });
     },
   },
   reward_claim: {
     cat: 'reward',
-    len: 0.85,
-    ms: [300, 800],
+    len: 0.6,
+    ms: [150, 480],
     build(s) {
-      // "ba-DING": a low rounded "ba", then a bright bell pair with a sparkle fall-off.
-      const e = s.echo(0.08, 0.3, 0.3, 6500);
-      thump(s, 330, 200, 0, 0.09, 0.8, 0.05);
-      blip(s, hz('B5'), 0.06, 0.1, 0.8);
-      bell(s, hz('E6'), 0.11, 0.42, 1, { bus: e, amt: 0.5 });
-      sparkles(s, 0.16, 3, 0.15, [hz('E7'), hz('G7'), hz('B6')], 0.22, 0.12, { bus: e, amt: 0.4 });
+      // A rubber stamp comes down on the form (dull thud, paper slap), then one kalimba ding says it counted.
+      stamp(s, 0, 1);
+      kalimba(s, hz('C6'), 0.075, 0.3, 0.55);
     },
   },
   level_up: {
     cat: 'reward',
-    len: 1.0,
-    ms: [450, 950],
     trim: 1,
+    len: 0.95,
+    ms: [400, 900],
     build(s) {
-      // Fast bright C-major arpeggio (65 ms steps) landing on a long ringing C6.
-      const e = s.echo(0.09, 0.38, 0.3, 6500);
-      ['C5', 'E5', 'G5'].forEach((n, k) => blip(s, hz(n), k * 0.065, 0.12, 0.8));
-      chime(s, hz('C6'), 0.195, 0.5, 1, { bus: e, amt: 0.5 });
-      bell(s, hz('E7'), 0.22, 0.3, 0.3, { bus: e, amt: 0.4 });
+      // The stamp, then a short rising marimba figure (C-E-G) that lands on a long C6 with a kalimba tine above it.
+      const e = s.echo(0.07, 0.22, 0.2, 4500);
+      stamp(s, 0, 0.8);
+      ['C5', 'E5', 'G5'].forEach((n, k) => mallet(s, hz(n), 0.1 + k * 0.075, 0.18, 0.8));
+      mallet(s, hz('C6'), 0.325, 0.55, 1, { bus: e, amt: 0.35 });
+      kalimba(s, hz('E6'), 0.36, 0.35, 0.3);
     },
   },
   star: {
-    cat: 'reward',
-    len: 0.65,
-    ms: [200, 560],
+    cat: 'tick',
+    len: 0.26,
+    ms: [50, 230],
+    climb: 19,
     build(s) {
-      // A single twinkle: B6 with glassy partials and a delayed D7 that shivers.
-      bell(s, hz('B6'), 0, 0.32, 0.9);
-      s.tone({ f: hz('D7'), at: 0.06, dur: 0.3, v: 0.3, trem: { rate: 14, depth: 0.6 }, s: 0.01 });
+      // A sticker pressed on: a pitched pop (D5) with a quick upward glide. playStep lifts it up the pentatonic scale
+      // when several land in a row, so the stickers of a reward list climb like a little tune.
+      pop(s, hz('D5'), 0, 1, 0.14);
     },
   },
   purchase: {
     cat: 'reward',
-    len: 0.7,
-    ms: [250, 650],
+    len: 0.6,
+    ms: [200, 520],
     build(s) {
-      // Cash-register: two quick blips, a coin-rattle noise burst, then a bell ring.
-      const e = s.echo(0.07, 0.3, 0.25, 6000);
-      blip(s, hz('E6'), 0, 0.06, 0.8);
-      blip(s, hz('A6'), 0.045, 0.08, 0.9);
-      s.noise({ at: 0.04, dur: 0.14, v: 0.14, a: 0.005, s: 0.1, trem: { rate: 40, depth: 1 }, filter: { t: 'highpass', f: 6500 } });
-      bell(s, hz('E6'), 0.1, 0.34, 0.7, { bus: e, amt: 0.4 });
+      // A receipt stamped and a small bell rung: the till of a toy shop.
+      const e = s.echo(0.06, 0.22, 0.2, 4500);
+      stamp(s, 0, 0.7, 175);
+      kalimba(s, hz('E6'), 0.07, 0.15, 0.6);
+      bell(s, hz('A6'), 0.12, 0.3, 0.7, { bus: e, amt: 0.3 });
     },
   },
 
-  // ---------------------------------------------------------------- summon (escalating)
+  // ---------------------------------------------------------------- summon (escalating, one instrument family)
   summon_common: {
-    cat: 'reward',
-    trim: -2,
-    len: 0.3,
-    ms: [100, 220],
-    // Rapid summoning (the guide: four or more a second) thins out: 80 ms apart and quieter as it gets denser.
+    cat: 'tick',
+    len: 0.22,
+    ms: [60, 200],
+    // Rapid summoning (four or more a second) thins out: 80 ms apart and quieter as it gets denser.
     rule: { maxVoices: 4, minGap: 0.08, falloff: 0.25 },
     build(s) {
-      // A short soft pop: pitch-drop body, an upward "plop" blip, a faint chime tail and a lowpassed air puff.
-      thump(s, 460, 200, 0, 0.14, 1, 0.08);
-      s.tone({ f: 840, f2: 1250, sw: 0.05, at: 0.012, dur: 0.095, v: 0.3 });
-      s.tone({ f: hz('E6'), at: 0.05, dur: 0.07, v: 0.12 });
-      s.noise({ dur: 0.07, v: 0.22, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200 } });
+      // A sticker pressed onto the board: a pitched pop (E5) and a little puff of paper.
+      pop(s, hz('E5'), 0, 1, 0.12);
+      puff(s, 0, 0.06, 0.25, 2600, 1500);
     },
   },
   summon_rare: {
-    cat: 'reward',
-    trim: 1,
-    len: 0.55,
-    ms: [220, 500],
+    cat: 'combat',
+    len: 0.5,
+    ms: [160, 440],
     rule: { maxVoices: 4, minGap: 0.08, falloff: 0.25 },
     build(s) {
-      // Common's pop + a rising air whoosh + a single bell at E6: the first "sparkle" of the ladder.
-      const e = s.echo(0.07, 0.3, 0.25, 6500);
-      whoosh(s, 700, 3200, 0, 0.1, 0.32, 1.2, 0.8);
-      thump(s, 460, 200, 0.01, 0.12, 1, 0.07);
-      bell(s, hz('E6'), 0.06, 0.32, 0.7, { bus: e, amt: 0.5 });
-      sparkles(s, 0.12, 2, 0.08, [hz('E7'), hz('A6')], 0.12, 0.1, { bus: e, amt: 0.4 });
+      // The same pop, then two kalimba tines (G5, C6) climbing out of it: the first step of the ladder.
+      pop(s, hz('E5'), 0, 0.9, 0.12);
+      kalimba(s, hz('G5'), 0.07, 0.2, 0.7);
+      kalimba(s, hz('C6'), 0.12, 0.3, 0.9);
+      puff(s, 0, 0.06, 0.2, 2600, 1500);
     },
   },
   summon_epic: {
-    cat: 'combat',
-    trim: 1.5,
-    len: 0.95,
-    ms: [450, 900],
+    cat: 'reward',
+    len: 0.8,
+    ms: [400, 760],
     rule: { maxVoices: 3, minGap: 0.08, falloff: 0 },
     build(s) {
-      // Short riser, a weighted thump on the drop, a two-note chime (E6, A6) and a twinkle tail.
-      const e = s.echo(0.08, 0.38, 0.32, 7000);
-      whoosh(s, 400, 3600, 0, 0.22, 0.65, 2, 0.85);
-      thump(s, 240, 78, 0.2, 0.3, 0.7, 0.14, 0.4);
-      s.noise({ at: 0.2, dur: 0.1, v: 0.35, s: 0.01, filter: { t: 'lowpass', f: 3500, f2: 500, sw: 0.1 } });
-      bell(s, hz('E6'), 0.21, 0.45, 1.0, { bus: e, amt: 0.5 });
-      bell(s, hz('A6'), 0.3, 0.45, 0.9, { bus: e, amt: 0.5 });
-      sparkles(s, 0.32, 6, 0.3, [hz('E7'), hz('A7'), hz('B7'), hz('C7')], 0.18, 0.14, { bus: e, amt: 0.4 });
+      // The pop, a marimba triad rolled upward (G5 C6 E6), a small bell on top and a puff of confetti.
+      const e = s.echo(0.06, 0.2, 0.22, 4500);
+      pop(s, hz('E5'), 0, 0.9, 0.12);
+      ['G5', 'C6', 'E6'].forEach((n, k) => mallet(s, hz(n), 0.1 + k * 0.07, 0.25, 0.8 + k * 0.1));
+      bell(s, hz('G6'), 0.28, 0.4, 0.6, { bus: e, amt: 0.35 });
+      puff(s, 0.12, 0.2, 0.35, 3500, 1500);
     },
   },
   summon_legendary: {
     cat: 'big',
-    trim: 0,
-    len: 1.7,
-    ms: [800, 1550],
+    trim: -2,
+    len: 1.2,
+    ms: [700, 1150],
     build(s) {
-      // Pull-in riser (noise + saw sweep), sub thump on the hit, a rising C-major arpeggio that
-      // blooms into a detuned-saw chord, with a high shimmer in a short room.
-      const rv = s.reverb(0.55, 0.28);
-      const e = s.echo(0.09, 0.4, 0.3, 7000);
-      whoosh(s, 300, 5200, 0, 0.38, 0.5, 2.2, 0.9);
-      s.tone({ w: 'sawtooth', f: 140, f2: 620, sw: 0.38, dur: 0.4, v: 0.12, a: 0.1, filter: { t: 'lowpass', f: 600, f2: 3500, sw: 0.38 } });
-      thump(s, 110, 42, 0.38, 0.5, 0.9, 0.3, 0.5);
-      s.noise({ at: 0.38, dur: 0.2, v: 0.4, s: 0.01, filter: { t: 'lowpass', f: 5200, f2: 700, sw: 0.18 } });
-      ['C7', 'E7', 'G7', 'C8'].forEach((n, k) => bell(s, hz(n), 0.38 + k * 0.04, 0.5, 0.45, { bus: e, amt: 0.5 }));
-      ['C5', 'E5', 'G5', 'C6'].forEach((n, k) => {
-        const at = 0.38 + k * 0.065;
-        chime(s, hz(n), at, 0.5, 0.55, { bus: rv, amt: 0.6 });
-        bell(s, hz(n) * 2, at + 0.01, 0.5, 0.6, { bus: rv, amt: 0.5 });
-        s.tone({ w: 'sawtooth', f: hz(n), at: at + 0.02, dur: 0.6, v: 0.05, a: 0.03, uni: [-9, 9], filter: { t: 'lowpass', f: 1900 } });
-      });
-      sparkles(s, 0.55, 14, 0.55, [hz('C7'), hz('E7'), hz('G7'), hz('B6'), hz('D7'), hz('C8')], 0.5, 0.2, { bus: e, amt: 0.5 });
-      s.noise({ at: 0.4, dur: 0.75, v: 0.3, a: 0.05, s: 0.05, trem: { rate: 18, depth: 0.8 }, filter: { t: 'highpass', f: 7500 } });
+      // The board takes the weight (a low felt thump), five marimba steps climb C5-E5-G5-C6-E6, a kalimba cascade and a
+      // bell ring above, and a paper shaker and a cloud of confetti fill the air under it.
+      const e = s.echo(0.07, 0.25, 0.25, 5000);
+      pop(s, hz('C5'), 0, 0.8, 0.14);
+      thump(s, 110, 48, 0.1, 0.4, 0.9, 0.2, 0.5);
+      ['C5', 'E5', 'G5', 'C6', 'E6'].forEach((n, k) => mallet(s, hz(n), 0.1 + k * 0.065, 0.35, 0.75 + k * 0.05, k >= 3 ? { bus: e, amt: 0.3 } : undefined));
+      ['G6', 'C7', 'E7', 'G7'].forEach((n, k) => kalimba(s, hz(n), 0.4 + k * 0.06, 0.3, 0.35));
+      bell(s, hz('C7'), 0.45, 0.5, 0.4, { bus: e, amt: 0.35 });
+      puff(s, 0.1, 0.35, 0.5, 3600, 1400);
+      shake(s, 0.12, 0.6, 0.45);
     },
   },
   summon_mythic: {
     cat: 'big',
-    trim: 1,
-    len: 2.0,
-    ms: [1300, 1650],
+    trim: 0,
+    len: 1.7,
+    ms: [1100, 1600],
     build(s) {
-      // Riser (noise + sweeping saw stack + sine glide), deep sub thump with a saturated noise burst,
-      // a bright Cmaj9 supersaw chord with bell arpeggio, and a fast high shimmer cascade in a hall.
-      // Mono: at 1.6 s it would otherwise be the single largest decoded buffer.
-      const rv = s.reverb(0.8, 0.3);
-      const e = s.echo(0.1, 0.45, 0.32, 8000);
-      whoosh(s, 250, 7500, 0, 0.65, 0.95, 2.8, 0.92);
-      s.tone({ w: 'sawtooth', f: 110, f2: 880, sw: 0.62, dur: 0.66, v: 0.26, a: 0.2, uni: [-12, 12], filter: { t: 'lowpass', f: 500, f2: 6000, sw: 0.62 } });
-      s.tone({ f: 440, f2: 1760, sw: 0.62, lin: true, dur: 0.66, v: 0.18, a: 0.3 });
-      thump(s, 90, 30, 0.62, 0.8, 1.0, 0.5, 0.5);
-      s.noise({ at: 0.62, dur: 0.5, v: 0.9, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 7000, f2: 250, sw: 0.5 } });
-      bell(s, hz('G6'), 0.62, 0.9, 0.45, { bus: rv, amt: 0.5 });
-      ['C5', 'E5', 'G5', 'B5', 'D6'].forEach((n, k) => {
-        const at = 0.66 + k * 0.06;
-        s.tone({ w: 'sawtooth', f: hz(n), at, dur: 0.85, v: 0.085, a: 0.04, r: 0.3, uni: [-10, 10], filter: { t: 'lowpass', f: 3500, f2: 6500, sw: 0.5 }, send: { bus: rv, amt: 0.5 } });
-        chime(s, hz(n) * 2, at, 0.65, 0.5, { bus: e, amt: 0.5 });
-        bell(s, hz(n) * 2, at + 0.01, 0.7, 0.4, { bus: e, amt: 0.5 });
-      });
-      ['C7', 'E7', 'G7', 'C8', 'E8'].forEach((n, k) => bell(s, hz(n), 0.62 + k * 0.05, 0.7, 0.4, { bus: e, amt: 0.5 }));
-      ['C7', 'E7', 'G7', 'B7', 'D8', 'E7', 'G7', 'C8', 'E8'].forEach((n, k) => {
-        s.tone({ f: hz(n), at: 0.75 + k * 0.045, dur: 0.4, v: 0.25, a: 0.003, trem: { rate: 12, depth: 0.5 }, send: { bus: e, amt: 0.6 } });
-      });
-      s.noise({ at: 0.62, dur: 0.9, v: 0.2, a: 0.08, s: 0.05, trem: { rate: 16, depth: 0.8 }, filter: { t: 'highpass', f: 8000 } });
-      sparkles(s, 0.7, 12, 0.6, [hz('C8'), hz('E8'), hz('G7'), hz('B7'), hz('D8')], 0.3, 0.18, { bus: e, amt: 0.5 });
+      // The same figure at full size: a deep felt thump, a seven-step marimba run (C5 to C7), a roll on C6, a kalimba
+      // shower, two hand bells, a paper shaker and a big cloud of confetti. All of it wood, felt and paper.
+      const e = s.echo(0.08, 0.28, 0.28, 5000);
+      pop(s, hz('C5'), 0, 0.8, 0.14);
+      thump(s, 90, 40, 0.1, 0.6, 1, 0.3, 0.5);
+      ['C5', 'E5', 'G5', 'C6', 'E6', 'G6', 'C7'].forEach((n, k) => mallet(s, hz(n), 0.1 + k * 0.06, 0.5, 0.75 + k * 0.04, k >= 4 ? { bus: e, amt: 0.3 } : undefined));
+      for (let k = 0; k < 5; k++) mallet(s, hz('C6'), 0.55 + k * 0.05, 0.3, 0.45 - k * 0.05);
+      ['E7', 'G6', 'C7', 'D7', 'E7'].forEach((n, k) => kalimba(s, hz(n), 0.6 + k * 0.08, 0.35, 0.35));
+      bell(s, hz('G6'), 0.5, 0.6, 0.45, { bus: e, amt: 0.35 });
+      bell(s, hz('C7'), 0.7, 0.6, 0.4, { bus: e, amt: 0.35 });
+      puff(s, 0.1, 0.5, 0.55, 3800, 1300);
+      shake(s, 0.15, 0.7, 0.7);
     },
   },
 
   // ---------------------------------------------------------------- merge & friends
   merge: {
     cat: 'combat',
-    trim: -3,
-    len: 0.55,
-    ms: [200, 480],
+    len: 0.5,
+    ms: [150, 480],
     build(s) {
-      // Two stages: a falling "suck-in" (noise + sine glide down), then a pop that jumps a fifth (C5 -> G5).
-      whoosh(s, 3200, 500, 0, 0.1, 0.65, 1.5, 0.7);
-      s.tone({ f: 700, f2: 260, sw: 0.1, dur: 0.11, v: 0.42 });
-      blip(s, hz('C5'), 0.1, 0.07, 0.85);
-      bell(s, hz('G5'), 0.15, 0.3, 0.9);
+      // A pop where the two cats meet, then a ukulele pair that rises (E5 up to A5). playStep lifts the whole figure, so
+      // a higher rank lands one step higher.
+      const e = s.echo(0.06, 0.2, 0.2, 4500);
+      pop(s, hz('C5'), 0, 0.9, 0.1);
+      pluck(s, hz('E5'), 0.06, 0.16, 0.8);
+      pluck(s, hz('A5'), 0.11, 0.3, 1, { bus: e, amt: 0.3 });
     },
   },
   merge_big: {
-    cat: 'big',
-    trim: -5,
-    len: 1.3,
-    ms: [550, 1100],
+    cat: 'reward',
+    len: 0.8,
+    ms: [350, 760],
     build(s) {
-      // A longer, lower suck-in with a sub, a thumping pop, then a C-major chime chord and sparkle.
-      const e = s.echo(0.09, 0.4, 0.3, 7000);
-      whoosh(s, 4200, 400, 0, 0.17, 0.75, 1.8, 0.7);
-      s.tone({ f: 900, f2: 150, sw: 0.17, dur: 0.19, v: 0.45 });
-      s.tone({ f: 80, f2: 45, dur: 0.2, v: 0.5, a: 0.03 });
-      s.noise({ at: 0.17, dur: 0.15, v: 0.45, s: 0.01, filter: { t: 'lowpass', f: 4500, f2: 600, sw: 0.15 } });
-      thump(s, 160, 55, 0.17, 0.3, 1.1, 0.12);
-      ['C5', 'E5', 'G5', 'C6'].forEach((n, k) => chime(s, hz(n), 0.17 + k * 0.05, 0.55, 0.7, { bus: e, amt: 0.5 }));
-      s.tone({ w: 'sawtooth', f: hz('C5'), at: 0.22, dur: 0.55, v: 0.1, a: 0.03, uni: [-8, 8], filter: { t: 'lowpass', f: 2500 } });
-      sparkles(s, 0.3, 6, 0.4, [hz('E7'), hz('G7'), hz('C7'), hz('D7')], 0.2, 0.16, { bus: e, amt: 0.5 });
+      // A stamp (the new cat is official), a marimba triad rolled upward with a kalimba tine on top and a puff of confetti.
+      const e = s.echo(0.07, 0.22, 0.22, 4500);
+      stamp(s, 0, 0.8, 170);
+      ['C5', 'E5', 'G5', 'C6'].forEach((n, k) => mallet(s, hz(n), 0.08 + k * 0.05, 0.4, 0.7, { bus: e, amt: 0.25 }));
+      kalimba(s, hz('E6'), 0.28, 0.3, 0.45);
+      puff(s, 0.08, 0.25, 0.4, 3400, 1500);
     },
   },
   sell: {
-    cat: 'reward',
-    trim: -1,
+    cat: 'combat',
+    trim: -3,
     len: 0.4,
-    ms: [100, 320],
+    ms: [80, 330],
     build(s) {
-      // Two descending dings with a coin clink: income going into the purse.
-      blip(s, hz('E6'), 0, 0.07, 0.8);
-      blip(s, hz('B5'), 0.05, 0.12, 0.7);
-      s.noise({ at: 0.01, dur: 0.1, v: 0.14, a: 0.003, s: 0.05, filter: { t: 'highpass', f: 7000 } });
+      // A paper slip torn off (a short falling swish) and two coins dropped on wood (E6, B5).
+      whoosh(s, 3000, 1000, 0, 0.06, 0.6, 0.8, 0.3);
+      kalimba(s, hz('E6'), 0.03, 0.12, 0.8);
+      kalimba(s, hz('B5'), 0.08, 0.14, 1);
     },
   },
   upgrade: {
     cat: 'reward',
-    trim: 1,
-    len: 0.75,
-    ms: [300, 650],
+    len: 0.7,
+    ms: [250, 620],
     build(s) {
-      // Rising glide (power-up), two arrival notes, a bell and a small sparkle.
-      const e = s.echo(0.08, 0.3, 0.25, 6500);
-      s.tone({ w: 'triangle', f: 330, f2: 880, sw: 0.16, dur: 0.2, v: 0.55 });
-      blip(s, hz('A5'), 0.16, 0.08, 0.8);
-      bell(s, hz('E6'), 0.2, 0.36, 0.9, { bus: e, amt: 0.5 });
-      sparkles(s, 0.24, 3, 0.15, [hz('A6'), hz('C7'), hz('E7')], 0.2, 0.12, { bus: e, amt: 0.4 });
+      // A light stamp, a ukulele strum climbing G-B-D and a marimba G on top. playStep makes it a ladder for synergy steps.
+      const e = s.echo(0.06, 0.2, 0.2, 4500);
+      stamp(s, 0, 0.6, 190);
+      ['G4', 'B4', 'D5'].forEach((n, k) => pluck(s, hz(n), 0.07 + k * 0.03, 0.3, 0.8));
+      mallet(s, hz('G5'), 0.18, 0.4, 0.9, { bus: e, amt: 0.3 });
     },
   },
   place: {
     cat: 'ui',
-    len: 0.16,
-    ms: [60, 125],
+    len: 0.12,
+    ms: [40, 125],
     build(s) {
-      // Soft thud on a felt board: sine drop + lowpassed puff + a faint tick.
-      thump(s, 340, 160, 0, 0.1, 1, 0.05, 0.3);
-      s.noise({ dur: 0.04, v: 0.3, a: 0.002, s: 0.01, filter: { t: 'lowpass', f: 1400 } });
-      tick(s, 0, 1600, 0.01, 0.3, 1);
+      // A cat slid across the felt board: a short swish, then the pat of the landing and a faint tap of the sticker's edge.
+      whoosh(s, 700, 1600, 0, 0.05, 0.6, 0.7, 0.5);
+      thump(s, 300, 200, 0.04, 0.06, 0.5, 0.03);
+      paper(s, 0.04, 1500, 0.35, 0.02);
     },
   },
   pickup: {
     cat: 'ui',
-    len: 0.12,
-    ms: [50, 120],
+    len: 0.1,
+    ms: [30, 110],
     build(s) {
-      // Quick upward blip: lifted off the board.
-      s.tone({ f: 620, f2: 1050, sw: 0.04, dur: 0.07, v: 0.7 });
-      s.tone({ f: 2100, at: 0.02, dur: 0.05, v: 0.22 });
+      // A sticker peeled off the board: a swish that rises, with a small upward pop in it.
+      whoosh(s, 1500, 3200, 0, 0.04, 0.7, 0.8, 0.4);
+      s.tone({ f: 420, f2: 640, sw: 0.03, at: 0.005, dur: 0.05, v: 0.5, a: 0.003, s: 0.01 });
     },
   },
 } satisfies Partial<Record<SfxId, Recipe>>;

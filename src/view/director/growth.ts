@@ -99,7 +99,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     // The burst opens with a short suck (0.17 s) that lines up with the materials travelling in.
     fx.mergeBurst(x, y, color, 1 + tier * 0.08);
     stage.later(0.17, () => {
-      stage.playStep(stage.rules.merge, tier >= 2 ? 'merge_big' : 'merge', step, tier >= 2 ? 0.85 : 0.75);
+      stage.playStep(stage.rules.merge, tier >= 2 ? 'merge_big' : 'merge', step + tier, tier >= 2 ? 0.85 : 0.75);
     });
     if (tier >= 2) stage.later(0.17, () => reveal(x, y, tier, 1.15));
     themeBurst(x, y, tier);
@@ -222,8 +222,8 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   on('swap', (e) => {
     fx.dustPuff(cellCenterX(e.a.cell), cellCenterY(e.a.cell) + 18, { scale: 0.6 });
     fx.dustPuff(cellCenterX(e.b.cell), cellCenterY(e.b.cell) + 18, { scale: 0.6 });
-    // A trade sounds a third higher than a plain move, so the two are told apart by ear.
-    stage.play(stage.rules.ui, 'place', 0.55, 1.26, 0.03);
+    // A trade is a double slide (the page-turn sound), so it is told apart from a plain move by ear.
+    stage.play(stage.rules.ui, 'ui_tab', 0.8, 1, 0.03);
     stage.buzz('tap');
   });
 

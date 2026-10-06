@@ -42,12 +42,6 @@
         touch-action: none;
         font-family: 'GameLatin', 'GameKR', system-ui, sans-serif;
       }
-      /* The wooden floor: planks with a darker groove between them. */
-      body {
-        background:
-          repeating-linear-gradient(180deg, rgba(160, 106, 51, 0) 0 168px, rgba(160, 106, 51, 0.45) 168px 172px),
-          repeating-linear-gradient(180deg, rgba(224, 176, 112, 0.1) 0 172px, rgba(160, 106, 51, 0.07) 172px 344px), #c48f50;
-      }
       #stage {
         position: fixed;
         inset: 0;
@@ -57,7 +51,54 @@
       }
       #stage canvas {
         display: block;
-        box-shadow: 0 0 60px rgba(74, 50, 34, 0.35);
+      }
+      /*
+       * Wider than 9:16 the portrait canvas is pillarboxed, and the page around it becomes the floor it lies on:
+       * planks 172 px tall like the kit's drawFloor (wood #c48f50, woodDark #a06a33, woodLight #e0b070), staggered
+       * end joints, a soft vignette, and a flat stepped shadow under the sheet. Below that ratio the canvas fills
+       * the screen, so none of this is declared and a phone paints only the flat colour.
+       */
+      @media (min-aspect-ratio: 9/16) {
+        body {
+          background:
+            repeating-linear-gradient(180deg, rgba(160, 106, 51, 0.5) 0 4px, rgba(224, 176, 112, 0.28) 4px 7px, rgba(224, 176, 112, 0) 7px 172px),
+            repeating-linear-gradient(180deg, rgba(224, 176, 112, 0.11) 0 172px, rgba(160, 106, 51, 0.09) 172px 344px), #c48f50;
+        }
+        /*
+         * End joints, one set per plank row (even / odd) at different spacings so the rows do not line up. Both
+         * come before #stage in paint order (html::before, body::before), so the canvas covers them.
+         */
+        html::before,
+        body::before {
+          content: '';
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+        }
+        html::before {
+          background: repeating-linear-gradient(90deg, rgba(160, 106, 51, 0) 0 150px, rgba(160, 106, 51, 0.5) 150px 153px, rgba(160, 106, 51, 0) 153px 620px);
+          -webkit-mask-image: repeating-linear-gradient(180deg, transparent 0 4px, #000 4px 172px, transparent 172px 344px);
+          mask-image: repeating-linear-gradient(180deg, transparent 0 4px, #000 4px 172px, transparent 172px 344px);
+        }
+        body::before {
+          background: repeating-linear-gradient(90deg, rgba(160, 106, 51, 0) 0 360px, rgba(160, 106, 51, 0.5) 360px 363px, rgba(160, 106, 51, 0) 363px 780px);
+          -webkit-mask-image: repeating-linear-gradient(180deg, transparent 0 176px, #000 176px 344px);
+          mask-image: repeating-linear-gradient(180deg, transparent 0 176px, #000 176px 344px);
+        }
+        /* Inside #stage and behind the canvas: only the pillars show it. */
+        #stage::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          background: radial-gradient(ellipse at center, rgba(74, 50, 34, 0) 40%, rgba(74, 50, 34, 0.46) 100%);
+        }
+        #stage canvas {
+          box-shadow:
+            0 0 0 5px rgba(74, 50, 34, 0.2),
+            0 0 0 14px rgba(74, 50, 34, 0.08),
+            12px 8px 0 14px rgba(74, 50, 34, 0.07);
+        }
       }
       /* Instant splash: pure CSS so something friendly is on screen before any JS runs. */
       #boot {

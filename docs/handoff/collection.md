@@ -95,3 +95,8 @@ Six testers played the whole game; their reports for this area are in `docs/qa/f
 2. Meta strings: English `meta.reward.chest` is `'{n} x {name}'`, so a bundle with two chests reads "2 x Silver chest" (should be plural). Either `.one` / plural name forms or a wording without the noun problem ("{name} x{n}").
 3. Home promo card (`src/screens/battle/PromoCard.ts`): its price button is a fourth style; the shop now uses one coral pill for every real-money price (the luggage `PriceTag` stays for gold / gem prices), so the promo's price should be the same coral `Button`.
 4. UI kit `confirmDialog` (`src/ui/dialogs.ts`): the confirm button is always `success` (green) and has no icon slot; purchases in the shop use the new `ChestConfirm`, but other callers still get the green confirm.
+
+## 2026-10-07 finishing pass
+
+- The piggy bank's "free break in N days" line goes through `tn` (English singular "After 1 day").
+- `RewardSheet` (`rewards.ts`) declares `PANEL_W + 48`, so the popup is no longer scaled to 0.978 and its 24 px text stays at 24 (body scale read back as 1).

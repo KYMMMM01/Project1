@@ -72,6 +72,17 @@ export interface Send {
   tail: number;
 }
 
+/**
+ * Node accounting for tracked synths (music notes and live-fallback SFX): offline renders create their nodes
+ * once and throw the context away, but a phone has to carry every live one, so the debug stats report them.
+ */
+export const nodeStats = { live: 0, peak: 0, created: 0 };
+
+export function resetNodeStats(): void {
+  nodeStats.peak = nodeStats.live;
+  nodeStats.created = 0;
+}
+
 const noiseCache = new Map<string, AudioBuffer>();
 const impulseCache = new Map<string, AudioBuffer>();
 const NOISE_SECONDS = 2;
@@ -187,8 +198,16 @@ export class Synth {
   }
 
   private keep<T extends AudioNode>(n: T): T {
-    this.nodes?.push(n);
+    this.track(n);
     return n;
+  }
+
+  private track(...added: AudioNode[]): void {
+    if (!this.nodes) return;
+    this.nodes.push(...added);
+    nodeStats.live += added.length;
+    nodeStats.created += added.length;
+    if (nodeStats.live > nodeStats.peak) nodeStats.peak = nodeStats.live;
   }
 
   private source<T extends AudioScheduledSourceNode>(n: T, start: number, stop: number): T {
@@ -400,6 +419,7 @@ export class Synth {
     if (!nodes) return;
     const finish = () => {
       for (const n of nodes) n.disconnect();
+      nodeStats.live -= nodes.length;
       nodes.length = 0;
       onDone?.();
     };
@@ -417,7 +437,7 @@ export class Synth {
     mute.gain.value = 0;
     timer.connect(mute);
     mute.connect(this.out);
-    nodes.push(timer, mute);
+    this.track(timer, mute);
     timer.start(this.t0);
     timer.stop(this.end + 0.05);
     timer.onended = finish;

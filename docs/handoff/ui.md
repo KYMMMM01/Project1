@@ -71,7 +71,7 @@ All exported from `@/ui`. Geometry is generated once per size/seed and cached (`
 - **ScreenScaffold**: wooden floor backdrop, a kraft header strip torn along its lower edge with the title on a cream `PaperLabel`, a kraft action bar torn along its top edge.
 - **Icons** (`icons.ts`): shapes untouched. Fills are flat (two-tone ramps collapse to their middle), the glossy sheen and tube highlights are gone, the generic glyphs (close, back, check, plus, minus, play, pause, fast forward, speakers, music, gear, speed, reroll, info, question) are ink, and the hot candy hues are re-mapped (blue -> teal, purple -> violet, red -> berry, white -> cream). Outlines are the ink brown.
 - **Text** (`text.ts`): `label` / `uiLabel` default to ink, no stroke, no shadow. New `LabelOpts.onArt` and `artLabel()`: light fill with a brown stroke, for text on artwork. `numberText(size, color = ink, text, onArt = false)`: the atlas is bare white (tinted), `onArt` bakes the stroke in.
-- **Retired but kept so old call sites compile**: `glossGradient` returns a fully transparent gradient; `drawPill`'s `gloss`, `rim`, `outlineWidth` and `drawShadow`'s `spread` are accepted and ignored; `drawGlow` is unchanged but is for light over artwork only. **Removed**: `drawBevelRect/Base/Face`, `BevelOpts`, `drawRibbon`, `RibbonColors`, `cardShapes.ts` (wing, flame and chamfer silhouettes).
+- **Removed**: the whole gradient section of `shapes.ts` (`gradient`, `vGradient`, `vGradient3`, `glossGradient`, `glowGradient`, `drawGlow`, `GradStop`) and `rgba()` in `colors.ts`; nothing in the tree used them any more. Also removed earlier: `drawBevelRect/Base/Face`, `BevelOpts`, `drawRibbon`, `RibbonColors`, `cardShapes.ts` (wing, flame and chamfer silhouettes).
 
 ## MIGRATION (for the engineers fixing call sites outside `src/ui`)
 
@@ -83,7 +83,7 @@ All exported from `@/ui`. Geometry is generated once per size/seed and cached (`
 | `numberText(34, 0xffffff, ...)` | `numberText(34, Color.ink, ...)` (the default); on artwork `numberText(34, Color.onArt, '', true)`. |
 | Dark purple fills (`vGradient(Color.panelLight, Color.panelDark)`, `Color.bgDeep` plates, `0x1b1036`...) | A paper piece: `paperShape(...)`, `drawPaper(g, x, y, { w, h, fill: Color.paper })`, or a kit `Panel`. Nested area: `Color.paperDim`. A scene background: `drawFloor(g, w, h)`. |
 | `.stroke({ width: 5, color: Color.outline, alignment: 1 })` round a plate | Remove the outline; the shape has a flat shadow and a thin rim instead. |
-| `glossGradient`, glossy ellipses, `drawGlow` on a panel or button | Delete the highlight. Keep `drawGlow` only for light over artwork (a chest burst, rays). |
+| `glossGradient`, glossy ellipses, `drawGlow` on a panel or button (all gone from the kit) | Delete the highlight; a burst behind a reward is a flat `paperSun`. |
 | `drawBevelRect`, `drawRibbon` | `drawPaper` / `PaperLabel`. |
 | White icons on dark buttons | Icons are ink on paper already; leave `drawIcon(name, size)` without a colour. |
 | A selected / recommended marker (gold glow, white ring) | One piece of tape: `tapeStrip({ name: 'sky' })` on the corner, or a dashed teal line round the piece (`drawDashedRect`). |
@@ -143,7 +143,7 @@ Behaviour you can rely on now (everything additive; no export or option was remo
 - **Disabled buttons** keep full `Color.ink` on the drained paper (AA, tested); the price on a disabled button stays readable. `mutedPalette` moved to `theme.ts` and is exported.
 - **Icons**: `reroll` is two chasing arrows (thin ring, small heads; legible at 36 px); `ad` is a teal television with an ink screen (no violet).
 - **Tokens only**: `ProgressBar` (leaf, coral, gem, paperLight), `ClassChip` (bronze, stone), `TabBar` / `SegmentTabs` (labels are built in `inkMid`, selection is `tintToward(inkMid, ink)`, new in `colors.ts`), `Button` / `CurrencyPill` / `CardFrame` / `ScrollView` / `numbers` / `paper` / `shapes` (white, pressTint, woodLight), `core/game.ts` and `core/scene.ts` (woodDark, inkDeep). The only literals left in `src/ui` are `theme.ts`, `icons.ts` (exempt), the white/black of `shade()` in `colors.ts` and the maths of `core/math.ts`.
-- **RewardPopup** draws a flat paper sunburst (12 faint cream rays baked once, turned slowly); no gradient, no `drawGlow`, no additive blend. `drawGlow` stays exported for light over artwork but nothing in the kit calls it now.
+- **RewardPopup** draws a flat paper sunburst (12 faint cream rays baked once, turned slowly); no gradient, no glow, no additive blend.
 - **Storage** (`core/save.ts`): `StorageBackend.volatile?()` (true while writes only reach memory), `reportStorageVolatile()`, `onStorageVolatile(fn)`, `isStorageVolatile()`. `SaveStore.flush` treats a throw or a volatile backend as a lost write, reports it once and retries after 2, 4, 8 ... up to 30 s. The kit shows one warning toast for it (`ui.storage.volatile`, strings in `src/ui/strings.ts`).
 - **FxDemo** (`?demo=fx`): wood floor, kraft header, kit paper buttons (88 px high), paper name labels, a warm well behind each effect cell; the cat stand-in and every effect tint use tokens (no purple, no hex).
 
@@ -157,3 +157,9 @@ Verified: `npx tsc --noEmit` clean in `src/ui`, `src/core`, `src/demo`, `tests/u
 4. HUD owner: the countdown bar can use `labelSize: 24` instead of overlaying its own text; refusal toasts now sit at y 262, over the top row of the board rather than the wave bar, check they still read well there.
 5. Capacitor / TWA hardware back (`src/platform`): forward it to `popups.handleBack() || ScreenScaffold.handleBack()` (both exported by `@/ui`).
 6. `npm run font`: one new string (`ui.storage.volatile`) on top of the existing request.
+
+## 2026-10-07 finishing pass
+
+- **CurrencyPill "+"**: now a cream paper disc (`neutral` IconButton, 58 px) with the ink plus, instead of leaf green on the teal strip. Users: the home top bar (gold, gems, tickets) and `?demo=ui`; the battle currency row has no "+".
+- **Dead code**: the gradient and glow helpers of `shapes.ts` and `rgba()` are deleted (see the list above); `src/ui` has no gradient left at all.
+- **Applied from the QA requests**: HUD `ProgressBar.labelSize` (battle countdown bar) and the reward sheet's `PANEL_W + 48` content width (its scale is 1, read back in the browser).

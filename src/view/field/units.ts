@@ -1,4 +1,5 @@
 import type { Container } from 'pixi.js';
+import { audio } from '@/audio';
 import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
 import { Color } from '@/ui';
@@ -271,6 +272,7 @@ export class UnitViews {
     const { tweens } = this.env.ctx;
     shakeObject(tweens, v.body, 6, 180);
     hitFlash(tweens, v.sprite, { ms: 120, color: Color.berry, peak: 0.55 });
+    audio.play('ui_error', { volume: 0.5 });
   }
 
   beginDrag(v: UnitView, px: number, py: number): void {

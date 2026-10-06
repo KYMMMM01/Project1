@@ -100,3 +100,17 @@ Rejected: none. Forwarded: see REQUESTS.
 1. `src/view/hud/index.ts` `afterPause('quit')`: `battle.abandon()` emits nothing, so the context never announces `finished` and the platform keeps believing the player is in play on the result screen. Emitting `ctx.events.emit('finished', { victory: false })` there (the flow's `gameplayStop` listens to it) would close the gap.
 2. `src/ui` `CurrencyPill`: the round "+" is leaf green on a teal strip; cream or mustard would read better (QA polish, `qa-look-pills-cramped`).
 3. `src/meta/strings.ts`: `meta.toast.unlock` is no longer used by anything.
+
+## 2026-10-07 finishing pass
+
+- **Desktop frame** (`index.html`): only where the window is wider than 9:16 (`@media (min-aspect-ratio: 9/16)`), the page around the canvas is a CSS floor: 172 px planks with a groove and a light edge, alternating tone, staggered end joints (`html::before` and `body::before`, each masked to every other row), a vignette (`#stage::before`, behind the canvas) and a flat stepped shadow on the canvas. Colours are the kit's wood tokens (`#c48f50`, `#a06a33`, `#e0b070`); no image is loaded. A phone is narrower than 9:16, so none of it is declared there and it paints the flat colour only. The boot splash is unchanged and sits above the floor.
+- **Legal and support links** (settings > About): `src/app/legalLinks.ts` reads three build-time variables. A row appears only for a variable that is set to an `http(s)://` URL (or, for support, a `mailto:` address); anything else hides it. With none set the About block is not drawn and only the version line shows.
+
+  | Variable | Row |
+  |---|---|
+  | `VITE_PRIVACY_URL` | 개인정보 처리방침 / Privacy policy |
+  | `VITE_TERMS_URL` | 이용약관 / Terms of service |
+  | `VITE_SUPPORT_URL` | 문의하기 / Contact support |
+
+  Set them where the build runs, e.g. `VITE_PRIVACY_URL=https://example.com/privacy VITE_TERMS_URL=https://example.com/terms VITE_SUPPORT_URL=mailto:help@example.com npm run build` (or in `.env.production`). Web pages open in a new tab with `noopener,noreferrer` (the platform layer has no link opener; if a channel needs one, change `openLegalLink` only); a `mailto:` goes to the mail app. The keys are typed in `src/vite-env.d.ts`; the pure part (which rows show) is tested in `tests/screens.system.links.test.ts`.
+- **Piggy bank line** in the shop reads `tn('meta.piggy.free', days, ...)`, so English says "After 1 day".

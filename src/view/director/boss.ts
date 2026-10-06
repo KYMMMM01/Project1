@@ -125,7 +125,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
         } else {
           fx.shockwave(en.x, en.y, { color: Color.leaf, radius: 120 });
         }
-        stage.direct('heal', 0.6, 0.8);
+        stage.direct('buff', 0.6, 0.9);
         break;
       }
       case 'enrage':

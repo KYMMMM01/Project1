@@ -122,6 +122,8 @@ export default class AudioDemo extends Scene {
   private muted = false;
   private stressTimer: ReturnType<typeof setInterval> | null = null;
   private stressLast = 0;
+  /** 1 = a busy wave, 3 = the same wave at speed 3 (three times the sounds per real second). */
+  private stressScale = 1;
   private hudTimer = 0;
   // Stress-test accumulators (seconds until the next shot of each kind).
   private nextHit = 0;
@@ -379,11 +381,18 @@ export default class AudioDemo extends Scene {
     audio.setMuted(this.muted);
   }
 
+  /** Press once for a busy wave, again for the same wave at speed 3, a third time to stop. */
   private toggleStress(): void {
+    if (this.stressTimer !== null && this.stressScale === 1) {
+      this.stressScale = 3;
+      this.stressButton.setText('x3');
+      return;
+    }
     if (this.stressTimer !== null) {
       this.stopStress();
       return;
     }
+    this.stressScale = 1;
     this.nextHit = this.nextDie = this.nextShot = this.nextCoin = this.nextBoom = 0;
     this.stressLast = performance.now();
     // A wall-clock timer, not the frame loop: the sounds must keep their rate even when frames are slow.
@@ -393,7 +402,7 @@ export default class AudioDemo extends Scene {
       this.stressLast = now;
     }, 20);
     this.stressButton.setColor(Color.danger);
-    this.stressButton.setText('stop');
+    this.stressButton.setText('x1');
   }
 
   private stopStress(): void {
@@ -412,8 +421,9 @@ export default class AudioDemo extends Scene {
     }
   }
 
-  /** A battle's worth of overlapping sounds: 16 hits/s, 4 deaths/s, 8 shots/s, 5 coins/s, a blast every 2 s. */
-  private runStress(dt: number): void {
+  /** A battle's worth of overlapping sounds: 16 hits/s, 4 deaths/s, 8 shots/s, 5 coins/s, a blast every 2 s (all times the stress scale). */
+  private runStress(realDt: number): void {
+    const dt = realDt * this.stressScale;
     this.nextHit -= dt;
     this.nextDie -= dt;
     this.nextShot -= dt;
@@ -444,12 +454,14 @@ export default class AudioDemo extends Scene {
   private refreshHud(): void {
     const s = audioStats();
     const m = s.music;
+    const n = s.nodes;
     // While locked or hidden the requested track differs from the playing one: show both.
     const wanted = m && s.wantedTrack !== m.track ? ` (wants ${s.wantedTrack})` : '';
     const paused = m && m.track !== 'none' && !m.running ? ' paused' : '';
     this.hud.text =
       `${s.state}${s.muted ? ' (muted)' : ''} | baked ${s.baked}/${s.total} ${(s.bakedKB / 1024).toFixed(1)} MB | sfx live ${s.sfxActive} (peak ${s.sfxActivePeak})` +
       (m ? ` | music ${m.track}${wanted}${paused} voices ${m.liveVoices}/${m.liveVoicesMax} overlap ${m.peakOverlap}` : '') +
+      ` | nodes pool ${n.pooledVoices} src ${n.sfxSources} music ${n.musicLive}/${n.musicPeak}` +
       (s.musicLpfHz < 19000 ? ` | lpf ${s.musicLpfHz} Hz` : '');
     fitWidth(this.hud, game.w - PAD * 2);
   }

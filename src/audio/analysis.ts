@@ -28,6 +28,8 @@ export interface SoundStats {
   modHz: number;
   /** Modulation index at `modHz`: envelope swing relative to its mean. */
   modDepth: number;
+  /** Milliseconds the first note takes to rise from 10 % to 90 % of its own peak: how soft or hard the touch is. */
+  attackMs: number;
 }
 
 const SILENT_PEAK = 0.01;
@@ -36,6 +38,8 @@ const ZERO_EDGE = 0.01;
 const END_EDGE = 0.005;
 /** Loudness integration window in seconds. */
 const LOUD_WINDOW = 0.2;
+/** Envelope block for the attack measurement. */
+const ATTACK_BLOCK_S = 0.001;
 
 export function peakOf(ch: readonly Float32Array[]): number {
   let p = 0;
@@ -84,6 +88,39 @@ export function normalisationGain(peak: number, loudRms: number, target: { peak:
   const byPeak = target.peak / peak;
   const byRms = loudRms > 1e-7 ? target.rms / loudRms : Infinity;
   return Math.min(byPeak, byRms);
+}
+
+/** The touch of the first note, not of the loudest one: later notes of a figure may be louder. */
+const ATTACK_HEAD_S = 0.08;
+
+/**
+ * Attack time in ms of the first note or grain: the envelope is 1 ms peak blocks widened to 3 ms (so a carrier cycle cannot
+ * ripple it), the clock starts at 10 % of the loudest block in the first 80 ms and stops at 90 % of the first local peak,
+ * which ends when the envelope falls to half of its running maximum.
+ */
+export function attackTime(ch: readonly Float32Array[], sampleRate: number, start: number, end: number): number {
+  const block = Math.max(1, Math.round(sampleRate * ATTACK_BLOCK_S));
+  const head = Math.min(end, start + Math.round(sampleRate * ATTACK_HEAD_S));
+  const env: number[] = [];
+  for (let i = start; i < head; i += block) {
+    let m = 0;
+    for (const c of ch) for (let j = i; j < Math.min(end, i + block); j++) m = Math.max(m, Math.abs(c[j] as number));
+    env.push(m);
+  }
+  const wide = env.map((m, i) => Math.max(env[i - 1] ?? 0, m, env[i + 1] ?? 0));
+  const first = wide.findIndex((m) => m >= Math.max(...wide) * 0.1);
+  if (first < 0) return 0;
+  let run = 0;
+  let stop = wide.length;
+  for (let i = first; i < wide.length; i++) {
+    run = Math.max(run, wide[i] as number);
+    if ((wide[i] as number) < run * 0.5) {
+      stop = i;
+      break;
+    }
+  }
+  const last = wide.findIndex((m, i) => i >= first && i < stop && m >= run * 0.9);
+  return last < first ? 0 : ((last - first) * block * 1000) / sampleRate;
 }
 
 const twiddles = new Map<number, { cos: Float64Array; sin: Float64Array }>();
@@ -289,5 +326,6 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number, spectra
     ...spec,
     modHz: mod.hz,
     modDepth: mod.depth,
+    attackMs: silent ? 0 : attackTime(ch, sampleRate, start, end),
   };
 }

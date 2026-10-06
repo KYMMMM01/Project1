@@ -116,6 +116,9 @@ export const STATUS_SFX: Readonly<Partial<Record<StatusKind, { sfx: SfxId; volum
   stun: { sfx: 'stun', volume: 0.6, pitch: 1 },
   armor_break: { sfx: 'shield_break', volume: 0.45, pitch: 1.5 },
   slow: { sfx: 'freeze', volume: 0.25, pitch: 1.4 },
+  burn: { sfx: 'zap', volume: 0.2, pitch: 0.7 },
+  poison: { sfx: 'shoot_poison', volume: 0.3, pitch: 0.9 },
+  bleed: { sfx: 'shoot_claw', volume: 0.3, pitch: 0.8 },
 };
 
 /** Short caption (i18n key) shown under the banner when a boss uses an ability. */

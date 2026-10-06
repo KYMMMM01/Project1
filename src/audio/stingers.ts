@@ -1,152 +1,122 @@
 /**
  * Stingers: 1-2 s composed phrases baked like any other sound (mono: six stereo phrases would alone
  * take 4 MB of decoded memory, and phone speakers fold them to mono anyway). They are played over a
- * ducked music bed; `duck` gives how deep the bed dips for each one.
+ * ducked music bed; `duck` gives how deep the bed dips for each one. Like the SFX they are made of
+ * mallets, plucked strings, a stamp and paper: a warm tune for a win, a soft sigh for a loss.
  */
 import type { StingerId } from './api';
-import { bell, blip, chime, sparkles, thump, whoosh, type Recipe } from './recipe';
-import type { Synth, Send } from './synth';
+import { bell, kalimba, mallet, pluck, puff, shake, stamp, thump, type Recipe } from './recipe';
 import { hz } from './theory';
-
-/** Warm brass: detuned saws through a lowpass that opens on the attack (a real horn "blats" in). */
-function brass(s: Synth, note: string, at: number, dur: number, v: number, send?: { bus: Send; amt: number }): void {
-  s.tone({
-    w: 'sawtooth',
-    f: hz(note),
-    at,
-    dur,
-    v,
-    a: 0.02,
-    s: 0.75,
-    r: Math.min(0.2, dur * 0.4),
-    uni: [-7, 7],
-    send,
-    filter: { t: 'lowpass', f: 900, f2: 3200, sw: 0.09 },
-  });
-}
 
 export const STINGER_RECIPES: Record<StingerId, Recipe> = {
   victory: {
     cat: 'stinger',
-    len: 2.4,
-    ms: [1300, 2000],
+    len: 2.0,
+    ms: [1100, 1800],
     build(s) {
-      // C-major fanfare: a quick G-C-E-G brass climb, then the full chord lands with timpani,
-      // a cymbal wash, a bell arpeggio and a twinkle tail.
-      const rv = s.reverb(0.7, 0.25);
-      ['G4', 'C5', 'E5'].forEach((n, k) => brass(s, n, k * 0.12, 0.13, 0.5, { bus: rv, amt: 0.3 }));
-      brass(s, 'G5', 0.36, 0.22, 0.55, { bus: rv, amt: 0.3 });
-      thump(s, 100, 55, 0, 0.35, 0.9, 0.2);
-      thump(s, 100, 52, 0.6, 0.5, 1, 0.3);
-      ['C4', 'G4', 'C5', 'E5', 'G5'].forEach((n) => brass(s, n, 0.6, 0.95, 0.34, { bus: rv, amt: 0.35 }));
-      s.noise({ at: 0.6, dur: 1.0, v: 0.2, a: 0.01, s: 0.08, filter: { t: 'highpass', f: 6000 } });
-      ['C6', 'E6', 'G6', 'C7'].forEach((n, k) => chime(s, hz(n), 0.62 + k * 0.07, 0.65, 0.4, { bus: rv, amt: 0.5 }));
-      sparkles(s, 0.9, 9, 0.6, [hz('E7'), hz('G7'), hz('C7'), hz('D7'), hz('A6')], 0.17, 0.18, { bus: rv, amt: 0.5 });
+      // A warm little tune in C major: a marimba climb (G4 C5 E5 G5) lands at 0.5 s on the stamp and a full chord
+      // (C5 E5 G5 C6) over a low plucked C and a hand bell, a kalimba tune (E6 D6 C6) rings out above it, and a shake of
+      // paper and a puff of confetti finish the picture.
+      const e = s.echo(0.08, 0.25, 0.25, 5000);
+      ['G4', 'C5', 'E5', 'G5'].forEach((n, k) => mallet(s, hz(n), k * 0.11, 0.3, 0.7 + k * 0.05));
+      stamp(s, 0.5, 1, 130);
+      ['C5', 'E5', 'G5', 'C6'].forEach((n) => mallet(s, hz(n), 0.5, 0.9, 0.7, { bus: e, amt: 0.3 }));
+      pluck(s, hz('C3'), 0.5, 0.7, 0.8);
+      bell(s, hz('G6'), 0.52, 0.8, 0.4, { bus: e, amt: 0.3 });
+      ['E6', 'D6', 'C6'].forEach((n, k) => kalimba(s, hz(n), 0.7 + k * 0.16, 0.4, 0.5, { bus: e, amt: 0.3 }));
+      shake(s, 0.5, 0.6, 0.6);
+      puff(s, 0.5, 0.5, 0.4, 3600, 1400);
     },
   },
   defeat: {
     cat: 'stinger',
     trim: -3,
-    len: 2.2,
-    ms: [1200, 1900],
+    len: 2.0,
+    ms: [1000, 1800],
     build(s) {
-      // A gentle sigh, never a buzzer: triangle E4 -> D4 -> B3 through a 1.4 kHz lowpass with slow
-      // vibrato, over a soft minor pad and a falling breath of noise.
-      const rv = s.reverb(0.75, 0.3, 0.4);
-      const filter = { t: 'lowpass' as const, f: 1400 };
-      const vib = { rate: 5, cents: 25, delay: 0.15 };
-      s.tone({ w: 'triangle', f: hz('E5'), at: 0, dur: 0.42, v: 1, a: 0.02, s: 0.8, r: 0.08, vib, filter, send: { bus: rv, amt: 0.4 } });
-      s.tone({ w: 'triangle', f: hz('D5'), at: 0.4, dur: 0.42, v: 1, a: 0.02, s: 0.8, r: 0.08, vib, filter, send: { bus: rv, amt: 0.4 } });
-      s.tone({ w: 'triangle', f: hz('B4'), at: 0.8, dur: 1.0, v: 1, a: 0.02, s: 0.35, r: 0.4, vib, filter, send: { bus: rv, amt: 0.4 } });
-      s.tone({ f: 165, at: 0, dur: 1.6, v: 0.22, a: 0.3, s: 0.6, r: 0.5 });
+      // A gentle sigh, never a punishment: three soft marimba notes falling (E5 D5 B4) over a warm triangle bed (E4 G4 B4,
+      // low-passed at 900 Hz, a slow swell), a low plucked E and a fading breath of paper. No tremolo, no dissonance.
+      const e = s.echo(0.09, 0.25, 0.25, 3500);
+      mallet(s, hz('E5'), 0, 0.42, 1, { bus: e, amt: 0.3 });
+      mallet(s, hz('D5'), 0.4, 0.42, 1, { bus: e, amt: 0.3 });
+      mallet(s, hz('B4'), 0.8, 1, 1, { bus: e, amt: 0.3 });
       ['E4', 'G4', 'B4'].forEach((n) => {
         s.tone({ w: 'triangle', f: hz(n), at: 0.1, dur: 1.5, v: 0.15, a: 0.25, s: 0.6, r: 0.5, filter: { t: 'lowpass', f: 900 } });
       });
+      pluck(s, hz('E3'), 0, 1.2, 0.5);
       s.noise({ kind: 'pink', at: 0.8, dur: 0.8, v: 0.08, a: 0.1, s: 0.3, filter: { t: 'lowpass', f: 1500, f2: 300, sw: 0.8 } });
     },
   },
   boss_intro: {
     cat: 'stinger',
     trim: -1,
-    len: 2.4,
-    ms: [1400, 2000],
+    len: 2.0,
+    ms: [1200, 1900],
     build(s) {
-      // Dread then impact: a sub that sinks, a swelling D-minor/tritone saw pad, a rising noise
-      // riser and cold bell hits; at 1.0 s a saturated blast, sub thump and a brass D-minor stab.
-      const rv = s.reverb(0.8, 0.3, 0.4);
-      s.tone({ f: 60, f2: 28, sw: 1.0, dur: 1.3, v: 0.5, a: 0.2, s: 0.5, sat: 0.4 });
-      ['D2', 'A2', 'F3', 'G#2'].forEach((n) => {
-        s.tone({ w: 'sawtooth', f: hz(n), at: 0, dur: 1.15, v: 0.2, a: 0.8, s: 1, r: 0.15, uni: [-10, 10], filter: { t: 'lowpass', f: 400, f2: 1400, sw: 1.0 } });
-      });
-      whoosh(s, 200, 3000, 0, 1.0, 0.7, 2, 0.9);
-      s.noise({ kind: 'brown', at: 0, dur: 1.65, v: 0.3, a: 0.3, s: 0.3, filter: { t: 'lowpass', f: 260 } });
-      bell(s, hz('D4'), 0.5, 0.7, 0.3, { bus: rv, amt: 0.5 });
-      bell(s, hz('G#4'), 0.78, 0.6, 0.3, { bus: rv, amt: 0.5 });
-      s.noise({ at: 1.0, dur: 0.6, v: 0.9, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 5000, f2: 300, sw: 0.5 } });
-      thump(s, 80, 30, 1.0, 0.9, 0.9, 0.5, 0.5);
-      ['D3', 'F3', 'A3', 'D4'].forEach((n) => {
-        s.tone({ w: 'sawtooth', f: hz(n), at: 1.02, dur: 0.65, v: 0.3, a: 0.02, s: 0.5, r: 0.35, uni: [-9, 9], filter: { t: 'lowpass', f: 1800, f2: 700, sw: 0.7 }, send: { bus: rv, amt: 0.35 } });
-      });
+      // Dread, then weight, all felt and wood: a low mallet roll that speeds up and swells for a second, two cold bell tings
+      // (D5 and the tritone below it), then one huge hit with a low plucked D and a D-minor marimba chord (D3 F3 A3 D4).
+      const e = s.echo(0.09, 0.25, 0.25, 3500);
+      let t = 0;
+      for (let k = 0; k < 13; k++) {
+        thump(s, 118, 82, t, 0.14, 0.3 + k * 0.05, 0.06, 0.5);
+        t += 0.085 - k * 0.003;
+      }
+      bell(s, hz('D5'), 0.5, 0.6, 0.25, { bus: e, amt: 0.3 });
+      bell(s, hz('G#4'), 0.78, 0.6, 0.25, { bus: e, amt: 0.3 });
+      thump(s, 80, 30, 1, 0.8, 1, 0.5, 0.5);
+      ['D3', 'F3', 'A3', 'D4'].forEach((n) => mallet(s, hz(n), 1.02, 0.7, 0.8, { bus: e, amt: 0.25 }));
+      pluck(s, hz('D3'), 1, 0.7, 0.9);
     },
   },
   mythic: {
     cat: 'stinger',
-    trim: 1,
-    len: 2.2,
-    ms: [1300, 1900],
+    trim: -3,
+    len: 1.9,
+    ms: [1100, 1700],
     build(s) {
-      // The summon fantasy at full size: noise + saw riser, a sub drop with a saturated burst and a
-      // G6 metal ping, a C-G-C supersaw pad swelling open, a C-E-G-C chime arpeggio and a high shimmer.
-      const rv = s.reverb(0.6, 0.35);
-      const e = s.echo(0.1, 0.35, 0.3, 8000);
-      whoosh(s, 300, 6000, 0, 0.5, 0.9, 2, 0.9);
-      s.tone({ w: 'sawtooth', f: 110, f2: 440, sw: 0.5, dur: 0.55, v: 0.3, a: 0.15, filter: { t: 'lowpass', f: 400, f2: 5000, sw: 0.5 } });
-      thump(s, 70, 30, 0.5, 0.8, 1.1, 0.5, 0.5);
-      s.noise({ at: 0.5, dur: 0.5, v: 0.85, s: 0.01, sat: 0.5, filter: { t: 'lowpass', f: 5000, f2: 300, sw: 0.5 } });
-      bell(s, hz('G6'), 0.5, 0.9, 0.5, { bus: rv, amt: 0.5 });
-      ['C3', 'G3', 'C4'].forEach((n) => {
-        s.tone({ w: 'sawtooth', f: hz(n), at: 0.45, dur: 1.15, v: 0.2, a: 0.3, s: 0.9, r: 0.45, uni: [-12, 12], filter: { t: 'lowpass', f: 900, f2: 2200, sw: 1.0 }, send: { bus: rv, amt: 0.4 } });
-      });
-      ['C6', 'E6', 'G6', 'C7'].forEach((n, k) => chime(s, hz(n), 0.6 + k * 0.12, 0.65, 0.5, { bus: e, amt: 0.5 }));
-      sparkles(s, 0.9, 9, 0.6, [hz('E7'), hz('G7'), hz('C7'), hz('D7'), hz('B6')], 0.17, 0.18, { bus: e, amt: 0.5 });
+      // The halo after the awakening: the awaken sound has already struck the chord, so this one has no attack of its own. A
+      // quiet marimba roll alternating C6 and G5 swells and fades, a low plucked C holds under it, hand bells and kalimba
+      // tines fall through the C-major pentatonic set and a shake of paper drifts across.
+      const e = s.echo(0.09, 0.3, 0.3, 5000);
+      for (let k = 0; k < 12; k++) mallet(s, hz(k % 2 ? 'G5' : 'C6'), 0.15 + k * 0.07, 0.3, 0.2 + 0.04 * Math.min(k, 8) - 0.02 * Math.max(0, k - 8));
+      pluck(s, hz('C3'), 0.2, 1, 0.5);
+      ['G6', 'C7', 'E7', 'G7', 'E7', 'C7'].forEach((n, k) => bell(s, hz(n), 0.5 + k * 0.14, 0.6, 0.35, { bus: e, amt: 0.3 }));
+      ['E6', 'G6', 'C7', 'E7'].forEach((n, k) => kalimba(s, hz(n), 0.7 + k * 0.12, 0.35, 0.3, { bus: e, amt: 0.3 }));
+      shake(s, 0.2, 0.4, 0.9);
     },
   },
   level_up: {
     cat: 'stinger',
     trim: -2,
-    len: 1.7,
-    ms: [1000, 1600],
+    len: 1.6,
+    ms: [1000, 1500],
     build(s) {
-      // Triumphant rise: C5 E5 G5 in quick brass, a sustained C6 over a C-major chord, bells on top.
-      const rv = s.reverb(0.7, 0.25);
-      ['C5', 'E5', 'G5'].forEach((n, k) => brass(s, n, k * 0.1, 0.12, 0.5, { bus: rv, amt: 0.3 }));
-      brass(s, 'C6', 0.3, 0.8, 0.5, { bus: rv, amt: 0.35 });
-      ['C5', 'E5', 'G5'].forEach((n) => brass(s, n, 0.3, 0.8, 0.25, { bus: rv, amt: 0.35 }));
-      ['C6', 'E6', 'G6'].forEach((n, k) => chime(s, hz(n), 0.3 + k * 0.06, 0.7, 0.4, { bus: rv, amt: 0.5 }));
-      s.noise({ at: 0.3, dur: 0.6, v: 0.14, a: 0.01, s: 0.06, filter: { t: 'highpass', f: 7000 } });
-      sparkles(s, 0.4, 6, 0.5, [hz('E7'), hz('G7'), hz('C7')], 0.16, 0.18, { bus: rv, amt: 0.5 });
+      // Triumphant but small: the stamp, a marimba climb (C5 E5 G5), a held C6 over a C-major chord and bells above it.
+      const e = s.echo(0.08, 0.25, 0.25, 5000);
+      stamp(s, 0, 0.8);
+      ['C5', 'E5', 'G5'].forEach((n, k) => mallet(s, hz(n), 0.1 + k * 0.09, 0.25, 0.8));
+      ['C5', 'E5', 'G5', 'C6'].forEach((n) => mallet(s, hz(n), 0.4, 0.8, 0.7, { bus: e, amt: 0.3 }));
+      ['G6', 'C7', 'E7'].forEach((n, k) => bell(s, hz(n), 0.42 + k * 0.1, 0.6, 0.3, { bus: e, amt: 0.3 }));
+      kalimba(s, hz('E6'), 0.6, 0.5, 0.4, { bus: e, amt: 0.3 });
+      shake(s, 0.4, 0.4, 0.5);
     },
   },
   jackpot: {
     cat: 'stinger',
-    trim: 0,
-    len: 2.3,
-    ms: [1300, 1900],
+    len: 2.0,
+    ms: [1100, 1800],
     build(s) {
-      // A rising 8-note run, a coin shower of 32 blips over a rattle bed, a big C-major
-      // chord with sub and cymbal at 0.55 s, and a final bell run.
-      const rv = s.reverb(0.7, 0.3);
-      ['C5', 'E5', 'G5', 'C6', 'E6', 'G6', 'C7', 'E7'].forEach((n, k) => blip(s, hz(n), k * 0.065, 0.15, 0.7));
-      for (let k = 0; k < 32; k++) {
-        const t = 0.3 + (k / 32) * 1.2 + s.rand() * 0.03;
-        const pool = ['E6', 'G6', 'A6', 'C7', 'D7', 'E7'];
-        s.tone({ w: 'triangle', f: hz(pool[Math.floor(s.rand() * pool.length)] as string), at: t, dur: 0.11, v: Math.max(0.12, 0.5 - k * 0.01), a: 0.002, s: 0.015 });
+      // A confetti cannon: a marimba run of eight notes (C5 up to E7), a shower of twenty kalimba tines falling in the
+      // pentatonic set, a stamp at 0.55 s and a rolled chord of hand bells, with a cloud of confetti under it.
+      const e = s.echo(0.09, 0.28, 0.28, 5000);
+      ['C5', 'E5', 'G5', 'C6', 'E6', 'G6', 'C7', 'E7'].forEach((n, k) => mallet(s, hz(n), k * 0.065, 0.3, 0.7));
+      const pool = ['E6', 'G6', 'A6', 'C7', 'D7', 'E7'];
+      for (let k = 0; k < 20; k++) {
+        kalimba(s, hz(pool[Math.floor(s.rand() * pool.length)] as string), 0.3 + (k / 20) * 1.1 + s.rand() * 0.03, 0.2, Math.max(0.12, 0.5 - k * 0.02));
       }
-      s.noise({ at: 0.3, dur: 1.3, v: 0.1, a: 0.05, s: 0.2, r: 0.5, trem: { rate: 26, depth: 1 }, filter: { t: 'highpass', f: 6000 } });
-      thump(s, 110, 50, 0.55, 0.45, 1, 0.25);
-      ['C4', 'G4', 'C5', 'E5', 'G5'].forEach((n) => brass(s, n, 0.55, 0.85, 0.3, { bus: rv, amt: 0.35 }));
-      s.noise({ at: 0.55, dur: 1.0, v: 0.18, a: 0.01, s: 0.08, filter: { t: 'highpass', f: 6000 } });
-      ['G6', 'C7', 'E7'].forEach((n, k) => bell(s, hz(n), 1.05 + k * 0.1, 0.5, 0.35, { bus: rv, amt: 0.5 }));
+      stamp(s, 0.55, 1);
+      ['C6', 'E6', 'G6'].forEach((n, k) => bell(s, hz(n), 0.58 + k * 0.05, 0.8, 0.4, { bus: e, amt: 0.3 }));
+      puff(s, 0.55, 0.7, 0.4, 3600, 1400);
     },
   },
 };

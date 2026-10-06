@@ -175,7 +175,7 @@ export function mountCombat(stage: Stage, on: Bus): void {
 
       const heavy = info.big || dealt >= en.maxHp * 0.08;
       if (heavy) stage.play(stage.rules.heavyHit, 'hit_heavy', 0.5, 1, 0.05);
-      else stage.play(stage.rules.hit, 'hit_light', 0.5, 1, 0.06);
+      else stage.play(stage.rules.hit, e.type === 'magic' ? 'zap' : 'hit_light', 0.5, 1, 0.06);
     }
 
     if (e.absorbed > 0 && perEnemy.ready(en.uid, SUB_SHIELD, stage.now, 0.1)) {

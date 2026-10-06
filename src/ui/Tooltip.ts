@@ -1,4 +1,5 @@
 import { Container, Graphics, Point } from 'pixi.js';
+import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { clamp } from '@/core/math';
@@ -78,6 +79,7 @@ class TooltipManager {
     game.overlayLayer.addChild(bubble);
     this.bubble = bubble;
     haptic('light');
+    audio.play('ui_popup_open', { volume: 0.35 });
 
     if (!motion.reduced) {
       const pop = backOut(2);

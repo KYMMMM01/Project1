@@ -187,7 +187,7 @@ function piggyCard(inner: Container, y: number, w: number, env: BlockEnv): numbe
   bar.position.set(x0 + bw / 2, 128);
   bar.setValue(p.gems / PIGGY_CAP, false);
   card.addChild(desc, bar);
-  const note = p.gems === 0 ? t('shop.piggy.empty') : !p.freeBreakReady ? t('meta.piggy.free', { days: p.daysUntilFree, n: fmt(p.freeBreakGems) }) : '';
+  const note = p.gems === 0 ? t('shop.piggy.empty') : !p.freeBreakReady ? tn('meta.piggy.free', p.daysUntilFree, { days: p.daysUntilFree, n: fmt(p.freeBreakGems) }) : '';
   if (note) {
     const line = uiLabel(note, { size: 24, color: Color.inkSoft, anchorX: 0, anchorY: 0, wrap: bw, lineHeight: 30, align: 'left' });
     line.position.set(x0, 164);

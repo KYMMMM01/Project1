@@ -14,9 +14,9 @@ import { playVoice, voiceLength } from './instruments';
 import { VoiceBudget } from './voices';
 
 /** Mix level of each track relative to the music bus. */
-const TRACK_LEVEL: Record<string, number> = { home: 0.8, battle: 0.85, boss: 0.85 };
-/** Reverb send per track: home sits in a soft room, battle stays tight and punchy. */
-const TRACK_VERB: Record<string, number> = { home: 0.4, battle: 0.14, boss: 0.24 };
+const TRACK_LEVEL: Record<string, number> = { home: 1, battle: 0.9, boss: 1 };
+/** Reverb send per track: close-miked and dry, home gets the most room, battle stays tight. */
+const TRACK_VERB: Record<string, number> = { home: 0.25, battle: 0.1, boss: 0.15 };
 const MAX_RUNS = 3;
 const FADE_POINTS = 48;
 const STEPS_PER_BEAT = 4;

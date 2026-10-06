@@ -17,7 +17,7 @@ export interface CurrencyPillOpts {
   icon: IconName;
   amount?: number;
   width?: number;
-  /** Shows a green + button on the right edge. */
+  /** Shows a cream paper + button on the right edge. */
   plus?: boolean;
   onPlus?: () => void;
   iconColor?: number;
@@ -65,7 +65,7 @@ export class CurrencyPill extends Container {
     this.addChild(this.view);
 
     if (opts.plus) {
-      this.plusBtn = new IconButton({ icon: 'plus', style: 'success', size: 58 });
+      this.plusBtn = new IconButton({ icon: 'plus', style: 'neutral', size: 58 });
       this.plusBtn.onTap(opts.onPlus ?? null);
       this.addChild(this.plusBtn);
     } else {

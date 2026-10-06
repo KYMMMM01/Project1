@@ -23,6 +23,7 @@ export interface SoundDef {
 /** Default voice rule per loudness tier; recipes override single fields. */
 const CAT_RULE: Record<Cat, VoiceRule> = {
   ui: { maxVoices: 3, minGap: 0.03, falloff: 0 },
+  tick: { maxVoices: 4, minGap: 0.04, falloff: 0.12 },
   reward: { maxVoices: 3, minGap: 0.04, falloff: 0 },
   fire: { maxVoices: 3, minGap: 0.08, falloff: 0.15 },
   hit: { maxVoices: 5, minGap: 0.04, falloff: 0.18 },
@@ -66,7 +67,7 @@ export function stingerIndexOf(id: StingerId): number {
   return stingerIndex.get(id) ?? -1;
 }
 
-const CAT_ORDER: readonly Cat[] = ['ui', 'reward', 'fire', 'hit', 'combat', 'big', 'stinger'];
+const CAT_ORDER: readonly Cat[] = ['ui', 'tick', 'reward', 'fire', 'hit', 'combat', 'big', 'stinger'];
 
 /** Bake order for the idle pre-render: the sounds heard first and most often come first. */
 export const PRERENDER_ORDER: readonly number[] = SOUNDS.map((d) => d.index).sort(
