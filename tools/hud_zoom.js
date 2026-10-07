@@ -1,12 +1,17 @@
 // Zoomed capture of any rectangle of the design space, for judging a layout like a ruler would (a 1x still hides faults of
 // a few pixels). Prepended to a script by tools/hud_zoom.sh after tools/battle_motion.js, so the runner prelude (openGame,
-// ev, tap, ...) and the mc* helpers (mcOpen, mcWarp, ...) are there too.
+// ev, tap, ...) and the mc* helpers (mcOpen, mcWarp, mcCat, mcMouse ...) are there too.
 //
 //   await hzShot(name, [x, y, w, h], zoom = 3, opts)   PNG of that design rectangle at `zoom` px per design px, with a ruler
 //                                                      in the margins (design coordinates, a tick every `tick` px); opts.ruler = false
 //   await hzTall(true | false)                          the 720 x 1600 screen (a 360 x 800 viewport) and back to the real one
 //   await hzTexts([x, y, w, h])                         every visible Text whose centre is in the rectangle: [string, x, y, w, h, effective size]
 //   await hzRects(fn, arg)                              run `fn(game, dbg, arg)` in the page and return its value (JSON), for measurements
+//   await hzOpen(query, wave = 0)                       mcOpen + hzQuiet, then (wave > 0) play on with the bot to that wave and settle
+//   await hzQuiet()                                     mark every guidebook topic read and answer a first-encounter card that is already up
+//   await hzTap(x, y)                                   a real press and release at design coordinates
+//   await hzToyChoice()                                 play the run on with the field emptied until the toy choice opens (wave 4's end)
+//   await hzAudit(scope = 'stage' | 'popup')            texts that leave their paper by more than 3 px, are cut by the screen or overlap another
 //
 // How: the renderer is given resolution = zoom / scale, the canvas is cut down to the rectangle's size and the root container is
 // moved so the rectangle sits at the canvas origin; one render, one read of the canvas, everything put back before the page
@@ -118,8 +123,6 @@ async function hzRects(fn, arg) {
   return await ev(({ src, arg }) => (new Function('game', 'dbg', 'arg', 'return (' + src + ')(game, dbg, arg)'))(window.__dbg.game, window.__dbg, arg), { src: fn.toString(), arg });
 }
 
-//   await hzQuiet()                                     mark every guidebook topic read, so no first-encounter card holds the battle
-//   await hzOpen(query, wave = 0)                       mcOpen + hzQuiet, then (wave > 0) play on with the bot to that wave and settle
 async function hzQuiet() {
   await ev(async ([L, R]) => {
     const resolve = (0, eval)(R);
@@ -145,8 +148,6 @@ async function hzOpen(query, wave = 0) {
   }
 }
 
-//   await hzTap(x, y)                                   a real press and release at design coordinates (the runner's `tap` through the page's mouse)
-//   await hzToyChoice()                                 play the run on with the field emptied until the toy choice opens (wave 4's end)
 async function hzTap(x, y) {
   await mcMouse('down', x, y);
   await mcMouse('up', 0, 0);
@@ -167,4 +168,66 @@ async function hzToyChoice() {
     }
   }, [LOADER, RESOLVE]);
   await mcWarp(2.5);
+}
+
+async function hzAudit(scope = 'stage') {
+  return await ev((scope) => {
+    const game = window.__dbg.game;
+    const k = game.scale;
+    const W = game.w;
+    const H = game.h;
+    const top = () => {
+      const ch = game.popupLayer.children.filter((c) => c.visible && c.alpha > 0.5 && (c.children || []).length > 0);
+      return ch[ch.length - 1] || game.popupLayer;
+    };
+    const root = scope === 'popup' ? top() : game.app.stage;
+    const shown = (o) => {
+      for (let p = o; p; p = p.parent) if (!p.visible || p.alpha <= 0.05 || p.renderable === false) return false;
+      return true;
+    };
+    const box = (o) => {
+      const r = o.getBounds();
+      return { x: r.x / k, y: r.y / k, w: r.width / k, h: r.height / k };
+    };
+    const texts = [];
+    const out = [];
+    const walk = (o) => {
+      if (!o.visible || o.alpha <= 0.05) return;
+      if (o.constructor.name === 'Text' && typeof o.text === 'string' && o.text.trim() && o.width > 0 && shown(o)) texts.push(o);
+      for (const c of o.children || []) walk(c);
+    };
+    walk(root);
+    const inter = (a, b) => ({ w: Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), h: Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) });
+    for (const t of texts) {
+      const b = box(t);
+      if (b.x < -2 || b.y < -2 || b.x + b.w > W + 2 || b.y + b.h > H + 2) out.push({ kind: 'offscreen', text: t.text.slice(0, 24), box: [b.x, b.y, b.w, b.h].map(Math.round) });
+      let paper = null;
+      for (let p = t.parent; p && !paper; p = p.parent) {
+        const kids = p.children || [];
+        const at = kids.findIndex((c) => { for (let q = t; q; q = q.parent) if (q === c) return true; return false; });
+        for (let i = 0; i < Math.max(0, at); i++) {
+          const s = kids[i];
+          const sn = s.constructor.name;
+          if (!s.visible || s.alpha <= 0.05 || !(sn === 'Graphics' || sn === 'Sprite' || sn === 'NineSliceSprite' || sn === 'Panel')) continue;
+          const sb = box(s);
+          const cx = b.x + b.w / 2;
+          const cy = b.y + b.h / 2;
+          if (sb.w > b.w * 0.6 && sb.h > b.h * 0.6 && cx >= sb.x && cx <= sb.x + sb.w && cy >= sb.y && cy <= sb.y + sb.h && sb.w < W * 1.05) paper = sb;
+        }
+      }
+      if (paper) {
+        const over = Math.max(paper.x - b.x, b.x + b.w - (paper.x + paper.w), paper.y - b.y, b.y + b.h - (paper.y + paper.h));
+        if (over > 3) out.push({ kind: 'out-of-paper', text: t.text.slice(0, 24), by: Math.round(over), box: [b.x, b.y, b.w, b.h].map(Math.round), paper: [paper.x, paper.y, paper.w, paper.h].map(Math.round) });
+      }
+    }
+    for (let i = 0; i < texts.length; i++) {
+      for (let j = i + 1; j < texts.length; j++) {
+        const a = box(texts[i]);
+        const b = box(texts[j]);
+        const r = inter(a, b);
+        if (r.w > 4 && r.h > 8) out.push({ kind: 'overlap', a: texts[i].text.slice(0, 18), b: texts[j].text.slice(0, 18), by: [Math.round(r.w), Math.round(r.h)], at: [Math.round(a.x), Math.round(a.y)] });
+      }
+    }
+    return out;
+  }, scope);
 }

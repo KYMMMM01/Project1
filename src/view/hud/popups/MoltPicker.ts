@@ -4,7 +4,7 @@ import { t } from '@/core/i18n';
 import { CLASS_IDS, classDef, unitClass, unitDef, unitOf, unitRarity, type ClassId, type UnitId } from '@/game';
 import { Color, drawIcon, drawPaper, fitLabel, Panel, paperSeed, Popup, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
-import { CLASS_ACCENT, CLASS_ICON, PressCard, unitPhoto } from '../kit';
+import { balanceWrap, CLASS_ACCENT, CLASS_ICON, PressCard, unitPhoto } from '../kit';
 
 const W = 640;
 const CARD_W = 184;
@@ -19,7 +19,7 @@ export class MoltPicker extends Popup<void> {
     const b = env.battle;
     const unit = b.units[cell];
     const from = unit ? unitClass(unit.id) : null;
-    const h = 500;
+    const h = 508;
     const panel = new Panel({ width: W, height: h, title: t('hud.molt'), onClose: () => this.close() });
     const c = panel.content;
     const cost = b.moltCost();
@@ -27,12 +27,13 @@ export class MoltPicker extends Popup<void> {
     const seed = paperSeed();
 
     const info = uiLabel(t('hud.molt.info', { cost, left }), { size: 26, wrap: W - 100, lineHeight: 34 });
+    balanceWrap(info, W - 100);
     info.position.set(W / 2, 112);
     c.addChild(info);
 
     if (unit) {
       const pic = unitPhoto({ size: 68, rarity: unitRarity(unit.id), unit: unit.id, seed });
-      pic.position.set(W / 2, 192);
+      pic.position.set(W / 2, 194);
       c.addChild(pic);
     }
 
@@ -41,7 +42,7 @@ export class MoltPicker extends Popup<void> {
       const x = W / 2 + (i - (options.length - 1) / 2) * (CARD_W + 14);
       const becomes: UnitId | null = unit ? unitOf(id, unitRarity(unit.id)) : null;
       const card = new PressCard(CARD_W, CARD_H, () => this.choose(id), { onDown: true });
-      card.position.set(x, 366);
+      card.position.set(x, 370);
       const g = new Graphics();
       drawPaper(g, -CARD_W / 2, -CARD_H / 2, { w: CARD_W, h: CARD_H, radius: 24, fill: Color.paperLight, edge: CLASS_ACCENT[id], edgeWidth: 3, edgeAlpha: 0.9, grain: false, seed: seed + i + 1 });
       const patch = new Graphics();

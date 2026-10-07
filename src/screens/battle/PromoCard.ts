@@ -5,11 +5,12 @@ import { iap } from '@/platform';
 import { Button, Color, Tag, drawIcon, fitLabel, toast, uiLabel } from '@/ui';
 import { refusalCue } from '@/ui/press';
 import { services, type Shell } from '../contract';
-import { CARD_PAD, HomeCard } from './HomeCard';
+import { CARD_PAD, HEAD_GROW, HomeCard, RIM_GROW } from './HomeCard';
 import { PROMO_PRODUCT } from './promo';
 import './strings';
 
-const H = 252;
+/** The price button's lip reached past the card's bottom edge; the card is as tall as the header, the body and the same 24 px under the button every other card has. */
+const H = 252 + HEAD_GROW + RIM_GROW + 25;
 /** The list stays left of the price button. */
 const LIST_W = 260;
 const ROW_H = 40;
@@ -22,7 +23,7 @@ export class PromoCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, iap.productName(PROMO_PRODUCT), 'gift', { tape: 'yellow', featured: true });
+    super(w, H, iap.productName(PROMO_PRODUCT), 'gift', { tape: 'yellow', featured: true, reserve: 170 });
     const gift = drawIcon('gift', 104);
     gift.position.set(CARD_PAD + 52, this.contentTop + 78);
     const spec = iapSpec(PROMO_PRODUCT);
@@ -32,7 +33,7 @@ export class PromoCard extends HomeCard {
     this.price.position.set(w - CARD_PAD - 116, this.contentTop + 130);
     this.price.onTap(() => void this.buy());
     const tag = new Tag({ text: t('battle.promo.tag'), style: 'danger', shape: 'flag', fontSize: 24 });
-    tag.position.set(w - CARD_PAD - tag.uiBox.w / 2, 40);
+    tag.position.set(w - CARD_PAD - tag.uiBox.w / 2, this.head.cy);
     this.body.addChild(gift, list, this.price, tag);
     this.price.startPulse({ times: 4 });
   }

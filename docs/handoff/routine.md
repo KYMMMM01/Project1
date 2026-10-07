@@ -161,3 +161,9 @@ The backup export with its copy (the clipboard is blocked in the runner; the pop
 
 - **"Newly unlocked" sheet with ghost icons** (`system/kit/noticePopup.ts`, owner picture 8): not a style of this sheet. The popup's fade-in made Pixi bake every cached icon and button face at about 30 % alpha for good (`ui.md` fixups item 1, fixed in `src/ui/bakeFix.ts`). The same sheet, the comeback, level-up and gem-pass notes and the reward sheets are solid now (scratchpad `shots/proof`). The sticker's `popIn` is now restart- and kill-safe (`ui.md` item 2).
 - The settings sheet's "try it" pointer passes the sheet's body as the paw's room (`showPointer(game.popupLayer, () => backupButton, () => scaffold.bodyRect)`), so the paw cannot cover the header.
+
+## 2026-10-07 precision
+
+- `system/kit/sheets.ts` `paperSheet` / `sharedSheet` with `dash`: on a cut (not torn) sheet the dashed line is the sheet's own outline moved inward (`drawDashedInset`, inset `dash - 3`), so it stays parallel to the edge; settings and the other routine sheets get it without changes.
+- Guidebook (`src/guide`): a tile's picture is the tile minus 24 px (it was 90 percent and crossed its own dashed line); a page's paragraphs lie on a cream sheet 24 px in from its edges (they lay on the wooden floor); the thumbnails' dashed line is parallel to the tile's cut edge.
+- Walk (see `ui.md`): settings, calendar, backup code popups, odds, reward popup, toast, guidebook list and page looked at in Korean 1280; the text audit ran in four configurations for settings, calendar, odds and the unit screen. The backup code field is a DOM overlay: shoot it at k = 1 (it does not follow the magnification of `tools/kit_zoom`).

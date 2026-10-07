@@ -22,51 +22,108 @@ export interface Point {
 export const HUD_W = 720;
 export const SIDE = 16;
 
+/** Everything of the top block sits on one grid: an 8 px pad, the round buttons' paper, then rows 2 and 3 with 8 px between every pair. */
+const TOP_PAD = 8;
+/** The pause, speed and skip papers (their touch targets are 88). */
+export const FACE = 72;
+const ROW_GAP = 8;
+/** Row 2's wave label and row 3's countdown bar: one column of one width, one left edge. */
+export const LABEL_H = 34;
+export const BAR_H = 34;
+export const COLUMN_W = 228;
+/** Space kept between neighbours of the top block that sit side by side. */
+const SIDE_GAP = 12;
+/** The skull sticker (63 x 69 as drawn, see GaugeStrip) hangs this far off the strip's left end, and half its height above and below the strip's centre. */
+export const SKULL_REACH = 30;
+export const SKULL_HALF = 35;
+/** The enemy gauge strip's height; the skull is taller and is centred on it. */
+const GAUGE_PAPER = 58;
+
+/** The next-wave cards: up to four on a 62 px pitch, left edge on the column's right edge plus a gap. */
+export const CARD_W = 56;
+export const CARD_H = LABEL_H + ROW_GAP + BAR_H;
+export const CARD_GAP = 6;
+export const PREVIEW_MAX = 4;
+/** The toy shelf: icons on a 40 px pitch, so five fit without touching. */
+export const TOY_SIZE = 40;
+export const TOY_MAX = 5;
+const SHELF_GAP = 8;
+
 export interface TopRects {
   /** The reserved strip (y from safeTop). */
   area: Rect;
+  /** Centres of the round buttons' papers (both on the first row's centre line). */
   pause: Point;
   speed: Point;
   gauge: Rect;
-  /** Phase label and countdown bar. */
+  /** Row 2, left: the phase label's paper. */
   wave: Rect;
-  /** Next-wave preview cards. */
+  /** Row 3, left: the countdown bar (a centre-origin bar of this size sits in it). */
+  timer: Rect;
+  /** Rows 2 and 3, right of the column: the next-wave cards (first card's left edge on this rect's left edge). */
   preview: Rect;
-  /** Row of owned toys. */
+  /** The toy shelf, same height as the cards. */
   toys: Rect;
   /** Boss / elite strip: takes over the preview and toy area while one is alive. */
   boss: Rect;
-  /** The countdown bar (a centre-origin bar of this size sits in it). */
-  timer: Rect;
-  /** Vertical centre of the second row. */
-  row2Y: number;
+  /** Centre line of rows 2 and 3 together (cards, toys, boss strip). */
+  midY: number;
 }
 
 export function topRects(l: BattleLayout): TopRects {
   const y0 = l.safeTop;
-  const row1Y = y0 + Math.round(l.topH * 0.31);
-  const row2Y = y0 + Math.round(l.topH * 0.76);
-  const rowH = Math.round(l.topH * 0.44);
+  const row1Y = y0 + TOP_PAD + FACE / 2;
+  const row2Y = y0 + TOP_PAD + FACE + ROW_GAP;
+  const row3Y = row2Y + LABEL_H + ROW_GAP;
+  const blockH = LABEL_H + ROW_GAP + BAR_H;
+  const pause = { x: SIDE + FACE / 2, y: row1Y };
+  const speed = { x: HUD_W - SIDE - FACE / 2, y: row1Y };
+  const gaugeX = pause.x + FACE / 2 + SIDE_GAP + SKULL_REACH;
+  const previewX = SIDE + COLUMN_W + SHELF_GAP;
+  const previewW = PREVIEW_MAX * CARD_W + (PREVIEW_MAX - 1) * CARD_GAP;
+  const toysX = previewX + previewW + SHELF_GAP;
+  // The boss strip's sticker hangs about 30 px off its left end, which the column keeps clear.
+  const bossX = previewX + 38;
   return {
     area: { x: 0, y: y0, w: HUD_W, h: l.topH },
-    pause: { x: SIDE + 44, y: row1Y },
-    speed: { x: HUD_W - SIDE - 44, y: row1Y },
-    // The skull sticker hangs 43 px off the strip's left end, so the strip starts that far clear of the pause button.
-    gauge: { x: 150, y: row1Y - 29, w: 440, h: 58 },
-    wave: { x: SIDE, y: row2Y - rowH / 2, w: 212, h: rowH },
-    preview: { x: 236, y: row2Y - rowH / 2, w: 208, h: rowH },
-    toys: { x: 452, y: row2Y - rowH / 2, w: HUD_W - SIDE - 452, h: rowH },
-    // The boss sticker overhangs the strip's left end by about 30 px, which the countdown bar leaves free.
-    boss: { x: 264, y: row2Y - 28, w: HUD_W - SIDE - 264, h: 66 },
-    timer: { x: SIDE, y: row2Y + 2, w: 212, h: 34 },
-    row2Y,
+    pause,
+    speed,
+    gauge: { x: gaugeX, y: row1Y - GAUGE_PAPER / 2, w: speed.x - FACE / 2 - SIDE_GAP - gaugeX, h: GAUGE_PAPER },
+    wave: { x: SIDE, y: row2Y, w: COLUMN_W, h: LABEL_H },
+    timer: { x: SIDE, y: row3Y, w: COLUMN_W, h: BAR_H },
+    preview: { x: previewX, y: row2Y, w: previewW, h: blockH },
+    toys: { x: toysX, y: row2Y, w: HUD_W - SIDE - toysX, h: blockH },
+    boss: { x: bossX, y: row2Y, w: HUD_W - SIDE - bossX, h: blockH },
+    midY: row2Y + blockH / 2,
   };
+}
+
+/** Centre x of card `i` of `n` (the first card's left edge is the preview rect's; they never touch, and a row of four stays inside it). */
+export function cardCentre(r: TopRects, i: number): number {
+  return r.preview.x + CARD_W / 2 + i * (CARD_W + CARD_GAP);
+}
+
+/** What the next-wave row shows: up to four cards, the last one a "+N" card when there are more kinds than fit. */
+export function previewShown(kinds: number): { cards: number; more: number } {
+  if (kinds <= PREVIEW_MAX) return { cards: kinds, more: 0 };
+  return { cards: PREVIEW_MAX - 1, more: kinds - (PREVIEW_MAX - 1) };
+}
+
+/** What the toy shelf shows: up to five icons, the last slot a "+N" when there are more toys than fit. */
+export function toysShown(toys: number): { icons: number; more: number } {
+  if (toys <= TOY_MAX) return { icons: toys, more: 0 };
+  return { icons: TOY_MAX - 1, more: toys - (TOY_MAX - 1) };
+}
+
+/** Centre x of shelf slot `i` (a slot is as wide as its icon; the shelf is one row of them with no gap, left edge on the shelf's). */
+export function toyCentre(r: TopRects, i: number): number {
+  return r.toys.x + TOY_SIZE / 2 + i * TOY_SIZE;
 }
 
 /** The tutorial's skip button: the Korean label ("건너뛰기", four glyphs at 24 px) on its paper. Its touch target is 88 px tall, its paper 76 (the speed button's size). */
 export const SKIP_W = 124;
 export const SKIP_H = 88;
-export const SKIP_FACE = 76;
+export const SKIP_FACE = FACE;
 /** Clear space kept between the skip button and the strip, and between it and the speed button. */
 const SKIP_GAP = 12;
 
@@ -132,20 +189,114 @@ function sellRect(l: BattleLayout, panelTop: number): Rect {
   return { x: 0, y, w: HUD_W, h: 112 - y };
 }
 
-/** Slot width for `n` items in a strip `w` wide: each item gets up to `max`, shrinking to fit. */
-export function slotWidth(n: number, w: number, max: number): number {
-  if (n <= 0) return max;
-  return Math.min(max, w / n);
-}
-
-/** Centre x of slot `i` of `n` equal slots starting at `x0`. */
-export function slotCentre(i: number, slot: number, x0: number): number {
-  return x0 + slot * (i + 0.5);
-}
-
 /** Largest scale (<= 1) at which content of `w x h` fits a screen with a margin. Used by popups that must survive 720 x 1280. */
 export function fitScale(contentW: number, contentH: number, screenW: number, screenH: number, margin = 24): number {
   return Math.min(1, (screenW - margin) / contentW, (screenH - margin * 2) / contentH);
+}
+
+// ───────────────────────── the selection sheet ─────────────────────────
+
+/**
+ * The selection sheet on one content box: the dashed line runs `frame` px inside the paper's edge and everything keeps `pad` px of paper from
+ * it, so every part (photo, close button, header rows, build well, buttons) lies in a box `edge` px in on all four sides. Coordinates are the sheet's own.
+ */
+export const SHEET = {
+  frame: 8,
+  pad: 8,
+  edge: 16,
+  /** Gap between the header, the well and the buttons. */
+  gap: 8,
+  photo: 85,
+  close: 60,
+  /** The well that says what the cat becomes (BuildPlanView), and a button's face and the lip the kit hangs under it. */
+  well: 60,
+  button: 72,
+  lip: 4,
+  /** Widths of Molt, Awaken and Sell (a cat that pays purr says both amounts on Sell; Awaken carries its reason) and the gap between them. */
+  molt: 186,
+  awaken: 214,
+  sell: 240,
+  buttonGap: 10,
+  /** Row centres of the header measured from the content box's top: the name (34 px type, glyphs about 30 tall; the pills are 34 tall), the stats (26 px, about 26) and the skill line (24 px, about 22), which ends where the photo does. */
+  nameY: 16,
+  statsY: 46,
+  skillY: 72,
+} as const;
+
+export interface SheetBoxes {
+  /** The dashed line's rectangle. */
+  frame: Rect;
+  content: Rect;
+  photo: Rect;
+  close: Rect;
+  well: Rect;
+  /** Centre line of the button faces. */
+  buttonY: number;
+  /** Where the header's text starts, and the most it may reach (left of the close button). */
+  textX: number;
+  textRight: number;
+}
+
+export function sheetBoxes(w: number, h: number): SheetBoxes {
+  const { frame, edge, gap, photo, close, well, button, lip } = SHEET;
+  const content = { x: edge, y: edge, w: w - edge * 2, h: h - edge * 2 };
+  const buttonTop = content.y + content.h - lip - button;
+  return {
+    frame: { x: frame, y: frame, w: w - frame * 2, h: h - frame * 2 },
+    content,
+    photo: { x: edge, y: edge, w: photo, h: photo },
+    close: { x: w - edge - close, y: edge, w: close, h: close },
+    well: { x: edge, y: buttonTop - gap - well, w: content.w, h: well },
+    buttonY: buttonTop + button / 2,
+    textX: edge + photo + 12,
+    textRight: w - edge - close - gap,
+  };
+}
+
+// ───────────────────────── the laser button ─────────────────────────
+
+/**
+ * The laser button on one centre: a face (the kit draws an icon-only glyph at 62 % of it), a moat of paper, then the timer ring (the kit's
+ * CooldownRing paints a paper disc inside its ring, and that disc is the moat). Nothing reaches beyond the ring; the "i" mark sits clear of it
+ * on the lower right and the seconds under it. Every number here is measured from the one centre.
+ */
+/** The button's centre in the action row: on the summon button's centre line (the call button above clears the ring by 18 px). */
+export const LASER_X = 615;
+export const LASER_FACE = 88;
+export const LASER_RING = 58;
+export const LASER_RING_TH = 8;
+export const LASER_GLYPH = Math.round(LASER_FACE * 0.62);
+/** Paper between the face's edge and the ring's inner edge. */
+export const LASER_MOAT = LASER_RING - LASER_RING_TH - LASER_FACE / 2;
+/** The "i" plate's radius with its edge (44 px face, 3 px edge: measured 22.75), its centre's offset from the laser's centre, and the seconds' centre under the ring. */
+export const INFO_R = 23;
+export const LASER_INFO = { x: 70, y: 64 } as const;
+export const LASER_SECONDS_Y = LASER_RING + 2 + 15;
+/** The lesson's window round the ring: this much clear of it, so the dashed line stays off the "i" mark. */
+export const LASER_SPOT = 8;
+
+/** The laser button's face and glyph radii (design px, scaled with its pop-in) and centre, from its ring's rectangle: what the paw's rim spots are cut from. */
+export function laserFace(ring: Rect): { centre: Point; faceR: number; glyphR: number } {
+  const k = ring.w / (2 * LASER_RING);
+  return { centre: { x: ring.x + ring.w / 2, y: ring.y + ring.h / 2 }, faceR: (LASER_FACE / 2) * k, glyphR: (LASER_GLYPH / 2) * k };
+}
+
+/**
+ * The tutorial's spotlight window round `r`: `margin` on every side about the control's own centre (so the insets left and right, top and bottom
+ * are equal), the half sizes rounded up to `grid` (a button that breathes does not change the window on every beat) and held inside the screen.
+ */
+export function spotWindow(r: Rect, margin: number, grid: number, screen: { w: number; h: number }): Rect {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const up = (v: number): number => Math.ceil(v / grid - 1e-9) * grid;
+  const hw = Math.min(up(r.w / 2 + margin), cx, screen.w - cx);
+  const hh = Math.min(up(r.h / 2 + margin), cy, screen.h - cy);
+  return { x: cx - hw, y: cy - hh, w: hw * 2, h: hh * 2 };
+}
+
+/** Corner radius of a spotlight window: a circle when the window is round (a button), else the usual cut-out corner. */
+export function spotRadius(w: Rect, corner: number): number {
+  return Math.abs(w.w - w.h) <= 12 ? Math.min(w.w, w.h) / 2 : corner;
 }
 
 // ───────────────────────── the pick of three ─────────────────────────
@@ -167,7 +318,16 @@ export const PICK = {
   frameHalf: 134,
   /** How far its fingertip sits inside the frame's top edge. */
   tipInside: 26,
+  /** Without the paw there is no band over the cards: they sit this far under the sub line, and the sheet is as much shorter as they moved up. */
+  plainGap: 20,
 } as const;
+
+/** Centre line of the cards and height of the sheet: the lesson's sheet has a band for the paw, a plain pick does not. */
+export function pickSheet(guide: boolean): { cardY: number; h: number } {
+  if (guide) return { cardY: PICK.cardY, h: PICK.h };
+  const cardY = PICK.subY + PICK.subHalf + PICK.plainGap + PICK.frameHalf;
+  return { cardY, h: PICK.h - (PICK.cardY - cardY) };
+}
 
 /** Centre x of card `i` of `n`. */
 export function pickCardX(i: number, n: number): number {

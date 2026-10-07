@@ -8,6 +8,8 @@ import { Container, Point, Text } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
 import { i18nEvents, t } from '@/core/i18n';
 import { closeGuide, GuideProgress, guideProgress, openGuide, topicTeach, type TopicId, type TryControl } from '@/guide';
+import { warm, WARM_PRIO } from '@/fx';
+import { CLASS_IDS } from '@/game';
 import { clearToasts, confirmDialog, popups, toast } from '@/ui';
 import type { UnitId } from '@/game';
 import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
@@ -22,6 +24,7 @@ import { encounterCard, Hints, onScreen } from './hints';
 import { LessonBubble } from './LessonBubble';
 import { LaserGuide } from './LaserGuide';
 import { LaserTeach } from './laserTeach';
+import { ClassSheet } from './popups/ClassSheet';
 import { PauseMenu, type PauseAction } from './popups/PauseMenu';
 import { SummonPickPopup } from './popups/SummonPickPopup';
 import { stageHeldFor } from '@/view/staging';
@@ -30,6 +33,7 @@ import { findTwins } from './planMath';
 import { canOpenPause, REVIVE_MIN_WAVES, revealFlags, type RevealKey } from './policy';
 import { canOfferContinue, openContinue, type DefeatReason } from './screens/ContinueScreen';
 import { RelicScreen } from './screens/RelicScreen';
+import { warmSheets } from './sheetWarm';
 import { openResult, type ResultHandle } from './screens/ResultScreen';
 import { openSettings } from './screens/SettingsScreen';
 import { ensureSettings } from './settings';
@@ -38,6 +42,12 @@ import { Tutorial, type TutorialHost } from './Tutorial';
 import { revealedBy, STEP_IDS, type Target } from './tutorialScript';
 import { topRects, type Rect } from './layoutMath';
 import { unionRect } from './bubbleMath';
+
+/** Tells the pieces one battle's HUD asks of the warm-up queue from those of an earlier battle (the queue remembers what has run). */
+let hudSerial = 0;
+
+/** Three cats of three classes: the offer the pick sheet is opened with ahead of time. */
+const PICK_SAMPLE: readonly UnitId[] = ['w_paw', 'r_sling', 'm_snow'];
 
 /** Frames to wait for the field to draw a new cat before the pair hint gives up on it. */
 const TWINS_WAIT = 90;
@@ -96,6 +106,7 @@ class Hud implements HudPart {
   private abandoned = false;
   private defeatReason: DefeatReason = null;
   private destroyed = false;
+  private readonly serial = ++hudSerial;
 
   constructor(private readonly ctx: BattleContext) {
     void ensureSettings();
@@ -186,8 +197,7 @@ class Hud implements HudPart {
     // A result chip only lies on free paper: the note, the card, the sticker and the class chips are what it makes way for.
     this.bottom.actions.overChips(() => this.tutorial?.noteRect ?? null, () => this.card.rect, () => this.tutorial?.cheerRect ?? null, () => this.bottom.classRowRect());
     // The laser's guided first use: a normal run starts it by itself, the tutorial run when its laser lesson begins.
-    const laser = this.bottom.actions.laser;
-    this.guide = new LaserGuide(env, () => this.boundsRect(laser), !lessons, () => this.avoidList());
+    this.guide = new LaserGuide(env, () => this.boundsRect(this.bottom.actions.laserRing), !lessons, () => this.avoidList());
     this.bottom.actions.onExplained = () => this.guide?.explained();
     watchEncounters(env, {
       gauge: this.top.gauge, waveLabel: this.top.waveLabel, previewLayer: this.top.previewLayer, boss: this.boss.root, chips: this.bottom.classes.root,
@@ -205,7 +215,7 @@ class Hud implements HudPart {
     env.on(battle.events, 'relicOffer', () => {
       // The boss-defeated banner that this offer follows gets to finish first; the field is frozen under it meanwhile.
       const wait = stageHeldFor();
-      if (wait > 0 && !this.relic) ctx.ui.call(wait, () => this.showRelics());
+      if (wait > 0 && !this.relic?.isOpen) ctx.ui.call(wait, () => this.showRelics());
       else this.showRelics();
     });
     env.on(battle.events, 'defeat', ({ reason }) => (this.defeatReason = reason));
@@ -221,15 +231,19 @@ class Hud implements HudPart {
     env.on(battle.events, 'molt', () => env.hints.used('molt'));
     env.on(battle.events, 'awaken', () => env.hints.used('awaken'));
     env.on(ctx.events, 'speed', () => env.hints.used('speed'));
-    env.on(battle.events, 'waveStart', ({ wave }) => {
+    env.on(battle.events, 'waveStart', ({ wave, kind }) => {
       if (wave >= 1 && env.reveal.speed) env.hints.request('speed', this.top.speedBtn);
       if (wave >= 2 && env.reveal.preview) env.hints.request('preview', this.top.previewLayer);
+      // An elite or a boss ends the act, and the toy screen follows it.
+      if (kind !== 'normal') this.prepareRelics();
     });
     // Outside the tutorial (which teaches the merge itself) the first pair of identical cats earns one card.
     if (!lessons && !env.hints.has('merge')) {
       for (const type of ['summon', 'move', 'swap', 'merge', 'molt', 'awaken'] as const) env.on(battle.events, type, () => (this.twinsFrames = TWINS_WAIT));
     }
 
+    if (battle.waveKind !== 'normal') this.prepareRelics();
+    this.warmSheets();
     // A restored run may be waiting on a choice.
     const pending = battle.pending;
     if (pending?.kind === 'summon') this.openPick(pending.options);
@@ -379,7 +393,7 @@ class Hud implements HudPart {
         case 'summon': return this.bottom.actions.summon.btn;
         case 'gauge': return this.top.gauge;
         case 'chips': return this.bottom.classes.root;
-        case 'laser': return this.bottom.actions.laser;
+        case 'laser': return this.bottom.actions.laserRing;
         case 'bossbar': return this.boss.root;
         case 'purr': return this.bottom.currency.purr;
         case 'molt': return this.bottom.sheet.buttonFor('molt');
@@ -407,7 +421,7 @@ class Hud implements HudPart {
             return row ? { x: row.x + 20, y: row.y, w: 150, h: row.h } : null;
           }
           case 'preview': return previewRect();
-          case 'laser': return this.rectOfContainer(this.bottom.actions.laser);
+          case 'laser': return this.rectOfContainer(this.bottom.actions.laserRing);
           case 'purr': return this.rectOfContainer(this.bottom.currency.purr);
           case 'gradeUpgrade': return this.rectOfContainer(this.bottom.actions.grade);
           case 'speed': return this.rectOfContainer(this.top.speedBtn);
@@ -428,7 +442,8 @@ class Hud implements HudPart {
         return out;
       },
       labelsOf: (target) => {
-        const c = control(target);
+        // The seconds under the laser button are writing the paw keeps off; the ring marker is only a measure.
+        const c = target === 'laser' ? this.bottom.actions.laser : control(target);
         return c ? this.textRects(c) : [];
       },
     };
@@ -504,11 +519,38 @@ class Hud implements HudPart {
   }
 
   private showRelics(): void {
-    if (this.relic) {
-      this.relic.render();
-      return;
-    }
-    this.relic = new RelicScreen(this.env, () => (this.relic = null));
+    this.relic ??= new RelicScreen(this.env, undefined, true);
+    this.relic.open();
+  }
+
+  /** The sheets a tap opens (a class sheet, the pick of three, the pause menu) are each opened once out of sight, a piece a frame (sheetWarm.ts). */
+  private warmSheets(): void {
+    const env = this.env;
+    warmSheets(
+      `sheets:${this.serial}`,
+      [
+        ...CLASS_IDS.map((id) => ({ name: `class:${id}`, make: () => new ClassSheet(env, id) })),
+        { name: 'pick', make: () => new SummonPickPopup(env, PICK_SAMPLE, false) },
+        { name: 'pause', make: () => new PauseMenu(env) },
+      ],
+      WARM_PRIO.later,
+      () => !this.destroyed,
+    );
+  }
+
+  /**
+   * The act's last wave is on, so the toy screen comes next: it is built asleep and its parts drawn once, a piece a frame (src/fx/warm.ts), so
+   * the offer only has three cards to fill. It stays for the battle: the next act's offer wakes the same screen.
+   */
+  private prepareRelics(): void {
+    const key = `toys:${this.serial}`;
+    warm.request(`${key}:build`, WARM_PRIO.next, 6, () => {
+      if (this.destroyed) return;
+      const screen = (this.relic ??= new RelicScreen(this.env, undefined, true));
+      screen.prewarm().forEach((step, i) => warm.request(`${key}:${i}`, WARM_PRIO.next, 5, () => {
+          if (!this.destroyed) step();
+        }));
+    });
   }
 
   /** Ask for the "identical cats merge" bubble on one cat of the first pair, as soon as that cat has a view. */

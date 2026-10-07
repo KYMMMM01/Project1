@@ -1,61 +1,93 @@
 import { Container, Sprite } from 'pixi.js';
-import { Ease } from '@/core/tween';
 import { fxTex } from '@/fx';
 import { backOut } from '@/ui';
 
-const RAYS = 9;
+const RAYS = 14;
 
 /**
- * The light of an opened chest: flat paper wedges fanning upward from the opening in two tones, swaying slowly from side to
- * side as it turns, popping in with a little overshoot and fading when told to. Nothing glows and nothing blends: they are cut
- * triangles. Built once per reveal; `update` only moves what exists. Origin = the opening.
+ * A flat paper sunburst: cut triangles in two tones fanning all the way round, turning slowly. Behind the closed chest it is the
+ * tell: it grows a step with every burst in the colour of the best rarity inside. At the pop it swells with an overshoot and spins up
+ * before it settles to a slow turn, then it follows the card on stage. Nothing glows and nothing blends. Origin = the middle.
  */
-export class LightFan extends Container {
-  private readonly rays: Sprite[] = [];
+export class Sunburst extends Container {
   private readonly pop = backOut(2);
-  private age = 0;
-  private fadeFrom = Infinity;
-  private fading = 0.4;
-  private still: boolean;
+  private level = 0;
+  private popAge = -1;
+  private fadeAge = -1;
+  private fadeFor = 0.4;
+  private goal: number;
+  private shown: number;
+  /** A kick of the flourish of a card: 1 right after it, dying away. */
+  private punched = 0;
 
-  /** `still` is the reduced-motion form: the same fan, no pop and no sway. */
-  constructor(core: number, edge: number, radius: number, private readonly peak = 0.55, still = false) {
+  /** `windPeak` is the opacity at full growth before the pop. `still` is the reduced-motion form: the same burst, no turning and no pop. */
+  constructor(core: number, edge: number, radius: number, private readonly windPeak = 0.5, private readonly still = false) {
     super();
-    this.still = still;
     this.eventMode = 'none';
+    this.goal = this.shown = windPeak;
     const wedge = fxTex('wedge');
-    const span = Math.PI - 0.5;
     for (let i = 0; i < RAYS; i++) {
       const long = i % 2 === 0;
       const s = new Sprite(wedge.texture);
       s.anchor.set(wedge.ax, wedge.ay);
       s.tint = long ? edge : core;
-      const len = radius * (long ? 1 : 0.66);
-      s.scale.set(len / wedge.w, (len * (long ? 0.2 : 0.13)) / wedge.h);
-      s.rotation = -Math.PI + 0.25 + (i / (RAYS - 1)) * span;
-      this.rays.push(s);
+      const len = radius * (long ? 1 : 0.7);
+      s.scale.set(len / wedge.w, (len * (long ? 0.24 : 0.17)) / wedge.h);
+      s.rotation = (i / RAYS) * Math.PI * 2;
       this.addChild(s);
     }
-    this.alpha = still ? this.peak : 0;
-    if (still) this.scale.set(1);
+    this.apply(0);
+  }
+
+  /** How far the burst has grown behind the closed chest, 0..1. */
+  setLevel(level: number): void {
+    this.level = Math.min(1, Math.max(this.level, level));
+  }
+
+  /** The chest pops: the burst swells and spins up, and settles at `peak` opacity. */
+  burst(peak: number): void {
+    if (this.popAge >= 0) return;
+    this.popAge = 0;
+    this.goal = this.shown = peak;
+  }
+
+  /** The big flourish of the best card: the burst swells and spins up once more. */
+  punch(): void {
+    this.punched = 1;
+  }
+
+  /** The opacity it settles at after the pop (the card on stage asks for more as the ranks rise). */
+  setPeak(peak: number): void {
+    this.goal = peak;
   }
 
   /** Fade out and leave (it stays in the tree until the reveal is destroyed). */
   stop(seconds = 0.4): void {
-    if (this.fadeFrom !== Infinity) return;
-    this.fadeFrom = this.age;
-    this.fading = seconds;
+    if (this.fadeAge >= 0) return;
+    this.fadeAge = 0;
+    this.fadeFor = Math.max(0.01, seconds);
   }
 
   update(dt: number): void {
-    this.age += dt;
-    let a = this.still ? 1 : Math.min(1, this.age / 0.3);
-    if (this.age > this.fadeFrom) a *= Math.max(0, 1 - (this.age - this.fadeFrom) / this.fading);
-    this.alpha = a * this.peak;
-    this.visible = this.alpha > 0.002;
-    if (this.still) return;
-    const k = Ease.cubicOut(Math.min(1, this.age / 0.4));
-    this.scale.set(0.35 + 0.65 * this.pop(k));
-    this.rotation = Math.sin(this.age * 0.9) * 0.3;
+    if (this.popAge >= 0) this.popAge += dt;
+    if (this.fadeAge >= 0) this.fadeAge += dt;
+    this.shown += (this.goal - this.shown) * Math.min(1, dt * 6);
+    this.punched = Math.max(0, this.punched - dt * 2.2);
+    const popped = this.popAge >= 0;
+    let a = popped ? this.shown : (0.25 + 0.75 * this.level) * this.windPeak;
+    if (this.fadeAge >= 0) a *= Math.max(0, 1 - this.fadeAge / this.fadeFor);
+    const s = (popped ? 0.9 + 0.4 * this.pop(Math.min(1, this.popAge / 0.45)) : 0.3 + 0.6 * this.level) * (1 + 0.25 * this.punched);
+    this.apply(a, s, (popped ? 0.3 + 2.4 * Math.exp(-4 * this.popAge) : 0.12 + 0.5 * this.level) + 2.5 * this.punched, dt);
+  }
+
+  private apply(alpha: number, scale = 0.3, spin = 0, dt = 0): void {
+    this.alpha = alpha;
+    this.visible = alpha > 0.002;
+    if (this.still) {
+      this.scale.set(this.popAge >= 0 ? 1.15 : scale);
+      return;
+    }
+    this.scale.set(scale);
+    this.rotation += spin * dt;
   }
 }

@@ -5,6 +5,7 @@ import {
   bakeResolution,
   cacheStatic,
   Color,
+  drawDashedInset,
   drawDashedRect,
   drawIcon,
   drawPaper,
@@ -62,7 +63,10 @@ function paintSheet(host: Container, w: number, h: number, o: SheetOpts): void {
   }
   if (o.dash !== undefined) {
     const d = o.dash;
-    drawDashedRect(g, d, d, w - d * 2, h - d * 2, { radius: Math.max(8, radius - d + 4), color: o.dashColor ?? Color.teal, seed });
+    const style = { color: o.dashColor ?? Color.teal, seed };
+    // On a cut edge the line is that edge moved inward, so it stays parallel to it; a torn edge has no steady line to follow.
+    if (o.torn === undefined) drawDashedInset(g, 0, 0, o.featured ? { ...base, w: w - FEATURED_BORDER * 2, h: h - FEATURED_BORDER * 2, radius: Math.max(8, radius - FEATURED_BORDER + 4), seed: seed + 7 } : base, Math.max(6, d - 3), style);
+    else drawDashedRect(g, d, d, w - d * 2, h - d * 2, { radius: Math.max(8, radius - d + 4), ...style });
   }
   host.addChild(g);
   if (o.tape) {

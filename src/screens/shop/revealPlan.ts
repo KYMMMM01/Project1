@@ -139,171 +139,6 @@ export function totalCards(stacks: readonly RevealStack[]): number {
   return n;
 }
 
-export interface Burst {
-  /** Seconds from the first frame. */
-  at: number;
-  dur: number;
-  /** 0..1: how hard the chest rattles and how much light leaks, rising burst by burst. */
-  power: number;
-}
-
-export interface RevealSchedule {
-  /** Seconds of the fall: the chest lands (squash, dust, shake) at `drop`. */
-  drop: number;
-  /** The rattles, each stronger than the one before. */
-  bursts: Burst[];
-  /** The rattling stops: the chest holds still while the lid creeps open (the creak). */
-  freezeAt: number;
-  /** The lid flies open: the open sprite, the flash, the rays, the stars and the paper. */
-  pop: number;
-  /** Start time of each stack's flight (same order as the stacks), measured from the first frame. */
-  flightAt: number[];
-  /** Seconds each flight and flip takes. */
-  flight: number;
-  /** When the last flip has landed (the best card is held for `hold` seconds after). */
-  lastFlipAt: number;
-  hold: number;
-  total: number;
-}
-
-const DROP = 0.26;
-/** Quiet moment after the landing before the first rattle, and between two rattles. */
-const REST = 0.08;
-const BURST_GAP = 0.06;
-const BURST_LEN = [0.28, 0.32, 0.36] as const;
-/** Rattles by the best rarity inside: a better chest makes you wait through one more. */
-const BURSTS: Record<ChestRarity, number> = { common: 2, rare: 2, epic: 3, legendary: 3 };
-/** The beat of stillness before the pop. The open sound creaks for `CREAK` seconds and then pops, so it starts that long before the pop. */
-const FREEZE: Record<ChestRarity, number> = { common: 0.3, rare: 0.3, epic: 0.32, legendary: 0.42 };
-export const CREAK = 0.3;
-/** From the pop to the first card leaving the opening. */
-const POP_TO_CARD = 0.14;
-/** Pause on the best stack. */
-const HOLD: Record<ChestRarity, number> = { common: 0, rare: 0.15, epic: 0.45, legendary: 0.9 };
-const GAP: Record<ChestRarity, number> = { common: 0.1, rare: 0.14, epic: 0.2, legendary: 0.3 };
-const FLIGHT = 0.34;
-/** All stacks but the best share this much time at most, however many there are. */
-const MAX_FLIP_PHASE = 2.2;
-
-export function revealSchedule(stacks: readonly RevealStack[]): RevealSchedule {
-  const best = bestRarity(stacks);
-  const count = BURSTS[best];
-  const bursts: Burst[] = [];
-  let t = DROP + REST;
-  for (let i = 0; i < count; i++) {
-    const dur = BURST_LEN[i] as number;
-    bursts.push({ at: t, dur, power: count === 2 ? (i === 0 ? 0.55 : 1) : ([0.4, 0.7, 1][i] as number) });
-    t += dur + BURST_GAP;
-  }
-  const freezeAt = t - BURST_GAP;
-  const pop = freezeAt + FREEZE[best];
-  const start = pop + POP_TO_CARD;
-  const flightAt: number[] = [];
-  const n = stacks.length;
-  const cap = n > 1 ? MAX_FLIP_PHASE / (n - 1) : GAP.common;
-  t = start;
-  for (let i = 0; i < n; i++) {
-    const s = stacks[i] as RevealStack;
-    flightAt.push(t);
-    const isLast = i === n - 1;
-    // Anticipation: the best stack waits a beat longer than the rest.
-    const gap = Math.min(GAP[s.rarity], cap);
-    t += isLast ? 0 : gap + (i + 1 === n - 1 ? GAP[best] * 0.8 : 0);
-  }
-  const lastFlipAt = (flightAt[n - 1] ?? start) + FLIGHT;
-  const hold = HOLD[best];
-  return { drop: DROP, bursts, freezeAt, pop, flightAt, flight: FLIGHT, lastFlipAt, hold, total: lastFlipAt + hold };
-}
-
-/** The chest's pose in one frame: where it is, how it is squashed, how far its lid stands open and how much light leaks. */
-export interface ChestPose {
-  /** Offsets from the resting place, design px: down is positive. */
-  x: number;
-  y: number;
-  rot: number;
-  /** Squash and stretch about the foot of the chest. */
-  sx: number;
-  sy: number;
-  /** Pixels the lid stands off the body. */
-  crack: number;
-  /** 0..1: how strong the light along the seam is. It steps up with every rattle and never falls back below the step it reached. */
-  light: number;
-  /** Swing of the tag hanging from the lock, radians. */
-  tag: number;
-}
-
-export function newPose(): ChestPose {
-  return { x: 0, y: 0, rot: 0, sx: 1, sy: 1, crack: 0, light: 0, tag: 0 };
-}
-
-/** The hairline of light on the seam from the first frame, and how wide the lid stands at the very end of the creak. */
-const SEAM_LIGHT = 0.2;
-const SEAM_CRACK = 1;
-const CREAK_CRACK = 22;
-const LANDING_RATE = 11;
-const LANDING_HZ = 34;
-
-function smooth(k: number): number {
-  const u = Math.min(1, Math.max(0, k));
-  return u * u * (3 - 2 * u);
-}
-
-/**
- * The pose of a closed chest `t` seconds after the first frame: it falls from `dropFrom` px up, lands with a squash that
- * springs back, rattles in the schedule's bursts (tilt, hop and sideways shake; the lid and the light rise a step each time and
- * never drop back below it), then holds still while the lid creeps open. Pure: it fills `out` and allocates nothing.
- */
-export function chestPoseAt(out: ChestPose, t: number, sch: RevealSchedule, dropFrom: number): ChestPose {
-  out.x = out.rot = out.tag = out.y = 0;
-  out.sx = out.sy = 1;
-  if (t < sch.drop) {
-    const k = Math.max(0, t / sch.drop);
-    out.y = -dropFrom * (1 - k * k);
-    out.sy = 1 + 0.06 * k;
-    out.sx = 1 - 0.03 * k;
-    out.crack = SEAM_CRACK;
-    out.light = SEAM_LIGHT;
-    return out;
-  }
-  const tau = t - sch.drop;
-  const squash = Math.exp(-LANDING_RATE * tau) * Math.cos(LANDING_HZ * tau);
-  out.sx = 1 + 0.15 * squash;
-  out.sy = 1 - 0.18 * squash;
-
-  let crack = SEAM_CRACK;
-  let light = SEAM_LIGHT;
-  for (let i = 0; i < sch.bursts.length; i++) {
-    const b = sch.bursts[i] as Burst;
-    if (t < b.at) break;
-    const peakCrack = 3 + 11 * b.power;
-    const peakLight = 0.4 + 0.6 * b.power;
-    const u = (t - b.at) / b.dur;
-    // The lid stays a little ajar and the light a little brighter after each rattle.
-    crack = Math.max(crack, 0.45 * peakCrack);
-    light = Math.max(light, 0.5 * peakLight);
-    if (u > 1) continue;
-    const env = Math.min(1, u * 7) * (u > 0.78 ? (1 - u) / 0.22 : 1);
-    const ph = (t - b.at) * (14 + 6 * b.power) * Math.PI * 2;
-    out.x += Math.sin(ph) * env * (3 + 9 * b.power);
-    out.rot += Math.sin(ph * 0.5 + i) * env * (0.025 + 0.06 * b.power);
-    out.y -= Math.abs(Math.sin(Math.PI * (2 + i) * u)) * env * (4 + 16 * b.power);
-    crack = Math.max(crack, peakCrack * env);
-    light = Math.max(light, peakLight * env);
-  }
-  if (t >= sch.freezeAt) {
-    const f = smooth((t - sch.freezeAt) / Math.max(0.01, sch.pop - sch.freezeAt));
-    // Still, tense, a hair squashed; the lid creeps up with a tremble; the light swells to full.
-    crack += (CREAK_CRACK - crack) * f + Math.sin(t * 90) * 0.8 * f;
-    light += (1 - light) * f;
-    out.sy = Math.min(out.sy, 1 - 0.04 * f);
-    out.sx = Math.max(out.sx, 1 + 0.02 * f);
-  }
-  out.crack = crack;
-  out.light = light;
-  out.tag = -out.rot * 3 + Math.sin(t * 8) * 0.08 * light;
-  return out;
-}
-
 export interface GridSlot {
   x: number;
   y: number;
@@ -318,10 +153,14 @@ export const NAME_LINE = 26;
 export const NAME_GAP = 8;
 const NAME_PAD = 4;
 const CELL_GAP = 10;
+/** Space between two rows: the tape and tags of a plate overhang its top, and must not lie on the names of the row above. */
+const ROW_GAP = CELL_GAP + 18;
 /** Room above the first row for the tape and tags that overhang a plate. */
 const CREST = 22;
 const MAX_SCALE = 1.5;
 const MAX_COLS = 6;
+/** A layout with fewer rows is chosen when its plates are at least this share of the biggest ones. */
+const NEAR_BEST = 0.9;
 
 export interface GridLayout {
   cols: number;
@@ -346,32 +185,38 @@ export function nameBlockOf(lines: number): number {
 
 /**
  * Lay `n` plates out in rows inside a `w` x `h` area, the last row centred. Every column count is tried and the one
- * that allows the biggest plates wins (fewer rows on a tie); a cell is as wide as its share of the area and carries
+ * that allows the biggest plates wins (a layout with fewer rows when its plates are nearly as big); a cell is as wide as its share of the area and carries
  * the name under the plate, so names keep their size and wrap in the cell instead of shrinking with the card.
  * `nameBlockFor` says how tall the names get when a cell is that wide (a long name wraps to a second line).
  */
 export function gridLayout(n: number, w: number, h: number, nameBlockFor: (cellW: number) => number = () => nameBlockOf(1)): GridLayout {
-  let best: GridLayout | null = null;
+  const options: GridLayout[] = [];
   for (let cols = 1; cols <= Math.min(Math.max(1, n), MAX_COLS); cols++) {
     const rows = Math.max(1, Math.ceil(n / cols));
     const cellW = (w - CELL_GAP * (cols - 1)) / cols;
     const nameBlock = nameBlockFor(cellW);
     const fitW = cellW / PLATE.w;
-    const fitH = (h - CREST - CELL_GAP * (rows - 1) - rows * nameBlock) / (rows * PLATE.h);
+    const fitH = (h - CREST - ROW_GAP * (rows - 1) - rows * nameBlock) / (rows * PLATE.h);
     const scale = Math.max(0.1, Math.min(fitW, fitH, MAX_SCALE));
-    if (best && (scale < best.scale - 1e-9 || (Math.abs(scale - best.scale) <= 1e-9 && rows >= best.rows))) continue;
-    best = { cols, rows, scale, cellW, plateW: PLATE.w * scale, plateH: PLATE.h * scale, nameBlock, slots: [] };
+    options.push({ cols, rows, scale, cellW, plateW: PLATE.w * scale, plateH: PLATE.h * scale, nameBlock, slots: [] });
+  }
+  // The biggest plates win, unless a layout with fewer rows is nearly as big: a compact block reads better than wide gaps.
+  const biggest = Math.max(...options.map((o) => o.scale));
+  let best: GridLayout | null = null;
+  for (const o of options) {
+    if (o.scale < biggest * NEAR_BEST) continue;
+    if (!best || o.rows < best.rows || (o.rows === best.rows && o.scale > best.scale)) best = o;
   }
   const g = best as GridLayout;
   const rowH = g.plateH + g.nameBlock;
-  const usedH = g.rows * rowH + (g.rows - 1) * CELL_GAP;
+  const usedH = g.rows * rowH + (g.rows - 1) * ROW_GAP;
   const top = CREST + Math.max(0, (h - CREST - usedH) / 2);
   for (let i = 0; i < n; i++) {
     const row = Math.floor(i / g.cols);
     const inRow = Math.min(g.cols, n - row * g.cols);
     const col = i - row * g.cols;
     const rowW = inRow * g.cellW + (inRow - 1) * CELL_GAP;
-    g.slots.push({ x: (w - rowW) / 2 + g.cellW / 2 + col * (g.cellW + CELL_GAP), y: top + g.plateH / 2 + row * (rowH + CELL_GAP) });
+    g.slots.push({ x: (w - rowW) / 2 + g.cellW / 2 + col * (g.cellW + CELL_GAP), y: top + g.plateH / 2 + row * (rowH + ROW_GAP) });
   }
   return g;
 }

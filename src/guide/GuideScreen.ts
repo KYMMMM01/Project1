@@ -40,6 +40,9 @@ const TILE = 128;
 const BAR_H = 112;
 const TAB_H = 84;
 const REPLAY_H = 96;
+/** A page's text sits this far in from the sheet it lies on, and its paragraphs this far apart. */
+const PAGE_PAD = 24;
+const PARA_GAP = 18;
 
 let current: { close: () => void } | null = null;
 
@@ -188,12 +191,19 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
     short.position.set(w / 2, y + 20);
     scaffold.content.addChild(strip, short);
     y += short.height + 40 + 26;
+    // The paragraphs lie on a cream sheet like every other piece of text in the menus (ink straight on the wooden floor is hard to read), 24 px in from its edges.
+    const lines: ReturnType<typeof uiLabel>[] = [];
+    let ty = y + PAGE_PAD;
     for (const paragraph of topicFull(id)) {
-      const text = uiLabel(paragraph, { size: 28, wrap: w - 16, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 42 });
-      text.position.set(8, y);
-      scaffold.content.addChild(text);
-      y += text.height + 18;
+      const text = uiLabel(paragraph, { size: 28, wrap: w - PAGE_PAD * 2, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 42 });
+      text.position.set(PAGE_PAD, ty);
+      lines.push(text);
+      ty += text.height + PARA_GAP;
     }
+    const sheetH = ty - PARA_GAP + PAGE_PAD - y;
+    const sheet = paperShape({ w, h: sheetH, radius: 24, fill: Color.paperLight, seed: paperSeed() });
+    sheet.position.set(w / 2, y + sheetH / 2);
+    scaffold.content.addChild(sheet, ...lines);
     buildPageBar(id);
     scaffold.refresh();
     scaffold.scroller?.scrollTo(0, false);

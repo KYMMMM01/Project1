@@ -12,12 +12,14 @@ import type { Text } from 'pixi.js';
 import type { HudEnv } from './env';
 import type { Rect } from './layoutMath';
 
+const ICON = 52;
+
 export class SellStrip {
   readonly root = new Container();
   private readonly bag = new TweenBag();
   private readonly plate = new Graphics();
   private readonly label: Text;
-  private readonly icon = drawIcon('sell', 52);
+  private readonly icon = drawIcon('sell', ICON);
   private readonly seed = paperSeed();
   private rect: Rect = { x: 0, y: 0, w: 720, h: 112 };
   private lit = false;
@@ -53,8 +55,16 @@ export class SellStrip {
     });
     drawDashedRect(g, 22, 18, w - 44, h - 36, { radius: 20, color: this.lit ? Color.paper : Color.berry, width: 3.5, seed: this.seed });
     this.label.style.fill = this.lit ? Color.inkDeep : Color.ink;
-    this.icon.position.set(w / 2 - 188, h / 2);
-    this.label.position.set(w / 2 + 28, h / 2);
+    this.placeGroup();
+  }
+
+  /** The tag and its words are one group, centred on the strip whatever the words say: 12 px between them. */
+  private placeGroup(): void {
+    const { w, h } = this.rect;
+    const total = ICON + 12 + this.label.width;
+    const left = w / 2 - total / 2;
+    this.icon.position.set(left + ICON / 2, h / 2);
+    this.label.position.set(left + ICON + 12 + this.label.width / 2, h / 2);
   }
 
   private text(): string {
@@ -79,6 +89,7 @@ export class SellStrip {
       this.paint();
       this.label.text = this.text();
       fitLabel(this.label, this.rect.w - 360, 32, 0.7);
+      this.placeGroup();
       if (pulse && !motion.reduced) {
         this.bag.runKeyed(this.plate, {
           duration: 0.2,

@@ -17,7 +17,6 @@ import {
   motion,
   Panel,
   Popup,
-  Tag,
   TweenBag,
   uiLabel,
 } from '@/ui';
@@ -26,7 +25,7 @@ import { haptic } from '@/core/haptics';
 import type { HudEnv } from '../env';
 import { CLASS_ICON, PressCard, unitPortrait } from '../kit';
 import { planOf } from '../planMath';
-import { PICK, pickCardX, pickHand } from '../layoutMath';
+import { PICK, pickCardX, pickHand, pickSheet } from '../layoutMath';
 import { recommendPick } from '../policy';
 import { Hand } from '../Hand';
 
@@ -36,9 +35,6 @@ const SCALE = PICK.scale;
 const CARD_W = 220;
 const CARD_H = 292;
 const LABEL = 27;
-/** The cards sit lower than the text above them needs: the pointing hand has its own band between the sub line and the cards. */
-const CARD_Y = PICK.cardY;
-const PANEL_H = PICK.h;
 /** Seconds the chosen card takes to spring up (and the others to slip away) before the sheet leaves. */
 const FAREWELL = 0.18;
 
@@ -47,6 +43,8 @@ export class SummonPickPopup extends Popup<void> {
   private readonly cards: PressCard[] = [];
   private readonly offs: Array<() => void> = [];
   private picked = false;
+  /** Centre line of the cards: the lesson's sheet keeps a band over them for the pointing hand, a plain pick does not. */
+  private readonly cardY: number;
   /** Index of the highlighted card, used by the tutorial pointer. */
   readonly recommended: number;
   readonly hand: Hand | null;
@@ -64,7 +62,8 @@ export class SummonPickPopup extends Popup<void> {
       unitClass,
     );
 
-    const h = PANEL_H;
+    const { cardY, h } = pickSheet(guide);
+    this.cardY = cardY;
     const panel = new Panel({ width: W, height: h, title: t('hud.pick.title'), torn: 'bottom', tape: 'pink' });
     const c = panel.content;
     // The tutorial's pick carries its lesson in the sub line: what the pick is, and which card to take.
@@ -77,25 +76,25 @@ export class SummonPickPopup extends Popup<void> {
       const x = pickCardX(i, options.length);
       const card = new PressCard(CARD_W, CARD_H, () => this.choose(i), { holdLimit: HOLD_DELAY });
       card.scale.set(SCALE);
-      card.position.set(x, CARD_Y);
-      const frame = new CardFrame({
-        rarity: def.rarity,
-        size: 'medium',
-        portrait: unitPortrait(id, 190),
-        name: t(def.nameKey),
-      });
-      card.addChild(frame);
-      if (guide && i === this.recommended) {
-        // The kit's own flag (CardFrame.setNew) in the same place, but 27 px: the card is shown at 0.92, and 24 px would read 22.
-        const flag = new Tag({ text: t('hud.recommend'), style: 'danger', shape: 'flag', fontSize: LABEL, tilt: 0.14 });
-        flag.position.set(CARD_W / 2 + 10 - flag.uiBox.w / 2, -CARD_H / 2 + 30);
-        card.addChild(flag);
-      }
+      card.position.set(x, cardY);
+      // The tutorial's recommended card wears the kit's flag; the card is shown at 0.92, so its text is 27 px and still reads 24.
+      const flag = guide && i === this.recommended ? { newTag: t('hud.recommend'), newFontSize: LABEL } : {};
+      card.addChild(
+        new CardFrame({
+          rarity: def.rarity,
+          size: 'medium',
+          portrait: unitPortrait(id, 190),
+          name: t(def.nameKey),
+          ...flag,
+        }),
+      );
+      // The class glyph and its name are one group, centred under the card whatever the name's length.
       const klass = new Container();
       const icon = drawIcon(CLASS_ICON[def.classId], 40);
-      icon.position.set(-44, 0);
       const name = uiLabel(t(classDef(def.classId).nameKey), { size: 28, anchorX: 0, align: 'left' });
-      name.position.set(-18, 0);
+      const groupW = 40 + 8 + name.width;
+      icon.position.set(-groupW / 2 + 20, 0);
+      name.position.set(-groupW / 2 + 48, 0);
       klass.addChild(icon, name);
       klass.position.set(0, 190);
       card.addChild(klass);
@@ -218,7 +217,7 @@ export class SummonPickPopup extends Popup<void> {
         card.setEnabled(true);
         card.alpha = 1;
         card.scale.set(SCALE);
-        card.y = CARD_Y;
+        card.y = this.cardY;
       }
     });
   }

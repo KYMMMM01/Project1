@@ -38,7 +38,8 @@ function chestOnShelf(card: Container, kind: ChestKind, base: number, owned: num
 
 function oddsButton(card: Container, w: number, kind: ChestKind, env: BlockEnv): void {
   const b = actionButton({ label: t('shop.chest.odds'), icon: 'info', width: ODDS_W, height: 88, style: 'neutral', fontSize: 26 }, () => env.actions.openOdds(kind));
-  b.position.set(w - 18 - ODDS_W / 2, 52);
+  // Its right edge is the buttons' below it (`w - 20`): one line down the card.
+  b.position.set(w - 20 - ODDS_W / 2, 52);
   card.addChild(b);
 }
 

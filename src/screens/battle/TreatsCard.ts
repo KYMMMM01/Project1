@@ -4,11 +4,11 @@ import { bundleParts, describeBundle, profile, type Bundle, type BundlePart } fr
 import { ads } from '@/platform';
 import { Button, Color, drawIcon, drawPaper, paperSeed, uiLabel, type IconName } from '@/ui';
 import { services, type Shell } from '../contract';
-import { CARD_PAD, HomeCard } from './HomeCard';
+import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { playClaim } from './claim';
 import './strings';
 
-const H = 356;
+const H = 356 + HEAD_GROW;
 const GAP = 14;
 
 function iconOf(reward: Bundle): IconName {

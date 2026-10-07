@@ -6,7 +6,7 @@ import type { UnitId } from '@/game/api';
 import { unitClass, unitRarity } from '@/game/data/roster';
 import { unitDef } from '@/game/data/units';
 import {
-  cacheStatic, Color, drawDashedRect, drawIcon, drawSpeechBubble, motion, paperSeed, paperShape, PaperLabel, punch, Rarity, rarityName,
+  cacheStatic, Color, drawDashedInset, drawIcon, drawSpeechBubble, motion, paperSeed, paperShape, PaperLabel, punch, Rarity, rarityName,
   tapeStrip, TweenBag, uiLabel,
 } from '@/ui';
 import { unitPortrait } from '../shop/art';
@@ -59,10 +59,11 @@ export class UnitHero extends Container {
     const bubbleH = Math.ceil(flavour.height) + 40;
     this.heroH = BUBBLE_Y + bubbleH + 34;
 
-    const sheet = paperShape({ w, h: this.heroH, fill: Color.paper, radius: 30, seed });
+    const paper = { w, h: this.heroH, fill: Color.paper, radius: 30, seed } as const;
+    const sheet = paperShape(paper);
     sheet.position.set(w / 2, this.heroH / 2);
     const cut = new Graphics();
-    drawDashedRect(cut, 14, 14, w - 28, this.heroH - 28, { radius: 22, seed });
+    drawDashedInset(cut, 0, 0, paper, 11, { seed });
     cacheStatic(cut);
     const tape = tapeStrip({ name: 'sky', w: 110, h: 32, angle: 3, pattern: 'dots', seed });
     tape.position.set(w - 86, 6);

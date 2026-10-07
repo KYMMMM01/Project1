@@ -45,7 +45,9 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
     });
   };
 
-  const c = scaffold.content;
+  // Everything hangs from one column, which is set lower once its height is known: the page and its buttons sit in the middle of the screen, not at the top.
+  const c = new Container();
+  scaffold.content.addChild(c);
   const stats = env.battle.getStats();
   const heart = drawIcon('heart', 150);
   heart.position.set(w / 2, 150);
@@ -55,16 +57,16 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
     size: 30, wrap: w - 100, lineHeight: 40, color: Color.inkSoft,
   });
   why.position.set(w / 2, 344);
-  const fix = uiLabel(t(reason === 'boss_timeout' ? 'hud.cont.fix.boss' : 'hud.cont.fix.over'), { size: 32, wrap: w - 130, lineHeight: 42 });
+  const fix = uiLabel(t(reason === 'boss_timeout' ? 'hud.cont.fix.boss' : 'hud.cont.fix.over'), { size: 32, wrap: w - 160, lineHeight: 42 });
   fix.position.set(w / 2, 444);
 
   // One cream page holds the story; the effect of continuing is marked with a stroke of yellow marker.
-  const pageH = Math.round(fix.y + fix.height / 2 + 50);
+  const pageH = Math.round(fix.y + fix.height / 2 + 54);
   const page = new Container();
   page.addChild(paperShape({ w: w - 16, h: pageH - 16, radius: 28, fill: Color.paper, seed: paperSeed() }));
   page.position.set(w / 2, pageH / 2 + 8);
   const marker = new Graphics();
-  drawPaintFill(marker, 56, fix.y - fix.height / 2 - 10, w - 112, fix.height + 20, Color.mustard);
+  drawPaintFill(marker, 56, fix.y - fix.height / 2 - 14, w - 112, fix.height + 28, Color.mustard);
   marker.alpha = 0.8;
   const cut = new Graphics();
   drawDashedRect(cut, 22, 22, w - 44, pageH - 44, { radius: 22 });
@@ -120,6 +122,7 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
   quit.position.set(w / 2, y + 20);
   quit.onTap(() => finish(false));
   c.addChild(quit);
+  c.y = Math.max(0, Math.round((scaffold.viewportHeight - (y + 20 + 92 / 2 + 6)) * 0.4));
 
   if (!motion.reduced) {
     // The heart beats: a scale change only, no glow.

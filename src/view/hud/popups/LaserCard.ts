@@ -18,6 +18,9 @@ const W = 640;
 const ART_W = 560;
 const ART_H = 168;
 const ROW_W = 470;
+const GOT_W = 250;
+const USE_W = 300;
+const BTN_GAP = 16;
 
 /** The little scene: a cat, a stretch of lane, three enemies, the dot with its area round two of them and a sticker on each. */
 function scene(): Container {
@@ -100,8 +103,10 @@ export class LaserCard extends Popup<LaserCardResult> {
       c.addChild(btn);
     };
     if (ready) {
-      add(t('hud.laserCard.got'), 'neutral', 188, 250, 'close');
-      add(t('hud.laserCard.use'), 'success', 452, 300, 'use');
+      // The pair is centred on the card with 16 px of paper between its two buttons.
+      const left = W / 2 - (GOT_W + BTN_GAP + USE_W) / 2;
+      add(t('hud.laserCard.got'), 'neutral', left + GOT_W / 2, GOT_W, 'close');
+      add(t('hud.laserCard.use'), 'success', left + GOT_W + BTN_GAP + USE_W / 2, USE_W, 'use');
     } else {
       add(t('hud.laserCard.got'), 'success', W / 2, 360, 'close');
     }

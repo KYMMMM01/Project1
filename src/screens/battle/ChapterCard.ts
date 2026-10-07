@@ -20,7 +20,7 @@ import {
   TweenBag,
   backOut,
   cacheStatic,
-  drawDashedRect,
+  drawDashedInset,
   drawIcon,
   drawPaper,
   drawSpeechBubble,
@@ -124,8 +124,9 @@ export class ChapterCard extends Container {
   constructor(private readonly handlers: ChapterCardHandlers) {
     super();
     const sheet = new Graphics();
-    drawPaper(sheet, 0, 0, { w: W, h: CHAPTER_CARD_H, radius: 34, fill: Color.paper, seed: this.seed });
-    drawDashedRect(sheet, 12, 12, W - 24, CHAPTER_CARD_H - 24, { radius: 26, seed: this.seed });
+    const paper = { w: W, h: CHAPTER_CARD_H, radius: 34, fill: Color.paper, seed: this.seed } as const;
+    drawPaper(sheet, 0, 0, paper);
+    drawDashedInset(sheet, 0, 0, paper, 10, { seed: this.seed });
     cacheStatic(sheet);
     this.addChild(sheet);
 

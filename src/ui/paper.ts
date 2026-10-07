@@ -6,7 +6,9 @@ import {
   cachedPaperPath,
   clipPolyX,
   dashRuns,
+  fitDash,
   hash32,
+  insetPolygon,
   makeRng,
   paintPath,
   tapeOutline,
@@ -330,14 +332,32 @@ export function drawDashedRect(g: Graphics, x: number, y: number, w: number, h: 
   strokeRuns(g, runs, x, y, o);
 }
 
-/** A hand-drawn dashed line; it sags a pixel or so, like a ruler-less pen. */
-export function drawDashedLine(g: Graphics, x0: number, y0: number, x1: number, y1: number, o: DashOpts = {}): void {
+/** Stroke dash runs that were already cut (a polyline per dash, see dashRuns) with the usual dashed-line style. */
+export function drawDashRuns(g: Graphics, runs: readonly (readonly number[])[], o: DashOpts = {}): void {
+  strokeRuns(g, runs, 0, 0, o);
+}
+
+/**
+ * A dashed line `inset` px inside a sheet drawn by drawPaper / drawPaperFace with the same `sheet` options and the same (x, y):
+ * it is the sheet's own cut edge moved inward, so it keeps one distance from it all the way round (a second rectangle with its
+ * own wobble drifts across the edge, which on a bordered sheet shows as a line that is not parallel to it).
+ */
+export function drawDashedInset(g: Graphics, x: number, y: number, sheet: PaperOpts, inset: number, o: DashOpts = {}): void {
+  const r = resolve(sheet);
   const dash = o.dash ?? 16;
   const gap = o.gap ?? 11;
+  const key = `i|${Math.round(r.w * 10)}|${Math.round(r.h * 10)}|${Math.round(r.radius * 10)}|${r.seed}|${Math.round(r.amp * 100)}|${inset}|${dash}|${gap}`;
+  const runs = cachedRuns(key, () => dashRuns(insetPolygon(cachedPaperPath(r.w, r.h, r.radius, r.seed, r.amp, 0).pts, inset), true, dash, gap));
+  strokeRuns(g, runs, x, y, o);
+}
+
+/** A hand-drawn dashed line; it sags a pixel or so, like a ruler-less pen. */
+export function drawDashedLine(g: Graphics, x0: number, y0: number, x1: number, y1: number, o: DashOpts = {}): void {
   const len = Math.hypot(x1 - x0, y1 - y0);
   if (len < 1) return;
+  const { dash, gap } = fitDash(len, o.dash ?? 16, o.gap ?? 11);
   const seed = o.seed ?? hash32(Math.round(len), 0xda6);
-  const key = `l|${Math.round(len)}|${dash}|${gap}|${seed}`;
+  const key = `l|${Math.round(len)}|${dash.toFixed(2)}|${gap.toFixed(2)}|${seed}`;
   const runs = cachedRuns(key, () => {
     const rnd = makeRng(seed);
     const n = Math.max(1, Math.ceil(len / 24));

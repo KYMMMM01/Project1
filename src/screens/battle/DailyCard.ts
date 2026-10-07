@@ -4,12 +4,12 @@ import { modifierName, modifierText } from '@/game';
 import { bundleParts, profile } from '@/meta';
 import { Button, Color, ProgressBar, Tag, fitLabel, uiLabel } from '@/ui';
 import { services, type Shell } from '../contract';
-import { CARD_PAD, HomeCard } from './HomeCard';
+import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { playClaim } from './claim';
 import { cupProgress, dailyDateLabel } from './model';
 import './strings';
 
-const H = 344;
+const H = 344 + HEAD_GROW;
 const BTN_W = 248;
 /** Width of the column left of the buttons: the bar and the texts stay inside it. */
 const LEFT_W = 356;
@@ -30,7 +30,7 @@ export class DailyCard extends HomeCard {
     w: number,
     private readonly shell: Shell,
   ) {
-    super(w, H, t('battle.daily.title'), 'trophy', { tape: 'sky' });
+    super(w, H, t('battle.daily.title'), 'trophy', { tape: 'sky', reserve: 150 });
     const left = CARD_PAD;
     this.rule.position.set(left, this.contentTop + 22);
     this.ruleText.position.set(left, this.contentTop + 46);
@@ -74,7 +74,7 @@ export class DailyCard extends HomeCard {
       this.dateText = v.setup.date;
       this.date.setText(dailyDateLabel(v.setup.date, getLang()));
     }
-    this.date.position.set(this.cardW - CARD_PAD - this.date.uiBox.w / 2 - 4, 38);
+    this.date.position.set(this.cardW - CARD_PAD - this.date.uiBox.w / 2, this.head.cy);
     const { next, fraction } = cupProgress(cup.score, cup.tiers);
     this.cup.setValue(fraction, false);
     this.cup.setLabel(t('battle.daily.cup', { score: fmt(cup.score) }));

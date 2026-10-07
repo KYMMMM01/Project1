@@ -8,8 +8,9 @@ import { lerp } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Color, cacheStatic, drawIcon, fitLabel, motion, paintTexture, paperShape, paperSeed, TweenBag, uiLabel } from '@/ui';
 
-const GAUGE_W = 440;
 export const GAUGE_H = 58;
+/** The skull sticker's icon size: it is drawn 63 x 69 (layoutMath SKULL_REACH / SKULL_HALF), taller than the strip and centred on its left end. */
+const SKULL_SIZE = 76;
 /** Painted fill: inset from the strip's edges so the skull keeps its end and the torn teeth keep theirs. */
 const FILL_H = 40;
 const FILL_LEFT = 44;
@@ -27,19 +28,21 @@ export class GaugeStrip extends Container {
   private readonly skull: Container;
   private readonly seed = paperSeed();
   private strip: Container;
-  private stripW = GAUGE_W;
-  private innerW = GAUGE_W - FILL_LEFT - FILL_RIGHT;
+  private stripW: number;
+  private innerW: number;
   private shown = 0;
   private level: GaugeLevel = 0;
 
-  constructor() {
+  constructor(width: number) {
     super();
-    this.strip = this.cut(GAUGE_W);
+    this.stripW = width;
+    this.innerW = width - FILL_LEFT - FILL_RIGHT;
+    this.strip = this.cut(width);
     this.fill = new NineSliceSprite({ texture: paintTexture(PAINT[0], FILL_H), leftWidth: FILL_H / 2, rightWidth: FILL_H / 2, topHeight: 2, bottomHeight: 2 });
     this.fill.height = FILL_H;
     this.fill.visible = false;
     this.text = uiLabel('', { size: 34 });
-    this.skull = drawIcon('skull', 84);
+    this.skull = drawIcon('skull', SKULL_SIZE);
     this.addChild(this.strip, this.fill, this.text, this.skull);
     this.place();
   }

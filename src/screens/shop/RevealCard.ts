@@ -1,36 +1,57 @@
-import { Container, type Text } from 'pixi.js';
+import { Container, Graphics, type Text } from 'pixi.js';
+import { game } from '@/core/game';
 import { t } from '@/core/i18n';
-import { Color, drawIcon, numberText, paperSeed, paperShape, Rarity, rarityName, Tag, uiLabel } from '@/ui';
+import { clamp, mixColor } from '@/core/math';
+import { Color, drawIcon, numberText, paperSeed, paperShape, Rarity, RARITY_GOLD, rarityName, Tag, uiLabel } from '@/ui';
 import { unitPortrait, wildArt } from './art';
+import { stageScale } from './cardMotion';
 import { buildPlate } from './photoPlate';
 import { NAME_GAP, NAME_LINE, NAME_SIZE, PLATE, rarityRank, type RevealStack } from './revealPlan';
 
 /** The mat is this tall; the cream strip under it carries the count pill. */
 const MAT_H = 112;
 
+/** The plate is baked for the biggest size it is shown at (alone on stage), so it is sharp there and not a soft enlargement. */
+function stageResolution(): number {
+  const r = game.app?.renderer.resolution ?? 1;
+  return clamp(r * game.scale * stageScale(1), 1, 4);
+}
+
 /**
- * One stack of cards in the chest reveal: a kraft back (dashed edge, paw print) that flips into a paper photo frame
- * with the count on a pill at its foot and a "Wild" / "Bonus" tag when it is one, and the cat's name under the frame.
- * The frame is drawn at its natural size and scaled by the layout; the name is counter-scaled so it is always
- * `NAME_SIZE` on screen, wraps inside its cell and is never cut. Origin = centre of the frame.
+ * One stack of cards in the chest reveal: a paper back in the stack's rarity colour (edge, cream rim, paw and one pip per rank above
+ * common, so it is told before it turns) that flips into a paper photo frame with the count on a pill at its foot and a "Wild" /
+ * "Bonus" tag when it is one, and the cat's name under the frame. The frame is drawn at its natural size and scaled by the
+ * layout; the name is counter-scaled so it is always `NAME_SIZE` on screen, wraps inside its cell and is never cut. Origin = centre
+ * of the frame.
  */
 export class RevealCard extends Container {
   readonly back = new Container();
   readonly face = new Container();
   readonly count: ReturnType<typeof numberText>;
   private readonly caption: Text;
+  private ribbonArt: Graphics | null = null;
+  private mark: Container | null = null;
 
   constructor(readonly stack: RevealStack) {
     super();
     const { w, h } = PLATE;
     const rim = Rarity[stack.rarity];
+    const rank = rarityRank(stack.rarity);
     const seed = paperSeed();
+    const rimLine = new Graphics().roundRect(-w / 2 + 10, -h / 2 + 10, w - 20, h - 20, 14).stroke({ width: 3, color: Color.paperLight, alpha: 0.75 });
     this.back.addChild(
-      paperShape({ w, h, radius: 22, fill: Color.kraft, edge: rim.dark, edgeWidth: 4, edgeAlpha: 0.9, shadow: 6, grain: false, seed }),
-      drawIcon('paw', w * 0.42, Color.kraftDark),
+      paperShape({ w, h, radius: 22, fill: rim.color, edge: rim.dark, edgeWidth: 6, edgeAlpha: 1, shadow: 6, grain: false, seed }),
+      rimLine,
+      drawIcon('paw', w * 0.42, mixColor(rim.color, rim.dark, 0.6), { cache: false }),
     );
+    if (rank > 0) {
+      const pips = new Graphics();
+      for (let i = 0; i < rank; i++) pips.circle((i - (rank - 1) / 2) * 18, h / 2 - 26, 6).fill(Color.paperLight);
+      this.back.addChild(pips);
+    }
 
-    const plate = buildPlate({ w, h, matH: MAT_H, rarity: stack.rarity, tier: rarityRank(stack.rarity), seed });
+    const plate = buildPlate({ w, h, matH: MAT_H, rarity: stack.rarity, tier: rank });
+    plate.base.cacheAsTexture({ resolution: stageResolution(), antialias: true });
     const win = plate.win;
     const unit = stack.unit;
     const art = unit ? unitPortrait(unit, stack.rarity, Math.min(win.w, win.h) - 4) : wildArt(stack.rarity, 100);
@@ -65,15 +86,56 @@ export class RevealCard extends Container {
     return Math.max(1, Math.round(this.caption.height / this.caption.scale.y / NAME_LINE));
   }
 
-  /** Apply the layout's plate scale and cell width: the frame scales, the name keeps its size and wraps in the cell. */
-  layout(scale: number, cellW: number): void {
+  /** Scale the frame; the name keeps its size on screen and stays under the frame, wrapped as `layout` last said. */
+  fitTo(scale: number): void {
+    this.scale.set(scale);
     this.caption.scale.set(1 / scale);
-    this.caption.style.wordWrapWidth = cellW - 4;
     this.caption.position.set(0, PLATE.h / 2 + NAME_GAP / scale);
+    if (this.ribbonArt) {
+      this.ribbonArt.scale.set(1 / scale);
+      this.ribbonArt.position.set(0, this.caption.y - 6 / scale);
+    }
+  }
+
+  /** Apply a plate scale and the cell width the name may wrap in. */
+  layout(scale: number, cellW: number): void {
+    this.caption.style.wordWrapWidth = cellW - 4;
+    this.fitTo(scale);
   }
 
   showFace(): void {
     this.back.visible = false;
     this.face.visible = true;
+  }
+
+  /** The name goes on a paper ribbon in the rank's colour (swallowtail ends, drawn behind the name at its size on screen). */
+  ribbon(): void {
+    if (this.ribbonArt) return;
+    const rim = Rarity[this.stack.rarity];
+    const w = Math.max(this.caption.width / this.caption.scale.x, 60) + 44;
+    const lines = Math.max(1, Math.round(this.caption.height / this.caption.scale.y / NAME_LINE));
+    const h = lines * NAME_LINE + 14;
+    const g = new Graphics();
+    const tail = 16;
+    g.poly([-w / 2, 0, -w / 2 - tail, h / 2, -w / 2, h]).fill(rim.dark);
+    g.poly([w / 2, 0, w / 2 + tail, h / 2, w / 2, h]).fill(rim.dark);
+    g.rect(-w / 2, 0, w, h).fill(rim.color);
+    g.rect(-w / 2, 0, w, h).stroke({ width: 3, color: rim.dark, alignment: 0 });
+    this.ribbonArt = g;
+    this.fitTo(this.scale.x);
+    this.face.addChildAt(g, this.face.getChildIndex(this.caption));
+  }
+
+  /** A gold star on a cream disc stuck on the frame's corner: the best card of the chest in the summary. Returns the sticker to animate. */
+  markBest(): Container {
+    if (this.mark) return this.mark;
+    const { w, h } = PLATE;
+    const disc = new Graphics().circle(0, 0, 25).fill(Color.paperLight).circle(0, 0, 25).stroke({ width: 3, color: RARITY_GOLD });
+    const star = drawIcon('star', 34, RARITY_GOLD, { cache: false });
+    this.mark = new Container();
+    this.mark.addChild(disc, star);
+    this.mark.position.set(w / 2 - 8, -h / 2 + 8);
+    this.face.addChild(this.mark);
+    return this.mark;
   }
 }

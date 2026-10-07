@@ -17,11 +17,11 @@ import { info } from '../info';
 import type { EnvImpl } from './env';
 import { Hand } from './Hand';
 import { cheerSpot, STICKER_WALL, topKeep } from './cheerMath';
-import { dragPrefer, FROM_BELOW, type Keep, pawBounds, type PawPose, placePaw, soften, tipSpot } from './handMath';
+import { bestRimPose, dragPrefer, FROM_BELOW, iconSpots, type Keep, pawBounds, type PawPose, placePaw, rimSpots, soften, tipSpot } from './handMath';
 import { unitPortrait } from './kit';
 import { LessonBubble } from './LessonBubble';
 import { LessonFx } from './LessonFx';
-import { bottomRects, type Point, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from './layoutMath';
+import { bottomRects, laserFace, LASER_SPOT, type Point, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, spotRadius, spotWindow, topRects } from './layoutMath';
 import { findTwins } from './planMath';
 import { REVEAL_KEYS, type RevealKey } from './policy';
 import { FIRST_SUMMON_AFTER, NUDGE_FOR, nudgeDue } from './tutorialFlow';
@@ -33,6 +33,8 @@ import {
 const BREATH = 0.75;
 const MARGIN = 18;
 const HOLE_GRID = 12;
+/** Corner of a window that is not round. */
+const HOLE_CORNER = 32;
 /** The nudge's bubble lies over the summon button: the paw keeps off this much of the space above it. */
 const NUDGE_ROOM = 130;
 /** Key of the nudge's own bubble (src/view/info.ts). */
@@ -410,7 +412,7 @@ export class Tutorial {
       this.lastTarget = target;
       this.aim(target);
       // Re-measured a few times a second: only a change in what is lit, said or blocked repaints the paper.
-      const hole = this.holeOf(this.rect);
+      const hole = target === 'laser' ? this.holeOf(this.rect, LASER_SPOT, 2) : this.holeOf(this.rect, MARGIN, HOLE_GRID);
       const text = this.textOf(step);
       const blocking = step.holds(w) && !step.popup && !this.script.relaxed;
       const key = `${step.id}|${target}|${hole.x}|${hole.y}|${hole.w}|${hole.h}|${blocking}|${text}|${this.layout.w}|${this.layout.h}`;
@@ -498,20 +500,19 @@ export class Tutorial {
     return taken;
   }
 
-  /** The spotlight's window round a rectangle, snapped to a coarse grid: a button that breathes must not make the note pop in again every frame. */
-  private holeOf(r: Rect): Rect {
+  /**
+   * The spotlight's window round a rectangle (layoutMath.spotWindow: equal insets on all four sides about the control's centre). A button that
+   * breathes can sit on the edge between two grid steps and flip between them every beat: the window stays where it was until the control has
+   * really moved or grown (a flip would repaint the note and start its paw over each time).
+   */
+  private holeOf(r: Rect, margin: number, grid: number): Rect {
     if (r.w <= 0) {
       this.hole = NO_RECT;
       return NO_RECT;
     }
-    const snap = (v: number): number => Math.round(v / HOLE_GRID) * HOLE_GRID;
-    const x = Math.max(0, snap(r.x - MARGIN));
-    const y = Math.max(0, snap(r.y - MARGIN));
-    const next = { x, y, w: Math.min(this.layout.w - x, snap(r.x + r.w + MARGIN) - x), h: snap(r.y + r.h + MARGIN) - y };
-    // A button that breathes can sit on the edge between two grid steps and flip between them every beat: the window stays where it was
-    // until the control has really moved (a flip would repaint the note and start its paw over each time).
+    const next = spotWindow(r, margin, grid, this.layout);
     const was = this.hole;
-    const still = was.w > 0 && Math.abs(next.x - was.x) <= HOLE_GRID && Math.abs(next.y - was.y) <= HOLE_GRID
+    const still = was.w > 0 && Math.abs(next.x + next.w / 2 - (was.x + was.w / 2)) <= 0.5 && Math.abs(next.y + next.h / 2 - (was.y + was.h / 2)) <= 0.5
       && Math.abs(next.w - was.w) <= HOLE_GRID * 2 && Math.abs(next.h - was.h) <= HOLE_GRID * 2;
     if (!still) this.hole = next;
     return this.hole;
@@ -532,8 +533,9 @@ export class Tutorial {
     this.dim.clear().rect(0, 0, W, H).fill({ color: Dim.backdrop, alpha });
     this.ring.clear();
     if (hole.w > 0) {
-      this.dim.roundRect(hole.x, hole.y, hole.w, hole.h, 32).cut();
-      drawDashedRect(this.ring, hole.x, hole.y, hole.w, hole.h, { radius: 32, color: Color.paper, width: 5, seed: this.seed });
+      const corner = spotRadius(hole, HOLE_CORNER);
+      this.dim.roundRect(hole.x, hole.y, hole.w, hole.h, corner).cut();
+      drawDashedRect(this.ring, hole.x, hole.y, hole.w, hole.h, { radius: corner, color: Color.paper, width: 5, seed: this.seed });
       if (!motion.reduced) {
         this.bag.killKeyed(this.ring);
         this.bag.runKeyed(this.ring, { duration: 0.6, yoyo: true, repeat: -1, onUpdate: (k) => (this.ring.alpha = 0.55 + 0.45 * k) });
@@ -635,7 +637,7 @@ export class Tutorial {
         const rows = bottomRects(this.layout);
         keep.push({ x: 0, y: rows.top + rows.currencyY - 44, w: this.layout.w, h: 88, weight: 2 });
       }
-      this.patControl(h, r, this.host.labelsOf(target), keep);
+      this.patControl(h, r, this.host.labelsOf(target), keep, target);
       return true;
     }
     return false;
@@ -645,7 +647,15 @@ export class Tutorial {
    * A pat on a control: the tip goes where the pad leaves the control's own writing alone. A few spots on the control are tried (the usual one,
    * the upper right corner, the middle of the top and right edges); each gets its best arm, and the one whose paw lies on least writing wins.
    */
-  private patControl(hand: Hand, r: Rect, labels: readonly Rect[], keep: readonly Keep[]): void {
+  private patControl(hand: Hand, r: Rect, labels: readonly Rect[], keep: readonly Keep[], target: Target): void {
+    // A control that is only a glyph on a round face is touched beside the glyph, on the band between it and the face's edge, never on it.
+    if (target === 'laser' || (labels.length === 0 && r.w < 150)) {
+      const spots = target === 'laser' ? ((f) => rimSpots(f.centre, f.faceR, f.glyphR))(laserFace(r)) : iconSpots(r);
+      const best = bestRimPose(spots, { bounds: pawBounds(this.layout), keep, prefer: FROM_BELOW });
+      hand.place(best.tip.x, best.tip.y, best.pose.rotation);
+      hand.tap();
+      return;
+    }
     const usual = tipSpot(r).tip;
     const tips: Point[] = [usual];
     if (labels.length > 0) tips.push({ x: r.x + r.w * 0.96, y: r.y + r.h * 0.04 }, { x: r.x + r.w * 0.97, y: r.y + r.h * 0.4 }, { x: r.x + r.w * 0.5, y: r.y + r.h * 0.03 });

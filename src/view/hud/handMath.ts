@@ -168,6 +168,40 @@ export function tipSpot(r: Rect): { tip: Point; label: Rect } {
   return { tip: wide ? { x: r.x + r.w * 0.88, y: r.y + r.h * 0.28 } : { x: r.x + r.w * 0.6, y: r.y + r.h * 0.42 }, label };
 }
 
+/**
+ * A round face with a glyph on it (the speed and laser buttons): the four places the tip may rest, the diagonals of the band between the glyph
+ * and the face's edge (upper right first), and the glyph's own rectangle, which the paw must stay off. `scale` is the face's size against its
+ * own (a button that is popping in).
+ */
+export function rimSpots(centre: Point, faceR: number, glyphR: number): { tips: Point[]; glyph: Rect } {
+  const d = (faceR + glyphR) / 2 / Math.SQRT2;
+  return {
+    tips: [
+      { x: centre.x + d, y: centre.y - d },
+      { x: centre.x - d, y: centre.y - d },
+      { x: centre.x + d, y: centre.y + d },
+      { x: centre.x - d, y: centre.y + d },
+    ],
+    glyph: { x: centre.x - glyphR, y: centre.y - glyphR, w: glyphR * 2, h: glyphR * 2 },
+  };
+}
+
+/** The same for a control whose rectangle is a round face (plus the lip under it) carrying a glyph at 62 % of the face, as the kit draws an icon-only button. */
+export function iconSpots(r: Rect): { tips: Point[]; glyph: Rect } {
+  return rimSpots({ x: r.x + r.w / 2, y: r.y + r.w / 2 }, r.w / 2, r.w * 0.31);
+}
+
+/** The best of the rim spots: the one whose best arm covers the glyph least and keeps on the screen and off what must stay readable (placePaw, the glyph counted as writing). */
+export function bestRimPose(spots: { tips: Point[]; glyph: Rect }, spec: Omit<PawSpec, 'tips' | 'labels'>): { tip: Point; pose: PawPose } {
+  let best: { tip: Point; pose: PawPose } | null = null;
+  for (const tip of spots.tips) {
+    const pose = placePaw({ ...spec, tips: [tip], labels: [spots.glyph] });
+    if (!best || pose.cost < best.pose.cost) best = { tip, pose };
+  }
+  // `tips` is never empty, so there is always a best one.
+  return best as { tip: Point; pose: PawPose };
+}
+
 /** The usual order: from below to the right, to the left, then from above. */
 export const FROM_BELOW: readonly PawFrom[] = ['lowerRight', 'lowerLeft', 'upperRight', 'upperLeft'];
 

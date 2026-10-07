@@ -154,6 +154,9 @@ export type MusicId = 'none' | 'home' | 'battle' | 'boss';
 
 export type StingerId = 'victory' | 'defeat' | 'boss_intro' | 'mythic' | 'level_up' | 'jackpot';
 
+/** What `primeStep` can get ready ahead of its first use: a sound effect or a stinger (the two have ids in common, so they are told apart by key). */
+export type PrimeTarget = { readonly sfx: SfxId } | { readonly stinger: StingerId };
+
 export interface PlayOpts {
   /** Linear gain multiplier, default 1. */
   volume?: number;
@@ -190,4 +193,11 @@ export interface AudioApi {
   stinger(id: StingerId): void;
   /** Temporarily lower the music by `depth` (0..1) for `seconds`, then recover. */
   duck(depth: number, seconds: number): void;
+  /**
+   * Get a sound ready before it is first heard: bakes its next missing variant (2 to 14 ms of work in the caller's frame, nothing audible, one
+   * render in flight per call) and returns how many variants are still to do. A frame-budgeted queue calls it once per piece.
+   */
+  primeStep(target: PrimeTarget): number;
+  /** Variants of `target` that are neither baked nor on their way (0: ready, or nothing to bake on this device). */
+  primeLeft(target: PrimeTarget): number;
 }

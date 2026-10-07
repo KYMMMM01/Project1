@@ -73,6 +73,17 @@ class Counter {
   }
 }
 
+/**
+ * The round "%" button. The kit's button fits its label to the width its rounded paper leaves, which is 28 px on an 84 px disc and makes the
+ * mark read as a speck; the mark is set on the face here, at 40 px, and presses with it.
+ */
+class OddsButton extends Button {
+  constructor() {
+    super({ style: 'info', width: 84, height: 84, radius: 'pill' });
+    this.face.addChild(uiLabel('%', { size: 40 }));
+  }
+}
+
 /** Right edge of the pity chip: 8 px clear of the odds button. */
 const PITY_RIGHT = 592;
 /** Where the fish counter stands beside the purr counter, and where it stands while it is alone. */
@@ -119,7 +130,7 @@ export class CurrencyRow {
     this.drawPity();
     this.pity.on('pointerup', openOdds);
 
-    this.odds = new Button({ label: '%', style: 'info', width: 84, height: 84, fontSize: 40, radius: 'pill' });
+    this.odds = new OddsButton();
     this.odds.position.set(646, 0);
     this.odds.onTap(openOdds);
     this.odds.visible = r.odds;

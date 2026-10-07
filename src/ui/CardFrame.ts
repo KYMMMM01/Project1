@@ -1,8 +1,8 @@
 import { Container, Graphics, Sprite, type Text, type Texture } from 'pixi.js';
-import { mixColor } from '@/core/math';
-import { drawIcon } from './icons';
+import { barBox, CARD_SPECS, cardGeometry, levelBadgeBox, nameCentre, pipsPillBox, type CardGeometry, type CardSizeId, type CardSpec } from './cardMath';
+import { drawFrameLayers, frameOrnaments } from './frameArt';
 import type { Box } from './layoutMath';
-import { drawDashedRect, drawPaper, drawPaperFace, paperSeed, tapeStrip } from './paper';
+import { drawPaper } from './paper';
 import { uiPrefs } from './prefs';
 import { ProgressBar } from './ProgressBar';
 import { rarityName } from './rarity';
@@ -10,30 +10,9 @@ import { RarityPips } from './RarityPips';
 import { cacheStatic } from './shapes';
 import { Tag } from './Tag';
 import { fitLabel, uiLabel } from './text';
-import { Color, MIN_FONT, Rarity, rarityIndex, RARITY_GOLD, RARITY_ORDER, type RarityId } from './theme';
+import { Color, MIN_FONT, Rarity, rarityIndex, RARITY_ORDER, type RarityId } from './theme';
 
-export type CardSize = 'small' | 'medium' | 'large';
-
-interface Metrics {
-  w: number;
-  h: number;
-  radius: number;
-  name: number;
-  level: number;
-  bar: number;
-  plate: number;
-  pip: number;
-  /** How far a corner sticker reaches past the frame sideways. */
-  over: number;
-  /** How far the tape / sticker reaches above the frame. */
-  crest: number;
-}
-
-const METRICS: Record<CardSize, Metrics> = {
-  small: { w: 150, h: 200, radius: 20, name: 24, level: 24, bar: 30, plate: 80, pip: 11, over: 8, crest: 14 },
-  medium: { w: 220, h: 292, radius: 26, name: 28, level: 24, bar: 32, plate: 92, pip: 13, over: 10, crest: 18 },
-  large: { w: 320, h: 424, radius: 34, name: 38, level: 30, bar: 34, plate: 116, pip: 17, over: 14, crest: 26 },
-};
+export type CardSize = CardSizeId;
 
 export interface CardFrameOpts {
   rarity: RarityId;
@@ -48,6 +27,8 @@ export interface CardFrameOpts {
   needed?: number;
   /** Text for the NEW tag; omit to hide it. */
   newTag?: string;
+  /** Size of the NEW tag's text (default: the smallest the kit allows). A card that is shown scaled down asks for more, so the tag still reads at MIN_FONT. */
+  newFontSize?: number;
 }
 
 /**
@@ -65,8 +46,8 @@ export class CardFrame extends Container {
   /** Portrait window rectangle in local coordinates. */
   readonly windowRect: { x: number; y: number; w: number; h: number };
 
-  private readonly m: Metrics;
-  private readonly seed = paperSeed();
+  private readonly m: CardSpec;
+  private readonly geo: CardGeometry;
   private readonly art = new Container();
   private readonly portraitHost = new Container();
   private readonly overlay = new Container();
@@ -76,21 +57,22 @@ export class CardFrame extends Container {
   private newTag: Tag | null = null;
   private portrait: Container | null = null;
   private hasBar = false;
+  private readonly newSize: number;
 
   constructor(opts: CardFrameOpts) {
     super();
     this.size = opts.size ?? 'medium';
     this.rarity = opts.rarity;
-    const m = METRICS[this.size];
+    this.newSize = opts.newFontSize ?? MIN_FONT;
+    const m = CARD_SPECS[this.size];
     this.m = m;
+    this.geo = cardGeometry(this.size);
     this.uiBox = { x: -m.w / 2 - m.over, y: -m.h / 2 - m.crest, w: m.w + m.over * 2, h: m.h + m.crest + 8 };
-    const wx = -m.w / 2 + 13;
-    const wy = -m.h / 2 + 13;
-    this.windowRect = { x: wx, y: wy, w: m.w - 26, h: m.h - m.plate - 13 - 8 };
+    this.windowRect = { ...this.geo.windowRect };
 
     this.drawArt();
     const mask = new Graphics();
-    mask.roundRect(this.windowRect.x, this.windowRect.y, this.windowRect.w, this.windowRect.h, m.radius * 0.5).fill(Color.white);
+    mask.poly(this.geo.window).fill(Color.white);
     this.portraitHost.mask = mask;
     this.addChild(this.art, this.portraitHost, mask, this.overlay);
     this.buildPips();
@@ -126,11 +108,9 @@ export class CardFrame extends Container {
     this.nameT?.destroy();
     const m = this.m;
     const t = uiLabel(text, { size: m.name });
-    fitLabel(t, m.w - 28, m.name);
-    // The name sits in the upper part of the plate; centred when there is no progress bar.
-    const plateTop = m.h / 2 - m.plate - 6;
-    const rowH = this.hasBar ? m.plate - m.bar - 20 : m.plate - 14;
-    t.position.set(0, plateTop + 8 + rowH / 2);
+    fitLabel(t, barBox(m, this.geo).w, m.name);
+    // The name takes the middle of what the plate has left between the mat and the bar (or the plate's own inset below it, without a bar).
+    t.position.set(0, nameCentre(m, this.geo, this.hasBar));
     this.overlay.addChild(t);
     this.nameT = t;
   }
@@ -147,9 +127,10 @@ export class CardFrame extends Container {
     const h = m.level * 1.5;
     const c = new Container();
     const g = new Graphics();
-    drawPaper(g, -w / 2, -h / 2, { w, h, kind: 'pill', fill: Color.paperLight, edge: rar.dark, shadow: 3, grain: false, seed: this.seed + 4 });
+    drawPaper(g, -w / 2, -h / 2, { w, h, kind: 'pill', fill: Color.paperLight, edge: rar.dark, shadow: 3, grain: false, seed: this.geo.seed + 4, wobble: 0.4 });
     c.addChild(g, t);
-    c.position.set(-m.w / 2 + 16 + w / 2, -m.h / 2 + 16 + h / 2);
+    const box = levelBadgeBox(m, this.geo, w, h);
+    c.position.set(box.x + w / 2, box.y + h / 2);
     this.overlay.addChild(c);
     this.levelBadge = c;
   }
@@ -160,8 +141,9 @@ export class CardFrame extends Container {
     const ready = owned >= needed;
     if (!this.bar) {
       this.hasBar = true;
-      this.bar = new ProgressBar({ width: m.w - 34, height: m.bar, color: 'blue', label: '', ticks: 0 });
-      this.bar.position.set(0, m.h / 2 - 16 - m.bar / 2 - 2);
+      const box = barBox(m, this.geo);
+      this.bar = new ProgressBar({ width: box.w, height: m.bar, color: 'blue', label: '', ticks: 0 });
+      this.bar.position.set(0, box.y + box.h / 2);
       this.overlay.addChild(this.bar);
       if (this.nameT) this.setName(this.nameT.text);
     }
@@ -170,8 +152,8 @@ export class CardFrame extends Container {
     this.bar.setValue(needed > 0 ? owned / needed : 1, false);
   }
 
-  /** Show / hide the NEW tag (pass the label text, or false to hide). */
-  setNew(label: string | false): void {
+  /** Show / hide the NEW tag (pass the label text, or false to hide); `fontSize` overrides the size the card was made with. */
+  setNew(label: string | false, fontSize: number = this.newSize): void {
     this.newTag?.destroy();
     this.newTag = null;
     if (!label) return;
@@ -181,12 +163,13 @@ export class CardFrame extends Container {
       text: label,
       style: 'danger',
       shape: small ? 'pill' : 'flag',
-      fontSize: MIN_FONT,
+      fontSize,
       tilt: small ? 0.1 : 0.14,
     });
     const m = this.m;
     if (small) t.position.set(m.w / 2 - t.uiBox.w / 2 - 2, -m.h / 2 - 4);
-    else t.position.set(m.w / 2 + 10 - t.uiBox.w / 2, -m.h / 2 + 30);
+    // The flag hangs off the right edge by the card's own overhang, its top on the same line as the level badge's.
+    else t.position.set(m.w / 2 + m.over - t.uiBox.w / 2, this.geo.windowRect.y + m.pad + t.uiBox.h / 2);
     this.overlay.addChild(t);
     this.newTag = t;
     t.pop();
@@ -195,70 +178,30 @@ export class CardFrame extends Container {
   /* -------------------------------------------------------------- drawing */
 
   private drawArt(): void {
-    const m = this.m;
-    const rar = Rarity[this.rarity];
-    const idx = rarityIndex(this.rarity);
     const g = new Graphics();
-    const x = -m.w / 2;
-    const y = -m.h / 2;
-    const seed = this.seed;
-    const wr = this.windowRect;
-
-    // The cream frame, then the mat in the rarity's colour, then the window the portrait shows through.
-    drawPaper(g, x, y, { w: m.w, h: m.h, radius: m.radius, fill: Color.paperLight, edge: Color.kraftDark, shadow: 6, grain: false, seed });
-    drawPaperFace(g, x + 8, y + 8, { w: m.w - 16, h: wr.h + 10, radius: m.radius * 0.7, fill: rar.color, edge: rar.dark, grain: false, seed: seed + 1, wobble: 0.7 });
-    drawPaperFace(g, wr.x, wr.y, { w: wr.w, h: wr.h, radius: m.radius * 0.5, fill: mixColor(rar.light, Color.paper, 0.62), edge: rar.dark, grain: false, seed: seed + 2, wobble: 0.6 });
-
-    // Ornaments pile up with the tier, so a rarity can be told without colour.
-    if (idx >= 1) {
-      drawDashedRect(g, x + 4.5, y + 4.5, m.w - 9, m.h - 9, { radius: m.radius - 3, color: idx === 4 ? RARITY_GOLD : rar.dark, width: 2, dash: 9, gap: 7, alpha: 0.8, seed: seed + 3 });
-    }
-    if (idx >= 2) {
-      // Photo-corner mounts on the four corners of the mat.
-      const c = m.radius * 0.9;
-      const mount = idx === 4 ? RARITY_GOLD : rar.dark;
-      for (const sx of [-1, 1] as const) {
-        for (const [cy, sy] of [[y + 8, -1], [y + 18 + wr.h, 1]] as const) {
-          const cx = sx * (m.w / 2 - 8);
-          g.poly([cx, cy, cx - sx * c, cy, cx, cy - sy * c]).fill(mount);
-        }
-      }
-    }
-    this.art.addChild(g);
-
-    if (idx >= 3) {
-      const tape = tapeStrip({ name: idx === 3 ? 'yellow' : 'pink', w: m.w * 0.42, h: m.w * 0.13, angle: -3, pattern: idx === 3 ? 'dots' : 'gingham', seed });
-      tape.position.set(0, y + 2);
-      this.art.addChild(tape);
-    }
-    if (idx >= 4) {
-      const star = drawIcon('star', m.w * 0.24, RARITY_GOLD);
-      star.position.set(x + m.w * 0.08, y + m.w * 0.06);
-      star.rotation = -0.2;
-      this.art.addChild(star);
-    }
+    drawFrameLayers(g, this.geo, this.rarity, 6);
+    this.art.addChild(g, frameOrnaments(this.geo, this.rarity));
     cacheStatic(this.art);
   }
 
   /** Tier pips sit on the artwork: the lit count repeats the rarity so colour is never the only cue. */
   private buildPips(): void {
     const m = this.m;
-    const wr = this.windowRect;
     const idx = rarityIndex(this.rarity);
     const pips = new RarityPips({ owned: RARITY_ORDER.map((_, i) => i <= idx), size: m.pip, gap: Math.round(m.pip * 0.38) });
-    const y = wr.y + wr.h - m.pip - 3;
-    const back = new Graphics();
     const b = pips.uiBox;
-    back.roundRect(b.x - 6, -m.pip * 0.95, b.w + 12, m.pip * 1.9, m.pip * 0.95).fill({ color: Color.paperLight, alpha: 0.92 });
-    back.position.set(0, y);
+    const pill = pipsPillBox(m, this.geo, b.w + 12);
+    const y = pill.y + pill.h / 2;
+    const back = new Graphics();
+    back.roundRect(pill.x, pill.y, pill.w, pill.h, pill.h / 2).fill({ color: Color.paperLight, alpha: 0.92 });
     pips.position.set(0, y);
     this.overlay.addChild(back, pips);
 
     if (uiPrefs.colorAssist) {
       const size = Math.max(MIN_FONT, Math.round(m.name * 0.78));
       const name = uiLabel(rarityName(this.rarity), { size });
-      fitLabel(name, wr.w - 12, size);
-      name.position.set(0, y - m.pip - name.height / 2 - 2);
+      fitLabel(name, this.geo.windowRect.w - 12, size);
+      name.position.set(0, pill.y - 4 - name.height / 2);
       this.overlay.addChild(name);
     }
   }

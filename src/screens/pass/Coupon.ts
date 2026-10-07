@@ -8,7 +8,7 @@ import {
   cacheStatic,
   Color,
   drawDashedLine,
-  drawDashedRect,
+  drawDashedInset,
   drawIcon,
   drawPaperFace,
   drawPaperShadow,
@@ -52,7 +52,7 @@ export class Coupon extends Container {
     cacheStatic(shadow);
     const paper = new Graphics();
     drawPaperFace(paper, -w / 2, -h / 2, piece);
-    drawDashedRect(paper, -w / 2 + 9, -h / 2 + 9, w - 18, h - 18, { radius: 11, color: Color.inkDeep, alpha: 0.5, width: 2.5, dash: 10, gap: 7, seed });
+    drawDashedInset(paper, -w / 2, -h / 2, piece, 7, { color: Color.inkDeep, alpha: 0.5, width: 2.5, dash: 10, gap: 7, seed });
     drawDashedLine(paper, -w / 2 + STUB_W, -h / 2 + 12, -w / 2 + STUB_W, h / 2 - 12, { color: Color.inkDeep, alpha: 0.5, width: 2.5, dash: 7, gap: 7, seed });
     cacheStatic(paper);
 

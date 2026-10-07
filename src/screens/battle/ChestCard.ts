@@ -5,13 +5,13 @@ import { t } from '@/core/i18n';
 import { profile } from '@/meta';
 import { FREE_CHEST_MS } from '@/meta/data/economy';
 import { ads } from '@/platform';
-import { Button, IconButton, ProgressBar, drawIcon, fitLabel, uiLabel } from '@/ui';
+import { Button, HEADER, IconButton, ProgressBar, drawIcon, fitLabel, uiLabel } from '@/ui';
 import { services, type Shell } from '../contract';
-import { CARD_PAD, HomeCard } from './HomeCard';
+import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { chestPile, chestsWaiting } from './model';
 import './strings';
 
-const H = 376;
+const H = 376 + HEAD_GROW + 6;
 const OPEN_H = 92;
 /** A pile holds two stacked buttons in the card; "open all" gives a little height (still above the 88 px touch floor). */
 const PILE_H = 88;
@@ -49,8 +49,8 @@ export class ChestCard extends HomeCard {
     this.bar = new ProgressBar({ width: w - CARD_PAD * 2, height: 28, color: 'gold' });
     this.body.addChild(this.art, this.bar, this.status, this.waiting);
 
-    this.odds = new IconButton({ icon: 'info', style: 'neutral', size: 56 });
-    this.odds.position.set(w - CARD_PAD - 28, 38);
+    this.odds = new IconButton({ icon: 'info', style: 'neutral', size: HEADER.disc });
+    this.odds.position.set(this.head.control.x, this.head.control.y);
     this.odds.onTap(() => services.openOdds('wooden'));
     this.body.addChild(this.odds);
 

@@ -351,3 +351,145 @@ export function paintPath(w: number, h: number, seed: number, edgeNoise = 0): nu
   run(h, true);
   return out;
 }
+
+/* ------------------------------------------------------------- offset outlines */
+
+/**
+ * The outline moved toward its inside by `d` px along its own normals (a closed polygon wound clockwise on screen, as paperPath
+ * returns it). Every point of the result is `d` from the original edge, so a line drawn on it stays parallel to a wobbly cut
+ * edge instead of drifting across it the way a second, separately wobbled rectangle does. `d` must stay under the tightest
+ * corner radius. The miter is capped at twice `d`, so a spike in the input cannot throw a point far off.
+ */
+export function insetPolygon(pts: readonly number[], d: number): number[] {
+  const n = pts.length / 2;
+  const nx = new Array<number>(n);
+  const ny = new Array<number>(n);
+  let lastX = 0;
+  let lastY = 1;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const dx = (pts[j * 2] as number) - (pts[i * 2] as number);
+    const dy = (pts[j * 2 + 1] as number) - (pts[i * 2 + 1] as number);
+    const len = Math.hypot(dx, dy);
+    if (len > 1e-6) {
+      lastX = -dy / len;
+      lastY = dx / len;
+    }
+    nx[i] = lastX;
+    ny[i] = lastY;
+  }
+  const out = new Array<number>(pts.length);
+  for (let i = 0; i < n; i++) {
+    const p = (i + n - 1) % n;
+    const mx = (nx[p] as number) + (nx[i] as number);
+    const my = (ny[p] as number) + (ny[i] as number);
+    const ml = Math.hypot(mx, my);
+    if (ml < 1e-6) {
+      out[i * 2] = (pts[i * 2] as number) + (nx[i] as number) * d;
+      out[i * 2 + 1] = (pts[i * 2 + 1] as number) + (ny[i] as number) * d;
+      continue;
+    }
+    const ux = mx / ml;
+    const uy = my / ml;
+    const k = Math.min(2, 1 / Math.max(0.01, ux * (nx[i] as number) + uy * (ny[i] as number)));
+    out[i * 2] = (pts[i * 2] as number) + ux * d * k;
+    out[i * 2 + 1] = (pts[i * 2 + 1] as number) + uy * d * k;
+  }
+  return out;
+}
+
+/**
+ * The part of a closed outline (clockwise, convex enough to cross a horizontal line twice) above `yCut`, closed by a straight
+ * bottom edge at `yCut` whose two corners are rounded with radius `r`: a mat that ends in a ruled line under a wobbly top.
+ * Returns the original outline when it does not reach `yCut`.
+ */
+export function cutBelow(pts: readonly number[], yCut: number, r: number): number[] {
+  const n = pts.length / 2;
+  const y = (i: number): number => pts[((i + n) % n) * 2 + 1] as number;
+  const x = (i: number): number => pts[((i + n) % n) * 2] as number;
+  const top = yCut - r;
+  let right = -1;
+  let left = -1;
+  for (let i = 0; i < n; i++) {
+    if (y(i) <= top && y(i + 1) > top) right = i;
+    if (y(i) > top && y(i + 1) <= top) left = i;
+  }
+  if (right < 0 || left < 0) return Array.from(pts);
+  const cross = (i: number): [number, number] => {
+    const t = (top - y(i)) / (y(i + 1) - y(i));
+    return [x(i) + (x(i + 1) - x(i)) * t, top];
+  };
+  const [rx] = cross(right);
+  const [lx] = cross(left);
+  const out: number[] = [lx, top];
+  for (let i = left + 1; ; i++) {
+    out.push(x(i), y(i));
+    if ((i + n) % n === right) break;
+  }
+  out.push(rx, top);
+  const steps = Math.max(3, Math.ceil((r * Math.PI) / 2 / 4));
+  for (let k = 1; k <= steps; k++) {
+    const a = (k / steps) * (Math.PI / 2);
+    out.push(rx - r + Math.cos(a) * r, top + Math.sin(a) * r);
+  }
+  for (let k = 0; k < steps; k++) {
+    const a = Math.PI / 2 + (k / steps) * (Math.PI / 2);
+    out.push(lx + r + Math.cos(a) * r, top + Math.sin(a) * r);
+  }
+  return out;
+}
+
+/**
+ * A photo-corner mount: the stretch of the outline within `reach` px of its vertex nearest (nx, ny), closed by the chord between
+ * the two ends. It lies on the outline itself, so it fits the corner it is stuck on at any radius or wobble.
+ */
+export function cornerCap(pts: readonly number[], nx: number, ny: number, reach: number): number[] {
+  const n = pts.length / 2;
+  let apex = 0;
+  let best = Infinity;
+  for (let i = 0; i < n; i++) {
+    const dd = Math.hypot((pts[i * 2] as number) - nx, (pts[i * 2 + 1] as number) - ny);
+    if (dd < best) {
+      best = dd;
+      apex = i;
+    }
+  }
+  const at = (i: number): [number, number] => [pts[((i + n) % n) * 2] as number, pts[((i + n) % n) * 2 + 1] as number];
+  const walk = (dir: 1 | -1): number[] => {
+    const part: number[] = [];
+    let run = 0;
+    let [px, py] = at(apex);
+    for (let k = 1; k < n; k++) {
+      const [qx, qy] = at(apex + dir * k);
+      const seg = Math.hypot(qx - px, qy - py);
+      if (run + seg >= reach) {
+        const t = (reach - run) / seg;
+        part.push(px + (qx - px) * t, py + (qy - py) * t);
+        break;
+      }
+      run += seg;
+      part.push(qx, qy);
+      px = qx;
+      py = qy;
+    }
+    return part;
+  };
+  const before = walk(-1);
+  const after = walk(1);
+  const out: number[] = [];
+  for (let i = before.length - 2; i >= 0; i -= 2) out.push(before[i] as number, before[i + 1] as number);
+  const [ax, ay] = at(apex);
+  out.push(ax, ay, ...after);
+  return out;
+}
+
+/**
+ * Dash and gap lengths adjusted (by at most a sixth) so a dashed line of length `len` starts and ends with a whole dash: both
+ * ends of a separator then stop at the same margin instead of one of them trailing off into a stub.
+ */
+export function fitDash(len: number, dash: number, gap: number): { dash: number; gap: number } {
+  const n = Math.max(1, Math.round((len + gap) / (dash + gap)));
+  if (n === 1) return { dash: len, gap };
+  const fitted = (len - (n - 1) * gap) / n;
+  return fitted >= dash * 0.84 && fitted <= dash * 1.16 ? { dash: fitted, gap } : { dash, gap: (len - n * dash) / (n - 1) };
+}

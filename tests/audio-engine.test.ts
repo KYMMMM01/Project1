@@ -4,6 +4,25 @@ import { MusicPlayer } from '@/audio/music';
 import { game } from '@/core/game';
 
 /**
+ * Baking is real unless a test switches `mode` to 'fake': then every bake is a promise the test settles by hand and the engine believes it
+ * has an offline renderer (the stand-in context below has none).
+ */
+const baking = vi.hoisted(() => ({ mode: 'real' as 'real' | 'fake', jobs: [] as Array<{ key: string; variant: number; land: () => void }> }));
+vi.mock('@/audio/bake', async (orig) => {
+  const real = await orig<typeof import('@/audio/bake')>();
+  return {
+    ...real,
+    offlineSupported: () => (baking.mode === 'fake' ? true : real.offlineSupported()),
+    bakeVariant: (...args: Parameters<typeof real.bakeVariant>) =>
+      baking.mode === 'fake'
+        ? new Promise((resolve) => {
+            baking.jobs.push({ key: args[1], variant: args[2], land: () => resolve({ buffer: { length: 2400, numberOfChannels: 1, duration: 0.05 } }) });
+          })
+        : real.bakeVariant(...args),
+  };
+});
+
+/**
  * A recording stand-in for WebAudio, just rich enough for the engine, the graph, the music player
  * and the live synthesis fallback. Every AudioParam logs its automation calls; every node factory
  * counts its calls; the context state is flipped by the test (or by resume()/suspend()).
@@ -588,5 +607,118 @@ describe('MusicPlayer scheduling', () => {
     expect(player.running).toBe(false);
     expect(player.stats().runs).toBe(0);
     expect(player.track).toBe('none');
+  });
+});
+
+describe('AudioEngine priming', () => {
+  beforeEach(() => {
+    baking.mode = 'fake';
+    baking.jobs.length = 0;
+  });
+  afterEach(() => {
+    baking.mode = 'real';
+  });
+
+  const landAll = async (): Promise<void> => {
+    for (let guard = 0; guard < 20 && baking.jobs.length > 0; guard++) {
+      for (const job of baking.jobs.splice(0)) job.land();
+      await flush();
+    }
+  };
+
+  it('has nothing to bake before init, or on a device without an offline renderer', () => {
+    expect(engine.primeLeft({ sfx: 'hit_light' })).toBe(0);
+    expect(engine.primeStep({ sfx: 'hit_light' })).toBe(0);
+    baking.mode = 'real';
+    engine.init();
+    expect(engine.primeLeft({ sfx: 'hit_light' })).toBe(0);
+    expect(engine.primeStep({ sfx: 'hit_light' })).toBe(0);
+  });
+
+  it('bakes one variant a step, even while the context is locked, and says how many are left', async () => {
+    engine.init();
+    expect(engine.unlocked).toBe(false);
+    expect(engine.primeLeft({ sfx: 'hit_light' })).toBe(3);
+    expect(engine.primeStep({ sfx: 'hit_light' })).toBe(2);
+    expect(baking.jobs.map((j) => j.variant)).toEqual([0]);
+    expect(engine.primeLeft({ sfx: 'hit_light' })).toBe(2);
+    expect(engine.primeStep({ sfx: 'hit_light' })).toBe(1);
+    expect(engine.primeStep({ sfx: 'hit_light' })).toBe(0);
+    expect(engine.primeStep({ sfx: 'hit_light' })).toBe(0);
+    expect(baking.jobs.map((j) => j.variant)).toEqual([0, 1, 2]);
+    await landAll();
+    const stats = engine.stats();
+    expect(stats.baked).toBe(1);
+    expect(stats.bakedKB).toBe(Math.round((3 * 2400 * 4) / 1024));
+    expect(engine.primeLeft({ sfx: 'hit_light' })).toBe(0);
+  });
+
+  it('never makes a sound: nothing is played, no voice or source is made, nothing is ducked', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    const ctx = ctxOf();
+    const sources = ctx.count('createBufferSource');
+    const voices = ctx.count('createStereoPanner');
+    for (const id of ['hit_light', 'boss_warning', 'ui_click'] as const) while (engine.primeStep({ sfx: id }) > 0) continue;
+    while (engine.primeStep({ stinger: 'victory' }) > 0) continue;
+    await landAll();
+    expect(engine.stats().sfxPlayed).toBe(0);
+    expect(engine.stats().baked).toBe(4);
+    expect(ctx.count('createBufferSource')).toBe(sources);
+    expect(ctx.count('createStereoPanner')).toBe(voices);
+    expect(ctx.params.some((p) => p.of('cancelScheduledValues').length > 0)).toBe(false);
+  });
+
+  it('tells a stinger from a sound effect of the same name', () => {
+    engine.init();
+    engine.primeStep({ stinger: 'level_up' });
+    engine.primeStep({ sfx: 'level_up' });
+    expect(baking.jobs.map((j) => j.key)).toEqual(['stinger:level_up', 'sfx:level_up']);
+  });
+
+  it('plays a primed sound at once, without baking again', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    for (const id of ['hit_light'] as const) while (engine.primeStep({ sfx: id }) > 0) continue;
+    await landAll();
+    const bakes = baking.jobs.length;
+    engine.play('hit_light');
+    expect(engine.stats().sfxPlayed).toBe(1);
+    expect(baking.jobs.length).toBe(bakes);
+  });
+
+  it('does not make a real play wait for the queue: it joins the bake that is on its way and sounds when the first variant lands', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    engine.primeStep({ sfx: 'hit_light' });
+    engine.play('hit_light');
+    // Still the one bake that priming started.
+    expect(baking.jobs).toHaveLength(1);
+    expect(engine.stats().sfxPlayed).toBe(0);
+    (baking.jobs.splice(0)[0] as { land: () => void }).land();
+    await flush();
+    expect(engine.stats().sfxPlayed).toBe(1);
+  });
+
+  it('bakes a cold sound the moment it is played, and sounds as soon as its first variant lands, not after all three', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    engine.play('hit_light');
+    expect(baking.jobs.map((j) => j.variant)).toEqual([0]);
+    (baking.jobs.splice(0)[0] as { land: () => void }).land();
+    await flush();
+    expect(engine.stats().sfxPlayed).toBe(1);
+    // The other variants follow one at a time.
+    expect(baking.jobs.map((j) => j.variant)).toEqual([1]);
+  });
+
+  it('reports the memory budget it keeps', () => {
+    engine.init();
+    expect(engine.stats().budgetKB).toBe(13672);
+    expect(engine.stats().evicted).toBe(0);
   });
 });

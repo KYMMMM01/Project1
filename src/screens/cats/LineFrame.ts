@@ -4,7 +4,7 @@ import { t } from '@/core/i18n';
 import type { UnitId } from '@/game/api';
 import { unitClass, unitRarity, unitRarityIndex } from '@/game/data/roster';
 import {
-  backOut, bindPress, cacheStatic, Color, drawDashedRect, drawIcon, motion, paperSeed, paperShape, ProgressBar, Rarity, tapeStrip, TweenBag, uiLabel,
+  backOut, bindPress, cacheStatic, Color, drawIcon, motion, paperSeed, paperShape, fitLabel, ProgressBar, Rarity, tapeStrip, TweenBag, uiLabel,
   type PressBinding,
 } from '@/ui';
 import { unitPortrait } from '../shop/art';
@@ -48,6 +48,7 @@ export class LineFrame extends Container {
   private readonly bar: ProgressBar | null;
   private readonly press: PressBinding;
   private readonly mode: FrameMode;
+  private readonly badgeAt: (w: number, h: number) => { x: number; y: number; w: number; h: number };
   private levelText: Text | null = null;
   private tapFn: ((unit: UnitId) => void) | null = null;
   private ready = false;
@@ -66,7 +67,8 @@ export class LineFrame extends Container {
     const seed = paperSeed();
 
     const matH = mode === 'card' ? 104 : h - 12;
-    const plate = buildPlate({ w, h, matH, rarity, tier, seed });
+    const plate = buildPlate({ w, h, matH, rarity, tier });
+    this.badgeAt = plate.badgeAt;
     const win = plate.win;
     this.body.addChild(plate.base);
     const portrait = unitPortrait(unit, rarity, win.h - 2);
@@ -87,7 +89,6 @@ export class LineFrame extends Container {
       mark.position.set(0, h / 2 - 22);
       this.body.addChild(pill, mark);
     }
-    this.levelPill.position.set(-w / 2 + 14, -h / 2 + 14);
     this.levelPill.visible = false;
     this.body.addChild(this.levelPill);
 
@@ -104,7 +105,7 @@ export class LineFrame extends Container {
 
     this.marker.visible = false;
     const ring = new Graphics();
-    drawDashedRect(ring, -w / 2 - 8, -h / 2 - 8, w + 16, h + 16, { radius: 24, color: Color.teal, width: 3.5, seed: seed + 7 });
+    plate.ring(ring, 8, Color.teal, 3.5);
     cacheStatic(ring);
     const tape = tapeStrip({ name: 'sky', w: 64, h: 24, angle: 4, pattern: 'dots', seed: seed + 8 });
     tape.position.set(0, -h / 2 - 6);
@@ -174,11 +175,13 @@ export class LineFrame extends Container {
     const text = t('cats.lv', { n: level });
     if (this.levelText?.text === text) return;
     for (const c of this.levelPill.removeChildren()) c.destroy({ children: true });
-    const label = uiLabel(text, { size: 22 });
+    const label = uiLabel(text, { size: 24 });
     const lw = Math.ceil(label.width) + 20;
-    const pill = paperShape({ w: lw, h: 32, kind: 'pill', fill: Color.paperLight, edge: Rarity[unitRarity(this.unit)].dark, shadow: 3, grain: false, seed: 11 });
+    const box = this.badgeAt(lw, 32);
+    fitLabel(label, box.w - 12, 24);
+    const pill = paperShape({ w: box.w, h: box.h, kind: 'pill', fill: Color.paperLight, edge: Rarity[unitRarity(this.unit)].dark, shadow: 3, grain: false, seed: 11 });
     this.levelPill.addChild(pill, label);
-    this.levelPill.x = -this.plateW / 2 + 8 + lw / 2;
+    this.levelPill.position.set(box.x + box.w / 2, box.y + box.h / 2);
     this.levelPill.visible = this.mode === 'card';
     this.levelText = label;
   }

@@ -1,5 +1,18 @@
+import { Container } from 'pixi.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { WARM_BUDGET_MS, WARM_PRIO, WARM_SLOW_DT, WarmQueue, warmBudget } from '@/fx/warm';
+
+const drawn = vi.hoisted(() => ({ calls: [] as Array<{ container: unknown; target: unknown; visible: boolean }> }));
+vi.mock('@/core/game', () => ({
+  game: {
+    app: {
+      renderer: {
+        render: (o: { container: Container; target: unknown }) => void drawn.calls.push({ container: o.container, target: o.target, visible: o.container.visible }),
+      },
+    },
+  },
+}));
+
+import { WARM_BUDGET_MS, WARM_PRIO, WARM_SLOW_DT, WarmQueue, renderOnce, warmBudget } from '@/fx/warm';
 
 /** A queue whose clock moves by `costOf(piece)` between the start and the end of each piece, so a piece "takes" that long. */
 function queueWithClock(costOf: (key: string) => number, ran: string[]): { q: WarmQueue; job: (key: string, prio: number, cost?: number) => void } {
@@ -80,13 +93,46 @@ describe('warm queue', () => {
     expect(q.pending).toBe(0);
   });
 
-  it('runs a piece bigger than the allowance alone, and then nothing else that frame', () => {
+  it('runs a piece bigger than the allowance alone, and the frames after it wait until it is paid back', () => {
     const { q, job } = queueWithClock((k) => (k === 'big' ? 20 : 0.1), ran);
     job('big', 1, 30);
     job('small', 1, 0.1);
     expect(q.update(1 / 60)).toBe(1);
     expect(ran).toEqual(['big']);
-    expect(q.update(1 / 60)).toBe(1);
+    // 20 ms drawn against 2.5 ms a frame: the overdraft of 17.5 ms is paid back by the next seven frames (2.5 each), the eighth has nothing to
+    // spend yet, and the ninth runs the next piece.
+    let frames = 1;
+    while (ran.length < 2 && frames < 20) {
+      frames++;
+      q.update(1 / 60);
+    }
+    expect(ran).toEqual(['big', 'small']);
+    expect(frames).toBe(9);
+  });
+
+  it('spends the allowance on average: pieces of 4 ms against 2.5 ms a frame run in about three frames of five', () => {
+    const { q, job } = queueWithClock(() => 4, ran);
+    for (let i = 0; i < 40; i++) job(`p${i}`, 1, 4);
+    let total = 0;
+    for (let f = 0; f < 20; f++) total += q.update(1 / 60);
+    // 20 frames x 2.5 ms = 50 ms of allowance and one piece of overdraft: 12 or 13 pieces of 4 ms.
+    expect(total).toBeGreaterThanOrEqual(12);
+    expect(total).toBeLessThanOrEqual(13);
+  });
+
+  it('refills nothing on a slow frame, and an overdraft survives it', () => {
+    const { q, job } = queueWithClock((k) => (k === 'big' ? 20 : 0.1), ran);
+    job('big', 1, 30);
+    job('small', 1, 0.1);
+    q.update(1 / 60);
+    for (let i = 0; i < 20; i++) q.update(WARM_SLOW_DT + 0.01);
+    expect(ran).toEqual(['big']);
+    let frames = 0;
+    while (ran.length < 2 && frames < 20) {
+      frames++;
+      q.update(1 / 60);
+    }
+    expect(frames).toBe(8);
   });
 
   it('measures what a piece really took: a cheap guess that was wrong ends the frame', () => {
@@ -130,5 +176,38 @@ describe('warm queue', () => {
     expect(q.has('b')).toBe(false);
     q.reset();
     expect(q.has('a')).toBe(false);
+  });
+});
+
+describe('drawing a container ahead of time', () => {
+  beforeEach(() => {
+    drawn.calls.length = 0;
+  });
+
+  it('draws it once into a small target nobody sees', () => {
+    const c = new Container();
+    renderOnce(c);
+    expect(drawn.calls).toHaveLength(1);
+    expect(drawn.calls[0]?.container).toBe(c);
+    expect(drawn.calls[0]?.target).toBeTruthy();
+  });
+
+  it('shows a hidden container for the call and hides it again', () => {
+    const c = new Container();
+    c.visible = false;
+    renderOnce(c);
+    expect(drawn.calls[0]?.visible).toBe(true);
+    expect(c.visible).toBe(false);
+    const shown = new Container();
+    renderOnce(shown);
+    expect(shown.visible).toBe(true);
+  });
+
+  it('uses the same target every time, and leaves the container as it was when the renderer throws', () => {
+    const a = new Container();
+    const b = new Container();
+    renderOnce(a);
+    renderOnce(b);
+    expect(drawn.calls[0]?.target).toBe(drawn.calls[1]?.target);
   });
 });

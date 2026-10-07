@@ -10,6 +10,7 @@ import { Color, drawSpeechBubble, motion, paperSeed, popIn, TweenBag, uiLabel } 
 import { info, type InfoContent, type InfoView } from '../info';
 import type { HudEnv } from './env';
 import { BUBBLE_MARGIN, placeBubble, type Weighted } from './bubbleMath';
+import { balanceWrap } from './kit';
 import type { Rect } from './layoutMath';
 
 const MAX_W = 460;
@@ -59,6 +60,7 @@ export class HintBubble implements InfoView {
   private measure(content: InfoContent): { title: Text | null; body: Text; w: number; h: number } {
     const title = content.title ? uiLabel(content.title, { size: 30, color: Color.coralDark }) : null;
     const body = uiLabel(content.text, { size: 26, wrap: MAX_W - PAD * 2, lineHeight: 34 });
+    balanceWrap(body, MAX_W - PAD * 2);
     return { title, body, w: Math.min(MAX_W, Math.max(title?.width ?? 0, body.width) + PAD * 2), h: PAD * 2 + body.height + (title ? title.height + 4 : 0) };
   }
 

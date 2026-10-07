@@ -2,11 +2,11 @@ import { t } from '@/core/i18n';
 import { bundleParts, profile } from '@/meta';
 import { Button, Color, ProgressBar, uiLabel } from '@/ui';
 import { services, type Shell } from '../contract';
-import { CARD_PAD, HomeCard } from './HomeCard';
+import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { playClaim } from './claim';
 import './strings';
 
-const H = 296;
+const H = 296 + HEAD_GROW;
 const BTN_W = 248;
 /** Width of the column left of the buttons: the bar and the texts stay inside it. */
 const LEFT_W = 356;

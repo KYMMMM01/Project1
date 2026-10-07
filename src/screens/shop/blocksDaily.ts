@@ -45,8 +45,9 @@ function slotCard(inner: Container, x: number, y: number, w: number, offer: Shop
   name.position.set(w / 2, 202);
   c.addChild(name);
 
-  const by = SLOT_H - 52;
-  const bw = w - 20;
+  // The tag is as wide as the mat above it (12 px in from each side) and keeps 12 px of card under it.
+  const bw = w - 24;
+  const by = SLOT_H - 12 - 44 - 4;
   if (bought) {
     c.alpha = 0.9;
     const stamp = new StampMark({ text: t('shop.daily.bought'), size: 28, maxWidth: w - 16, tilt: -0.18, color: Color.berryDark });

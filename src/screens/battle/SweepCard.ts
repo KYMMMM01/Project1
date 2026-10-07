@@ -5,12 +5,12 @@ import { TICKET_AD_AMOUNT } from '@/meta/data/economy';
 import { ads } from '@/platform';
 import { Button, Color, drawIcon, fitLabel, toast, uiLabel } from '@/ui';
 import type { Shell } from '../contract';
-import { CARD_PAD, HomeCard } from './HomeCard';
+import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { playClaim } from './claim';
 import { sweepable, type Selection } from './model';
 import './strings';
 
-const H = 376;
+const H = 376 + HEAD_GROW + 6;
 
 /** Sweep: spend a ticket to collect the reward of a cleared level without playing it. Tickets can be topped up right here. */
 export class SweepCard extends HomeCard {

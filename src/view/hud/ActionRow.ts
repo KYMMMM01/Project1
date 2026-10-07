@@ -16,24 +16,17 @@ import { info } from '../info';
 import { LaserCard } from './popups/LaserCard';
 import { SummonButton } from './SummonButton';
 import { chipCeiling, chipColumn } from './chipMath';
-import type { Rect } from './layoutMath';
+import { LASER_FACE, LASER_INFO, LASER_RING, LASER_RING_TH, LASER_SECONDS_Y, LASER_X, type Rect } from './layoutMath';
 import { SummonChips } from './SummonChip';
 import { REVEAL_DELAY } from '../timing';
 import { tossFor } from '../toss';
 
 const GRADE_X = 121;
-const LASER_X = 615;
-const LASER_SIZE = 116;
 const PAWS = 6;
 /** The call button's right edge lines up with the odds button above it (x 688); it is 236 wide. */
 const CALL_X = 570;
 const CALL_W = 236;
 const CALL_H = 84;
-/** The laser sits a little lower than the summon button's centre, so the call button above it clears its ring. */
-const LASER_DY = -4;
-/** The info mark sits off the button's lower right corner; its hit slot is a full 88 px square that overlaps the button as little as the screen's edge allows. */
-const INFO_DX = 74;
-const INFO_DY = 50;
 /** Seconds the lane stays lit after a press of the button (until the dot is down). */
 const AIM_FOR = 6;
 /** Key of the laser button's own bubble (src/view/info.ts): its state while it works or recharges, and the "tap the walkway" line. */
@@ -69,6 +62,8 @@ export class ActionRow {
   private readonly coolRing: CooldownRing;
   private readonly aimRing: CooldownRing;
   private readonly laserText: Text;
+  /** Marks the laser button's ring for the HUD's measurements (see the constructor). */
+  readonly laserRing: Graphics;
   readonly tracker = new Container();
   private readonly paws: Array<{ lit: Container; dim: Container }> = [];
   private readonly trackerCaption: Text;
@@ -105,17 +100,19 @@ export class ActionRow {
     });
     this.grade.visible = r.gradeUpgrade;
 
-    // The ring around the button is the clock: it fills while the laser recharges (teal) and drains while it is on (coral).
-    this.coolRing = new CooldownRing({ radius: LASER_SIZE / 2 + 9, thickness: 9, color: Color.teal });
-    this.aimRing = new CooldownRing({ radius: LASER_SIZE / 2 + 9, thickness: 9, color: Color.coral });
-    this.coolRing.visible = false;
+    // The ring around the button is the clock: it fills while the laser recharges (teal, and stays full while it is ready) and drains while it is on (coral).
+    this.coolRing = new CooldownRing({ radius: LASER_RING, thickness: LASER_RING_TH, color: Color.teal });
+    this.aimRing = new CooldownRing({ radius: LASER_RING, thickness: LASER_RING_TH, color: Color.coral });
     this.aimRing.visible = false;
-    this.laserBtn = new IconButton({ icon: 'target', style: 'info', size: LASER_SIZE, fireOnDown: true, sfx: 'ui_click', haptic: false });
+    this.laserBtn = new IconButton({ icon: 'target', style: 'info', size: LASER_FACE, fireOnDown: true, sfx: 'ui_click', haptic: false });
     this.laserBtn.onTap(() => this.pressLaser());
     this.buildInfo();
     this.laserText = uiLabel('', { size: 26 });
-    this.laserText.position.set(0, LASER_SIZE / 2 + 24);
-    this.laser.addChild(this.coolRing, this.aimRing, this.laserBtn, this.laserText);
+    this.laserText.position.set(0, LASER_SECONDS_Y);
+    // An invisible disc the size of the ring: the tutorial's window and paw are measured from it, not from the button's face plus its lip and the seconds.
+    this.laserRing = new Graphics().circle(0, 0, LASER_RING).fill({ color: Color.paper, alpha: 0.001 });
+    this.laserRing.eventMode = 'none';
+    this.laser.addChild(this.coolRing, this.aimRing, this.laserBtn, this.laserText, this.laserRing);
     this.laser.visible = r.laser;
     this.info.visible = r.laser;
 
@@ -285,9 +282,9 @@ export class ActionRow {
 
   layout(summonY: number, utilY: number, panelTop: number): void {
     this.summon.position.set(360, summonY);
-    this.grade.position.set(GRADE_X, summonY + 4);
-    this.laser.position.set(LASER_X, summonY + LASER_DY);
-    this.info.position.set(LASER_X + INFO_DX, summonY + LASER_DY + INFO_DY);
+    this.grade.position.set(GRADE_X, summonY);
+    this.laser.position.set(LASER_X, summonY);
+    this.info.position.set(LASER_X + LASER_INFO.x, summonY + LASER_INFO.y);
     this.chips.root.position.set(CHIP_X, summonY - CHIP_LIFT);
     this.chips.originY = panelTop + summonY - CHIP_LIFT;
     this.util.position.set(0, utilY);
@@ -365,7 +362,7 @@ export class ActionRow {
     const was = this.laserState;
     this.laserState = state;
     this.laserBtn.setStyle(LASER_STYLE[state]);
-    this.coolRing.visible = state === 'cool';
+    this.coolRing.visible = state !== 'active';
     this.aimRing.visible = state === 'active';
     this.laserBtn.stopPulse();
     if (state === 'active') this.laserBtn.startPulse({ times: -1, amount: 0.04 });

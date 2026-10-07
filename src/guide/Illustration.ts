@@ -6,7 +6,7 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
-import { cacheStatic, Color, drawDashedRect, drawIcon, paperSeed, paperShape, Rarity, type IconName } from '@/ui';
+import { cacheStatic, Color, drawDashedInset, drawIcon, paperSeed, paperShape, Rarity, type IconName } from '@/ui';
 import type { UnitId } from '@/game';
 import type { Art } from './topics';
 
@@ -132,12 +132,14 @@ function catsArt(art: Extract<Art, { k: 'cats' }>, box: number, small: boolean):
 export function illustration(art: Art, size: number): Container {
   const root = new Container();
   const seed = paperSeed();
-  root.addChild(paperShape({ w: size, h: size, radius: size * 0.16, fill: Color.paperLight, seed, grain: false }));
+  const paper = { w: size, h: size, radius: size * 0.16, fill: Color.paperLight, seed, grain: false } as const;
+  root.addChild(paperShape(paper));
   const line = new Graphics();
-  drawDashedRect(line, -size / 2 + 8, -size / 2 + 8, size - 16, size - 16, { radius: size * 0.12, color: Color.teal, width: 2.5, dash: 9, gap: 7, alpha: 0.7, seed });
+  drawDashedInset(line, -size / 2, -size / 2, paper, 4, { color: Color.teal, width: 2.5, dash: 9, gap: 7, alpha: 0.7, seed });
   cacheStatic(line);
   root.addChild(line);
-  const inner = size * 0.9;
+  // The picture lives inside the dashed line, 6 px clear of it on every side: never on it.
+  const inner = size - 24;
   switch (art.k) {
     case 'icon':
       root.addChild(disc(inner, ICON_PAPER[art.name] ?? mixColor(Color.teal, Color.paper, 0.35), art.name));

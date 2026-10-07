@@ -1,64 +1,28 @@
-import { Container, Graphics, Rectangle, Sprite, Texture, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics, Sprite, type DestroyOptions, type Texture } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
-import { fxTex, fxTexture } from '@/fx';
 import type { ChestKind, ChestRarity } from '@/meta/types';
-import { backOut, Color, motion, paperSeed, paperShape, Rarity, rarityName, TweenBag, uiLabel } from '@/ui';
+import { Color, motion, paperSeed, paperShape, Rarity, rarityName, TweenBag, uiLabel } from '@/ui';
 import { chestArt } from './art';
+import type { ChestPose } from './chestPose';
 import { chestKey } from './keys';
 import { countPill } from './paperBits';
-import type { ChestPose } from './revealPlan';
 
 /** Edge of the square a chest is fitted into. */
 export const CHEST_SIZE = 330;
 
-/** The lid meets the body at this share of the picture's height, counted from the top (all three chests are drawn alike). */
-const SEAM = 0.46;
-/** The art is cut 4 px inside its texture: a sticker outline and nothing else. */
-const MARGIN = 4;
-/** Where the lock sits on the closed chest (share of the height from the top), and where the opening is on the open one. */
-const LOCK_Y = 0.6;
-const OPENING_Y = 0.3;
-const BEAMS = 5;
+/** Where the cards leave the open chest: this share of its picture's height above the foot. */
+const OPENING = 0.62;
+/** The tag is tied this far along the chest's width and up its height (any picture has a corner there). */
+const TIE_X = 0.26;
+const TIE_Y = 0.3;
 
 /** The two colours of everything that leaks and bursts out of a chest: they tell the best rarity inside from the first frame to the last. */
 export function tellColors(best: ChestRarity): { core: number; edge: number } {
   const r = Rarity[best];
   // Light is pale: paper white tinted with the rarity, so it reads as light on the wooden floor and not as a grey stain of the rarity's own colour.
   return best === 'common' ? { core: Color.paperLight, edge: r.light } : { core: mixColor(Color.paperLight, r.light, 0.55), edge: r.light };
-}
-
-interface Halves {
-  lid: Texture;
-  body: Texture;
-  /** Size of the whole picture in texture px. */
-  w: number;
-  h: number;
-  /** Rows the lid takes. */
-  cut: number;
-}
-
-const halvesCache = new Map<ChestKind, Halves>();
-
-/** The closed chest cut along its seam into the lid and the body (cached: two views of the same texture per kind), or null while its picture is missing. */
-function halvesOf(kind: ChestKind): Halves | null {
-  const cached = halvesCache.get(kind);
-  if (cached) return cached;
-  const key = chestKey(kind);
-  if (!hasTex(key)) return null;
-  const base = tex(key);
-  const { x, y, width: w, height: h } = base.frame;
-  const cut = Math.round(h * SEAM);
-  const out: Halves = {
-    lid: new Texture({ source: base.source, frame: new Rectangle(x, y, w, cut), label: key + '_lid' }),
-    body: new Texture({ source: base.source, frame: new Rectangle(x, y + cut, w, h - cut), label: key + '_body' }),
-    w,
-    h,
-    cut,
-  };
-  halvesCache.set(kind, out);
-  return out;
 }
 
 function sprite(texture: Texture, scale: number): Sprite {
@@ -68,7 +32,7 @@ function sprite(texture: Texture, scale: number): Sprite {
   return s;
 }
 
-/** A flat paper tag hanging from the lock by a string: the best rarity in words, so colour is never the only cue. Origin = where the string is tied. */
+/** A flat paper tag hanging from a string: the best rarity in words, so colour is never the only cue. Origin = where the string is tied. */
 function rarityTag(best: ChestRarity): Container {
   const r = Rarity[best];
   const label = uiLabel(rarityName(best), { size: 24, color: Color.inkDeep });
@@ -86,127 +50,79 @@ function rarityTag(best: ChestRarity): Container {
 }
 
 /**
- * The chest of a reveal, from the first frame to the pop. Closed it is the sticker cut along its seam, so the lid can stand a crack
- * open on every rattle with flat light in the gap (a lens in the best rarity's colour, beams behind the chest, a flat disc under it),
- * and a paper tag with the rarity's name hangs from the lock: the colour of all of it is fixed for the whole opening. At the pop the
- * open sticker swaps in (while it is missing, the lid is thrown off and a flat light plate fills the opening). Origin = the middle of the
- * chest's foot on the floor.
+ * The chest of a reveal, whole from the first frame to the last: its picture is never cut or covered, so any picture works. It
+ * shows the closed picture, flicks to the `_ajar` one for a few frames at the top of a hop when that exists, and swaps to the open
+ * one at the pop (without it the closed chest just jumps). A paper tag with the best rarity's name hangs from a corner of it; a pile's
+ * count sits on the top corner. Origin = the middle of the chest's foot on the floor; the rig squashes and tilts about it.
  */
 export class ChestStage extends Container {
   /** Where cards leave the chest after the pop, relative to the origin. */
   readonly opening = { x: 0, y: 0 };
-  /** Half the chest's height: lifting the origin by this much puts the chest's middle on a given spot. */
+  /** Half the closed chest's height: lifting the origin by this much puts the chest's middle on a given spot. */
   readonly halfH: number;
+  /** Width of the closed picture. */
+  readonly bodyW: number;
   private readonly bag = new TweenBag();
   private readonly shadow = new Graphics();
   private readonly rig = new Container();
-  private readonly halo: Sprite;
-  private readonly beams = new Container();
-  private readonly slit = new Graphics();
-  private readonly lid: Container | null;
-  private readonly body: Container;
-  private readonly openSprite: Sprite | null;
-  private readonly plate: Sprite;
+  private readonly closed: Container;
+  private readonly ajar: Sprite | null;
+  private readonly openArt: Sprite | null;
   private readonly tag: Container;
-  private readonly seamY: number;
-  private readonly slitH = 10;
+  private readonly pill: Container | null;
   private opened = false;
 
   constructor(kind: ChestKind, best: ChestRarity, count: number) {
     super();
-    const colors = tellColors(best);
-    const halves = halvesOf(kind);
-    let bodyW = CHEST_SIZE * 0.9;
+    const key = chestKey(kind);
     let height = CHEST_SIZE;
-    let lockY: number;
-    let openH = CHEST_SIZE;
-    this.openSprite = null;
-    if (halves) {
-      const s = CHEST_SIZE / Math.max(halves.w, halves.h);
-      const bodyH = (halves.h - halves.cut) * s;
-      height = halves.h * s;
-      bodyW = (halves.w - MARGIN * 2) * s;
-      this.seamY = -bodyH;
-      const lid = new Container();
-      lid.addChild(sprite(halves.lid, s));
-      lid.position.y = this.seamY;
-      this.lid = lid;
-      this.body = new Container();
-      this.body.addChild(sprite(halves.body, s));
-      lockY = -height * (1 - LOCK_Y);
-      const openKey = chestKey(kind) + '_open';
-      if (hasTex(openKey)) {
-        const t = tex(openKey);
-        // The open picture is drawn a little differently: its body is made as wide as the closed one's so the swap does not jump.
-        const os = (s * (halves.w - MARGIN * 2)) / (t.width - MARGIN * 2);
-        this.openSprite = sprite(t, os);
-        this.openSprite.visible = false;
-        openH = t.height * os;
-      }
+    let width = CHEST_SIZE * 0.9;
+    if (hasTex(key)) {
+      const t = tex(key);
+      const s = CHEST_SIZE / Math.max(t.width, t.height);
+      this.closed = sprite(t, s);
+      height = t.height * s;
+      width = t.width * s;
     } else {
-      // No picture at all (a test, or an art file that failed to load): the drawn icon, with the lid and the seam as one piece.
+      // No picture at all (a test, or an art file that failed to load): the drawn icon.
       const art = chestArt(kind, CHEST_SIZE);
       art.position.y = -CHEST_SIZE / 2;
-      this.body = new Container();
-      this.body.addChild(art);
-      this.lid = null;
-      this.seamY = -CHEST_SIZE * (1 - SEAM);
-      lockY = -CHEST_SIZE * (1 - LOCK_Y);
+      this.closed = art;
     }
+    // The other two pictures are drawn as wide as the closed one, so a swap never makes the chest jump sideways.
+    const alike = (suffix: string): Sprite | null => {
+      const k = key + suffix;
+      if (!hasTex(k)) return null;
+      const t = tex(k);
+      const s = sprite(t, width / Math.max(1, t.width));
+      s.visible = false;
+      return s;
+    };
+    this.ajar = alike('_ajar');
+    this.openArt = alike('_open');
     this.halfH = height / 2;
-    this.opening.y = this.openSprite ? -openH * (1 - OPENING_Y) : this.seamY - 10;
+    this.bodyW = width;
+    this.opening.y = -(this.openArt ? this.openArt.height : height) * OPENING;
 
     this.shadow.ellipse(0, 0, CHEST_SIZE * 0.44, 28).fill({ color: Color.shadow, alpha: 0.24 });
 
-    this.halo = new Sprite(fxTexture('disc'));
-    this.halo.anchor.set(0.5);
-    this.halo.tint = colors.edge;
-    this.halo.position.y = this.seamY;
-    this.halo.alpha = 0;
-    this.halo.scale.set((bodyW * 1.2) / 256);
-
-    // Beams of flat light fanning up from the seam, behind the chest.
-    const wedge = fxTex('wedge');
-    for (let i = 0; i < BEAMS; i++) {
-      const w = new Sprite(wedge.texture);
-      w.anchor.set(wedge.ax, wedge.ay);
-      w.tint = colors.core;
-      const len = CHEST_SIZE * (i % 2 === 0 ? 0.78 : 0.6);
-      w.scale.set(len / wedge.w, (len * 0.2) / wedge.h);
-      w.rotation = -Math.PI / 2 + (i - (BEAMS - 1) / 2) * 0.34;
-      this.beams.addChild(w);
-    }
-    this.beams.position.y = this.seamY;
-    this.beams.alpha = 0;
-
-    // A flat lens, pointed at both ends: light seeping out through the middle of the seam, not a strap round the chest.
-    this.slit.ellipse(0, 0, bodyW * 0.36, this.slitH / 2).fill(colors.core);
-    this.slit.position.y = this.seamY;
-
-    this.plate = new Sprite(fxTexture('disc'));
-    this.plate.anchor.set(0.5);
-    this.plate.tint = colors.core;
-    this.plate.scale.set((bodyW * 0.8) / 256, 72 / 256);
-    this.plate.position.y = this.seamY - 8;
-    this.plate.visible = false;
-
     this.tag = rarityTag(best);
-    this.tag.position.set(bodyW * -0.02, lockY + 8);
-
-    this.rig.addChild(this.halo, this.beams, this.body);
-    this.rig.addChild(this.slit);
-    if (this.lid) this.rig.addChild(this.lid);
-    if (this.openSprite) this.rig.addChild(this.openSprite);
-    this.rig.addChild(this.plate, this.tag);
+    this.tag.position.set(width * TIE_X, -height * TIE_Y);
+    this.rig.addChild(this.closed);
+    if (this.ajar) this.rig.addChild(this.ajar);
+    if (this.openArt) this.rig.addChild(this.openArt);
+    this.rig.addChild(this.tag);
     if (count > 1) {
-      const pill = countPill('x' + count);
-      pill.position.set(bodyW * 0.38, -height + 30);
-      this.rig.addChild(pill);
+      this.pill = countPill('x' + count);
+      this.pill.position.set(width * 0.4, -height + 30);
+      this.rig.addChild(this.pill);
+    } else {
+      this.pill = null;
     }
     this.addChild(this.shadow, this.rig);
   }
 
-  /** Put the chest in a pose: the rig squashes about the foot, the shadow shrinks with the height, the seam opens by `crack`. */
+  /** Put the chest in a pose: the rig squashes about the foot, the shadow shrinks with the height. */
   apply(p: ChestPose): void {
     this.rig.position.set(p.x, p.y);
     this.rig.rotation = p.rot;
@@ -215,121 +131,40 @@ export class ChestStage extends Container {
     this.shadow.scale.set(1 - 0.55 * lift, 1 - 0.4 * lift);
     this.shadow.alpha = 1 - 0.5 * lift;
     if (this.opened) return;
-    const gap = Math.max(0, p.crack);
-    if (this.lid) this.lid.position.y = this.seamY - gap;
-    this.slit.position.y = this.seamY - gap / 2;
-    this.slit.scale.y = (gap + 3) / this.slitH;
-    this.slit.alpha = 0.55 + 0.45 * p.light;
-    this.halo.alpha = p.light * 0.3;
-    this.halo.scale.set(((CHEST_SIZE * 1.08) / 256) * (0.8 + 0.5 * p.light));
-    this.beams.alpha = p.light * 0.6;
-    this.beams.scale.set(0.5 + 0.6 * p.light);
+    const flick = p.ajar && this.ajar !== null;
+    this.closed.visible = !flick;
+    if (this.ajar) this.ajar.visible = flick;
     this.tag.rotation = p.tag;
   }
 
-  /** The lid flies open: the open sticker swaps in (or, without it, the lid is thrown off) and the chest gives a jolt; the leak and the tag go. */
+  /** The lid is open: the open picture takes over (without one the closed chest stays) and the tag drops off. */
   open(): void {
     if (this.opened) return;
     this.opened = true;
-    this.slit.visible = false;
-    if (this.openSprite) {
-      this.body.visible = false;
-      if (this.lid) this.lid.visible = false;
-      this.openSprite.visible = true;
+    if (this.ajar) this.ajar.visible = false;
+    if (this.openArt) {
+      this.closed.visible = false;
+      this.openArt.visible = true;
+      if (this.pill) this.pill.y = -this.openArt.height + 30;
     } else {
-      this.plate.visible = true;
-      if (this.lid) this.flingLid(this.lid);
+      this.closed.visible = true;
     }
-    this.rig.rotation = 0;
-    this.rig.position.set(0, 0);
-    this.rig.scale.set(1);
-    this.leave(this.tag, 0, 90, 0.5);
+    this.tag.rotation = 0;
     if (motion.reduced) {
       this.tag.visible = false;
-      this.halo.alpha = 0.3;
-      this.beams.alpha = 0;
       return;
     }
-    this.bag.run({
-      duration: 0.34,
-      ease: backOut(3),
-      onUpdate: (k) => {
-        const j = 1.1 - 0.1 * k;
-        this.rig.scale.set(j, 2 - j);
-      },
-      onComplete: () => this.rig.scale.set(1),
-    });
-    // The leak flares with the pop, then dies down to a soft disc behind the open chest.
+    const { x, y } = this.tag;
     this.bag.run({
       duration: 0.5,
-      ease: Ease.cubicOut,
-      onUpdate: (k) => {
-        this.beams.alpha = 0.9 * (1 - k);
-        this.beams.scale.set(1.1 + 0.5 * k);
-        this.halo.alpha = 0.55 - 0.25 * k;
-      },
-      onComplete: () => {
-        this.beams.visible = false;
-      },
-    });
-  }
-
-  /** The chest has done its part: it sinks and fades while the cards take the place. */
-  fadeOut(): void {
-    if (motion.reduced) {
-      this.visible = false;
-      return;
-    }
-    const y = this.y;
-    this.bag.run({
-      duration: 0.4,
       ease: Ease.cubicIn,
       onUpdate: (k) => {
-        this.alpha = 1 - k;
-        this.y = y + 40 * k;
+        this.tag.position.set(x, y + 90 * k);
+        this.tag.rotation = 2.4 * k;
+        this.tag.alpha = 1 - k;
       },
       onComplete: () => {
-        this.visible = false;
-      },
-    });
-  }
-
-  private flingLid(lid: Container): void {
-    if (motion.reduced) {
-      lid.visible = false;
-      return;
-    }
-    const y = lid.y;
-    this.bag.run({
-      duration: 0.4,
-      ease: Ease.cubicOut,
-      onUpdate: (k) => {
-        lid.y = y - 130 * k;
-        lid.rotation = -0.5 * k;
-        lid.alpha = 1 - k * k;
-      },
-      onComplete: () => {
-        lid.visible = false;
-      },
-    });
-  }
-
-  /** `piece` drops off, spinning, and fades. */
-  private leave(piece: Container, dx: number, dy: number, seconds: number): void {
-    if (motion.reduced) return;
-    const x = piece.x;
-    const y = piece.y;
-    const turn = piece.rotation;
-    this.bag.run({
-      duration: seconds,
-      ease: Ease.cubicIn,
-      onUpdate: (k) => {
-        piece.position.set(x + dx * k, y + dy * k);
-        piece.rotation = turn + 2.4 * k;
-        piece.alpha = 1 - k;
-      },
-      onComplete: () => {
-        piece.visible = false;
+        this.tag.visible = false;
       },
     });
   }

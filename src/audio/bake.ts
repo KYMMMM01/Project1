@@ -25,7 +25,7 @@ const MAX_PEAK = 0.95;
 /**
  * A sound ends where it has fallen 40 dB below its own peak (and is quieter than -54 dBFS in any
  * case): reverb and echo tails below that are inaudible under a game mix, and keeping them costs
- * decoded memory, which is what holds the whole bank under its 8 MB budget.
+ * decoded memory, which is what holds the whole bank under its 14 MB budget (bank.ts).
  */
 const END_FLOOR = 0.002;
 const END_REL = 0.01;

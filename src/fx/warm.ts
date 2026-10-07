@@ -5,7 +5,7 @@
  * before it is needed, a few pieces a frame and never on a frame that is already long, so the warm-up itself costs no hitch.
  * Urgent pieces (the coming wave) go before the ones that merely have to be ready some time (the next wave, the chests).
  */
-import { Texture } from 'pixi.js';
+import { RenderTexture, Texture, type Container } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { game } from '@/core/game';
 
@@ -36,6 +36,12 @@ export class WarmQueue {
   private readonly byKey = new Map<string, Job>();
   private readonly done = new Set<string>();
   private order = 0;
+  /**
+   * Milliseconds the queue may spend now. A frame refills it by its allowance (never past one frame's worth) and a piece draws what it
+   * measured, so a piece bigger than the allowance (a bake of a sound is 4 to 15 ms) leaves it negative and the frames after it wait: the
+   * allowance holds on average, the way a slow piece of a slow phone is spread over the frames that follow it.
+   */
+  private tokens = WARM_BUDGET_MS;
   /** Replaceable clock (tests). */
   now: () => number = () => performance.now();
 
@@ -88,13 +94,16 @@ export class WarmQueue {
   /** Run what fits in this frame's allowance, most urgent first. Returns how many pieces ran. */
   update(dt: number): number {
     const budget = warmBudget(dt);
-    if (budget <= 0 || this.jobs.length === 0) return 0;
+    if (budget <= 0) return 0;
+    this.tokens = Math.min(budget, this.tokens + budget);
+    if (this.tokens <= 0 || this.jobs.length === 0) return 0;
+    const allowance = this.tokens;
     let spent = 0;
     let ran = 0;
     while (this.jobs.length > 0) {
       const job = this.jobs[0] as Job;
       // The first piece of a frame always runs; the next ones only when they are expected to fit.
-      if (ran > 0 && spent + job.cost > budget) break;
+      if (ran > 0 && spent + job.cost > allowance) break;
       this.jobs.shift();
       this.byKey.delete(job.key);
       const t0 = this.now();
@@ -106,8 +115,9 @@ export class WarmQueue {
       this.done.add(job.key);
       spent += this.now() - t0;
       ran++;
-      if (spent >= budget) break;
+      if (spent >= allowance) break;
     }
+    this.tokens -= spent;
     return ran;
   }
 
@@ -122,6 +132,7 @@ export class WarmQueue {
     this.clear();
     this.done.clear();
     this.order = 0;
+    this.tokens = WARM_BUDGET_MS;
   }
 }
 
@@ -143,4 +154,23 @@ export function uploadTexture(texture: Texture): void {
 /** Ask for the image `key` to be uploaded (an unknown key is ignored). */
 export function warmImage(key: string, prio: number): void {
   if (hasTex(key)) warm.request(`img:${key}`, prio, 0.6, () => uploadTexture(tex(key)));
+}
+
+let scratch: RenderTexture | null = null;
+
+/**
+ * Draw `container` once into a 16 x 16 target nobody sees, so that its first real draw (glyph textures, geometry, uploads, a shader variant)
+ * has been paid for: a screen's first frame costs 40 to 60 ms of that, a piece drawn ahead costs 3 to 12. A hidden container is shown for the
+ * call. Pixi makes the container a render group of its own the first time it is drawn this way.
+ */
+export function renderOnce(container: Container): void {
+  const renderer = game.app.renderer;
+  scratch ??= RenderTexture.create({ width: 16, height: 16 });
+  const was = container.visible;
+  container.visible = true;
+  try {
+    renderer.render({ container, target: scratch, clear: false });
+  } finally {
+    container.visible = was;
+  }
 }

@@ -11,6 +11,7 @@ import { ENEMY_IDS, UNIT_IDS } from '@/game/api';
 import { Rng } from '@/core/rng';
 import { analyse, signatureDistance, type Signature, type SoundStats } from './analysis';
 import { bakeVariant } from './bake';
+import { BANK_BUDGET_MB } from './bank';
 import { gainToDb } from './envelopes';
 import { BOSS_DEATHS, FAMILIES, FOE_DEATHS, FOE_HITS, IMPACTS, RELEASES, type Family } from './families';
 import { createGraph } from './graph';
@@ -97,8 +98,9 @@ const MB = 1_000_000;
  * Budget for every pre-rendered buffer (SFX variants plus stingers); music is live-synthesised and costs none. It was 8 MB for the 76 sounds
  * of the first pass; the 64 weapon and enemy sounds (3 variants of 40 attacks and impacts and 18 reactions, 1 of each boss death) add about
  * 6 MB, which is nothing next to what a phone gives a web page and is what a fight that sounds like a fight costs. (13.0 MB measured at 48 kHz, 11.9 MB at 44.1 kHz.)
+ * The bank enforces the same figure while the game runs (bank.ts).
  */
-const MEMORY_BUDGET_MB = 14;
+const MEMORY_BUDGET_MB = BANK_BUDGET_MB;
 
 async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
   const n = def.recipe.variants ?? 1;

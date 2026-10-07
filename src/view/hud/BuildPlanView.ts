@@ -10,11 +10,16 @@ import { AWAKEN_MIN_TIER, unitClass, unitDef, unitRarity, type UnitState } from 
 import { Color, drawDashedRect, drawIcon, drawPaperFace, fitLabel, paperSeed, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
 import { CLASS_ACCENT, unitPhoto } from './kit';
+import { SHEET } from './layoutMath';
 import { canMergeNow, MERGE_NEED, planOf, type BuildPlan } from './planMath';
 
-export const PLAN_H = 62;
+const PLAN_H = SHEET.well;
 
-const PHOTO = 50;
+const PHOTO = 46;
+const STITCH = 3;
+/** The two lines of the right-hand block: 25 px apart, 6.5 px of paper above the upper and under the lower. */
+const LINE_1 = 17.5;
+const LINE_2 = 42.5;
 const PAD = 14;
 /** Widths of the right-hand block: a merge shows two short lines, an awakening two requirements with a status disc each. */
 const RIGHT_MERGE = 224;
@@ -24,9 +29,9 @@ const RIGHT_AWAKEN = 266;
 function statusDisc(met: boolean): Container {
   const c = new Container();
   const g = new Graphics();
-  g.circle(0, 0, 13).fill(met ? Color.leaf : Color.paperDim).stroke({ width: 2.5, color: met ? Color.leafDark : Color.kraftDark });
+  g.circle(0, 0, 10).fill(met ? Color.leaf : Color.paperDim).stroke({ width: 2.5, color: met ? Color.leafDark : Color.kraftDark });
   c.addChild(g);
-  if (met) c.addChild(drawIcon('check', 20));
+  if (met) c.addChild(drawIcon('check', 15));
   return c;
 }
 
@@ -34,10 +39,10 @@ function statusDisc(met: boolean): Container {
 function requirement(text: string, met: boolean, maxW: number): Container {
   const row = new Container();
   const disc = statusDisc(met);
-  disc.position.set(13, 0);
+  disc.position.set(11.5, 0);
   const label = uiLabel(text, { size: 24, anchorX: 0, align: 'left' });
-  label.position.set(36, 1);
-  fitLabel(label, maxW - 36, 24, 0.8);
+  label.position.set(34, 1);
+  fitLabel(label, maxW - 34, 24, 0.8);
   row.addChild(disc, label);
   return row;
 }
@@ -74,7 +79,8 @@ export class BuildPlanView extends Container {
     const g = new Graphics();
     const fill = met ? mixColor(Color.paperDim, Color.mustard, 0.38) : Color.paperDim;
     drawPaperFace(g, 0, 0, { w: this.w, h: PLAN_H, radius: 20, fill, edge: Color.kraftDark, edgeAlpha: 0.4, grain: false, seed: this.seed });
-    if (met) drawDashedRect(g, 5, 5, this.w - 10, PLAN_H - 10, { radius: 15, color: Color.mustardDark, width: 2.5, dash: 10, gap: 7, seed: this.seed });
+    // A stitch just inside the well's edge: the two lines of text (7 px of paper above and under them) stay clear of it.
+    if (met) drawDashedRect(g, STITCH, STITCH, this.w - STITCH * 2, PLAN_H - STITCH * 2, { radius: 20 - STITCH, color: Color.mustardDark, width: 2.5, dash: 10, gap: 7, seed: this.seed });
     this.addChild(g);
   }
 
@@ -107,11 +113,11 @@ export class BuildPlanView extends Container {
   /** Right block of a merge: how many identical cats there are, and the rule or the call to drag. */
   private drawTwins(plan: BuildPlan, x: number, maxW: number): void {
     const have = uiLabel(t('hud.plan.have', { n: plan.twins }), { size: 24, anchorX: 0, align: 'left' });
-    have.position.set(x, 19);
+    have.position.set(x, LINE_1);
     fitLabel(have, maxW, 24, 0.8);
     const ready = canMergeNow(plan);
     const rule = uiLabel(t(ready ? 'hud.plan.ready' : 'hud.plan.rule', { n: MERGE_NEED }), { size: 24, color: ready ? Color.ink : Color.inkSoft, anchorX: 0, align: 'left' });
-    rule.position.set(x, 44);
+    rule.position.set(x, LINE_2);
     fitLabel(rule, maxW, 24, 0.8);
     this.addChild(have, rule);
   }
@@ -122,9 +128,9 @@ export class BuildPlanView extends Container {
     const tier = b.synergyTier(unitClass(unit.id));
     const need = b.awakenCost();
     const synergy = requirement(t('hud.plan.synergy', { need: AWAKEN_MIN_TIER, now: tier }), tier >= AWAKEN_MIN_TIER, maxW);
-    synergy.position.set(x, 19);
+    synergy.position.set(x, LINE_1);
     const purr = requirement(t('hud.plan.purr', { have: b.purr, need }), b.purr >= need, maxW);
-    purr.position.set(x, 44);
+    purr.position.set(x, LINE_2);
     this.addChild(synergy, purr);
   }
 }

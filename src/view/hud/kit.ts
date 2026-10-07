@@ -1,5 +1,5 @@
 /** Small display helpers shared by the HUD components: portraits, photo frames, icons, hit areas, class colours. */
-import { Container, Graphics, Rectangle, Sprite, type DestroyOptions } from 'pixi.js';
+import { Container, Graphics, Rectangle, Sprite, type DestroyOptions, type Text } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { game } from '@/core/game';
 import { mixColor } from '@/core/math';
@@ -105,6 +105,22 @@ export function relicIcon(id: RelicId, size: number, rarity: Exclude<RarityId, '
   c.addChild(g, drawIcon(RELIC_FALLBACK[rarity], size * 0.5));
   return c;
 }
+
+/**
+ * A wrapped label set to the narrowest width that keeps its line count, so a sentence that needs two lines comes out as two lines of
+ * about the same length and not one full line with a stray word under it. `max` is the width it would wrap at otherwise.
+ */
+export function balanceWrap(label: Text, max: number): void {
+  const style = label.style;
+  style.wordWrap = false;
+  const full = label.width;
+  const lines = Math.max(1, Math.ceil(full / max));
+  style.wordWrap = true;
+  style.wordWrapWidth = lines === 1 ? max : Math.min(max, Math.ceil(full / lines) + BALANCE_SLACK);
+}
+
+/** Room a balanced line is given beyond an even share, so a long word that does not fit moves down without making a third line. */
+const BALANCE_SLACK = 56;
 
 export interface PhotoOpts {
   /** Side of the cream frame. */

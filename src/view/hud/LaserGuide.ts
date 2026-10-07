@@ -14,11 +14,12 @@ import { startAim, stopAim } from '../aim';
 import { info } from '../info';
 import type { HudEnv } from './env';
 import { Hand } from './Hand';
-import { FROM_BELOW, type Keep, pawBounds, pawRotation, type PawFrom, placePaw, soften, tipSpot } from './handMath';
-import type { Rect } from './layoutMath';
+import { bestRimPose, FROM_BELOW, type Keep, pawBounds, pawRotation, type PawFrom, rimSpots, soften } from './handMath';
+import { INFO_R, laserFace, LASER_INFO, LASER_RING, LASER_SPOT, type Rect, spotRadius, spotWindow } from './layoutMath';
 import { guideDue, LaserGuideFlow, SEE_FOR, type GuideStep } from './laserGuideFlow';
 
-const MARGIN = 16;
+/** How far from the button's centre the bubble's tail points, away from the paw. */
+const TAIL_SIDE = 40;
 /** Seconds into the last step after which the closing line replaces the one that names the marks. */
 const SEE_SPLIT = SEE_FOR * 0.55;
 /** Tilt of the paw riding the lane, off the vertical. */
@@ -147,21 +148,23 @@ export class LaserGuide {
     this.hand.visible = step !== 'see';
     if (step === 'press') {
       this.line = t('hud.laserGuide.press');
-      const x = Math.max(0, r.x - MARGIN);
-      const y = Math.max(0, r.y - MARGIN);
-      const w = Math.min(this.layout.w - x, r.w + MARGIN * 2);
-      const h = r.h + MARGIN * 2;
-      // The warm-brown dim with a hole round the button, edged with the cream dashed line of the first run's spotlight.
+      // The warm-brown dim with a round hole about the button's centre, edged with the cream dashed line of the first run's spotlight. It stays
+      // clear of the ring by LASER_SPOT on every side, which leaves the "i" mark outside the line.
+      const win = spotWindow(r, LASER_SPOT, 2, this.layout);
+      const corner = spotRadius(win, 40);
       this.dim.rect(0, 0, this.layout.w, this.layout.h).fill({ color: Dim.backdrop, alpha: Dim.backdropAlpha * 0.8 });
-      this.dim.roundRect(x, y, w, h, 40).cut();
-      drawDashedRect(this.ring, x, y, w, h, { radius: 40, color: Color.paper, width: 5, seed: this.seed });
-      // The paw pats the button from the side that has room (the screen ends right under it, so it comes down from above), off the
-      // call-wave offer over the button, the seconds under it and the "i" mark on its corner.
-      const { tip } = tipSpot(r);
-      const pose = placePaw({ tips: [tip], bounds: pawBounds(this.layout), keep: soften(this.keep()), prefer: FROM_BELOW });
+      this.dim.roundRect(win.x, win.y, win.w, win.h, corner).cut();
+      drawDashedRect(this.ring, win.x, win.y, win.w, win.h, { radius: corner, color: Color.paper, width: 5, seed: this.seed });
+      // The paw pats the button beside its glyph (on the band between the glyph and the face's edge) from the side that has room: the screen
+      // ends right under the button, so it comes down from above; off the glyph, the call-wave offer over the button, the seconds under it and the "i" mark.
+      const face = laserFace(r);
+      const k = r.w / (2 * LASER_RING);
+      const mark: Keep = { x: face.centre.x + LASER_INFO.x * k - INFO_R * k, y: face.centre.y + LASER_INFO.y * k - INFO_R * k, w: INFO_R * 2 * k, h: INFO_R * 2 * k, weight: 6 };
+      const { tip, pose } = bestRimPose(rimSpots(face.centre, face.faceR, face.glyphR), { bounds: pawBounds(this.layout), keep: [...soften(this.keep()), mark], prefer: FROM_BELOW });
       this.hand.place(tip.x, tip.y, pose.rotation);
       this.hand.tap();
-      this.anchorAt(r.x + r.w / 2, y);
+      // The bubble's tail points at the window's top on the side the paw is not on, so the tail never lies across the pad.
+      this.anchorAt(face.centre.x - Math.sign(tip.x - face.centre.x) * TAIL_SIDE, win.y);
     } else if (step === 'place') {
       this.line = t('hud.laserGuide.place');
       this.hand.tap();

@@ -9,7 +9,7 @@
  * effect the moment audio can run, so a game may start its soundtrack before the first tap.
  */
 import { game } from '@/core/game';
-import type { AudioApi, MusicId, PlayOpts, SfxId, StingerId } from './api';
+import type { AudioApi, MusicId, PlayOpts, PrimeTarget, SfxId, StingerId } from './api';
 import { SoundBank } from './bank';
 import { offlineSupported } from './bake';
 import { duckPlan, volumeTaper } from './envelopes';
@@ -104,8 +104,11 @@ export interface AudioStats {
   total: number;
   bakePending: number;
   bakeMs: number;
-  /** Memory held by baked buffers. */
+  /** Memory held by baked buffers, and the most the bank may hold (the oldest-played sounds are dropped beyond it). */
   bakedKB: number;
+  budgetKB: number;
+  /** Sounds dropped to stay inside the budget. */
+  evicted: number;
   sfxActive: number;
   sfxActivePeak: number;
   sfxPlayed: number;
@@ -625,11 +628,33 @@ export class AudioEngine implements AudioApi {
     if (d) this.duck(d.depth, d.seconds);
   }
 
-  /** Bake these sounds now (dev tooling: a measurement must not start before the bank has what it plays). */
+  /** Bake these sounds now, every variant (dev tooling: a measurement must not start before the bank has what it plays). */
   async prime(ids: readonly SfxId[]): Promise<void> {
     const bank = this.bank;
     if (!bank) return;
-    for (const id of ids) await bank.ensure(sfxIndexOf(id));
+    for (const id of ids) await bank.ensure(sfxIndexOf(id), true);
+  }
+
+  primeStep(target: PrimeTarget): number {
+    try {
+      const bank = this.bank;
+      const idx = this.indexOfTarget(target);
+      if (!bank || idx < 0 || !offlineSupported()) return 0;
+      bank.bakeStep(idx);
+      return bank.left(idx);
+    } catch {
+      // see play()
+      return 0;
+    }
+  }
+
+  primeLeft(target: PrimeTarget): number {
+    const idx = this.indexOfTarget(target);
+    return this.bank && idx >= 0 && offlineSupported() ? this.bank.left(idx) : 0;
+  }
+
+  private indexOfTarget(target: PrimeTarget): number {
+    return 'sfx' in target ? sfxIndexOf(target.sfx) : stingerIndexOf(target.stinger);
   }
 
   /** Counters for the debug hooks and the demo's HUD. */
@@ -646,6 +671,8 @@ export class AudioEngine implements AudioApi {
       bakePending: this.bank?.pending ?? 0,
       bakeMs: Math.round(this.bank?.bakeMs ?? 0),
       bakedKB: Math.round((this.bank?.bytes ?? 0) / 1024),
+      budgetKB: Math.round((this.bank?.limit ?? 0) / 1024),
+      evicted: this.bank?.evicted ?? 0,
       sfxActive: this.limiter.active(now),
       sfxActivePeak: this.activePeak,
       sfxPlayed: this.played,

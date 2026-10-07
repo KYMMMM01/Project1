@@ -198,12 +198,16 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const x1 = obj.x;
     const y1 = obj.y;
     obj.alpha = 0;
+    // Hidden, not just clear: a piece that is not drawn costs nothing, and its first draw (glyphs, geometry) then comes with its own turn
+    // instead of all of them in the frame the page opens.
+    obj.visible = false;
     bag.run({
       duration: 0.3,
       delay,
       ease: backOut(1.6),
       onUpdate: (k) => {
         if (obj.destroyed) return;
+        obj.visible = true;
         obj.x = x1 + dx * (1 - k);
         obj.y = y1 + dy * (1 - k);
         obj.alpha = Math.min(1, k * 3);
@@ -224,12 +228,16 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   if (!motion.reduced) {
     page.alpha = 0;
     cut.alpha = 0;
+    page.visible = false;
+    cut.visible = false;
     bag.run({
       duration: 0.36,
       delay: PAGE_AT,
       ease: backOut(1.4),
       onUpdate: (k) => {
         if (page.destroyed) return;
+        page.visible = true;
+        cut.visible = true;
         sheet.y = sheetY + 44 * (1 - k);
         page.alpha = Math.min(1, k * 3);
         cut.alpha = page.alpha;
@@ -244,6 +252,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     if (photo) {
       // The photo is slapped on: it lands from above, a little too big, squashes onto the page and settles once.
       photo.alpha = 0;
+      photo.visible = false;
       const rot = photo.rotation;
       bag.run({
         duration: 0.34,
@@ -251,6 +260,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
         ease: Ease.linear,
         onUpdate: (k) => {
           if (photo.destroyed) return;
+          photo.visible = true;
           const e = backOut(2.2)(Ease.quadOut(k));
           photo.scale.set(1.5 - 0.5 * e);
           photo.rotation = rot - 0.16 * (1 - e);
@@ -540,7 +550,9 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   };
   const askNext = (): NextRun | null => (victory ? (env.ctx.run.next?.() ?? null) : null);
   if (wantsNext) bag.call(2.5, () => buildBar(null));
-  else buildBar(null);
+  // The buttons are drawn a few frames after the page opens (it is rising under them for a quarter of a second anyway): their first draw is a frame of its own.
+  else if (motion.reduced) buildBar(null);
+  else bag.call(0.08, () => buildBar(null));
 
   // ── victory confetti ──
   if (victory && !motion.reduced) confetti(scaffold, bag);

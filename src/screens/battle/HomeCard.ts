@@ -12,25 +12,36 @@ import {
   drawIcon,
   drawPaper,
   fitLabel,
+  HEADER,
+  HEADER_H,
+  headerLayout,
   paperSeed,
   tapeStrip,
   toast,
   uiLabel,
+  type HeaderLayout,
   type IconName,
   type TapeName,
 } from '@/ui';
 
-const PAD = 24;
-const TITLE_H = 64;
+const PAD = HEADER.padX;
 const RADIUS = 30;
+/** Width of the mustard backing of a featured card. */
+const RIM = 9;
+/** The header is this much taller than the 72 px title row it replaced: every card adds it to its own height, so the body keeps its spacing. */
+export const HEAD_GROW = HEADER_H - 72;
+/** Extra height a featured card needs: its header sits below the rim. */
+export const RIM_GROW = RIM;
 /** The paper disc under a card's icon. */
-const discPaper = (seed: number) => ({ w: 52, h: 52, kind: 'circle', fill: Color.paperDim, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 2 }) as const;
+const discPaper = (seed: number) => ({ w: HEADER.disc, h: HEADER.disc, kind: 'circle', fill: Color.paperDim, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 2 }) as const;
 
 interface CardOpts {
   /** The one piece of washi tape this card carries. */
   tape: TapeName;
   /** A card the shop wants noticed: cream paper on a mustard backing. */
   featured?: boolean;
+  /** Width the control at the right end of the header row needs (default: a round button as big as the disc). */
+  reserve?: number;
 }
 
 /**
@@ -48,25 +59,32 @@ export abstract class HomeCard extends Container {
   /** The hint the veil is built for; null = the card is open. */
   private lockHint: string | null = null;
   private working = false;
+  /** Where the header's parts sit (see headerLayout): subclasses put their right-hand control on `head.control`. */
+  protected readonly head: HeaderLayout;
+  private readonly featured: boolean;
 
   protected constructor(w: number, h: number, private readonly title: string, private readonly iconName: IconName, opts: CardOpts) {
     super();
     this.cardW = w;
     this.cardH = h;
+    this.featured = opts.featured === true;
+    this.head = headerLayout(w, { rim: this.featured ? RIM : 0, reserve: opts.reserve });
 
     const art = new Container();
     const sheet = new Graphics();
     if (opts.featured) {
       drawPaper(sheet, 0, 0, { w, h, radius: RADIUS, fill: Color.mustard, edge: Color.mustardDark, seed: this.seed });
-      drawPaper(sheet, 9, 9, { w: w - 18, h: h - 18, radius: RADIUS - 8, fill: Color.paper, seed: this.seed + 1, shadow: false });
+      drawPaper(sheet, RIM, RIM, { w: w - RIM * 2, h: h - RIM * 2, radius: RADIUS - 8, fill: Color.paper, seed: this.seed + 1, shadow: false });
     } else {
       drawPaper(sheet, 0, 0, { w, h, radius: RADIUS, fill: Color.paper, seed: this.seed });
     }
-    drawDashedLine(sheet, PAD, TITLE_H, w - PAD, TITLE_H, { seed: this.seed });
+    const { sep, disc: d, tapeSpan } = this.head;
+    drawDashedLine(sheet, sep.x0, sep.y, sep.x1, sep.y, { seed: this.seed });
     const disc = new Graphics();
-    drawPaper(disc, PAD, 10, discPaper(this.seed));
+    drawPaper(disc, d.x, d.y, discPaper(this.seed));
     const tape = tapeStrip({ name: opts.tape, pattern: this.seed % 2 === 0 ? 'dots' : 'gingham', w: 84, h: 26, angle: (this.seed % 5) - 2, seed: this.seed });
-    tape.position.set(w * 0.5 + ((this.seed >>> 4) % 90) - 45, 3);
+    // The tape lies across the top edge, between the disc and the control: it never covers either of them.
+    tape.position.set(tapeSpan.min + (((this.seed >>> 4) % 100) / 100) * Math.max(0, tapeSpan.max - tapeSpan.min), this.featured ? 3 : 0);
     art.addChild(sheet, disc, tape);
     cacheStatic(art);
 
@@ -80,18 +98,19 @@ export abstract class HomeCard extends Container {
   /** The icon and the title on the card's title row; the locked veil draws its own copy, so a closed card still says what it is. */
   private titleRow(): Container {
     const row = new Container();
-    const ic = drawIcon(this.iconName, 38);
-    ic.position.set(PAD + 26, 36);
+    const { icon, title } = this.head;
+    const ic = drawIcon(this.iconName, icon.size);
+    ic.position.set(icon.x, icon.y);
     const head = uiLabel(this.title, { size: 32, anchorX: 0 });
-    head.position.set(PAD + 66, 37);
-    fitLabel(head, this.cardW - PAD * 2 - 66, 32);
+    head.position.set(title.x, title.y);
+    fitLabel(head, title.maxW, 32);
     row.addChild(ic, head);
     return row;
   }
 
   /** Bottom edge of the title row: where the card's own content may start. */
   protected get contentTop(): number {
-    return TITLE_H + 8;
+    return this.head.contentTop;
   }
 
   /** Re-read the profile into the widgets. Cheap; called on show, on every profile change and when a countdown rolls over. */
@@ -111,14 +130,17 @@ export abstract class HomeCard extends Container {
     if (hint === null) return;
     const { cardW: w, cardH: h } = this;
     const sheet = new Graphics();
+    const { sep, disc: d } = this.head;
     drawPaper(sheet, 0, 0, { w, h, radius: RADIUS, fill: Color.kraft, edge: Color.kraftDark, seed: this.seed });
-    drawDashedRect(sheet, 14, 14, w - 28, h - 28, { radius: RADIUS - 8, color: Color.kraftDark, seed: this.seed });
-    drawDashedLine(sheet, PAD, TITLE_H, w - PAD, TITLE_H, { seed: this.seed, color: Color.kraftDark });
-    drawPaper(sheet, PAD, 10, discPaper(this.seed));
+    drawDashedLine(sheet, sep.x0, sep.y, sep.x1, sep.y, { seed: this.seed, color: Color.kraftDark });
+    drawPaper(sheet, d.x, d.y, discPaper(this.seed));
+    // The dashed slot holds what is closed: it starts under the header, so no disc or title ever sits on its line; equal margins on the sides and below.
+    const well = { x: PAD, y: sep.y + 16, w: w - PAD * 2, h: h - (sep.y + 16) - PAD };
+    drawDashedRect(sheet, well.x, well.y, well.w, well.h, { radius: 20, color: Color.kraftDark, seed: this.seed });
     cacheStatic(sheet);
     sheet.eventMode = 'static';
-    // The lock and the hint sit in the middle of what is left under the title row.
-    const mid = TITLE_H + (h - TITLE_H) / 2;
+    // The lock and the hint sit in the middle of the slot.
+    const mid = well.y + well.h / 2;
     const lock = drawIcon('lock', 64);
     lock.position.set(w / 2, mid - 28);
     const text = uiLabel(hint, { size: 26, wrap: w - 72 });

@@ -4,11 +4,11 @@ import { profile } from '@/meta';
 import { ads } from '@/platform';
 import { Button, Color, ProgressBar, drawIcon, uiLabel } from '@/ui';
 import type { Shell } from '../contract';
-import { CARD_PAD, HomeCard } from './HomeCard';
+import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { playClaim } from './claim';
 import './strings';
 
-const H = 316;
+const H = 316 + HEAD_GROW - 7;
 const BTN_W = 252;
 
 /** Patrol: gold the cats collected while the player was away, claimed for free or doubled by an ad. */

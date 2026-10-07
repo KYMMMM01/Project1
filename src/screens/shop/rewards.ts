@@ -21,6 +21,8 @@ const PANEL_W = 640;
 const SLOT_W = 188;
 const TILE_H = 248;
 const ART = 112;
+/** Side of a reward's paper disc or photo tile. */
+const TILE = 148;
 /** Amounts below this show at once: a chest or a cat card counting up from "x0" reads as nothing received. */
 const ROLL_FROM = 10;
 
@@ -98,12 +100,13 @@ class RewardSheet extends Popup<void> {
     const photo = part.kind === 'card' || part.kind === 'wild';
     const rar = photo ? Rarity[part.kind === 'card' ? RARITY_OF[part.unit] : part.rarity] : null;
     if (rar) {
-      view.addChild(paperShape({ w: 140, h: 140, radius: 24, fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed }));
-      view.addChild(paperShape({ w: 120, h: 120, radius: 16, fill: rar.light, edge: rar.dark, shadow: false, grain: false, seed: seed + 1 }));
+      // A photo tile is as big as a disc, so a row of both reads as one size.
+      view.addChild(paperShape({ w: TILE, h: TILE, radius: 24, fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed }));
+      view.addChild(paperShape({ w: TILE - 20, h: TILE - 20, radius: 16, fill: rar.light, edge: rar.dark, shadow: false, grain: false, seed: seed + 1 }));
     } else {
-      view.addChild(paperShape({ w: 148, h: 148, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed }));
+      view.addChild(paperShape({ w: TILE, h: TILE, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed }));
     }
-    const art = part.kind === 'gold' || part.kind === 'gems' || part.kind === 'tickets' ? currencyArt(part.kind, ART) : partArt(part, photo ? 112 : ART);
+    const art = part.kind === 'gold' || part.kind === 'gems' || part.kind === 'tickets' ? currencyArt(part.kind, ART) : partArt(part, photo ? TILE - 30 : ART);
     art.y = -4;
     view.addChild(art);
 

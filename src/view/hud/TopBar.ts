@@ -31,21 +31,15 @@ import type { HudEnv } from './env';
 import { GAUGE_H, GaugeStrip } from './GaugeStrip';
 import { enemyPortrait, relicIcon } from './kit';
 import { gaugeLevel, nextSpeed, overflowLeft, speedSteps, traitOrder } from './policy';
-import { gaugeWidth, slotCentre, slotWidth, topRects, type Rect, type TopRects } from './layoutMath';
+import { CARD_GAP, CARD_H, CARD_W, cardCentre, COLUMN_W, FACE, gaugeWidth, LABEL_H, PREVIEW_MAX, previewShown, TOY_MAX, TOY_SIZE, toyCentre, toysShown, topRects, type TopRects } from './layoutMath';
 
-const SLOT_MAX = 56;
-const PREVIEW_MAX = 4;
-const PREVIEW_SLOT = 64;
 /** Seconds the cards of the wave that has begun take to leave before the next wave's are dealt. */
 const PREVIEW_LEAVE = 0.12;
-const TOY_MAX = 6;
-/** Seconds the picked toy's icon takes to fly from the choice screen to the row. */
 
-/** Touch targets are at least 88 wide, so a strip is one target and the tap picks the icon nearest to the finger. */
-const STRIP_H = 96;
-
-const CARD_W = 60;
-const CARD_H = 66;
+/** Touch targets are at least 88 tall, so a row is one target and the tap picks the icon nearest to the finger. */
+const STRIP_H = 88;
+/** Pitch of the cards, and what a tap on the row is measured against. */
+const CARD_PITCH = CARD_W + CARD_GAP;
 
 interface Slot {
   box: Container;
@@ -91,12 +85,13 @@ export class TopBar {
     this.rects = topRects(l);
     const b = env.battle;
 
-    this.pauseBtn = new IconButton({ icon: 'pause', style: 'neutral', size: 76, fireOnDown: true, sfx: 'ui_click' });
-    this.speedBtn = new IconButton({ icon: 'speed_1', style: 'info', size: 76, fireOnDown: true });
-    this.gauge = new GaugeStrip();
+    this.pauseBtn = new IconButton({ icon: 'pause', style: 'neutral', size: FACE, fireOnDown: true, sfx: 'ui_click' });
+    this.speedBtn = new IconButton({ icon: 'speed_1', style: 'info', size: FACE, fireOnDown: true });
+    this.gauge = new GaugeStrip(gaugeWidth(this.rects, env.skip));
     this.warn = drawIcon('warning', 34);
     this.warn.visible = false;
-    this.waveLabel = new PaperLabel({ text: t('hud.prep'), size: 24, paper: Color.paper, padX: 16, padY: 7, maxWidth: this.rects.wave.w + 8 });
+    // 24 px text on a 34 px paper (28 + 2 x 3) as wide as the countdown bar under it: one column, one left edge.
+    this.waveLabel = new PaperLabel({ text: t('hud.prep'), size: 24, paper: Color.paper, padX: 12, padY: (LABEL_H - 28) / 2, minWidth: COLUMN_W, maxWidth: COLUMN_W });
     this.timer = new ProgressBar({ width: this.rects.timer.w, height: this.rects.timer.h, color: 'blue', value: 1, labelSize: 24 });
     this.more = uiLabel('', { size: 24, onArt: true });
     this.more.visible = false;
@@ -230,10 +225,10 @@ export class TopBar {
     this.placeWave();
   }
 
-  /** The label hangs from the left edge of the second row whatever its width. */
+  /** The label's paper is the wave rect: same left edge, width and centre as the countdown bar under it. */
   private placeWave(): void {
-    const r = this.rects;
-    this.waveLabel.position.set(r.wave.x + this.waveLabel.uiBox.w / 2, r.row2Y - 22);
+    const w = this.rects.wave;
+    this.waveLabel.position.set(w.x + w.w / 2, w.y + w.h / 2);
   }
 
   private punchWave(): void {
@@ -287,28 +282,23 @@ export class TopBar {
     }
     this.slots = [];
     this.previewIds = [];
-    this.more.visible = false;
     if (!this.env.reveal.preview) return;
-    const shown = entries.slice(0, PREVIEW_MAX);
-    const r = this.rects.preview;
-    const slot = slotWidth(shown.length, r.w, PREVIEW_SLOT);
+    const { cards, more } = previewShown(entries.length);
+    const shown = entries.slice(0, cards);
+    const r = this.rects;
     this.previewIds = shown.map((en) => en.enemy);
     shown.forEach((en, i) => {
-      const box = new Container();
-      box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 6);
-      // Cards lie slightly crooked, like scraps dropped on the floor.
-      box.rotation = (i % 2 === 0 ? -1 : 1) * 0.035;
       const def = enemyDef(en.enemy);
       const boss = def.traits.includes('boss') || def.traits.includes('elite');
-      const card = paperShape({ w: CARD_W, h: CARD_H, radius: 12, fill: boss ? Color.berry : Color.paper, seed: this.cardSeeds[i], grain: false });
-      const pic = enemyPortrait(en.enemy, 46);
-      pic.position.set(-3, -9);
+      const box = this.card(i, boss);
+      const pic = enemyPortrait(en.enemy, 44);
+      pic.position.set(0, -11);
       const count = uiLabel(`×${en.count}`, { size: 24, color: boss ? Color.inkDeep : Color.ink });
-      count.position.set(8, 22);
-      box.addChild(card, pic, count);
+      count.position.set(0, 22);
+      box.addChild(pic, count);
       if (boss) {
         const mark = drawIcon('skull', 26);
-        mark.position.set(-17, -23);
+        mark.position.set(-CARD_W / 2 + 13, -CARD_H / 2 + 15);
         box.addChild(mark);
       }
       this.previewLayer.addChild(box);
@@ -316,11 +306,24 @@ export class TopBar {
       const pop = changed ? popIn(this.bag, box, { from: 0.35, duration: 0.24, delay: PREVIEW_LEAVE + i * 0.05, overshoot: 2.4 }) : undefined;
       this.slots.push({ box, pop });
     });
-    if (entries.length > shown.length) {
-      this.more.text = `+${entries.length - shown.length}`;
-      this.more.visible = true;
+    if (more > 0) {
+      // Kinds that do not fit: the last card says how many more there are.
+      const box = this.card(cards, false);
+      const n = uiLabel(`+${more}`, { size: 30 });
+      box.addChild(n);
+      this.previewLayer.addChild(box);
+      this.slots.push({ box });
     }
-    this.layoutMore();
+    this.previewLayer.hitArea = new Rectangle(r.preview.x, r.midY - STRIP_H / 2, r.preview.w, STRIP_H);
+  }
+
+  /** One card's paper at slot `i` of the row: a little crooked, like a scrap dropped on the floor, on the row's centre line. */
+  private card(i: number, boss: boolean): Container {
+    const box = new Container();
+    box.position.set(cardCentre(this.rects, i), this.rects.midY);
+    box.rotation = (i % 2 === 0 ? -1 : 1) * 0.02;
+    box.addChild(paperShape({ w: CARD_W, h: CARD_H, radius: 12, fill: boss ? Color.berry : Color.paper, seed: this.cardSeeds[i], grain: false }));
+    return box;
   }
 
   /** An old card slips down and fades before it goes (it takes no taps meanwhile). */
@@ -341,15 +344,14 @@ export class TopBar {
     });
   }
 
-  /** Index of the icon under the finger in a strip of `n` equal slots starting at `r.x`. */
-  private slotUnder(e: FederatedPointerEvent, layer: Container, r: Rect, n: number): number {
+  /** Index of the slot whose centre is nearest the finger, in a row of `n` slots `pitch` apart starting at `first`. */
+  private slotUnder(e: FederatedPointerEvent, layer: Container, first: number, pitch: number, n: number): number {
     if (n <= 0) return -1;
-    const slot = Math.min(r.w / n, layer === this.previewLayer ? PREVIEW_SLOT : SLOT_MAX);
-    return Math.min(n - 1, Math.max(0, Math.floor((layer.toLocal(e.global).x - r.x) / slot)));
+    return Math.min(n - 1, Math.max(0, Math.round((layer.toLocal(e.global).x - first) / pitch)));
   }
 
   private tapPreview(e: FederatedPointerEvent): void {
-    const i = this.slotUnder(e, this.previewLayer, this.rects.preview, this.previewIds.length);
+    const i = this.slotUnder(e, this.previewLayer, cardCentre(this.rects, 0), CARD_PITCH, this.slots.length);
     const id = this.previewIds[i];
     const box = this.slots[i]?.box;
     if (!id || !box) return;
@@ -358,7 +360,7 @@ export class TopBar {
   }
 
   private tapToy(e: FederatedPointerEvent): void {
-    const i = this.slotUnder(e, this.toyLayer, this.rects.toys, this.toyIds.length);
+    const i = this.slotUnder(e, this.toyLayer, toyCentre(this.rects, 0), TOY_SIZE, this.toySlots.length);
     const id = this.toyIds[i];
     const box = this.toySlots[i]?.box;
     if (!id || !box) return;
@@ -383,22 +385,25 @@ export class TopBar {
     }
     this.toySlots = [];
     const relics = this.env.battle.relics;
-    const shown = relics.slice(0, TOY_MAX);
-    this.toyIds = shown.slice();
-    const r = this.rects.toys;
-    const slot = slotWidth(Math.max(shown.length, 1), r.w, SLOT_MAX);
-    shown.forEach((id, i) => {
+    const { icons, more } = toysShown(relics.length);
+    this.toyIds = relics.slice(0, icons);
+    this.toyIds.forEach((id, i) => {
       const def = relicDef(id);
       const box = new Container();
-      box.position.set(slotCentre(i, slot, r.x), this.rects.row2Y + 4);
-      box.addChild(relicIcon(id, 46, def.rarity));
+      box.position.set(toyCentre(this.rects, i), this.rects.midY);
+      box.addChild(relicIcon(id, TOY_SIZE, def.rarity));
       this.toyLayer.addChild(box);
       const slotEntry: Slot = { box };
       this.toySlots.push(slotEntry);
-      if (animateLast && i === shown.length - 1) slotEntry.pop = popIn(this.bag, box, { from: 0.2, duration: 0.3, overshoot: 3 });
+      if (animateLast && i === icons - 1 && more === 0) slotEntry.pop = popIn(this.bag, box, { from: 0.2, duration: 0.3, overshoot: 3 });
     });
-    this.more.visible = this.more.visible || relics.length > shown.length;
-    this.layoutMore();
+    this.toyLayer.hitArea = new Rectangle(this.rects.toys.x, this.rects.midY - STRIP_H / 2, this.rects.toys.w, STRIP_H);
+    // The slot after the last icon says how many toys did not fit.
+    this.more.visible = more > 0;
+    if (more > 0) {
+      this.more.text = `+${more}`;
+      this.more.position.set(toyCentre(this.rects, icons), this.rects.midY);
+    }
   }
 
   /** The toy appears when the card's icon (flown from the choice screen) would land. */
@@ -409,18 +414,10 @@ export class TopBar {
     });
   }
 
-  /** Where the next toy lands: the first free slot of the row. */
+  /** Where the next toy lands: its slot on the shelf (the last slot when the shelf is full). */
   toyAnchor(): { x: number; y: number } {
-    const r = this.rects.toys;
-    const n = Math.min(this.env.battle.relics.length, TOY_MAX);
-    const slot = slotWidth(Math.max(n, 1), r.w, SLOT_MAX);
-    const x = this.toySlots.length > 0 ? slotCentre(Math.max(0, n - 1), slot, r.x) : r.x + slot / 2;
-    return { x, y: this.rects.row2Y + 4 };
-  }
-
-  private layoutMore(): void {
-    const r = this.rects.toys;
-    this.more.position.set(r.x + r.w - 10, this.rects.row2Y + 30);
+    const slot = Math.min(Math.max(0, this.env.battle.relics.length - 1), TOY_MAX - 1);
+    return { x: toyCentre(this.rects, slot), y: this.rects.midY };
   }
 
   // ───────────────────────── layout / frame ─────────────────────────
@@ -431,8 +428,6 @@ export class TopBar {
     this.pauseBtn.position.set(r.pause.x, r.pause.y);
     this.speedBtn.position.set(r.speed.x, r.speed.y);
     this.fitGauge();
-    this.previewLayer.hitArea = new Rectangle(r.preview.x, r.row2Y - STRIP_H / 2 - 4, r.preview.w, STRIP_H);
-    this.toyLayer.hitArea = new Rectangle(r.toys.x, r.row2Y - STRIP_H / 2 - 4, r.toys.w, STRIP_H);
     this.timer.position.set(r.timer.x + r.timer.w / 2, r.timer.y + r.timer.h / 2);
     this.refreshPreview();
     this.refreshToys(false);
@@ -499,7 +494,7 @@ export class TopBar {
   anchorOf(name: 'enemyGauge' | 'wave' | 'relics'): { x: number; y: number } {
     const r = this.rects;
     if (name === 'enemyGauge') return { x: this.gauge.x, y: this.gauge.y };
-    if (name === 'wave') return { x: r.wave.x + r.wave.w / 2, y: r.row2Y };
+    if (name === 'wave') return { x: r.wave.x + r.wave.w / 2, y: r.wave.y + r.wave.h / 2 };
     return this.toyAnchor();
   }
 

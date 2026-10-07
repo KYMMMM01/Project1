@@ -34,8 +34,8 @@ const STICKER = 78;
 /** Text starts right of the sticker; the torn right end keeps its own margin. */
 const TEXT_X = 54;
 const RIGHT_PAD = 28;
-const ROW_Y = 22;
-const HP_Y = 47;
+const ROW_Y = 25;
+const HP_Y = 55;
 
 /** The paper each kill-time verdict sits on, with a glyph so the colour is never the only cue. */
 const TONE_PAPER: Record<KillTone, number> = { green: Color.leaf, amber: Color.mustard, red: Color.coral };
@@ -186,7 +186,7 @@ export class BossBar {
     const { w, h } = this.rect;
     this.root.position.set(this.rect.x, this.rect.y);
     for (const c of this.back.removeChildren()) c.destroy({ children: true });
-    this.back.addChild(paperShape({ w, h: h - 8, radius: 10, fill: Color.paper, torn: ['right'], seed: this.seed, grain: false }));
+    this.back.addChild(paperShape({ w, h, radius: 10, fill: Color.paper, torn: ['right'], seed: this.seed, grain: false }));
     this.back.position.set(w / 2, h / 2);
     this.hp.position.set(TEXT_X + (w - TEXT_X - RIGHT_PAD) / 2, HP_Y);
     this.sticker?.position.set(6, h / 2 - 2);

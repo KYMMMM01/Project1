@@ -28,29 +28,16 @@ import {
   type IconName,
 } from '@/ui';
 import { info } from '../info';
-import type { Rect } from './layoutMath';
+import { SHEET, sheetBoxes, type Rect } from './layoutMath';
 import type { HudEnv } from './env';
 import { BuildPlanView } from './BuildPlanView';
 import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE, tapArea, unitPhoto } from './kit';
 import { MoltPicker } from './popups/MoltPicker';
 
-/** Sell and awaken are wider than molt: a cat that also pays purr says both amounts on the sell button, and awaken carries its reason, all in 24 px text. */
 /** Seconds a cat's full skill text stays up (it is the longest line a bubble carries). */
 const SKILL_FOR = 8;
-const BTN_W = 186;
-const AWAKEN_W = 214;
-const SELL_W = 240;
-const BTN_GAP = 10;
-const BTN_H = 80;
-const BTN_Y = 224;
-const PHOTO = 90;
-const TEXT_X = 122;
-/** The close button sits on the card's top-right corner; text stays clear of it. */
-const TEXT_RIGHT = 628;
-const PLAN_X = 16;
 /** Room kept at the end of a cut skill line for its info mark. */
 const INFO_W = 36;
-const PLAN_Y = 114;
 
 /** One short line for a refused awakening, shown on the (disabled) button itself. */
 function awakenReason(fail: Fail, cost: number): string {
@@ -67,7 +54,7 @@ function pill(text: string, fill: number, edge: number, icon: IconName | null, s
   const iw = icon ? 28 : 0;
   const w = label.width + iw + 28;
   const g = new Graphics();
-  drawPaper(g, 0, -18, { w, h: 36, kind: 'pill', fill, edge, shadow: 3, grain: false, seed });
+  drawPaper(g, 0, -17, { w, h: 34, kind: 'pill', fill, edge, shadow: 3, grain: false, seed });
   label.position.set(14 + iw + label.width / 2, 0);
   c.addChild(g, label);
   if (icon) {
@@ -99,14 +86,14 @@ export class SelectionSheet {
 
   constructor(private readonly env: HudEnv) {
     const r = env.reveal;
-    this.molt = new Button({ label: t('hud.molt'), sublabel: '', sublabelIcon: 'purr', style: 'info', width: BTN_W, height: BTN_H, fontSize: 32 });
+    this.molt = new Button({ label: t('hud.molt'), sublabel: '', sublabelIcon: 'purr', style: 'info', width: SHEET.molt, height: SHEET.button, fontSize: 32 });
     this.molt.onTap(() => this.openMolt());
-    this.awaken = new Button({ label: t('hud.awaken'), sublabel: '', sublabelIcon: 'purr', style: 'mustard', width: AWAKEN_W, height: BTN_H, fontSize: 32, fireOnDown: true });
+    this.awaken = new Button({ label: t('hud.awaken'), sublabel: '', sublabelIcon: 'purr', style: 'mustard', width: SHEET.awaken, height: SHEET.button, fontSize: 32, fireOnDown: true });
     this.awaken.onTap(() => this.doAwaken());
     this.awaken.onDisabledTap(() => this.explainAwaken());
-    this.sell = new Button({ label: t('hud.sell'), sublabel: '', sublabelIcon: 'fish', style: 'danger', width: SELL_W, height: BTN_H, fontSize: 32, fireOnDown: true });
+    this.sell = new Button({ label: t('hud.sell'), sublabel: '', sublabelIcon: 'fish', style: 'danger', width: SHEET.sell, height: SHEET.button, fontSize: 32, fireOnDown: true });
     this.sell.onTap(() => this.doSell());
-    this.close = new IconButton({ icon: 'close', style: 'kraft', size: 60, fireOnDown: true });
+    this.close = new IconButton({ icon: 'close', style: 'kraft', size: SHEET.close, fireOnDown: true });
     this.close.onTap(() => env.ctx.select(null));
     this.molt.visible = r.molt;
     this.awaken.visible = r.awaken;
@@ -129,15 +116,16 @@ export class SelectionSheet {
   layout(rect: Rect): void {
     this.rect = rect;
     this.root.position.set(rect.x, rect.y);
-    this.close.position.set(rect.w - 36, 36);
+    const boxes = sheetBoxes(rect.w, rect.h);
+    this.close.position.set(boxes.close.x + boxes.close.w / 2, boxes.close.y + boxes.close.h / 2);
     const buttons = [this.molt, this.awaken, this.sell].filter((b) => b.visible);
-    const widths = buttons.map((b) => (b === this.sell ? SELL_W : b === this.awaken ? AWAKEN_W : BTN_W));
+    const widths = buttons.map((b) => (b === this.sell ? SHEET.sell : b === this.awaken ? SHEET.awaken : SHEET.molt));
     // The row is centred as a group, whatever the number of buttons.
-    let x = (rect.w - widths.reduce((sum, w) => sum + w, 0) - BTN_GAP * (buttons.length - 1)) / 2;
+    let x = (rect.w - widths.reduce((sum, w) => sum + w, 0) - SHEET.buttonGap * (buttons.length - 1)) / 2;
     buttons.forEach((btn, i) => {
-      const w = widths[i] ?? BTN_W;
-      btn.position.set(x + w / 2, BTN_Y);
-      x += w + BTN_GAP;
+      const w = widths[i] ?? SHEET.molt;
+      btn.position.set(x + w / 2, boxes.buttonY);
+      x += w + SHEET.buttonGap;
     });
     this.drawBg();
     this.shownKey = '';
@@ -149,7 +137,8 @@ export class SelectionSheet {
     const { w, h } = this.rect;
     this.bg.clear();
     drawPaper(this.bg, 0, 0, { w, h, radius: 30, fill: Color.paperLight, edge: Color.kraftDark, seed: this.seed });
-    drawDashedRect(this.bg, 10, 10, w - 20, h - 20, { radius: 22, color: this.accent, width: 3, dash: 14, gap: 10, alpha: 0.85, seed: this.seed });
+    const f = sheetBoxes(w, h).frame;
+    drawDashedRect(this.bg, f.x, f.y, f.w, f.h, { radius: 22, color: this.accent, width: 3, dash: 14, gap: 10, alpha: 0.85, seed: this.seed });
   }
 
   get shown(): boolean {
@@ -261,28 +250,32 @@ export class SelectionSheet {
     for (const ch of this.dynamic.removeChildren()) ch.destroy({ children: true });
     const d = this.dynamic;
 
-    const photo = unitPhoto({ size: PHOTO, rarity: def.rarity, unit: u.id, tape: CLASS_TAPE[def.classId], seed: this.seed });
-    photo.position.set(16 + PHOTO / 2, 18 + PHOTO / 2);
+    const box = sheetBoxes(this.rect.w, this.rect.h);
+    const { textX: TEXT_X } = box;
+    const { nameY: NAME_Y, statsY: STATS_Y, skillY: SKILL_Y, edge: EDGE } = SHEET;
+    const photo = unitPhoto({ size: SHEET.photo, rarity: def.rarity, unit: u.id, tape: CLASS_TAPE[def.classId], seed: this.seed });
+    photo.position.set(box.photo.x + box.photo.w / 2, box.photo.y + box.photo.h / 2);
     d.addChild(photo);
 
     // Rank and class pills sit right after the name; the name gives way when it is long.
     const rank = pill(rarityName(def.rarity), rar.color, rar.dark, null, this.seed + 1);
     const klass = pill(t(classDef(def.classId).nameKey), CLASS_ACCENT[def.classId], Color.kraftDark, CLASS_ICON[def.classId], this.seed + 2);
     const pillsW = rank.width + klass.width + 8;
+    const textRight = box.textRight;
     const name = uiLabel(t(def.nameKey), { size: 34, anchorX: 0, align: 'left' });
-    fitLabel(name, TEXT_RIGHT - TEXT_X - pillsW - 14, 34, 0.7);
-    name.position.set(TEXT_X, 34);
+    fitLabel(name, textRight - TEXT_X - pillsW - 14, 34, 0.7);
+    name.position.set(TEXT_X, EDGE + NAME_Y);
     const px = TEXT_X + name.width + 14;
-    rank.position.set(px, 34);
-    klass.position.set(px + rank.width + 8, 34);
+    rank.position.set(px, EDGE + NAME_Y);
+    klass.position.set(px + rank.width + 8, EDGE + NAME_Y);
     d.addChild(name, rank, klass);
 
     let sx = TEXT_X;
     const stat = (icon: IconName, text: string): void => {
       const ic = drawIcon(icon, 26);
-      ic.position.set(sx + 13, 70);
+      ic.position.set(sx + 13, EDGE + STATS_Y);
       const tx = uiLabel(text, { size: 26, anchorX: 0, align: 'left' });
-      tx.position.set(sx + 32, 71);
+      tx.position.set(sx + 32, EDGE + STATS_Y + 1);
       d.addChild(ic, tx);
       sx += 32 + tx.width + 24;
     };
@@ -292,23 +285,23 @@ export class SelectionSheet {
 
     this.fullSkill = def.skillText();
     const skill = uiLabel(this.fullSkill, { size: 24, color: Color.inkSoft, anchorX: 0, align: 'left' });
-    const lineW = TEXT_RIGHT - TEXT_X;
+    const lineW = box.content.x + box.content.w - TEXT_X;
     this.fitLine(skill, lineW);
-    skill.position.set(TEXT_X, 98);
+    skill.position.set(TEXT_X, EDGE + SKILL_Y);
     if (skill.text !== this.fullSkill) {
       // A cut line says so: an info mark closes it, and the whole band around it opens the full text.
       skill.text = this.fullSkill;
       this.fitLine(skill, lineW - INFO_W);
       const mark = drawIcon('info', 26);
-      mark.position.set(TEXT_X + lineW - 13, 98);
+      mark.position.set(TEXT_X + lineW - 13, EDGE + SKILL_Y);
       d.addChild(mark);
       tapArea(skill, 0, -44, lineW, 88);
       skill.on('pointerdown', () => info.tap(`skill:${def.id}`, skill, { title: t(def.nameKey), text: this.fullSkill }, { seconds: SKILL_FOR }));
     }
     d.addChild(skill);
 
-    const plan = new BuildPlanView(this.env, u, this.rect.w - PLAN_X * 2);
-    plan.position.set(PLAN_X, PLAN_Y);
+    const plan = new BuildPlanView(this.env, u, box.well.w);
+    plan.position.set(box.well.x, box.well.y);
     d.addChild(plan);
   }
 

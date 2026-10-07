@@ -58,7 +58,8 @@ export class ClassSheet extends Popup<void> {
     const accent = CLASS_ACCENT[classId];
     const showUpgrade = env.reveal.classUpgrade;
 
-    const h = UPGRADE_Y + (showUpgrade ? 196 : 8);
+    // The upgrade button's face ends 194 px under UPGRADE_Y and its lip 6 px lower: 24 px of paper under that.
+    const h = UPGRADE_Y + (showUpgrade ? 224 : 8);
     this.panel = new Panel({ width: W, height: h, title: t(def.nameKey), onClose: () => this.close() });
     const c = this.panel.content;
 

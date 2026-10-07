@@ -15,31 +15,62 @@ vi.mock('@/fx/textures', () => ({
   fxTexture: () => Texture.WHITE,
   fxVignette: () => Texture.WHITE,
 }));
+vi.mock('@/view/glyphs', () => ({ warmGlyphs: () => undefined }));
 vi.mock('@/fx/areaArt', () => ({ bakeArea: () => new Texture() }));
 const warmParticles = vi.fn();
 vi.mock('@/fx/particles', async (orig) => ({ ...(await orig<typeof import('@/fx/particles')>()), warmParticles: () => warmParticles() }));
 
 import { areaBaked, warm } from '@/fx';
-import type { BattleApi, WavePreviewEntry } from '@/game';
+import type { BattleApi, UnitId, WavePreviewEntry } from '@/game';
 import { BattleWarmup } from '@/view/warmup';
+
+/** The sound engine as the warm-up sees it: what is left to bake per sound (2 variants unless told), and every step taken. */
+const sound = vi.hoisted(() => ({ left: new Map<string, number>(), steps: [] as string[] }));
+const nameOf = (t: { sfx?: string; stinger?: string }): string => (t.sfx ? `sfx:${t.sfx}` : `stinger:${t.stinger}`);
+vi.mock('@/audio', async (orig) => ({
+  ...(await orig<typeof import('@/audio')>()),
+  audio: {
+    primeLeft: (t: { sfx?: string; stinger?: string }) => sound.left.get(nameOf(t)) ?? 2,
+    primeStep: (t: { sfx?: string; stinger?: string }) => void sound.steps.push(nameOf(t)),
+  },
+}));
+
+type Listener = (e: { level: number }) => void;
 
 interface FakeBattle {
   wave: number;
+  totalWaves: number;
   phase: string;
+  init: { mode: string };
+  pending: { kind: string; options: UnitId[] } | null;
+  units: Array<{ id: UnitId } | null>;
+  events: { on: (name: string, fn: Listener) => () => void };
   previewWave: (w?: number) => WavePreviewEntry[];
 }
 
-function fake(lists: Record<number, WavePreviewEntry[]>): { b: FakeBattle; asked: number[] } {
+function fake(lists: Record<number, WavePreviewEntry[]>): { b: FakeBattle; asked: number[]; fire: (name: string, level?: number) => void; offs: string[] } {
   const asked: number[] = [];
+  const listeners = new Map<string, Listener[]>();
+  const offs: string[] = [];
   const b: FakeBattle = {
     wave: 0,
+    totalWaves: 12,
     phase: 'prep',
+    init: { mode: 'chapter' },
+    pending: null,
+    units: new Array<{ id: UnitId } | null>(20).fill(null),
+    events: {
+      on: (name, fn) => {
+        listeners.set(name, [...(listeners.get(name) ?? []), fn]);
+        return () => void offs.push(name);
+      },
+    },
     previewWave: (w = 0) => {
       asked.push(w);
       return lists[w] ?? [];
     },
   };
-  return { b, asked };
+  return { b, asked, fire: (name, level = 1) => (listeners.get(name) ?? []).forEach((fn) => fn({ level })), offs };
 }
 
 /** Frames until nothing is left to warm. */
@@ -57,6 +88,8 @@ describe('the battle warm-up', () => {
     warm.reset();
     warm.now = () => performance.now();
     warmParticles.mockClear();
+    sound.left.clear();
+    sound.steps.length = 0;
   });
 
   it('links the particle shader first, before any picture', () => {
@@ -132,5 +165,125 @@ describe('the battle warm-up', () => {
     expect(asked).toEqual([]);
     w.destroy();
     expect(warm.pending).toBe(0);
+  });
+
+  describe('sounds', () => {
+    /** The keys of the sound pieces in the order the queue will run them. */
+    function soundOrder(): string[] {
+      const order: string[] = [];
+      for (let guard = 0; warm.next !== null && guard < 2000; guard++) {
+        order.push(warm.next);
+        warm.update(1 / 60);
+      }
+      return order.filter((k) => k.startsWith('snd:'));
+    }
+
+    it('asks for every sound a fight plays once, a piece per variant that is still to bake, after the pictures of the coming wave', () => {
+      const { b } = fake({ 1: [{ enemy: 'clock', count: 2 }] });
+      sound.left.set('sfx:merge', 3);
+      sound.left.set('sfx:ui_click', 0);
+      const w = new BattleWarmup(b as unknown as BattleApi);
+      expect(warm.has('snd:sfx:ui_click:0')).toBe(false);
+      w.update();
+      expect(warm.has('snd:sfx:ui_click:0')).toBe(false);
+      for (const i of [0, 1, 2]) expect(warm.has(`snd:sfx:merge:${i}`)).toBe(true);
+      expect(warm.has('snd:sfx:merge:3')).toBe(false);
+      expect(warm.has('snd:sfx:summon_common:1')).toBe(true);
+      const order = soundOrder();
+      expect(order.indexOf('snd:sfx:summon_common:0')).toBeLessThan(order.indexOf('snd:sfx:sell:0'));
+      expect(order.indexOf('snd:sfx:hit_light:0')).toBeLessThan(order.indexOf('snd:sfx:awaken:0'));
+    });
+
+    it('bakes one variant per piece through the audio engine, and a piece of a sound that is ready does nothing', () => {
+      const { b } = fake({});
+      const w = new BattleWarmup(b as unknown as BattleApi);
+      w.update();
+      for (let i = 0; i < 400 && warm.pending > 0; i++) warm.update(1 / 60);
+      expect(sound.steps.filter((s) => s === 'sfx:ui_click')).toHaveLength(2);
+      expect(sound.steps).toContain('stinger:victory');
+      expect(sound.steps).toContain('stinger:defeat');
+    });
+
+    it('asks for the release and impact of a cat when it appears, and of the next rank a little later', () => {
+      const { b } = fake({});
+      const w = new BattleWarmup(b as unknown as BattleApi);
+      w.update();
+      expect(warm.has('snd:sfx:atk_m_snow:0')).toBe(false);
+      b.units[4] = { id: 'm_snow' };
+      w.update();
+      expect(warm.has('snd:sfx:atk_m_snow:0')).toBe(true);
+      expect(warm.has('snd:sfx:imp_m_snow:1')).toBe(true);
+      // m_snow merges into m_fire: asked, but behind the cat itself.
+      expect(warm.has('snd:sfx:atk_m_fire:0')).toBe(true);
+      const order = soundOrder();
+      expect(order.indexOf('snd:sfx:imp_m_snow:0')).toBeLessThan(order.indexOf('snd:sfx:atk_m_fire:0'));
+    });
+
+    it('notices a cat once, and again when a different cat takes its cell', () => {
+      const { b } = fake({});
+      const w = new BattleWarmup(b as unknown as BattleApi);
+      w.update();
+      b.units[0] = { id: 'w_paw' };
+      w.update();
+      const waiting = warm.pending;
+      w.update();
+      w.update();
+      expect(warm.pending).toBe(waiting);
+      b.units[0] = { id: 'w_sword' };
+      w.update();
+      expect(warm.has('snd:sfx:atk_w_sword:0')).toBe(true);
+      b.units[0] = null;
+      expect(() => w.update()).not.toThrow();
+    });
+
+    it('asks for the warning, the cry and the collapse of a boss wave, and the victory fanfare when it ends the run', () => {
+      const { b } = fake({ 1: [{ enemy: 'boss_vacuum', count: 1 }], 2: [] });
+      b.totalWaves = 1;
+      new BattleWarmup(b as unknown as BattleApi).update();
+      for (const id of ['boss_warning', 'boss_roar', 'boss_die', 'foe_boss_vacuum', 'foe_motor_hit', 'whoosh']) expect(warm.has(`snd:sfx:${id}:0`), id).toBe(true);
+      expect(warm.has('snd:stinger:victory:0')).toBe(true);
+    });
+
+    it('moves the victory fanfare up only when the last wave is the coming one or the one after it, and never in an endless run', () => {
+      const lane = (mode: string, total: number): number => {
+        warm.reset();
+        const { b } = fake({});
+        b.totalWaves = total;
+        b.init.mode = mode;
+        new BattleWarmup(b as unknown as BattleApi).update();
+        const order = soundOrder();
+        return order.indexOf('snd:stinger:victory:0') - order.indexOf('snd:sfx:sell:0');
+      };
+      expect(lane('chapter', 12)).toBeGreaterThan(0);
+      expect(lane('chapter', 2)).toBeLessThan(0);
+      expect(lane('endless', 2)).toBeGreaterThan(0);
+    });
+
+    it('asks for the three offered cats while the pick of three is open', () => {
+      const { b } = fake({});
+      const w = new BattleWarmup(b as unknown as BattleApi);
+      w.update();
+      b.phase = 'choice';
+      b.pending = { kind: 'summon', options: ['t_chef', 'r_ninja', 'w_viking'] };
+      w.update();
+      for (const id of ['atk_t_chef', 'imp_r_ninja', 'atk_w_viking']) expect(warm.has(`snd:sfx:${id}:0`), id).toBe(true);
+    });
+
+    it('moves the defeat fanfare up when the field is in danger or over its cap, and stops listening with the battle', () => {
+      const rankAfter = (event: string, level: number): number => {
+        warm.reset();
+        const { b, fire } = fake({});
+        new BattleWarmup(b as unknown as BattleApi).update();
+        fire(event, level);
+        const order = soundOrder();
+        return order.indexOf('snd:stinger:defeat:0') - order.indexOf('snd:sfx:sell:0');
+      };
+      expect(rankAfter('danger', 0)).toBeGreaterThan(0);
+      expect(rankAfter('danger', 1)).toBeLessThan(0);
+      expect(rankAfter('overflow', 0)).toBeLessThan(0);
+      const { b, offs } = fake({});
+      new BattleWarmup(b as unknown as BattleApi).destroy();
+      expect(offs.sort()).toEqual(['danger', 'overflow']);
+    });
   });
 });
