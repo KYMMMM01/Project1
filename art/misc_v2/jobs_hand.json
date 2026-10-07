@@ -1,0 +1,10 @@
+[
+ {
+  "name": "icon_hand",
+  "ref": [
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours, the orange-and-white tabby fur). Draw only a paw and forearm, not a whole cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game tutorial pointer icon (shown about 100 px, rotated by the game as needed)\nSubject: a cute cat's front PAW and short forearm reaching straight UP from the bottom of the image to boop something, like a cat tapping a button: a chubby rounded paw at the top shaped like a mitten (all toes together, NO separate fingers, NO extended finger, just three tiny curved toe lines on the rounded tip), cream-white paw with a soft orange tabby forearm below it with two darker orange stripes, ending in a rounded cut at the bottom. The paw tip is the pointer.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean thin white sticker border. MATTE finish: flat colours with at most one soft shadow tone, NO glossy highlights, NO gradients, NO glow, NO halo, NO soft light around the sticker.\nComposition: perfectly vertical, the rounded paw tip at the top centre, centred horizontally, generous padding, no ground shadow, no motion lines.\nBackground: genuinely transparent background (alpha) everywhere outside the white sticker border, with hard edges.\nConstraints: one paw only, no text, no watermark, nothing cropped."
+ }
+]

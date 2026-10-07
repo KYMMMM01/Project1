@@ -1,7 +1,13 @@
-/** The tutorial's pointing hand, cut from cream paper with an ink line. Its origin is the fingertip; it taps in place or drags between two points. */
-import { Container, Graphics, type DestroyOptions } from 'pixi.js';
+/** The tutorial's pointer: a cat's paw sticker reaching up. Its origin is the paw tip; it taps in place or drags between two points. */
+import { Container, Graphics, Sprite, type DestroyOptions } from 'pixi.js';
+import { hasTex, tex } from '@/core/assets';
 import { Ease } from '@/core/tween';
 import { Color, motion, TweenBag } from '@/ui';
+
+/** Drawn height of the paw sticker in design pixels. */
+const PAW_H = 124;
+/** The tip sits just inside the sticker's white border, this far down the image. */
+const PAW_TIP = 0.05;
 
 export class Hand extends Container {
   private readonly bag = new TweenBag();
@@ -10,15 +16,19 @@ export class Hand extends Container {
 
   constructor() {
     super();
-    const g = new Graphics();
-    const skin = Color.paperLight;
-    const line = { width: 5, color: Color.ink, join: 'round' as const };
-    // Curled fingers, palm, thumb, then the pointing finger on top: the fingertip sits at (0, 0).
-    g.roundRect(-4, 38, 66, 70, 26).fill(skin).stroke(line);
-    for (let i = 0; i < 3; i++) g.roundRect(12 + i * 15, 30 - i * 2, 18, 34, 9).fill(skin).stroke({ ...line, width: 4 });
-    g.roundRect(-36, 54, 24, 48, 12).fill(skin).stroke({ ...line, width: 4 });
-    g.roundRect(-9, 0, 24, 74, 12).fill(skin).stroke(line);
-    this.art.addChild(g);
+    if (hasTex('icon_hand')) {
+      const paw = new Sprite(tex('icon_hand'));
+      paw.anchor.set(0.5, PAW_TIP);
+      paw.scale.set(PAW_H / paw.texture.height);
+      this.art.addChild(paw);
+    } else {
+      // Fallback without the image: a paper mitten with the same origin and reach.
+      const g = new Graphics();
+      const line = { width: 5, color: Color.ink, join: 'round' as const };
+      g.roundRect(-26, 44, 52, 70, 20).fill(Color.mustard).stroke(line);
+      g.circle(0, 30, 32).fill(Color.paperLight).stroke(line);
+      this.art.addChild(g);
+    }
     this.ring.alpha = 0;
     this.addChild(this.ring, this.art);
     this.eventMode = 'none';
