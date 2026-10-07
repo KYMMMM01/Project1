@@ -15,6 +15,7 @@ import { makeUnit, refresh } from '@/game/sim/board';
 import { addFish, addPurr } from '@/game/sim/economy';
 import { Sim } from '@/game/sim/sim';
 import { audio } from '@/audio';
+import { warm } from '@/fx';
 import type { RunConfig } from '../context';
 import { DEFAULT_RUG } from './rugSkins';
 
@@ -161,6 +162,10 @@ export function installBattleDebug(scene: BattleScene): void {
     },
     lang(l: 'ko' | 'en'): void {
       setLang(l);
+    },
+    /** What the first-use warm-up has left to do and what runs next (see src/fx/warm.ts). */
+    warmLeft(): { pending: number; next: string | null; done: number } {
+      return { pending: warm.pending, next: warm.next, done: warm.finished };
     },
     /** Pause reasons held right now (a reason that stays after every popup closed is a bug). */
     pauseReasons(): string[] {

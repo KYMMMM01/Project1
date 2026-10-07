@@ -82,3 +82,8 @@ Known gaps from above, closed: the replay row, the home highlight, and the two R
 ## 2026-10-07 fixups (battle side)
 
 The guidebook's "try it" line and every refused command's reason are information bubbles of the battle (`Hints.explain` opens one through `info.show`, keyed by the control): a tap elsewhere closes them, as does the 2.6 s timer. The paw (`Hand.ts`, `handMath.ts`) is the cat's-paw sticker; `hud.md` "2026-10-07 fixups" says where it lies in each lesson.
+
+
+## 2026-10-07 leftovers
+
+The guidebook's own text was not changed. The English teaching lines of the 19 lessons (`guide.<id>.teach`) were read on screen in the real tutorial, at 1280 and 1600: each fits its note in two lines at 26 px, none needed a shorter English string. What changed around them (`hud.md`): the note of a lesson now waits for the "nice!" sticker of the one before (1.1 s), the paw avoids the control's own writing, the elite and boss strips say "Est. ?" instead of "Estimating" while the estimate is unknown (`hud.est.wait`), and the pick of three draws its lines and its "Best" flag at 24 px or more. The first-encounter cards (here the awakening card, which the tutorial run lets through) show "Got it" and "More in the guidebook" on one row without cutting either in English.

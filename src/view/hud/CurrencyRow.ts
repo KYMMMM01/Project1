@@ -91,7 +91,7 @@ export class CurrencyRow {
   private readonly pityCaption: Text;
   private readonly pityBg = new Graphics();
   private readonly pitySeed = paperSeed();
-  private readonly odds: Button;
+  readonly odds: Button;
   private pityShown = false;
   private readonly tmp = new Point();
 

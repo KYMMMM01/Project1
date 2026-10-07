@@ -1,4 +1,5 @@
-import { Container, Particle, ParticleContainer, Point } from 'pixi.js';
+import { Container, Particle, ParticleContainer, Point, RenderTexture } from 'pixi.js';
+import { game } from '@/core/game';
 import { TAU } from '@/core/math';
 import { Color } from '@/ui/theme';
 import { ParticleBudget, scaleCount } from './budget';
@@ -140,19 +141,37 @@ export class Fp {
   layer: Layer | null = null;
 }
 
+/** The one kind of container every particle layer is (the warm-up draws a scratch one made the same way, so the shader it links is the one the layer uses). */
+function newParticleContainer(): ParticleContainer {
+  return new ParticleContainer({
+    texture: fxTexture('dot'),
+    dynamicProperties: { vertex: true, position: true, rotation: true, uvs: true, color: true },
+    // Rounding vertices to device pixels makes slow particles visibly stair-step.
+    roundPixels: false,
+    blendMode: 'normal',
+  });
+}
+
 class Layer {
   readonly live: Fp[] = [];
-  readonly container: ParticleContainer;
+  readonly container = newParticleContainer();
   constructor() {
-    this.container = new ParticleContainer({
-      texture: fxTexture('dot'),
-      dynamicProperties: { vertex: true, position: true, rotation: true, uvs: true, color: true },
-      // Rounding vertices to device pixels makes slow particles visibly stair-step.
-      roundPixels: false,
-      blendMode: 'normal',
-    });
     this.container.label = 'fx-flat';
   }
+}
+
+/**
+ * Draw one particle into a 4 x 4 target now: the particle shader is linked (25 to 70 ms on a phone, the largest single first-use
+ * cost of a battle) and the effect sheet goes to the graphics card, in a calm frame instead of at the first hit of the first wave.
+ */
+export function warmParticles(): void {
+  const { renderer } = game.app;
+  const scratch = newParticleContainer();
+  scratch.addParticle(new Particle(fxTexture('dot')));
+  const target = RenderTexture.create({ width: 4, height: 4 });
+  renderer.render({ container: scratch, target });
+  target.destroy(true);
+  scratch.destroy();
 }
 
 export interface EmitterOpts {

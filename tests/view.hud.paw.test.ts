@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { overlapArea } from '@/view/hud/bubbleMath';
-import { dragPrefer, FROM_BELOW, pawBounds, pawBox, PAW_LENGTH, pawRotation, placePaw, soften, tipSpot, type PawFrom } from '@/view/hud/handMath';
+import { dragPrefer, FROM_BELOW, pawBounds, pawBox, pawCovers, PAW_LENGTH, pawRotation, placePaw, soften, tipSpot, type PawFrom } from '@/view/hud/handMath';
 import type { Rect } from '@/view/hud/layoutMath';
 
 const SCREEN = { w: 720, h: 1280, safeTop: 0, safeBottom: 0 };
@@ -122,5 +122,48 @@ describe('the spot of a control the tip lands on', () => {
     expect(spot.x).toBeLessThan(icon.x + icon.w);
     expect(spot.y).toBeGreaterThan(icon.y);
     expect(spot.y).toBeLessThan(icon.y + icon.h / 2 + 1);
+  });
+});
+
+describe('the paw and the writing on a control', () => {
+  // The grade button of the tutorial: a small paper with "Lv.1" in its middle and the price under it.
+  const grade: Rect = { x: 40, y: 1110, w: 170, h: 130 };
+  const label: Rect = { x: 84, y: 1150, w: 84, h: 36 };
+
+  it('counts the circles of the paw body that lie on a rectangle: none when it is clear, all when it lies on it', () => {
+    const rot = pawRotation('lowerRight', 0.44);
+    expect(pawCovers({ x: 100, y: 200 }, rot, label)).toBe(0);
+    expect(pawCovers({ x: label.x + 40, y: label.y + 10 }, rot, label)).toBeGreaterThan(2);
+  });
+
+  it('is told apart from the box: a turned paw covers less than its box', () => {
+    const rot = pawRotation('lowerRight', 0.61);
+    const tip = { x: 300, y: 300 };
+    const box = pawBox(tip, rot);
+    // The lower left corner of the box is empty paper for a paw trailing to the lower right.
+    const corner: Rect = { x: box.x, y: box.y + box.h - 24, w: 24, h: 24 };
+    expect(pawCovers(tip, rot, corner)).toBe(0);
+    expect(overlapArea(box, corner)).toBeGreaterThan(0);
+  });
+
+  it('keeps off the writing when the spot allows it, and says what it could not avoid', () => {
+    const clear = placePaw({ tips: [{ x: grade.x + grade.w * 0.96, y: grade.y + grade.h * 0.04 }], bounds: BOUNDS, keep: [], labels: [label], prefer: FROM_BELOW });
+    expect(clear.covered).toBe(0);
+    // A tip on the writing itself cannot be clear whichever way the arm goes.
+    const onIt = placePaw({ tips: [{ x: label.x + 40, y: label.y + 18 }], bounds: BOUNDS, keep: [], labels: [label], prefer: FROM_BELOW });
+    expect(onIt.covered).toBeGreaterThan(0);
+    expect(onIt.cost).toBeGreaterThan(clear.cost);
+  });
+
+  it('turns the arm away from writing it would otherwise lie on', () => {
+    const tip = { x: grade.x + grade.w * 0.5, y: grade.y - 4 };
+    const free = placePaw({ tips: [tip], bounds: BOUNDS, keep: [], prefer: FROM_BELOW });
+    expect(free.from).toBe('lowerRight');
+    // Writing right under the tip, where the usual arm would go.
+    const under: Rect = { x: tip.x - 10, y: tip.y + 55, w: 60, h: 40 };
+    const aware = placePaw({ tips: [tip], bounds: BOUNDS, keep: [], labels: [under], prefer: FROM_BELOW });
+    expect(aware.covered).toBe(0);
+    expect(placePaw({ tips: [tip], bounds: BOUNDS, keep: [], labels: [under], prefer: ['lowerRight'] }).covered).toBeGreaterThan(0);
+    expect(aware.from).not.toBe('lowerRight');
   });
 });

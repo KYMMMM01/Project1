@@ -48,6 +48,8 @@ const GAP = 18;
 const TOP = 152;
 /** Seconds the old cards of a reroll take to leave before the new ones are dealt. */
 const FAREWELL = 0.14;
+/** Seconds between building one card and the next of a new offer (a few frames: the deal is 0.08 s apart). */
+const BUILD_GAP = 0.04;
 /** The mat the toy lies on: a square window at the card's left. */
 const MAT = 176;
 const MAT_PAD = 20;
@@ -72,6 +74,8 @@ export class RelicScreen {
   private busy = false;
   private closed = false;
   private optionKey = '';
+  /** Counts the renders: a card whose building was put off belongs to the render that asked for it, not to a later one. */
+  private generation = 0;
   private readonly offResize: () => void;
 
   constructor(
@@ -132,38 +136,55 @@ export class RelicScreen {
     this.head = head;
 
     const best = this.bestIndex(p);
+    const generation = ++this.generation;
+    const wait = sendOff ? FAREWELL : 0;
+    // A new offer is dealt card by card (0.08 s apart), so each card is also BUILT just ahead of its own deal: three cards of paper, tape and
+    // fresh text built in one frame are a 100 ms hitch the first time the screen opens, one a frame is a third of that each.
     p.options.forEach((id, i) => {
-      const def = relicDef(id);
-      const card = new PressCard(CARD_W, CARD_H, () => this.pick(i), { holdLimit: Infinity });
-      card.position.set(w / 2, dy + TOP + CARD_H / 2 + i * (CARD_H + GAP));
-      card.addChild(this.frame(def.rarity, i));
-      const icon = relicIcon(id, 134, def.rarity);
-      icon.position.set(-CARD_W / 2 + MAT_PAD + MAT / 2, 4);
-      const rar = Rarity[def.rarity];
-      const textX = -CARD_W / 2 + MAT_PAD + MAT + 26;
-      const name = uiLabel(t(def.nameKey), { size: 40, anchorX: 0, align: 'left' });
-      name.position.set(textX, -52);
-      fitLabel(name, CARD_W / 2 - 20 - textX - 150, 40, 0.7);
-      const tag = new Container();
-      const tagLabel = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkDeep });
-      const tagW = tagLabel.width + 28;
-      const tagBg = new Graphics();
-      drawPaper(tagBg, -tagW / 2, -17, { w: tagW, h: 34, kind: 'pill', fill: rar.color, edge: rar.dark, shadow: 3, grain: false, seed: this.seed + 20 + i });
-      tag.addChild(tagBg, tagLabel);
-      tag.position.set(CARD_W / 2 - 34 - tagW / 2, -52);
-      const desc = uiLabel(def.descText(), { size: 27, wrap: CARD_W / 2 - 30 - textX, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left' });
-      desc.position.set(textX, -22);
-      card.addChild(icon, name, tag, desc);
-      if (this.env.tutorial && i === best) {
-        const rec = new Tag({ text: t('hud.recommend'), style: 'mustard', shape: 'flag', fontSize: 24, tilt: 0.1 });
-        rec.position.set(CARD_W / 2 - 90, CARD_H / 2 - 20);
-        card.addChild(rec);
+      if (i === 0 || !fresh || motion.reduced) {
+        this.buildCard(id, i, best, dy, wait, fresh);
+        return;
       }
-      content.addChild(card);
-      this.cards.push(card);
-      if (fresh && !motion.reduced) this.deal(card, i, sendOff ? FAREWELL : 0);
+      this.bag.call(i * BUILD_GAP, () => {
+        if (!this.closed && this.generation === generation) this.buildCard(id, i, best, dy, wait, fresh);
+      });
     });
     this.buildReroll(p);
+  }
+
+  /** One toy card: the photo frame, the toy on its mat, the name, the rarity tag, the description, and the tutorial's "recommended" flag. */
+  private buildCard(id: RelicPending['options'][number], i: number, best: number, dy: number, wait: number, fresh: boolean): void {
+    const content = this.scaffold.content;
+    const w = this.scaffold.contentWidth;
+    const def = relicDef(id);
+    const card = new PressCard(CARD_W, CARD_H, () => this.pick(i), { holdLimit: Infinity });
+    card.position.set(w / 2, dy + TOP + CARD_H / 2 + i * (CARD_H + GAP));
+    card.addChild(this.frame(def.rarity, i));
+    const icon = relicIcon(id, 134, def.rarity);
+    icon.position.set(-CARD_W / 2 + MAT_PAD + MAT / 2, 4);
+    const rar = Rarity[def.rarity];
+    const textX = -CARD_W / 2 + MAT_PAD + MAT + 26;
+    const name = uiLabel(t(def.nameKey), { size: 40, anchorX: 0, align: 'left' });
+    name.position.set(textX, -52);
+    fitLabel(name, CARD_W / 2 - 20 - textX - 150, 40, 0.7);
+    const tag = new Container();
+    const tagLabel = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkDeep });
+    const tagW = tagLabel.width + 28;
+    const tagBg = new Graphics();
+    drawPaper(tagBg, -tagW / 2, -17, { w: tagW, h: 34, kind: 'pill', fill: rar.color, edge: rar.dark, shadow: 3, grain: false, seed: this.seed + 20 + i });
+    tag.addChild(tagBg, tagLabel);
+    tag.position.set(CARD_W / 2 - 34 - tagW / 2, -52);
+    const desc = uiLabel(def.descText(), { size: 27, wrap: CARD_W / 2 - 30 - textX, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left' });
+    desc.position.set(textX, -22);
+    card.addChild(icon, name, tag, desc);
+    if (this.env.tutorial && i === best) {
+      const rec = new Tag({ text: t('hud.recommend'), style: 'mustard', shape: 'flag', fontSize: 24, tilt: 0.1 });
+      rec.position.set(CARD_W / 2 - 90, CARD_H / 2 - 20);
+      card.addChild(rec);
+    }
+    content.addChild(card);
+    this.cards.push(card);
+    if (fresh && !motion.reduced) this.deal(card, i, wait);
   }
 
   /** The photo frame: cream border, a mat in the rarity colour holding the toy, and the ornaments that pile up with rarity. */

@@ -6,7 +6,7 @@ import { Ease } from '@/core/tween';
 import { unitDef, unitRarity, unitRarityIndex, type UnitId } from '@/game';
 import { Color, drawPaper, motion, paperSeed, Rarity, rarityName, uiLabel } from '@/ui';
 import { unitPortrait } from './kit';
-import { CHIP_H, CHIP_MAX, CHIP_SECONDS, chipAlpha, chipLifeLeft, chipRays, chipRise, chipScale, chipWidth } from './chipMath';
+import { CHIP_H, CHIP_MAX, CHIP_SECONDS, CHIP_SQUEEZE, CHIP_WAIT, chipAlpha, chipFits, chipLifeLeft, chipRays, chipRise, chipScale, chipWidth } from './chipMath';
 
 const POP = 0.22;
 
@@ -32,8 +32,8 @@ class Chip {
     this.root.visible = false;
   }
 
-  /** Dress the chip for `id`. Its origin is the middle of the plate. */
-  dress(id: UnitId): void {
+  /** Dress the chip for `id`; the rays behind a high rank are only drawn when `rays` (they reach far above the plate). Its origin is the middle of the plate. */
+  dress(id: UnitId, rays: boolean): void {
     const tier = unitRarityIndex(id);
     const style = Rarity[unitRarity(id)];
     this.name.text = t(unitDef(id).nameKey);
@@ -48,7 +48,7 @@ class Chip {
     this.face.addChild(photo);
     this.name.position.set(-w / 2 + 16 + 80 + 14, -17);
     this.rank.position.set(-w / 2 + 16 + 80 + 14, 20);
-    const rings = chipRays(tier);
+    const rings = rays ? chipRays(tier) : 0;
     this.rays.clear();
     if (rings > 0) {
       // Flat paper rays behind the plate, longer above it than below (the summon button is there): one ring for an epic, a second and longer one for the two ranks above.
@@ -77,14 +77,34 @@ export class SummonChips {
   private readonly pool = new Pool<Chip>(() => new Chip());
   /** Newest first. */
   private readonly live: Chip[] = [];
+  /** Results that found no room under a lesson's note and wait for it to leave (newest last). */
+  private readonly waiting: Array<{ id: UnitId; age: number }> = [];
+  /** Where the first slot's centre line lies in scene space, set by the layout. */
+  originY = 0;
+  /**
+   * Scene-space bottom edge of whatever lies over the chips' column (a lesson's note, a first-encounter card), or null. Chips only lie on
+   * free paper: they wait for room under it, and leave when it comes down over them (see chipMath.ts).
+   */
+  ceiling: () => number | null = () => null;
 
   constructor() {
     this.root.eventMode = 'none';
   }
 
   show(id: UnitId): void {
+    const ceiling = this.ceiling();
+    if (!chipFits(this.originY, 0, chipScale(unitRarityIndex(id)), ceiling)) {
+      // No room under the note: the result waits for it to go (the newest three at most).
+      this.waiting.push({ id, age: 0 });
+      if (this.waiting.length > CHIP_MAX) this.waiting.shift();
+      return;
+    }
+    this.add(id, ceiling);
+  }
+
+  private add(id: UnitId, ceiling: number | null): void {
     const chip = this.pool.get();
-    chip.dress(id);
+    chip.dress(id, ceiling === null);
     chip.left = CHIP_SECONDS;
     chip.age = 0;
     chip.slot = 0;
@@ -109,10 +129,23 @@ export class SummonChips {
   }
 
   update(dt: number): void {
+    const ceiling = this.ceiling();
+    for (let i = this.waiting.length - 1; i >= 0; i--) {
+      const w = this.waiting[i] as { id: UnitId; age: number };
+      w.age += dt;
+      if (chipFits(this.originY, 0, chipScale(unitRarityIndex(w.id)), ceiling)) {
+        this.waiting.splice(i, 1);
+        this.add(w.id, ceiling);
+      } else if (w.age > CHIP_WAIT) {
+        this.waiting.splice(i, 1);
+      }
+    }
     for (let i = this.live.length - 1; i >= 0; i--) {
       const c = this.live[i] as Chip;
       c.age += dt;
       c.left -= dt;
+      // A note that has come down over a chip sends it away quickly (it never lies under one).
+      if (!chipFits(this.originY, c.slot, c.scale, ceiling)) c.left = Math.min(c.left, CHIP_SQUEEZE);
       if (c.left <= 0) {
         this.live.splice(i, 1);
         this.drop(c);
@@ -134,6 +167,7 @@ export class SummonChips {
   destroy(): void {
     for (const c of this.live) c.root.destroy({ children: true });
     this.live.length = 0;
+    this.waiting.length = 0;
     this.pool.drain((c) => c.root.destroy({ children: true }));
     this.root.destroy({ children: true });
   }

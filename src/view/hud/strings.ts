@@ -228,7 +228,7 @@ addStrings('en', {
   'hud.gauge': '{n} / {cap}',
   'hud.overflow': 'Overrun! {s}s',
   'hud.est': 'Est. {s}s',
-  'hud.est.wait': 'Estimating',
+  'hud.est.wait': 'Est. ?',
   'hud.est.none': 'No damage',
   'hud.est.far': 'Est. 99s+',
 

@@ -75,6 +75,9 @@ export const DOT_NUMBER_COLOR: Readonly<Partial<Record<StatusKind, number>>> = {
 
 export const SHIELD_COLOR: number = TapeColors.sky.base;
 
+/** Every face colour the director asks the floating numbers for beyond the stock styles': their fonts are drawn with the scene, not on a first tick. */
+export const NUMBER_FACES: readonly number[] = [...new Set<number>([...Object.values(DOT_NUMBER_COLOR), SHIELD_COLOR])];
+
 /** shot: a muzzle flash at the cat; swing: a slash at the target; cast: a ring at the cat (zones, chains). */
 export type ShootStyle = 'shot' | 'swing' | 'cast';
 

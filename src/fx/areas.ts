@@ -82,33 +82,71 @@ interface Baked {
   dashes: Texture[];
 }
 
-const BAKED = new Map<DiscKind, Baked>();
+/** The pieces of a kind as they get baked (a piece is one texture; the warm-up bakes one a frame). */
+interface Parts {
+  sheet: Texture | null;
+  dashes: Array<Texture | null>;
+}
 
-function bakedOf(kind: DiscKind, look: DiscLook): Baked {
-  let baked = BAKED.get(kind);
-  if (baked) return baked;
+const PARTS = new Map<DiscKind, Parts>();
+
+/** How many pieces one kind is baked in: the sheet and the dashed ring at each stage of the warning. */
+export const AREA_BAKE_STEPS = 1 + DASH_STEPS.length;
+export const DISC_KINDS: readonly DiscKind[] = ['frost', 'brew', 'void', 'haste', 'heal'];
+
+function partsOf(kind: DiscKind): Parts {
+  let parts = PARTS.get(kind);
+  if (!parts) {
+    parts = { sheet: null, dashes: DASH_STEPS.map(() => null) };
+    PARTS.set(kind, parts);
+  }
+  return parts;
+}
+
+function bakeSheet(look: DiscLook): Texture {
   const sheet = new Graphics();
   outline(sheet, look.edge, look.steps).fill({ color: look.paper, alpha: look.paperAlpha });
   outline(sheet, look.edge, look.steps).stroke({ width: look.rimWidth, color: look.rim, alpha: look.rimAlpha, join: 'bevel' });
-  const dashes: Texture[] = [];
-  for (let level = 0; level < DASH_STEPS.length; level++) {
-    const ring = new Graphics();
-    for (let i = 0; i < look.dashCount; i++) {
-      if (dashGroup(i) < level) continue;
-      const th = (i / look.dashCount) * TAU;
-      const r = look.dashAt * REF;
-      const cx = Math.cos(th) * r;
-      const cy = Math.sin(th) * r;
-      const tx = -Math.sin(th) * look.dashW * 0.5;
-      const ty = Math.cos(th) * look.dashW * 0.5;
-      ring.moveTo(cx - tx, cy - ty).lineTo(cx + tx, cy + ty);
-    }
-    ring.stroke({ width: look.dashH, color: look.dash, cap: 'round' });
-    dashes.push(bakeArea(ring, 2 * BAKE_HALF, 2 * BAKE_HALF));
+  return bakeArea(sheet, 2 * BAKE_HALF, 2 * BAKE_HALF);
+}
+
+function bakeDashes(look: DiscLook, level: number): Texture {
+  const ring = new Graphics();
+  for (let i = 0; i < look.dashCount; i++) {
+    if (dashGroup(i) < level) continue;
+    const th = (i / look.dashCount) * TAU;
+    const r = look.dashAt * REF;
+    const cx = Math.cos(th) * r;
+    const cy = Math.sin(th) * r;
+    const tx = -Math.sin(th) * look.dashW * 0.5;
+    const ty = Math.cos(th) * look.dashW * 0.5;
+    ring.moveTo(cx - tx, cy - ty).lineTo(cx + tx, cy + ty);
   }
-  baked = { sheet: bakeArea(sheet, 2 * BAKE_HALF, 2 * BAKE_HALF), dashes };
-  BAKED.set(kind, baked);
-  return baked;
+  ring.stroke({ width: look.dashH, color: look.dash, cap: 'round' });
+  return bakeArea(ring, 2 * BAKE_HALF, 2 * BAKE_HALF);
+}
+
+/**
+ * Bake piece `step` (0 the sheet, then the three dashed rings) of a kind if it has not been baked yet. The warm-up calls this a piece
+ * a frame before a wave that needs the kind; `bakedOf` does the same for whatever is missing the first time an area of the kind starts.
+ */
+export function bakeAreaStep(kind: DiscKind, step: number): void {
+  const parts = partsOf(kind);
+  const look = LOOKS[kind];
+  if (step === 0) parts.sheet ??= bakeSheet(look);
+  else if (step - 1 < parts.dashes.length) parts.dashes[step - 1] ??= bakeDashes(look, step - 1);
+}
+
+/** True when every piece of the kind is baked. */
+export function areaBaked(kind: DiscKind): boolean {
+  const parts = PARTS.get(kind);
+  return !!parts && parts.sheet !== null && parts.dashes.every((d) => d !== null);
+}
+
+function bakedOf(kind: DiscKind): Baked {
+  for (let step = 0; step < AREA_BAKE_STEPS; step++) bakeAreaStep(kind, step);
+  const parts = partsOf(kind);
+  return { sheet: parts.sheet as Texture, dashes: parts.dashes as Texture[] };
 }
 
 /** A sprite of a baked piece, centred on the area's origin and sized in design px. */
@@ -509,7 +547,7 @@ class DiscArea implements Pooled {
     const shadow = new Part('disc', Hue.shadow, 2 * REF, 2 * REF, this.root);
     shadow.at(2.5, 6);
     shadow.s.alpha = 0.2;
-    const baked = bakedOf(kind, look);
+    const baked = bakedOf(kind);
     this.dashTextures = baked.dashes;
     this.dash = pieceSprite(baked.dashes[0] as Texture);
     this.root.addChild(pieceSprite(baked.sheet), this.dash);
@@ -885,6 +923,25 @@ export class AreaLayer {
     }
     v.start(x, y, radius, this.motifEvery());
     return this.begin(v);
+  }
+
+  /**
+   * Build one view of `kind` ahead of the first area that needs it and leave it in the pool, so that area does not build its sprites on the frame
+   * it starts. Only once the kind is baked (building it would bake what is missing, all at once). Returns true when a view was built.
+   */
+  ready(kind: DiscKind): boolean {
+    let free = this.freeDisc.get(kind);
+    if (!free) {
+      free = [];
+      this.freeDisc.set(kind, free);
+    }
+    if (free.length > 0 || !areaBaked(kind)) return false;
+    const pool = free;
+    const v = new DiscArea(kind, LOOKS[kind], this.all.length, (d) => this.release(d, pool));
+    this.parent.addChild(v.root);
+    this.all.push(v);
+    free.push(v);
+    return true;
   }
 
   /** A hazard cell: `rect` is its top-left based footprint in the layer's coordinates. */

@@ -214,3 +214,52 @@ Owner: the paw is still wrong (it is now an image, `icon_hand`), a lesson card l
 **Not verified.** Real touch on a phone; sound; the sell and class-sheet lessons in English (the paw is computed from measured rectangles; it was checked in Korean everywhere and in English for the first, the pick and the speed lessons, at 1600 for two); the hold-to-read tooltip on the pick sheet's cards is still the kit's.
 
 REQUESTS: none. (The kit's `tooltip` is no longer used by the battle apart from that pick-sheet tooltip; `src/screens/shell/HomePointer.ts` already uses the new `Hand.place`.)
+
+
+## 2026-10-07 leftovers
+
+Three items from the owner's last list: the summon result chips against lesson notes, the whole tutorial in English, first-appearance hitches (item 3 is in `fx.md`, `field.md`, `battle.md`). Method of the long runs: `?debug=1&fresh=1&lang=en` on a `vite build --minify false` bundle served from a scratch folder on a port nobody used before (the browser keeps the `index.html` of an earlier build on the same origin, so a reused port plays the OLD code: that cost one whole run), a durable tab opened with the `aside` CLI and attached to from every runner call (`attachBrowserTab`), the ticker stopped and stepped with `game.tick`, real taps and drags, a bot that does what a first-time player does. Every lesson is judged once, after its note has popped in, by `inspect()` read from the display tree in design px: text sizes after scale, text outside its paper, note against target and skip button, paw tip against target, writing under the paw, Korean left over, top-row gaps.
+
+**1. One rule for the result chips, the lesson notes and the "nice!" sticker.** Root cause: three things were each placed alone. The chips rose 112 px above the summon button for up to three slots (94 px apart) whatever lay there, a lesson note over the sheet lies on the same strip, and the sticker was put on top of its target, which for the summon lesson is the chips' own column. The rule (pure, in `chipMath.ts` and `cheerMath.ts`):
+- *Priority: lesson note or first-encounter card, then the "nice!" sticker, then the result chips.* Chips only lie on free paper: whatever lies over their column is their ceiling (`chipCeiling`: the note, the card, the sticker, and the class chips' row, which they never cover, lesson or not). A chip whose top edge would come within 6 px of the ceiling (`chipFits`, per slot and rank) waits up to 1.2 s and is then dropped (the NEW tag on the cell said it already); a chip that is up when a note arrives over it leaves within 0.2 s. Without a ceiling nothing changes (three slots, rays for epic and up); with one the rays are not drawn (they reach 140 px above the plate). Wiring: `SummonChips.ceiling`, `ActionRow.overChips(note, card, cheer, classes)`, `ActionRow.chipColumn()`, `BottomPanel.classRowRect()`, `ActionRow.layout(summonY, utilY, panelTop)`; the HUD hands in `tutorial.noteRect`, `card.rect`, `tutorial.cheerRect`.
+- *The sticker lands on free paper* (`cheerSpot`: spots lined up with the target, then a 36 px grid over the screen, cost = overlap x weight x 400 + distance): controls and writing weigh 8 (`STICKER_WALL`), a cat 1.2, the enemy lane 0.4, so it covers a cat only when nothing else on the screen is free (a board of 15 cats), never a control or a label. `Hud.avoidList(sticker)` gives the weights, `topKeep` adds the top row's own controls (gauge, pause, speed, skip, the toy shelf once it holds a toy), the chips' column is a wall, and so are the places the NEXT lesson's controls will take (`restingRects`: the control as it will rest, full size, also while it is hidden or popping in; the laser button used to arrive under a sticker). It is placed after the frame's events, at its settled size (36 px text; it lands 1.45x and settles in 0.16 s, a flourish over its own spot). `LessonFx.celebrate(word, spot)`, `cheering`, `cheerRect`.
+- *The next lesson's note waits for the sticker* (`Tutorial.tick`: no note while `fx.cheering`, 1.1 s), so a note and the sticker never share the screen. The lesson's clock hold is not delayed.
+
+Proof: `shots/lo/item1_after_ko.png` in the session scratchpad (the original complaint played again: the third summon, the sticker beside the button, two chips stacked, the merge note arriving after the sticker). Mechanical, English 1280, a chip probe at every lesson (three chips summoned with the note up, then read: overlap in px² with the note, the card, the class row): summon 3 chips, merge 1, classes 2, synergy 2, sun 1, purr 2, molt 1, summon_grade 2, class_upgrade 2, call_wave 2, speed 1, sell 1, and 0 (no room under the card: they wait) for lose_gauge, acts, elite, awaken, boss; overlap 0 everywhere. Stickers (Korean 16, English 13 logged, 1280 and 1600): no control, no writing, no note covered; a cat only on a full board (strips 4 to 105 px wide). Tests: `view.hud.chip.test.ts` (9: ceiling, fit per slot and rank, every chip of every rank off a note over 6 targets x 3 heights x 2 screens, two chips under the class row), `view.hud.cheer.test.ts` (6: beside the target, next side when taken, off every control for 13 targets on both screens with and without the speed button, a full board).
+
+**2. The tutorial in English, 19 lessons, from a fresh profile, real taps and drags (1280, then 720 x 1600).** Verdicts after the fixes below. In every lesson: every text is 24 px or more after scale (notes 26, buttons 28, card titles 32; the toy card's "Best" flag measures 23.9 only because it is turned 0.14 rad), nothing is cut, no Korean is left on screen, no note covers its target or the skip button, pause to strip 20, strip to skip 12, skip to speed 16 px (the elite and boss lessons keep the strip 2 px under the skip button, as before).
+
+| # | Lesson | English note | Paw | Verdict |
+|---|---|---|---|---|
+| 1 | summon | Spend fish to call a cat. Tap it! (n/3) | on the button's upper right, off "Summon" | fits |
+| 2 | merge | Drag a cat onto its twin: next rank! | carries the cat between the twins | fits |
+| 3 | lose_gauge | If this bar stays full you lose. Thin them out! | none (Got it) | fits, 2 lines |
+| 4 | classes | Tap a class chip. Each class does a different job. | on the first chip | fits |
+| 5 | acts | 4 waves make an act. Each act ends with rewards. | none (Got it) | fits; a stray paw at the screen corner here was a bug (below) |
+| 6 | pick3 (popup) | Every 6 summons, pick one of three cats. The card with tape is the pick we suggest. | on the taped card | lines under the cards read 22 px: fixed |
+| 7 | synergy | More different cats of one class make them stronger. | none (timed) | fits |
+| 8 | sun | Drag a cat onto a sunny cell. It attacks faster there! | carries the cat to the cell | fits |
+| 9 | laser | four bubbles ("You got the laser pointer! Tap it to see what it does." ... "Enemies near the dot are marked. Your cats attack them first!") and the card ("Got it" / "Use it") | beside the button, then rides the enemy | fits |
+| 10 | elite | Elites are tough. Beat them before the timer ends! | none | strip read "King Cuc... Estimating": fixed |
+| 11 | purr | Purr is the rare material for molting and awakening. | none | fits |
+| 12 | toys (popup) | Pick a toy. It helps for the whole run. | none | fits |
+| 13 | molt | Tap a cat, then molt it into another class. | on the cat, then the button | fits |
+| 14 | summon_grade | Tap to raise the grade: better cats show up more. | was over "Lv.1": fixed | fits |
+| 15 | class_upgrade | Tap a class chip to upgrade the whole class. | on the first chip | fits |
+| 16 | call_wave | Call the next wave early for bonus fish. Tap it! | upper right of the green button, off "Next wave" | fits |
+| 17 | speed | Each tap makes the game faster. Try it! | on the round button | fits |
+| 18 | sell | Tap a cat and sell it for fish and room. | on the weakest cat | fits |
+| 19 | boss | A boss! Beat it before the timer runs out. | none | strip read "Lord Vacu... Estimating": fixed |
+
+The awakening card ("Awakening and Guardians / A King that gathers purr becomes a Guardian." with "Got it" and "More in the guidebook") reads correctly. At 1600 the same 19 play the same way: notes over the panel (y 988 / 1020), no stray paw, the pick and toy popups inside the screen.
+
+Found and fixed at the root:
+- *A paw at the screen corner in every note-only lesson after the player's own drag* (the drag listener set `hand.visible = true` when a drag ended, whatever the lesson). `Tutorial.handOn` remembers whether the lesson has a paw (`placeHand` / `layHand`).
+- *The paw lay on "Lv.1" of the grade button* (tip on the usual spot, pad 78 px wide). `handMath.pawCovers` (ten circles along the paw, the pad wide and the arm tapering) says how much of the paw's body lies on a rectangle; `placePaw` takes `labels` (2500 a circle) and returns `covered` and `cost`; `Tutorial.patControl` tries the usual tip, the upper right corner and the middles of the top and right edges, each with its best arm, and keeps the one on least writing (`TutorialHost.labelsOf` reads the control's real `Text` rectangles). Every pat of a control now covers 0. `view.hud.paw.test.ts` +4.
+- *The pick sheet's small lines read 22 px* (the cards are shown at 0.92: "Merge" was 24, the next cat's name 26, the kit's flag 24): `SummonPickPopup` sets them in 27 and draws the "Best" flag itself with the kit's `Tag`, in the place `CardFrame.setNew` puts it (see REQUESTS).
+- *The elite and boss strip cut the English name* ("Estimating" is 10 letters): `hud.est.wait` is "Est. ?" (Korean "계산 중" unchanged).
+- The sticker and the chips (item 1), `Hud.avoidList` gained the grade button.
+Bot changes for English and 1600 (scratch, not in the repo): the recommended card is found by `PressCard` position, not by the label's x; the toy card by `PressCard`.
+Not verified: a touch phone; sound.
+
+REQUESTS: `src/ui/CardFrame.ts` `setNew`: the flag is set at `MIN_FONT` (24) on a card that a popup shows at 0.92, so it reads 22; a `fontSize` option on `CardFrame` would let `SummonPickPopup` drop its own flag. `src/audio`: the first `audio.play` of a sound costs 6 to 13 ms and `audio.music` 5 ms on the wave-start frame of a boss wave (the bank bakes on first use): the sounds of the coming wave (`boss_warning`, `boss_roar`, the first hit and kill sounds) could be primed (`engine.prime`) in the preparation, like the pictures are.

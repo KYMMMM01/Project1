@@ -1,4 +1,4 @@
-import { BitmapFont, BitmapText, Container, Sprite } from 'pixi.js';
+import { BitmapFont, BitmapFontManager, BitmapText, Container, Sprite, TextStyle, type Texture } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { clamp, formatNumber, mixColor } from '@/core/math';
 import { Color, FONT_FAMILY } from '@/ui/theme';
@@ -21,6 +21,7 @@ const STROKE = 12;
 const CHARS = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×'];
 
 const faces = new Map<number, string>();
+const fonts = new Map<string, ReturnType<typeof BitmapFontManager.getFont>>();
 
 /** The bitmap font of one face colour: the paper tone lightened toward cream, inside one flat brown stroke. Baked once per colour. */
 function faceFont(color: number): string {
@@ -40,12 +41,28 @@ function faceFont(color: number): string {
       stroke: { color: Color.ink, width: STROKE, join: 'round' },
     },
   });
+  fonts.set(name, BitmapFontManager.getFont('0', new TextStyle({ fontFamily: name, fontSize: BAKED })));
   return name;
 }
 
+/** The glyph sheets of every face font baked so far: the warm-up puts them on the graphics card before the first number is drawn. */
+export function numberFontTextures(): Texture[] {
+  const out: Texture[] = [];
+  for (const font of fonts.values()) for (const page of font.pages) out.push(page.texture);
+  return out;
+}
+
 /**
- * Bake the face fonts of the stock styles once. Call after the game fonts are loaded (BootScene does this
- * before any scene starts); show() calls it lazily too. A number floats over artwork, so it is light digits
+ * Draw the face font of `color` now: for a colour that is not one of the stock styles' (a damage-over-time tick, a shield), whose font would
+ * otherwise be drawn on the frame of its first number, 20 ms in the middle of a fight.
+ */
+export function bakeNumberFace(color: number): void {
+  faceFont(color);
+}
+
+/**
+ * Bake the face fonts of the stock styles once: 140 ms of drawing glyphs, so a battle does it while its scene is built (BattleScene) and
+ * not on the frame of the first hit; show() calls it lazily too. A number floats over artwork, so it is light digits
  * (tinted by kind) inside one brown stroke, with no shadow and no second outline.
  */
 export function ensureNumberFonts(): void {

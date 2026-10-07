@@ -18,6 +18,7 @@ import { buildRug, RUG_X, RUG_Y } from './rug';
 import { rugSkin } from './rugSkins';
 import { SunNote } from './sunNote';
 import { UnitViews } from './units';
+import { FieldWarmup } from './warmup';
 import { buildWalkway } from './walkway';
 import { WeaponMarks } from './weaponMarks';
 
@@ -50,6 +51,7 @@ export function createField(ctx: BattleContext): FieldPart {
   layers.overlay.addChild(lift);
   const units = new UnitViews(env, layers.units, lift);
   const enemies = new EnemyViews(env, layers.enemies);
+  const spares = new FieldWarmup(battle, enemies, ground);
   const shots = new Projectiles(env, layers.projectiles);
   const effects = new FieldEffects(env, enemies);
   // What the weapons leave on the field (swing arcs, stuck arrows, splats ...): over the cats and enemies, under the numbers.
@@ -108,6 +110,7 @@ export function createField(ctx: BattleContext): FieldPart {
       cells.update(dt, env.time);
       laser.update(dt, env.time);
       ground.update(dt);
+      spares.update(dt);
     },
     resize(layout: BattleLayout): void {
       lift.position.set(layout.fieldX, layout.fieldY);

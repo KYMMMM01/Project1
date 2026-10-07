@@ -8,7 +8,8 @@ vi.mock('pixi.js', async (importOriginal) => {
     anchor = { set: () => undefined };
   }
   class FakeGradient {}
-  return { ...m, BitmapFont: { install: () => undefined }, BitmapText: FakeBitmapText, FillGradient: FakeGradient };
+  // The installed font is asked for its glyph sheets (the warm-up uploads them): a font with one sheet stands in.
+  return { ...m, BitmapFont: { install: () => undefined }, BitmapFontManager: { getFont: () => ({ pages: [{ texture: m.Texture.WHITE }] }) }, BitmapText: FakeBitmapText, FillGradient: FakeGradient };
 });
 
 vi.mock('@/fx/textures', () => ({ fxTexture: () => Texture.WHITE }));
@@ -189,11 +190,11 @@ describe('FloatingNumbers behaviour', () => {
   it('a face colour override gets its own pool: the face is baked per colour', () => {
     const n = make(10);
     n.show(0, 0, 10, 'dot');
-    n.show(0, 0, 10, 'dot', { color: 0x123456 });
+    n.show(0, 0, 10, 'dot', { color: 0x0badf0 });
     expect(n.created).toBe(2);
     for (let t = 0; t < 1; t += DT) n.update(DT);
     n.show(0, 0, 10, 'dot');
-    n.show(0, 0, 10, 'dot', { color: 0x123456 });
+    n.show(0, 0, 10, 'dot', { color: 0x0badf0 });
     expect(n.created).toBe(2);
   });
 });
@@ -233,5 +234,21 @@ describe('FloatingNumbers on the clamped top line', () => {
     n.show(300, 600, 11, 'damage', { noScatter: true });
     n.show(300, 600, 23, 'damage', { noScatter: true });
     expect(n.layer.children.map((c) => c.x)).toEqual([300, 300]);
+  });
+});
+
+describe('the glyph sheets the warm-up uploads', () => {
+  it('lists the sheets of every face baked, a colour that no stock style uses included, and bakes a face only once', async () => {
+    const { bakeNumberFace, numberFontTextures } = await import('@/fx/numbers');
+    const counts: number[] = [numberFontTextures().length];
+    bakeNumberFace(0x0ace55);
+    counts.push(numberFontTextures().length);
+    bakeNumberFace(0x0ace55);
+    counts.push(numberFontTextures().length);
+    // A second colour is a second face.
+    bakeNumberFace(0x0f00d1);
+    counts.push(numberFontTextures().length);
+    const first = counts[0] as number;
+    expect(counts).toEqual([first, first + 1, first + 1, first + 2]);
   });
 });

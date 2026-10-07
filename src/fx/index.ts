@@ -12,6 +12,8 @@ export * from './rays';
 export * from './loops';
 export type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
 export type { AreaHandle, CellKind, DiscKind } from './areas';
+export { AREA_BAKE_STEPS, DISC_KINDS, areaBaked, bakeAreaStep } from './areas';
+export * from './warm';
 export * from './cutin';
 export * from './numbers';
 export * from './flyTo';

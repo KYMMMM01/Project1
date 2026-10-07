@@ -3,7 +3,7 @@ import { game } from '@/core/game';
 import { Emitter } from '@/core/events';
 import { Scene, scenes } from '@/core/scene';
 import { Tweener } from '@/core/tween';
-import { Fx, createHitStop } from '@/fx';
+import { Fx, createHitStop, ensureNumberFonts, bakeNumberFace, warm } from '@/fx';
 import { createBattle, type BattleApi, type Fail } from '@/game';
 import { clearToasts, popups } from '@/ui';
 import type {
@@ -19,9 +19,11 @@ import type {
   RunConfig,
 } from '@/view/context';
 import { createDirector } from '@/view/director';
+import { NUMBER_FACES } from '@/view/director/palette';
 import { BattleClock } from '@/view/field/clock';
 import { createField } from '@/view/field';
 import { createHud } from '@/view/hud';
+import { BattleWarmup } from '@/view/warmup';
 import { computeBattleLayout } from '@/view/layout';
 import { BootScene } from './BootScene';
 
@@ -168,12 +170,17 @@ export class BattleScene extends Scene {
   private readonly field: FieldPart;
   private readonly director: DirectorPart;
   private readonly hud: HudPart;
+  private readonly warmup: BattleWarmup;
   private readonly offs: Array<() => void> = [];
   private leaving = false;
   private finish: { victory: boolean; wait: number } | null = null;
 
   constructor(readonly run: RunConfig) {
     super();
+    // The floating numbers' glyphs (the stock faces and the burn, poison, bleed and shield colours) are drawn now, while the scene is built behind
+    // the transition: each face is 20 ms of drawing, which would otherwise land on the frame of its first number.
+    ensureNumberFonts();
+    for (const color of NUMBER_FACES) bakeNumberFace(color);
     this.battle = (run.snapshot ? createBattle(run.init, run.snapshot) : null) ?? createBattle(run.init);
     const layers = this.buildLayers();
     const layout = computeBattleLayout(game.w, game.h, game.safeTop, game.safeBottom);
@@ -194,6 +201,7 @@ export class BattleScene extends Scene {
     this.director = createDirector(this.ctx);
     this.hud = createHud(this.ctx);
     this.context.hud = this.hud;
+    this.warmup = new BattleWarmup(this.battle);
 
     this.offs.push(
       game.events.on('visibility', ({ visible }) => this.context.setPaused('system', !visible)),
@@ -264,6 +272,9 @@ export class BattleScene extends Scene {
     this.hud.update(dt);
     // Particles and floating numbers keep real time: hit-stop must not smear them.
     ctx.fx.update(dt);
+    // Last: the frame's own work is done, what is left of its allowance goes to first-use work for what is coming.
+    this.warmup.update();
+    warm.update(dt);
     this.tickFinish(dt);
   }
 
@@ -280,6 +291,7 @@ export class BattleScene extends Scene {
   override exit(): void {
     for (const off of this.offs) off();
     this.offs.length = 0;
+    this.warmup.destroy();
     this.hud.destroy();
     this.director.destroy();
     this.field.destroy();

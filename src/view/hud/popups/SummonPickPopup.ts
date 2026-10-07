@@ -17,6 +17,7 @@ import {
   motion,
   Panel,
   Popup,
+  Tag,
   TweenBag,
   uiLabel,
 } from '@/ui';
@@ -31,6 +32,10 @@ import { Hand } from '../Hand';
 
 const W = PICK.w;
 const SCALE = PICK.scale;
+/** The card's own size (CardFrame 'medium') and the size its small lines are set in: shown at 0.92 they still read 24 px or more. */
+const CARD_W = 220;
+const CARD_H = 292;
+const LABEL = 27;
 /** The cards sit lower than the text above them needs: the pointing hand has its own band between the sub line and the cards. */
 const CARD_Y = PICK.cardY;
 const PANEL_H = PICK.h;
@@ -70,7 +75,7 @@ export class SummonPickPopup extends Popup<void> {
     options.forEach((id, i) => {
       const def = unitDef(id);
       const x = pickCardX(i, options.length);
-      const card = new PressCard(220, 292, () => this.choose(i), { holdLimit: HOLD_DELAY });
+      const card = new PressCard(CARD_W, CARD_H, () => this.choose(i), { holdLimit: HOLD_DELAY });
       card.scale.set(SCALE);
       card.position.set(x, CARD_Y);
       const frame = new CardFrame({
@@ -78,9 +83,14 @@ export class SummonPickPopup extends Popup<void> {
         size: 'medium',
         portrait: unitPortrait(id, 190),
         name: t(def.nameKey),
-        newTag: guide && i === this.recommended ? t('hud.recommend') : undefined,
       });
       card.addChild(frame);
+      if (guide && i === this.recommended) {
+        // The kit's own flag (CardFrame.setNew) in the same place, but 27 px: the card is shown at 0.92, and 24 px would read 22.
+        const flag = new Tag({ text: t('hud.recommend'), style: 'danger', shape: 'flag', fontSize: LABEL, tilt: 0.14 });
+        flag.position.set(CARD_W / 2 + 10 - flag.uiBox.w / 2, -CARD_H / 2 + 30);
+        card.addChild(flag);
+      }
       const klass = new Container();
       const icon = drawIcon(CLASS_ICON[def.classId], 40);
       icon.position.set(-44, 0);
@@ -92,10 +102,10 @@ export class SummonPickPopup extends Popup<void> {
       // What two of this cat make (or what a king awakens into): the line the player is building.
       const plan = planOf(id, []);
       if (plan.result) {
-        const lead = uiLabel(t(plan.kind === 'awaken' ? 'hud.plan.awaken' : 'hud.plan.merge'), { size: 24, color: Color.inkSoft });
+        const lead = uiLabel(t(plan.kind === 'awaken' ? 'hud.plan.awaken' : 'hud.plan.merge'), { size: LABEL, color: Color.inkSoft });
         lead.position.set(0, 226);
-        const next = uiLabel(t(unitDef(plan.result).nameKey), { size: 26 });
-        fitLabel(next, 232, 26, 0.8);
+        const next = uiLabel(t(unitDef(plan.result).nameKey), { size: LABEL });
+        fitLabel(next, 232, LABEL, 0.9);
         next.position.set(0, 256);
         card.addChild(lead, next);
       }

@@ -1359,6 +1359,11 @@ export class Fx {
     return this.areas.disc('void', x, y, radius);
   }
 
+  /** Have a view of a ground area's kind built and waiting (see `AreaLayer.ready`): true when one was built just now. */
+  readyArea(kind: DiscKind): boolean {
+    return this.areas.ready(kind);
+  }
+
   /** The hostile ring round an enemy: speed comets for the clock's haste, healing crosses for the pill's mending. Move it with `moveTo`. */
   enemyRing(kind: Extract<DiscKind, 'haste' | 'heal'>, x: number, y: number, radius: number): AreaHandle {
     return this.areas.disc(kind, x, y, radius);

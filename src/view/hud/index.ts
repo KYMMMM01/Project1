@@ -4,7 +4,7 @@
  * timers follow the frame clock. See docs/handoff/hud.md.
  */
 import './strings';
-import { Container, Point } from 'pixi.js';
+import { Container, Point, Text } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
 import { i18nEvents, t } from '@/core/i18n';
 import { closeGuide, GuideProgress, guideProgress, openGuide, topicTeach, type TopicId, type TryControl } from '@/guide';
@@ -46,6 +46,16 @@ const TWINS_WAIT = 90;
 const BANNER_HOLD = 2.6;
 /** How much a bubble covering the enemy lane costs next to covering a cat (3) or a pill (1.2): enough to pick the other side when it is free. */
 const LANE_WEIGHT = 1.5;
+/** What covering each thing costs the "nice!" sticker (see `avoidList`). */
+const STICKER_CONTROL = 8;
+const STICKER_CAT = 1.2;
+const STICKER_LANE = 0.4;
+
+/** True when the container and every ancestor are shown (its alpha may still be on the way up). */
+function shownChain(c: Container): boolean {
+  for (let p: Container | null = c; p; p = p.parent) if (!p.visible) return false;
+  return true;
+}
 
 /** Simulated seconds a single frame can never exceed (3x speed, 0.05 s frame cap, hit-stop aside): a bigger step means skipped events. */
 const RESYNC_JUMP = 0.5;
@@ -173,6 +183,8 @@ class Hud implements HudPart {
     if (env.tutorial) {
       this.tutorial = new Tutorial(env, this.tutorialHost(), this.progress.skipped);
     }
+    // A result chip only lies on free paper: the note, the card, the sticker and the class chips are what it makes way for.
+    this.bottom.actions.overChips(() => this.tutorial?.noteRect ?? null, () => this.card.rect, () => this.tutorial?.cheerRect ?? null, () => this.bottom.classRowRect());
     // The laser's guided first use: a normal run starts it by itself, the tutorial run when its laser lesson begins.
     const laser = this.bottom.actions.laser;
     this.guide = new LaserGuide(env, () => this.boundsRect(laser), !lessons, () => this.avoidList());
@@ -240,37 +252,75 @@ class Hud implements HudPart {
     this.boss.destroy();
   }
 
-  /** Rectangles a hint bubble should not cover: the cats, the summon button, the enemy preview and the chips. */
-  private avoidList(): Weighted[] {
+  /**
+   * Rectangles a hint bubble should not cover: the cats, the summon button, the enemy preview and the chips. For the "nice!" sticker (`sticker`)
+   * the order is different: no control or writing is ever to be covered (a high weight), a cat only when nothing else is free, the lane the least.
+   */
+  private avoidList(sticker = false): Weighted[] {
+    const control = (weight: number): number => (sticker ? STICKER_CONTROL : weight);
     const out: Weighted[] = [];
     const add = (c: Container, weight: number): void => {
-      if (onScreen(c)) out.push({ ...this.bubble.boundsOf(c), weight });
+      // The sticker is placed on the frame a control arrives: it keeps off the control as it will rest (full size, fully shown), not as it pops in.
+      if (sticker ? shownChain(c) : onScreen(c)) out.push({ ...(sticker ? this.restingRect(c) : this.bubble.boundsOf(c)), weight });
     };
-    add(this.top.previewLayer, 2);
-    add(this.top.waveLabel, 2);
-    add(this.bottom.classes.root, 1.5);
-    add(this.bottom.currency.fish, 1.2);
-    add(this.bottom.currency.purr, 1.2);
-    add(this.bottom.actions.summon, 3);
-    add(this.bottom.actions.laser, 1);
-    add(this.bottom.actions.util, 1);
+    add(this.top.previewLayer, control(2));
+    add(this.top.waveLabel, control(2));
+    add(this.bottom.classes.root, control(1.5));
+    add(this.bottom.currency.fish, control(1.2));
+    add(this.bottom.currency.purr, control(1.2));
+    add(this.bottom.actions.summon, control(3));
+    add(this.bottom.actions.grade, control(2));
+    add(this.bottom.actions.laser, control(1));
+    add(this.bottom.actions.util, control(1));
     // The call button is an offer that comes and goes: a bubble over it hides the one thing the player may want to press.
-    add(this.bottom.actions.callBtn, 2.5);
+    add(this.bottom.actions.callBtn, control(2.5));
     for (const u of this.ctx.battle.units) {
       const view = u ? this.ctx.unitView(u.uid) : null;
-      if (view) add(view, 3);
+      if (view) add(view, sticker ? STICKER_CAT : 3);
     }
     // The enemy lane runs round the board: a bubble over it hides the enemies the player has to watch.
     const { fieldX, fieldY } = this.ctx.layout;
     const half = LANE_WIDTH / 2;
     const side = PATH_BOTTOM - PATH_TOP;
     out.push(
-      { x: fieldX, y: fieldY + PATH_TOP - half, w: FIELD_W, h: LANE_WIDTH, weight: LANE_WEIGHT },
-      { x: fieldX, y: fieldY + PATH_BOTTOM - half, w: FIELD_W, h: LANE_WIDTH, weight: LANE_WEIGHT },
-      { x: fieldX + PATH_LEFT - half, y: fieldY + PATH_TOP, w: LANE_WIDTH, h: side, weight: LANE_WEIGHT },
-      { x: fieldX + PATH_RIGHT - half, y: fieldY + PATH_TOP, w: LANE_WIDTH, h: side, weight: LANE_WEIGHT },
+      { x: fieldX, y: fieldY + PATH_TOP - half, w: FIELD_W, h: LANE_WIDTH, weight: sticker ? STICKER_LANE : LANE_WEIGHT },
+      { x: fieldX, y: fieldY + PATH_BOTTOM - half, w: FIELD_W, h: LANE_WIDTH, weight: sticker ? STICKER_LANE : LANE_WEIGHT },
+      { x: fieldX + PATH_LEFT - half, y: fieldY + PATH_TOP, w: LANE_WIDTH, h: side, weight: sticker ? STICKER_LANE : LANE_WEIGHT },
+      { x: fieldX + PATH_RIGHT - half, y: fieldY + PATH_TOP, w: LANE_WIDTH, h: side, weight: sticker ? STICKER_LANE : LANE_WEIGHT },
     );
     return out;
+  }
+
+  /** The containers a reveal key brings in (empty for keys with no place of their own). */
+  private controlsOf(key: RevealKey): Container[] {
+    const a = this.bottom.actions;
+    switch (key) {
+      case 'chips':
+      case 'classUpgrade': return [this.bottom.classes.root];
+      case 'preview': return [this.top.previewLayer];
+      case 'tracker': return [a.tracker];
+      case 'laser': return [a.laser, a.info];
+      case 'callWave': return [a.callBtn];
+      case 'purr': return [this.bottom.currency.purr];
+      case 'odds': return [this.bottom.currency.odds];
+      case 'gradeUpgrade': return [a.grade];
+      case 'speed': return [this.top.speedBtn];
+      default: return [];
+    }
+  }
+
+  /**
+   * Where `c` lies in scene space once its own pop-in scale is 1: its bounds, grown about its origin by the scale it has now. With `hidden` it
+   * is measured as if shown (a control that has not arrived yet, which the sticker has to keep off all the same).
+   */
+  private restingRect(c: Container, hidden = false): Rect {
+    const was = c.visible;
+    if (hidden) c.visible = true;
+    const r = this.boundsRect(c);
+    c.visible = was;
+    const s = Math.abs(c.scale.x) > 0.05 ? c.scale.x : 1;
+    const o = this.env.toHud(c.getGlobalPosition());
+    return { x: o.x + (r.x - o.x) / s, y: o.y + (r.y - o.y) / s, w: r.w / s, h: r.h / s };
   }
 
   /** The control a refusal is about; null when the command lives in a popup (its toast shows above it). */
@@ -300,6 +350,21 @@ class Hud implements HudPart {
     const tl = this.env.toHud(new Point(b.x, b.y));
     const br = this.env.toHud(new Point(b.x + b.width, b.y + b.height));
     return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+  }
+
+  /** The rectangles (scene space) of the visible writing inside `c`, each a few px wider than the letters. */
+  private textRects(c: Container): Rect[] {
+    const out: Rect[] = [];
+    const walk = (o: Container): void => {
+      if (!o.visible || o.alpha <= 0) return;
+      if (o instanceof Text && o.text !== '') {
+        const r = this.boundsRect(o);
+        out.push({ x: r.x - 3, y: r.y - 3, w: r.w + 6, h: r.h + 6 });
+      }
+      for (const child of o.children) walk(child);
+    };
+    walk(c);
+    return out;
   }
 
   private rectOfContainer(c: Container): Rect | null {
@@ -351,8 +416,21 @@ class Hud implements HudPart {
       },
       pulse: (on) => this.bottom.actions.summon.attention(on),
       keepClear: () => this.avoidList(),
+      stickerKeep: () => this.avoidList(true),
       laserGuided: () => this.teach.guided,
       startLaserGuide: () => this.guide?.arm(),
+      chipColumn: () => this.bottom.actions.chipColumn(),
+      restingRects: (keys) => {
+        const out: Rect[] = [];
+        for (const key of keys) {
+          for (const c of this.controlsOf(key)) out.push(this.restingRect(c, true));
+        }
+        return out;
+      },
+      labelsOf: (target) => {
+        const c = control(target);
+        return c ? this.textRects(c) : [];
+      },
     };
   }
 

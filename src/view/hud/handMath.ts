@@ -66,6 +66,32 @@ export function pawBox(tip: Point, rotation: number): Rect {
   return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
 }
 
+/** How many circles along the paw stand for its body when asking whether it lies on a label, and what each costs. */
+const BODY_SAMPLES = 10;
+const LABEL_COST = 2500;
+
+/** True when a circle of radius `r` at (x, y) touches `rect`. */
+function touches(x: number, y: number, r: number, rect: Rect): boolean {
+  const dx = Math.max(rect.x - x, 0, x - (rect.x + rect.w));
+  const dy = Math.max(rect.y - y, 0, y - (rect.y + rect.h));
+  return dx * dx + dy * dy < r * r;
+}
+
+/**
+ * How many of ten circles along the paw (the pad at the tip, wider than the arm that tapers behind it) touch `rect`: 0 when the paw leaves
+ * a label alone. The paw is not a rectangle once it is turned, so its box says more than it covers.
+ */
+export function pawCovers(tip: Point, rotation: number, rect: Rect): number {
+  const ux = Math.sin(rotation);
+  const uy = -Math.cos(rotation);
+  let n = 0;
+  for (let i = 0; i < BODY_SAMPLES; i++) {
+    const t = i / (BODY_SAMPLES - 1);
+    if (touches(tip.x - ux * t * PAW_LENGTH, tip.y - uy * t * PAW_LENGTH, (PAW_WIDTH / 2) * (1 - 0.35 * t), rect)) n++;
+  }
+  return n;
+}
+
 export interface PawSpec {
   /** Where the tip has to be: one spot for a tap, the start and the end of a drag (the paw keeps its turn all the way). */
   tips: readonly Point[];
@@ -74,6 +100,8 @@ export interface PawSpec {
   keep: readonly Keep[];
   /** Sides to come from, the most natural first. */
   prefer: readonly PawFrom[];
+  /** Writing that must stay readable: measured against the paw's own body, not its box (see `pawCovers`). */
+  labels?: readonly Rect[];
 }
 
 export interface PawPose {
@@ -81,6 +109,10 @@ export interface PawPose {
   rotation: number;
   /** Everything the paw covers on the way, tip to tip. */
   box: Rect;
+  /** Circles of the paw's body that lie on a label, summed over the tips (0 when the labels are clear). */
+  covered: number;
+  /** What the pose costs: lower is better. */
+  cost: number;
 }
 
 /** Part of `box` that lies outside `bounds`. */
@@ -98,25 +130,25 @@ const OUTSIDE_COST = 40;
  */
 export function placePaw(s: PawSpec): PawPose {
   let best: PawPose | null = null;
-  let bestCost = Infinity;
   s.prefer.forEach((from, i) => {
     TILTS.forEach((tilt, j) => {
       const rotation = pawRotation(from, tilt);
       let box: Rect | null = null;
+      let covered = 0;
       let cost = i * PREFER_COST + j * TILT_COST;
       for (const tip of s.tips) {
         const b = pawBox(tip, rotation);
         cost += outside(b, s.bounds) * OUTSIDE_COST;
         for (const k of s.keep) cost += k.weight * overlapArea(b, k);
+        for (const label of s.labels ?? []) covered += pawCovers(tip, rotation, label);
         box = box ? union(box, b) : b;
       }
-      if (box && cost < bestCost) {
-        bestCost = cost;
-        best = { from, rotation, box };
-      }
+      cost += covered * LABEL_COST;
+      if (box && (!best || cost < best.cost)) best = { from, rotation, box, covered, cost };
     });
   });
-  return best ?? { from: 'lowerRight', rotation: pawRotation('lowerRight', TILTS[0]), box: pawBox(s.tips[0] ?? { x: 0, y: 0 }, pawRotation('lowerRight', TILTS[0])) };
+  const fallback = pawRotation('lowerRight', TILTS[0]);
+  return best ?? { from: 'lowerRight', rotation: fallback, box: pawBox(s.tips[0] ?? { x: 0, y: 0 }, fallback), covered: 0, cost: Infinity };
 }
 
 function union(a: Rect, b: Rect): Rect {

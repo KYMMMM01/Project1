@@ -7,11 +7,19 @@ import { Container, Graphics } from 'pixi.js';
 import { audio } from '@/audio';
 import { Color, motion, PaperLabel, paperSeed } from '@/ui';
 import { Ease } from '@/core/tween';
+import type { Point, Rect } from './layoutMath';
 
 const BURSTS = 3;
 const PIECES = 14;
 const BURST_LIFE = 0.7;
-const CHEER_LIFE = 1.1;
+/** Seconds the sticker stays: the next lesson's note waits for it (see Tutorial.tick), so the two never share the screen. */
+export const CHEER_LIFE = 1.1;
+/** The sticker lands this much bigger than it settles (a pop of 0.16 s) and lifts this far on the way out (px). */
+const CHEER_LAND = 1.45;
+const CHEER_LIFT = 16;
+/** What a spot has to leave free for it: the settled sticker with its turn and a margin, and the lift-off. The landing pop is a flourish over its own spot. */
+const CHEER_ROOM = 1.04;
+const CHEER_MARGIN = 6;
 const PIECE_LIFE = 1.2;
 const GRAVITY = 900;
 const PAPERS = [Color.coral, Color.leaf, Color.mustard, Color.teal, Color.berry] as const;
@@ -42,6 +50,7 @@ export class LessonFx {
   private readonly bursts: Burst[] = [];
   private readonly pieces: Piece[] = [];
   private cheerAge = -1;
+  private readonly box: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private cheer: PaperLabel | null = null;
   private nextBurst = 0;
   private nextPiece = 0;
@@ -85,10 +94,31 @@ export class LessonFx {
     audio.play('ui_tab', { volume: 0.6 });
   }
 
-  /** A "nice!" sticker slaps down at (x, y) and confetti flutters up from it. */
-  celebrate(x: number, y: number, word: string): void {
+  /** True while a sticker is up. */
+  get cheering(): boolean {
+    return this.cheer !== null;
+  }
+
+  /** Where the sticker lies right now (scene space), or null. The same object each time: it is asked for every frame. */
+  get cheerRect(): Rect | null {
+    const c = this.cheer;
+    if (!c) return null;
+    const r = this.box;
+    r.w = c.width;
+    r.h = c.height;
+    r.x = c.x - r.w / 2;
+    r.y = c.y - r.h / 2;
+    return r;
+  }
+
+  /**
+   * A "nice!" sticker slaps down and confetti flutters up from it. `spot` is told how much room the settled sticker needs (with its margin
+   * and the lift-off) and says where its centre goes: the caller keeps that room off everything else on the screen.
+   */
+  celebrate(word: string, spot: (w: number, h: number) => Point): void {
     this.cheer?.destroy({ children: true });
-    const label = new PaperLabel({ text: word, size: 40, paper: Color.leaf, padX: 30, padY: 10, seed: paperSeed(), tape: 'pink' });
+    const label = new PaperLabel({ text: word, size: 36, paper: Color.leaf, padX: 24, padY: 10, seed: paperSeed(), tape: 'pink' });
+    const { x, y } = spot(Math.ceil(label.width * CHEER_ROOM) + CHEER_MARGIN, Math.ceil(label.height * CHEER_ROOM) + CHEER_MARGIN + CHEER_LIFT);
     label.position.set(x, y);
     label.rotation = -0.08;
     this.layer.addChild(label);
@@ -150,9 +180,9 @@ export class LessonFx {
       } else if (!motion.reduced) {
         // Slapped down: it lands a little big, settles at once, then lifts off and fades.
         const land = Math.min(1, this.cheerAge / 0.16);
-        this.cheer.scale.set(1 + 0.45 * (1 - Ease.cubicOut(land)));
+        this.cheer.scale.set(1 + (CHEER_LAND - 1) * (1 - Ease.cubicOut(land)));
         this.cheer.alpha = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
-        this.cheer.y -= 14 * dt;
+        this.cheer.y -= (CHEER_LIFT / CHEER_LIFE) * dt;
       } else {
         this.cheer.alpha = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
       }

@@ -103,3 +103,8 @@ Performance of a crowded wave: see `fx.md` ("the crowded wave got slower, and wh
 ## 2026-10-07 fixups
 
 `SunNote.show(cell)` asks `info.tap('sun:<cell>', anchor, text)` (`src/view/info.ts`; the HUD draws it): the same lit cell again closes the note, another lit cell replaces it, a tap elsewhere or 5 s closes it (see `hud.md`). The field no longer uses the kit tooltip.
+
+
+## 2026-10-07 leftovers
+
+Warm-up of the field (see `fx.md` for the queue and the numbers): `field/warmPlan.ts` (pure: `enemyArtKey` = the rule of `enemyTextureKey` with the lookup passed in, `auraAreaOf`, `waveNeeds(previewEntries, has)` = pictures, aura areas and head count of a wave, `spareFor(count)` = 4 to 12 bodies), `field/warmup.ts` (`FieldWarmup`: when the wave or phase changes it reads `previewWave(wave + 1)`, then one frame at a time and never on a slow frame it makes one enemy body for the pool, `EnemyViews.spare(n)`, and one pooled ground-area view, `Fx.readyArea(kind)` for the ground effects' `Fx`, only for a kind that has been baked). A body is a dozen sprites; the first enemy of a battle used to build its bodies and its aura ring on the frame it walked in (first clock 14 ms, first pill 22 ms). `__dbg.battle.warmLeft()` says what the queue has left. Tests: `view.field.warm.test.ts` (7, over the real wave scripts of all five chapters).

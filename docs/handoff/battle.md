@@ -132,3 +132,18 @@ REQUESTS: see `guide.md`.
 | 7. alignment audit | display-tree audit of the HUD screens, both languages, both heights | molt sublabel, laser guide bubble | `hud.md` |
 
 Debug and method notes: a battle on the real route has `__dbg.battle` and `__dbg.lessons` too; `__dbg.meta.unlockAll()` then `__dbg.home.shell.startRun({ mode: 'chapter', chapter: 5, stake: 0 })` opens the last chapter's pre-run page (there are 5 chapters; asking for 6 is refused with "아직 열리지 않았어요"). `tools/battle_motion.js` `mcOpen` marks the lessons skipped, but not the first-encounter cards: mark every topic taught (`for (const id of progress.unread()) progress.markTaught(id)`) before measuring frame time or the cards pause the simulation.
+
+
+## 2026-10-07 leftovers
+
+| Item | Root cause | Change | Where |
+|---|---|---|---|
+| 1. result chips and the "nice!" sticker over lesson notes | each placed alone: chips 112 px over the button for three slots, the sticker on its target | one rule: note or card, then sticker, then chips; the chips take the room under the highest thing over them (class row included) and wait 1.2 s or leave; the sticker takes the nearest free paper (also free of the next lesson's controls) and the next note waits for it | `hud.md` |
+| 2. the tutorial in English and at 1600 | only spot-checked | played end to end both ways, 4 defects fixed (stray paw after a drag, paw on "Lv.1", pick sheet lines at 22 px, "Estimating" cutting the strip's name) | `hud.md` |
+| 3. first-use hitches | glyph fonts of the floating numbers drawn on the first hit (218 ms), particle shader, ground-area bakes, the toy screen built in one frame, textures dropped by Pixi's collector after 60 s | `src/fx/warm.ts` queue, scene-level `BattleWarmup`, `FieldWarmup`, numbers drawn with the scene, toy cards built one by one | `fx.md`, `field.md` |
+
+Wiring in `BattleScene`: the constructor draws the number fonts (`ensureNumberFonts`, `bakeNumberFace` for `NUMBER_FACES`) before anything else; `update` ends with `this.warmup.update()` (asks for the coming wave's pictures and areas when the wave counter or the phase moved) and `warm.update(dt)`; `exit` clears the queue. Debug: `__dbg.battle.warmLeft()` is `{ pending, next, done }`. `tools/battle_frames.sh` / `.js` measure frame times over real waves (first frames per enemy kind, median/p95/p99, slowest frames of each target wave); `tools/battle_motion.js` is unchanged.
+
+Method notes for the next long play-through (also in `hud.md`): serve the bundle on a port that was never used (the browser caches `index.html` per origin; a reused port plays the old build), open the tab with the `aside` CLI so it outlives a runner call, and keep every runner script under about 30 KB (the command line of `aside repl` is limited; strip comments and indentation when a library grows).
+
+REQUESTS: none beyond those in `hud.md` (CardFrame flag size, audio priming).

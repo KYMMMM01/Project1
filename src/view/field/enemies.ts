@@ -54,6 +54,16 @@ export class EnemyViews {
     return this.byUid.get(uid) ?? null;
   }
 
+  /**
+   * Make one more view for the pool if fewer than `n` rest in it, so a wave's first crowd does not build its bodies on the frame it walks in.
+   * @returns true when `n` views are ready
+   */
+  spare(n: number): boolean {
+    if (this.pool.idle >= n) return true;
+    this.pool.release(new EnemyView(this.env.art));
+    return this.pool.idle >= n;
+  }
+
   update(dt: number): void {
     const { battle } = this.env;
     const time = this.env.time;

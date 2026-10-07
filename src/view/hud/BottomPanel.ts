@@ -12,11 +12,14 @@ import { ActionRow } from './ActionRow';
 import { ClassRow } from './ClassRow';
 import { CurrencyRow } from './CurrencyRow';
 import type { HudEnv } from './env';
-import { bottomRects, HUD_W } from './layoutMath';
+import { bottomRects, HUD_W, type Rect } from './layoutMath';
 import { ClassSheet } from './popups/ClassSheet';
 import { OddsPopup } from './popups/OddsPopup';
 import { SelectionSheet } from './SelectionSheet';
 import { SellStrip } from './SellStrip';
+
+/** Height of the class chips' row as the chips and the tutorial's paw measure it. */
+const CLASS_ROW_H = 92;
 
 export class BottomPanel {
   readonly root = new Container();
@@ -28,6 +31,8 @@ export class BottomPanel {
   private readonly plate = new Container();
   private readonly seed = paperSeed();
   private readonly upper = new Container();
+  /** Where the class chips' row lies in scene space (one object, moved on layout). */
+  private readonly classRow: Rect = { x: 0, y: 0, w: HUD_W, h: CLASS_ROW_H };
   private readonly bag = new TweenBag();
 
   constructor(private readonly env: HudEnv) {
@@ -97,10 +102,16 @@ export class BottomPanel {
     this.plate.hitArea = new Rectangle(0, 0, HUD_W, h);
     refreshCache(this.plate);
     this.classes.layout(r.chipsY);
+    this.classRow.y = r.top + r.chipsY - CLASS_ROW_H / 2;
     this.currency.layout(r.currencyY);
-    this.actions.layout(r.summonY, r.utilY);
+    this.actions.layout(r.summonY, r.utilY, r.top);
     this.sheet.layout(r.sheet);
     this.sell.layout(r.sell);
+  }
+
+  /** The class chips' row in scene space while it is on screen (revealed, and not under the selection sheet), else null. */
+  classRowRect(): Rect | null {
+    return this.classes.root.visible && this.upper.visible ? this.classRow : null;
   }
 
   invalidate(): void {

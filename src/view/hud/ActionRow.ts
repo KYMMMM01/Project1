@@ -15,6 +15,8 @@ import { startAim, stopAim } from '../aim';
 import { info } from '../info';
 import { LaserCard } from './popups/LaserCard';
 import { SummonButton } from './SummonButton';
+import { chipCeiling, chipColumn } from './chipMath';
+import type { Rect } from './layoutMath';
 import { SummonChips } from './SummonChip';
 import { REVEAL_DELAY } from '../timing';
 import { tossFor } from '../toss';
@@ -38,6 +40,7 @@ const AIM_FOR = 6;
 const LASER_TIP = 'laser';
 /** The result chips rest this far above the summon button's centre: just over its top edge, clear of the pills above. */
 const CHIP_LIFT = 112;
+const CHIP_X = 360;
 /** The grade button's arrow sits here and hops from it when the grade goes up. */
 const ARROW_Y = -42;
 
@@ -66,7 +69,7 @@ export class ActionRow {
   private readonly coolRing: CooldownRing;
   private readonly aimRing: CooldownRing;
   private readonly laserText: Text;
-  private readonly tracker = new Container();
+  readonly tracker = new Container();
   private readonly paws: Array<{ lit: Container; dim: Container }> = [];
   private readonly trackerCaption: Text;
   private summonCount = 0;
@@ -270,12 +273,23 @@ export class ActionRow {
     this.summon.invalidate();
   }
 
-  layout(summonY: number, utilY: number): void {
+  /** Tell the chips what can lie over them: a lesson's note, a first-encounter card, the "nice!" sticker, the class chips' row (each null when it is not there). */
+  overChips(note: () => Rect | null, card: () => Rect | null, cheer: () => Rect | null, classes: () => Rect | null): void {
+    this.chips.ceiling = () => chipCeiling(this.chips.originY, CHIP_X, note(), card(), cheer(), classes());
+  }
+
+  /** The column the result chips use, in scene space. */
+  chipColumn(): Rect {
+    return chipColumn(this.chips.originY, CHIP_X);
+  }
+
+  layout(summonY: number, utilY: number, panelTop: number): void {
     this.summon.position.set(360, summonY);
     this.grade.position.set(GRADE_X, summonY + 4);
     this.laser.position.set(LASER_X, summonY + LASER_DY);
     this.info.position.set(LASER_X + INFO_DX, summonY + LASER_DY + INFO_DY);
-    this.chips.root.position.set(360, summonY - CHIP_LIFT);
+    this.chips.root.position.set(CHIP_X, summonY - CHIP_LIFT);
+    this.chips.originY = panelTop + summonY - CHIP_LIFT;
     this.util.position.set(0, utilY);
     this.tracker.position.set(24, 0);
     this.callBtn.position.set(CALL_X, 6);

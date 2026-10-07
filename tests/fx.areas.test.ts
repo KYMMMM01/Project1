@@ -332,3 +332,57 @@ describe('hazard cells', () => {
     layer.destroy();
   });
 });
+
+/** The areas module with nothing baked yet (the bakes are kept for the whole session, as in the game). */
+async function freshAreas(): Promise<typeof import('@/fx/areas')> {
+  vi.resetModules();
+  return import('@/fx/areas');
+}
+
+describe('baking a kind piece by piece (the warm-up)', () => {
+  it('is baked once every piece has been, and a piece is baked once', async () => {
+    const m = await freshAreas();
+    expect(m.areaBaked('void')).toBe(false);
+    expect(m.AREA_BAKE_STEPS).toBe(4);
+    for (let step = 0; step < m.AREA_BAKE_STEPS - 1; step++) m.bakeAreaStep('void', step);
+    expect(m.areaBaked('void')).toBe(false);
+    m.bakeAreaStep('void', m.AREA_BAKE_STEPS - 1);
+    expect(m.areaBaked('void')).toBe(true);
+    // The first area of the kind uses the baked pieces and bakes nothing more.
+    const layer = new m.AreaLayer(new Container());
+    const pieces = (layer as unknown as { parent: Container }).parent;
+    layer.disc('void', 0, 0, 100);
+    const area = pieces.children[0] as Container;
+    const sheet = (area.children[1] as Sprite).texture;
+    layer.disc('void', 0, 0, 100);
+    expect(((pieces.children[1] as Container).children[1] as Sprite).texture).toBe(sheet);
+  });
+
+  it('bakes what is missing when an area starts before the warm-up got to its kind', async () => {
+    const m = await freshAreas();
+    expect(m.areaBaked('frost')).toBe(false);
+    const layer = new m.AreaLayer(new Container());
+    layer.disc('frost', 0, 0, 100);
+    expect(m.areaBaked('frost')).toBe(true);
+  });
+
+  it('builds a view ahead of time only for a baked kind, and only one while it waits unused', async () => {
+    const m = await freshAreas();
+    const layer = new m.AreaLayer(new Container());
+    expect(layer.ready('heal')).toBe(false);
+    for (let step = 0; step < m.AREA_BAKE_STEPS; step++) m.bakeAreaStep('heal', step);
+    expect(layer.ready('heal')).toBe(true);
+    expect(layer.ready('heal')).toBe(false);
+    // The ready view is the one the first area uses: starting one builds nothing more.
+    const root = (layer as unknown as { parent: Container }).parent;
+    const before = countAll(root);
+    layer.disc('heal', 10, 10, 100);
+    expect(countAll(root)).toBe(before);
+    expect(layer.count).toBe(1);
+  });
+
+  it('knows every kind it can draw', async () => {
+    const m = await freshAreas();
+    expect([...m.DISC_KINDS].sort()).toEqual(['brew', 'frost', 'haste', 'heal', 'void']);
+  });
+});

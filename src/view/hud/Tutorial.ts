@@ -16,11 +16,12 @@ import type { BattleLayout } from '../context';
 import { info } from '../info';
 import type { EnvImpl } from './env';
 import { Hand } from './Hand';
-import { dragPrefer, FROM_BELOW, type Keep, pawBounds, placePaw, soften, tipSpot } from './handMath';
+import { cheerSpot, STICKER_WALL, topKeep } from './cheerMath';
+import { dragPrefer, FROM_BELOW, type Keep, pawBounds, type PawPose, placePaw, soften, tipSpot } from './handMath';
 import { unitPortrait } from './kit';
 import { LessonBubble } from './LessonBubble';
 import { LessonFx } from './LessonFx';
-import { bottomRects, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from './layoutMath';
+import { bottomRects, type Point, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from './layoutMath';
 import { findTwins } from './planMath';
 import { REVEAL_KEYS, type RevealKey } from './policy';
 import { FIRST_SUMMON_AFTER, NUDGE_FOR, nudgeDue } from './tutorialFlow';
@@ -56,6 +57,14 @@ export interface TutorialHost {
   laserGuided(): boolean;
   /** The guided first use of the laser should run now. */
   startLaserGuide(): void;
+  /** What the "nice!" sticker must keep off, weighed for it: controls and writing first, then cats, the lane last. */
+  stickerKeep(): readonly Keep[];
+  /** The column the summon result chips use above the summon button (scene space): a sticker keeps off it. */
+  chipColumn(): Rect;
+  /** The rectangles of the writing on the control a target names (scene space): the paw keeps its body off them. */
+  labelsOf(target: Target): Rect[];
+  /** Where the controls that `keys` bring in will rest (scene space), whether they are out yet or not: the sticker keeps off them. */
+  restingRects(keys: readonly RevealKey[]): Rect[];
 }
 
 const NO_RECT: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -88,6 +97,8 @@ export class Tutorial {
   private measure = 0;
   private paintedKey = '';
   private carrying = false;
+  /** Whether the lesson on screen has a paw to show (it comes back after the player's own drag only then). */
+  private handOn = false;
   private idle = 0;
   private nudgeLeft = 0;
   private nudges = 0;
@@ -108,6 +119,8 @@ export class Tutorial {
   private unseen = 0;
   private heldFor = 0;
   private destroyed = false;
+  /** The lesson that has just been done and has a sticker coming (placed at the end of the frame's events). */
+  private cheerFor: StepDef | null = null;
 
   constructor(
     private readonly env: EnvImpl,
@@ -201,7 +214,7 @@ export class Tutorial {
     // While the player holds a cat the hand would sit on what they are carrying: it steps out of the way.
     env.on(env.ctx.events, 'drag', ({ from }) => {
       this.carrying = from !== null;
-      this.hand.visible = !this.carrying;
+      this.hand.visible = !this.carrying && this.handOn;
       if (this.carrying) this.endNudge();
     });
   }
@@ -272,21 +285,26 @@ export class Tutorial {
     this.breath = Math.max(0, this.breath - dt);
     const heldByOthers = this.env.ctx.paused && !this.held;
     const events = this.script.update(w, dt, heldByOthers);
-    for (let i = 0; i < events.length; i++) this.handle(events[i] as ScriptEvent, w);
+    for (let i = 0; i < events.length; i++) this.handle(events[i] as ScriptEvent);
+    // The sticker is placed once the next lesson's controls have arrived (they are in the same batch): it lands on none of them.
+    if (this.cheerFor) {
+      this.cheer(this.cheerFor, w);
+      this.cheerFor = null;
+    }
     this.tick(dt, w);
     // A lesson whose target never shows up (a control that stayed hidden) must not hold the run: it is dropped after a few seconds.
     if (this.script.active && this.rect.w <= 0 && !this.script.active.popup && this.script.active.id !== 'laser') {
       this.unseen += dt;
       if (this.unseen > UNSEEN_LIMIT) {
         const drop = this.script.abandon();
-        if (drop) this.handle(drop, w);
+        if (drop) this.handle(drop);
       }
     } else {
       this.unseen = 0;
     }
   }
 
-  private handle(e: ScriptEvent, w: World): void {
+  private handle(e: ScriptEvent): void {
     const id = e.step.id;
     this.countLeft();
     this.heldFor = 0;
@@ -301,7 +319,7 @@ export class Tutorial {
     this.endVisuals();
     if (e.kind === 'done') {
       this.env.progress.markTaught(id);
-      this.cheer(e.step, w);
+      this.cheerFor = e.step;
     }
   }
 
@@ -312,12 +330,26 @@ export class Tutorial {
     if (r) this.fx.arrive(r.x + r.w / 2, r.y + r.h / 2, Math.min(300, Math.max(r.w, r.h) * 2.2));
   }
 
+  /**
+   * The "nice!" sticker lands beside what the player has just used, on free paper: it keeps off the cats, the controls, the lane, the skip
+   * button and the column the result chips use (cheerMath.ts). The next lesson's note waits until it has gone (`tick`), so it never lands
+   * under a note either.
+   */
   private cheer(step: StepDef, w: World): void {
-    const r = this.rect.w > 0 ? this.rect : null;
-    const cx = r ? r.x + r.w / 2 : this.layout.w / 2;
-    const cy = r ? Math.max(this.layout.safeTop + 120, r.y - 8) : this.layout.h * 0.4;
     if (step.popup) return;
-    this.fx.celebrate(Math.min(this.layout.w - 130, Math.max(130, cx)), cy, t(`guide.cheer.${w.wave % 4}`));
+    const l = this.layout;
+    const target = this.rect.w > 0 ? this.rect : null;
+        // What the next lesson will bring in may arrive while the sticker is up: its place is kept free as well.
+    const next = this.script.remaining.find((s) => s.id !== step.id);
+    const coming = this.host.restingRects(next ? next.reveal : []).map((r) => ({ ...r, weight: STICKER_WALL }));
+    const keep: Keep[] = [
+      ...this.host.stickerKeep(),
+      ...topKeep(l, { speed: this.env.reveal.speed, skip: this.skipLayer.visible, toys: this.env.battle.relics.length > 0 }),
+      ...coming,
+      { ...this.host.chipColumn(), weight: STICKER_WALL },
+    ];
+    const bounds: Rect = { x: 0, y: l.safeTop + 8, w: l.w, h: l.h - l.safeTop - l.safeBottom - 16 };
+    this.fx.celebrate(t(`guide.cheer.${w.wave % 4}`), (cw, ch) => cheerSpot({ target, home: { x: l.w / 2, y: l.h * 0.4 }, w: cw, h: ch, bounds, keep }));
   }
 
   /** The spotlight, the hand and the note go away; the clock is released unless something else holds it. */
@@ -327,6 +359,7 @@ export class Tutorial {
     for (const b of this.blockers) b.visible = false;
     this.note.hide();
     this.hand.position.set(0, 0);
+    this.handOn = false;
     this.host.pulse(false);
     this.setHold(false);
     this.breath = 0;
@@ -363,7 +396,8 @@ export class Tutorial {
       this.note.hide();
       return;
     }
-    if (modal || this.breath > 0) {
+    // The next note waits for the sticker to go: the two never share the screen.
+    if (modal || this.breath > 0 || this.fx.cheering) {
       this.layer.visible = false;
       this.note.hide();
       this.paintedKey = '';
@@ -557,13 +591,15 @@ export class Tutorial {
    * the note, the label and the cats where it can (handMath.placePaw).
    */
   private placeHand(step: StepDef, target: Target): void {
+    this.handOn = this.layHand(step, target);
+    this.hand.visible = this.handOn && !this.carrying;
+  }
+
+  /** Lay the paw for the lesson; false when the lesson has nothing for a paw to do (it stays hidden, also after a drag by the player ends). */
+  private layHand(step: StepDef, target: Target): boolean {
     const h = this.hand;
-    h.visible = !this.carrying;
     // A read-only lesson and a timed note have nothing to do with a hand.
-    if (step.ok || step.timed > 0) {
-      h.visible = false;
-      return;
-    }
+    if (step.ok || step.timed > 0) return false;
     const ctx = this.env.ctx;
     const cell = (c: number): { x: number; y: number } => ({ x: ctx.toSceneX(cellCenterX(c)), y: ctx.toSceneY(cellCenterY(c)) });
     const units = this.env.battle.units;
@@ -578,25 +614,49 @@ export class Tutorial {
     };
     if (target === 'pair' && this.pair) {
       drag(this.pair[0], this.pair[1]);
-    } else if (target === 'sun' && this.cat >= 0 && this.sunTo >= 0) {
+      return true;
+    }
+    if (target === 'sun' && this.cat >= 0 && this.sunTo >= 0) {
       drag(this.cat, this.sunTo);
-    } else if ((target === 'cat' || target === 'sellcat') && this.cat >= 0) {
+      return true;
+    }
+    if ((target === 'cat' || target === 'sellcat') && this.cat >= 0) {
       const c = cell(this.cat);
       this.pat(h, { x: c.x + 10, y: c.y - 6 }, keep);
-    } else if (this.rect.w > 0 && target !== 'sun' && target !== 'cat' && target !== 'sellcat' && target !== 'pair') {
+      return true;
+    }
+    if (this.rect.w > 0 && target !== 'sun' && target !== 'cat' && target !== 'sellcat' && target !== 'pair') {
       // The whole chip row is lit; the paw pats the first chip.
       const r = target === 'chips' ? { x: this.rect.x + 20, y: this.rect.y, w: 150, h: this.rect.h } : this.rect;
-      const { tip, label } = tipSpot(r);
+      const { label } = tipSpot(r);
       if (r.w >= 150) keep.push({ ...label, weight: 3 });
       if (target === 'chips') {
         // The fish and purr counters lie right under the chips.
         const rows = bottomRects(this.layout);
         keep.push({ x: 0, y: rows.top + rows.currencyY - 44, w: this.layout.w, h: 88, weight: 2 });
       }
-      this.pat(h, tip, keep);
-    } else {
-      h.visible = false;
+      this.patControl(h, r, this.host.labelsOf(target), keep);
+      return true;
     }
+    return false;
+  }
+
+  /**
+   * A pat on a control: the tip goes where the pad leaves the control's own writing alone. A few spots on the control are tried (the usual one,
+   * the upper right corner, the middle of the top and right edges); each gets its best arm, and the one whose paw lies on least writing wins.
+   */
+  private patControl(hand: Hand, r: Rect, labels: readonly Rect[], keep: readonly Keep[]): void {
+    const usual = tipSpot(r).tip;
+    const tips: Point[] = [usual];
+    if (labels.length > 0) tips.push({ x: r.x + r.w * 0.96, y: r.y + r.h * 0.04 }, { x: r.x + r.w * 0.97, y: r.y + r.h * 0.4 }, { x: r.x + r.w * 0.5, y: r.y + r.h * 0.03 });
+    let best: { tip: Point; pose: PawPose } | null = null;
+    for (const tip of tips) {
+      const pose = placePaw({ tips: [tip], bounds: pawBounds(this.layout), keep, labels, prefer: FROM_BELOW });
+      if (!best || pose.cost < best.pose.cost) best = { tip, pose };
+    }
+    if (!best) return;
+    hand.place(best.tip.x, best.tip.y, best.pose.rotation);
+    hand.tap();
   }
 
   private pat(hand: Hand, tip: { x: number; y: number }, keep: readonly Keep[]): void {
@@ -743,6 +803,11 @@ export class Tutorial {
   /** Where the note's body lies in scene space (the QA hooks tap its button), or null. */
   get noteRect(): Rect | null {
     return this.note.rect;
+  }
+
+  /** Where the "nice!" sticker lies right now (scene space), or null. */
+  get cheerRect(): Rect | null {
+    return this.fx.cheerRect;
   }
 
   /** True while a lesson holds the clock or is up on the field (hints and cards wait). */
