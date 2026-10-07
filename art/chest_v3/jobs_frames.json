@@ -1,0 +1,50 @@
+[
+ {
+  "name": "icon_chest_wood_ajar",
+  "ref": [
+   "art/raw/icon_chest_wood.png"
+  ],
+  "ref_note": "Image 1 is the approved CLOSED chest. Draw the SAME chest: identical materials, colours, tape, stitch lines, latch, proportions, position, size and viewing angle. Only the lid changes as described. Do not redesign anything.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward chest icon, the 'about to open' frame of an opening animation\nChange: the lid is lifted a little on its back hinge (a gap of about one fifth of the chest's height at the front), slightly crooked as if it is bursting to open, and the gap is filled with a flat warm cream-yellow light shape (flat colour, no glow). Two tiny flat paper scraps pop out of the gap.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached chest images: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO blur, a hand-made paper-craft look (cut paper and cardboard panels with visible folded edges, strips of patterned masking tape, dashed stitch lines).\nComposition: one object, three-quarter view from slightly above, centred, generous padding (leave room above for an open lid), no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_wood_open",
+  "ref": [
+   "art/raw/icon_chest_wood.png"
+  ],
+  "ref_note": "Image 1 is the approved CLOSED chest. Draw the SAME chest: identical materials, colours, tape, stitch lines, latch, proportions, position, size and viewing angle. Only the lid changes as described. Do not redesign anything.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward chest icon, the fully OPEN frame of an opening animation\nChange: the lid is swung fully open backwards on its hinge so the inside is visible and the lid's plain inner side shows; the inside is filled to the brim with flat warm golden-yellow light drawn as a simple flat shape (a bright cream-yellow fill with a slightly darker yellow rim), four or five short flat triangular light rays fan upward out of the opening, and three small flat four-point paper stars float above it.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached chest images: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO blur, a hand-made paper-craft look (cut paper and cardboard panels with visible folded edges, strips of patterned masking tape, dashed stitch lines).\nComposition: one object, three-quarter view from slightly above, centred, generous padding (leave room above for an open lid), no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_silver_ajar",
+  "ref": [
+   "art/raw/icon_chest_silver.png"
+  ],
+  "ref_note": "Image 1 is the approved CLOSED chest. Draw the SAME chest: identical materials, colours, tape, stitch lines, latch, proportions, position, size and viewing angle. Only the lid changes as described. Do not redesign anything.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward chest icon, the 'about to open' frame of an opening animation\nChange: the lid is lifted a little on its back hinge (a gap of about one fifth of the chest's height at the front), slightly crooked as if it is bursting to open, and the gap is filled with a flat warm cream-yellow light shape (flat colour, no glow). Two tiny flat paper scraps pop out of the gap.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached chest images: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO blur, a hand-made paper-craft look (cut paper and cardboard panels with visible folded edges, strips of patterned masking tape, dashed stitch lines).\nComposition: one object, three-quarter view from slightly above, centred, generous padding (leave room above for an open lid), no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_silver_open",
+  "ref": [
+   "art/raw/icon_chest_silver.png"
+  ],
+  "ref_note": "Image 1 is the approved CLOSED chest. Draw the SAME chest: identical materials, colours, tape, stitch lines, latch, proportions, position, size and viewing angle. Only the lid changes as described. Do not redesign anything.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward chest icon, the fully OPEN frame of an opening animation\nChange: the lid is swung fully open backwards on its hinge so the inside is visible and the lid's plain inner side shows; the inside is filled to the brim with flat warm golden-yellow light drawn as a simple flat shape (a bright cream-yellow fill with a slightly darker yellow rim), four or five short flat triangular light rays fan upward out of the opening, and three small flat four-point paper stars float above it.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached chest images: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO blur, a hand-made paper-craft look (cut paper and cardboard panels with visible folded edges, strips of patterned masking tape, dashed stitch lines).\nComposition: one object, three-quarter view from slightly above, centred, generous padding (leave room above for an open lid), no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_gold_ajar",
+  "ref": [
+   "art/raw/icon_chest_gold.png"
+  ],
+  "ref_note": "Image 1 is the approved CLOSED chest. Draw the SAME chest: identical materials, colours, tape, stitch lines, latch, proportions, position, size and viewing angle. Only the lid changes as described. Do not redesign anything.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward chest icon, the 'about to open' frame of an opening animation\nChange: the lid is lifted a little on its back hinge (a gap of about one fifth of the chest's height at the front), slightly crooked as if it is bursting to open, and the gap is filled with a flat warm cream-yellow light shape (flat colour, no glow). Two tiny flat paper scraps pop out of the gap.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached chest images: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO blur, a hand-made paper-craft look (cut paper and cardboard panels with visible folded edges, strips of patterned masking tape, dashed stitch lines).\nComposition: one object, three-quarter view from slightly above, centred, generous padding (leave room above for an open lid), no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_gold_open",
+  "ref": [
+   "art/raw/icon_chest_gold.png"
+  ],
+  "ref_note": "Image 1 is the approved CLOSED chest. Draw the SAME chest: identical materials, colours, tape, stitch lines, latch, proportions, position, size and viewing angle. Only the lid changes as described. Do not redesign anything.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward chest icon, the fully OPEN frame of an opening animation\nChange: the lid is swung fully open backwards on its hinge so the inside is visible and the lid's plain inner side shows; the inside is filled to the brim with flat warm golden-yellow light drawn as a simple flat shape (a bright cream-yellow fill with a slightly darker yellow rim), four or five short flat triangular light rays fan upward out of the opening, and three small flat four-point paper stars float above it.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached chest images: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO blur, a hand-made paper-craft look (cut paper and cardboard panels with visible folded edges, strips of patterned masking tape, dashed stitch lines).\nComposition: one object, three-quarter view from slightly above, centred, generous padding (leave room above for an open lid), no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ }
+]

@@ -1,0 +1,11 @@
+[
+ {
+  "name": "icon_chest_silver",
+  "ref": [
+   "art/chest_v3/c_wood.png",
+   "art/chest_v3/c_gold.png"
+  ],
+  "ref_note": "The attached images are the approved wooden-tier and gold-tier chests of the same set. Draw the SILVER-tier chest of this set in exactly the same paper-craft rendering, size, proportions and viewing angle (the middle tier between them).",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward chest icon (shown up to 300 px)\nSubject: a treasure chest made of CUT PAPER and cardboard like a child's craft project, closed: pale silver-grey craft paper panels with visible folded edges, strips of teal striped masking tape as the bands, a dashed stitch line along the lid edge, a round paper latch with a small blue paper fish glued on.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached chest images: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO blur, a hand-made paper-craft look (cut paper and cardboard panels with visible folded edges, strips of patterned masking tape, dashed stitch lines).\nComposition: one object, three-quarter view from slightly above, centred, generous padding (leave room above for an open lid), no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ }
+]

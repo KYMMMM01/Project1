@@ -1,0 +1,50 @@
+[
+ {
+  "name": "a_wood",
+  "ref": [
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours, level of detail). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward-box icon for a cosy cat game set in a home (shown about 200 px)\nSubject: a simple chunky TOY treasure chest, closed: plain warm-brown wooden planks, two plain blue-grey bands, a round cream latch with a paw print. Rounded, soft, toy-like, almost no ornament.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached character: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO sparkle, slightly muted natural colours, simple large shapes with very little small detail (it must look as simple and soft as the attached character, not like an ornate fantasy item).\nComposition: one object, three-quarter view from slightly above, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "a_gold",
+  "ref": [
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours, level of detail). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward-box icon for a cosy cat game set in a home (shown about 200 px)\nSubject: a simple chunky TOY treasure chest, closed: plain mustard-gold body with two darker gold bands, a round cream latch with a paw print, one small red heart-shaped gem on the lid, two tiny cat-ear bumps on the lid corners. Rounded, soft, toy-like, almost no ornament.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached character: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO sparkle, slightly muted natural colours, simple large shapes with very little small detail (it must look as simple and soft as the attached character, not like an ornate fantasy item).\nComposition: one object, three-quarter view from slightly above, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "b_wood",
+  "ref": [
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours, level of detail). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward-box icon for a cosy cat game set in a home (shown about 200 px)\nSubject: a closed brown CARDBOARD delivery box, the kind cats love to sit in: plain corrugated cardboard, the flaps closed and held by one strip of pale tape, a paw print stamped on the front in dark ink, one corner slightly dented.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached character: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO sparkle, slightly muted natural colours, simple large shapes with very little small detail (it must look as simple and soft as the attached character, not like an ornate fantasy item).\nComposition: one object, three-quarter view from slightly above, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "b_gold",
+  "ref": [
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours, level of detail). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward-box icon for a cosy cat game set in a home (shown about 200 px)\nSubject: a closed fancy GIFT BOX: a mustard-gold square box with a lid, wrapped with a wide red ribbon tied in a big soft bow on top, a small cream tag with a paw print hanging from the bow.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached character: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO sparkle, slightly muted natural colours, simple large shapes with very little small detail (it must look as simple and soft as the attached character, not like an ornate fantasy item).\nComposition: one object, three-quarter view from slightly above, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "c_wood",
+  "ref": [
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours, level of detail). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward-box icon for a cosy cat game set in a home (shown about 200 px)\nSubject: a treasure chest made of CUT PAPER and cardboard like a child's craft project, closed: kraft-brown cardboard panels with visible folded edges, strips of blue-dotted masking tape as the bands, a dashed stitch line drawn along the lid edge, a round paper latch with a paw print glued on.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached character: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO sparkle, slightly muted natural colours, simple large shapes with very little small detail (it must look as simple and soft as the attached character, not like an ornate fantasy item).\nComposition: one object, three-quarter view from slightly above, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "c_gold",
+  "ref": [
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "The attached image is a RENDERING reference only (outline weight, white sticker border, matte flat colours, level of detail). Do not draw a cat.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game reward-box icon for a cosy cat game set in a home (shown about 200 px)\nSubject: a treasure chest made of CUT PAPER and cardboard like a child's craft project, closed: mustard-yellow craft paper panels with visible folded edges, strips of red gingham masking tape as the bands, a dashed stitch line along the lid edge, a paper star glued on the front, two small paper cat ears taped on the lid.\nStyle: 2D cartoon sticker icon in exactly the rendering of the attached character: a thick dark-brown outline, a clean white sticker border, MATTE flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO sparkle, slightly muted natural colours, simple large shapes with very little small detail (it must look as simple and soft as the attached character, not like an ornate fantasy item).\nComposition: one object, three-quarter view from slightly above, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: no text, no letters, no numbers, no watermark, nothing cropped."
+ }
+]

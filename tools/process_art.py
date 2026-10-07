@@ -34,6 +34,7 @@ SPRITE_MAX = {
     "unit_": 320,
     "enemy_": 240,
     "boss_": 480,
+    "icon_chest_": 360,  # drawn large in the chest opening; listed before "icon_" because the first prefix wins
     "icon_": 192,
     "relic_": 192,
     "fx_": 256,
