@@ -3,12 +3,13 @@ import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
 import { mixColor } from '@/core/math';
 import { Color, TapeColors } from '@/ui';
-import { hitFlash, kickObject, punchScale, rattleObject, squash, wobbleRotation } from '@/fx';
+import { kickObject, punchScale, rattleObject, squash, wobbleRotation } from '@/fx';
 import { Hue } from '@/fx/palette';
 import type { BattleEvents, EnemyState } from '@/game/api';
 import type { ZoneMark } from './art';
 import type { FieldEnv } from './env';
 import { EnemyView } from './enemyView';
+import { depthFrame } from './policy';
 import { materialOf, reactionOf } from './reactions';
 import { weaponStyle } from '../weapons';
 
@@ -57,13 +58,14 @@ export class EnemyViews {
     const { battle } = this.env;
     const time = this.env.time;
     this.frame++;
+    const reorder = depthFrame(this.frame);
     const list = battle.enemies;
     for (let i = 0; i < list.length; i++) {
       const e = list[i] as EnemyState;
       let v = this.byUid.get(e.uid);
       if (!v) v = this.create(e);
       v.mark = this.frame;
-      v.step(dt, time, e);
+      v.step(dt, time, e, reorder);
     }
     for (let i = this.live.length - 1; i >= 0; i--) {
       const v = this.live[i] as EnemyView;
@@ -78,7 +80,7 @@ export class EnemyViews {
         // Removed without an event (a revive clearing the field): collapse like a death, quietly.
         this.collapse(v);
       }
-      v.step(dt, time, null);
+      v.step(dt, time, null, reorder);
     }
   }
 
@@ -127,7 +129,7 @@ export class EnemyViews {
 
   private flash(uid: number, color: number, ms: number): void {
     const v = this.byUid.get(uid);
-    if (v && !v.dying) hitFlash(this.env.ctx.tweens, v.sprite, { ms, color, peak: 0.8 });
+    if (v && !v.dying) v.flash(color, ms, 0.8);
   }
 
   private onHit(e: BattleEvents['hit']): void {
@@ -144,7 +146,7 @@ export class EnemyViews {
     const style = e.unitId ? weaponStyle(e.unitId) : null;
     const r = reactionOf(materialOf(e.enemy.id));
     const w = (style ? style.weight : 0.8) * (e.crit ? 1.25 : 1);
-    hitFlash(tweens, v.sprite, { ms: e.crit ? 70 : 55, color: style ? mixColor(style.tint, Hue.cream, 0.2) : PLAIN_TINT, peak: 0.7 });
+    v.flash(style ? mixColor(style.tint, Hue.cream, 0.2) : PLAIN_TINT, e.crit ? 70 : 55, 0.7);
     const a = e.enemy.angle;
     kickObject(tweens, v.body, -Math.cos(a) * r.knock * w, -Math.sin(a) * r.knock * w, 100);
     squash(tweens, v.body, 1 + (r.sx - 1) * w, 1 + (r.sy - 1) * w, r.ms);
@@ -155,7 +157,7 @@ export class EnemyViews {
   private onDie(e: BattleEvents['enemyDie']): void {
     const v = this.byUid.get(e.enemy.uid);
     if (!v) return;
-    hitFlash(this.env.ctx.tweens, v.sprite, { ms: 50 });
+    v.flash(Color.white, 50, 0.9);
     if (v.isBoss) {
       // The director's boss sequence flickers and blows up this view; it is hidden when that ends.
       v.die();

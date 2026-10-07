@@ -6,6 +6,8 @@ import { profile } from '@/meta';
 import type { UnitView } from '@/meta/economy';
 import { ScrollView, SegmentTabs, TweenBag, motion } from '@/ui';
 import type { ContentArea, TabScreen } from '../contract';
+import type { PointResolver } from '../shell/HomePointer';
+import { POINT_MARGIN } from '../shell/pointerMath';
 import { ClassSheet } from './ClassSheet';
 import { CLASS_GROUPS, cardProgress, isUpgradeReady, upgradeReadyCount, visibleGroups, type ClassFilter } from './collection';
 import { openUnitScreen } from './UnitScreen';
@@ -162,6 +164,25 @@ class CatsTab implements TabScreen {
 
   badge(): number {
     return this.ready;
+  }
+
+  pointAt(point: string): PointResolver | null {
+    if (point === 'cats.wild') {
+      this.scroll.scrollToTop(false);
+      return () => this.wild;
+    }
+    if (point !== 'cats.cards') return null;
+    // The first photo of the first class page that is showing: a card, the thing the topic is about.
+    const first = (): Container | null => {
+      for (const g of CLASS_GROUPS) {
+        const sheet = this.sheets.get(g.classId);
+        if (sheet?.visible) return sheet.row.frames.get(g.base[0]) ?? null;
+      }
+      return null;
+    };
+    const frame = first();
+    if (frame) this.scroll.scrollToShow(frame, POINT_MARGIN);
+    return frame ? first : null;
   }
 
   destroy(): void {

@@ -50,7 +50,7 @@ function horizontalCoupon(inner: Container, y: number, w: number, h: number, ton
 
 function packCoupon(inner: Container, y: number, w: number, spec: IapSpec, env: BlockEnv): number {
   const x0 = COUPON_STUB + 24;
-  const contents = uiLabel(describeBundle(spec.bundle).join(' · '), { size: 26, anchorX: 0, anchorY: 0, wrap: w - x0 - 24, lineHeight: 34, align: 'left' });
+  const contents = uiLabel(describeBundle(spec.bundle).join(', '), { size: 26, anchorX: 0, anchorY: 0, wrap: w - x0 - 24, lineHeight: 34, align: 'left' });
   // The coupon grows with the contents (English wraps to a second line) so the price button never covers them.
   const h = Math.max(250, Math.ceil(88 + contents.height + 118));
   const c = horizontalCoupon(inner, y, w, h, Color.mustard);

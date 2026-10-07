@@ -52,7 +52,7 @@ addStrings('ko', {
 
   'shop.butler.title': '집사 패스',
   'shop.butler.owned': '쓰는 중이에요',
-  'shop.butler.perks': '3배속 · 광고 없이 보상 2배 · 상자 바로 열기 · 순찰 2배',
+  'shop.butler.perks': '3배속, 광고 없이 보상 2배, 상자 바로 열기, 순찰 2배',
   'shop.butler.note': '전투 안의 이득은 없어요.',
   'shop.gempass.title': '월간 보석 패스',
   'shop.gempass.desc': '지금 보석 {now}개, 30일 동안 매일 {daily}개',

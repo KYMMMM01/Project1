@@ -13,6 +13,8 @@ import {
   liftsAboveHud,
   pathDistance,
   unitTint,
+  depthFrame,
+  depthKey,
 } from '@/view/field/policy';
 
 describe('drag threshold', () => {
@@ -135,5 +137,26 @@ describe('cell looks and tints', () => {
     expect(out.shield).toBeCloseTo(20 / 140);
     barSegments(0, 0, 0, 0, out);
     expect(out.hp + out.shield).toBe(0);
+  });
+});
+
+describe('enemy depth order', () => {
+  it('a body that creeps a pixel or two keeps its place: the key changes only every few pixels', () => {
+    const keys = new Set<number>();
+    for (let y = 300; y < 304; y += 0.5) keys.add(depthKey(y, 56));
+    expect(keys.size).toBeLessThanOrEqual(2);
+    expect(depthKey(400, 56)).toBeGreaterThan(depthKey(300, 56));
+  });
+
+  it('a lower body is in front of a higher one, and a bigger one stands a little further forward at the same y', () => {
+    expect(depthKey(500, 40)).toBeGreaterThan(depthKey(420, 40));
+    expect(depthKey(500, 115)).toBeGreaterThan(depthKey(500, 40));
+  });
+
+  it('the layer may be re-sorted on one frame in four, never on all of them', () => {
+    let n = 0;
+    for (let f = 1; f <= 60; f++) if (depthFrame(f)) n++;
+    expect(n).toBe(15);
+    expect(depthFrame(1)).toBe(false);
   });
 });

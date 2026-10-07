@@ -53,6 +53,11 @@ export class DailyCard extends HomeCard {
     this.sync();
   }
 
+  /** The weekly cup's bar: what the guidebook points at for the cup. */
+  get cupBar(): ProgressBar {
+    return this.cup;
+  }
+
   get claimable(): number {
     return profile.cupView().tiers.filter((tier) => tier.reached && !tier.claimed).length;
   }

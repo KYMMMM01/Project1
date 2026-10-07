@@ -118,3 +118,17 @@ REQUESTS: `ScreenScaffold` has no way to change its action bar height after cons
 Debug: `window.__dbg.lessons` (see `guide.md`). The battle debug route's tutorial sandbox runs the lessons with in-memory progress; `tools/battle_motion.js` `mcOpen` marks them skipped, a lesson run opens the game itself.
 
 REQUESTS: see `guide.md`.
+
+## 2026-10-07 last gaps
+
+| Item | Root cause | Change | Where |
+|---|---|---|---|
+| 1. crowded wave 16.5 to 11.5 ms mean, p95 28.7 to about 18 | the whole scene was re-recorded every frame; 110 draw calls from areas; about 35 `hit` numbers a frame, most evicted unseen | render group per layer, baked areas, number budget, small per-frame costs, faster governor | `fx.md` |
+| 2. skip button over the enemy strip | the button took 148 px of the strip's end, then dropped a row onto the toys | top row only, strip cut to give way | `hud.md` |
+| 3. cards cover the board | above/below weighing put a 270 px card next to its target | card over the half of the screen the target is not on | `hud.md` |
+| 4. result bar reserved for three buttons | scaffold height fixed at construction | `ScreenScaffold.setActionBarHeight` | `hud.md` |
+| 5. tutorial from a fresh profile | played once: 19 lessons in order, 118 game seconds | speed hand under the skip button, laser bubble over lesson cards and sheet, awakening card at the front, molt sublabel, "next" after the tutorial | `hud.md` |
+| 6. next chapter | played: chapter 1 to 2 through the pre-run page, last chapter, defeat | none needed | `hud.md` |
+| 7. alignment audit | display-tree audit of the HUD screens, both languages, both heights | molt sublabel, laser guide bubble | `hud.md` |
+
+Debug and method notes: a battle on the real route has `__dbg.battle` and `__dbg.lessons` too; `__dbg.meta.unlockAll()` then `__dbg.home.shell.startRun({ mode: 'chapter', chapter: 5, stake: 0 })` opens the last chapter's pre-run page (there are 5 chapters; asking for 6 is refused with "아직 열리지 않았어요"). `tools/battle_motion.js` `mcOpen` marks the lessons skipped, but not the first-encounter cards: mark every topic taught (`for (const id of progress.unread()) progress.markTaught(id)`) before measuring frame time or the cards pause the simulation.

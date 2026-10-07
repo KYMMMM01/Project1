@@ -7,5 +7,5 @@ export { illustration } from './Illustration';
 export { GuideProgress, guideProgress } from './progress';
 export { topicFull, topicTeach, topicTitle } from './text';
 export {
-  SECTIONS, TOPICS, TOPIC_IDS, isTopicId, topicDef, topicsOf, type Art, type SectionId, type TopicDef, type TopicId, type TryControl, type TryTab,
+  SECTIONS, TOPICS, TOPIC_IDS, isTopicId, topicDef, topicsOf, type Art, type HomePoint, type SectionId, type TopicDef, type TopicId, type TryControl, type TryTab,
 } from './topics';

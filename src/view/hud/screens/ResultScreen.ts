@@ -490,6 +490,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     if (!alive || barBuilt) return;
     barBuilt = true;
     const box = resultBar(next !== null, scaffold.contentWidth);
+    // The bar was reserved tall for three buttons; a win with nothing to go on to (a daily run, the last butler level) needs only the row of two.
+    scaffold.setActionBarHeight(box.height);
     const home = new Button({ label: t('hud.res.home'), icon: 'home', style: 'neutral', width: box.home.w, height: box.home.h, fontSize: next ? 34 : 36 });
     home.position.set(box.home.x, box.home.y);
     home.onTap(() => {

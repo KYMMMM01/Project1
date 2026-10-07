@@ -6,7 +6,7 @@ import { Ease } from '@/core/tween';
 import { Badge, type BadgeValue } from './Badge';
 import { LoadingSpinner } from './Decor';
 import { drawIcon, type IconName } from './icons';
-import type { Box } from './layoutMath';
+import { buttonRows, type Box } from './layoutMath';
 import { motion, shakeX, TweenBag } from './motion';
 import { drawPaperFace, drawPaperShadow, paperSeed, tapeStrip, type PaperOpts } from './paper';
 import { clearActivePress, inScrollHost, noteRefusal, setActivePress, type Pressable } from './press';
@@ -398,8 +398,7 @@ export class Button extends Container implements Pressable {
     }
 
     const hasRow1 = hasLabel || this.iconG !== null;
-    const row1H = hasLabel ? fs * 1.08 : iconSize;
-    const row2H = hasSub ? subFs * 1.1 : 0;
+    const { row1: row1H, row2: row2H } = buttonRows(fs, iconSize, subFs, hasLabel, hasSub);
     const total = (hasRow1 ? row1H : 0) + (hasSub ? row2H - (hasRow1 ? 2 : 0) : 0);
     let y = -total / 2 - 2;
 

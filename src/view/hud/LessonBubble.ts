@@ -1,15 +1,16 @@
 /**
  * The paper speech bubble of the lessons: the topic's picture on a small tile, its words, and up to two buttons. The tutorial
  * uses it as a short note (two lines and, for a read-only lesson, "got it"); the first-encounter lessons use it as a card (title,
- * teaching text, "got it" and "more in the guidebook"). It sits on the side of its target where it hides less (bubbleMath.ts).
+ * teaching text, "got it" and "more in the guidebook"). It lies over the half of the screen its target is not on (bubbleMath.ts `placeCard`).
  */
 import { Container, Graphics } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { illustration, topicDef, type TopicId } from '@/guide';
 import { Button, drawSpeechBubble, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
-import { BUBBLE_MARGIN, placeBubble, type Weighted } from './bubbleMath';
-import type { Rect } from './layoutMath';
+import { FIELD_H } from '@/game/geometry';
+import { BUBBLE_MARGIN, placeCard } from './bubbleMath';
+import { bottomRects, type Rect } from './layoutMath';
 
 const PAD = 20;
 const ARROW = 22;
@@ -27,8 +28,6 @@ export interface BubbleSpec {
   title: string | null;
   text: string;
   target: Rect;
-  avoid: readonly Weighted[];
-  prefer: 'above' | 'below';
   width: number;
   /** Side of the picture's tile. */
   tile: number;
@@ -63,7 +62,7 @@ export class LessonBubble {
     const h = PAD * 2 + contentH + (rowH > 0 ? 18 + rowH : 0);
     const l = this.env.layout();
     const bounds: Rect = { x: 0, y: l.safeTop + BUBBLE_MARGIN, w: l.w, h: l.h - l.safeBottom - l.safeTop - BUBBLE_MARGIN * 2 };
-    const fit = placeBubble({ target: spec.target, w: W, h, bounds, arrow: ARROW, prefer: spec.prefer, avoid: spec.avoid });
+    const fit = placeCard({ target: spec.target, w: W, h, bounds, arrow: ARROW, panelTop: bottomRects(l).top, boardBottom: l.fieldY + FIELD_H });
     const bodyY = fit.above ? -ARROW - h : ARROW;
     const g = new Graphics();
     drawSpeechBubble(g, -fit.tailX, bodyY, W, h, {

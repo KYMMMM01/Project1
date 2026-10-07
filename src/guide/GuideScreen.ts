@@ -15,12 +15,14 @@ import { illustration } from './Illustration';
 import { guideProgress, type GuideProgress } from './progress';
 import './strings';
 import { topicFull, topicTeach, topicTitle } from './text';
-import { SECTIONS, topicDef, topicsOf, type SectionId, type TopicId, type TryControl, type TryTab } from './topics';
+import { SECTIONS, topicDef, topicsOf, type HomePoint, type SectionId, type TopicId, type TryControl, type TryTab } from './topics';
 
-/** What the caller can do for the "try it" button: a battle points at a control, the home screen goes to a tab. */
+/** What the caller can do for the "try it" button: a battle points at a control, the home screen goes to a tab (and points at `point` there). */
 export interface GuideHost {
   tryControl?(control: TryControl, topic: TopicId): void;
-  goTab?(tab: TryTab): void;
+  goTab?(tab: TryTab, point?: HomePoint): void;
+  /** The home screen can play the tutorial again: `ask` is the one confirmation (true = go ahead), `start` leaves for the run once the guidebook has gone. */
+  replay?: { ask(): Promise<boolean>; start(): void };
 }
 
 export interface GuideOpts {
@@ -37,6 +39,7 @@ const ROW_GAP = 14;
 const TILE = 128;
 const BAR_H = 112;
 const TAB_H = 84;
+const REPLAY_H = 96;
 
 let current: { close: () => void } | null = null;
 
@@ -80,9 +83,10 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
     pic.position.set(18 + TILE / 2, ROW_H / 2);
     const title = uiLabel(topicTitle(id), { size: 32, anchorX: 0, anchorY: 0.5 });
     fitLabel(title, w - TILE - 56 - 96, 32);
-    title.position.set(TILE + 42, 40);
+    // The two reserved lines of text (a title and up to two of the teaching line) stand centred on the picture.
+    title.position.set(TILE + 42, 48);
     const teach = uiLabel(topicTeach(id), { size: 24, color: Color.inkSoft, wrap: w - TILE - 64, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 30 });
-    teach.position.set(TILE + 42, 68);
+    teach.position.set(TILE + 42, 76);
     view.addChild(card, pic, title, teach);
     if (!progress.isSeen(id)) {
       const sticker = new PaperLabel({ text: t('guide.new'), size: 24, paper: Color.berry, padX: 14, padY: 4, seed: 7 });
@@ -139,6 +143,13 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
     caption.position.set(w - 8, 36);
     scaffold.content.addChild(heading, caption);
     let y = 84;
+    if (section === 'start' && host.replay) {
+      const again = new Button({ label: t('guide.replay.row'), icon: 'play', style: 'neutral', width: w, height: REPLAY_H, fontSize: 32 });
+      again.position.set(w / 2, y + REPLAY_H / 2);
+      again.onTap(() => void replay());
+      scaffold.content.addChild(again);
+      y += REPLAY_H + ROW_GAP;
+    }
     for (const def of topicsOf(section)) {
       const r = row(def.id, w);
       r.position.set(w / 2, y + ROW_H / 2);
@@ -222,7 +233,7 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
       go.onTap(() => {
         close(() => {
           if (control) host.tryControl?.(control, id);
-          else if (tab) host.goTab?.(tab);
+          else if (tab) host.goTab?.(tab, def.try?.point);
         });
       });
       place(go, 1, n);
@@ -234,6 +245,13 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
   }
 
   // ───────────────────────── frame ─────────────────────────
+
+  /** One confirmation, then the guidebook goes and the tutorial run takes its place. */
+  async function replay(): Promise<void> {
+    const again = host.replay;
+    if (!again || !(await again.ask()) || closed) return;
+    close(() => again.start());
+  }
 
   function back(): void {
     if (page) showList();

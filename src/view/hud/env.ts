@@ -11,6 +11,7 @@ import { popups, toast, tooltip, type Popup } from '@/ui';
 import type { BattleContext, BattleLayout } from '../context';
 import type { Hints } from './hints';
 import type { LaserTeach } from './laserTeach';
+import type { Rect } from './layoutMath';
 import { failKeys, type Reveal, type RevealKey } from './policy';
 import type { CountKey } from './tutorialScript';
 
@@ -21,6 +22,11 @@ export interface HudEnv {
   readonly reveal: Reveal;
   /** A control of the screen was revealed (the tutorial brings them in one by one); `fresh` plays its arrival. */
   readonly revealed: Emitter<{ reveal: { key: RevealKey; fresh: boolean } }>;
+  /** Where the tutorial's skip button lies in the top row while it is shown (null when it is not): the enemy strip gives way to it. */
+  readonly skip: Rect | null;
+  /** The skip button came, went or moved. */
+  readonly skipChanged: Emitter<{ change: null }>;
+  setSkip(rect: Rect | null): void;
   /** What the player has been taught and has read. */
   readonly progress: GuideProgress;
   readonly hints: Hints;
@@ -66,6 +72,8 @@ export class EnvImpl implements HudEnv {
   lessonOf: (() => TopicId | null) | null = null;
   noteTo: ((key: CountKey) => void) | null = null;
   readonly revealed = new Emitter<{ reveal: { key: RevealKey; fresh: boolean } }>();
+  readonly skipChanged = new Emitter<{ change: null }>();
+  skip: Rect | null = null;
 
   constructor(
     readonly ctx: BattleContext,
@@ -82,6 +90,13 @@ export class EnvImpl implements HudEnv {
 
   layout(): BattleLayout {
     return this.ctx.layout;
+  }
+
+  setSkip(rect: Rect | null): void {
+    const same = rect === null ? this.skip === null : this.skip !== null && this.skip.x === rect.x && this.skip.y === rect.y && this.skip.w === rect.w;
+    if (same) return;
+    this.skip = rect;
+    this.skipChanged.emit('change', null);
   }
 
   on<E extends object, K extends keyof E>(emitter: Emitter<E>, type: K, fn: (payload: E[K]) => void): void {

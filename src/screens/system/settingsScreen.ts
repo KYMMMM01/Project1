@@ -7,12 +7,13 @@ import { getLang, i18nEvents, t, type Lang } from '@/core/i18n';
 import { isStorageVolatile, onStorageVolatile } from '@/core/save';
 import { uiTweens } from '@/core/tween';
 import type { NumbersMode } from '@/fx';
-import { guideProgress, openGuide } from '@/guide';
+import { guideProgress, openGuide, type GuideHost } from '@/guide';
 import { profile } from '@/meta';
 import { iap } from '@/platform';
 import { backOut, Button, Color, drawIcon, fitLabel, motion, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, TweenBag, uiLabel } from '@/ui';
 import { refusalCue } from '@/ui/press';
 import { shell } from '@/screens/shell/controller';
+import { clearPointer, showPointer } from '@/screens/shell/HomePointer';
 import { currentSettings, ensureSettings, updateSettings } from '@/view/hud/settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '@/view/hud/settingsMath';
 import { CodeExportPopup, CodeImportPopup } from './backupPopups';
@@ -20,6 +21,7 @@ import { paperSheet } from './kit/sheets';
 import { routinePrefs, setQuality } from './prefs';
 import { resetProgress } from './resetProgress';
 import { QUALITIES, type Quality } from './settingsModel';
+import { askReplayTutorial, startTutorialReplay } from './tutorialReplay';
 import { formSheet, LABEL_OVERHANG, type FormRow } from './settingsForm';
 import { GAME_VERSION } from './strings';
 
@@ -28,6 +30,7 @@ const SEG_H = 80;
 const SIDE = 28;
 const GAP = 20;
 const LINK_H = 88;
+const REPLAY_H = 96;
 /** The language strip's paper piece slides across before the screen changes language; then the new sheets settle into place one after another. */
 const LANG_SLIDE = 0.2;
 const RELAY_DROP = 18;
@@ -64,6 +67,10 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   let closed = false;
   let restoring = false;
   const bag = new TweenBag();
+  /** The "make a code" button of the rows built last: what the guidebook's backup topic points at. */
+  let backupButton: Button | null = null;
+  /** Runs once the guidebook has gone and the sheet is built again (the pointer needs the new rows). */
+  let afterGuide: (() => void) | null = null;
 
   const labelOf = (row: Container, text: string, w: number, y: number, room: number): Text => {
     const label = uiLabel(text, { size: 32, anchorX: 0, align: 'left' });
@@ -171,10 +178,16 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
       label: t('guide.settings.title'), sublabel: left > 0 ? t('guide.unread', { n: left }) : t('guide.settings.hint'), style: 'primary', icon: 'question',
       width: w, height: 120, fontSize: 40, tape: 'pink',
     });
-    guideBtn.onTap(() => openGuide({ host: { goTab: (tab) => { closeSettingsScreen(); shell.goTab(tab); } }, onClose: () => { if (!closed) build(); } }));
+    guideBtn.onTap(() => openGuide({ host: guideHost, onClose: afterGuideClosed }));
     guideBtn.position.set(w / 2, y + 60);
     scaffold.content.addChild(guideBtn);
-    y += 120 + GAP + LABEL_OVERHANG;
+    y += 120 + GAP;
+    // Next to it, so a player who skipped the tutorial (or wants it once more) finds it where the rules are.
+    const again = new Button({ label: t('guide.replay.row'), icon: 'play', style: 'neutral', width: w, height: REPLAY_H, fontSize: 32 });
+    again.onTap(() => void askReplayTutorial().then((yes) => (yes ? startReplay() : undefined)));
+    again.position.set(w / 2, y + REPLAY_H / 2);
+    scaffold.content.addChild(again);
+    y += REPLAY_H + GAP + LABEL_OVERHANG;
     const add = (title: string, rows: readonly FormRow[]): void => {
       const sheet = formSheet(w, title, rows);
       sheet.view.position.set(0, y);
@@ -224,6 +237,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
         height: 96 + 40,
         draw: (row) => {
           const exp = buttonOf(t('rt.sys.code.export'), 'info', 'code', () => void exportCode(), bw);
+          backupButton = exp;
           exp.position.set(SIDE + bw / 2, 68);
           const imp = buttonOf(t('rt.sys.code.import'), 'info', 'code', () => void popups.open(new CodeImportPopup(onChanged)), bw);
           imp.position.set(SIDE + bw + GAP + bw / 2, 68);
@@ -278,6 +292,40 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     scaffold.refresh();
   };
 
+  /** Leave the sheet and play the tutorial: its record is cleared, then the run opens through the home screen's own path. */
+  const startReplay = (): void => {
+    if (closed) return;
+    closeSettingsScreen();
+    void startTutorialReplay();
+  };
+
+  /** "Try it" of the guidebook: another tab is the home scene's business (this sheet goes), the backup topic points at its own button. */
+  const guideHost: GuideHost = {
+    goTab: (tab, point) => {
+      if (tab !== 'settings') {
+        closeSettingsScreen();
+        if (point) shell.pointAt(tab, point);
+        else shell.goTab(tab);
+        return;
+      }
+      afterGuide = () => {
+        const button = backupButton;
+        if (!button) return;
+        scaffold.scroller?.scrollToShow(button, 60);
+        showPointer(game.popupLayer, () => backupButton);
+      };
+    },
+    replay: { ask: askReplayTutorial, start: startReplay },
+  };
+
+  const afterGuideClosed = (): void => {
+    if (closed) return;
+    build();
+    const next = afterGuide;
+    afterGuide = null;
+    next?.();
+  };
+
   const exportCode = async (): Promise<void> => {
     const code = await profile.exportCode();
     if (!closed) void popups.open(new CodeExportPopup(code));
@@ -313,6 +361,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   const close = (): void => {
     if (closed) return;
     closed = true;
+    clearPointer();
     bag.killAll();
     offLang();
     offVolatile();
@@ -323,6 +372,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   dispose = () => {
     if (closed) return;
     closed = true;
+    clearPointer();
     bag.killAll();
     offLang();
     offVolatile();

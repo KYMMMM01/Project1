@@ -77,6 +77,9 @@ export class ActionRow {
   private laserP = -1;
   private laserSeconds = '';
   private gradeReady: boolean | null = null;
+  /** What the grade button shows now: the price (-1 at the top grade) and the level, so an unchanged button is not rebuilt. */
+  private gradeCost = -2;
+  private gradeLevel = -1;
   private cardOpen = false;
   private dead = false;
 
@@ -259,6 +262,7 @@ export class ActionRow {
 
   invalidate(): void {
     this.gradeDirty = true;
+    this.gradeCost = -2;
     this.trackerDirty = true;
     this.summon.invalidate();
   }
@@ -279,21 +283,25 @@ export class ActionRow {
   private refreshGrade(): void {
     const b = this.env.battle;
     const cost = b.summonGradeCost();
+    const level = b.summonGrade();
+    const ready = cost >= 0 && b.fish >= cost;
+    if (ready) this.env.hints.request('summon_grade', this.grade);
+    // The fish change every few frames in a busy wave; the button only needs its paper redone when what it says or how it looks changes.
+    if (cost === this.gradeCost && level === this.gradeLevel && ready === this.gradeReady) return;
+    this.gradeCost = cost;
+    this.gradeLevel = level;
     if (cost < 0) {
       this.grade.setLabel(t('hud.max'));
       this.grade.setSublabel(undefined);
       this.grade.setStyle('kraft');
+      this.gradeReady = ready;
       return;
     }
-    const ready = b.fish >= cost;
-    this.grade.setLabel(`Lv.${b.summonGrade() + 1}`);
+    this.grade.setLabel(`Lv.${level + 1}`);
     this.grade.setSublabel(fmt(cost), 'fish');
     // Cream paper when the fish are there, plain kraft when not; the price says the rest.
     this.grade.setStyle(ready ? 'neutral' : 'kraft');
-    if (ready) {
-      this.env.hints.request('summon_grade', this.grade);
-      if (this.gradeReady === false) this.grade.shine();
-    }
+    if (ready && this.gradeReady === false) this.grade.shine();
     this.gradeReady = ready;
   }
 

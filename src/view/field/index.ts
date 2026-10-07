@@ -101,7 +101,7 @@ export function createField(ctx: BattleContext): FieldPart {
       units.update(dt, ctx.selected);
       enemies.update(dt);
       shots.update();
-      effects.update();
+      effects.update(dt);
       marks.update(dt);
       input.update(dt);
       updateCells(dt);

@@ -17,7 +17,8 @@ const GAP = 52;
 export class DailySection implements Section {
   readonly view = new Container();
   readonly height: number;
-  private readonly strip: ChestStrip;
+  /** The day's chest card, and the first line of the mission page: what the guidebook points at. */
+  readonly strip: ChestStrip;
   private readonly rows: MissionRowView[] = [];
 
   constructor(w: number, act: MissionActions) {
@@ -48,6 +49,10 @@ export class DailySection implements Section {
     this.view.addChild(this.strip, book);
     this.height = TOP + CHEST_STRIP_H + GAP + book.pageH;
     this.sync(false);
+  }
+
+  get firstRow(): MissionRowView | null {
+    return this.rows[0] ?? null;
   }
 
   sync(animate: boolean): void {

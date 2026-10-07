@@ -10,6 +10,8 @@ import { ScrollView } from '@/ui/ScrollView';
 import { SegmentTabs } from '@/ui/TabBar';
 import { toast } from '@/ui/Toast';
 import type { ContentArea, Shell, TabScreen } from '../contract';
+import type { PointResolver } from '../shell/HomePointer';
+import { POINT_MARGIN } from '../shell/pointerMath';
 import { services } from '../contract';
 import { payout } from '../system/kit/claimFx';
 import { partsOf } from '../system/kit/parts';
@@ -233,6 +235,18 @@ export class MissionsTab implements TabScreen {
 
   badge(): number | boolean {
     return missionBadges(profile).total;
+  }
+
+  /** The guidebook's "try it": the day's chest card, or the first mission of the day (both are on the daily page). */
+  pointAt(point: string): PointResolver | null {
+    if (!this.scroller || (point !== 'missions.chest' && point !== 'missions.list')) return null;
+    this.select('daily');
+    const daily = this.sections.daily as DailySection | undefined;
+    const pick = (): Container | null => (point === 'missions.chest' ? daily?.strip : daily?.firstRow) ?? null;
+    const target = pick();
+    if (!target) return null;
+    this.scroller.scrollToShow(target, POINT_MARGIN);
+    return pick;
   }
 
   destroy(): void {

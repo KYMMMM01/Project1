@@ -97,7 +97,9 @@ export class LaserGuide {
       hints.used('laser');
       flow.start();
     }
-    const modal = this.env.modalCount > 0;
+    // A card, a popup, another lesson (the elite and the boss cut in on a guide that is waiting for its dot), a drag or a selected cat
+    // (its sheet covers the row the bubble would sit over) puts the guide on hold: its bubble never lies over what is being said or used.
+    const modal = busy || this.env.modalCount > 0 || this.env.ctx.selected !== null;
     if (flow.tick(dt, modal)) {
       teach.noteGuided();
       this.env.progress.markTaught('laser');
@@ -113,7 +115,7 @@ export class LaserGuide {
     const step = this.flow.step;
     if (step === 'wait' || step === 'done') return;
     if (modal) {
-      // The card is up: the guide waits behind it (the kit's bubble would sit on top of it).
+      // A card or the selection sheet is up: the guide waits behind it (the kit's bubble would sit on top of it).
       this.layer.visible = false;
       if (tooltip.target === this.anchor) tooltip.hide();
       return;

@@ -161,8 +161,6 @@ export class Hints {
         title: topicTitle(hint.id),
         text: topicTeach(hint.id),
         target: box,
-        avoid: host.avoid(),
-        prefer: 'above',
         width: CARD_W,
         tile: CARD_TILE,
         buttons: [

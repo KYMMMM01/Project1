@@ -62,7 +62,7 @@ addStrings('ko', {
 
   // selection sheet
   'hud.molt': '털갈이',
-  'hud.molt.sub': '{cost} · 남은 {left}번',
+  'hud.molt.sub': '{cost} · {left}번',
   'hud.molt.info': '골골 {cost}개로 같은 등급의 다른 직업이 돼요. 남은 털갈이 {left}번',
   'hud.awaken': '각성',
   'hud.awaken.r.legend': '대왕만 가능',

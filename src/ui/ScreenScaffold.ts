@@ -83,7 +83,7 @@ export class ScreenScaffold extends Container {
   private readonly actionsRight: Container[] = [];
   private readonly padding: number;
   private readonly titleH: number;
-  private readonly actionH: number;
+  private actionH: number;
   private readonly backdrop: boolean;
   private backFn: (() => void) | null;
   private offResize: (() => void) | null = null;
@@ -137,6 +137,14 @@ export class ScreenScaffold extends Container {
       keyBound = true;
       window.addEventListener('keydown', onKey);
     }
+  }
+
+  /** Change the action bar's height after construction (a page whose buttons arrive later and know then how much room they need). */
+  setActionBarHeight(height: number): void {
+    const next = Math.max(0, height);
+    if (next === this.actionH) return;
+    this.actionH = next;
+    this.layout();
   }
 
   /** Usable body rectangle (below the header, above the action bar) in screen design space. */

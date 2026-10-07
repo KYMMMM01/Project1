@@ -8,6 +8,7 @@
 import type { Container } from 'pixi.js';
 import type { Tweener } from '@/core/tween';
 import type { BattleMode } from '@/game';
+import type { PointResolver } from './shell/HomePointer';
 
 export type TabId = 'shop' | 'cats' | 'battle' | 'missions' | 'pass';
 
@@ -33,6 +34,11 @@ export interface TabScreen {
   update(dt: number): void;
   /** Tab-bar badge: a count, true for a plain dot, false/0 for none. */
   badge(): number | boolean;
+  /**
+   * Where the guidebook's "try it" points on this tab (a home point id, see `guide/topics.ts`): brings the thing into view and
+   * answers with a function that tells where it is now, or null when this tab has nothing by that name or it is not on screen.
+   */
+  pointAt?(point: string): PointResolver | null;
   destroy(): void;
 }
 

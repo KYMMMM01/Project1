@@ -4,11 +4,11 @@ import { FX_TIER_ORDER, fxSettings, setFxSettings, type FxTier } from './setting
 export interface GovernorOpts {
   /** Tier to start in. Default 'mid'. */
   start?: FxTier;
-  /** Length of the frame-time moving average, in frames. Default 120. */
+  /** Length of the frame-time moving average, in frames. Default 60 (about a second): a crowded wave must show in it before the player has felt it for long. */
   window?: number;
-  /** Step down when the average stays above this many ms ... Default 20 (under 50 fps). */
+  /** Step down when the average stays above this many ms ... Default 19 (under 53 fps: a 60 Hz screen already drops frames). */
   slowMs?: number;
-  /** ... for this many seconds. Default 3. */
+  /** ... for this many seconds. Default 1.5. */
   slowSeconds?: number;
   /**
    * Step up when the average stays below this many ms ... Default 17.5. A 60 Hz display never
@@ -57,9 +57,9 @@ export class QualityGovernor {
 
   constructor(o: GovernorOpts = {}) {
     this.tier = o.start ?? 'mid';
-    this.k = 2 / ((o.window ?? 120) + 1);
-    this.slowMs = o.slowMs ?? 20;
-    this.slowSeconds = o.slowSeconds ?? 3;
+    this.k = 2 / ((o.window ?? 60) + 1);
+    this.slowMs = o.slowMs ?? 19;
+    this.slowSeconds = o.slowSeconds ?? 1.5;
     this.fastMs = o.fastMs ?? 17.5;
     this.fastSeconds = o.fastSeconds ?? 10;
     this.upHold = o.upHold ?? 30;

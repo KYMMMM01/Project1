@@ -51,3 +51,25 @@ See the 2026-10-07 owner feedback section of `hud.md` for the list of runs and t
 
 - `src/app/flow.ts` `chooseFirstScene` / `dropInterruptedTutorial`: a player who skipped the tutorial and then closed the app gets a tutorial run again (it opens as an easy run with no lessons and everything revealed). Going home instead needs `!guideProgress.skipped` next to `profile.data.stats.runs === 0` in `chooseFirstScene`.
 - `src/screens/system/resetProgress.ts` `PROGRESS_KEYS` also lacks `meowguard.laser` (the laser explanation's counters), so an erased profile still has its laser guide marked done.
+
+## 2026-10-07 last gaps
+
+**Play the tutorial again** (`screens/system/tutorialReplay.ts`, `GuideHost.replay`, `GuideProgress.resetTaught()`).
+- Entrances: a neutral row "튜토리얼 다시 하기 / Play the tutorial again" at the top of the guidebook's first section (only when the host offers it: the home settings sheet does; the pause menu and the end-of-tutorial card do not) and a row under the guidebook button in the settings sheet. Both go through `askReplayTutorial()`: one confirmation dialog (title, one line, "다시 하기" / "취소"). A run in progress that is not an interrupted tutorial refuses with a toast first and clears nothing (`replayBlocked`, pure).
+- On "yes": `guideProgress.resetTaught()` clears the taught lessons and the skipped flag (the tutorial run only teaches with `skipped` false) and keeps the "read" marks, so the "new" stickers come back only for what was never read. The laser's own record (`meowguard.laser`: how often its card opened, the guided first use) is reset so that its lesson starts from nothing. Both are flushed, then `shell.startRun({ mode: 'tutorial' })`, the home screen's own run launcher (pending-run record, iris transition, platform play signals). Nothing else is paid: it is the tutorial mode, so it pays what any tutorial run pays (gold, XP, the victory's wooden chest, a counted run) and nothing a first clear or the piggy bank would add (mode tutorial has neither).
+- Verified in the browser: a profile with `merge` and `sun` taught, `sun` and `laser` read and the tutorial skipped. "취소" changes nothing. "다시 하기": taught merge false, read sun and laser still true, skipped false, the scene is a battle in mode tutorial with the first lesson ("생선으로 고양이를 불러요! 눌러 봐요. (0/3)") on screen (scratchpad `shots/rp`).
+- Tests: `tests/guide.progress.test.ts` (resetTaught keeps read, clears taught and skipped, announces once), `tests/screens.system.replay.test.ts` (`replayBlocked`).
+
+**"Try it" points on the home screen**: see `shell.md` item 3. `TryTarget` gained `point`, `TryTab` gained `'settings'` (the backup topic stays on the sheet it was opened from), `GuideHost.goTab(tab, point?)`. Every topic of the home section has a tab and a point (calendar and backup, which had none, now do; the field section's "stakes" points at the butler-level tags), enforced by `tests/guide.topics.test.ts`.
+
+**Guidebook rows**: the title and the teaching line stood 30 px above the picture's centre; the two reserved text lines are centred on the picture now (title centre 48, teaching line top 76 in a 156 px row).
+
+Known gaps from above, closed: the replay row, the home highlight, and the two REQUESTS of the first note (`chooseFirstScene` already tests `!guideProgress.skipped`; `resetProgress.ts` already lists `meowguard.laser`). Still open: the result screen of a replayed tutorial offers "next: chapter 1" at butler level 0 (`app/nextRun.ts` plans mode tutorial that way), also for a player who has cleared more.
+
+## 2026-10-07 last gaps (battle side)
+
+- The cards of `LessonBubble` (lesson notes and first-encounter cards) are placed by `bubbleMath.placeCard`: over the board for a bottom control, over the sheet for everything else (`hud.md`). `BubbleSpec` lost `avoid` and `prefer`; `HintBubble` (refusals, twins, the laser guide) still weighs above/below.
+- The awakening card is requested at the front of the line (`Hints.request(..., first)`): it is about the cat that has just arrived and can be acted on now.
+- The skip button's geometry is `layoutMath.skipRect` (top row only); `HudEnv.skip` / `setSkip` tell the top bar to cut the enemy strip.
+- The laser guide's bubble waits while any lesson, popup, drag or selected cat is up.
+- Tutorial playtest facts for the hand-off: 19 lessons in 118 game seconds, no stall; a page reload drops a tutorial run (so a play-through has to stay in one page); the "next" offer after the tutorial reads "다음: 챕터 1 거실".

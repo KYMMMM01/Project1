@@ -56,10 +56,31 @@ export function topRects(l: BattleLayout): TopRects {
     preview: { x: 236, y: row2Y - rowH / 2, w: 208, h: rowH },
     toys: { x: 452, y: row2Y - rowH / 2, w: HUD_W - SIDE - 452, h: rowH },
     // The boss sticker overhangs the strip's left end by about 30 px, which the countdown bar leaves free.
-    boss: { x: 264, y: row2Y - 34, w: HUD_W - SIDE - 264, h: 66 },
+    boss: { x: 264, y: row2Y - 28, w: HUD_W - SIDE - 264, h: 66 },
     timer: { x: SIDE, y: row2Y + 2, w: 212, h: 34 },
     row2Y,
   };
+}
+
+/** The tutorial's skip button: the Korean label ("건너뛰기", four glyphs at 24 px) on its paper. Its touch target is 88 px tall, its paper 76 (the speed button's size). */
+export const SKIP_W = 124;
+export const SKIP_H = 88;
+export const SKIP_FACE = 76;
+/** Clear space kept between the skip button and the strip, and between it and the speed button. */
+const SKIP_GAP = 12;
+
+/**
+ * Where the skip button lies in the top row: at the right end, in the slot the speed button will take, and one button's
+ * width further in once the speed button has arrived. It never leaves the row, so nothing of the second row is covered.
+ */
+export function skipRect(r: TopRects, speedShown: boolean): Rect {
+  const right = speedShown ? r.speed.x - 44 - SKIP_GAP : HUD_W - SIDE;
+  return { x: right - SKIP_W, y: r.speed.y - SKIP_H / 2, w: SKIP_W, h: SKIP_H };
+}
+
+/** Width of the enemy strip: all of it, or what the skip button leaves (the strip's left end stays where it is). */
+export function gaugeWidth(r: TopRects, skip: Rect | null): number {
+  return skip ? Math.min(r.gauge.w, skip.x - SKIP_GAP - r.gauge.x) : r.gauge.w;
 }
 
 export interface BottomRects {

@@ -165,6 +165,11 @@ export class ChapterCard extends Container {
     this.addChild(this.bubble, this.ruleText, ...this.chips);
   }
 
+  /** The butler-level tags: what the guidebook points at for the levels. */
+  get stakeChips(): readonly Button[] {
+    return this.chips;
+  }
+
   get calendarButton(): IconButton {
     return this.calendar;
   }

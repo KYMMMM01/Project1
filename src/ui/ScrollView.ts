@@ -208,6 +208,21 @@ export class ScrollView extends Container implements ScrollHost {
     });
   }
 
+  /**
+   * Scroll just far enough that `target` (anywhere under `content`) lies fully inside the view with `margin` to spare; a target
+   * taller than the view lines its top edge up instead. Nothing moves when it is already in view.
+   */
+  scrollToShow(target: Container, margin = 24, animated = false): void {
+    if (this.dirty) this.refresh();
+    const b = target.getBounds();
+    const top = this.content.toLocal({ x: b.minX, y: b.minY }).y + this.padding;
+    const bottom = this.content.toLocal({ x: b.maxX, y: b.maxY }).y + this.padding;
+    const pos = this.ay.pos;
+    if (bottom - top + margin * 2 > this.viewH) this.scrollTo(top - margin, animated);
+    else if (top - margin < pos) this.scrollTo(top - margin, animated);
+    else if (bottom + margin > pos + this.viewH) this.scrollTo(bottom + margin - this.viewH, animated);
+  }
+
   override destroy(options?: DestroyOptions): void {
     // Destroying the children fires childRemoved on `content`; without this the handler would
     // schedule a re-measure of a view that no longer exists.

@@ -9,6 +9,8 @@ import { fxTexture } from './textures';
 export type NumStyle = 'damage' | 'crit' | 'dot' | 'heal' | 'gold' | 'hurt' | 'big';
 
 const BAKED = 64;
+/** New plain numbers (priority 0 and 1) accepted per frame: a zone ticking on forty enemies would lay down a hundred a frame, all but the newest evicted before one was drawn. */
+const PLAIN_PER_FRAME = 3;
 /** Width and height of the room a number takes along a clamped line: the next one lands beside it, not on it. */
 const SLOT_W = 62;
 const SLOT_Y = 34;
@@ -167,6 +169,9 @@ export class FloatingNumbers {
   /** Total BitmapText objects ever created, per stats(). */
   created = 0;
   skipped = 0;
+  /** Plain numbers started since the last `update`. */
+  private plainThisFrame = 0;
+  private fontsReady = false;
 
   /** Maximum simultaneous numbers; lowering it lets the extras finish. */
   cap: number;
@@ -191,7 +196,10 @@ export class FloatingNumbers {
     const def = STYLES[style];
     const mode = fxSettings.numbers;
     if (mode === 'off' || (mode === 'brief' && def.prio < 2)) return;
-    ensureNumberFonts();
+    if (!this.fontsReady) {
+      ensureNumberFonts();
+      this.fontsReady = true;
+    }
 
     if (o.key !== undefined && typeof value === 'number') {
       for (const a of this.active) {
@@ -204,10 +212,15 @@ export class FloatingNumbers {
       }
     }
 
+    if (def.prio < 2 && this.plainThisFrame >= PLAIN_PER_FRAME) {
+      this.skipped++;
+      return;
+    }
     if (this.active.length >= this.cap && !this.evictFor(def.prio)) {
       this.skipped++;
       return;
     }
+    if (def.prio < 2) this.plainThisFrame++;
     const font = faceFont(o.color ?? def.face);
     let n = this.pools.get(font)?.pop();
     if (!n) {
@@ -234,6 +247,7 @@ export class FloatingNumbers {
   }
 
   update(dt: number): void {
+    this.plainThisFrame = 0;
     const list = this.active;
     let w = 0;
     for (let i = 0; i < list.length; i++) {

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { CHEST_BULK_MAX } from '@/meta/data/economy';
 import {
   PROMO_WINDOW_MS,
   badgeCount,
   bestStake,
   cardsVisible,
   chapterUnlocked,
+  chestPile,
+  chestsWaiting,
   clampSelection,
   cupProgress,
   frontier,
@@ -118,5 +121,28 @@ describe('butler-level tags', () => {
     expect(stakeTagState(FRESH, 2, 0, 0)).toBe('locked');
     expect(stakeTagState(FRESH, 1, 0, 0)).toBe('selected');
     expect(stakeTagState(FRESH, 1, 1, 0)).toBe('locked');
+  });
+});
+
+describe('free-chest card: open all', () => {
+  it('counts the chests in hand and the free one that is ready', () => {
+    expect(chestsWaiting(0, false)).toBe(0);
+    expect(chestsWaiting(0, true)).toBe(1);
+    expect(chestsWaiting(2, true)).toBe(3);
+    expect(chestsWaiting(-1, true)).toBe(1);
+  });
+
+  it('offers the pile from two chests on, never more than one bulk open takes', () => {
+    expect(chestPile(0)).toBe(0);
+    expect(chestPile(1)).toBe(0);
+    expect(chestPile(2)).toBe(2);
+    expect(chestPile(7)).toBe(7);
+    expect(chestPile(CHEST_BULK_MAX + 30)).toBe(CHEST_BULK_MAX);
+  });
+
+  it('a ready free chest on top of one in hand makes a pile of two, the countdown with one in hand does not', () => {
+    expect(chestPile(chestsWaiting(1, true))).toBe(2);
+    expect(chestPile(chestsWaiting(1, false))).toBe(0);
+    expect(chestPile(chestsWaiting(2, false))).toBe(2);
   });
 });

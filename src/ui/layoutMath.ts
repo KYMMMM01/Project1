@@ -251,3 +251,14 @@ export function tabPaperBox(cell: number, barH: number, featured: boolean): Box 
   const top = featured ? TAB_BAR.heroPaperTop : TAB_BAR.paperTop;
   return { x: -w / 2, y: top, w, h: barH + TAB_BAR.bleed - top };
 }
+
+/**
+ * Heights of a button's content rows: the first holds the icon and the label, the second the sublabel. The icon can be taller
+ * than the label's line; the sublabel then starts under the icon, not under the text, so the two never overlap.
+ */
+export function buttonRows(fontSize: number, iconSize: number, subFontSize: number, hasLabel: boolean, hasSub: boolean): { row1: number; row2: number } {
+  return {
+    row1: hasLabel ? Math.max(fontSize * 1.08, iconSize) : iconSize,
+    row2: hasSub ? subFontSize * 1.1 : 0,
+  };
+}

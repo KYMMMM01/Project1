@@ -1,5 +1,6 @@
 /** Pure rules of the battle tab: what is selectable, what the tab opens on, which cards show. No rendering. */
 import { CHAPTERS, MAX_STAKE } from '@/game/data/roster';
+import { CHEST_BULK_MAX } from '@/meta/data/economy';
 import { canPlayStake, chaptersCleared } from '@/meta/rewards';
 
 export interface Selection {
@@ -99,6 +100,16 @@ export function promoVisible(since: number, now: number): boolean {
 /** Number on the tab badge: how many things wait to be collected. */
 export function badgeCount(waiting: { patrol: boolean; chest: boolean; calendar: boolean; cup: number; endless: number }): number {
   return (waiting.patrol ? 1 : 0) + (waiting.chest ? 1 : 0) + (waiting.calendar ? 1 : 0) + waiting.cup + waiting.endless;
+}
+
+/** Wooden chests the free-chest card can open now: the ones the player holds plus the free one when it is ready (it is claimed first). */
+export function chestsWaiting(owned: number, ready: boolean): number {
+  return Math.max(0, Math.floor(owned)) + (ready ? 1 : 0);
+}
+
+/** How many chests "open all" opens in one go, or 0 when the card does not offer it (it takes two chests to make a pile; the same rule as the shop's button). */
+export function chestPile(waiting: number): number {
+  return waiting >= 2 ? Math.min(Math.floor(waiting), CHEST_BULK_MAX) : 0;
 }
 
 /** Share of the next weekly-cup tier earned, 0..1 (1 when every tier is reached). */

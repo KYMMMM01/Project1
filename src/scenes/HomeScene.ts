@@ -9,6 +9,7 @@ import { profile, featureHint, type FeatureId } from '@/meta';
 import { TabBar, toast, type TabDef } from '@/ui';
 import { shell, type HomeSurface } from '@/screens/shell/controller';
 import { HomeFloor } from '@/screens/shell/HomeFloor';
+import { clearPointer, showPointer } from '@/screens/shell/HomePointer';
 import { HomeTopBar } from '@/screens/shell/HomeTopBar';
 import { shellLayout } from '@/screens/shell/layoutMath';
 import { TabHost } from '@/screens/shell/TabHost';
@@ -83,6 +84,7 @@ export class HomeScene extends Scene implements HomeSurface {
   }
 
   override exit(): void {
+    clearPointer();
     for (const off of this.offs) off();
     this.offs.length = 0;
     shell.detach(this);
@@ -113,6 +115,15 @@ export class HomeScene extends Scene implements HomeSurface {
       return;
     }
     this.tabBar.select(id);
+  }
+
+  /** The guidebook's "try it": the tab opens and a hand and a soft spotlight show the thing the topic is about, until the first tap. */
+  pointAt(id: TabId, point: string): void {
+    clearPointer();
+    this.goTab(id);
+    if (this.locked(id)) return;
+    const resolve = this.host.pointAt(id, point);
+    if (resolve) showPointer(this, resolve);
   }
 
   currencyAnchor(kind: CurrencyKind): { x: number; y: number } {

@@ -13,6 +13,9 @@ const NO_HAZARD = 0;
 const WET = 1;
 const ZAP = 2;
 
+/** Who stands in which area is looked up this often (seconds): the tag stays up for 0.6 s after the last look, so a tenth is more than the eye can tell. */
+const TOUCH_EVERY = 0.1;
+
 /** At most this many enemy rings are drawn at once: a wave of clocks would otherwise be a field of overlapping circles. */
 const MAX_RINGS = 4;
 
@@ -93,6 +96,8 @@ export class FieldEffects {
   private readonly rings = new Roster();
   private laser: ZoneHandle | null = null;
   private readonly off: () => void;
+  /** Seconds until the next look at who stands in an area. */
+  private touchWait = 0;
 
   constructor(
     private readonly env: FieldEnv,
@@ -106,11 +111,14 @@ export class FieldEffects {
     this.off = env.battle.events.on('hazardWarn', (e) => this.onWarn(e));
   }
 
-  update(): void {
+  update(dt: number): void {
+    this.touchWait -= dt;
+    const look = this.touchWait <= 0;
+    if (look) this.touchWait = TOUCH_EVERY;
     this.syncSun();
     this.syncHazards();
-    this.syncZones();
-    this.syncRings();
+    this.syncZones(look);
+    this.syncRings(look);
     this.syncLaser();
   }
 
@@ -174,7 +182,7 @@ export class FieldEffects {
   }
 
   /** Each live zone gets its area; the area warns before the zone's last second (in real time, so at 3x speed too); enemies inside wear its tag. */
-  private syncZones(): void {
+  private syncZones(look: boolean): void {
     const zones = this.env.battle.zones;
     const enemies = this.env.battle.enemies;
     const speed = Math.max(1, this.env.ctx.speed);
@@ -187,6 +195,7 @@ export class FieldEffects {
         this.zones.add(z.uid, h);
       }
       h.setLeft(z.timeLeft / speed, z.duration / speed);
+      if (!look) continue;
       const mark = zoneLook(z.unitId);
       for (let k = 0; k < enemies.length; k++) {
         const e = enemies[k] as EnemyState;
@@ -200,7 +209,7 @@ export class FieldEffects {
   }
 
   /** A ring round each clock and pill (the first few), following it; enemies inside it wear the ring's tag. */
-  private syncRings(): void {
+  private syncRings(look: boolean): void {
     const enemies = this.env.battle.enemies;
     this.rings.begin();
     for (let i = 0; i < enemies.length; i++) {
@@ -214,6 +223,7 @@ export class FieldEffects {
         this.rings.add(e.uid, h);
       }
       h.moveTo(e.x, e.y);
+      if (!look) continue;
       const reach = ring.radius + 4;
       for (let k = 0; k < enemies.length; k++) {
         const o = enemies[k] as EnemyState;

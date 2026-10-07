@@ -74,6 +74,43 @@ export function placeBubble(s: BubbleSpec): BubbleFit {
   return takeAbove ? { above: true, x, y: aboveY, tailX } : { above: false, x, y: belowY, tailX };
 }
 
+export interface CardSpec {
+  /** What the lesson points at. */
+  target: Rect;
+  w: number;
+  h: number;
+  bounds: Rect;
+  arrow: number;
+  /** Top edge of the bottom panel, and bottom edge of the board. */
+  panelTop: number;
+  boardBottom: number;
+}
+
+/** Gap between a card lying over the board and the panel under it, beyond its tail. */
+const CARD_EDGE = 6;
+/** How far a card lying over the sheet may sit below the panel's top edge: the summon button starts at 284, and a card never covers it. */
+const SHEET_ROOM = 280;
+/** How far above the panel a card over the sheet may reach on a tall screen, so it stays near the board it explains. */
+const SHEET_REACH = 150;
+
+/**
+ * Where a lesson card goes: on the half of the screen its target is not on. A lesson about a control of the bottom panel puts its card over
+ * the board, just above the panel (tail down), so the control and its neighbours stay in sight; a lesson about the board or the top row puts
+ * it over the sheet, right under the board (tail up), so the cats and the lane stay in sight. The spotlight and the hand do the exact pointing.
+ */
+export function placeCard(s: CardSpec): BubbleFit {
+  const { target, w, h, bounds, arrow, panelTop, boardBottom } = s;
+  const cx = target.x + target.w / 2;
+  const x = Math.min(Math.max(cx - w / 2, bounds.x + BUBBLE_MARGIN), Math.max(bounds.x + BUBBLE_MARGIN, bounds.x + bounds.w - BUBBLE_MARGIN - w));
+  const tailX = Math.min(Math.max(cx - x, TAIL_INSET), Math.max(TAIL_INSET, w - TAIL_INSET));
+  if (target.y + target.h / 2 >= panelTop) {
+    return { above: true, x, y: Math.max(bounds.y, panelTop - CARD_EDGE - arrow - h), tailX };
+  }
+  const tip = Math.min(panelTop - 20, Math.max(boardBottom - 10, panelTop - SHEET_REACH));
+  const y = Math.max(bounds.y, Math.min(tip + arrow, panelTop + SHEET_ROOM - h, bounds.y + bounds.h - h));
+  return { above: false, x, y, tailX };
+}
+
 /** The smallest rectangle holding both. */
 export function unionRect(a: Rect, b: Rect): Rect {
   const x = Math.min(a.x, b.x);

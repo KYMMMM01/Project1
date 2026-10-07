@@ -40,6 +40,7 @@ describe('FloatingNumbers capacity', () => {
     n.show(0, 0, 1, 'damage', { noScatter: true });
     n.show(0, 0, 2, 'damage', { noScatter: true });
     n.show(0, 0, 3, 'damage', { noScatter: true });
+    n.update(0);
     n.show(0, 0, 4, 'damage', { noScatter: true });
     expect(n.count).toBe(3);
     expect(n.skipped).toBe(0);
@@ -79,11 +80,25 @@ describe('FloatingNumbers capacity', () => {
 
   it('numbers fade out and are recycled after their lifetime without creating new objects', () => {
     const n = make(10);
-    for (let i = 0; i < 5; i++) n.show(0, 0, 100 + i, 'damage');
+    for (let i = 0; i < 3; i++) n.show(0, 0, 100 + i, 'damage');
     for (let t = 0; t < 1; t += DT) n.update(DT);
     expect(n.count).toBe(0);
-    for (let i = 0; i < 5; i++) n.show(0, 0, 100 + i, 'damage');
-    expect(n.created).toBe(5);
+    for (let i = 0; i < 3; i++) n.show(0, 0, 100 + i, 'damage');
+    expect(n.created).toBe(3);
+  });
+
+  it('a frame takes only a few plain numbers, but every crit and boss hit: the rest of a burst would be evicted unseen', () => {
+    const n = make(40);
+    for (let i = 0; i < 30; i++) n.show(0, 0, 100 + i, 'damage');
+    expect(n.count).toBe(3);
+    expect(n.skipped).toBe(27);
+    n.show(0, 0, 900, 'crit');
+    n.show(0, 0, 900, 'big');
+    expect(n.count).toBe(5);
+    // The next frame has its own share.
+    n.update(DT);
+    n.show(0, 0, 1, 'damage');
+    expect(n.count).toBe(6);
   });
 });
 

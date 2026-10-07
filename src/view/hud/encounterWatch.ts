@@ -54,7 +54,8 @@ export function watchEncounters(env: EnvImpl, at: EncounterTargets): void {
     for (const u of b.units) {
       if (!u || unitRarityIndex(u.id) !== 3) continue;
       const view = env.ctx.unitView(u.uid);
-      if (view) ask.request('awaken', view);
+      // The card is about the cat that has just arrived, and the player can act on it now: it does not wait behind the others.
+      if (view) ask.request('awaken', view, false, true);
       return;
     }
   };

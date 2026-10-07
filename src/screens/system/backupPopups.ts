@@ -18,6 +18,7 @@ import './strings';
 const W = 640;
 const PAD = 40;
 const FIELD_H = 230;
+const BUTTON_GAP = 20;
 /** Height of one line of the receipt. */
 const ROW = 56;
 /** How far a new stage's sheet drops while it settles. */
@@ -161,11 +162,13 @@ export class CodeImportPopup extends Popup<boolean> {
     const fieldY = 96 + help.height + 26;
     const { frame, anchor } = fieldFrame(fieldY);
     const by = fieldY + FIELD_H + 36 + 52;
-    const paste = new Button({ label: t('rt.sys.code.paste'), style: 'info', width: 270, height: 104, fontSize: 36 });
-    paste.position.set(W / 2 - 150, by);
+    // Two equal buttons between the sheet's margins (the field above them is as wide).
+    const bw = (W - PAD * 2 - BUTTON_GAP) / 2;
+    const paste = new Button({ label: t('rt.sys.code.paste'), style: 'info', width: bw, height: 104, fontSize: 36 });
+    paste.position.set(W / 2 - (bw + BUTTON_GAP) / 2, by);
     paste.onTap(() => void this.paste());
-    const check = new Button({ label: t('rt.sys.code.check'), style: 'primary', width: 300, height: 104, fontSize: 36 });
-    check.position.set(W / 2 + 165, by);
+    const check = new Button({ label: t('rt.sys.code.check'), style: 'primary', width: bw, height: 104, fontSize: 36 });
+    check.position.set(W / 2 + (bw + BUTTON_GAP) / 2, by);
     check.onTap(() => void this.check());
     this.layer.addChild(help, frame, paste, check);
     // Placed from the anchor's on-screen bounds, which are only right once the popup is on stage and has settled.

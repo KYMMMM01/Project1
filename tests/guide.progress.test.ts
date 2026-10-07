@@ -30,6 +30,29 @@ describe('guide progress', () => {
     expect(p.skipped).toBe(true);
   });
 
+  it('forgets what was taught and the skip but keeps what was read, so the tutorial can teach it all again', () => {
+    const p = new GuideProgress(false);
+    p.markTaught('merge');
+    p.markTaught('sun');
+    p.markRead('sun');
+    p.markRead('laser');
+    p.markSkipped();
+    const seen: Array<string | null> = [];
+    p.events.on('change', ({ id }) => seen.push(id));
+    p.resetTaught();
+    expect(p.isTaught('merge')).toBe(false);
+    expect(p.isTaught('sun')).toBe(false);
+    expect(p.skipped).toBe(false);
+    expect(p.isRead('sun')).toBe(true);
+    expect(p.isRead('laser')).toBe(true);
+    expect(p.isSeen('merge')).toBe(false);
+    expect(p.unread()).toHaveLength(TOPIC_IDS.length - 2);
+    expect(seen).toEqual([null]);
+    // Nothing left to forget: no second announcement.
+    p.resetTaught();
+    expect(seen).toEqual([null]);
+  });
+
   it('is ready at once in memory and needs a load from storage otherwise', () => {
     expect(new GuideProgress(false).ready).toBe(true);
     expect(new GuideProgress(true).ready).toBe(false);

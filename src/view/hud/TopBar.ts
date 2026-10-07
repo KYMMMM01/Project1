@@ -28,10 +28,10 @@ import {
 import { profile } from '@/meta';
 import type { BattleLayout } from '../context';
 import type { HudEnv } from './env';
-import { GAUGE_H, GAUGE_W, GaugeStrip } from './GaugeStrip';
+import { GAUGE_H, GaugeStrip } from './GaugeStrip';
 import { enemyPortrait, relicIcon } from './kit';
 import { gaugeLevel, nextSpeed, overflowLeft, speedSteps, traitOrder } from './policy';
-import { slotCentre, slotWidth, topRects, type Rect, type TopRects } from './layoutMath';
+import { gaugeWidth, slotCentre, slotWidth, topRects, type Rect, type TopRects } from './layoutMath';
 
 const SLOT_MAX = 56;
 const PREVIEW_MAX = 4;
@@ -115,6 +115,8 @@ export class TopBar {
     this.syncSpeed(env.ctx.speed, false);
 
     env.on(env.ctx.events, 'speed', ({ speed }) => this.syncSpeed(speed, true));
+    // The tutorial's skip button takes the row's right end while it is there: the enemy strip is cut shorter to leave it room.
+    env.on(env.skipChanged, 'change', () => this.fitGauge());
     // A control the tutorial brings in: the speed button pops in, the next-wave cards are dealt.
     env.on(env.revealed, 'reveal', ({ key, fresh }) => {
       if (key === 'speed') {
@@ -428,15 +430,22 @@ export class TopBar {
     const r = this.rects;
     this.pauseBtn.position.set(r.pause.x, r.pause.y);
     this.speedBtn.position.set(r.speed.x, r.speed.y);
-    this.gauge.position.set(r.gauge.x + GAUGE_W / 2, r.gauge.y + GAUGE_H / 2);
-    // The tutorial's skip button lies over the strip's right end, so the warning icon stays clear of it.
-    this.warn.position.set(r.gauge.x + r.gauge.w - 62, r.gauge.y + r.gauge.h / 2);
+    this.fitGauge();
     this.previewLayer.hitArea = new Rectangle(r.preview.x, r.row2Y - STRIP_H / 2 - 4, r.preview.w, STRIP_H);
     this.toyLayer.hitArea = new Rectangle(r.toys.x, r.row2Y - STRIP_H / 2 - 4, r.toys.w, STRIP_H);
     this.timer.position.set(r.timer.x + r.timer.w / 2, r.timer.y + r.timer.h / 2);
     this.refreshPreview();
     this.refreshToys(false);
     this.refreshWave();
+  }
+
+  /** The enemy strip cut to what the skip button leaves of the row (its left end stays put), with the warning icon near its right end. */
+  private fitGauge(): void {
+    const r = this.rects;
+    const w = gaugeWidth(r, this.env.skip);
+    this.gauge.setWidth(w);
+    this.gauge.position.set(r.gauge.x + w / 2, r.gauge.y + GAUGE_H / 2);
+    this.warn.position.set(r.gauge.x + w - 62, r.gauge.y + r.gauge.h / 2);
   }
 
   update(): void {
@@ -489,7 +498,7 @@ export class TopBar {
 
   anchorOf(name: 'enemyGauge' | 'wave' | 'relics'): { x: number; y: number } {
     const r = this.rects;
-    if (name === 'enemyGauge') return { x: r.gauge.x + GAUGE_W / 2, y: r.gauge.y + GAUGE_H / 2 };
+    if (name === 'enemyGauge') return { x: this.gauge.x, y: this.gauge.y };
     if (name === 'wave') return { x: r.wave.x + r.wave.w / 2, y: r.row2Y };
     return this.toyAnchor();
   }

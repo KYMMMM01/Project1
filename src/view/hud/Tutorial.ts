@@ -13,12 +13,11 @@ import { CELL_COUNT, CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geo
 import { topicTeach, type TopicId } from '@/guide';
 import { Button, Color, confirmDialog, Dim, drawDashedRect, motion, paperSeed, toast, TweenBag, tooltip } from '@/ui';
 import type { BattleLayout } from '../context';
-import type { Weighted } from './bubbleMath';
 import type { EnvImpl } from './env';
 import { Hand } from './Hand';
 import { LessonBubble } from './LessonBubble';
 import { LessonFx } from './LessonFx';
-import { type Rect, topRects } from './layoutMath';
+import { type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from './layoutMath';
 import { findTwins } from './planMath';
 import { REVEAL_KEYS, type RevealKey } from './policy';
 import { FIRST_SUMMON_AFTER, NUDGE_FOR, nudgeDue } from './tutorialFlow';
@@ -37,16 +36,13 @@ const NOTE_TILE = 92;
 const MEASURE_EVERY = 0.1;
 /** Seconds a lesson may wait for the thing it points at to appear before it is dropped. */
 const UNSEEN_LIMIT = 6;
-const SKIP_W = 148;
-const SKIP_H = 88;
 
-/** What the HUD lends the tutorial: where its controls are, what to keep a note off, the summon button's breathing. */
+/** What the HUD lends the tutorial: where its controls are and the summon button's breathing. */
 export interface TutorialHost {
   /** Scene-space rectangle of a control or of the top-row feature a target names; null when it is not on screen. */
   rectOf(target: Target): Rect | null;
   /** The control a revealed key brings in, as a rectangle (for the starburst); null for keys without a place of their own. */
   rectOfReveal(key: RevealKey): Rect | null;
-  avoid(): Weighted[];
   pulse(on: boolean): void;
   /** The laser's guided first use has been done (it runs on its own, see LaserGuide.ts). */
   laserGuided(): boolean;
@@ -91,8 +87,8 @@ export class Tutorial {
   private sunTo = -1;
   private lastTarget: Target | '' = '';
   private releaseDialog: (() => void) | null = null;
-  private skipRow = 0;
-  private skipDown = false;
+  /** Whether the speed button was out when the skip button was last placed: it takes its place beside the speed button then. */
+  private speedSeen = false;
   /** Lessons still to come that are worth a skip button (the last one, the boss, is a note with its own "got it"). */
   private left = 0;
   private twinsClock = 0;
@@ -135,12 +131,13 @@ export class Tutorial {
     this.fx = new LessonFx(parent);
     parent.addChild(this.noteLayer, this.nudgeHand);
 
-    this.skipBtn = new Button({ label: t('guide.skip'), style: 'kraft', width: SKIP_W, height: SKIP_H, fontSize: 24, radius: 10, sfx: 'ui_click' });
+    this.skipBtn = new Button({ label: t('guide.skip'), style: 'kraft', width: SKIP_W, height: SKIP_FACE, fontSize: 24, radius: 10, sfx: 'ui_click' });
+    // The paper is as tall as the speed button next to it; the touch target is the full 88 px.
+    this.skipBtn.hitArea = new Rectangle(-SKIP_W / 2, -SKIP_H / 2, SKIP_W, SKIP_H);
     this.skipBtn.onTap(() => void this.askSkip());
     this.skipLayer.addChild(this.skipBtn);
-    this.skipLayer.visible = !skipped;
     parent.addChild(this.skipLayer);
-    this.placeSkip();
+    this.showSkip(!skipped);
 
     this.listen();
     env.lessonOf = () => this.script.active?.id ?? null;
@@ -245,7 +242,7 @@ export class Tutorial {
     // Once the run is decided only the staging is left: the lessons put everything away and let go of the clock.
     if (this.env.battle.phase === 'won' || this.env.battle.phase === 'lost') {
       this.endVisuals();
-      this.skipLayer.visible = false;
+      this.showSkip(false);
       return;
     }
     if (this.skipped || this.script.finished) {
@@ -504,15 +501,12 @@ export class Tutorial {
       this.note.hide();
       return;
     }
-    const lower = hole.y + hole.h / 2 > H * 0.5;
     this.note.show(
       {
         topic: step.id,
         title: null,
         text,
         target: hole,
-        avoid: this.host.avoid(),
-        prefer: lower ? 'above' : 'below',
         width: NOTE_W,
         tile: NOTE_TILE,
         buttons: step.ok ? [{ label: t('guide.ok'), style: 'primary', width: 220 }] : [],
@@ -551,8 +545,8 @@ export class Tutorial {
       const a = cell(this.cat);
       h.position.set(a.x, a.y + 14);
       h.tap();
-    } else if ((target === 'molt' || target === 'sell') && this.rect.w > 0) {
-      // The selection sheet's buttons stand shoulder to shoulder: the hand comes up from below the one that is lit.
+    } else if ((target === 'molt' || target === 'sell' || target === 'speed') && this.rect.w > 0) {
+      // The selection sheet's buttons stand shoulder to shoulder, and the speed button has the skip button on its left: the hand comes up from below the one that is lit.
       h.scale.set(HAND_SCALE);
       h.position.set(this.rect.x + this.rect.w / 2, this.rect.y + this.rect.h - 14);
       h.tap();
@@ -628,24 +622,29 @@ export class Tutorial {
 
   /** After the last lesson (or a skip) the tutorial only keeps the nudges. */
   private afterLessons(dt: number): void {
-    this.skipLayer.visible = false;
+    this.showSkip(false);
     this.setHold(false);
     this.nudge(dt, this.fill());
   }
 
   // ───────────────────────── skip ─────────────────────────
 
-  /** The skip button sits where the speed button will arrive; once that arrives it moves down a row so the two never overlap. */
+  /** The skip button lies in the top row, in the speed button's slot and beside it once it has arrived; the enemy strip gives way to it. */
   private placeSkip(): void {
-    const r = topRects(this.layout);
-    this.skipDown = this.env.reveal.speed;
-    this.skipRow = this.skipDown ? r.row2Y : r.speed.y;
-    this.skipLayer.position.set(this.layout.w - 16 - SKIP_W / 2, this.skipRow);
+    this.speedSeen = this.env.reveal.speed;
+    const r = skipRect(topRects(this.layout), this.speedSeen);
+    this.skipLayer.position.set(r.x + r.w / 2, r.y + r.h / 2);
+    this.env.setSkip(this.skipLayer.visible ? r : null);
+  }
+
+  private showSkip(on: boolean): void {
+    this.skipLayer.visible = on;
+    this.placeSkip();
   }
 
   private placeSkipFor(step: StepDef | null): void {
-    this.skipLayer.visible = !this.skipped && this.left > 0 && step?.id !== 'boss';
-    if (this.env.reveal.speed !== this.skipDown) this.placeSkip();
+    const on = !this.skipped && this.left > 0 && step?.id !== 'boss';
+    if (on !== this.skipLayer.visible || this.env.reveal.speed !== this.speedSeen) this.showSkip(on);
   }
 
   private countLeft(): void {
@@ -676,7 +675,7 @@ export class Tutorial {
     this.skipped = true;
     this.env.progress.markSkipped();
     this.endVisuals();
-    this.skipLayer.visible = false;
+    this.showSkip(false);
     audio.play('ui_confirm');
     let i = 0;
     for (const key of REVEAL_KEYS) {
@@ -721,6 +720,7 @@ export class Tutorial {
     this.noteLayer.destroy({ children: true });
     this.skipLayer.destroy({ children: true });
     this.nudgeHand.destroy({ children: true });
+    this.env.setSkip(null);
     this.env.lessonOf = null;
     this.env.noteTo = null;
   }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { addStrings, setLang } from '@/core/i18n';
-import { scaffoldLayout } from '@/ui/layoutMath';
+import { buttonRows, scaffoldLayout } from '@/ui/layoutMath';
 import { formatOdds, oddsBarWidth, oddsTotal } from '@/ui/oddsMath';
 import { rarityName } from '@/ui/rarity';
 import { ButtonPalettes, Color, Dim, Rarity, RARITY_ORDER, rarityIndex } from '@/ui/theme';
@@ -145,5 +145,19 @@ describe('rarityName', () => {
 
   it('is defined for all five rarities in order', () => {
     expect(RARITY_ORDER).toEqual(['common', 'rare', 'epic', 'legendary', 'mythic']);
+  });
+});
+
+describe('buttonRows', () => {
+  it('gives the first row the height of the icon when it is taller than the label line, so the sublabel starts under it', () => {
+    // The guidebook button: a 40 px label with a 52 px icon and a 24 px sublabel.
+    const { row1, row2 } = buttonRows(40, 52, 24, true, true);
+    expect(row1).toBe(52);
+    expect(row2).toBeCloseTo(26.4, 5);
+  });
+
+  it('keeps the label line when the icon is smaller, and has no second row without a sublabel', () => {
+    expect(buttonRows(30, 20, 24, true, false)).toEqual({ row1: 30 * 1.08, row2: 0 });
+    expect(buttonRows(30, 20, 24, false, false)).toEqual({ row1: 20, row2: 0 });
   });
 });

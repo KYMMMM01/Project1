@@ -211,8 +211,10 @@ export class BattleScene extends Scene {
   }
 
   private buildLayers(): BattleLayers {
+    // Every layer is its own render group: an enemy that moves past another, a number that appears or a toggled sticker changes the
+    // structure of ITS layer only, so the other layers keep their recorded draw instructions instead of the whole scene being walked again.
     const make = (label: string): Container => {
-      const c = new Container();
+      const c = new Container({ isRenderGroup: true });
       c.label = label;
       return c;
     };

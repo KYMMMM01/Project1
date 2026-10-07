@@ -176,6 +176,8 @@ export const chestsBlock: Block = {
     y += buildPaid(inner, y, w, env, 'silver') + GAP;
     y += buildPaid(inner, y, w, env, 'gold');
     const height = mountPage(root, 0, pageW, inner, y, { title: t('shop.sec.chests'), ribbon: 'primary', tape: 'pink' });
-    return { height: height + GAP };
+    // The cards were added to `inner` in the order they were built: the free chest, the silver chest, the gold chest.
+    const [free, silver] = inner.children as [Container, Container];
+    return { height: height + GAP, points: { free, chests: silver } };
   },
 };

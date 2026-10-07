@@ -121,6 +121,18 @@ export class GuideProgress {
     this.events.emit('change', { id: null });
   }
 
+  /**
+   * "Play the tutorial again": what the lessons taught is forgotten and the skip is undone, so the next tutorial run teaches
+   * every lesson from the start. What the player has read in the guidebook stays read.
+   */
+  resetTaught(): void {
+    if (this.taughtSet.size === 0 && !this.skippedFlag) return;
+    this.taughtSet.clear();
+    this.skippedFlag = false;
+    this.persist();
+    this.events.emit('change', { id: null });
+  }
+
   /** Topics never taught and never read: the guidebook's "new" stickers. */
   unread(): TopicId[] {
     return TOPIC_IDS.filter((id) => !this.isSeen(id));

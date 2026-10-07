@@ -9,6 +9,7 @@ vi.mock('@/fx/textures', () => ({
   fxTexture: () => Texture.WHITE,
   fxVignette: () => Texture.WHITE,
 }));
+vi.mock('@/fx/areaArt', () => ({ bakeArea: () => Texture.WHITE }));
 vi.mock('@/fx/particles', () => ({
   ParticleSystem: class {
     budget = { cap: 700 };

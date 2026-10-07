@@ -4,6 +4,8 @@ import { featureHint, profile, type FeatureId } from '@/meta';
 import { Button, ScrollView, TweenBag, toast } from '@/ui';
 import { services, type ContentArea, type Shell, type TabScreen } from '../contract';
 import { startBob, stopBob } from '../shell/bob';
+import type { PointResolver, PointTarget } from '../shell/HomePointer';
+import { POINT_MARGIN } from '../shell/pointerMath';
 import { ChapterCard, CHAPTER_CARD_H } from './ChapterCard';
 import { ChestCard } from './ChestCard';
 import { DailyCard } from './DailyCard';
@@ -74,6 +76,10 @@ export class BattleTab implements TabScreen {
   private readonly bag = new TweenBag();
   private readonly entries: Entry[] = [];
   private readonly sweep: SweepCard;
+  private readonly patrol: PatrolCard;
+  private readonly chest: ChestCard;
+  private readonly daily: DailyCard;
+  private readonly endless: EndlessCard;
   private promo: PromoCard | null = null;
   private area: ContentArea = { x: 0, y: 0, w: 720, h: 800 };
   private dirty = true;
@@ -99,13 +105,17 @@ export class BattleTab implements TabScreen {
     content.addChild(this.chapter, this.startSlot);
 
     this.sweep = new SweepCard(HALF_W, shell);
+    this.patrol = new PatrolCard(CARD_W, shell);
+    this.chest = new ChestCard(HALF_W, shell);
+    this.daily = new DailyCard(CARD_W, shell);
+    this.endless = new EndlessCard(CARD_W, shell);
     this.entries.push(
-      { card: new PatrolCard(CARD_W, shell), feature: 'patrol' },
-      { card: new ChestCard(HALF_W, shell), feature: null, half: true },
+      { card: this.patrol, feature: 'patrol' },
+      { card: this.chest, feature: null, half: true },
       { card: this.sweep, feature: 'sweep', half: true },
       { card: new TreatsCard(CARD_W, shell), feature: 'treat' },
-      { card: new DailyCard(CARD_W, shell), feature: 'daily' },
-      { card: new EndlessCard(CARD_W, shell), feature: 'endless' },
+      { card: this.daily, feature: 'daily' },
+      { card: this.endless, feature: 'endless' },
     );
     for (const e of this.entries) content.addChild(e.card);
 
@@ -154,6 +164,30 @@ export class BattleTab implements TabScreen {
 
   badge(): number {
     return waitingCount();
+  }
+
+  pointAt(point: string): PointResolver | null {
+    const resolve = this.resolverOf(point);
+    const target = resolve?.();
+    const first = target instanceof Container ? target : target?.[0];
+    if (!resolve || !first || !first.visible) return null;
+    this.scroll.scrollToShow(first, POINT_MARGIN);
+    return resolve;
+  }
+
+  /** What each home point of this tab is, looked up anew each time the pointer asks (the cards stay, but a hidden one answers null). */
+  private resolverOf(point: string): PointResolver | null {
+    const card = (c: HomeCard): PointResolver => () => (c.visible ? c : null);
+    const picks: Readonly<Record<string, PointResolver>> = {
+      'battle.stakes': (): PointTarget => this.chapter.stakeChips,
+      'battle.calendar': (): PointTarget => this.chapter.calendarButton,
+      'battle.patrol': card(this.patrol),
+      'battle.sweep': card(this.sweep),
+      'battle.daily': card(this.daily),
+      'battle.cup': () => (this.daily.visible ? this.daily.cupBar : null),
+      'battle.endless': card(this.endless),
+    };
+    return picks[point] ?? null;
   }
 
   destroy(): void {

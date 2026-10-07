@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setLang } from '@/core/i18n';
 import '@/game/data/strings';
+import { scaffoldLayout } from '@/ui/layoutMath';
 import { BAR_H_NEXT, BAR_H_PLAIN, MIN_TARGET, nextKind, nextText, resultBar, type BarBox } from '@/view/nextOffer';
 
 const WIDTH = 672;
@@ -49,6 +50,17 @@ describe('the result page buttons', () => {
   });
 });
 
+describe('the bar of a win with nothing to go on to', () => {
+  it('is cut back to the row of two: the bar the page reserved for three buttons gives its height to the body', () => {
+    // `ScreenScaffold.setActionBarHeight(bar.height)` re-runs this layout with the new height.
+    const reserved = scaffoldLayout(720, 1280, 40, 34, 104, BAR_H_NEXT);
+    const fitted = scaffoldLayout(720, 1280, 40, 34, 104, resultBar(false, WIDTH).height);
+    expect(fitted.actionBar?.h).toBe(BAR_H_PLAIN + 34);
+    expect(fitted.body.h - reserved.body.h).toBe(BAR_H_NEXT - BAR_H_PLAIN);
+    expect(fitted.actionBar && reserved.actionBar && fitted.actionBar.y - reserved.actionBar.y).toBe(BAR_H_NEXT - BAR_H_PLAIN);
+  });
+});
+
 describe('the wording of the offer', () => {
   beforeAll(() => {
     vi.stubGlobal('document', { documentElement: { lang: '' } });
@@ -57,8 +69,10 @@ describe('the wording of the offer', () => {
   afterAll(() => vi.unstubAllGlobals());
 
   it('tells a chapter step from a butler step', () => {
-    expect(nextKind({ chapter: 1 }, { chapter: 2 })).toBe('chapter');
-    expect(nextKind({ chapter: 5 }, { chapter: 5 })).toBe('butler');
+    expect(nextKind({ chapter: 1 }, { chapter: 2, stake: 0 })).toBe('chapter');
+    expect(nextKind({ chapter: 5, stake: 0 }, { chapter: 5, stake: 1 })).toBe('butler');
+    // The tutorial leads to chapter 1 at level 0: that is the chapter, not a butler step.
+    expect(nextKind({ chapter: 1, stake: 0 }, { chapter: 1, stake: 0 })).toBe('chapter');
   });
 
   it('names the chapter and, above level 0, the butler level', () => {
@@ -67,14 +81,15 @@ describe('the wording of the offer', () => {
   });
 
   it('says the butler level when the chapter stays, with the chapter under it', () => {
-    expect(nextText({ chapter: 5 }, { chapter: 5, stake: 1 })).toEqual({ label: '다음: 집사 1단계', sub: '챕터 5 동물병원' });
+    expect(nextText({ chapter: 5, stake: 0 }, { chapter: 5, stake: 1 })).toEqual({ label: '다음: 집사 1단계', sub: '챕터 5 동물병원' });
   });
 
   it('has an English wording of the same shape', () => {
     setLang('en');
     const chapter = nextText({ chapter: 1 }, { chapter: 3, stake: 0 });
     expect(chapter.label.startsWith('Next: Chapter 3 ')).toBe(true);
-    expect(nextText({ chapter: 5 }, { chapter: 5, stake: 2 }).label).toBe('Next: Butler 2');
+    expect(nextText({ chapter: 5, stake: 1 }, { chapter: 5, stake: 2 }).label).toBe('Next: Butler 2');
+    expect(nextText({ chapter: 1, stake: 0 }, { chapter: 1, stake: 0 })).toEqual({ label: 'Next: Chapter 1 Living Room', sub: '' });
     setLang('ko');
   });
 });

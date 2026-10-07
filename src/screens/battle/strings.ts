@@ -23,6 +23,8 @@ addStrings('ko', {
   'battle.chest.ready': '열 수 있어요!',
   'battle.chest.wait': '다음 상자까지 {time}',
   'battle.chest.open': '열기',
+  'battle.chest.openAll': '한번에 열기 ({n})',
+  'battle.chest.waiting': '상자 {n}개가 기다려요',
 
   'battle.treat.title': '오늘의 간식',
   'battle.treat.watch': '광고',
@@ -75,6 +77,8 @@ addStrings('en', {
   'battle.chest.ready': 'Ready to open!',
   'battle.chest.wait': 'Next chest in {time}',
   'battle.chest.open': 'Open',
+  'battle.chest.openAll': 'Open all ({n})',
+  'battle.chest.waiting': '{n} chests waiting',
 
   'battle.treat.title': "Today's treats",
   'battle.treat.watch': 'Ad',

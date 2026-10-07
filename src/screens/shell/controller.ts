@@ -14,6 +14,8 @@ export interface HomeSurface {
   readonly ui: Tweener;
   readonly area: ContentArea;
   goTab(id: TabId): void;
+  /** Open a tab and point at a control or card on it (a hand and a spotlight that leave on the first tap). */
+  pointAt(id: TabId, point: string): void;
   currencyAnchor(kind: CurrencyKind): { x: number; y: number };
   pending(kind: CurrencyKind, amount: number, seconds?: number): void;
   landed(kind: CurrencyKind): void;
@@ -57,6 +59,12 @@ class ShellController implements Shell {
 
   goTab(id: TabId): void {
     if (this.surface) this.surface.goTab(id);
+    else this.queuedTab = id;
+  }
+
+  /** The tab opens (or, once there is a home scene, opens then) and the guidebook's pointer shows on it. */
+  pointAt(id: TabId, point: string): void {
+    if (this.surface) this.surface.pointAt(id, point);
     else this.queuedTab = id;
   }
 

@@ -18,6 +18,8 @@ import { themeOf } from '@/view/director/palette';
 import { confirmDialog, ScrollView, SegmentTabs, toast, uiLabel, type SegmentDef } from '@/ui';
 import { refusalCue } from '@/ui/press';
 import { services, type ContentArea, type Shell, type TabScreen } from '../contract';
+import type { PointResolver } from '../shell/HomePointer';
+import { POINT_MARGIN } from '../shell/pointerMath';
 import { chestsBlock, freeWaitText } from './blocksChests';
 import { confirmChestBuy } from './ChestConfirm';
 import { afterStamp, stampPending } from '../system/kit/marks';
@@ -39,6 +41,7 @@ interface BlockState {
   height: number;
   top: number;
   anchors: BlockBuild['anchors'];
+  points: BlockBuild['points'];
 }
 
 /** The section a jump asked for before the tab existed or was visible. */
@@ -72,7 +75,7 @@ class ShopTab implements TabScreen {
     for (const block of BLOCKS) {
       const root = new Container();
       this.scroll.content.addChild(root);
-      this.states.push({ block, root, sig: '\u0000', shown: false, height: 0, top: 0, anchors: undefined });
+      this.states.push({ block, root, sig: '\u0000', shown: false, height: 0, top: 0, anchors: undefined, points: undefined });
     }
     this.offProfile = profile.subscribe(() => {
       this.checkNow = true;
@@ -118,11 +121,13 @@ class ShopTab implements TabScreen {
     if (!s.shown) {
       s.height = 0;
       s.anchors = undefined;
+      s.points = undefined;
       return;
     }
     const built = s.block.build(s.root, { w: this.area.w, actions: this.actions });
     s.height = built.height;
     s.anchors = built.anchors;
+    s.points = built.points;
   }
 
   private restack(): void {
@@ -258,6 +263,16 @@ class ShopTab implements TabScreen {
     }
     if (this.freeTimer && !v.ready) this.freeTimer.text = freeWaitText(v.waitMs);
     this.checkSignatures();
+  }
+
+  /** The guidebook's "try it": a part of the chests block ('shop.free' the free chest, 'shop.chests' the silver chest and its odds). Blocks rebuild, so it is looked up again each time. */
+  pointAt(point: string): PointResolver | null {
+    const name = point.slice('shop.'.length);
+    const find = (): Container | null => this.states.find((s) => s.shown && s.points?.[name])?.points?.[name] ?? null;
+    const card = point.startsWith('shop.') ? find() : null;
+    if (!card) return null;
+    this.scroll.scrollToShow(card, POINT_MARGIN);
+    return find;
   }
 
   badge(): boolean {

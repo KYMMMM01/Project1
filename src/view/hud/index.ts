@@ -332,7 +332,6 @@ class Hud implements HudPart {
           default: return null;
         }
       },
-      avoid: () => this.avoidList(),
       pulse: (on) => this.bottom.actions.summon.attention(on),
       laserGuided: () => this.teach.guided,
       startLaserGuide: () => this.guide?.arm(),

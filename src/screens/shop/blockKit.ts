@@ -45,6 +45,8 @@ export interface BlockBuild {
   height: number;
   /** Offsets of inner anchors (for example the piggy bank inside the pass block), relative to the block top. */
   anchors?: Partial<Record<ShopSectionId, number>>;
+  /** Parts of the block the guidebook's "try it" can point at, by the name after the dot of its home point (`shop.free` is `free`). */
+  points?: Readonly<Record<string, Container>>;
 }
 
 export interface Block {

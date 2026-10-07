@@ -137,3 +137,18 @@ export function barSegments(hp: number, maxHp: number, shield: number, maxShield
   out.shield = total > 0 ? Math.max(0, Math.min(1, shield / total)) : 0;
   return out;
 }
+
+/** Enemies in front are drawn over those behind by their y, rounded to this many px: a body that creeps along its lane keeps its place in the order. */
+const DEPTH_STEP = 6;
+/** The enemy layer is re-sorted this often (every n-th frame): every re-sort makes the layer record its draw calls again, and a body moves a pixel or two a frame. */
+const DEPTH_EVERY = 4;
+
+/** The sort key of a body whose feet are at `y` and whose drawn size is `size`. */
+export function depthKey(y: number, size: number): number {
+  return Math.round((y + size * 0.3) / DEPTH_STEP);
+}
+
+/** Whether frame number `frame` may re-sort the enemy layer. */
+export function depthFrame(frame: number): boolean {
+  return frame % DEPTH_EVERY === 0;
+}

@@ -24,6 +24,7 @@ import {
 } from '@/ui';
 import { refusalCue } from '@/ui/press';
 import type { ContentArea, Shell, TabScreen } from '../contract';
+import type { PointResolver } from '../shell/HomePointer';
 import { payout } from '../system/kit/claimFx';
 import { paperConfetti } from '../system/kit/confetti';
 import { NoticePopup } from '../system/kit/noticePopup';
@@ -495,6 +496,13 @@ export class PassTab implements TabScreen {
 
   badge(): number | boolean {
     return passBadgeCount(profile);
+  }
+
+  /** The guidebook's "try it": the header with the season's experience bar and the tier it has reached. */
+  pointAt(point: string): PointResolver | null {
+    if (point !== 'pass.head' || !this.head) return null;
+    this.scroller?.scrollToTop(false);
+    return () => this.head;
   }
 
   destroy(): void {

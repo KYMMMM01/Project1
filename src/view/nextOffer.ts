@@ -12,8 +12,9 @@ export const MIN_TARGET = 88;
 /** What the offer is: a new chapter, or the same chapter one butler level up. */
 export type NextKind = 'chapter' | 'butler';
 
-export function nextKind(current: { chapter: number }, next: Pick<NextRun, 'chapter'>): NextKind {
-  return next.chapter === current.chapter ? 'butler' : 'chapter';
+export function nextKind(current: { chapter: number; stake?: number }, next: Pick<NextRun, 'chapter' | 'stake'>): NextKind {
+  // The tutorial (or any run) that leads to the same chapter at the same level is the chapter itself, not a step up.
+  return next.chapter === current.chapter && next.stake > (current.stake ?? 0) ? 'butler' : 'chapter';
 }
 
 export interface NextText {
@@ -24,7 +25,7 @@ export interface NextText {
 }
 
 /** "Next: Chapter 2 Kitchen" / "Next: Butler 2" (same chapter), with the missing half on the second line. */
-export function nextText(current: { chapter: number }, next: Pick<NextRun, 'chapter' | 'stake'>): NextText {
+export function nextText(current: { chapter: number; stake?: number }, next: Pick<NextRun, 'chapter' | 'stake'>): NextText {
   const name = t(`chapter.${next.chapter}.name`);
   if (nextKind(current, next) === 'butler') {
     return { label: t('view.next.step', { n: next.stake }), sub: t('view.next.chapter', { n: next.chapter, name }) };

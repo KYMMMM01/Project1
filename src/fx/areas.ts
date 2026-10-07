@@ -10,10 +10,11 @@
  * Views are pooled: the sprites and graphics of an area are built once and handed on to the next one, so starting a zone
  * allocates only its small handle and nothing is allocated per frame. The shapes are drawn at a reference radius and scaled.
  */
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { TAU, clamp01, lighten, mixColor } from '@/core/math';
 import { Color } from '@/ui/theme';
+import { bakeArea } from './areaArt';
 import { drawHazardFrame } from './hazardFrame';
 import { hash01, type FxRect, type ZoneHandle } from './loops';
 import { Hue } from './palette';
@@ -43,6 +44,12 @@ const BLINK_HZ = 2;
 const MIN_WARN = 0.35;
 /** The ring that spreads from a landing sheet. */
 const LAND = 0.42;
+/** This many areas or fewer move their motifs every frame. */
+const FEW_AREAS = 6;
+/** Seconds a motif update may come early. */
+const MOTIF_SLACK = 0.002;
+/** Areas that start together are spread over this many frames of motif updates. */
+const STAGGER = 4;
 
 const CREAM = Hue.cream;
 
@@ -56,6 +63,60 @@ const DASH_STEPS: readonly number[] = [0.3, 0.6, 0.9];
 /** Which of the three groups dash `i` belongs to: scattered, so what is left of the rim looks torn rather than evenly thinned. */
 function dashGroup(i: number): number {
   return Math.min(2, Math.floor(hash01(i * 2.3 + 1) * 3));
+}
+
+/** How many dash groups have dropped out at warning level `warn`: 0 is the whole ring, 3 is none of it. */
+function dashLevel(warn: number): number {
+  let level = 0;
+  while (level < DASH_STEPS.length && warn > (DASH_STEPS[level] as number)) level++;
+  return level;
+}
+
+/** Half the side of the square every baked piece covers: the reference radius, the widest rim and a little air. */
+const BAKE_HALF = REF + 8;
+
+/** What one kind of disc is made of once it has been drawn: the sheet with its cut rim, and the dashed line at each stage of the warning. */
+interface Baked {
+  sheet: Texture;
+  /** `dashes[level]`: the ring with the first `level` groups gone. */
+  dashes: Texture[];
+}
+
+const BAKED = new Map<DiscKind, Baked>();
+
+function bakedOf(kind: DiscKind, look: DiscLook): Baked {
+  let baked = BAKED.get(kind);
+  if (baked) return baked;
+  const sheet = new Graphics();
+  outline(sheet, look.edge, look.steps).fill({ color: look.paper, alpha: look.paperAlpha });
+  outline(sheet, look.edge, look.steps).stroke({ width: look.rimWidth, color: look.rim, alpha: look.rimAlpha, join: 'bevel' });
+  const dashes: Texture[] = [];
+  for (let level = 0; level < DASH_STEPS.length; level++) {
+    const ring = new Graphics();
+    for (let i = 0; i < look.dashCount; i++) {
+      if (dashGroup(i) < level) continue;
+      const th = (i / look.dashCount) * TAU;
+      const r = look.dashAt * REF;
+      const cx = Math.cos(th) * r;
+      const cy = Math.sin(th) * r;
+      const tx = -Math.sin(th) * look.dashW * 0.5;
+      const ty = Math.cos(th) * look.dashW * 0.5;
+      ring.moveTo(cx - tx, cy - ty).lineTo(cx + tx, cy + ty);
+    }
+    ring.stroke({ width: look.dashH, color: look.dash, cap: 'round' });
+    dashes.push(bakeArea(ring, 2 * BAKE_HALF, 2 * BAKE_HALF));
+  }
+  baked = { sheet: bakeArea(sheet, 2 * BAKE_HALF, 2 * BAKE_HALF), dashes };
+  BAKED.set(kind, baked);
+  return baked;
+}
+
+/** A sprite of a baked piece, centred on the area's origin and sized in design px. */
+function pieceSprite(texture: Texture): Sprite {
+  const s = new Sprite(texture);
+  s.anchor.set(0.5);
+  s.eventMode = 'none';
+  return s;
 }
 
 /** One atlas shape as a sprite sized in design px (the atlas cell's own size is divided out). */
@@ -172,9 +233,9 @@ const FROST: DiscLook = {
         const g = calm ? 1 : grow(age, i * 0.022, 0.28);
         const gone = warn > (DROP_ORDER[i] as number) ? 0 : 1;
         const len = 20 * g * gone;
-        sp.s.visible = len > 0.5;
         const base = 0.89 * REF;
         sp.at(Math.cos(th) * (base - len), Math.sin(th) * (base - len), th);
+        // A crystal that is gone is a sliver a tenth of a pixel long, not a hidden one: showing and hiding would re-record the layer's draw calls.
         sp.size(Math.max(0.1, len), 9);
       }
     }
@@ -396,7 +457,7 @@ interface Pooled {
   left: number;
   /** Seconds before the end at which the warning starts. */
   span: number;
-  update(dt: number): void;
+  update(dt: number, every: number): void;
   stop(): void;
   moveTo(x: number, y: number): void;
 }
@@ -425,19 +486,22 @@ class DiscArea implements Pooled {
   span = AREA_WARN;
   handle: Handle | null = null;
   private readonly landing: Part;
-  private readonly dashLayer = new Container();
-  /** The dashes in three groups, so the rim breaks up in three steps: one Graphics each, nothing per dash. */
-  private readonly dashGroups: Graphics[] = [];
-  private dashWarn = -1;
-  private readonly sheet = new Graphics();
+  /** The dashed line: one sprite whose texture is swapped for a thinner ring as the warning passes each step. */
+  private readonly dash: Sprite;
+  private readonly dashTextures: readonly Texture[];
+  private dashStage = -1;
   private age = 0;
   private leaving = false;
   private leaveAge = 0;
   private radius = REF;
+  /** Time on the area's own clock at which its motif is next moved (see `AreaLayer.update`). */
+  private motifAt = 0;
 
   constructor(
     readonly kind: DiscKind,
     private readonly look: DiscLook,
+    /** Which of the layer's views this is: areas started together move their motifs on different frames. */
+    readonly slot: number,
     private readonly onRelease: (v: DiscArea) => void,
   ) {
     this.root.eventMode = 'none';
@@ -445,31 +509,17 @@ class DiscArea implements Pooled {
     const shadow = new Part('disc', Hue.shadow, 2 * REF, 2 * REF, this.root);
     shadow.at(2.5, 6);
     shadow.s.alpha = 0.2;
-    outline(this.sheet, look.edge, look.steps).fill({ color: look.paper, alpha: look.paperAlpha });
-    outline(this.sheet, look.edge, look.steps).stroke({ width: look.rimWidth, color: look.rim, alpha: look.rimAlpha, join: 'bevel' });
-    this.root.addChild(this.sheet, this.dashLayer);
-    for (let g = 0; g < DASH_STEPS.length; g++) {
-      const group = new Graphics();
-      for (let i = 0; i < look.dashCount; i++) {
-        if (dashGroup(i) !== g) continue;
-        const th = (i / look.dashCount) * TAU;
-        const r = look.dashAt * REF;
-        const cx = Math.cos(th) * r;
-        const cy = Math.sin(th) * r;
-        const tx = -Math.sin(th) * look.dashW * 0.5;
-        const ty = Math.cos(th) * look.dashW * 0.5;
-        group.moveTo(cx - tx, cy - ty).lineTo(cx + tx, cy + ty);
-      }
-      group.stroke({ width: look.dashH, color: look.dash, cap: 'round' });
-      this.dashLayer.addChild(group);
-      this.dashGroups.push(group);
-    }
+    const baked = bakedOf(kind, look);
+    this.dashTextures = baked.dashes;
+    this.dash = pieceSprite(baked.dashes[0] as Texture);
+    this.root.addChild(pieceSprite(baked.sheet), this.dash);
     this.root.addChild(this.layer);
     look.build(this);
     this.landing = new Part('ring', CREAM, 2 * REF, 2 * REF, this.root);
   }
 
-  start(x: number, y: number, radius: number): void {
+  /** `every` is the layer's current motif interval: the first move of the motif waits a share of it that depends on the slot. */
+  start(x: number, y: number, radius: number, every: number): void {
     this.gen++;
     this.active = true;
     this.left = Infinity;
@@ -478,12 +528,13 @@ class DiscArea implements Pooled {
     this.leaving = false;
     this.leaveAge = 0;
     this.spikeWarn = -1;
-    this.dashWarn = -1;
+    this.dashStage = -1;
     this.radius = radius;
     this.root.position.set(x, y);
     this.root.visible = true;
     this.root.alpha = 0;
-    this.apply(true);
+    this.motifAt = ((this.slot % STAGGER) / STAGGER) * every;
+    this.apply(true, true);
   }
 
   stop(): void {
@@ -496,7 +547,8 @@ class DiscArea implements Pooled {
     this.root.position.set(x, y);
   }
 
-  update(dt: number): void {
+  /** `every` is how often (seconds) the motif's many small parts are moved; the sheet itself follows every frame. */
+  update(dt: number, every: number): void {
     if (!this.active) return;
     this.age += dt;
     if (this.leaving) {
@@ -508,10 +560,13 @@ class DiscArea implements Pooled {
         return;
       }
     }
-    this.apply(false);
+    // A little early is on time: two 60 Hz frames are 33.3 ms, and a motif due then must not wait for a third.
+    const motif = this.age >= this.motifAt - MOTIF_SLACK;
+    if (motif) this.motifAt = this.age + every;
+    this.apply(false, motif);
   }
 
-  private apply(first: boolean): void {
+  private apply(first: boolean, motif: boolean): void {
     const calm = fxSettings.reducedMotion;
     const look = this.look;
     const age = this.age;
@@ -532,10 +587,12 @@ class DiscArea implements Pooled {
     this.root.rotation = rot;
     this.root.alpha = first ? 0 : alpha;
     // Dashes: a slow turn, then they drop out in three steps as the end nears.
-    this.dashLayer.rotation = calm ? 0 : age * look.dashSpin;
-    if (warn !== this.dashWarn) {
-      this.dashWarn = warn;
-      for (let g = 0; g < this.dashGroups.length; g++) (this.dashGroups[g] as Graphics).visible = warn <= (DASH_STEPS[g] as number);
+    this.dash.rotation = calm ? 0 : age * look.dashSpin;
+    const stage = dashLevel(warn);
+    if (stage !== this.dashStage) {
+      this.dashStage = stage;
+      this.dash.visible = stage < this.dashTextures.length;
+      if (this.dash.visible) this.dash.texture = this.dashTextures[stage] as Texture;
     }
     // The landing ring: one flat ring that spreads from the sheet's edge as it lands.
     const lk = clamp01(age / LAND);
@@ -545,7 +602,7 @@ class DiscArea implements Pooled {
       this.landing.size(d, d);
       this.landing.s.alpha = 0.9 * (1 - lk);
     }
-    look.animate(this, age, warn, calm);
+    if (motif) look.animate(this, age, warn, calm);
   }
 
   destroy(): void {
@@ -822,11 +879,11 @@ export class AreaLayer {
     let v = free.pop();
     if (!v) {
       const pool = free;
-      v = new DiscArea(kind, LOOKS[kind], (d) => this.release(d, pool));
+      v = new DiscArea(kind, LOOKS[kind], this.all.length, (d) => this.release(d, pool));
       this.parent.addChild(v.root);
       this.all.push(v);
     }
-    v.start(x, y, radius);
+    v.start(x, y, radius, this.motifEvery());
     return this.begin(v);
   }
 
@@ -867,9 +924,21 @@ export class AreaLayer {
     free.push(v);
   }
 
+  /**
+   * How often (seconds) the motifs of the areas on screen are moved. A handful of areas move every frame; a crowd of them (twenty
+   * blizzards and clouds on a late wave) moves at the pace the eye still reads as smooth, slower on a weaker tier. The sheets, rims
+   * and the dashed lines turn every frame regardless.
+   */
+  private motifEvery(): number {
+    const tier = fxSettings.tier;
+    if (this.live.length <= FEW_AREAS) return tier === 'low' ? 1 / 30 : 0;
+    return tier === 'high' ? 1 / 40 : tier === 'mid' ? 1 / 30 : 1 / 20;
+  }
+
   update(dt: number): void {
+    const every = this.motifEvery();
     // A view releases itself from inside its own update, which swaps the last live one into its place: walk backwards.
-    for (let i = this.live.length - 1; i >= 0; i--) (this.live[i] as DiscArea | CellArea).update(dt);
+    for (let i = this.live.length - 1; i >= 0; i--) (this.live[i] as DiscArea | CellArea).update(dt, every);
   }
 
   /** Take every area away at once (scene change, `Fx.clear`). */

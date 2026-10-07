@@ -8,7 +8,7 @@ import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
 import { FIELD_W } from '@/game/geometry';
 import type { FieldArt, StatusSticker, ZoneMark } from './art';
-import { barSegments, type BarSegments } from './policy';
+import { barSegments, depthKey, type BarSegments } from './policy';
 import { BOSS_DROP } from '@/view/timing';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
 
@@ -65,6 +65,13 @@ export class EnemyView {
   deathK = 0;
 
   private readonly lean = new Container();
+  /** A flat copy of the body laid over it for a few frames when it is struck. It stays in the tree and is only faded: a hit changes no structure. */
+  private readonly flashSprite = new Sprite();
+  private flashAge = 1;
+  private flashMs = 50;
+  private flashPeak = 0.7;
+  /** The sort key last given to the layer. */
+  private sortKey = Number.NaN;
   private readonly shadow: Sprite;
   private readonly aura: Sprite;
   private readonly ring: Sprite;
@@ -128,7 +135,10 @@ export class EnemyView {
     this.zoneTag.visible = false;
     this.bar.addChild(this.barBack, this.barHp, this.barShield);
     this.bar.visible = false;
-    this.body.addChild(this.sprite);
+    this.flashSprite.anchor.set(0.5);
+    this.flashSprite.eventMode = 'none';
+    this.flashSprite.alpha = 0;
+    this.body.addChild(this.sprite, this.flashSprite);
     this.lean.addChild(this.body);
     this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker, this.targetMark, this.zoneTag);
     this.root.eventMode = 'none';
@@ -154,6 +164,9 @@ export class EnemyView {
     this.reactAt = -1;
     const texture = tex(enemyTextureKey(enemy.id));
     this.sprite.texture = texture;
+    this.flashSprite.texture = texture;
+    this.flashAge = 1;
+    this.flashSprite.alpha = 0;
     this.size = def.radius * (this.isBoss ? BOSS_SIZE_PER_RADIUS : SIZE_PER_RADIUS);
     this.spriteScale = this.size / Math.max(texture.width, texture.height, 1);
     this.rate = stepRate(def.speed);
@@ -213,7 +226,15 @@ export class EnemyView {
     this.x = enemy.x;
     this.y = enemy.y;
     this.root.position.set(this.drawX(), this.y);
-    this.root.zIndex = this.y + this.size * 0.3;
+    this.sort();
+  }
+
+  /** Put this body in the layer's front-to-back order now (the layer re-sorts when a key changes, so the caller decides how often). */
+  sort(): void {
+    const key = depthKey(this.y, this.size);
+    if (key === this.sortKey) return;
+    this.sortKey = key;
+    this.root.zIndex = key;
   }
 
   /** The sprite's x: the simulation's, pulled in just far enough that a big body stays on the screen. */
@@ -243,8 +264,25 @@ export class EnemyView {
     });
   }
 
-  /** Per-frame upkeep. `enemy` is null for a dead view that is still playing out. */
-  step(dt: number, time: number, enemy: EnemyState | null): void {
+  /** Lay a flat copy of the body in `color` over it for `ms`, fading out: a struck body flashes in the colour of what struck it. */
+  flash(color: number, ms: number, peak: number): void {
+    this.flashSprite.tint = color;
+    this.flashMs = ms / 1000;
+    this.flashPeak = peak;
+    this.flashAge = 0;
+  }
+
+  private updateFlash(dt: number): void {
+    if (this.flashAge >= 1) return;
+    this.flashAge = Math.min(1, this.flashAge + dt / this.flashMs);
+    const k = this.flashAge;
+    this.flashSprite.alpha = this.flashPeak * this.sprite.alpha * (1 - k * k);
+    this.flashSprite.scale.copyFrom(this.sprite.scale);
+    this.flashSprite.visible = this.sprite.visible;
+  }
+
+  /** Per-frame upkeep. `enemy` is null for a dead view that is still playing out; `reorder` says whether the layer may be re-sorted this frame. */
+  step(dt: number, time: number, enemy: EnemyState | null, reorder: boolean): void {
     if (enemy) {
       this.x = enemy.x;
       this.y = enemy.y;
@@ -262,8 +300,9 @@ export class EnemyView {
       this.updateBar(dt, enemy);
     }
     this.root.position.set(this.drawX(), this.y);
-    this.root.zIndex = this.y + this.size * 0.3;
+    if (reorder) this.sort();
     this.sprite.scale.x = this.spriteScale * this.facing;
+    this.updateFlash(dt);
     this.aura.alpha = this.aura.visible ? 0.8 + 0.12 * Math.sin(time * 3.2) : 0;
     if (this.dying) {
       const s = deathScale(this.deathK);
@@ -382,6 +421,8 @@ export class EnemyView {
   }
 
   retire(): void {
+    this.flashAge = 1;
+    this.flashSprite.alpha = 0;
     this.token++;
     this.dying = false;
     this.holdUntil = 0;

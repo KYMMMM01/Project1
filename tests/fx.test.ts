@@ -534,12 +534,12 @@ describe('QualityGovernor', () => {
     expect(run(g, 25, 16.7)).toEqual([]);
   });
 
-  it('steps down one tier after about 3 s of slow frames, then again, and stops at low', () => {
+  it('steps down one tier after about 2 s of slow frames, then again, and stops at low', () => {
     const g = new QualityGovernor({ start: 'high' });
-    expect(run(g, 2.5, 28)).toEqual([]);
-    expect(run(g, 1.5, 28)).toEqual(['mid']);
-    // The average is judged afresh in the new tier: another few slow seconds, one more step.
-    expect(run(g, 5, 28)).toEqual(['low']);
+    expect(run(g, 1.2, 28)).toEqual([]);
+    expect(run(g, 1.8, 28)).toEqual(['mid']);
+    // The average is judged afresh in the new tier: another couple of slow seconds, one more step.
+    expect(run(g, 4, 28)).toEqual(['low']);
     expect(run(g, 30, 28)).toEqual([]);
     expect(g.tier).toBe('low');
   });
@@ -578,7 +578,7 @@ describe('QualityGovernor', () => {
     // Mid is comfortable (60 fps), so it climbs to high; high is too heavy (30 ms frames) and drops back.
     log.push(...run(g, 40, 16.7));
     expect(g.tier).toBe('high');
-    log.push(...run(g, 4, 30));
+    log.push(...run(g, 2.4, 30));
     expect(g.tier).toBe('mid');
     expect(g.ceiling).toBe('mid');
     // Hours of comfortable frames afterwards: it stays in mid for good.
@@ -591,7 +591,7 @@ describe('QualityGovernor', () => {
     run(g, 40, 16.7);
     expect(g.tier).toBe('high');
     run(g, 200, 16.7);
-    expect(run(g, 4, 30)).toEqual(['mid']);
+    expect(run(g, 2.4, 30)).toEqual(['mid']);
     expect(g.ceiling).toBe('high');
     expect(run(g, 40, 16.7)).toEqual(['high']);
   });
@@ -599,7 +599,7 @@ describe('QualityGovernor', () => {
   it('set() adopts a tier chosen elsewhere and forgets what it learnt', () => {
     const g = new QualityGovernor();
     run(g, 40, 16.7);
-    run(g, 4, 30);
+    run(g, 2.4, 30);
     expect(g.ceiling).toBe('mid');
     g.set('low');
     expect(g.tier).toBe('low');

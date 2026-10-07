@@ -21,14 +21,33 @@ export type Art =
 
 /** A control of the battle screen "try it" can point at. */
 export type TryControl = 'summon' | 'grade' | 'laser' | 'call' | 'speed' | 'chips' | 'odds' | 'gauge' | 'purr' | 'toys' | 'preview';
-/** A home tab "try it" can go to. */
-export type TryTab = 'shop' | 'cats' | 'battle' | 'missions' | 'pass';
+/** A home tab "try it" can go to; 'settings' stays on the settings sheet the guidebook was opened from. */
+export type TryTab = 'shop' | 'cats' | 'battle' | 'missions' | 'pass' | 'settings';
+/** The control or card "try it" points at once the tab is open, named `<tab>.<thing>`; each tab (or the settings sheet) answers for its own. */
+export type HomePoint =
+  | 'cats.cards'
+  | 'cats.wild'
+  | 'shop.chests'
+  | 'shop.free'
+  | 'battle.stakes'
+  | 'battle.calendar'
+  | 'battle.patrol'
+  | 'battle.sweep'
+  | 'battle.daily'
+  | 'battle.cup'
+  | 'battle.endless'
+  | 'missions.list'
+  | 'missions.chest'
+  | 'pass.head'
+  | 'settings.backup';
 
 export interface TryTarget {
   /** Shown when the guidebook was opened from a battle. */
   control?: TryControl;
   /** Shown when it was opened from the home screen. */
   tab?: TryTab;
+  /** What the home screen then points at (a hand and a spotlight); without it the tab simply opens. */
+  point?: HomePoint;
 }
 
 export interface TopicDef {
@@ -76,7 +95,7 @@ export const TOPIC_LIST = [
   T('preview', 'field', foe('cucumber'), { control: 'preview' }),
   T('toys', 'field', { k: 'toy', id: 'yarn_ball' }, { control: 'toys' }),
   T('toy_reroll', 'field', ico('reroll')),
-  T('stakes', 'field', ico('crown'), { tab: 'battle' }),
+  T('stakes', 'field', ico('crown'), { tab: 'battle', point: 'battle.stakes' }),
   // ── foes ──
   T('elite', 'foes', foe('boss_cucumber')),
   T('boss', 'foes', foe('boss_vacuum')),
@@ -95,20 +114,20 @@ export const TOPIC_LIST = [
   T('trait_shield', 'foes', foe('cone')),
   T('trait_weaken', 'foes', foe('dryer')),
   // ── home ──
-  T('cards', 'home', cats('w_sword', 'r_archer', 'm_fire'), { tab: 'cats' }),
-  T('wild_cards', 'home', ico('cards'), { tab: 'cats' }),
-  T('chests', 'home', { k: 'chest', chest: 'silver' }, { tab: 'shop' }),
-  T('free_chest', 'home', { k: 'chest', chest: 'wood' }, { tab: 'shop' }),
-  T('missions', 'home', ico('mission'), { tab: 'missions' }),
-  T('daily_chest', 'home', { k: 'chest', chest: 'gold' }, { tab: 'missions' }),
-  T('calendar', 'home', ico('calendar')),
-  T('pass', 'home', ico('trophy'), { tab: 'pass' }),
-  T('patrol', 'home', ico('paw'), { tab: 'battle' }),
-  T('sweep', 'home', ico('sweep'), { tab: 'battle' }),
-  T('daily_challenge', 'home', ico('star'), { tab: 'battle' }),
-  T('weekly_cup', 'home', ico('trophy'), { tab: 'battle' }),
-  T('endless', 'home', ico('crown'), { tab: 'battle' }),
-  T('backup_code', 'home', ico('code')),
+  T('cards', 'home', cats('w_sword', 'r_archer', 'm_fire'), { tab: 'cats', point: 'cats.cards' }),
+  T('wild_cards', 'home', ico('cards'), { tab: 'cats', point: 'cats.wild' }),
+  T('chests', 'home', { k: 'chest', chest: 'silver' }, { tab: 'shop', point: 'shop.chests' }),
+  T('free_chest', 'home', { k: 'chest', chest: 'wood' }, { tab: 'shop', point: 'shop.free' }),
+  T('missions', 'home', ico('mission'), { tab: 'missions', point: 'missions.list' }),
+  T('daily_chest', 'home', { k: 'chest', chest: 'gold' }, { tab: 'missions', point: 'missions.chest' }),
+  T('calendar', 'home', ico('calendar'), { tab: 'battle', point: 'battle.calendar' }),
+  T('pass', 'home', ico('trophy'), { tab: 'pass', point: 'pass.head' }),
+  T('patrol', 'home', ico('paw'), { tab: 'battle', point: 'battle.patrol' }),
+  T('sweep', 'home', ico('sweep'), { tab: 'battle', point: 'battle.sweep' }),
+  T('daily_challenge', 'home', ico('star'), { tab: 'battle', point: 'battle.daily' }),
+  T('weekly_cup', 'home', ico('trophy'), { tab: 'battle', point: 'battle.cup' }),
+  T('endless', 'home', ico('crown'), { tab: 'battle', point: 'battle.endless' }),
+  T('backup_code', 'home', ico('code'), { tab: 'settings', point: 'settings.backup' }),
 ] as const;
 
 export type TopicId = (typeof TOPIC_LIST)[number]['id'];

@@ -158,3 +158,8 @@ Stills and strips (scratchpad `shots/`): `rw/strip_rw` (wooden, rare best, the w
 Tests: `tests/screens.collection.shop.test.ts` (merge, replay grouping, `resultsOf`, `pileSize`), `tests/screens.collection.stage.test.ts` (the stage without pictures through the whole timeline, reduced path, light fan), `tests/meta.chests.test.ts` (N opens equal N single opens on the same random stream for every kind, a pity bonus in the middle of a pile, two bonuses, stored before it resolves and replayed as one pile, caps).
 
 Removed: `ribbonDots`, the ribbon, the old burst that swelled and faded the closed chest. Debug: `__dbg.collection.revealChest(result | [results])` as before; a fabricated result needs only `{ id, kind, cards, pity }` (the id is simply not found when acknowledged).
+
+## 2026-10-07 last gaps
+
+- Alignment audit of the cats tab (five filters), the unit screens, every shop section, the odds screens, the chest reveal and its summaries (single and pile) and the reward popup: see `shell.md` "2026-10-07 last gaps", item 4. One fix here: the Butler pass card's perk line and a pack's contents line were joined with " · ", and a wrapped line could start with the dot (`strings.ts` `shop.butler.perks`, `blocksStore.ts`): both are comma lists now. A chest-info line ("카드 24장 · 골목대장 1장은 꼭 나와요") keeps its dot (it fits one line in both languages).
+- `BlockBuild.points` (new, optional): named parts of a block that the guidebook's "try it" can point at. The chests block offers `free` and `chests` (the silver card). `ShopTab.pointAt('shop.free' | 'shop.chests')` looks them up anew each time because blocks rebuild.

@@ -8,7 +8,7 @@ import { lerp } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Color, cacheStatic, drawIcon, fitLabel, motion, paintTexture, paperShape, paperSeed, TweenBag, uiLabel } from '@/ui';
 
-export const GAUGE_W = 440;
+const GAUGE_W = 440;
 export const GAUGE_H = 58;
 /** Painted fill: inset from the strip's edges so the skull keeps its end and the torn teeth keep theirs. */
 const FILL_H = 40;
@@ -24,27 +24,60 @@ export class GaugeStrip extends Container {
   private readonly bag = new TweenBag();
   private readonly fill: NineSliceSprite;
   private readonly text: Text;
-  private readonly innerW = GAUGE_W - FILL_LEFT - FILL_RIGHT;
+  private readonly skull: Container;
+  private readonly seed = paperSeed();
+  private strip: Container;
+  private stripW = GAUGE_W;
+  private innerW = GAUGE_W - FILL_LEFT - FILL_RIGHT;
   private shown = 0;
   private level: GaugeLevel = 0;
 
   constructor() {
     super();
-    const strip = paperShape({ w: GAUGE_W, h: GAUGE_H, radius: 10, fill: Color.paper, torn: ['right'], seed: paperSeed(), grain: false });
-    cacheStatic(strip);
+    this.strip = this.cut(GAUGE_W);
     this.fill = new NineSliceSprite({ texture: paintTexture(PAINT[0], FILL_H), leftWidth: FILL_H / 2, rightWidth: FILL_H / 2, topHeight: 2, bottomHeight: 2 });
     this.fill.height = FILL_H;
-    this.fill.position.set(-GAUGE_W / 2 + FILL_LEFT, -FILL_H / 2);
     this.fill.visible = false;
     this.text = uiLabel('', { size: 34 });
+    this.skull = drawIcon('skull', 84);
+    this.addChild(this.strip, this.fill, this.text, this.skull);
+    this.place();
+  }
+
+  /** The torn strip at width `w`; the same seed every time, so a narrower strip is the same piece of paper cut shorter. */
+  private cut(w: number): Container {
+    const strip = paperShape({ w, h: GAUGE_H, radius: 10, fill: Color.paper, torn: ['right'], seed: this.seed, grain: false });
+    cacheStatic(strip);
+    return strip;
+  }
+
+  /** Everything hangs from the strip's left end, so a change of width only moves what is measured from the right. */
+  private place(): void {
+    this.fill.position.set(-this.stripW / 2 + FILL_LEFT, -FILL_H / 2);
     this.text.position.set((FILL_LEFT - FILL_RIGHT) / 2 + 2, 0);
-    const skull = drawIcon('skull', 84);
-    skull.position.set(-GAUGE_W / 2 + 2, 0);
-    this.addChild(strip, this.fill, this.text, skull);
+    this.skull.position.set(-this.stripW / 2 + 2, 0);
+  }
+
+  /** Cut the strip to `w` wide (its left end stays put): the tutorial's skip button takes the top row's right end for a while. */
+  setWidth(w: number): void {
+    if (Math.abs(w - this.stripW) < 0.5) return;
+    this.stripW = w;
+    this.innerW = w - FILL_LEFT - FILL_RIGHT;
+    const old = this.strip;
+    this.strip = this.cut(w);
+    this.addChildAt(this.strip, 0);
+    old.destroy({ children: true });
+    this.place();
+    this.apply(this.shown);
+    this.fitText();
   }
 
   setLabel(text: string): void {
     this.text.text = text;
+    this.fitText();
+  }
+
+  private fitText(): void {
     fitLabel(this.text, this.innerW - 60, 34, 0.7);
   }
 

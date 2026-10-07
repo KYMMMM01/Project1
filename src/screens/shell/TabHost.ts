@@ -7,6 +7,7 @@ import { createCatsTab } from '../cats';
 import { createMissionsTab } from '../missions';
 import { createPassTab } from '../pass';
 import { createShopTab } from '../shop';
+import type { PointResolver } from './HomePointer';
 
 const FADE_IN = 0.16;
 const FADE_OUT = 0.1;
@@ -77,6 +78,11 @@ export class TabHost {
 
   resize(area: ContentArea): void {
     for (const id of TAB_ORDER) this.tabs[id].resize(area);
+  }
+
+  /** Where the guidebook's "try it" points on a tab, once that tab is the open one. */
+  pointAt(id: TabId, point: string): PointResolver | null {
+    return this.tabs[id].pointAt?.(point) ?? null;
   }
 
   /** Call once after the first resize: the starting tab becomes visible. */

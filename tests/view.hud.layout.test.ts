@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BattleLayout } from '@/view/context';
-import { bottomRects, fitScale, PICK, pickCardX, pickHand, slotCentre, slotWidth, topRects } from '@/view/hud/layoutMath';
+import { bottomRects, fitScale, gaugeWidth, PICK, pickCardX, pickHand, SKIP_H, SKIP_W, skipRect, slotCentre, slotWidth, topRects } from '@/view/hud/layoutMath';
 
 function layout(h: number, safeTop = 0, safeBottom = 0): BattleLayout {
   const slack = Math.round((h - safeTop - safeBottom - 168 - 452 - 624) / 2);
@@ -33,6 +33,40 @@ describe('top area', () => {
     expect(r.wave.x + r.wave.w).toBeLessThanOrEqual(r.preview.x);
     expect(r.preview.x + r.preview.w).toBeLessThanOrEqual(r.toys.x);
     expect(r.toys.x + r.toys.w).toBeLessThanOrEqual(720);
+  });
+});
+
+describe('the skip button in the top row', () => {
+  for (const speedShown of [false, true]) {
+    it(`never touches the enemy strip, the pause button or the speed button (speed ${speedShown ? 'out' : 'not yet out'})`, () => {
+      for (const h of [1280, 1600]) {
+        const r = topRects(layout(h, 40));
+        const skip = skipRect(r, speedShown);
+        const strip = { x: r.gauge.x, w: gaugeWidth(r, skip) };
+        expect(skip.w).toBe(SKIP_W);
+        expect(skip.h).toBe(SKIP_H);
+        // The strip ends at least a button-gap short of the skip button, and the skull sticker still has its room on the left.
+        expect(skip.x - (strip.x + strip.w)).toBeGreaterThanOrEqual(12);
+        // Beside the speed button once it is out (its slot is 88 wide), else in its slot; never past the screen's side margin.
+        if (speedShown) expect(r.speed.x - 44 - (skip.x + skip.w)).toBeGreaterThanOrEqual(12);
+        expect(skip.x + skip.w).toBeLessThanOrEqual(720 - 16);
+        expect(skip.x).toBeGreaterThan(r.pause.x + 44);
+        // It stays in the first row: the second row's strips are free of it.
+        expect(skip.y).toBeGreaterThanOrEqual(r.area.y);
+        expect(skip.y + skip.h).toBeLessThanOrEqual(r.row2Y - 32);
+      }
+    });
+  }
+
+  it('leaves the strip room for its count: at least 300 px even beside the speed button', () => {
+    const r = topRects(layout(1280));
+    expect(gaugeWidth(r, skipRect(r, true))).toBeGreaterThanOrEqual(300);
+    expect(gaugeWidth(r, skipRect(r, false))).toBeGreaterThan(gaugeWidth(r, skipRect(r, true)));
+  });
+
+  it('gives the whole strip back when the button is gone', () => {
+    const r = topRects(layout(1280));
+    expect(gaugeWidth(r, null)).toBe(r.gauge.w);
   });
 });
 
