@@ -106,6 +106,7 @@ vi.mock('@/ui', async () => {
     fitLabel: () => undefined,
     drawPaper: () => undefined,
     drawPaperFace: () => undefined,
+    paperOutline: () => [0, 0, 176, 0, 176, 176, 0, 176],
     drawDashedInset: () => undefined,
     tapeStrip: () => new Container(),
     paperSeed: () => 1,

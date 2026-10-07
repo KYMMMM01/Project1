@@ -29,6 +29,7 @@ import {
   fitLabel,
   motion,
   PaperLabel,
+  paperOutline,
   paperSeed,
   Rarity,
   rarityName,
@@ -41,6 +42,7 @@ import {
   uiLabel,
   type TapeName,
 } from '@/ui';
+import { photoCorners } from '@/ui/cardMath';
 import type { HudEnv } from '../env';
 import { PressCard, relicIcon } from '../kit';
 import { offerRoute } from '../policy';
@@ -58,6 +60,9 @@ const BUILD_GAP = 0.04;
 /** The mat the toy lies on: a square window at the card's left. */
 const MAT = 176;
 const MAT_PAD = 20;
+/** Corner radius of the mat, and how far a photo-corner mount runs along the straight edge past the end of that arc. */
+const MAT_RADIUS = 26;
+const MOUNT_LEG = 10;
 
 type RelicPending = Extract<PendingChoice, { kind: 'relic' }>;
 type ToyRarity = 'common' | 'rare' | 'epic' | 'legendary';
@@ -321,22 +326,14 @@ export class RelicScreen {
     drawPaper(g, x, y, card);
     const mx = x + MAT_PAD;
     const my = -MAT / 2 + 4;
-    drawPaperFace(g, mx, my, { w: MAT, h: MAT, radius: 26, fill: rar.color, edge: rar.dark, grain: false, seed: seed + 1, wobble: 0.7 });
+    const mat = { w: MAT, h: MAT, radius: MAT_RADIUS, fill: rar.color, edge: rar.dark, grain: false, seed: seed + 1, wobble: 0.7 } as const;
+    drawPaperFace(g, mx, my, mat);
     drawPaperFace(g, mx + 14, my + 14, { w: MAT - 28, h: MAT - 28, radius: 18, fill: mixColor(rar.light, Color.paper, 0.62), edge: rar.dark, grain: false, seed: seed + 2, wobble: 0.6 });
     if (idx >= 1) drawDashedInset(g, x, y, card, 8, { color: rar.dark, width: 2.5, dash: 12, gap: 9, alpha: 0.8, seed: seed + 3 });
     if (idx >= 2) {
-      // Photo-corner mounts on the mat.
-      const k = 26;
+      // Photo-corner mounts, cut from the mat's own outline so none can poke out of its rounded corners.
       const mount = idx === 3 ? RARITY_GOLD : rar.dark;
-      for (const sx of [0, 1] as const) {
-        for (const sy of [0, 1] as const) {
-          const cx = mx + sx * MAT;
-          const cy = my + sy * MAT;
-          const dx = sx === 0 ? 1 : -1;
-          const dyy = sy === 0 ? 1 : -1;
-          g.poly([cx, cy, cx + dx * k, cy, cx, cy + dyy * k]).fill(mount);
-        }
-      }
+      for (const cap of photoCorners(paperOutline(mx, my, mat), MAT_RADIUS, MOUNT_LEG)) g.poly(cap).fill(mount);
     }
     c.addChild(g);
     const pin = TAPE[rarity];

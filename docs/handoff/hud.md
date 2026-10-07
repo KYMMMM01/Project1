@@ -321,6 +321,9 @@ REQUESTS: `src/ui/ClassChip.ts`: make the right padding of the rarity dots equal
 
 **4. Dashed lines** (`drawDashedInset`) on the result page (14 px in), the continue page (14 px in, the page is 8 px in from the screen), the selection sheet (`sheetBoxes().frame.x`), the toy cards and the class sheet's current row; each checked at 4x (`g_a`, `g_b`, `g_d` in the session scratchpad). `PICK.tipInside` 26 to 29. The tip's position against the live paw was not eyeballed (the tutorial's pick was not played).
 
+**5. Toy cards' photo-corner mounts (REQUEST 1 below, done).** `RelicScreen.frame` cuts the epic and legendary mounts from the mat's own outline: `paperOutline` (`ui/paper.ts`, the outline `drawPaperFace` draws for the same options, so the mat and its mounts cannot drift apart) fed to `photoCorners` (`ui/cardMath.ts`, the function `frameGeometry` now uses for the unit cards too), leg 10 past the 26 px corner arc; checked at 5x and 14x on an epic, a legendary and a second epic (all four corners each: no colour past the mat's rim; `epic_mat`, `legend_mat`, `epic2_mat`, `legend_tl`, `epic_tr` in the session scratchpad).
+Test: `ui.cardgeometry.test.ts`, "photoCorners on a toy card mat (176 px square, radius 26, wobble 0.7)" (6 seeds: the old triangle's vertex on the box corner is outside the mat, every vertex of every mount is on the mat's outline, in its own quadrant, within arc + leg + wobble of its corner, and the closing chord stays on the paper); `view.hud.relicScreen.test.ts` stubs `paperOutline`.
+
 REQUESTS
 1. Toy cards (`RelicScreen.frame`): epic and legendary cards draw the photo-corner mounts as triangles with their vertex on the mat's box corner, outside its rounded corner (the fault `CardFrame` had before the precision pass). Cut them from the mat's outline the way `frameArt.ts` does.
 2. `tests/sim.perf.test.ts` (150 ms for a full run) failed once while the whole suite ran on a loaded machine and passes alone.

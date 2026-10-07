@@ -121,6 +121,16 @@ export interface FrameSpec {
   dashGap: number;
 }
 
+/**
+ * The four photo corners of a mat, top-left, top-right, bottom-right, bottom-left: each is cut from the mat's own outline (its corner arc plus
+ * `leg` px of straight edge on either side, closed by a chord), so none can stick out past it at any radius or wobble. `radius` is the mat's corner radius.
+ */
+export function photoCorners(mat: readonly number[], radius: number, leg: number): number[][] {
+  const mb = bounds(mat);
+  const reach = (Math.PI / 4) * radius + leg;
+  return [cornerCap(mat, mb.l, mb.t, reach), cornerCap(mat, mb.r, mb.t, reach), cornerCap(mat, mb.r, mb.b, reach), cornerCap(mat, mb.l, mb.b, reach)];
+}
+
 const frames = new Map<string, CardGeometry>();
 
 /**
@@ -142,14 +152,7 @@ export function frameGeometry(f: FrameSpec, spec: CardSpec): CardGeometry {
   const wx = nominal.x + f.border + f.frame;
   const wy = nominal.y + f.border + f.frame;
   const windowRect: CardBox = { x: wx, y: wy, w: nominal.w - 2 * (f.border + f.frame), h: f.matBottom - f.frame - wy };
-  const mb = bounds(mat);
-  const reach = (Math.PI / 4) * matRadius + f.leg;
-  const caps = [
-    cornerCap(mat, mb.l, mb.t, reach),
-    cornerCap(mat, mb.r, mb.t, reach),
-    cornerCap(mat, mb.r, mb.b, reach),
-    cornerCap(mat, mb.l, mb.b, reach),
-  ];
+  const caps = photoCorners(mat, matRadius, f.leg);
   const dash = insetPolygon(outer, f.dash);
   const geo: CardGeometry = { spec, seed, amp, outer, nominal, dash, dashRuns: dashRuns(dash, true, f.dashLen, f.dashGap), mat, matRadius, matBottom: f.matBottom, window, windowRect, caps };
   frames.set(key, geo);

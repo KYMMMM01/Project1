@@ -177,6 +177,12 @@ export function drawPaperShadow(g: Graphics, x: number, y: number, o: PaperOpts)
   g.poly(shifted(path.pts, x, y + dy)).fill({ color: Color.shadow, alpha: o.shadowAlpha ?? 0.22 });
 }
 
+/** The cut edge `drawPaperFace` draws for these options, clockwise, in the same coordinates ((x, y) is the top-left of the piece): what a mount stuck on the piece is cut from. */
+export function paperOutline(x: number, y: number, o: PaperOpts): number[] {
+  const r = resolve(o);
+  return shifted(cachedPaperPath(r.w, r.h, r.radius, r.seed, r.amp, r.mask).pts, x, y);
+}
+
 /** The paper itself: fill, grain, rim line, torn fibre. (x, y) is the top-left of the piece. */
 export function drawPaperFace(g: Graphics, x: number, y: number, o: PaperOpts): void {
   const r = resolve(o);

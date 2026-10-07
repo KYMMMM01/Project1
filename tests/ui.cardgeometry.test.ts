@@ -8,6 +8,7 @@ import {
   plateGeometry,
   ringRuns,
   nameCentre,
+  photoCorners,
   pipsPillBox,
   starBox,
   tapeBox,
@@ -309,6 +310,41 @@ describe.each([
 
   it('puts the badge in the same place whatever the rarity or the level: it depends on the plate alone', () => {
     expect(plateBadgeBox(plateGeometry(w, h, matH), BADGE_D)).toEqual(plateBadgeBox(geo, BADGE_D));
+  });
+});
+
+describe('photoCorners on a toy card mat (176 px square, radius 26, wobble 0.7)', () => {
+  const MAT = 176;
+  const R = 26;
+  const LEG = 10;
+
+  it.each([1, 2, 3, 41, 987, 123456])('keeps all four mounts inside the mat, none past its rounded corners (seed %i)', (seed) => {
+    const mat = cachedPaperPath(MAT, MAT, R, seed, wobbleAmp(MAT, MAT, 0.7)).pts;
+    const xs = mat.filter((_, i) => i % 2 === 0);
+    const ys = mat.filter((_, i) => i % 2 === 1);
+    const [l, r, t, b] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    // The fault: a triangle whose vertex is on the box corner has that vertex outside the mat, in every corner.
+    for (const [cx, cy] of [[l, t], [r, t], [r, b], [l, b]] as const) expect(inside(mat, cx, cy)).toBe(false);
+    const caps = photoCorners(mat, R, LEG);
+    expect(caps).toHaveLength(4);
+    caps.forEach((cap, k) => {
+      const right = k === 1 || k === 2;
+      const low = k >= 2;
+      for (let i = 0; i < cap.length; i += 2) {
+        const x = cap[i] as number;
+        const y = cap[i + 1] as number;
+        // Every vertex lies on the mat's own outline, and the mount stays in its own corner, within its reach of it (the arc, the leg and a few px of wobble).
+        expect(edgeDistance(mat, x, y)).toBeLessThan(0.05);
+        expect(right ? x > (l + r) / 2 : x < (l + r) / 2).toBe(true);
+        expect(low ? y > (t + b) / 2 : y < (t + b) / 2).toBe(true);
+        expect(Math.abs(x - (right ? r : l))).toBeLessThanOrEqual(R + LEG + 4);
+        expect(Math.abs(y - (low ? b : t))).toBeLessThanOrEqual(R + LEG + 4);
+      }
+      // The chord that closes the mount (last vertex back to the first) does not bulge out of the mat: its middle is on the paper, or within the wobble of its edge.
+      const mx = ((cap[0] as number) + (cap[cap.length - 2] as number)) / 2;
+      const my = ((cap[1] as number) + (cap[cap.length - 1] as number)) / 2;
+      expect(inside(mat, mx, my) || edgeDistance(mat, mx, my) < 0.5).toBe(true);
+    });
   });
 });
 
