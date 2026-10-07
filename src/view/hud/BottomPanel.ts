@@ -45,11 +45,11 @@ export class BottomPanel {
   }
 
   private openClass(id: ClassId): void {
-    void this.env.modal(new ClassSheet(this.env, id));
+    void this.env.modal(new ClassSheet(this.env, id)).then(() => this.env.note('sheetClose'));
   }
 
   private openOdds(): void {
-    this.env.hints.used('odds');
+    this.env.hints.used('summon_grade');
     void this.env.modal(new OddsPopup(this.env));
   }
 

@@ -1,15 +1,24 @@
 import type { Container } from 'pixi.js';
 import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
+import { mixColor } from '@/core/math';
 import { Color, TapeColors } from '@/ui';
-import { hitFlash, kickObject, punchScale, squash } from '@/fx';
+import { hitFlash, kickObject, punchScale, rattleObject, squash, wobbleRotation } from '@/fx';
+import { Hue } from '@/fx/palette';
 import type { BattleEvents, EnemyState } from '@/game/api';
+import type { ZoneMark } from './art';
 import type { FieldEnv } from './env';
 import { EnemyView } from './enemyView';
+import { materialOf, reactionOf } from './reactions';
+import { weaponStyle } from '../weapons';
 
 /** A recycled view rests this long before reuse so a juice tween that is still finishing cannot touch its next owner. */
 const COOLDOWN = 0.45;
 const DEATH_SECONDS = 0.17;
+/** A body answers a blow at most this often (seconds): sixteen hits a second are one long shudder, not sixteen overlapping ones. */
+const REACT_GAP = 0.07;
+/** A hit with no cat behind it (a toy) tints the body like this. */
+const PLAIN_TINT = mixColor(Color.coral, Hue.cream, 0.3);
 /** How long a dead boss stays standing for the director's death sequence before the field clears it. */
 const BOSS_HOLD = 2.6;
 
@@ -73,6 +82,11 @@ export class EnemyViews {
     }
   }
 
+  /** An area is acting on enemy `uid` this frame: its tag shows beside the health bar. */
+  zoneTouch(uid: number, kind: ZoneMark): void {
+    this.byUid.get(uid)?.zoneTouch(kind);
+  }
+
   private create(e: EnemyState): EnemyView {
     const v = this.pool.get();
     v.assign(e);
@@ -121,11 +135,21 @@ export class EnemyViews {
     if (!v || v.dying || e.killed) return;
     // Damage-over-time ticks tint nothing: only a real strike flashes, knocks and squashes.
     if (e.dot) return;
+    const time = this.env.time;
+    if (time - v.reactAt < REACT_GAP) return;
+    v.reactAt = time;
     const { tweens } = this.env.ctx;
-    hitFlash(tweens, v.sprite, { ms: e.crit ? 66 : 50 });
+    // The enemy answers in the voice of what it is made of and the weapon that hit it: a tint in the weapon's colour (never a white
+    // flash), then a squash and a wobble for soft things or a rigid knock and a rattle for hard ones; a heavy weapon moves it more.
+    const style = e.unitId ? weaponStyle(e.unitId) : null;
+    const r = reactionOf(materialOf(e.enemy.id));
+    const w = (style ? style.weight : 0.8) * (e.crit ? 1.25 : 1);
+    hitFlash(tweens, v.sprite, { ms: e.crit ? 70 : 55, color: style ? mixColor(style.tint, Hue.cream, 0.2) : PLAIN_TINT, peak: 0.7 });
     const a = e.enemy.angle;
-    kickObject(tweens, v.body, -Math.cos(a) * 3, -Math.sin(a) * 3, 100);
-    squash(tweens, v.body, 1.12, 0.9, 120);
+    kickObject(tweens, v.body, -Math.cos(a) * r.knock * w, -Math.sin(a) * r.knock * w, 100);
+    squash(tweens, v.body, 1 + (r.sx - 1) * w, 1 + (r.sy - 1) * w, r.ms);
+    if (r.wobble > 0) wobbleRotation(tweens, v.body, r.wobble * w, 420, 11, 7);
+    if (r.rattle > 0) rattleObject(tweens, v.body, { ms: 170, amplitude: r.rattle * w, degrees: 2, from: 24, to: 32 });
   }
 
   private onDie(e: BattleEvents['enemyDie']): void {

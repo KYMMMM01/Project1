@@ -8,6 +8,7 @@ import { t } from '@/core/i18n';
 import { Button, Color, CurrencyPill, drawPaper, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
 import { landings } from '@/view/landings';
 import type { HudEnv } from './env';
+import type { RevealKey } from './policy';
 import { tapArea } from './kit';
 import { pityVisible } from './policy';
 
@@ -74,6 +75,9 @@ class Counter {
 
 /** Right edge of the pity chip: 8 px clear of the odds button. */
 const PITY_RIGHT = 592;
+/** Where the fish counter stands beside the purr counter, and where it stands while it is alone. */
+const FISH_X = 152;
+const FISH_ALONE_X = 360;
 
 export class CurrencyRow {
   readonly root = new Container();
@@ -101,7 +105,7 @@ export class CurrencyRow {
     this.purr = new CurrencyPill({ icon: 'purr', amount: b.purr, width: 156, tickSfx: false });
     this.fishCounter = new Counter(this.fish, this.bag, b.fish);
     this.purrCounter = new Counter(this.purr, this.bag, b.purr);
-    this.fish.position.set(r.purr ? 152 : 360, 0);
+    this.fish.position.set(r.purr ? FISH_X : FISH_ALONE_X, 0);
     this.purr.position.set(380, 0);
     this.purr.visible = r.purr;
 
@@ -128,6 +132,7 @@ export class CurrencyRow {
       if (delta > 0 && r.purr) env.hints.request('purr', this.purr);
     });
     env.on(landings, 'landed', ({ kind, amount }) => (kind === 'fish' ? this.fishCounter : this.purrCounter).landed(amount));
+    env.on(env.revealed, 'reveal', ({ key, fresh }) => this.onReveal(key, fresh));
     env.on(b.events, 'pity', () => this.refreshPity());
     env.on(b.events, 'summon', () => this.refreshPity());
     env.on(env.ctx.events, 'refused', ({ fail }) => {
@@ -135,6 +140,24 @@ export class CurrencyRow {
       else if (fail === 'not_enough_purr' && r.purr) this.purr.shakeInsufficient();
     });
     this.refreshPity();
+  }
+
+  /** The purr counter arrives beside the fish (which slides over to make room); the odds button pops in. */
+  private onReveal(key: RevealKey, fresh: boolean): void {
+    if (key === 'purr') {
+      this.purr.visible = true;
+      if (fresh && !motion.reduced) {
+        popIn(this.bag, this.purr, { from: 0.3, duration: 0.32, overshoot: 2.8 });
+        const x0 = this.fish.x;
+        this.bag.runKeyed(this.fish, { duration: 0.28, ease: Ease.cubicOut, onUpdate: (k) => (this.fish.x = x0 + (FISH_X - x0) * k), onComplete: () => (this.fish.x = FISH_X) });
+      } else {
+        this.fish.x = FISH_X;
+      }
+    } else if (key === 'odds') {
+      this.odds.visible = true;
+      this.refreshPity();
+      if (fresh && !motion.reduced) popIn(this.bag, this.odds, { from: 0.3, duration: 0.32, overshoot: 2.8 });
+    }
   }
 
   private refreshPity(): void {

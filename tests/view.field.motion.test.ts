@@ -1,41 +1,72 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACK_SECONDS, attackPose, breathe, coilPose, deathScale, hopArc, makePose, stepRate, walkBob, walkTilt, windStart } from '@/view/field/motion';
+import { breathe, coilPose, deathScale, hopArc, makePose, releasePose, stepRate, walkBob, walkTilt } from '@/view/field/motion';
+import { WEAPON_IDS, releaseSeconds, weaponStyle } from '@/view/weapons';
 import { MERGE_SECONDS, REVEAL_DELAY, REVEAL_MS, REVEAL_OVERSHOOT, SLIDE_SECONDS } from '@/view/timing';
 import { Color, TapeColors } from '@/ui/theme';
 import { DEFAULT_RUG, RUG_SKINS, cellPaper, rugSkin, type RugPattern } from '@/view/field/rugSkins';
 
-describe('attack pose', () => {
-  it('starts and ends at rest', () => {
-    const p = makePose();
-    for (const k of [0, 1]) {
-      attackPose(k, p);
-      expect(p).toEqual({ lunge: 0, sx: 1, sy: 1 });
-    }
-    expect(ATTACK_SECONDS).toBeGreaterThan(0.2);
-  });
+describe('weapon poses', () => {
+  for (const id of WEAPON_IDS) {
+    const spec = weaponStyle(id).pose;
 
-  it('pulls back first, then lunges the full distance, then recoils to rest', () => {
-    const p = makePose();
-    attackPose(0.2, p);
-    expect(p.lunge).toBeLessThan(0);
-    expect(p.sy).toBeLessThan(1);
-    attackPose(0.46, p);
-    expect(p.lunge).toBeCloseTo(1, 1);
-    expect(p.sy).toBeGreaterThan(1);
-    attackPose(0.99, p);
-    expect(Math.abs(p.lunge)).toBeLessThan(0.05);
-    expect(p.sx).toBeCloseTo(1, 1);
-  });
+    it(`${id}: continues out of its coil, reaches contact when the strike ends and ends at rest`, () => {
+      const start = releasePose(spec, 0, 1, makePose());
+      const coiled = coilPose(spec, 1, makePose());
+      expect(start).toEqual(coiled);
+      const hit = releasePose(spec, spec.strike, 1, makePose());
+      expect(hit.lunge).toBeCloseTo(spec.hit.lunge, 5);
+      expect(hit.rot).toBeCloseTo(spec.hit.rot, 5);
+      expect(hit.sy).toBeCloseTo(spec.hit.sy, 5);
+      expect(hit.rise).toBeCloseTo(spec.hit.rise, 5);
+      const end = releasePose(spec, releaseSeconds(spec) + 1e-3, 1, makePose());
+      expect(end).toEqual({ lunge: 0, sx: 1, sy: 1, rot: 0, rise: 0 });
+    });
 
-  it('is continuous across phase boundaries', () => {
-    const a = makePose();
-    const b = makePose();
-    for (const k of [0.26, 0.46]) {
-      attackPose(k - 1e-6, a);
-      attackPose(k + 1e-6, b);
+    it(`${id}: is continuous across the strike boundary`, () => {
+      const a = releasePose(spec, spec.strike - 1e-6, 1, makePose());
+      const b = releasePose(spec, spec.strike + 1e-6, 1, makePose());
       expect(Math.abs(a.lunge - b.lunge)).toBeLessThan(0.01);
       expect(Math.abs(a.sy - b.sy)).toBeLessThan(0.01);
-    }
+      expect(Math.abs(a.rot - b.rot)).toBeLessThan(0.01);
+    });
+
+    it(`${id}: reaches contact on the release, not after it`, () => {
+      // The sound is on the release frame: the contact pose may follow it by a few frames at most.
+      expect(spec.strike).toBeLessThanOrEqual(0.09);
+      expect(releaseSeconds(spec)).toBeLessThan(0.5);
+      expect(spec.lead).toBeLessThanOrEqual(0.2);
+    });
+
+    it(`${id}: a cat coiled to any degree starts its release from that pose without a jump`, () => {
+      for (const coil of [0, 0.3, 0.6, 1]) {
+        const c = coilPose(spec, coil, makePose());
+        const r = releasePose(spec, 0, coil, makePose());
+        expect(r.lunge).toBeCloseTo(c.lunge, 6);
+        expect(r.sy).toBeCloseTo(c.sy, 6);
+      }
+    });
+  }
+
+  it('gives each weapon its own body language', () => {
+    const reach = (id: (typeof WEAPON_IDS)[number]): number => weaponStyle(id).pose.hit.lunge;
+    // A punch jabs further than a sword swings, a katana darts furthest, the cork gun kicks the cat backwards.
+    expect(reach('w_paw')).toBeGreaterThan(reach('w_sword'));
+    expect(reach('w_samurai')).toBeGreaterThan(reach('w_paw'));
+    expect(reach('r_gunner')).toBeLessThan(0);
+    // The sword turns through an arc, the axe rises before it slams and lands squashed, the bow shivers, the bell shakes.
+    expect(weaponStyle('w_sword').pose.hit.rot - weaponStyle('w_sword').pose.coil.rot).toBeGreaterThan(0.6);
+    expect(weaponStyle('w_viking').pose.coil.rise).toBeGreaterThan(4);
+    expect(weaponStyle('w_viking').pose.hit.sy).toBeLessThan(0.9);
+    expect(weaponStyle('r_archer').pose.twang).toBeGreaterThan(0.05);
+    expect(weaponStyle('t_bell').pose.twang).toBeGreaterThan(0.1);
+    // Thrown things hop with the throw.
+    expect(weaponStyle('m_snow').pose.hit.rise).toBeGreaterThan(3);
+    expect(weaponStyle('t_lucky').pose.hit.rise).toBeGreaterThan(8);
+  });
+
+  it('is not one pose with different numbers: the twenty cats do not share a wind-up', () => {
+    const windups = new Set(WEAPON_IDS.map((id) => JSON.stringify(weaponStyle(id).pose.coil)));
+    expect(windups.size).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -112,24 +143,6 @@ describe('rug skins', () => {
     expect(d.paper).toBe(Color.paper);
     expect(d.pattern).toBe('plain');
     expect(d.dash).toBe(Color.teal);
-  });
-});
-
-describe('attack anticipation', () => {
-  it('a cat coiled to any degree continues into the attack without a jump', () => {
-    for (const coil of [0, 0.3, 0.6, 1]) {
-      const a = coilPose(coil, makePose());
-      const b = attackPose(Math.max(1e-6, windStart(coil)), makePose());
-      expect(b.sx).toBeCloseTo(a.sx, 3);
-      expect(b.sy).toBeCloseTo(a.sy, 3);
-      expect(b.lunge).toBeCloseTo(a.lunge, 3);
-    }
-  });
-
-  it('a fully coiled cat starts at the strike and the start never passes it', () => {
-    expect(windStart(0)).toBe(0);
-    expect(windStart(1)).toBeLessThan(0.26 + 1e-9);
-    expect(windStart(0.4)).toBeLessThan(windStart(0.8));
   });
 });
 

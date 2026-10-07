@@ -115,6 +115,15 @@ export class TopBar {
     this.syncSpeed(env.ctx.speed, false);
 
     env.on(env.ctx.events, 'speed', ({ speed }) => this.syncSpeed(speed, true));
+    // A control the tutorial brings in: the speed button pops in, the next-wave cards are dealt.
+    env.on(env.revealed, 'reveal', ({ key, fresh }) => {
+      if (key === 'speed') {
+        this.speedBtn.visible = true;
+        if (fresh && !motion.reduced) popIn(this.bag, this.speedBtn, { from: 0.3, duration: 0.32, overshoot: 2.8 });
+      } else if (key === 'preview') {
+        this.previewDirty = true;
+      }
+    });
     const e = b.events;
     env.on(e, 'enemySpawn', () => (this.gaugeDirty = true));
     env.on(e, 'enemyDie', () => (this.gaugeDirty = true));
@@ -420,7 +429,8 @@ export class TopBar {
     this.pauseBtn.position.set(r.pause.x, r.pause.y);
     this.speedBtn.position.set(r.speed.x, r.speed.y);
     this.gauge.position.set(r.gauge.x + GAUGE_W / 2, r.gauge.y + GAUGE_H / 2);
-    this.warn.position.set(r.gauge.x + r.gauge.w - 36, r.gauge.y + r.gauge.h / 2);
+    // The tutorial's skip button lies over the strip's right end, so the warning icon stays clear of it.
+    this.warn.position.set(r.gauge.x + r.gauge.w - 62, r.gauge.y + r.gauge.h / 2);
     this.previewLayer.hitArea = new Rectangle(r.preview.x, r.row2Y - STRIP_H / 2 - 4, r.preview.w, STRIP_H);
     this.toyLayer.hitArea = new Rectangle(r.toys.x, r.row2Y - STRIP_H / 2 - 4, r.toys.w, STRIP_H);
     this.timer.position.set(r.timer.x + r.timer.w / 2, r.timer.y + r.timer.h / 2);

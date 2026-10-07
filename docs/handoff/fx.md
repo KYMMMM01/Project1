@@ -164,3 +164,24 @@ Second pass (table in `director.md`). `flyTo` now keeps every icon on the screen
 - **`marks.ts`** (new, exported from `@/fx`): `drawSunMark`, `drawTargetMark`, `drawPaw`: the stickers the field bakes and the laser card draws.
 - **`laserDot`** takes `ZoneOpts.radius` and draws the marked area: a flat soft disc, a cream rim and a dashed ring in the dot's red, turning slowly; `calm` is read per frame.
 - **`FloatingNumbers`**: a hit whose rise would end on the `minY` line (the HUD edge) takes the nearest free slot beside the numbers already there (`SLOT_W` 62, `SLOT_Y` 34, up to two slots each way), so a pack of hits near the entrance is read number by number, not as "1123". Tests in `fx.numbers.test.ts`; `fx.zones.test.ts` (sunbeam has no pooled sprites, laser dot with an area).
+
+## 2026-10-07 owner feedback (second round): ground areas
+
+`src/fx/areas.ts` (new, exported types from `@/fx`) replaces the old blizzard, potion cloud, black hole, wet puddle and live cell loops (their code left `zones.ts`; `hazardWarn`, `sunbeamCell`, `laserDot` and `weakenSwirl` stay there). `Fx` owns one `AreaLayer` on its ground container; the facade keeps its names and returns `AreaHandle` (a `ZoneHandle` with `setLeft(seconds, total)`).
+
+What every area has: it **lands** (the sheet drops from 0.55 to full size with an overshoot over 0.3 s and a ring spreads from its edge), it **loops** with one small motif on a sheet that is mostly see-through (the lane and the enemies read through it; areas sit under enemies and cats, over the floor and path, in `layers.zones`), it **warns** (the last second, or the last third of a short life, in real time: the dashes drop out in three steps, the sheet draws in by 14 % and blinks at 2 Hz at most), and it **lifts away** (0.32 s). Reduced motion: same picture, still, the ending shown by missing dashes, a smaller and dimmer sheet and no blinking.
+
+| Area | Shape and rim | Motif | Who |
+|---|---|---|---|
+| blizzard | pale ice doily, 14 scallops, cream rim, steel-blue dashes | six-arm paper snowflakes drift down and melt where they land; 14 crystal spikes grow in from the rim one by one | friend (m_frost) |
+| potion cloud | green cloud with eight bumps, cream rim, leaf dots | bubbles swell as they rise and pop | friend (t_alch) |
+| black hole | torn ink sheet, kraft rim, cream dots | a paper spiral turning, scraps spiral in and shrink to the core; spins up and the core swells in the warning; the sheet collapses to the core when it leaves | friend (m_cosmo) |
+| wet cell | cell under berry-and-cream hazard tape, blue pool at the cat's feet | ripples, drops falling in; the pool dries in the warning | foe (spray, bath boss) |
+| live cell | hazard tape, mustard tint | a zig-zag warning, a bolt glyph, flicking bolts | foe (storm cloud boss) |
+| haste ring (clock), heal ring (pill) | berry dashed ring, coral or berry tint, radius 120 like the simulation | speed comets orbit; healing crosses rise | foe, at most four at once |
+
+Friend and foe differ before colour is read: friendly areas have a cream rim with dashes or dots, hostile ones hazard tape or a berry rim. `hazardWarn` (the telegraph) wears the same tape.
+
+Pooling: a view is built once per kind (and cell size) and handed on; starting a zone allocates only its small handle, a frame allocates nothing, and the crystals and dashes only move while they grow or while the warning moves. Cost, measured at speed 3 on chapter 3, wave 21, 20 cats, 41 enemies and 22 zones alive on average (26 at most), 150 frames of `game.tick + render + gl.finish`: before (old zones) mean 13.9 and 15.2 ms, p95 24.7 and 26.4; after mean 17.0 to 17.7 ms (the same script, a busier minute on the machine; in the same run with the simulation frozen on 16 zones the layer costs 0.9 ms of the frame: 4.1 ms shown against 3.2 ms hidden, and 0.5 ms of that frame is `tick`). It was made cheaper after the first measurement (dashes became three Graphics instead of 28 sprites, shorter outlines, crystals idle).
+
+Tests: `tests/fx.areas.test.ts` (landing, scale to the reach, pooling, stale handles, the warning for long and short lives, reduced motion, blink rate, clear), `tests/fx.zones.test.ts` (the old presets left).

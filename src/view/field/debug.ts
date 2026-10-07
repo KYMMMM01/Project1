@@ -7,9 +7,10 @@ import { setLang } from '@/core/i18n';
 import { scenes } from '@/core/scene';
 import { BootScene } from '@/scenes/BootScene';
 import { BattleScene, setBattleCreatedHook } from '@/scenes/BattleScene';
-import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId, type UnitId } from '@/game';
+import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type UnitId } from '@/game';
 import { createBot } from '@/game/sim/bots';
 import { spawnEnemy, killEnemy, removeEnemy } from '@/game/sim/enemies';
+import { scheduleHazard } from '@/game/sim/hazards';
 import { makeUnit, refresh } from '@/game/sim/board';
 import { addFish, addPurr } from '@/game/sim/economy';
 import { Sim } from '@/game/sim/sim';
@@ -136,9 +137,14 @@ export function installBattleDebug(scene: BattleScene): void {
       for (const [cell, id] of Object.entries(units)) s.units[Number(cell)] = makeUnit(s, id, Number(cell), 0);
       refresh(s);
     },
-    spawn(id: EnemyId, count = 1, from = 220): void {
+    /** `hp` scales the health (a strip of one weapon needs an enemy that is still there at the end). */
+    spawn(id: EnemyId, count = 1, from = 220, hp = 1): void {
       const s = need();
-      for (let i = 0; i < count; i++) spawnEnemy(s, id, from + i * 30, s.baseHp(), false, id.startsWith('boss_') ? s.baseHp() * 400 : 0);
+      for (let i = 0; i < count; i++) spawnEnemy(s, id, from + i * 30, s.baseHp() * hp, false, id.startsWith('boss_') ? s.baseHp() * 400 : 0);
+    },
+    /** Announce a cell hazard now (the warning, then `duration` seconds on the cells), as a boss or the spray elite would. */
+    hazard(kind: HazardKind, cells: number[], duration = 4): void {
+      scheduleHazard(need(), kind, cells, duration);
     },
     /** Let the bot play and clear the field until the run is won. */
     win(): void {

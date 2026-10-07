@@ -52,7 +52,9 @@ export const Gate = {
   enrage: 8,
   hazardCaption: 9,
   hazardBuzz: 10,
-  count: 12,
+  hitShake: 11,
+  bossShake: 12,
+  count: 14,
 } as const;
 
 export interface EnemyInfo {

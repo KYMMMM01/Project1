@@ -25,7 +25,7 @@ export class ClassRow {
     open: (id: ClassId) => void,
   ) {
     const b = env.battle;
-    this.unlocked = env.ctx.run.runsPlayed >= 1 || b.getStats().merges > 0;
+    this.unlocked = env.reveal.chips;
     CLASS_IDS.forEach((id, i) => {
       const chip = new ClassChip({
         icon: CLASS_ICON[id],
@@ -33,8 +33,8 @@ export class ClassRow {
         tier: b.synergyTier(id),
         accent: CLASS_ACCENT[id],
         onTap: () => {
-          env.hints.used('chips');
-          env.hints.used('synergy');
+          env.hints.used('classes');
+          env.hints.used('class_sheet');
           open(id);
         },
       });
@@ -53,22 +53,23 @@ export class ClassRow {
       this.dirty = true;
     };
     for (const type of ['summon', 'merge', 'molt', 'awaken', 'sell', 'synergy', 'relicGain'] as const) env.on(b.events, type, mark);
-    env.on(b.events, 'merge', () => this.unlock());
+    env.on(env.revealed, 'reveal', ({ key, fresh }) => {
+      if (key === 'chips') this.unlock(fresh);
+    });
     env.on(b.events, 'synergy', ({ tier, previous }) => {
       if (tier > previous && tier >= 1) env.hints.request('synergy', this.root);
     });
   }
 
-  /** First merge of the first run: the chips pop in one after another. */
-  private unlock(): void {
+  /** The tutorial brings the chips in: they pop in one after another. */
+  private unlock(fresh: boolean): void {
     if (this.unlocked) return;
     this.unlocked = true;
     this.root.visible = true;
     this.refresh(false);
     this.holders.forEach((holder, i) => {
-      if (!motion.reduced) popIn(this.bag, holder, { from: 0.3, duration: 0.3, delay: i * 0.06, overshoot: 2.5 });
+      if (fresh && !motion.reduced) popIn(this.bag, holder, { from: 0.3, duration: 0.3, delay: i * 0.06, overshoot: 2.5 });
     });
-    this.env.hints.request('chips', this.root);
   }
 
   private refresh(animate: boolean): void {
@@ -82,7 +83,6 @@ export class ClassRow {
 
   invalidate(): void {
     this.dirty = true;
-    if (!this.unlocked && this.env.battle.getStats().merges > 0) this.unlock();
   }
 
   layout(y: number): void {

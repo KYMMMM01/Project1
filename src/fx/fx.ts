@@ -10,6 +10,7 @@ import type { TimeFreeze } from './freeze';
 import { startFxGovernor } from './governor';
 import { FloatingNumbers, type NumStyle, type NumberOpts } from './numbers';
 import { EmitterGroup, type FxHandle, type FxSequence, type FxTimeline } from './handles';
+import { AreaLayer, type AreaHandle, type DiscKind } from './areas';
 import { Loop, type FxEnv, type FxRect, type ZoneHandle } from './loops';
 import { ParticleSystem, type BurstMods, type EmitDef } from './particles';
 import { hitFlash } from './juice';
@@ -157,6 +158,8 @@ export class Fx {
   private readonly spritePool = makeSpritePool();
   private readonly rayList: Rays[] = [];
   private readonly loops: Loop[] = [];
+  /** Pooled ground areas (blizzard, potion cloud, black hole, wet and live cells, enemy rings). */
+  private readonly areas: AreaLayer;
   private readonly timers: Tween[] = [];
   private readonly screen: ScreenFx;
   private readonly freeze: TimeFreeze | undefined;
@@ -176,6 +179,7 @@ export class Fx {
     this.root.eventMode = 'none';
     target.addChild(this.root);
     this.root.addChild(this.ground);
+    this.areas = new AreaLayer(this.ground);
     this.ps = new ParticleSystem(this.root, FX_TIERS[fxSettings.tier].particles);
     this.numbers = new FloatingNumbers(this.root, FX_TIERS[fxSettings.tier].numbers);
     this.screen = o.screen ?? screenFx;
@@ -210,6 +214,7 @@ export class Fx {
       l.update(dt);
       if (!l.alive) this.loops.splice(i, 1);
     }
+    this.areas.update(dt);
   }
 
   /** Remove every live effect immediately. */
@@ -220,6 +225,7 @@ export class Fx {
     this.rayList.length = 0;
     for (const l of this.loops.slice()) l.dispose();
     this.loops.length = 0;
+    this.areas.clear();
     for (const t of this.timers) t.kill();
     this.timers.length = 0;
   }
@@ -228,6 +234,7 @@ export class Fx {
     this.clear();
     this.numbers.destroy();
     this.ps.destroy();
+    this.areas.destroy();
     this.spritePool.drain((s) => s.destroy());
     this.root.destroy({ children: true });
   }
@@ -237,7 +244,7 @@ export class Fx {
       ...this.ps.stats(),
       numbers: this.numbers.count,
       rays: this.rayList.length,
-      loops: this.loops.length,
+      loops: this.loops.length + this.areas.count,
       timers: this.timers.length,
       tier: fxSettings.tier,
     };
@@ -1322,14 +1329,14 @@ export class Fx {
     return zones.hazardWarn(this.env, rect, kind, o);
   }
 
-  /** Looping `wet` hazard: a rippling puddle with leaping droplets. */
-  wetPuddle(rect: FxRect, o?: ZoneOpts): ZoneHandle {
-    return zones.wetPuddle(this.env, rect, o);
+  /** Looping `wet` hazard: a puddle under hazard tape, ripples spreading, drops falling in. Feed `setLeft` so its last second warns. */
+  wetPuddle(rect: FxRect): AreaHandle {
+    return this.areas.cell('wet', rect);
   }
 
-  /** Looping `zap` hazard: a flickering mustard tint with crackling arcs. */
-  zapCell(rect: FxRect, o?: ZoneOpts): ZoneHandle {
-    return zones.zapCell(this.env, rect, o);
+  /** Looping `zap` hazard: a live cell under hazard tape with a zig-zag warning and flickering bolts. */
+  zapCell(rect: FxRect): AreaHandle {
+    return this.areas.cell('zap', rect);
   }
 
   /** Looping droopy blue spiral above a weakened unit. Pass `follow` to ride along with the unit. */
@@ -1337,19 +1344,24 @@ export class Fx {
     return zones.weakenSwirl(this.env, x, y, o);
   }
 
-  /** Looping blizzard zone of the given radius. */
-  blizzardZone(x: number, y: number, radius: number, o?: ZoneOpts): ZoneHandle {
-    return zones.blizzardZone(this.env, x, y, radius, o);
+  /** A friendly blizzard of the given reach: a scalloped ice doily, crystals growing in from its rim, snowflakes settling. */
+  blizzardZone(x: number, y: number, radius: number): AreaHandle {
+    return this.areas.disc('frost', x, y, radius);
   }
 
-  /** Looping potion mist zone of the given radius. */
-  potionCloud(x: number, y: number, radius: number, o?: ZoneOpts): ZoneHandle {
-    return zones.potionCloud(this.env, x, y, radius, o);
+  /** A friendly potion cloud of the given reach: a bubbly green sheet with bubbles rising and popping. */
+  potionCloud(x: number, y: number, radius: number): AreaHandle {
+    return this.areas.disc('brew', x, y, radius);
   }
 
-  /** Looping black hole of the given pull radius. */
-  blackHole(x: number, y: number, radius: number, o?: ZoneOpts): ZoneHandle {
-    return zones.blackHole(this.env, x, y, radius, o);
+  /** A friendly black hole of the given pull radius: a torn ink sheet, a paper spiral and scraps pulled in. */
+  blackHole(x: number, y: number, radius: number): AreaHandle {
+    return this.areas.disc('void', x, y, radius);
+  }
+
+  /** The hostile ring round an enemy: speed comets for the clock's haste, healing crosses for the pill's mending. Move it with `moveTo`. */
+  enemyRing(kind: Extract<DiscKind, 'haste' | 'heal'>, x: number, y: number, radius: number): AreaHandle {
+    return this.areas.disc(kind, x, y, radius);
   }
 
   /* ---- one-shot specials -------------------------------------------------------------------- */

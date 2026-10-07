@@ -10,6 +10,7 @@ import { Ease } from '@/core/tween';
 import { unitRarityIndex } from '@/game';
 import { Button, Color, CooldownRing, drawIcon, drawPaper, IconButton, motion, paperSeed, popIn, punch, tooltip, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
+import type { RevealKey } from './policy';
 import { startAim, stopAim } from '../aim';
 import { LaserCard } from './popups/LaserCard';
 import { SummonButton } from './SummonButton';
@@ -130,7 +131,7 @@ export class ActionRow {
       const fail = env.ctx.command('callNextWave', () => b.callNextWave());
       if (fail === null) {
         audio.play('call_wave');
-        env.hints.used('callWave');
+        env.hints.used('call_wave');
       }
     });
     this.callBtn.visible = false;
@@ -144,7 +145,7 @@ export class ActionRow {
       if (kind === 'summon') this.hopArrow();
     });
     env.on(b.events, 'summon', () => {
-      if (++this.summonCount >= 2) env.hints.request('tracker', this.tracker);
+      if (++this.summonCount >= 2) env.hints.request('pick3', this.tracker);
     });
     // The chip names the cat on the frame its sticker pops on the board (after the toss and the rarity's own charge-up).
     env.on(b.events, 'summon', ({ unit, source }) => {
@@ -152,15 +153,32 @@ export class ActionRow {
       if (wait > 0) this.bag.call(wait, () => this.chips.show(unit.id));
       else this.chips.show(unit.id);
     });
-    env.on(b.events, 'waveStart', ({ wave }) => {
-      if (wave >= 2) env.hints.request('laser', this.laser);
-    });
+    env.on(env.revealed, 'reveal', ({ key, fresh }) => this.onReveal(key, fresh));
     env.on(b.events, 'laser', () => {
       stopAim();
       this.pop();
       // The dot is down: the "tap the path" tip has done its job.
       if (tooltip.target === this.laser) tooltip.hide();
     });
+  }
+
+  /** A control the tutorial brings in: it appears here, with a small pop when it is fresh. */
+  private onReveal(key: RevealKey, fresh: boolean): void {
+    const pop = (obj: Container): void => {
+      if (fresh && !motion.reduced) popIn(this.bag, obj, { from: 0.3, duration: 0.32, overshoot: 2.8 });
+    };
+    if (key === 'laser') {
+      this.laser.visible = true;
+      this.info.visible = true;
+      pop(this.laser);
+      pop(this.info);
+    } else if (key === 'gradeUpgrade') {
+      this.grade.visible = true;
+      this.gradeDirty = true;
+      pop(this.grade);
+    } else if (key === 'tracker') {
+      this.trackerDirty = true;
+    }
   }
 
   /** The "i": a small cream sticker with a full-size touch slot. */
@@ -273,7 +291,7 @@ export class ActionRow {
     // Cream paper when the fish are there, plain kraft when not; the price says the rest.
     this.grade.setStyle(ready ? 'neutral' : 'kraft');
     if (ready) {
-      this.env.hints.request('grade', this.grade);
+      this.env.hints.request('summon_grade', this.grade);
       if (this.gradeReady === false) this.grade.shine();
     }
     this.gradeReady = ready;
@@ -345,7 +363,7 @@ export class ActionRow {
         this.callBtn.visible = true;
         this.callBonus = -2;
         if (!motion.reduced) popIn(this.bag, this.callBtn, { from: 0.5, duration: 0.3, overshoot: 3 });
-        this.env.hints.request('callWave', this.callBtn);
+        this.env.hints.request('call_wave', this.callBtn);
       } else if (motion.reduced) {
         this.callBtn.visible = false;
       } else {

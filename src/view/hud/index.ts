@@ -5,31 +5,38 @@
  */
 import './strings';
 import { Container, Point } from 'pixi.js';
-import { i18nEvents } from '@/core/i18n';
-import { clearToasts, popups, tooltip } from '@/ui';
+import { debugExpose } from '@/core/debug';
+import { i18nEvents, t } from '@/core/i18n';
+import { closeGuide, GuideProgress, guideProgress, openGuide, topicTeach, type TopicId, type TryControl } from '@/guide';
+import { clearToasts, confirmDialog, popups, toast, tooltip } from '@/ui';
 import type { UnitId } from '@/game';
 import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
 import type { BattleContext, BattleLayout, HudAnchor, HudPart } from '../context';
 import { BossBar } from './BossBar';
 import { BottomPanel } from './BottomPanel';
 import type { Weighted } from './bubbleMath';
+import { watchEncounters } from './encounterWatch';
 import { EnvImpl } from './env';
 import { HintBubble } from './HintBubble';
 import { Hints, onScreen } from './hints';
+import { LessonBubble } from './LessonBubble';
 import { LaserGuide } from './LaserGuide';
 import { LaserTeach } from './laserTeach';
 import { PauseMenu, type PauseAction } from './popups/PauseMenu';
 import { SummonPickPopup } from './popups/SummonPickPopup';
 import { stageHeldFor } from '@/view/staging';
 import { findTwins } from './planMath';
-import { canOpenPause, REVIVE_MIN_WAVES, revealFlags } from './policy';
+import { canOpenPause, REVIVE_MIN_WAVES, revealFlags, type RevealKey } from './policy';
 import { canOfferContinue, openContinue, type DefeatReason } from './screens/ContinueScreen';
 import { RelicScreen } from './screens/RelicScreen';
 import { openResult, type ResultHandle } from './screens/ResultScreen';
 import { openSettings } from './screens/SettingsScreen';
 import { ensureSettings } from './settings';
 import { TopBar } from './TopBar';
-import { Tutorial } from './Tutorial';
+import { Tutorial, type TutorialHost } from './Tutorial';
+import { revealedBy, STEP_IDS, type Target } from './tutorialScript';
+import { topRects, type Rect } from './layoutMath';
+import { unionRect } from './bubbleMath';
 
 /** Frames to wait for the field to draw a new cat before the pair hint gives up on it. */
 const TWINS_WAIT = 90;
@@ -57,6 +64,10 @@ class Hud implements HudPart {
   private bottom!: BottomPanel;
   private tutorial: Tutorial | null = null;
   private guide: LaserGuide | null = null;
+  private readonly progress: GuideProgress;
+  private card!: LessonBubble;
+  /** "Try it" in the guidebook asked to point at a control: the pause menu stays closed and the control gets a bubble. */
+  private tryControl: { control: TryControl; topic: TopicId } | null = null;
   private readonly teach: LaserTeach;
   private relic: RelicScreen | null = null;
   private pick: SummonPickPopup | null = null;
@@ -65,7 +76,6 @@ class Hud implements HudPart {
   private readonly onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !e.repeat && this.env.modalCount === 0) void this.openPause();
   };
-  private summons = 0;
   /** Waiting to point the first-time "merge identical cats" bubble at a pair, once the field has drawn it. */
   private twinsFrames = 0;
   private lastTime = 0;
@@ -78,13 +88,34 @@ class Hud implements HudPart {
 
   constructor(private readonly ctx: BattleContext) {
     void ensureSettings();
-    this.hints = new Hints(!ctx.run.sandbox);
-    // A sandbox run skips the laser's guided first use unless the debug route asks for it (?laserguide=1).
-    this.teach = new LaserTeach(!ctx.run.sandbox, !ctx.run.sandbox || new URLSearchParams(window.location.search).get('laserguide') === '1');
+    // A sandbox run keeps what it teaches in memory only.
+    this.progress = ctx.run.sandbox ? new GuideProgress(false) : guideProgress;
+    this.hints = new Hints(this.progress);
+    // A sandbox run skips the laser's guided first use unless the debug route asks for it (?laserguide=1) or it is the tutorial.
+    const lessonRun = ctx.battle.init.mode === 'tutorial';
+    this.teach = new LaserTeach(!ctx.run.sandbox, !ctx.run.sandbox || lessonRun || new URLSearchParams(window.location.search).get('laserguide') === '1');
     this.root.eventMode = 'passive';
     ctx.layers.hud.addChild(this.root);
+    // QA: what the lessons are doing (debug builds only).
+    debugExpose('lessons', {
+      topic: () => this.tutorial?.topic ?? null,
+      left: () => this.tutorial?.script.remaining.map((s) => s.id) ?? [],
+      card: () => this.hints.liveId,
+      laser: () => this.guide?.flow.step ?? null,
+      rectOf: (target: Target) => this.tutorialHost().rectOf(target),
+      progress: this.progress,
+    });
     this.build();
     window.addEventListener('keydown', this.onKey);
+    // What the player has been taught is read from storage a moment after the scene opens; the lessons and the controls that are out
+    // depend on it, so a HUD built before it arrived is built once more (nothing has happened yet).
+    if (!this.progress.ready) {
+      void this.progress.load().then(() => {
+        if (this.destroyed) return;
+        this.teardown();
+        this.build();
+      });
+    }
     // A language switch rebuilds every label; the handler that changed it must finish first.
     this.offLang = i18nEvents.on('change', () =>
       queueMicrotask(() => {
@@ -99,8 +130,11 @@ class Hud implements HudPart {
 
   private build(): void {
     const ctx = this.ctx;
-    const reveal = revealFlags(ctx.run.runsPlayed);
-    this.env = new EnvImpl(ctx, reveal, this.hints, this.root, this.teach);
+    // The tutorial run starts with only what its lessons have already brought in; every other run (and a skipped tutorial) shows it all.
+    const lessons = ctx.battle.init.mode === 'tutorial' && !this.progress.skipped;
+    const taught = new Set<TopicId>(STEP_IDS.filter((id) => this.progress.isTaught(id)));
+    const reveal = revealFlags(lessons, revealedBy(taught));
+    this.env = new EnvImpl(ctx, reveal, this.progress, this.hints, this.root, this.teach);
     const env = this.env;
     this.top = new TopBar(env);
     this.bottom = new BottomPanel(env);
@@ -109,30 +143,29 @@ class Hud implements HudPart {
     this.top.pauseBtn.onTap(() => void this.openPause());
     this.layoutAll(ctx.layout);
     this.bubble = new HintBubble(env, ctx.layers.overlay);
-    this.hints.bind({ bubble: this.bubble, avoid: () => this.avoidList() });
+    this.card = new LessonBubble(env, ctx.layers.overlay);
+    this.hints.bind({
+      bubble: this.bubble,
+      card: this.card,
+      avoid: () => this.avoidList(),
+      hold: () => env.holdPause(),
+      openGuide: (id) => this.openGuideAt(id, false),
+    });
     env.explainAt = (command) => this.explainTarget(command);
+    // The tutorial run teaches its own topics (in order, as each control arrives); a card only comes for what it leaves out.
+    this.hints.only = lessons ? new Set<TopicId>(['awaken']) : null;
 
     if (env.tutorial) {
-      this.tutorial = new Tutorial(env, () => {
-        // getBounds() is in screen pixels: both corners go through the HUD's own transform.
-        const b = this.bottom.actions.summon.btn.getBounds();
-        const tl = env.toHud(new Point(b.x, b.y));
-        const br = env.toHud(new Point(b.x + b.width, b.y + b.height));
-        return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
-      }, (on) => this.bottom.actions.summon.attention(on));
+      this.tutorial = new Tutorial(env, this.tutorialHost(), this.progress.skipped);
     }
-
-    if (!env.tutorial && reveal.laser) {
-      const laser = this.bottom.actions.laser;
-      this.guide = new LaserGuide(env, () => {
-        // getBounds() is in screen pixels: both corners go through the HUD's own transform.
-        const b = laser.getBounds();
-        const tl = env.toHud(new Point(b.x, b.y));
-        const br = env.toHud(new Point(b.x + b.width, b.y + b.height));
-        return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
-      });
-      this.bottom.actions.onExplained = () => this.guide?.explained();
-    }
+    // The laser's guided first use: a normal run starts it by itself, the tutorial run when its laser lesson begins.
+    const laser = this.bottom.actions.laser;
+    this.guide = new LaserGuide(env, () => this.boundsRect(laser), !lessons);
+    this.bottom.actions.onExplained = () => this.guide?.explained();
+    watchEncounters(env, {
+      gauge: this.top.gauge, waveLabel: this.top.waveLabel, previewLayer: this.top.previewLayer, boss: this.boss.root, chips: this.bottom.classes.root,
+      floor: ctx.layers.floor,
+    });
 
     const battle = ctx.battle;
     env.on(ctx.events, 'refused', ({ command, fail }) => {
@@ -155,7 +188,7 @@ class Hud implements HudPart {
     }
     env.on(battle.events, 'laser', () => env.hints.used('laser'));
     env.on(battle.events, 'upgrade', ({ kind }) => {
-      if (kind === 'summon') env.hints.used('grade');
+      if (kind === 'summon') env.hints.used('summon_grade');
     });
     env.on(battle.events, 'sell', () => env.hints.used('sell'));
     env.on(battle.events, 'molt', () => env.hints.used('molt'));
@@ -165,14 +198,8 @@ class Hud implements HudPart {
       if (wave >= 1 && env.reveal.speed) env.hints.request('speed', this.top.speedBtn);
       if (wave >= 2 && env.reveal.preview) env.hints.request('preview', this.top.previewLayer);
     });
-    env.on(battle.events, 'sunbeams', () => {
-      if (battle.wave > 1) env.hints.request('sun', this.top.waveLabel);
-    });
-    env.on(battle.events, 'summon', () => {
-      if (++this.summons >= 3 && env.reveal.odds) env.hints.request('odds', this.bottom.currency.root);
-    });
-    // Outside the tutorial (which teaches the merge itself) the first pair of identical cats earns one bubble.
-    if (!env.tutorial && !env.hints.has('twins')) {
+    // Outside the tutorial (which teaches the merge itself) the first pair of identical cats earns one card.
+    if (!lessons && !env.hints.has('merge')) {
       for (const type of ['summon', 'move', 'swap', 'merge', 'molt', 'awaken'] as const) env.on(battle.events, type, () => (this.twinsFrames = TWINS_WAIT));
     }
 
@@ -189,6 +216,7 @@ class Hud implements HudPart {
     this.guide = null;
     this.hints.bind(null);
     this.bubble.destroy();
+    this.card.destroy();
     this.env.dispose();
     this.top.destroy();
     this.bottom.destroy();
@@ -247,6 +275,122 @@ class Hud implements HudPart {
     }
   }
 
+  // ───────────────────────── tutorial host and the guidebook ─────────────────────────
+
+  /** Scene-space rectangle of a container: getBounds() is in screen pixels, so both corners go through the HUD's own transform. */
+  private boundsRect(c: Container): Rect {
+    const b = c.getBounds();
+    const tl = this.env.toHud(new Point(b.x, b.y));
+    const br = this.env.toHud(new Point(b.x + b.width, b.y + b.height));
+    return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+  }
+
+  private rectOfContainer(c: Container): Rect | null {
+    return onScreen(c) ? this.boundsRect(c) : null;
+  }
+
+  /** What the tutorial needs from the screen: where each thing it points at is, and the few things that are not its own. */
+  private tutorialHost(): TutorialHost {
+    const previewRect = (): Rect => topRects(this.ctx.layout).preview;
+    const control = (target: Target): Container | null => {
+      switch (target) {
+        case 'summon': return this.bottom.actions.summon.btn;
+        case 'gauge': return this.top.gauge;
+        case 'chips': return this.bottom.classes.root;
+        case 'laser': return this.bottom.actions.laser;
+        case 'bossbar': return this.boss.root;
+        case 'purr': return this.bottom.currency.purr;
+        case 'molt': return this.bottom.sheet.buttonFor('molt');
+        case 'sell': return this.bottom.sheet.buttonFor('sell');
+        case 'grade': return this.bottom.actions.grade;
+        case 'call': return this.bottom.actions.callBtn;
+        case 'speed': return this.top.speedBtn;
+        default: return null;
+      }
+    };
+    return {
+      rectOf: (target) => {
+        if (target === 'wave') {
+          const label = this.rectOfContainer(this.top.waveLabel);
+          return label ? unionRect(label, previewRect()) : null;
+        }
+        const c = control(target);
+        return c ? this.rectOfContainer(c) : null;
+      },
+      rectOfReveal: (key: RevealKey) => {
+        switch (key) {
+          case 'chips': {
+            // The whole row arrives; the burst opens round the first chip.
+            const row = this.rectOfContainer(this.bottom.classes.root);
+            return row ? { x: row.x + 20, y: row.y, w: 150, h: row.h } : null;
+          }
+          case 'preview': return previewRect();
+          case 'laser': return this.rectOfContainer(this.bottom.actions.laser);
+          case 'purr': return this.rectOfContainer(this.bottom.currency.purr);
+          case 'gradeUpgrade': return this.rectOfContainer(this.bottom.actions.grade);
+          case 'speed': return this.rectOfContainer(this.top.speedBtn);
+          default: return null;
+        }
+      },
+      avoid: () => this.avoidList(),
+      pulse: (on) => this.bottom.actions.summon.attention(on),
+      laserGuided: () => this.teach.guided,
+      startLaserGuide: () => this.guide?.arm(),
+    };
+  }
+
+  /** The guidebook, from the pause menu (`fromPause`: the menu comes back after it) or from a lesson card's "more". The battle stands still meanwhile. */
+  private openGuideAt(topic: TopicId | undefined, fromPause: boolean): void {
+    if (this.destroyed || (!fromPause && this.pauseOpen)) return;
+    if (!fromPause) {
+      this.pauseOpen = true;
+      this.ctx.setPaused('user', true);
+    }
+    tooltip.hide();
+    openGuide({
+      ...(topic ? { topic } : {}),
+      progress: this.progress,
+      host: { tryControl: (control, id) => (this.tryControl = { control, topic: id }) },
+      onClose: () => this.afterGuide(fromPause),
+    });
+  }
+
+  private afterGuide(fromPause: boolean): void {
+    if (this.destroyed) return;
+    const tryIt = this.tryControl;
+    this.tryControl = null;
+    if (fromPause && !tryIt) {
+      void this.pauseMenu().then((a) => this.afterPause(a));
+      return;
+    }
+    this.pauseOpen = false;
+    this.ctx.setPaused('user', false);
+    if (tryIt) this.pointAt(tryIt.control, tryIt.topic);
+  }
+
+  /** "Try it": the game goes on and a bubble on the control says what it is for (a toast when the control is not on screen). */
+  private pointAt(control: TryControl, topic: TopicId): void {
+    const target = this.controlOf(control);
+    const text = topicTeach(topic);
+    if (!target || !this.env.hints.explain(target, text)) toast(text, 'info');
+  }
+
+  private controlOf(control: TryControl): Container | null {
+    switch (control) {
+      case 'summon': return this.bottom.actions.summon.btn;
+      case 'grade': return this.bottom.actions.grade;
+      case 'laser': return this.bottom.actions.laser;
+      case 'call': return this.bottom.actions.callBtn;
+      case 'speed': return this.top.speedBtn;
+      case 'chips': return this.bottom.classes.root;
+      case 'odds': return this.bottom.currency.root;
+      case 'gauge': return this.top.gauge;
+      case 'purr': return this.bottom.currency.purr;
+      case 'toys': return this.top.toyLayer;
+      case 'preview': return this.top.previewLayer;
+    }
+  }
+
   private layoutAll(l: BattleLayout): void {
     this.top.layout(l);
     this.bottom.layout(l);
@@ -257,8 +401,7 @@ class Hud implements HudPart {
 
   private openPick(options: readonly UnitId[]): void {
     if (this.pick) return;
-    const guide = this.tutorial?.guidingPick ?? false;
-    const popup = new SummonPickPopup(this.env, options, guide);
+    const popup = new SummonPickPopup(this.env, options, this.env.lessonOn('pick3'));
     this.pick = popup;
     void this.env.modal(popup).then(() => {
       if (this.pick === popup) this.pick = null;
@@ -289,7 +432,7 @@ class Hud implements HudPart {
     }
     this.twinsFrames = 0;
     // The one hint that explains the merge rule goes before whatever else is waiting; it points at both cats of the pair.
-    this.env.hints.request('twins', view, false, true, other);
+    this.env.hints.request('merge', view, false, true, other);
   }
 
   // ───────────────────────── pause ─────────────────────────
@@ -314,6 +457,10 @@ class Hud implements HudPart {
         if (this.destroyed) return;
         void this.pauseMenu().then((a) => this.afterPause(a));
       });
+      return;
+    }
+    if (action === 'guide') {
+      this.openGuideAt(undefined, true);
       return;
     }
     this.pauseOpen = false;
@@ -344,7 +491,27 @@ class Hud implements HudPart {
       });
       return;
     }
+    if (victory && env.tutorial) {
+      void this.tutorialEnd();
+      return;
+    }
     this.showResult(victory);
+  }
+
+  /** The tutorial is won: one note that the guidebook is in the settings, then the result. */
+  private async tutorialEnd(): Promise<void> {
+    const open = await confirmDialog({
+      title: t('guide.end.title'),
+      message: t('guide.end.body'),
+      confirmLabel: t('guide.end.open'),
+      cancelLabel: t('guide.end.go'),
+    });
+    if (this.destroyed) return;
+    if (!open) {
+      this.showResult(true);
+      return;
+    }
+    openGuide({ progress: this.progress, onClose: () => !this.destroyed && this.showResult(true) });
   }
 
   private showResult(victory: boolean): void {
@@ -397,14 +564,19 @@ class Hud implements HudPart {
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.
     if (this.pick && !this.pick.picking && this.env.battle.pending?.kind !== 'summon') this.pick.close();
     // A bubble never shows over a popup, a staged moment or a drag; while a cat is selected only the selection bar's own hints may.
-    const quiet =
-      !this.ctx.paused && this.env.modalCount === 0 && !this.dragging && !this.pauseOpen && !this.ending && !(this.tutorial?.flow.holding ?? false);
-    this.hints.update(dt, quiet, this.ctx.selected !== null);
-    this.guide?.update(dt, !quiet);
+    // A card that is up holds the battle and counts as a modal itself; it must not make its own stage look busy.
+    const cardUp = this.hints.holding;
+    const calm = (!this.ctx.paused || cardUp) && this.env.modalCount - (cardUp ? 1 : 0) === 0 && !this.dragging && !this.pauseOpen && !this.ending;
+    const lesson = this.tutorial?.active ?? false;
+    this.hints.update(dt, calm && !lesson, this.ctx.selected !== null);
+    // The tutorial's laser lesson is the guide's own: any other lesson makes the guide wait.
+    this.guide?.update(dt, !calm || (lesson && this.tutorial?.topic !== 'laser'));
   }
 
   destroy(): void {
     this.destroyed = true;
+    debugExpose('lessons', null);
+    closeGuide();
     window.removeEventListener('keydown', this.onKey);
     this.offLang();
     this.teardown();

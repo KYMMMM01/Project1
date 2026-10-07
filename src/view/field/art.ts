@@ -86,6 +86,8 @@ function starPoints(r: number, inner: number, points: number, rot: number): numb
 
 export type CellGlyph = 'merge' | 'swap' | 'blocked' | 'move';
 export type StatusSticker = 'slow' | 'freeze' | 'burn' | 'poison' | 'rage';
+/** What an area is doing to an enemy standing in it: a small tag on the enemy that says so (one per area kind). */
+export type ZoneMark = 'frost' | 'brew' | 'void' | 'haste' | 'heal';
 
 export interface FieldArt {
   /** A flat ellipse of the shadow colour; sprites set its opacity. */
@@ -105,6 +107,7 @@ export interface FieldArt {
   /** Flat dashed ring round a hazard-shielded cat (opaque paper, like the selection and range rings). */
   shield: Texture;
   status: Record<StatusSticker, Texture>;
+  zoneMark: Record<ZoneMark, Texture>;
   mark: { elite: Texture; boss: Texture };
   /** The paper star that circles a stunned enemy. */
   star: Texture;
@@ -151,6 +154,7 @@ export function fieldArt(): FieldArt {
     groundRing: bake(gfx((g) => dashedEllipse(g, 0, 0, 62, 24, 14, 0.55, 5, Color.white)), 136, 56),
     shield: bake(gfx((g) => dashedEllipse(g, 0, 4, 46, 52, 14, 0.62, 5, TapeColors.sky.base)), 100, 112),
     status: bakeStatus(),
+    zoneMark: bakeZoneMarks(),
     mark: {
       elite: bake(
         gfx((g) => {
@@ -290,6 +294,55 @@ function bakeStatus(): Record<StatusSticker, Texture> {
   };
 }
 
+/** Round tags a little bigger than the status stickers, in the area's own paper, each with a glyph that is not a status glyph. */
+function bakeZoneMarks(): Record<ZoneMark, Texture> {
+  const tag = (fill: number, glyph: (g: Graphics) => void): Texture =>
+    bake(
+      gfx((g) => {
+        disc(g, 13, fill);
+        glyph(g);
+      }),
+      40,
+      40,
+    );
+  return {
+    // A six-armed paper flake with a dot at the end of each arm.
+    frost: tag(mixColor(TapeColors.sky.base, Rarity.rare.color, 0.35), (g) => {
+      for (let i = 0; i < 3; i++) {
+        const a = (i * Math.PI) / 3 + Math.PI / 6;
+        g.moveTo(Math.cos(a) * -7, Math.sin(a) * -7).lineTo(Math.cos(a) * 7, Math.sin(a) * 7);
+      }
+      g.stroke({ width: 2, color: CREAM, cap: 'round' });
+      for (let i = 0; i < 6; i++) g.circle(Math.cos((i * Math.PI) / 3 + Math.PI / 6) * 7.6, Math.sin((i * Math.PI) / 3 + Math.PI / 6) * 7.6, 1.5).fill(CREAM);
+    }),
+    // Two bubbles, a big one and a small one.
+    brew: tag(Color.leaf, (g) => {
+      g.circle(-1.5, 1.5, 5.4).stroke({ width: 2.2, color: CREAM });
+      g.circle(4.6, -4.6, 2.5).stroke({ width: 1.8, color: CREAM });
+    }),
+    // A spiral winding in.
+    void: tag(Color.inkSoft, (g) => {
+      for (let i = 0; i <= 28; i++) {
+        const k = i / 28;
+        const a = k * Math.PI * 3.4;
+        const r = 7.6 * (1 - k * 0.86);
+        if (i === 0) g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      g.stroke({ width: 2.2, color: CREAM, cap: 'round', join: 'round' });
+    }),
+    // Two chevrons: faster.
+    haste: tag(Color.coral, (g) => {
+      for (const dx of [-3.4, 2.6]) g.moveTo(dx - 2.4, -5.4).lineTo(dx + 2.4, 0).lineTo(dx - 2.4, 5.4);
+      g.stroke({ width: 2.6, color: CREAM, cap: 'round', join: 'round' });
+    }),
+    // A plus: mended.
+    heal: tag(Color.berry, (g) => {
+      g.moveTo(-6, 0).lineTo(6, 0).moveTo(0, -6).lineTo(0, 6).stroke({ width: 3, color: CREAM, cap: 'round' });
+    }),
+  };
+}
+
 function bakeProjectiles(): Record<ProjectileShape, Texture> {
   const metal = mixColor(Color.paperDim, Color.ink, 0.25);
   return {
@@ -311,7 +364,16 @@ function bakeProjectiles(): Record<ProjectileShape, Texture> {
       36,
       36,
     ),
-    bullet: bake(gfx((g) => piece(g, (p) => p.roundRect(-11, -3.6, 22, 7.2, 3.6), Color.mustard)), 36, 22),
+    // A cork: a short tan slug with a darker ring round it.
+    cork: bake(
+      gfx((g) => {
+        piece(g, (p) => p.roundRect(-9, -5, 18, 10, 3), Color.kraft);
+        g.moveTo(-1, -4.2).lineTo(-1, 4.2).stroke({ width: 2, color: Color.kraftDark, cap: 'round' });
+        g.moveTo(5, -3.6).lineTo(5, 3.6).stroke({ width: 1.6, color: Color.kraftDark, cap: 'round' });
+      }),
+      36,
+      26,
+    ),
     starArrow: bake(
       gfx((g) => {
         piece(g, (p) => p.poly(starPoints(12, 5.2, 5, -Math.PI / 2)), Color.mustard);
@@ -321,13 +383,14 @@ function bakeProjectiles(): Record<ProjectileShape, Texture> {
       38,
     ),
     snowball: bake(gfx((g) => piece(g, (p) => p.circle(0, 0, 9), TapeColors.sky.base)), 32, 32),
+    // A flame: a round head with a pointed tail behind it (the shot turns to fly head first).
     fireball: bake(
       gfx((g) => {
-        piece(g, (p) => p.circle(0, 0, 9), Color.coral);
-        g.circle(0, 0, 5).fill(Color.mustard);
+        piece(g, (p) => p.moveTo(-16, 0).quadraticCurveTo(-6, -8, 4, -8).arc(4, 0, 8, -Math.PI / 2, Math.PI / 2).quadraticCurveTo(-6, 8, -16, 0).closePath(), Color.coral);
+        g.circle(3, 0, 4.4).fill(Color.mustard);
       }),
-      32,
-      32,
+      44,
+      28,
     ),
     bell: bake(
       gfx((g) => {
@@ -337,12 +400,14 @@ function bakeProjectiles(): Record<ProjectileShape, Texture> {
       34,
       34,
     ),
-    bone: bake(
+    // A ladle: a long handle ending in a round bowl.
+    ladle: bake(
       gfx((g) => {
-        bar(g, -12, 0, 10, 0, 4.4, Color.paperLight);
-        for (const [x, y] of [[-14, -4], [-14, 4], [12, -4], [12, 4]] as const) piece(g, (p) => p.circle(x, y, 3.2), Color.paperLight);
+        bar(g, -20, 0, 6, 0, 3.4, Color.kraftDark);
+        piece(g, (p) => p.circle(11, 0, 7.5), Color.paperDim);
+        g.circle(11, 0, 4.2).fill(Color.kraft);
       }),
-      52,
+      56,
       28,
     ),
     note: bake(

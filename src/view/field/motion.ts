@@ -1,68 +1,71 @@
 /** Pure animation curves of the playfield sprites. They write into a caller-owned `Pose` so a frame allocates nothing. */
 import { Ease } from '@/core/tween';
-import { TAU } from '@/core/math';
+import { TAU, clamp01 } from '@/core/math';
+import type { PoseSpec } from '../weapons';
 
 export interface Pose {
   /** Signed travel along the attack direction, in lunge units (1 = the full lunge distance). */
   lunge: number;
   sx: number;
   sy: number;
+  /** Turn toward the target in radians (the caller flips it for a cat facing left). */
+  rot: number;
+  /** Hop up in px (negative = pressed down). */
+  rise: number;
 }
 
 export function makePose(): Pose {
-  return { lunge: 0, sx: 1, sy: 1 };
+  return { lunge: 0, sx: 1, sy: 1, rot: 0, rise: 0 };
 }
 
-/** Seconds of one attack animation: wind-up, strike and recoil. */
-export const ATTACK_SECONDS = 0.3;
-
-/** Where the wind-up ends and the strike begins, as a fraction of the attack. */
-const WIND = 0.26;
-const STRIKE = 0.46;
-const PULL_BACK = -0.3;
-
-/**
- * Attack pose for progress k in 0..1: a squashing wind-up that leans away from the target, a quick
- * lunge with a stretch, then a recoil that settles with a small landing squash.
- */
-export function attackPose(k: number, out: Pose): Pose {
-  if (k <= 0 || k >= 1) {
-    out.lunge = 0;
-    out.sx = 1;
-    out.sy = 1;
-    return out;
-  }
-  if (k < WIND) {
-    const p = Ease.quadOut(k / WIND);
-    out.lunge = PULL_BACK * p;
-    out.sx = 1 + 0.09 * p;
-    out.sy = 1 - 0.1 * p;
-  } else if (k < STRIKE) {
-    const p = Ease.cubicOut((k - WIND) / (STRIKE - WIND));
-    out.lunge = PULL_BACK + (1 - PULL_BACK) * p;
-    out.sx = 1.09 - 0.15 * p;
-    out.sy = 0.9 + 0.2 * p;
-  } else {
-    const p = (k - STRIKE) / (1 - STRIKE);
-    out.lunge = 1 - Ease.cubicOut(p);
-    // Landing squash that relaxes with a slight overshoot.
-    const s = Math.sin(p * Math.PI * 1.5) * (1 - p) * 0.1;
-    out.sx = 0.94 + 0.06 * Ease.quadOut(p) + s * 0.6;
-    out.sy = 1.1 - 0.1 * Ease.quadOut(p) - s;
-  }
+function rest(out: Pose): Pose {
+  out.lunge = 0;
+  out.sx = 1;
+  out.sy = 1;
+  out.rot = 0;
+  out.rise = 0;
   return out;
 }
 
-/** Attack progress at which the wind-up pose has reached `coil` (0..1): the inverse of its ease, so a coiled cat continues without a jump. */
-export function windStart(coil: number): number {
-  return WIND * (1 - Math.sqrt(1 - Math.min(0.999, Math.max(0, coil))));
+/** The wind-up held at `coil` (0..1): the cat leans, squashes and rises as its weapon's spec says, in the `lead` seconds before the release. */
+export function coilPose(spec: PoseSpec, coil: number, out: Pose): Pose {
+  const c = Ease.quadOut(clamp01(coil));
+  const k = spec.coil;
+  out.lunge = k.lunge * c;
+  out.rot = k.rot * c;
+  out.sx = 1 + (k.sx - 1) * c;
+  out.sy = 1 + (k.sy - 1) * c;
+  out.rise = k.rise * c;
+  return out;
 }
 
-/** The wind-up pose held at `coil` (0..1) while a cat's charge is about to release: it presses down and leans back. */
-export function coilPose(coil: number, out: Pose): Pose {
-  out.lunge = PULL_BACK * coil;
-  out.sx = 1 + 0.09 * coil;
-  out.sy = 1 - 0.1 * coil;
+/**
+ * The pose `t` seconds after the release, for a cat that had coiled to `coil0`: it starts exactly where the coil left it, reaches the
+ * contact pose after `strike` seconds (fast and decelerating, so the contact is on the frame of the sound) and comes back to rest
+ * over `recover` seconds, the squash rebounding and the turn shivering by `twang`.
+ */
+export function releasePose(spec: PoseSpec, t: number, coil0: number, out: Pose): Pose {
+  if (t <= 0) return coilPose(spec, coil0, out);
+  const hit = spec.hit;
+  if (t < spec.strike) {
+    coilPose(spec, coil0, out);
+    const p = Ease.cubicOut(t / spec.strike);
+    out.lunge += (hit.lunge - out.lunge) * p;
+    out.rot += (hit.rot - out.rot) * p;
+    out.sx += (hit.sx - out.sx) * p;
+    out.sy += (hit.sy - out.sy) * p;
+    out.rise += (hit.rise - out.rise) * p;
+    return out;
+  }
+  const q = clamp01((t - spec.strike) / spec.recover);
+  if (q >= 1) return rest(out);
+  const back = 1 - Ease.cubicOut(q);
+  const bounce = 1 - Ease.elasticOut(q);
+  out.lunge = hit.lunge * back;
+  out.rot = hit.rot * back + spec.twang * Math.sin(q * Math.PI * 3) * (1 - q);
+  out.sx = 1 + (hit.sx - 1) * bounce;
+  out.sy = 1 + (hit.sy - 1) * bounce;
+  out.rise = hit.rise * back;
   return out;
 }
 
@@ -70,6 +73,8 @@ export function coilPose(coil: number, out: Pose): Pose {
 export function breathe(time: number, phase: number, slow: number, out: Pose): Pose {
   const w = Math.sin(time * TAU * 0.72 * slow + phase);
   out.lunge = 0;
+  out.rot = 0;
+  out.rise = 0;
   out.sy = 1 + 0.028 * w;
   out.sx = 1 - 0.016 * w;
   return out;

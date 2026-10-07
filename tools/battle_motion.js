@@ -1,6 +1,6 @@
 // Frame-by-frame motion capture for the battle, driven by the Aside runner (see tools/battle_motion.sh).
 // Prepended to a moment script; adds to the runner prelude (openGame, tap, drag, ev, sleep, done):
-//   await mcOpen(query)                     open the game, full motion on, real time stopped, sound calls logged, 3 s warm-up
+//   await mcOpen(query)                     open the game, full motion on, real time stopped, sound calls logged, 3 s warm-up, first-run lesson card dismissed
 //   await mcBegin({ region:[x,y,w,h], scale })   start a strip (design-space crop, tile px per design unit)
 //   await mcSnap(label)                     render now and add a tile
 //   await mcRun(n, dt, { every })           advance n steps of dt seconds with the game's own tick, one tile per `every` steps
@@ -180,6 +180,17 @@ async function mcOpen(query) {
   await openGame(query);
   await mcInit();
   await mcWarp(3);
+  await mcDismiss();
+}
+
+// The first-run lessons open a card over a sandbox battle and hold the pause: skip them and close the card (its button is at design 144, 1040 on a 1280 screen).
+async function mcDismiss() {
+  await ev(() => window.__dbg.lessons?.progress?.markSkipped?.());
+  const held = await ev(() => (window.__dbg.battle ? window.__dbg.battle.scene.pauseReasons().includes('popup') : false));
+  if (!held) return;
+  await mcMouse('down', 144, 1040);
+  await mcMouse('up', 144, 1040);
+  await mcWarp(0.5);
 }
 
 // Design-space position of a board cat's feet, from its live view.

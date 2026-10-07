@@ -12,7 +12,7 @@ vi.mock('@/fx/textures', () => ({
 import { Loop, hash01, type FxEnv } from '@/fx/loops';
 import { makeSpritePool } from '@/fx/rays';
 import { setFxSettings } from '@/fx/settings';
-import { blackHole, blizzardZone, hazardWarn, laserDot, potionCloud, sunbeamCell, weakenSwirl, wetPuddle, zapCell } from '@/fx/zones';
+import { hazardWarn, laserDot, sunbeamCell, weakenSwirl } from '@/fx/zones';
 import type { EmitDef, EmitterHandle } from '@/fx/particles';
 
 interface FakeEmitter {
@@ -185,12 +185,7 @@ describe('zone presets', () => {
     ['sunbeamCell', (e) => sunbeamCell(e, rect)],
     ['laserDot', (e) => laserDot(e, 300, 300)],
     ['laserDot with its marked area', (e) => laserDot(e, 300, 300, { radius: 130 })],
-    ['wetPuddle', (e) => wetPuddle(e, rect)],
-    ['zapCell', (e) => zapCell(e, rect)],
     ['weakenSwirl', (e) => weakenSwirl(e, 300, 300)],
-    ['blizzardZone', (e) => blizzardZone(e, 300, 300, 120)],
-    ['potionCloud', (e) => potionCloud(e, 300, 300, 120)],
-    ['blackHole', (e) => blackHole(e, 300, 300, 120)],
   ];
 
   for (const [name, make] of makers) {
@@ -222,19 +217,6 @@ describe('zone presets', () => {
       expect(h.alive).toBe(false);
     });
   }
-
-  it('zapCell asks for arcs while it crackles and none under reduced motion', () => {
-    const calm = makeEnv();
-    setFxSettings({ reducedMotion: true });
-    const c = zapCell(calm.env, rect) as Loop;
-    for (let i = 0; i < 240; i++) c.update(DT);
-    expect(calm.allocs.n).toBe(0);
-    setFxSettings({ reducedMotion: false });
-    const live = makeEnv();
-    const z = zapCell(live.env, rect) as Loop;
-    for (let i = 0; i < 240; i++) z.update(DT);
-    expect(live.allocs.n).toBeGreaterThan(10);
-  });
 
   it('laserDot glides to a new point and follows every moveTo', () => {
     const { env } = makeEnv();

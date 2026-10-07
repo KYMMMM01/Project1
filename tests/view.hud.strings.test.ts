@@ -4,7 +4,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { allStrings, hasString, setLang, t } from '@/core/i18n';
 import '@/game/data/strings';
 import '@/view/hud/strings';
-import { HINT_IDS } from '@/view/hud/policy';
 import { SHAKE_MODES } from '@/view/hud/settingsMath';
 
 const DIR = join(process.cwd(), 'src', 'view', 'hud');
@@ -63,7 +62,6 @@ describe('hud strings', () => {
     for (const lang of ['ko', 'en'] as const) {
       setLang(lang);
       const keys: string[] = [];
-      for (const id of HINT_IDS) keys.push(`hud.hint.${id}`);
       for (const m of SHAKE_MODES) keys.push(`hud.set.shake.${m}`);
       for (const m of ['full', 'brief', 'off']) keys.push(`hud.set.numbers.${m}`);
       for (const m of ['top', 'low', 'avg']) keys.push(`hud.res.luck.${m}`);
@@ -90,7 +88,7 @@ describe('hud strings', () => {
   it('keeps Korean lines in the polite 해요 style', () => {
     setLang('ko');
     // Spot checks of the lines players read most; formal endings would break the tone.
-    for (const key of ['hud.pause.quitAsk', 'hud.cont.fix.over', 'hud.hint.laser', 'hud.fail.board_full']) {
+    for (const key of ['hud.pause.quitAsk', 'hud.cont.fix.over', 'hud.laser.hint', 'hud.fail.board_full']) {
       expect(/(요|요!|요\.|요\?)$/.test(t(key)), key).toBe(true);
     }
   });

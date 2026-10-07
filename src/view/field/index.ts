@@ -19,6 +19,7 @@ import { rugSkin } from './rugSkins';
 import { SunNote } from './sunNote';
 import { UnitViews } from './units';
 import { buildWalkway } from './walkway';
+import { WeaponMarks } from './weaponMarks';
 
 /**
  * The playfield: background, mat, cells, walkway, cats, enemies, shots and ground effects, and the
@@ -50,7 +51,9 @@ export function createField(ctx: BattleContext): FieldPart {
   const units = new UnitViews(env, layers.units, lift);
   const enemies = new EnemyViews(env, layers.enemies);
   const shots = new Projectiles(env, layers.projectiles);
-  const effects = new FieldEffects(env);
+  const effects = new FieldEffects(env, enemies);
+  // What the weapons leave on the field (swing arcs, stuck arrows, splats ...): over the cats and enemies, under the numbers.
+  const marks = new WeaponMarks(env, layers.fxFront);
   const input = new FieldInput(env, layers.floor, layers.zones, layers.projectiles, units, cells);
   const sunNote = new SunNote(env, layers.fxFront);
   // The lit lane goes on the ground effects' layer (under the enemies and cats); the dot's tag over the cats.
@@ -99,6 +102,7 @@ export function createField(ctx: BattleContext): FieldPart {
       enemies.update(dt);
       shots.update();
       effects.update();
+      marks.update(dt);
       input.update(dt);
       updateCells(dt);
       cells.update(dt, env.time);
@@ -116,6 +120,7 @@ export function createField(ctx: BattleContext): FieldPart {
       sunNote.destroy();
       laser.destroy();
       effects.destroy();
+      marks.destroy();
       shots.destroy();
       enemies.destroy();
       units.destroy();

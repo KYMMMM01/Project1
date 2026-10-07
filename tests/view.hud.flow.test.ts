@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DamageWindow, killTone } from '@/view/hud/killEstimate';
 import { shakeScaleOf, volumeStep } from '@/view/hud/settingsMath';
-import { TUTORIAL_SUMMONS, TutorialFlow, findMergePair } from '@/view/hud/tutorialFlow';
+import { NUDGE_AFTER, NUDGE_CATS, NUDGE_MAX, findMergePair, nudgeDue } from '@/view/hud/tutorialFlow';
 
 describe('kill estimate', () => {
   it('waits for 1.5 s of observation before it shows a number', () => {
@@ -48,32 +48,16 @@ describe('kill estimate', () => {
   });
 });
 
-describe('tutorial flow', () => {
-  it('walks summon x3, merge, pick', () => {
-    const f = new TutorialFlow();
-    expect(f.holding).toBe(true);
-    for (let i = 0; i < TUTORIAL_SUMMONS - 1; i++) expect(f.onSummon()).toBe(false);
-    expect(f.step).toBe('summon');
-    expect(f.onSummon()).toBe(true);
-    expect(f.step).toBe('merge');
-    expect(f.onSummon()).toBe(false);
-    expect(f.onMerge()).toBe(true);
-    expect(f.step).toBe('free');
-    expect(f.holding).toBe(false);
-    expect(f.offered).toBe(false);
-    expect(f.onOffer()).toBe(true);
-    expect(f.offered).toBe(true);
-    expect(f.step).toBe('pick');
-    expect(f.holding).toBe(true);
-    expect(f.onPicked()).toBe(true);
-    expect(f.holding).toBe(false);
+describe('tutorial nudges', () => {
+  it('waits for the fish to sit unspent before it points at the summon button', () => {
+    expect(nudgeDue(NUDGE_AFTER - 0.1, 0, 2)).toBe(false);
+    expect(nudgeDue(NUDGE_AFTER, 0, 2)).toBe(true);
   });
 
-  it('ignores steps that are not current', () => {
-    const f = new TutorialFlow();
-    expect(f.onMerge()).toBe(false);
-    expect(f.onPicked()).toBe(false);
-    expect(f.step).toBe('summon');
+  it('comes back until the board holds enough cats, and then only a few times', () => {
+    expect(nudgeDue(NUDGE_AFTER, NUDGE_MAX, NUDGE_CATS - 1)).toBe(true);
+    expect(nudgeDue(NUDGE_AFTER, NUDGE_MAX, NUDGE_CATS)).toBe(false);
+    expect(nudgeDue(NUDGE_AFTER, NUDGE_MAX - 1, NUDGE_CATS)).toBe(true);
   });
 });
 

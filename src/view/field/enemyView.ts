@@ -7,7 +7,7 @@ import { popIn, squash } from '@/fx';
 import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
 import { FIELD_W } from '@/game/geometry';
-import type { FieldArt, StatusSticker } from './art';
+import type { FieldArt, StatusSticker, ZoneMark } from './art';
 import { barSegments, type BarSegments } from './policy';
 import { BOSS_DROP } from '@/view/timing';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
@@ -23,6 +23,10 @@ const SCORCH = mixColor(Color.white, Color.coral, 0.5);
 const TOXIC = mixColor(Color.white, Color.leaf, 0.6);
 const RAGE = mixColor(Color.white, Color.berry, 0.6);
 const BAR_H = 6;
+/** Seconds the area tag stays after the last touch: longer than the slowest area tick (a blizzard ticks every half second). */
+const ZONE_HOLD = 0.6;
+/** The tag is baked 40 px across; it is shown a little smaller than that so a row of enemies does not become a row of tags. */
+const ZONE_TAG_SCALE = 0.72;
 /** Gap kept between a drawn sprite and the screen edge: a boss on the outer lane would otherwise be cut by it. */
 const EDGE_GAP = 6;
 
@@ -50,6 +54,8 @@ export class EnemyView {
   y = 0;
   /** Frame stamp of the last reconcile that matched this view to a live enemy. */
   mark = 0;
+  /** Field clock time of the last blow it answered (see `EnemyViews.onHit`). */
+  reactAt = -1;
   /** A dead boss stays standing until this time unless the director hides it first (0 = not held). */
   holdUntil = 0;
   dying = false;
@@ -72,6 +78,11 @@ export class EnemyView {
   /** The coral crosshair sticker over an enemy the laser has marked, and how far it has popped in (0..1). */
   private readonly targetMark: Sprite;
   private markK = 0;
+  /** The tag of the area this enemy stands in (left of the bar, where the status sticker is on the right) and how far it has popped in. */
+  private readonly zoneTag: Sprite;
+  private zoneKind: ZoneMark | null = null;
+  private zoneHold = 0;
+  private zoneK = 0;
   private readonly seg: BarSegments = { hp: 0, shield: 0 };
   private sickness: StatusSticker | null = null;
   private size = 56;
@@ -113,11 +124,13 @@ export class EnemyView {
     this.sticker.visible = false;
     this.targetMark = this.makeSprite(art.targetMark);
     this.targetMark.visible = false;
+    this.zoneTag = this.makeSprite(art.zoneMark.frost);
+    this.zoneTag.visible = false;
     this.bar.addChild(this.barBack, this.barHp, this.barShield);
     this.bar.visible = false;
     this.body.addChild(this.sprite);
     this.lean.addChild(this.body);
-    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker, this.targetMark);
+    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker, this.targetMark, this.zoneTag);
     this.root.eventMode = 'none';
   }
 
@@ -138,6 +151,7 @@ export class EnemyView {
     this.dying = false;
     this.deathK = 0;
     this.holdUntil = 0;
+    this.reactAt = -1;
     const texture = tex(enemyTextureKey(enemy.id));
     this.sprite.texture = texture;
     this.size = def.radius * (this.isBoss ? BOSS_SIZE_PER_RADIUS : SIZE_PER_RADIUS);
@@ -174,6 +188,11 @@ export class EnemyView {
     this.targetMark.position.set(0, -this.size * 0.56 - 46);
     this.targetMark.visible = false;
     this.markK = 0;
+    this.zoneTag.position.set(-this.barW / 2 - 8, -this.size * 0.56 - 12);
+    this.zoneTag.visible = false;
+    this.zoneKind = null;
+    this.zoneHold = 0;
+    this.zoneK = 0;
     this.sickness = null;
     this.bar.visible = false;
     this.barShown = false;
@@ -239,6 +258,7 @@ export class EnemyView {
       this.lean.y = -walkBob(enemy.age, this.rate, amp);
       this.lean.rotation = enemy.stunned ? Math.sin(time * 14) * 0.1 : walkTilt(enemy.age, this.rate, still ? 0 : 0.09);
       this.updateStatus(dt, time, enemy);
+      this.updateZoneTag(dt, time);
       this.updateBar(dt, enemy);
     }
     this.root.position.set(this.drawX(), this.y);
@@ -250,6 +270,27 @@ export class EnemyView {
       this.root.scale.set(Math.max(0, s));
       this.root.alpha = this.isBoss ? 1 : 1 - this.deathK * this.deathK;
     }
+  }
+
+  /** An area is acting on this enemy right now: its tag pops on beside the bar and stays while the touches keep coming. */
+  zoneTouch(kind: ZoneMark): void {
+    if (this.dying) return;
+    if (kind !== this.zoneKind) {
+      this.zoneKind = kind;
+      this.zoneTag.texture = this.art.zoneMark[kind];
+    }
+    this.zoneHold = ZONE_HOLD;
+  }
+
+  private updateZoneTag(dt: number, time: number): void {
+    this.zoneHold = Math.max(0, this.zoneHold - dt);
+    this.zoneK = damp(this.zoneK, this.zoneHold > 0 ? 1 : 0, 0.05, dt);
+    this.zoneTag.visible = this.zoneK > 0.02 && this.zoneKind !== null;
+    if (!this.zoneTag.visible) return;
+    // A small overshoot as it lands, then a slow pulse (a still tag under reduced motion).
+    const k = Math.min(1.2, this.zoneK * (1 + 0.35 * (1 - this.zoneK)));
+    this.zoneTag.scale.set(ZONE_TAG_SCALE * k * (motion.reduced ? 1 : 1 + 0.06 * Math.sin(time * 8)));
+    this.zoneTag.alpha = Math.min(1, this.zoneK * 1.6);
   }
 
   private updateStatus(dt: number, time: number, e: EnemyState): void {
@@ -335,6 +376,8 @@ export class EnemyView {
     this.sticker.visible = false;
     this.targetMark.visible = false;
     this.markK = 0;
+    this.zoneTag.visible = false;
+    this.zoneKind = null;
     this.sickness = null;
   }
 

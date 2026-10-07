@@ -139,3 +139,13 @@ Synergy bot, chapter 1, level 1, `npm run sim` (`SIM_ONLY=stakes SIM_RUNS=300`, 
 Stakes 0-3 are bit-identical (their rules did not change). The first 300 seeds run about 5 points easier at stake 5 than the 1,500-run sample (standard error 2.7 points at 300), so the value was chosen to land in the band at both sizes. Sweep behind it (600 runs, synergy bot, stake 4 / stake 5, specialHpMult 1.4): cut 10 = 42.5 / 30.2, 12 = 39.8 / 28.2, 14 = 35.8 / 25.5, 16 = 32.3 / 21.0. Raising `specialHpMult` instead (1.5 / 1.6 / 1.8 at cut 10 gave 27.5 / 25.0 / 20.3 at stake 5) fixes stake 5 but leaves stake 4 at 42 %, so the boss-time lever alone was the smallest change that fits both bands. Cut 13 against 14 at 1,500 runs: 36.5 / 23.5 against 34.8 / 22.7; 13 keeps stake 4 in the middle of its 35-40 band.
 
 Known gap closed: "the stake curve ends at 33 % (target 25 %)". REQUESTS: `docs/기획서_GDD.md` line 316 and `docs/설계_결정_기록.md` D-17 still say "−10초" (not my files).
+
+## 2026-10-07 owner feedback: the tutorial script
+
+Mode `tutorial` (the first eight waves of chapter 1 at 0.7 health, 12 s waves) is the lesson plan's stage: each system has to enter the game at the moment it is taught. Every other mode is unchanged (a test checks sunbeams from the first frame and no top-up or kittens in chapter, daily and endless).
+
+- `src/game/sim/tutorial.ts` (new): `TUTORIAL_SCRIPT` (the three free summons, moved here from `sim.ts`), `tutorialWaveStart(s, wave)`, constants `TUTORIAL_PICK_WAVE` 3, `TUTORIAL_FISH_WAVE` 5 and `TUTORIAL_FISH_FLOOR` (grade step + class step + 30 fish), `TUTORIAL_GIFT_WAVE` 6, `TUTORIAL_GIFT_FREE` 2, `TUTORIAL_GIFT_MAX` 8.
+- The tutorial board starts without sunbeams (`markSun(this, [])` in the constructor); `Sim.pickSummon` lights `FIRST_SUN_CELLS` and announces them (`revealSun`, exported from `flow.ts`) when the scripted pick-of-three is answered, so the director's sparkle and the sun lesson start together.
+- Wave 5 start: fish are topped up to the floor so the grade and the class upgrade can each be bought once. Wave 6 start: random common kittens (`placeRandomCommon`, the toy stream) tip onto the board until two cells are free, at most eight: the board is crowded for the selling lesson and holds twins to merge.
+- The wave-4 elite pays purr (existing rule), the act clear two more, so molt is possible after the first toy choice. The wave-8 boss is the chapter-one vacuum boss.
+- Tests: `tests/sim.tutorial.test.ts` (sunbeams only after the pick, other modes untouched, the fish floor, the kitten box, purr after the elite, and a merge and a synergy bot each winning at least five of six seeds); `tests/sim.fuzz.test.ts` allows the empty board until wave 3.

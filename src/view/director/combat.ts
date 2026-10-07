@@ -7,6 +7,7 @@ import { attackSfx, critSfx, foeHitSfx, impactSfx } from '@/audio';
 import { lighten } from '@/core/math';
 import type { BattleEvents, EnemyState, StatusKind, UnitId, UnitState } from '@/game';
 import { UNIT_IDS, unitSpec } from '@/game';
+import { weaponStyle } from '../weapons';
 import { cellAt, cellCenterX, cellCenterY } from '@/game/geometry';
 import { Trauma } from '@/fx';
 import {
@@ -90,7 +91,6 @@ const ZONE_SFX: Partial<Record<UnitId, { sfx: 'freeze' | 'zap' | 'splash'; pitch
 };
 
 export function mountCombat(stage: Stage, on: Bus): void {
-  const ctx = stage.ctx;
   const fx = stage.fx;
   const ps = fx.ps;
   const shootByUnit = new GapGate(UNIT_IDS.length);
@@ -100,11 +100,6 @@ export function mountCombat(stage: Stage, on: Bus): void {
   const muzzles = new FrameBudget(10);
   /** The unit behind the latest attack event: strikes carry only a unit type, not which cat fired. */
   let lastAttacker: UnitState | null = null;
-
-  const enemyByUid = (uid: number): EnemyState | null => {
-    for (const e of ctx.battle.enemies) if (e.uid === uid) return e;
-    return null;
-  };
 
   on('attack', (e) => {
     const u = e.unit;
@@ -126,9 +121,6 @@ export function mountCombat(stage: Stage, on: Bus): void {
       if (shape[1] > 0 && stage.detail > 0) ps.burst(MUZZLE_STREAK, mx, my, { colors: ramp, dir: ang, count: shape[1] / 2 });
     } else if (cue.style === 'cast') {
       ps.burst(CAST_RING, cx, cy - 10, { colors: ramp, scale: 0.9 });
-    } else if (u.id === 'w_paw' || u.id === 'w_viking') {
-      // The cats with no strike event swing a small claw mark of their own.
-      fx.slashArc(e.tx, e.ty, { angle: ang, scale: u.id === 'w_paw' ? 0.45 : 0.75, color: UNIT_COLOR[u.id] });
     }
   });
 
@@ -162,9 +154,11 @@ export function mountCombat(stage: Stage, on: Bus): void {
       const critCue = critSfx(e.unitId);
       stage.play(stage.rules.crit, critCue.id, critCue.volume, critCue.pitch, 0.03);
       stage.buzz('tap', Gate.critBuzz, 0.2);
-      if (info.big) stage.stop(33);
+      // A crit stops the frame for a moment: a little longer when it lands on a boss or an elite.
+      stage.stop(info.big ? 36 : 26);
     } else {
-      if (density < 2 || info.big) lightSpark(x, y, ramp, info.big ? 1.3 : 1);
+      // A cat's weapon leaves its own mark on the field (`WeaponMarks`); the generic spark is for a hit with no cat behind it.
+      if (!e.unitId && (density < 2 || info.big)) lightSpark(x, y, ramp, info.big ? 1.3 : 1);
       const merged = agg.add(en.uid, dealt, stage.now, AGGREGATION_WINDOW);
       const wasVisible = agg.visible;
       let show = wasVisible;
@@ -187,6 +181,7 @@ export function mountCombat(stage: Stage, on: Bus): void {
         answerHit(en, e.killed);
         if (heavy || e.killed) stage.direct('hit_heavy', e.killed ? 0.6 : 0.5, e.killed ? 1.15 : info.boss ? 0.8 : 1);
       }
+      weigh(e, info.boss, dealt);
     }
 
     if (e.absorbed > 0 && perEnemy.ready(en.uid, SUB_SHIELD, stage.now, 0.1)) {
@@ -195,6 +190,22 @@ export function mountCombat(stage: Stage, on: Bus): void {
       if (density === 0) fx.number(x + 22, y - info.radius - 18, e.absorbed, 'damage', { color: SHIELD_COLOR, scale: 0.7 });
     }
   });
+
+  /**
+   * The weight behind an ordinary blow: only the heavy weapons (axe, polearm, cork gun) and hits on a boss move the camera, a few
+   * milliseconds of hit-stop for the weapon, a small nudge for either, each at most every few tenths of a second. Never every hit.
+   */
+  function weigh(e: BattleEvents['hit'], boss: boolean, dealt: number): void {
+    const en = e.enemy;
+    const style = e.unitId ? weaponStyle(e.unitId) : null;
+    if (style?.heavy && (boss || dealt >= en.maxHp * 0.05)) {
+      stage.stop(34);
+      stage.shake(Trauma.t1, Gate.hitShake, 0.35);
+      stage.buzz('light', Gate.critBuzz, 0.3);
+    } else if (boss && dealt >= en.maxHp * 0.01) {
+      stage.shake(Trauma.t1, Gate.bossShake, 0.45);
+    }
+  }
 
   /** How an enemy answers a blow, by what it is made of; a killing blow gets none because its death follows. */
   function answerHit(en: EnemyState, killed: boolean): void {
@@ -312,18 +323,12 @@ export function mountCombat(stage: Stage, on: Bus): void {
     const color = UNIT_COLOR[id];
     switch (id) {
       case 'w_sword':
-        fx.slashArc(e.x, e.y, { angle: Math.atan2(e.y - cy, e.x - cx), scale: Math.max(0.85, e.radius / 70), color });
+        // The arc is the field's (`WeaponMarks`); the sound is the blade's.
         strikeSound('w_sword');
         break;
-      case 'w_samurai': {
-        const first = e.points[0];
-        const en = first ? enemyByUid(first.uid) : null;
-        const a = en ? en.angle : 0;
-        const r = e.radius;
-        fx.slashLine(e.x - Math.cos(a) * r, e.y - Math.sin(a) * r, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, { color });
+      case 'w_samurai':
         strikeSound('w_samurai');
         break;
-      }
       case 'w_tiger':
         // The stomp every fourth swing is centred on the cat's own cell; the ordinary blast lands on the enemy.
         if (cellAt(e.x, e.y) >= 0) {

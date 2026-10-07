@@ -8,6 +8,8 @@ import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { Scene, scenes, type TransitionKind } from '@/core/scene';
 import type { BattleInit, BattleSnapshot } from '@/game';
+// The leaf module: the guide's index would pull its whole screen in before the first scene.
+import { guideProgress } from '@/guide/progress';
 import { bundleParts, errorKey, profile } from '@/meta';
 import { BattleScene, setBattleCreatedHook, setBattleExit } from '@/scenes/BattleScene';
 import { HomeScene } from '@/scenes/HomeScene';
@@ -219,7 +221,9 @@ export async function offerContinue(): Promise<void> {
 /** The very first scene: the tutorial battle for a brand-new player, the home screen for everyone else. */
 export async function chooseFirstScene(): Promise<() => Scene> {
   await dropInterruptedTutorial();
-  if (!profile.pendingRun && profile.data.stats.runs === 0) {
+  await guideProgress.load();
+  // A player who skipped the tutorial and closed the app during that run is not sent back into it.
+  if (!profile.pendingRun && profile.data.stats.runs === 0 && !guideProgress.skipped) {
     const prepared = await profile.prepareRun({ mode: 'tutorial' });
     if (prepared.ok) return battleScene(runConfig(prepared.value));
   }

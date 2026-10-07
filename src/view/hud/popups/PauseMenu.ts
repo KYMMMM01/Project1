@@ -4,7 +4,7 @@ import { fmtDuration } from '@/core/format';
 import { t } from '@/core/i18n';
 import type { HudEnv } from '../env';
 
-export type PauseAction = 'resume' | 'settings' | 'restart' | 'quit';
+export type PauseAction = 'resume' | 'settings' | 'guide' | 'restart' | 'quit';
 
 const W = 600;
 
@@ -15,7 +15,7 @@ export class PauseMenu extends Popup<PauseAction> {
     const btnH = 104;
     const gap = 22;
     const top = 150;
-    const h = top + 4 * btnH + 3 * gap + 54;
+    const h = top + 5 * btnH + 4 * gap + 54;
     const panel = new Panel({ width: W, height: h, title: t('hud.pause.title'), torn: 'bottom', tape: 'sky' });
     const c = panel.content;
 
@@ -24,7 +24,7 @@ export class PauseMenu extends Popup<PauseAction> {
     info.position.set(W / 2, 98);
     c.addChild(info);
 
-    const add = (i: number, label: string, style: 'success' | 'info' | 'neutral' | 'danger', icon: 'play' | 'settings' | 'reroll' | 'home', run: () => void): void => {
+    const add = (i: number, label: string, style: 'success' | 'info' | 'neutral' | 'danger', icon: 'play' | 'settings' | 'question' | 'reroll' | 'home', run: () => void): void => {
       const btn = new Button({ label, style, icon, width: W - 90, height: btnH, fontSize: 40 });
       btn.position.set(W / 2, top + btnH / 2 + i * (btnH + gap));
       btn.onTap(run);
@@ -32,7 +32,8 @@ export class PauseMenu extends Popup<PauseAction> {
     };
     add(0, t('hud.pause.resume'), 'success', 'play', () => this.close('resume'));
     add(1, t('hud.settings'), 'info', 'settings', () => this.close('settings'));
-    add(2, t('hud.pause.restart'), 'neutral', 'reroll', () => {
+    add(2, t('guide.pause'), 'info', 'question', () => this.close('guide'));
+    add(3, t('hud.pause.restart'), 'neutral', 'reroll', () => {
       void confirmDialog({
         title: t('hud.pause.restart'),
         message: t('hud.pause.restartAsk'),
@@ -43,7 +44,7 @@ export class PauseMenu extends Popup<PauseAction> {
         if (ok) this.close('restart');
       });
     });
-    add(3, t('hud.pause.quit'), 'danger', 'home', () => {
+    add(4, t('hud.pause.quit'), 'danger', 'home', () => {
       void confirmDialog({
         title: t('hud.pause.quit'),
         message: t('hud.pause.quitAsk'),

@@ -9,8 +9,8 @@ import type { UnitId, UnitState } from '@/game/api';
 import { t } from '@/core/i18n';
 import { Color, Tag, backOut, motion, type RarityId } from '@/ui';
 import type { FieldArt } from './art';
-import { ANTICIPATION_SECONDS } from '@/view/timing';
-import { ATTACK_SECONDS, attackPose, breathe, coilPose, makePose, windStart } from './motion';
+import { releaseSeconds, weaponStyle } from '@/view/weapons';
+import { breathe, coilPose, makePose, releasePose } from './motion';
 import { unitTint } from './policy';
 
 /** Where a unit's feet stand relative to its cell centre: the sprite reaches up from here. */
@@ -89,11 +89,13 @@ export class UnitView {
   private facingTarget = 1;
   private dirX = 1;
   private dirY = 0;
-  private attackK = -1;
-  /** Progress the running attack started from (a cat already coiled skips the wind-up it has shown). */
-  private attackK0 = 0;
+  /** Seconds since the release of the running attack (-1 = none). */
+  private attackT = -1;
+  /** How far the cat had coiled when it released: a cat that was not coiled (a shot fired the instant an enemy walked in) starts from a pose that skips most of the wind-up. */
+  private coil0 = 0;
   /** 0..1 how far the cat has coiled for the shot that its charge is about to release. */
   private coil = 0;
+  private spec = weaponStyle('w_paw').pose;
   private attackTween: Tween | null = null;
   private readonly attackOpts: TweenOpts;
   private blocked = 0;
@@ -131,13 +133,13 @@ export class UnitView {
     this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.sunMark, this.overhead);
     this.root.eventMode = 'none';
     this.attackOpts = {
-      duration: ATTACK_SECONDS,
+      duration: releaseSeconds(this.spec),
       ease: Ease.linear,
       onUpdate: (k) => {
-        this.attackK = this.attackK0 + (1 - this.attackK0) * k;
+        this.attackT = k * this.attackOpts.duration;
       },
       onComplete: () => {
-        this.attackK = -1;
+        this.attackT = -1;
       },
     };
     this.dome.alpha = 0;
@@ -163,6 +165,8 @@ export class UnitView {
     this.rank.texture = art.rank[rarity];
     this.badge.texture = art.badge[unitClass(unit.id)];
     this.phase = (unit.uid * 1.713) % TAU;
+    this.spec = weaponStyle(unit.id).pose;
+    this.attackOpts.duration = releaseSeconds(this.spec);
     this.x = this.homeX(unit.cell);
     this.y = this.homeY(unit.cell);
     // Units on the right half face the middle of the board, the others face right.
@@ -173,7 +177,7 @@ export class UnitView {
     this.dragging = false;
     this.exit = 'none';
     this.exitK = 0;
-    this.attackK = -1;
+    this.attackT = -1;
     this.coil = 0;
     this.blocked = this.weak = this.sun = this.shield = this.press = this.lift = this.select = this.lean = 0;
     this.pressed = false;
@@ -222,11 +226,10 @@ export class UnitView {
       this.dirY = dy / len;
     }
     if (Math.abs(dx) > 6) this.facingTarget = dx > 0 ? 1 : -1;
-    // The release sits on the strike: the cat has been coiling since its charge neared full, and one that was not
-    // (a shot fired the instant an enemy walked in) still skips most of the wind-up so the lunge is not late.
-    this.attackK0 = windStart(Math.max(this.coil, 0.6));
-    this.attackK = this.attackK0;
-    this.attackOpts.duration = ATTACK_SECONDS * (1 - this.attackK0);
+    // The release is on the frame of the attack: the cat has been coiling since its charge neared full, and one that was not
+    // (a shot fired the instant an enemy walked in) still starts from most of the wind-up so the strike is not late.
+    this.coil0 = Math.max(this.coil, 0.6);
+    this.attackT = 0;
     this.coil = 0;
     this.attackTween = tweens.run(this.attackOpts);
   }
@@ -257,7 +260,7 @@ export class UnitView {
       this.sun = damp(this.sun, unit.sunlit ? 1 : 0, 0.25, dt);
       this.shield = damp(this.shield, unit.shielded ? 1 : 0, 0.15, dt);
       // The last stretch of the charge coils the cat back; a cat held at full charge waiting for a target stays relaxed.
-      const lead = ANTICIPATION_SECONDS / Math.max(0.2, unit.stats.interval);
+      const lead = this.spec.lead / Math.max(0.2, unit.stats.interval);
       const wait = 1 - unit.charge;
       this.coil = wait > 0 && wait < lead ? 1 - wait / lead : 0;
     }
@@ -292,13 +295,13 @@ export class UnitView {
 
     // Pose.
     const pose = this.pose;
-    if (this.attackK >= 0) attackPose(this.attackK, pose);
-    else if (this.coil > 0) coilPose(this.coil, pose);
+    if (this.attackT >= 0) releasePose(this.spec, this.attackT, this.coil0, pose);
+    else if (this.coil > 0) coilPose(this.spec, this.coil, pose);
     else breathe(time, this.phase, 1 - 0.5 * this.weak, pose);
     let k = (1 - 0.06 * this.press) * (1 + 0.12 * this.lift) * (1 + 0.022 * this.select * Math.sin(time * 7));
     // A lifted sticker tilts the way it is being pulled and leans a little to one side.
     this.lean = damp(this.lean, this.dragging ? clamp((this.dragX - this.x) * 0.004, -0.12, 0.12) : 0, 0.05, dt);
-    let rot = (-0.16 * this.blocked - 0.07 * this.weak) * this.facing + this.lift * (0.07 * this.facing + this.lean);
+    let rot = (-0.16 * this.blocked - 0.07 * this.weak + pose.rot) * this.facing + this.lift * (0.07 * this.facing + this.lean);
     let fade = 1;
     switch (this.exit) {
       case 'fly':
@@ -328,7 +331,7 @@ export class UnitView {
     this.rig.rotation = rot;
     const lunge = LUNGE_PX * pose.lunge;
     const sellRise = this.exit === 'sell' ? -26 * this.exitK : 0;
-    this.rig.position.set(this.dirX * lunge, this.dirY * lunge * 0.6 - 3 * this.select - 16 * this.lift + sellRise);
+    this.rig.position.set(this.dirX * lunge, this.dirY * lunge * 0.6 - 3 * this.select - 16 * this.lift + sellRise - pose.rise);
     this.sprite.scale.x = this.spriteScale * this.facing;
     this.root.alpha = fade;
 

@@ -11,6 +11,7 @@ export * from './handles';
 export * from './rays';
 export * from './loops';
 export type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
+export type { AreaHandle, CellKind, DiscKind } from './areas';
 export * from './cutin';
 export * from './numbers';
 export * from './flyTo';

@@ -7,6 +7,7 @@ import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { CLASS_UPGRADE_BONUS, SYNERGY_TIER_AT, classDef, type ClassId } from '@/game';
+import { Hand } from '../Hand';
 import { Button, Color, drawDashedRect, drawIcon, drawPaper, drawPaperFace, fitLabel, Panel, paperSeed, Popup, punch, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
 import { ClassLadder, LADDER_H } from '../ClassLadder';
@@ -43,6 +44,7 @@ export class ClassSheet extends Popup<void> {
   private readonly levelT: Text;
   private readonly noteT: Text;
   private readonly upBtn: Button;
+  private hand: Hand | null = null;
   private readonly seed = paperSeed();
   private tierNow = -1;
 
@@ -72,7 +74,8 @@ export class ClassSheet extends Popup<void> {
     // The ladder and the rule it shows.
     this.ladder = new ClassLadder(classId, W - SIDE * 2 - 8);
     this.ladder.position.set(SIDE + 4, LADDER_Y);
-    const rule = uiLabel(t('hud.class.rule'), { size: 24, color: Color.inkSoft, wrap: W - SIDE * 2 - 20, lineHeight: 30 });
+    // The tutorial's first look at the sheet says what to look at and how to leave it.
+    const rule = uiLabel(env.lesson() === 'classes' ? t('guide.tut.sheet') : t('hud.class.rule'), { size: 24, color: Color.inkSoft, wrap: W - SIDE * 2 - 20, lineHeight: 30 });
     rule.position.set(W / 2, RULE_Y + 18);
     c.addChild(this.ladder, rule);
 
@@ -115,6 +118,15 @@ export class ClassSheet extends Popup<void> {
       env.ctx.command('upgradeClass', () => env.battle.upgradeClass(classId));
     });
     c.addChild(this.levelT, this.noteT, this.upBtn);
+    // The tutorial's upgrade lesson: a hand beside the button (the sheet is where the lesson goes on).
+    if (env.lesson() === 'class_upgrade' && showUpgrade) {
+      this.hand = new Hand();
+      this.hand.rotation = -Math.PI / 2;
+      this.hand.scale.set(0.8);
+      this.hand.position.set(W / 2 + 160 + 4, UPGRADE_Y + 146);
+      this.hand.tap();
+      c.addChild(this.hand);
+    }
     if (!showUpgrade) this.levelT.visible = this.noteT.visible = this.upBtn.visible = false;
 
     this.body.addChild(this.panel);

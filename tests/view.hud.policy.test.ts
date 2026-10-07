@@ -1,28 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import '@/view/hud/strings';
 import { hasString } from '@/core/i18n';
+import type { TopicId } from '@/guide';
+import { revealedBy } from '@/view/hud/tutorialScript';
 import {
   ALL_FAILS, HOLD_EVERY, HOLD_FIRST, HoldRepeater, failKeys, gaugeLevel, luckLine, nextSpeed, offerRoute, overflowLeft,
-  paidBy, pityVisible, recommendPick, revealFlags, rewardTiles, soCloseWaves, speedSteps, summonView, traitOrder,
+  paidBy, pityVisible, recommendPick, revealFlags, REVEAL_KEYS, rewardTiles, soCloseWaves, speedSteps, summonView, traitOrder,
 } from '@/view/hud/policy';
 
-describe('staged reveal', () => {
-  it('shows only the five basics in run 0', () => {
-    const r = revealFlags(0);
+describe('which controls are out', () => {
+  it('shows every control in a normal run', () => {
+    const r = revealFlags(false);
+    expect(Object.values(r).every((v) => v === true)).toBe(true);
+    expect(Object.keys(r).sort()).toEqual([...REVEAL_KEYS].sort());
+  });
+
+  it('shows only the five basics when the tutorial starts', () => {
+    const r = revealFlags(true);
     expect(Object.values(r).every((v) => v === false)).toBe(true);
   });
 
-  it('adds speed, preview, tracker, laser, call wave and class upgrades in run 1', () => {
-    const r = revealFlags(1);
-    expect(r).toMatchObject({ classUpgrade: true, speed: true, preview: true, tracker: true, laser: true, callWave: true });
-    expect(r.purr).toBe(false);
-    expect(r.gradeUpgrade).toBe(false);
-  });
-
-  it('adds purr, molt and odds in run 2 and grade, awaken and sell hints in run 3', () => {
-    expect(revealFlags(2)).toMatchObject({ purr: true, molt: true, odds: true, gradeUpgrade: false, awaken: false });
-    expect(revealFlags(3)).toMatchObject({ gradeUpgrade: true, awaken: true, sellHint: true });
-    expect(revealFlags(40).gradeUpgrade).toBe(true);
+  it('puts out exactly what the lessons already taught have revealed, so a restarted tutorial keeps them', () => {
+    const r = revealFlags(true, revealedBy(new Set<TopicId>(['merge', 'classes', 'laser', 'summon_grade'])));
+    expect(r).toMatchObject({ chips: true, laser: true, gradeUpgrade: true, odds: true, purr: false, molt: false, speed: false, callWave: false });
   });
 });
 

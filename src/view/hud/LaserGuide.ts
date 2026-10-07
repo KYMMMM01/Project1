@@ -51,6 +51,8 @@ export class LaserGuide {
     private readonly env: HudEnv,
     /** The laser button's rectangle in scene space. */
     private readonly target: () => Rect,
+    /** A normal run starts the guide by itself; the tutorial run holds it back until its laser lesson begins (`arm`). */
+    private armed = true,
   ) {
     this.layout = env.layout();
     this.dim.eventMode = 'none';
@@ -62,6 +64,11 @@ export class LaserGuide {
     this.layer.visible = false;
     env.ctx.layers.overlay.addChild(this.layer);
     env.on(env.battle.events, 'laser', () => this.flow.onDot());
+  }
+
+  /** The tutorial's laser lesson has begun: the guide may start as soon as a wave gives it enemies to mark. */
+  arm(): void {
+    this.armed = true;
   }
 
   /** The player has been explained the laser (the card closed any way) or pressed the button to aim: on to placing the dot. */
@@ -86,13 +93,14 @@ export class LaserGuide {
       const L = battle.laser;
       // Another bubble on screen (a hint, an enemy card) counts as busy too: the guide waits for its turn.
       const world = { phase: battle.phase, enemies: battle.enemyCount, ready: !L.active && L.cooldown <= 0, busy: busy || (tooltip.visible && tooltip.target !== this.anchor) };
-      if (!teach.ready || !reveal.laser || !guideDue(world)) return;
+      if (!teach.ready || !reveal.laser || !this.armed || !guideDue(world)) return;
       hints.used('laser');
       flow.start();
     }
     const modal = this.env.modalCount > 0;
     if (flow.tick(dt, modal)) {
       teach.noteGuided();
+      this.env.progress.markTaught('laser');
       stopAim();
       this.hide();
       return;

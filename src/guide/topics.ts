@@ -96,10 +96,9 @@ export const TOPIC_LIST = [
   T('trait_weaken', 'foes', foe('dryer')),
   // ── home ──
   T('cards', 'home', cats('w_sword', 'r_archer', 'm_fire'), { tab: 'cats' }),
-  T('wild_cards', 'home', ico('card'), { tab: 'cats' }),
+  T('wild_cards', 'home', ico('cards'), { tab: 'cats' }),
   T('chests', 'home', { k: 'chest', chest: 'silver' }, { tab: 'shop' }),
   T('free_chest', 'home', { k: 'chest', chest: 'wood' }, { tab: 'shop' }),
-  T('training', 'home', ico('star'), { tab: 'cats' }),
   T('missions', 'home', ico('mission'), { tab: 'missions' }),
   T('daily_chest', 'home', { k: 'chest', chest: 'gold' }, { tab: 'missions' }),
   T('calendar', 'home', ico('calendar')),

@@ -7,10 +7,12 @@ import { getLang, i18nEvents, t, type Lang } from '@/core/i18n';
 import { isStorageVolatile, onStorageVolatile } from '@/core/save';
 import { uiTweens } from '@/core/tween';
 import type { NumbersMode } from '@/fx';
+import { guideProgress, openGuide } from '@/guide';
 import { profile } from '@/meta';
 import { iap } from '@/platform';
 import { backOut, Button, Color, drawIcon, fitLabel, motion, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, TweenBag, uiLabel } from '@/ui';
 import { refusalCue } from '@/ui/press';
+import { shell } from '@/screens/shell/controller';
 import { currentSettings, ensureSettings, updateSettings } from '@/view/hud/settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '@/view/hud/settingsMath';
 import { CodeExportPopup, CodeImportPopup } from './backupPopups';
@@ -54,6 +56,7 @@ export function closeSettingsScreen(): void {
 export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   if (current) return;
   await ensureSettings();
+  await guideProgress.load();
   if (current) return;
   const scaffold = new ScreenScaffold({ title: t('rt.sys.settings'), onBack: () => close(), scroll: true });
   current = scaffold;
@@ -162,6 +165,16 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
       scaffold.content.addChild(notice);
       y += notice.height + GAP + LABEL_OVERHANG;
     }
+    // The guidebook sits first, as one big paper button: a player who skipped the tutorial finds it without hunting.
+    const left = guideProgress.unread().length;
+    const guideBtn = new Button({
+      label: t('guide.settings.title'), sublabel: left > 0 ? t('guide.unread', { n: left }) : t('guide.settings.hint'), style: 'primary', icon: 'question',
+      width: w, height: 120, fontSize: 40, tape: 'pink',
+    });
+    guideBtn.onTap(() => openGuide({ host: { goTab: (tab) => { closeSettingsScreen(); shell.goTab(tab); } }, onClose: () => { if (!closed) build(); } }));
+    guideBtn.position.set(w / 2, y + 60);
+    scaffold.content.addChild(guideBtn);
+    y += 120 + GAP + LABEL_OVERHANG;
     const add = (title: string, rows: readonly FormRow[]): void => {
       const sheet = formSheet(w, title, rows);
       sheet.view.position.set(0, y);

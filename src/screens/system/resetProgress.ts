@@ -7,7 +7,7 @@ import { confirmDialog } from '@/ui/dialogs';
 import './strings';
 
 /** Everything that records progress. Settings (volume, language, quality tier) are kept. */
-const PROGRESS_KEYS: readonly string[] = [SAVE_KEY, 'meowguard.hints', 'meowguard.promo', 'meowguard.routine'];
+const PROGRESS_KEYS: readonly string[] = [SAVE_KEY, 'meowguard.hints', 'meowguard.laser', 'meowguard.promo', 'meowguard.routine'];
 
 export async function resetProgress(): Promise<void> {
   const first = await confirmDialog({

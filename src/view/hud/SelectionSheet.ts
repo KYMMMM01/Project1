@@ -116,6 +116,12 @@ export class SelectionSheet {
     for (const type of ['fish', 'purr', 'synergy', 'merge', 'molt', 'awaken', 'move', 'swap', 'sell', 'upgrade', 'summon'] as const) {
       env.on(b.events, type, () => (this.dirty = true));
     }
+    // The tutorial brings the molt and awaken buttons in; the row of buttons re-centres around them.
+    env.on(env.revealed, 'reveal', ({ key }) => {
+      if (key !== 'molt' && key !== 'awaken') return;
+      (key === 'molt' ? this.molt : this.awaken).visible = true;
+      this.layout(this.rect);
+    });
   }
 
   layout(rect: Rect): void {
@@ -148,9 +154,9 @@ export class SelectionSheet {
     return this.cell !== null;
   }
 
-  /** The sheet's button for a command a refusal can be about. */
-  buttonFor(command: 'awaken' | 'sell'): Button {
-    return command === 'awaken' ? this.awaken : this.sell;
+  /** The sheet's button for a command a refusal (or a lesson) can be about. */
+  buttonFor(command: 'awaken' | 'sell' | 'molt'): Button {
+    return command === 'awaken' ? this.awaken : command === 'molt' ? this.molt : this.sell;
   }
 
   /** Show for `cell`, or hide with null. */
@@ -194,9 +200,9 @@ export class SelectionSheet {
         this.root.alpha = 1;
       },
     });
-    if (this.env.reveal.molt) this.env.hints.request('molt', this.molt, true);
-    if (this.env.reveal.awaken) this.env.hints.request('awaken', this.awaken, true);
-    if (this.env.reveal.sellHint) this.env.hints.request('sell', this.sell, true);
+    const { battle, hints, reveal } = this.env;
+    if (reveal.molt && battle.purr >= battle.moltCost()) hints.request('molt', this.molt, true);
+    if (reveal.sellHint) hints.request('sell', this.sell, true);
   }
 
   private hide(): void {

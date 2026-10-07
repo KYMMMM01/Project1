@@ -29,9 +29,6 @@ export const QUICK_REVEAL_WINDOW = 3;
 export const REVEAL_OVERSHOOT: readonly number[] = [1.7, 1.9, 2.1, 2.4, 2.7];
 export const REVEAL_MS: readonly number[] = [240, 260, 290, 330, 400];
 
-/** Seconds the coil of an attack lasts before its release (the cat squashes back while the attack charges up). */
-export const ANTICIPATION_SECONDS = 0.1;
-
 /**
  * A toy picked on the choice screen flies to the HUD shelf and takes its place on the frame it lands: burst, rest and
  * flight are fixed (the screen asks `flyTo` for exactly these), and the shelf waits their sum.

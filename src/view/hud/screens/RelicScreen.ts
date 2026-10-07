@@ -12,6 +12,7 @@ import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { flyTo } from '@/fx';
 import { relicDef, type PendingChoice } from '@/game';
+import { topicTeach } from '@/guide';
 import { errorKey, profile } from '@/meta';
 import { ads } from '@/platform';
 import {
@@ -119,7 +120,8 @@ export class RelicScreen {
     const head = new Container();
     head.y = dy;
     const act = this.env.battle.act;
-    const line = p.picksLeft > 1 ? t('hud.relic.many', { n: p.picksLeft }) : t('hud.relic.one');
+    // The tutorial's first toy choice says what toys are in the line under the title.
+    const line = this.env.lessonOn('toys') ? topicTeach('toys') : p.picksLeft > 1 ? t('hud.relic.many', { n: p.picksLeft }) : t('hud.relic.one');
     const w = this.scaffold.contentWidth;
     const a = new PaperLabel({ text: t('hud.relic.cleared', { act }), size: 44, paper: 'primary', padX: 44, padY: 12, maxWidth: w - 20, seed: this.seed });
     a.position.set(w / 2, 42);

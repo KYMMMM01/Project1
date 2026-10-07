@@ -92,3 +92,29 @@ REQUESTS: none. (The `SceneManager.cover` request of the polish pass still stand
 Debug: `?scene=battle&...&laserguide=1` runs the laser's guided first use in a sandbox run (otherwise sandbox runs skip it). `window.__dbg.battle.lang('en')` switches the language (opening with a `lang=` query parameter next to `debug=1` was unreliable in the runner: `__dbg` appeared late).
 
 REQUESTS: see `hud.md` (home settings row, kit `popIn` guard).
+
+## 2026-10-07 owner feedback (second round)
+
+Three items, built at full motion first (the reduced path keeps the same information as a still picture). Strips and stills are in the session's scratchpad/shots (h = areas, i = weapons, g = result page).
+
+| Item | Root cause | Change | Where |
+|---|---|---|---|
+| G. no "next chapter" after a win | the result page only knew Home and Retry; `RunConfig.next` (the app flow already supplies it, `src/app/flow.ts nextRunOf`) was never asked | the won page asks `run.next()` once the run is paid out (at once in a sandbox run); an offer turns the bar into a wide primary "Next: Chapter N name" (a butler step says "Next: Butler N" with the chapter under it; a chapter step at butler 1+ says the level under it) over Home and Retry (Retry is secondary), 116 / 92 px faces; no offer or a defeat: the bar is as before | `src/view/nextOffer.ts`, `hud/screens/ResultScreen.ts`, `tests/view.hud.result.test.ts` |
+| H. ground effects read poorly | every zone was a faint translucent disc plus particles, with no edge, no end warning and no tell on the enemy | one pooled `AreaLayer` (`src/fx/areas.ts`): each kind has its own paper-cut shape, rim, moving motif, landing, end warning and exit; enemies inside wear a small tag; hostile cells wear hazard tape; the haste and heal rings of clocks and pills are drawn | `fx.md`, `field.md` |
+| I. every hit looks the same | one lunge for twenty cats, one white flash and one squash for every enemy, generic sparks | a weapon table (`src/view/weapons.ts`) drives each cat's wind-up and strike, its shot, its swing mark and its impact mark; enemies answer by material with a tint instead of white; heavy cats, crits and boss hits stop the frame a few ms | `field.md`, `director.md` |
+
+Debug hooks added: `__dbg.battle.hazard(kind, cells, seconds)` (a wet or live cell now), `spawn(id, count, from, hpMultiplier)`. Inject a fake offer for the result page with `__dbg.battle.ctx.run.next = () => ({ chapter: 2, stake: 0, start() {} })` before `win()`. `tools/battle_motion.js` now dismisses the first-run lesson card that the new tutorial opens over a sandbox battle (`mcDismiss`).
+
+REQUESTS: `ScreenScaffold` has no way to change its action bar height after construction, so the won page reserves the tall bar up front when `run.next` exists (a win that then gets no offer, such as a daily run, shows today's two buttons in the taller bar). A `setActionBarHeight()` in `src/ui/ScreenScaffold.ts` would let the page grow the bar only when an offer arrives.
+
+## 2026-10-07 owner feedback: tutorial and guidebook
+
+| Item | Root cause | Change | Where |
+|---|---|---|---|
+| The tutorial teaches only summon and synergy | Controls were revealed by run count and explained by one-line bubbles | 19 lessons, each control or board feature enters when it is taught; first-encounter cards for everything the tutorial left out; a skip button | `guide.md`, `hud.md`, GDD 9 |
+| No place to read the rules | Nothing | Guidebook (58 topics, 5 sections) from the home settings, the pause menu and every card | `guide.md` |
+| The tutorial run's script | Sunbeams and the fish were the same as a normal run | Sunbeams arrive when the scripted pick is answered, fish topped up at wave 5, a box of kittens at wave 6 | `sim.md` |
+
+Debug: `window.__dbg.lessons` (see `guide.md`). The battle debug route's tutorial sandbox runs the lessons with in-memory progress; `tools/battle_motion.js` `mcOpen` marks them skipped, a lesson run opens the game itself.
+
+REQUESTS: see `guide.md`.

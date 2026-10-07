@@ -3,10 +3,12 @@
  * reads, what the summon button says, which offers may be shown. Pure so they can be unit tested.
  */
 import type { BattlePhase, ClassId, EnemyTrait, Fail, PityInfo, RarityId, UnitId } from '@/game';
+import type { TopicId } from '@/guide';
 
 // ───────────────────────────── staged reveal (GDD 9.1) ─────────────────────────────
 
 export interface Reveal {
+  chips: boolean;
   classUpgrade: boolean;
   speed: boolean;
   preview: boolean;
@@ -21,24 +23,33 @@ export interface Reveal {
   sellHint: boolean;
 }
 
-/** Run 0 shows only summon, fish, wave timer, enemy gauge and pause; the rest arrives over the next three runs. */
-export function revealFlags(runsPlayed: number): Reveal {
-  const r2 = runsPlayed >= 1;
-  const r3 = runsPlayed >= 2;
-  const r4 = runsPlayed >= 3;
+export type RevealKey = keyof Reveal;
+
+export const REVEAL_KEYS: readonly RevealKey[] = [
+  'chips', 'classUpgrade', 'speed', 'preview', 'tracker', 'laser', 'callWave', 'purr', 'molt', 'odds', 'gradeUpgrade', 'awaken', 'sellHint',
+];
+
+/**
+ * Which controls are on the screen when a battle opens. Every normal run shows all of them (a first-encounter card explains each one the
+ * first time it matters); the tutorial run starts with only summon, fish, the wave timer, the enemy gauge and pause, plus whatever
+ * the lessons already taught have revealed, and every other control arrives with its lesson.
+ */
+export function revealFlags(tutorial: boolean, revealed: readonly RevealKey[] = []): Reveal {
+  const on = (key: RevealKey): boolean => !tutorial || revealed.includes(key);
   return {
-    classUpgrade: r2,
-    speed: r2,
-    preview: r2,
-    tracker: r2,
-    laser: r2,
-    callWave: r2,
-    purr: r3,
-    molt: r3,
-    odds: r3,
-    gradeUpgrade: r4,
-    awaken: r4,
-    sellHint: r4,
+    chips: on('chips'),
+    classUpgrade: on('classUpgrade'),
+    speed: on('speed'),
+    preview: on('preview'),
+    tracker: on('tracker'),
+    laser: on('laser'),
+    callWave: on('callWave'),
+    purr: on('purr'),
+    molt: on('molt'),
+    odds: on('odds'),
+    gradeUpgrade: on('gradeUpgrade'),
+    awaken: on('awaken'),
+    sellHint: on('sellHint'),
   };
 }
 
@@ -280,9 +291,5 @@ export function traitOrder(traits: readonly EnemyTrait[]): EnemyTrait[] {
   return traits.slice().sort((a, b) => rank(a) - rank(b));
 }
 
-/** First-time speech bubbles: ids in the order they may appear. */
-export const HINT_IDS = [
-  'twins', 'chips', 'synergy', 'toys', 'sun', 'speed', 'preview', 'tracker', 'laser', 'callWave', 'purr', 'molt', 'odds',
-  'grade', 'awaken', 'sell',
-] as const;
-export type HintId = (typeof HINT_IDS)[number];
+/** The first-time lessons (a card when the player first meets the thing) are named after the guide's topics. */
+export type HintId = TopicId;

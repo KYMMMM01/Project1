@@ -132,7 +132,7 @@ addStrings('ko', {
   'hud.res.winSub': '냥이 수비대가 집을 지켰어요!',
   'hud.res.loseSub': '다음엔 더 잘할 수 있어요.',
   'hud.res.close': '{n}웨이브만 더 가면 클리어였어요!',
-  'hud.res.loseFish': '물고기가 {n}마리 남았어요. 고양이를 더 불러요!',
+  'hud.res.loseFish': '생선이 {n}마리 남았어요. 고양이를 더 불러요!',
   'hud.res.waves': '웨이브',
   'hud.res.kills': '처치',
   'hud.res.merges': '합성',
@@ -165,9 +165,7 @@ addStrings('ko', {
   'hud.res.retry': '다시 도전',
 
   // tutorial
-  'hud.tut.summon': '버튼을 눌러 고양이를 불러요! ({n}/{total})',
-  'hud.tut.merge': '같은 고양이끼리 끌어서 합쳐요! 같은 직업의 다음 등급이 돼요.',
-  'hud.tut.more': '물고기가 넉넉해요! 고양이를 더 불러요!',
+  'hud.tut.more': '생선이 넉넉해요! 고양이를 더 불러요!',
 
   // laser
   'hud.laser.hint': '길 위를 눌러 빨간 점을 찍어요. 점 가까이 있는 적부터 공격해요.',
@@ -219,24 +217,6 @@ addStrings('ko', {
   'hud.fail.setLaser.on_cooldown': '레이저를 충전하고 있어요.',
   'hud.fail.laser.on_cooldown': '레이저를 충전하고 있어요.',
   'hud.fail.drop.invalid_cell': '그 칸에는 놓을 수 없어요.',
-
-  // first-time speech bubbles
-  'hud.hint.chips': '직업 칩이에요. 눌러서 자세히 봐요.',
-  'hud.hint.synergy': '시너지가 켜졌어요! 같은 직업 종류가 많을수록 강해져요.',
-  'hud.hint.toys': '장난감이 생겼어요. 눌러서 효과를 확인해요.',
-  'hud.hint.sun': '햇살 칸이 새 자리로 옮겨 갔어요. 거기 선 고양이는 더 빨라요!',
-  'hud.hint.speed': '누를 때마다 배속이 바뀌어요.',
-  'hud.hint.preview': '다음 웨이브에 나올 적이에요. 눌러서 알아봐요.',
-  'hud.hint.tracker': '6번째 소환마다 세 마리 중 하나를 골라요.',
-  'hud.hint.laser': '레이저예요. 길 위를 눌러 빨간 점을 찍어요.',
-  'hud.hint.callWave': '미리 불러서 생선 보너스를 받아요!',
-  'hud.hint.purr': '골골이에요. 털갈이와 각성에 써요.',
-  'hud.hint.molt': '골골로 같은 등급의 다른 직업으로 바꿔요.',
-  'hud.hint.odds': '눌러서 다음 소환의 진짜 확률을 봐요.',
-  'hud.hint.grade': '소환 등급을 올리면 좋은 고양이가 더 잘 나와요.',
-  'hud.hint.awaken': '대왕은 시너지 2단계에서 골골을 모으면 수호신이 돼요.',
-  'hud.hint.sell': '팔면 생선을 돌려받아요. 고양이를 아래로 끌어다 놓아도 돼요.',
-  'hud.hint.twins': '같은 고양이 둘을 합치면 같은 직업의 다음 등급이 돼요.',
 });
 
 addStrings('en', {
@@ -391,8 +371,6 @@ addStrings('en', {
   'hud.res.home': 'Home',
   'hud.res.retry': 'Try again',
 
-  'hud.tut.summon': 'Tap to summon a cat! ({n}/{total})',
-  'hud.tut.merge': 'Drag one cat onto its twin to merge! You get the next rank of the same class.',
   'hud.tut.more': 'Fish ready! Summon more cats!',
 
   'hud.laser.hint': 'Tap the walkway to place the red dot. Cats hit enemies near it first.',
@@ -444,20 +422,4 @@ addStrings('en', {
   'hud.fail.laser.on_cooldown': 'The laser is recharging.',
   'hud.fail.drop.invalid_cell': 'You cannot drop it there.',
 
-  'hud.hint.chips': 'Class chips. Tap one for details.',
-  'hud.hint.synergy': 'Synergy is on! More kinds of cats, higher tier.',
-  'hud.hint.toys': 'You got a toy. Tap it to see what it does.',
-  'hud.hint.sun': 'The sunny cells moved! Cats standing there attack faster.',
-  'hud.hint.speed': 'Tap to change the game speed.',
-  'hud.hint.preview': 'Enemies of the next wave. Tap one to learn more.',
-  'hud.hint.tracker': 'Every 6th summon lets you pick one of three cats.',
-  'hud.hint.laser': 'The laser. Tap the walkway to drop the red dot.',
-  'hud.hint.callWave': 'Call the next wave early for bonus fish!',
-  'hud.hint.purr': 'Purr pays for molting and awakening.',
-  'hud.hint.molt': 'Purr turns a cat into another class of the same rank.',
-  'hud.hint.odds': 'Tap to see the real odds of the next summon.',
-  'hud.hint.grade': 'A higher summon grade makes better cats more likely.',
-  'hud.hint.awaken': 'Kings awaken into Guardians at tier 2 with enough purr.',
-  'hud.hint.sell': 'Sell for fish, or drag a cat down onto the panel.',
-  'hud.hint.twins': 'Two identical cats merge into the next rank of their class.',
 });

@@ -20,7 +20,7 @@ import { installCheats, installClockShift } from './cheats';
 import { afterFirstScene, chooseFirstScene, homeScene, installFlow } from './flow';
 
 const REFRESH_MS = 60_000;
-const SAVE_KEYS = ['meowguard.profile', 'meowguard.settings'] as const;
+const SAVE_KEYS = ['meowguard.profile', 'meowguard.settings', 'meowguard.hints', 'meowguard.laser', 'meowguard.promo', 'meowguard.routine'] as const;
 
 export interface AppStart {
   /** Land on the home screen (on this tab) even for a brand-new profile. Used by the `?scene=home` QA route. */

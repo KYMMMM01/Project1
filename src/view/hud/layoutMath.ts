@@ -137,8 +137,8 @@ export const PICK = {
   /** Centre line of the cards, and the sub line above them (centre y, half height, width of the widest text). */
   cardY: 330,
   subY: 84,
-  subHalf: 15,
-  subW: 340,
+  subHalf: 34,
+  subW: 610,
   /** Half height of a photo frame (292 x scale / 2): the text of a card starts under it. */
   frameHalf: 134,
   /** The pointing hand: scale, and how far its fingertip sits inside the frame's top edge. */
