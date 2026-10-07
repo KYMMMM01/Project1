@@ -14,6 +14,7 @@ import {
   type CardBox,
   type CardSizeId,
 } from '@/ui/cardMath';
+import { BADGE_D } from '@/screens/cats/collection';
 import { cachedPaperPath, cornerCap, cutBelow, insetPolygon, wobbleAmp } from '@/ui/paperMath';
 
 const SIZES: CardSizeId[] = ['small', 'medium', 'large'];
@@ -281,17 +282,33 @@ describe.each([
     expect(geo.windowRect.h).toBeCloseTo(matH - 2 * spec.frame, 6);
   });
 
-  it('keeps the top corners for the level pill: photo corners only on the bottom two', () => {
+  it('keeps the top corners for the level badge and the ready sticker: photo corners only on the bottom two', () => {
     expect(spec.topCaps).toBe(false);
   });
 
-  it('puts the level pill inside the window, clear of the tape and star above it', () => {
-    const pill = plateBadgeBox(geo, 80, 32);
-    expect(within(pill, geo.windowRect)).toBe(true);
+  it('hangs the round level badge on the upper-left corner: the disc is on the paper, the head of the cat, the tape and the star are free', () => {
+    const d = BADGE_D;
+    const badge = plateBadgeBox(geo, d);
+    expect(badge.w).toBe(d);
+    expect(badge.h).toBe(d);
+    // Its centre is on the paper and its upper left sticks out past the cut edge.
+    expect(inside(geo.outer, badge.x + d / 2, badge.y + d / 2)).toBe(true);
+    expect(badge.x).toBeLessThan(-w / 2);
+    expect(badge.y).toBeLessThan(-h / 2);
+    // The window's middle half is the cat: the disc stays in its left quarter.
+    expect(badge.x + d).toBeLessThanOrEqual(geo.windowRect.x + geo.windowRect.w / 4);
+    // The tape is centred on the top edge and sways a few degrees; the star sits on it.
     const tape = tapeBox(spec);
-    const sway = (tape.w / 2) * Math.sin((3 * Math.PI) / 180);
-    expect(tape.y + tape.h + sway).toBeLessThanOrEqual(pill.y);
-    expect(starBox(spec).y + starBox(spec).h).toBeLessThanOrEqual(pill.y + 0.01);
+    const sway = (tape.w / 2) * Math.sin((4 * Math.PI) / 180);
+    const hit = (b: CardBox): boolean => overlap(badge, { x: b.x, y: b.y - sway, w: b.w, h: b.h + 2 * sway });
+    expect(hit(tape)).toBe(false);
+    expect(hit(starBox(spec))).toBe(false);
+    // The ready sticker (38 px, 8 px in from the right edge) is on the other side of the middle.
+    expect(badge.x + d).toBeLessThan(w / 2 - 8 - 19);
+  });
+
+  it('puts the badge in the same place whatever the rarity or the level: it depends on the plate alone', () => {
+    expect(plateBadgeBox(plateGeometry(w, h, matH), BADGE_D)).toEqual(plateBadgeBox(geo, BADGE_D));
   });
 });
 

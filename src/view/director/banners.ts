@@ -377,6 +377,17 @@ export class BannerService {
     for (const id of Object.keys(this.lanes) as LaneId[]) this.lanes[id].resize(layout);
   }
 
+  /**
+   * The warning ribbon dressed for `spec` and handed back unshown: the warm-up draws it once ahead of time, so its first draw (the paper, the
+   * hazard tape, two texts) is not in the frame the warning arrives in. Null while a ribbon is up or waiting, and once the service is gone.
+   */
+  dressBand(spec: BannerSpec): Container | null {
+    const lane = this.lanes.alert;
+    if (this.host.destroyed || lane.queue.length > 0) return null;
+    lane.show(spec);
+    return lane.root;
+  }
+
   /** Banners on screen plus waiting, over all lanes. */
   depth(): number {
     let n = 0;

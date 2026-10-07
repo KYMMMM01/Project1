@@ -8,8 +8,8 @@ import { Container, Point, Text } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
 import { i18nEvents, t } from '@/core/i18n';
 import { closeGuide, GuideProgress, guideProgress, openGuide, topicTeach, type TopicId, type TryControl } from '@/guide';
-import { warm, WARM_PRIO } from '@/fx';
-import { CLASS_IDS } from '@/game';
+import { renderOnce, warm, WARM_PRIO } from '@/fx';
+import { CLASS_IDS, isWaveTarget, waveKindOf } from '@/game';
 import { clearToasts, confirmDialog, popups, toast } from '@/ui';
 import type { UnitId } from '@/game';
 import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
@@ -236,6 +236,7 @@ class Hud implements HudPart {
       if (wave >= 2 && env.reveal.preview) env.hints.request('preview', this.top.previewLayer);
       // An elite or a boss ends the act, and the toy screen follows it.
       if (kind !== 'normal') this.prepareRelics();
+      if (waveKindOf(wave + 1) !== 'normal') this.prepareStrip(wave + 1);
     });
     // Outside the tutorial (which teaches the merge itself) the first pair of identical cats earns one card.
     if (!lessons && !env.hints.has('merge')) {
@@ -550,6 +551,16 @@ class Hud implements HudPart {
       screen.prewarm().forEach((step, i) => warm.request(`${key}:${i}`, WARM_PRIO.next, 5, () => {
           if (!this.destroyed) step();
         }));
+    });
+  }
+
+  /** The wave after this one brings an elite or a boss: its strip is drawn once, out of sight, while this one is played (src/fx/warm.ts). */
+  private prepareStrip(wave: number): void {
+    const target = this.ctx.battle.previewWave(wave).find((p) => isWaveTarget(p.enemy));
+    if (!target) return;
+    warm.request(`strip:${this.serial}:${wave}`, WARM_PRIO.coming, 4, () => {
+      const strip = this.destroyed ? null : this.boss.dress(target.enemy);
+      if (strip) renderOnce(strip);
     });
   }
 

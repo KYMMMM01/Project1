@@ -146,6 +146,21 @@ export interface GridSlot {
 
 /** Natural size of a reveal card's plate. The name is set under it at a fixed size on screen, whatever the scale. */
 export const PLATE = { w: 116, h: 136 } as const;
+
+/**
+ * The rarity stamp lands on the photo's outer side: its near edge a quarter of the plate in from the middle (the cat's face is up and in the
+ * centre, the tape in the upper left corner, the count at the foot and the "Wild" tag in the upper right), level with the middle. `half` is
+ * half its width, `outer` the side it hangs on (1 the right).
+ */
+export const STAMP_NEAR = 0.28;
+export function stampSpot(half: number, outer: 1 | -1): { x: number; y: number } {
+  return { x: outer * (PLATE.w * STAMP_NEAR + half), y: -PLATE.h * 0.04 };
+}
+
+/** How big the stamp may arrive: up to `max` times its size, but never so big that its far edge passes the screen's, `room` plate units from the middle. */
+export function stampFrom(room: number, half: number, max: number): number {
+  return Math.max(1, Math.min(max, 1 + (room - (PLATE.w * STAMP_NEAR + 2 * half)) / half));
+}
 /** Font size of a card's name on screen: never below the kit's body-text floor, never shrunk to fit. */
 export const NAME_SIZE = 24;
 export const NAME_LINE = 26;

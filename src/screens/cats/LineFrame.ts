@@ -10,7 +10,7 @@ import {
 import { unitPortrait } from '../shop/art';
 import { buildPlate } from '../shop/photoPlate';
 import { classIcon } from '../shop/keys';
-import { FRAME_H, NAME_LINE, NAME_PAD, type CardProgress } from './collection';
+import { BADGE_D, FRAME_H, NAME_LINE, NAME_PAD, type CardProgress } from './collection';
 
 export type FrameMode = keyof typeof FRAME_H;
 
@@ -29,7 +29,7 @@ export interface FrameState {
 
 /**
  * One cat as a compact paper photo frame: cream border, a mat in the rarity colour (rarity also adds an
- * ornament: dashed line, corner mounts, tape, star), the sticker in the window, the level pill, the card bar
+ * ornament: dashed line, corner mounts, tape, star), the sticker in the window, the level badge, the card bar
  * and an "upgrade ready" sticker; the name sits under the plate on the page and wraps to a second line rather than
  * shrinking or being cut. Origin = centre of the plate.
  * Built once; `setState` and `setMarked` update it in place.
@@ -43,12 +43,12 @@ export class LineFrame extends Container {
   private readonly bag = new TweenBag();
   private readonly body = new Container();
   private readonly marker = new Container();
-  private readonly levelPill = new Container();
+  private readonly levelBadge = new Container();
   private readonly readySticker = new Container();
   private readonly bar: ProgressBar | null;
   private readonly press: PressBinding;
   private readonly mode: FrameMode;
-  private readonly badgeAt: (w: number, h: number) => { x: number; y: number; w: number; h: number };
+  private readonly badgeAt: (d: number) => { x: number; y: number; w: number; h: number };
   private levelText: Text | null = null;
   private tapFn: ((unit: UnitId) => void) | null = null;
   private ready = false;
@@ -89,8 +89,8 @@ export class LineFrame extends Container {
       mark.position.set(0, h / 2 - 22);
       this.body.addChild(pill, mark);
     }
-    this.levelPill.visible = false;
-    this.body.addChild(this.levelPill);
+    this.levelBadge.visible = false;
+    this.body.addChild(this.levelBadge);
 
     // Kept inside the plate's top-right corner so it never reaches up into the merge / awaken words over the gaps.
     const ready = paperShape({ w: 38, h: 38, kind: 'circle', fill: Color.leaf, edge: Color.leafDark, grain: false, seed: seed + 6 });
@@ -171,18 +171,18 @@ export class LineFrame extends Container {
     }
   }
 
+  /** The level is only the number on a small round paper badge: a pill with "Lv." in it would cover the cat's head. */
   private setLevel(level: number): void {
-    const text = t('cats.lv', { n: level });
+    const text = String(level);
     if (this.levelText?.text === text) return;
-    for (const c of this.levelPill.removeChildren()) c.destroy({ children: true });
+    for (const c of this.levelBadge.removeChildren()) c.destroy({ children: true });
     const label = uiLabel(text, { size: 24 });
-    const lw = Math.ceil(label.width) + 20;
-    const box = this.badgeAt(lw, 32);
-    fitLabel(label, box.w - 12, 24);
-    const pill = paperShape({ w: box.w, h: box.h, kind: 'pill', fill: Color.paperLight, edge: Rarity[unitRarity(this.unit)].dark, shadow: 3, grain: false, seed: 11 });
-    this.levelPill.addChild(pill, label);
-    this.levelPill.position.set(box.x + box.w / 2, box.y + box.h / 2);
-    this.levelPill.visible = this.mode === 'card';
+    const box = this.badgeAt(BADGE_D);
+    fitLabel(label, box.w - 10, 24);
+    const disc = paperShape({ w: box.w, h: box.h, kind: 'circle', fill: Color.paperLight, edge: Rarity[unitRarity(this.unit)].dark, shadow: 3, grain: false, seed: 11 });
+    this.levelBadge.addChild(disc, label);
+    this.levelBadge.position.set(box.x + box.w / 2, box.y + box.h / 2);
+    this.levelBadge.visible = this.mode === 'card';
     this.levelText = label;
   }
 

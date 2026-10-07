@@ -8,7 +8,7 @@
 import { Container, Graphics, type Text } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { enemyDef, type EnemyState } from '@/game';
+import { enemyDef, type EnemyId, type EnemyState } from '@/game';
 import {
   Color,
   drawIcon,
@@ -140,6 +140,22 @@ export class BossBar {
         this.hp.setValue(this.hpFraction(), true);
       },
     });
+  }
+
+  /**
+   * The strip dressed for the elite or boss the coming wave brings, handed back hidden: the warm-up draws it once ahead of time, so the
+   * frame the big one arrives in does not pay for the strip's first draw (the torn paper, the bar, the name, the sticker). Null while a strip is up.
+   */
+  dress(id: EnemyId): Container | null {
+    if (this.shown || this.finishing) return null;
+    this.nameFull = t(enemyDef(id).nameKey);
+    this.sticker?.destroy({ children: true });
+    this.sticker = enemyPortrait(id, STICKER);
+    this.root.addChild(this.sticker);
+    this.timeT.text = t('hud.secs', { s: Math.ceil(this.env.battle.waveDuration) });
+    this.estT.text = t('hud.est.wait');
+    this.place();
+    return this.root;
   }
 
   private hpFraction(): number {

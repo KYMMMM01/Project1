@@ -14,7 +14,7 @@ import {
   backOut,
   Button,
   Color,
-  drawDashedRect,
+  drawDashedInset,
   drawIcon,
   drawPaper,
   fitLabel,
@@ -136,9 +136,9 @@ export class SelectionSheet {
   private drawBg(): void {
     const { w, h } = this.rect;
     this.bg.clear();
-    drawPaper(this.bg, 0, 0, { w, h, radius: 30, fill: Color.paperLight, edge: Color.kraftDark, seed: this.seed });
-    const f = sheetBoxes(w, h).frame;
-    drawDashedRect(this.bg, f.x, f.y, f.w, f.h, { radius: 22, color: this.accent, width: 3, dash: 14, gap: 10, alpha: 0.85, seed: this.seed });
+    const paper = { w, h, radius: 30, fill: Color.paperLight, edge: Color.kraftDark, seed: this.seed } as const;
+    drawPaper(this.bg, 0, 0, paper);
+    drawDashedInset(this.bg, 0, 0, paper, sheetBoxes(w, h).frame.x, { color: this.accent, width: 3, dash: 14, gap: 10, alpha: 0.85, seed: this.seed });
   }
 
   get shown(): boolean {

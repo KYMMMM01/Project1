@@ -23,7 +23,7 @@ import { ads } from '@/platform';
 import {
   Button,
   Color,
-  drawDashedRect,
+  drawDashedInset,
   drawPaper,
   drawPaperFace,
   fitLabel,
@@ -317,12 +317,13 @@ export class RelicScreen {
     const seed = this.seed + 10 + i * 4;
     const x = -CARD_W / 2;
     const y = -CARD_H / 2;
-    drawPaper(g, x, y, { w: CARD_W, h: CARD_H, radius: 34, fill: Color.paperLight, edge: Color.kraftDark, shadow: 7, seed });
+    const card = { w: CARD_W, h: CARD_H, radius: 34, fill: Color.paperLight, edge: Color.kraftDark, shadow: 7, seed } as const;
+    drawPaper(g, x, y, card);
     const mx = x + MAT_PAD;
     const my = -MAT / 2 + 4;
     drawPaperFace(g, mx, my, { w: MAT, h: MAT, radius: 26, fill: rar.color, edge: rar.dark, grain: false, seed: seed + 1, wobble: 0.7 });
     drawPaperFace(g, mx + 14, my + 14, { w: MAT - 28, h: MAT - 28, radius: 18, fill: mixColor(rar.light, Color.paper, 0.62), edge: rar.dark, grain: false, seed: seed + 2, wobble: 0.6 });
-    if (idx >= 1) drawDashedRect(g, x + 8, y + 8, CARD_W - 16, CARD_H - 16, { radius: 28, color: rar.dark, width: 2.5, dash: 12, gap: 9, alpha: 0.8, seed: seed + 3 });
+    if (idx >= 1) drawDashedInset(g, x, y, card, 8, { color: rar.dark, width: 2.5, dash: 12, gap: 9, alpha: 0.8, seed: seed + 3 });
     if (idx >= 2) {
       // Photo-corner mounts on the mat.
       const k = 26;

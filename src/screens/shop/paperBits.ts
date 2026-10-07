@@ -87,6 +87,8 @@ export interface StampOpts {
   maxWidth?: number;
   /** Radians. Default a few degrees anticlockwise. */
   tilt?: number;
+  /** Paper between the word and the inner line, vertically in all; twice that on each side (default 24: a small stamp wants less). */
+  pad?: number;
 }
 
 /** An ink stamp: two lines round a word, pressed on paper. The one drawn line besides the speech bubble. Origin = centre. */
@@ -94,10 +96,10 @@ export function stampMark(text: string, o: StampOpts = {}): Container {
   const color = o.color ?? Color.berryDark;
   const size = o.size ?? 34;
   const t = uiLabel(text, { size, color });
-  const padX = 24;
-  if (o.maxWidth) fitLabel(t, o.maxWidth - padX * 2, size);
-  const w = Math.ceil(t.width) + padX * 2;
-  const h = Math.round(size * 1.15) + 24;
+  const pad = o.pad ?? 24;
+  if (o.maxWidth) fitLabel(t, o.maxWidth - pad * 2, size);
+  const w = Math.ceil(t.width) + pad * 2;
+  const h = Math.round(size * 1.15) + pad;
   const g = new Graphics();
   g.roundRect(-w / 2, -h / 2, w, h, 12).stroke({ width: 5, color, alignment: 0.5 });
   g.roundRect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16, 7).stroke({ width: 2, color, alignment: 0.5 });

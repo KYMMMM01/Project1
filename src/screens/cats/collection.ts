@@ -86,6 +86,8 @@ export function cardProgress(v: UnitView): CardProgress {
 /** Widest a photo frame gets, and the heights of the two frame kinds: a card also carries the progress bar. */
 export const FRAME_W = 108;
 export const FRAME_H = { card: 150, mini: 114 } as const;
+/** Diameter of the round level badge on a card frame's upper-left corner. */
+export const BADGE_D = 40;
 /** Height of the band above a card row where the merge / awaken words sit over the gaps. */
 export const RAIL_H = 34;
 /** One line of a cat's name under its plate, and the room kept above and below the lines. */

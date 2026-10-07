@@ -11,7 +11,7 @@ import { drawPaper, paperSeed, tapeStrip } from './paper';
 import { justRefused } from './press';
 import { cacheStatic } from './shapes';
 import './strings';
-import { uiLabel } from './text';
+import { balanceWrap, uiLabel } from './text';
 import { ButtonPalettes, Color, type ButtonStyleId, type TapeName } from './theme';
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
@@ -49,6 +49,8 @@ function buildToast(text: string, kind: ToastKind): { view: Container; label: Te
   const k = KIND[kind];
   const pal = ButtonPalettes[k.style];
   const label = uiLabel(text, { size: 30, wrap: 520, lineHeight: LINE_H });
+  // A message of two lines comes out as two even lines, not one full line and a stray word.
+  if (label.height <= LINE_H * MAX_LINES + 6) balanceWrap(label, 520);
   capLines(label);
   const h = Math.max(88, label.height + 40);
   const w = Math.min(680, Math.max(380, label.width + 150));

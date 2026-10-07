@@ -317,7 +317,7 @@ export const PICK = {
   /** Half height of a photo frame (292 x scale / 2): the text of a card starts under it. */
   frameHalf: 134,
   /** How far its fingertip sits inside the frame's top edge. */
-  tipInside: 26,
+  tipInside: 29,
   /** Without the paw there is no band over the cards: they sit this far under the sub line, and the sheet is as much shorter as they moved up. */
   plainGap: 20,
 } as const;

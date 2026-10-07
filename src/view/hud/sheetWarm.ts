@@ -85,6 +85,7 @@ export function warmSheets(key: string, makers: readonly SheetMaker[], prio: num
         step(i + 1);
         return;
       }
+      sheet.finishBuild();
       partsOf(sheet.body).forEach((part, n) =>
         warm.request(`${base}:${n}`, prio, PART_MS, () => {
           if (alive() && !part.destroyed) renderOnce(part);

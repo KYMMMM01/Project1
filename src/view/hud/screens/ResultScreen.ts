@@ -4,7 +4,7 @@
  * counting up, stickers popping in, level-ups, a newly cleared stake) and at most two paper coupons
  * (double the rewards, a snack box). Sandbox runs show the statistics only.
  */
-import { Container, Graphics, type BitmapText } from 'pixi.js';
+import { Container, Graphics, GraphicsContext, type BitmapText } from 'pixi.js';
 import { audio } from '@/audio';
 import { fmt, fmtDuration } from '@/core/format';
 import { game } from '@/core/game';
@@ -20,8 +20,8 @@ import {
   Color,
   countUpDuration,
   countUpValue,
+  drawDashedInset,
   drawDashedLine,
-  drawDashedRect,
   drawIcon,
   drawPaper,
   fitLabel,
@@ -34,6 +34,7 @@ import {
   popIn,
   rarityName,
   ScreenScaffold,
+  Staged,
   toast,
   TweenBag,
   uiLabel,
@@ -60,6 +61,9 @@ const TILE_GAP = 24;
 const ROW_H = 54;
 const SHEET_H = 480;
 const COUPON_H = 120;
+/** Top of the page under the title and its line, and of the rewards under the page. */
+const SHEET_Y = 236;
+const REWARDS_Y = SHEET_Y + SHEET_H + 32;
 
 /** Seconds after the page opens before the home track starts under it: the director's stinger has rung out by then. */
 const MUSIC_DELAY = 1.4;
@@ -96,102 +100,16 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   const release = env.holdPause();
   const seed = paperSeed();
   let alive = true;
-  let y = 0;
-
-  // ── title ──
-  const title = new PaperLabel({
-    text: t(victory ? 'hud.res.win' : 'hud.res.lose'),
-    size: victory ? 88 : 76,
-    paper: victory ? 'mustard' : 'kraft',
-    padX: 70,
-    padY: 20,
-    maxWidth: W - 20,
-    tape: 'sky',
-    seed,
-  });
-  title.position.set(W / 2, 82);
-  const near = soCloseWaves(stats.wavesCleared, stats.totalWaves, victory);
-  const battle = env.battle;
-  const left = unspentFish(victory, abandoned, battle.fish, battle.summonCost(), battle.units.filter((u) => !u).length);
-  // A run lost with fish in the purse says why before it says anything cheerful.
-  const sub = new PaperLabel({
-    text: left > 0 ? t('hud.res.loseFish', { n: fmt(left) }) : near > 0 ? t('hud.res.close', { n: near }) : t(victory ? 'hud.res.winSub' : 'hud.res.loseSub'),
-    size: 28,
-    paper: Color.paper,
-    padX: 26,
-    padY: 8,
-    maxWidth: W - 20,
-    seed: seed + 1,
-  });
-  sub.position.set(W / 2, 180);
-  c.addChild(title, sub);
-  y = 236;
 
   // ── the page: best cat on the left, numbers on the right ──
-  const sheet = new Container();
-  sheet.position.set(0, y);
-  const page = paperShape({ w: W, h: SHEET_H, radius: 30, fill: Color.paper, seed: seed + 2 });
-  page.position.set(W / 2, SHEET_H / 2);
-  const cut = new Graphics();
-  drawDashedRect(cut, 14, 14, W - 28, SHEET_H - 28, { radius: 22 });
-  sheet.addChild(page, cut);
-
-  let photoParts: Container[] = [];
+  // The page is laid down piece by piece (the title, the sheet, the photo slapped on, then the numbers one by one), and built in the same order, a
+  // frame apart (Staged): the scaffold alone is drawn in the frame the screen opens, the title and its line a frame later, the page and its list
+  // after, the confetti last.
   const cat = bestCat(stats, env.battle.units, unitRarity);
-  if (cat) {
-    const def = unitDef(cat);
-    const photo = unitPhoto({ size: 196, rarity: def.rarity, unit: cat, tape: CLASS_TAPE[def.classId], seed });
-    photo.position.set(136, 148);
-    photo.rotation = -0.03;
-    const name = uiLabel(t(def.nameKey), { size: 30 });
-    fitLabel(name, 220, 30, 0.7);
-    name.position.set(136, 282);
-    const rank = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkSoft });
-    rank.position.set(136, 316);
-    sheet.addChild(photo, name, rank);
-    photoParts = [photo, name, rank];
-  }
-
-  const cells: Array<{ icon: IconName; label: string; value: string }> = [
-    { icon: 'trophy', label: t('hud.res.waves'), value: stats.totalWaves > 0 ? `${stats.wavesCleared}/${stats.totalWaves}` : String(stats.wavesCleared) },
-    { icon: 'skull', label: t('hud.res.kills'), value: fmt(stats.kills) },
-    { icon: 'arrow_up', label: t('hud.res.merges'), value: fmt(stats.merges) },
-    { icon: 'crown', label: t('hud.res.best'), value: rarityName(stats.bestRarity) },
-    { icon: 'clock', label: t('hud.res.time'), value: fmtDuration(stats.duration) },
-    { icon: 'paw', label: t('hud.res.summons'), value: fmt(stats.summons) },
-  ];
-  const listX = cat ? 276 : 40;
-  const listR = W - 40;
-  const listY = 32;
-  const lines = new Graphics();
-  const rows: Container[] = [];
-  cells.forEach((cell, i) => {
-    const row = new Container();
-    rows.push(row);
-    const cy = listY + i * ROW_H + ROW_H / 2;
-    const icon = drawIcon(cell.icon, 38);
-    icon.position.set(listX + 19, cy);
-    const label = uiLabel(cell.label, { size: 24, color: Color.inkSoft, anchorX: 0, align: 'left' });
-    label.position.set(listX + 50, cy);
-    const value = uiLabel(cell.value, { size: 34, anchorX: 1, align: 'right' });
-    fitLabel(value, listR - listX - 150, 34, 0.7);
-    value.position.set(listR, cy);
-    row.addChild(icon, label, value);
-    sheet.addChild(row);
-    if (i > 0) drawDashedLine(lines, listX, listY + i * ROW_H, listR, listY + i * ROW_H, { color: Color.kraftDark, width: 2, dash: 8, gap: 8, alpha: 0.7 });
-  });
-  sheet.addChild(lines);
-  const luck = luckLine(stats.summonLuck);
-  const luckT = uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 26, wrap: W - 80, lineHeight: 34 });
-  // The luck line may wrap to two lines in English: it is centred in the gap between the list and the seed line.
-  luckT.position.set(W / 2, listY + cells.length * ROW_H + 42);
-  const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.inkSoft });
-  seedT.position.set(W / 2, SHEET_H - 34);
-  sheet.addChild(luckT, seedT);
+  const sheet = new Container();
+  sheet.position.set(0, SHEET_Y);
   c.addChild(sheet);
-  y += SHEET_H + 32;
 
-  // ── the page is laid down piece by piece: the sheet, the photo slapped on, then the numbers one by one ──
   /** A piece of the page waits unseen, then rises a little and settles, like paper laid on paper. */
   const lay = (obj: Container, delay: number, dx: number, dy: number): void => {
     if (motion.reduced) return;
@@ -220,12 +138,67 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       },
     });
   };
-  const sheetY = sheet.y;
   const PAGE_AT = 0.3;
   const PHOTO_AT = PAGE_AT + 0.3;
   const ROWS_AT = PHOTO_AT + 0.2;
   const ROW_STEP = 0.08;
-  if (!motion.reduced) {
+
+  /** The title on its big label, and the line under it. */
+  const buildHead = (): void => {
+    const title = new PaperLabel({
+      text: t(victory ? 'hud.res.win' : 'hud.res.lose'),
+      size: victory ? 88 : 76,
+      paper: victory ? 'mustard' : 'kraft',
+      padX: 70,
+      padY: 20,
+      maxWidth: W - 20,
+      tape: 'sky',
+      seed,
+    });
+    title.position.set(W / 2, 82);
+    const near = soCloseWaves(stats.wavesCleared, stats.totalWaves, victory);
+    const battle = env.battle;
+    const left = unspentFish(victory, abandoned, battle.fish, battle.summonCost(), battle.units.filter((u) => !u).length);
+    // A run lost with fish in the purse says why before it says anything cheerful.
+    const sub = new PaperLabel({
+      text: left > 0 ? t('hud.res.loseFish', { n: fmt(left) }) : near > 0 ? t('hud.res.close', { n: near }) : t(victory ? 'hud.res.winSub' : 'hud.res.loseSub'),
+      size: 28,
+      paper: Color.paper,
+      padX: 26,
+      padY: 8,
+      maxWidth: W - 20,
+      seed: seed + 1,
+    });
+    sub.position.set(W / 2, 180);
+    c.addChild(title, sub);
+    if (!motion.reduced) popIn(bag, title, { from: 0.2, duration: 0.4, overshoot: 2.5 });
+  };
+
+  /** The paper, its cut line, and the best cat's photo, name and rank. */
+  const buildPage = (): void => {
+    const paper = { w: W, h: SHEET_H, radius: 30, fill: Color.paper, seed: seed + 2 } as const;
+    const page = paperShape(paper);
+    page.position.set(W / 2, SHEET_H / 2);
+    const cut = new Graphics();
+    drawDashedInset(cut, 0, 0, paper, 14);
+    sheet.addChild(page, cut);
+
+    const parts: Container[] = [];
+    if (cat) {
+      const def = unitDef(cat);
+      const photo = unitPhoto({ size: 196, rarity: def.rarity, unit: cat, tape: CLASS_TAPE[def.classId], seed });
+      photo.position.set(136, 148);
+      photo.rotation = -0.03;
+      const name = uiLabel(t(def.nameKey), { size: 30 });
+      fitLabel(name, 220, 30, 0.7);
+      name.position.set(136, 282);
+      const rank = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkSoft });
+      rank.position.set(136, 316);
+      sheet.addChild(photo, name, rank);
+      parts.push(photo, name, rank);
+    }
+    if (motion.reduced) return;
+
     page.alpha = 0;
     cut.alpha = 0;
     page.visible = false;
@@ -238,52 +211,101 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
         if (page.destroyed) return;
         page.visible = true;
         cut.visible = true;
-        sheet.y = sheetY + 44 * (1 - k);
+        sheet.y = SHEET_Y + 44 * (1 - k);
         page.alpha = Math.min(1, k * 3);
         cut.alpha = page.alpha;
       },
       onComplete: () => {
-        sheet.y = sheetY;
+        sheet.y = SHEET_Y;
         page.alpha = 1;
         cut.alpha = 1;
       },
     });
-    const photo = photoParts[0];
-    if (photo) {
-      // The photo is slapped on: it lands from above, a little too big, squashes onto the page and settles once.
-      photo.alpha = 0;
-      photo.visible = false;
-      const rot = photo.rotation;
-      bag.run({
-        duration: 0.34,
-        delay: PHOTO_AT,
-        ease: Ease.linear,
-        onUpdate: (k) => {
-          if (photo.destroyed) return;
-          photo.visible = true;
-          const e = backOut(2.2)(Ease.quadOut(k));
-          photo.scale.set(1.5 - 0.5 * e);
-          photo.rotation = rot - 0.16 * (1 - e);
-          photo.alpha = Math.min(1, k * 6);
-        },
-        onComplete: () => {
-          photo.scale.set(1);
-          photo.rotation = rot;
-          photo.alpha = 1;
-        },
-      });
-      // The sound is the slap: the photo reaches the page about a third of the way through its drop.
-      bag.call(PHOTO_AT + 0.11, () => alive && audio.play('place', { volume: 0.6 }));
-      for (const p of photoParts.slice(1)) lay(p, PHOTO_AT + 0.15, 0, 10);
-    }
+    const photo = parts[0];
+    if (!photo) return;
+    // The photo is slapped on: it lands from above, a little too big, squashes onto the page and settles once.
+    photo.alpha = 0;
+    photo.visible = false;
+    const rot = photo.rotation;
+    bag.run({
+      duration: 0.34,
+      delay: PHOTO_AT,
+      ease: Ease.linear,
+      onUpdate: (k) => {
+        if (photo.destroyed) return;
+        photo.visible = true;
+        const e = backOut(2.2)(Ease.quadOut(k));
+        photo.scale.set(1.5 - 0.5 * e);
+        photo.rotation = rot - 0.16 * (1 - e);
+        photo.alpha = Math.min(1, k * 6);
+      },
+      onComplete: () => {
+        photo.scale.set(1);
+        photo.rotation = rot;
+        photo.alpha = 1;
+      },
+    });
+    // The sound is the slap: the photo reaches the page about a third of the way through its drop.
+    bag.call(PHOTO_AT + 0.11, () => alive && audio.play('place', { volume: 0.6 }));
+    for (const p of parts.slice(1)) lay(p, PHOTO_AT + 0.15, 0, 10);
+  };
+
+  /** The run's numbers as a list, the luck line and the seed. */
+  const buildList = (): void => {
+    const cells: Array<{ icon: IconName; label: string; value: string }> = [
+      { icon: 'trophy', label: t('hud.res.waves'), value: stats.totalWaves > 0 ? `${stats.wavesCleared}/${stats.totalWaves}` : String(stats.wavesCleared) },
+      { icon: 'skull', label: t('hud.res.kills'), value: fmt(stats.kills) },
+      { icon: 'arrow_up', label: t('hud.res.merges'), value: fmt(stats.merges) },
+      { icon: 'crown', label: t('hud.res.best'), value: rarityName(stats.bestRarity) },
+      { icon: 'clock', label: t('hud.res.time'), value: fmtDuration(stats.duration) },
+      { icon: 'paw', label: t('hud.res.summons'), value: fmt(stats.summons) },
+    ];
+    const listX = cat ? 276 : 40;
+    const listR = W - 40;
+    const listY = 32;
+    const lines = new Graphics();
+    const rows: Container[] = [];
+    cells.forEach((cell, i) => {
+      const row = new Container();
+      rows.push(row);
+      const cy = listY + i * ROW_H + ROW_H / 2;
+      const icon = drawIcon(cell.icon, 38);
+      icon.position.set(listX + 19, cy);
+      const label = uiLabel(cell.label, { size: 24, color: Color.inkSoft, anchorX: 0, align: 'left' });
+      label.position.set(listX + 50, cy);
+      const value = uiLabel(cell.value, { size: 34, anchorX: 1, align: 'right' });
+      fitLabel(value, listR - listX - 150, 34, 0.7);
+      value.position.set(listR, cy);
+      row.addChild(icon, label, value);
+      sheet.addChild(row);
+      if (i > 0) drawDashedLine(lines, listX, listY + i * ROW_H, listR, listY + i * ROW_H, { color: Color.kraftDark, width: 2, dash: 8, gap: 8, alpha: 0.7 });
+    });
+    sheet.addChild(lines);
+    const luck = luckLine(stats.summonLuck);
+    const luckT = uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 26, wrap: W - 80, lineHeight: 34 });
+    // The luck line may wrap to two lines in English: it is centred in the gap between the list and the seed line.
+    luckT.position.set(W / 2, listY + cells.length * ROW_H + 42);
+    const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.inkSoft });
+    seedT.position.set(W / 2, SHEET_H - 34);
+    sheet.addChild(luckT, seedT);
     rows.forEach((row, i) => lay(row, ROWS_AT + i * ROW_STEP, 22, 0));
     lay(luckT, ROWS_AT + rows.length * ROW_STEP, 0, 8);
     lay(seedT, ROWS_AT + rows.length * ROW_STEP + 0.1, 0, 0);
-  }
+  };
+  // The page and its list are hidden until their turn in the laying down, so they cost a frame of building and no drawing: one stage.
+  const staged = new Staged([
+    buildHead,
+    () => {
+      buildPage();
+      buildList();
+    },
+    () => victory && !motion.reduced && confetti(scaffold, bag),
+  ]);
+  staged.start();
 
   // ── rewards ──
   const rewardLayer = new Container();
-  rewardLayer.position.set(0, y);
+  rewardLayer.position.set(0, REWARDS_Y);
   c.addChild(rewardLayer);
   const spinner = new LoadingSpinner({ size: 64 });
   spinner.position.set(W / 2, 60);
@@ -550,12 +572,9 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   };
   const askNext = (): NextRun | null => (victory ? (env.ctx.run.next?.() ?? null) : null);
   if (wantsNext) bag.call(2.5, () => buildBar(null));
-  // The buttons are drawn a few frames after the page opens (it is rising under them for a quarter of a second anyway): their first draw is a frame of its own.
+  // The buttons are drawn after the stages of the page (it is rising under them for a quarter of a second anyway): their first draw is a frame of its own.
   else if (motion.reduced) buildBar(null);
-  else bag.call(0.08, () => buildBar(null));
-
-  // ── victory confetti ──
-  if (victory && !motion.reduced) confetti(scaffold, bag);
+  else bag.call(0.2, () => buildBar(null));
 
   void scaffold.show(true);
   if (victory) haptic('success');
@@ -569,7 +588,6 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     audio.setMusicVolume(musicBase * MUSIC_QUIET);
     audio.music('home', 3);
   });
-  if (!motion.reduced) popIn(bag, title, { from: 0.2, duration: 0.4, overshoot: 2.5 });
 
   // ── settle the run with the meta layer ──
   if (showStatsOnly) {
@@ -594,6 +612,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       if (!alive) return;
       alive = false;
       release();
+      staged.destroy();
       bag.killAll();
       if (musicOn) {
         // The home scene asks for the same track, which then simply goes on; its volume comes up instead of jumping.
@@ -610,7 +629,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   };
 }
 
-/** One burst of paper confetti over the title: 90 pieces on one tween, no per-frame allocation. */
+/** One burst of paper confetti over the title: 90 pieces on one tween, no per-frame allocation. A colour's pieces share one drawing. */
 function confetti(scaffold: ScreenScaffold, bag: TweenBag): void {
   const N = 90;
   const layer = new Container();
@@ -619,10 +638,10 @@ function confetti(scaffold: ScreenScaffold, bag: TweenBag): void {
   const vx = new Float32Array(N);
   const vy = new Float32Array(N);
   const spin = new Float32Array(N);
-  const colors = [Color.mustard, Color.coral, Color.teal, Color.leaf, Color.berry];
+  const shapes = [Color.mustard, Color.coral, Color.teal, Color.leaf, Color.berry].map((color) => new GraphicsContext().rect(-7, -4, 14, 8).fill(color));
+  layer.once('destroyed', () => shapes.forEach((shape) => shape.destroy()));
   for (let i = 0; i < N; i++) {
-    const g = new Graphics();
-    g.rect(-7, -4, 14, 8).fill(colors[i % colors.length] as number);
+    const g = new Graphics(shapes[i % shapes.length]);
     g.position.set(360 + (Math.random() - 0.5) * 120, 230);
     vx[i] = (Math.random() - 0.5) * 900;
     vy[i] = -300 - Math.random() * 700;

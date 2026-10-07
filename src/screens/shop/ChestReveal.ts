@@ -21,7 +21,7 @@ import { stampThud } from '../system/kit/marks';
 import { RevealCard } from './RevealCard';
 import { FLIP_TURN, RevealFlow, TIMES, type BeatState, type FlowEvent } from './revealFlow';
 import {
-  bestRarity, flourishOf, gridLayout, mergePile, nameBlockOf, PLATE, rarityRank, stacksOf, totalCards, type GridLayout, type Pile, type RevealStack,
+  bestRarity, flourishOf, gridLayout, mergePile, nameBlockOf, PLATE, rarityRank, stacksOf, stampFrom, stampSpot, totalCards, type GridLayout, type Pile, type RevealStack,
 } from './revealPlan';
 import './revealStrings';
 
@@ -56,6 +56,9 @@ const SUMMARY_LINE = 62;
 const STAMP_SLAM = 0.2;
 const STAMP_BUMP = 0.22;
 const STAMP_FADE = 0.3;
+/** The stamp's word in plate units (a card on stage is about twice that), and the scale it arrives at. */
+const STAMP_SIZE = 18;
+const STAMP_FROM = 1.5;
 /** The chest sinks and fades over this long once the first cards are out. */
 const EXIT = 0.4;
 
@@ -710,7 +713,11 @@ class ChestReveal {
       }
       this.popPaper(x, y, r, r === 'rare' ? 0.8 : r === 'epic' ? 1.2 : 1.7);
       if (plan.tape) this.slapTape(v);
-      if (plan.stamp) this.stampCard(v, isBest ? 0.3 : 0.2);
+      // Of two cards side by side the left one's stamp hangs off its left edge: the right one's would land on its neighbour.
+      if (plan.stamp) {
+        const outer = n > 1 && j === 0 ? -1 : 1;
+        this.stampCard(v, isBest ? 0.3 : 0.2, outer, (outer > 0 ? game.w - x : x) / ss);
+      }
       if (isBest && rarityRank(r) >= 2) v.card.ribbon();
     });
     if (fl.shake > 0 && (isBest || r !== 'legendary')) this.kick(isBest ? fl.shake : fl.shake * 0.5);
@@ -846,17 +853,22 @@ class ChestReveal {
   }
 
   /**
-   * The rarity's name stamped on the card: it arrives big and transparent, lands with a squash (and a thud on that frame), stays for
-   * `hold` seconds and fades so the portrait is clear again. One tween drives all of it, so the stamp is gone only after its last move.
+   * The rarity's name stamped on the card's outer edge (`outer` 1 the right, -1 the left, `room` plate units to the screen's edge on that side):
+   * it arrives big (as big as the room allows) and transparent, lands with a squash (and a thud on that frame), stays for `hold` seconds and
+   * fades so the portrait is clear again. One tween drives all of it, so the stamp is gone only after its last move.
    */
-  private stampCard(v: StackView, hold: number): void {
+  private stampCard(v: StackView, hold: number, outer: 1 | -1, room: number): void {
     const rs = Rarity[v.stack.rarity];
-    const stamp = stampMark(rarityName(v.stack.rarity), { size: 28, color: rs.dark, maxWidth: PLATE.w * 0.64, tilt: -0.2 });
-    // On the photo's upper-left corner, half over its edge: the cat's face is what the player waited for, so nothing lands on it.
-    stamp.position.set(-PLATE.w * 0.22, -PLATE.h * 0.38);
+    const stamp = stampMark(rarityName(v.stack.rarity), { size: STAMP_SIZE, pad: 12, color: rs.dark, tilt: -0.2 * outer });
+    // Half a hand's width over the photo's outer edge, level with the middle: the face is up and in the centre, the tape in the upper left corner,
+    // the count at the foot and the name under the plate, so the side of the photo is where a stamp can land. Its size on stage is the card's.
+    const half = stamp.getLocalBounds().width / 2;
+    const spot = stampSpot(half, outer);
+    stamp.position.set(spot.x, spot.y);
     v.card.face.addChild(stamp);
     v.stamp = stamp;
     const tilt = stamp.rotation;
+    const from = stampFrom(room, half, STAMP_FROM);
     const total = STAMP_SLAM + STAMP_BUMP + hold + STAMP_FADE;
     let landed = false;
     const land = (): void => {
@@ -874,9 +886,9 @@ class ChestReveal {
         const t = k * total;
         if (t < STAMP_SLAM) {
           const u = Ease.cubicIn(t / STAMP_SLAM);
-          stamp.scale.set(2.4 - 1.4 * u);
+          stamp.scale.set(from - (from - 1) * u);
           stamp.alpha = Math.min(0.94, u * 3);
-          stamp.rotation = tilt - 0.2 * (1 - u);
+          stamp.rotation = tilt - 0.2 * outer * (1 - u);
           return;
         }
         land();

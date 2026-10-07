@@ -190,3 +190,7 @@ REQUESTS
 ## 2026-10-07 precision
 
 No change to the battle scene or its layout contract (`src/view/layout.ts`, `TOP_HUD_H` 168, the banner band). The top HUD block was re-laid on one grid and ends 4 px inside the 168 px strip, so banners in the band keep their old room; see `hud.md`, "2026-10-07 precision".
+
+## 2026-10-07 final leftovers
+
+The two sheets left in "What is left" above are staged now (`Staged`, `ui.md` and `hud.md`): class sheet 43.6 / 34.2 ms first / second open to 12.8 to 20.3 / 14.0 to 14.4, result screen 42.9 to 14.3 to 23.6 (same method, machine idle 5 to 6 ms). `sheetWarm` finishes a staged sheet before listing its parts (`Popup.finishBuild`). REQUEST 1 above is done.

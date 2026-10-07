@@ -43,7 +43,7 @@ export interface CardSpec {
   crest: number;
   /** Washi tape height (rarity legendary and up). */
   tape: number;
-  /** Photo corners on the top corners too (a card), or on the bottom ones only (the compact plate keeps its top corners for the level pill). */
+  /** Photo corners on the top corners too (a card), or on the bottom ones only (the compact plate keeps its top corners for the level badge and the ready sticker). */
   topCaps: boolean;
   /** The dashed line: dash length, gap and stroke width. */
   dashLen: number;
@@ -198,10 +198,15 @@ export function levelBadgeBox(spec: CardSpec, geo: CardGeometry, w: number, h: n
   return { x: right + spec.pad, y: geo.windowRect.y + spec.pad, w, h };
 }
 
-/** The compact plate's level pill: inside the window at its top-left, `pad` below its top edge so the tape and star above it stay clear, never wider than the window. */
-export function plateBadgeBox(geo: CardGeometry, w: number, h: number): CardBox {
-  const wr = geo.windowRect;
-  return { x: wr.x, y: wr.y + geo.spec.pad, w: Math.min(w, wr.w), h };
+/**
+ * The compact plate's level badge: a round disc of diameter `d` on the plate's upper-left corner, its centre `d / 5` in from the box corner on both
+ * axes. It hangs off the corner (the window's middle, where the cat's head is, stays free) and its right edge stops short of the tape's left end
+ * (the tape is centred and 0.42 of the plate wide) and of the star on it.
+ */
+export function plateBadgeBox(geo: CardGeometry, d: number): CardBox {
+  const { w, h } = geo.spec;
+  const inset = d / 5;
+  return { x: -w / 2 + inset - d / 2, y: -h / 2 + inset - d / 2, w: d, h: d };
 }
 
 /** The tier pips' backing pill: centred, resting `pad` above the window's bottom edge. */

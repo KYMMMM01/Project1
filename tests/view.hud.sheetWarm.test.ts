@@ -99,17 +99,26 @@ describe('the parts a sheet is drawn in', () => {
   });
 });
 
-function sheet(parts: number): { popup: SheetMaker['make']; destroyed: () => number } {
+/** A sheet of `parts` rows; `late` more arrive when it is told to finish building (a sheet built over a few frames). */
+function sheet(parts: number, late = 0): { popup: SheetMaker['make']; destroyed: () => number; finished: () => number } {
   let destroyed = 0;
+  let finished = 0;
   return {
-    popup: () =>
-      ({
-        body: tree(parts),
+    popup: () => {
+      const body = tree(parts);
+      return {
+        body,
+        finishBuild: () => {
+          finished++;
+          if (late > 0) body.addChild(tree(late));
+        },
         destroy: () => {
           destroyed++;
         },
-      }) as unknown as ReturnType<SheetMaker['make']>,
+      } as unknown as ReturnType<SheetMaker['make']>;
+    },
     destroyed: () => destroyed,
+    finished: () => finished,
   };
 }
 
@@ -197,5 +206,18 @@ describe('opening the sheets ahead of time', () => {
     drain(queue.q);
     expect(drawn.parts).toHaveLength(parts);
     expect(a.destroyed()).toBe(1);
+  });
+
+  it('lets a sheet that builds itself over frames finish before its parts are listed, so the late parts are drawn too', () => {
+    const early = sheet(30);
+    const staged = sheet(30, 30);
+    warmSheets('s6', [{ name: 'early', make: early.popup }, { name: 'staged', make: staged.popup }], 3, () => true);
+    drain(queue.q);
+    expect(early.finished()).toBe(1);
+    expect(staged.finished()).toBe(1);
+    expect(staged.destroyed()).toBe(1);
+    const whole = partsOf(tree(30)).length;
+    // The first sheet's parts, then the second's: its two trees of 30 rows make more parts than the one tree of the first.
+    expect(drawn.parts.length).toBeGreaterThan(whole * 2);
   });
 });

@@ -108,3 +108,19 @@ export function fitLabel(tx: Text, maxWidth: number, baseSize: number, minScale 
 export function uiLabel(text: string | number, o: LabelOpts = {}): Text {
   return label(text, { ...o, size: Math.max(MIN_FONT, o.size ?? 28) });
 }
+
+/**
+ * A wrapped label set to the narrowest width that keeps its line count, so a sentence that needs two lines comes out as two lines of
+ * about the same length and not one full line with a stray word under it. `max` is the width it would wrap at otherwise.
+ */
+export function balanceWrap(label: Text, max: number): void {
+  const style = label.style;
+  style.wordWrap = false;
+  const full = label.width;
+  const lines = Math.max(1, Math.ceil(full / max));
+  style.wordWrap = true;
+  style.wordWrapWidth = lines === 1 ? max : Math.min(max, Math.ceil(full / lines) + BALANCE_SLACK);
+}
+
+/** Room a balanced line is given beyond an even share, so a long word that does not fit moves down without making a third line. */
+const BALANCE_SLACK = 56;

@@ -3,14 +3,15 @@
  * warnings and starts, weakened cats and the laser pointer. Visuals that persist (hazard tiles, the
  * laser dot) belong to the field; this part adds the cues around them.
  */
+import { Sprite } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { rand } from '@/core/math';
 import { Ease } from '@/core/tween';
-import { Trauma, screenFx, type FxHandle } from '@/fx';
+import { Trauma, WARM_PRIO, fxVignette, renderOnce, screenFx, warm, type FxHandle } from '@/fx';
 import { PATH_LENGTH, cellCenterX, cellCenterY, pathPoint, type PathPoint } from '@/game/geometry';
 import type { EnemyState } from '@/game';
-import { BOSS_APPEAR, enemyDef, isWaveTarget } from '@/game';
-import type { BannerService } from './banners';
+import { BOSS_APPEAR, enemyDef, isWaveTarget, waveKindOf } from '@/game';
+import type { BannerService, BannerSpec } from './banners';
 import { SOFT_RING, SPLASH_DROPS, SWEAT, WHIRL_LINE, WIND_IN } from './defs';
 import type { MusicService } from './music';
 import { ABILITY_CAPTION } from './palette';
@@ -28,8 +29,20 @@ const WET = Hue.water;
 const WARN_IN = 0.15;
 const WARN_OUT = 0.2;
 
+/** Tells one battle's warm-up pieces from another's: the queue remembers a key for the page's life. */
+let mounted = 0;
+
+/** The warning's red edge drawn once out of sight: the vignette picture, tinted the way the pulse tints it. */
+function drawAlarmEdge(): void {
+  const edge = new Sprite(fxVignette());
+  edge.tint = Hue.alarm;
+  renderOnce(edge);
+  edge.destroy();
+}
+
 export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: MusicService): void {
   const ctx = stage.ctx;
+  const serial = ++mounted;
   const fx = stage.fx;
   const ps = fx.ps;
   const sweatLimit = new WindowLimiter(6, 0.5);
@@ -45,16 +58,34 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
     handles.push(h);
   };
 
+  /** What the warning ribbon of an elite or boss wave says. */
+  const warning = (wave: number, boss: boolean): BannerSpec => {
+    const entry = ctx.battle.previewWave(wave).find((p) => isWaveTarget(p.enemy));
+    const name = entry ? t(enemyDef(entry.enemy).nameKey) : '';
+    return { title: t('director.warning'), sub: t(boss ? 'director.bossIncoming' : 'director.eliteIncoming', { name }), color: boss ? Color.berry : Color.coral };
+  };
+
+  // The wave after this one brings an elite or a boss: its ribbon and the red edge are drawn once, out of sight, while this one is played
+  // (src/fx/warm.ts), so the frame the warning arrives in only has to move them.
+  on('waveStart', (e) => {
+    const next = e.wave + 1;
+    const kind = waveKindOf(next);
+    if (kind === 'normal') return;
+    warm.request(`director:${serial}:ribbon:${next}`, WARM_PRIO.coming, 4, () => {
+      const ribbon = banners.dressBand(warning(next, kind === 'boss'));
+      if (ribbon) renderOnce(ribbon);
+    });
+    warm.request(`director:${serial}:edge`, WARM_PRIO.coming, 2, drawAlarmEdge);
+  });
+
   on('waveStart', (e) => {
     if (e.kind === 'normal') return;
-    const entry = ctx.battle.previewWave(e.wave).find((p) => isWaveTarget(p.enemy));
-    const name = entry ? t(enemyDef(entry.enemy).nameKey) : '';
     const boss = e.kind === 'boss';
     banners.push(
       'alert',
       'warning',
       3,
-      { title: t('director.warning'), sub: t(boss ? 'director.bossIncoming' : 'director.eliteIncoming', { name }), color: boss ? Color.berry : Color.coral },
+      warning(e.wave, boss),
       // The ribbon covers the lane's first run, where the big one lands: it has to be gone when BOSS_APPEAR comes.
       BOSS_APPEAR - WARN_IN - WARN_OUT,
       WARN_IN,

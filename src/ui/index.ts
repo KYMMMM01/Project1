@@ -8,6 +8,7 @@ export { drawFrameLayers, frameOrnaments } from './frameArt';
 export { plateBadgeBox, plateGeometry, cardGeometry, ringRuns, type CardGeometry } from './cardMath';
 export * from './icons';
 export * from './motion';
+export { Staged } from './staged';
 export * from './numbers';
 export * from './countUp';
 export * from './layout';

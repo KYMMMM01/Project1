@@ -9,7 +9,7 @@ import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { errorKey, profile } from '@/meta';
 import { ads } from '@/platform';
-import { Button, Color, drawDashedRect, drawIcon, drawPaintFill, motion, paperShape, paperSeed, ScreenScaffold, tapeStrip, toast, TweenBag, uiLabel } from '@/ui';
+import { Button, Color, drawDashedInset, drawIcon, drawPaintFill, motion, paperShape, paperSeed, ScreenScaffold, tapeStrip, toast, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
 import { offerRoute, wavesReached } from '../policy';
 
@@ -63,13 +63,15 @@ export function openContinue(env: HudEnv, reason: DefeatReason, onDone: (continu
   // One cream page holds the story; the effect of continuing is marked with a stroke of yellow marker.
   const pageH = Math.round(fix.y + fix.height / 2 + 54);
   const page = new Container();
-  page.addChild(paperShape({ w: w - 16, h: pageH - 16, radius: 28, fill: Color.paper, seed: paperSeed() }));
+  const paper = { w: w - 16, h: pageH - 16, radius: 28, fill: Color.paper, seed: paperSeed() } as const;
+  page.addChild(paperShape(paper));
   page.position.set(w / 2, pageH / 2 + 8);
   const marker = new Graphics();
   drawPaintFill(marker, 56, fix.y - fix.height / 2 - 14, w - 112, fix.height + 28, Color.mustard);
   marker.alpha = 0.8;
   const cut = new Graphics();
-  drawDashedRect(cut, 22, 22, w - 44, pageH - 44, { radius: 22 });
+  // The page is 8 px in from the screen's sides and top: the line is its cut edge moved 14 px inward.
+  drawDashedInset(cut, 8, 8, paper, 14);
   const tape = tapeStrip({ name: 'sky', w: 120, h: 30, angle: -3, pattern: 'dots' });
   tape.position.set(w / 2, 16);
   c.addChild(page, cut, tape, marker, heart, where, why, fix);

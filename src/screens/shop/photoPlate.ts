@@ -26,8 +26,8 @@ export interface Plate {
   over: Container;
   /** The picture window, relative to the plate's centre. */
   win: { x: number; y: number; w: number; h: number };
-  /** Where the level pill of size (w, h) goes on this plate (its width is cut to the window's). */
-  badgeAt(w: number, h: number): { x: number; y: number; w: number; h: number };
+  /** Where the round level badge of diameter `d` goes on this plate: on its upper-left corner, clear of the cat's head, the tape and the star. */
+  badgeAt(d: number): { x: number; y: number; w: number; h: number };
   /** The dashed selection ring `gap` px outside the plate's cut edge, parallel to it, drawn into `g` in `color`. */
   ring(g: Graphics, gap: number, color: number, width: number): void;
 }
@@ -41,7 +41,7 @@ export function buildPlate(o: PlateOpts): Plate {
     base: g,
     over: frameOrnaments(geo, o.rarity),
     win: { ...geo.windowRect },
-    badgeAt: (w, h) => plateBadgeBox(geo, w, h),
+    badgeAt: (d) => plateBadgeBox(geo, d),
     ring: (ring, gap, color, width) => drawDashRuns(ring, ringRuns(geo, gap, 16, 11), { color, width }),
   };
 }

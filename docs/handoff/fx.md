@@ -269,3 +269,7 @@ Earlier runs of the same pair (idle prerender on, which bakes `ui` and `fire` so
 REQUESTS
 1. `tools/battle_frames.js` (not in my paths): await a few milliseconds between frames (`await new Promise(r => setTimeout(r, 6))`) and time the `audio.*` calls the way `p/bf.js` does, or a sound's first play can never be told from a primed one.
 2. Director (`banners.ts`, `boss.ts`, `fx.bossWarning`): the boss wave's first frame is still 23 to 27 ms without any sound in it (the warning ribbon's text, the vignette, the boss bar are drawn for the first time in it). A piece that builds and draws the ribbon once ahead of time (`renderOnce`) would take most of the 8 to 10 ms of render out of it; the banner service is not reachable from `BattleWarmup` (it only has `BattleApi`).
+
+## 2026-10-07 final leftovers
+
+REQUEST 2 above (the boss wave's first frame) is done on the director's side: the ribbon, the red edge and the boss strip are drawn through `renderOnce` in the wave before (`hud.md`, `director.md`): 22.3 to 17.5 ms and 17.1 to 16.2 ms. `src/fx/warm.ts` itself is unchanged.

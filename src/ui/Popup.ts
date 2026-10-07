@@ -96,6 +96,9 @@ export abstract class Popup<R = void> extends Container {
   /** Called once the open animation has started and the popup is on screen. */
   onOpened(): void {}
 
+  /** A popup that builds the rest of itself over a few frames (see Staged) finishes now: the warm-up draws the whole sheet. */
+  finishBuild(): void {}
+
   get screenW(): number {
     return this.w;
   }
