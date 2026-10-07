@@ -154,3 +154,13 @@ See `battle.md`. Numbers are one stroked bitmap font per colour now (no edge fon
 ## 2026-10-07 motion review
 
 Full table in `director.md`. fx side: `Fx` is now built on the battle's real-time clock (`BattleScene`: `new Fx(layers.fxFront, this.ui, ...)`), so an effect's own beats (`after()`: impact shake, level-up flourish) share the clock of the particles they time instead of drifting under hit-stop, slow motion and 3x speed. The filled flash discs that cover a new sticker at its reveal are shorter and a little lighter: merge impact 0.24 to 0.14 s, epic 0.2 to 0.13 s, legendary 0.28 to 0.16 s (alpha 0.85), mythic 0.34 to 0.2 s (alpha 1 to 0.85). The pillar and the large rings still cross the mythic cat for about 0.3 s after its pop; it is clear by 0.9 s.
+
+Second pass (table in `director.md`). `flyTo` now keeps every icon on the screen: `planFlight(..., bounds)` folds the resting spot and the curve's control point back inside (`foldInto`, `FlyBounds` in `flyPath.ts`, tests `tests/fx.flyPath.test.ts`), `flyTo` passes the screen in `parent`'s coordinates less half an icon; callers need no edge values any more. `moltPuff`: flash disc 0.18 s from 0.04 s before the impact, puffs on a ring; `mythic`: flash 0.15 s, starburst 0.2 s, pillar 150 px and 0.32 s (`pillar(..., life)`), the second ring is born at 230 px so it never crosses the new sticker.
+
+
+## 2026-10-07 owner feedback
+
+- **`sunbeamCell`** is cut from paper shapes now (Graphics, no pooled sprites): a clearly lighter warm patch (`mustard` mixed 58 % toward `paperLight`), a cream edge with a dashed `mustardDark` line inside it, ten flat rays that turn slowly behind the cat (still and stronger under reduced motion, read every frame so the switch applies at once) and a 50 px sun sticker on the corner (`marks.drawSunMark`). Checked on the 13 mats.
+- **`marks.ts`** (new, exported from `@/fx`): `drawSunMark`, `drawTargetMark`, `drawPaw`: the stickers the field bakes and the laser card draws.
+- **`laserDot`** takes `ZoneOpts.radius` and draws the marked area: a flat soft disc, a cream rim and a dashed ring in the dot's red, turning slowly; `calm` is read per frame.
+- **`FloatingNumbers`**: a hit whose rise would end on the `minY` line (the HUD edge) takes the nearest free slot beside the numbers already there (`SLOT_W` 62, `SLOT_Y` 34, up to two slots each way), so a pack of hits near the entrance is read number by number, not as "1123". Tests in `fx.numbers.test.ts`; `fx.zones.test.ts` (sunbeam has no pooled sprites, laser dot with an area).

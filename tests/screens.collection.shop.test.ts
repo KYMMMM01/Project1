@@ -5,13 +5,15 @@ import { bundleParts } from '@/meta/bundle';
 import { IAP_SPECS } from '@/meta/data/catalog';
 import { ODDS, oddsView } from '@/meta/odds';
 import { createTestProfile } from '@/meta/testing';
-import type { ChestCard, ChestKind } from '@/meta/types';
+import type { ChestCard, ChestKind, ChestResult } from '@/meta/types';
 import '@/meta/strings';
 import '../src/screens/shop/strings';
 import { couponPath, cutPoly, lowered } from '../src/screens/shop/cutMath';
-import { bestRarity, flourishOf, gridLayout, nameBlockOf, revealSchedule, ribbonDots, stacksOf, totalCards } from '../src/screens/shop/revealPlan';
 import {
-  chestAction, cosmeticStatus, gemBonusPercent, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, shortBy,
+  bestRarity, chestPoseAt, flourishOf, gridLayout, mergePile, nameBlockOf, newPose, pilesOf, resultsOf, revealSchedule, stacksOf, totalCards,
+} from '../src/screens/shop/revealPlan';
+import {
+  chestAction, cosmeticStatus, gemBonusPercent, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, pileSize, shortBy,
 } from '../src/screens/shop/shopLogic';
 
 const card = (rarity: ChestCard['rarity'], unit: ChestCard['unit']): ChestCard => ({ rarity, unit });
@@ -41,21 +43,46 @@ describe('reveal stacks', () => {
     expect(s[1]).toMatchObject({ bonus: true, count: 8, unit: 'w_samurai' });
   });
 
-  it('a wooden chest reveals in about a second and a half; rarer contents take longer', () => {
+  it('a wooden chest shows its first card in about a second and a half; rarer contents take longer', () => {
     const wood = stacksOf({ cards: [card('common', 'w_paw'), card('common', 'r_sling'), card('common', null), card('rare', 'w_sword'), card('common', 'm_snow')], pity: { unit: null, cards: 0 } });
     const a = revealSchedule(wood);
-    expect(a.total).toBeGreaterThan(1.2);
-    expect(a.total).toBeLessThan(2.1);
+    expect(a.flightAt[0]).toBeGreaterThan(1.3);
+    expect(a.flightAt[0]).toBeLessThan(1.7);
+    expect(a.total).toBeGreaterThan(1.8);
+    expect(a.total).toBeLessThan(2.6);
+    const epic = revealSchedule(stacksOf({ cards: [card('common', 'w_paw'), card('epic', 'm_storm')], pity: { unit: null, cards: 0 } }));
     const b = revealSchedule(stacks);
+    expect(epic.flightAt[0]).toBeGreaterThan((a.flightAt[0] as number) + 0.25);
+    expect(b.flightAt[0]).toBeGreaterThan(epic.flightAt[0] as number);
     expect(b.total).toBeGreaterThan(a.total + 0.8);
     expect(b.flightAt).toHaveLength(stacks.length);
     for (let i = 1; i < b.flightAt.length; i++) expect(b.flightAt[i] as number).toBeGreaterThan(b.flightAt[i - 1] as number);
   });
 
+  it('rattles twice for a common or rare best card and three times from epic on, each burst harder than the one before', () => {
+    const rattles = (best: 'common' | 'rare' | 'epic' | 'legendary') => revealSchedule([{ key: 'k', unit: null, rarity: best, count: 1, bonus: false }]).bursts;
+    expect((['common', 'rare', 'epic', 'legendary'] as const).map((r) => rattles(r).length)).toEqual([2, 2, 3, 3]);
+    for (const r of ['common', 'epic'] as const) {
+      const b = rattles(r);
+      for (let i = 1; i < b.length; i++) {
+        expect((b[i] as { power: number }).power).toBeGreaterThan((b[i - 1] as { power: number }).power);
+        expect((b[i] as { at: number }).at).toBeGreaterThan((b[i - 1] as { at: number }).at + (b[i - 1] as { dur: number }).dur - 1e-9);
+      }
+    }
+  });
+
+  it('holds still for the creak, then pops, then the first card follows', () => {
+    const s = revealSchedule(stacks);
+    const last = s.bursts[s.bursts.length - 1] as { at: number; dur: number };
+    expect(s.freezeAt).toBeGreaterThanOrEqual(last.at + last.dur - 0.07);
+    expect(s.pop - s.freezeAt).toBeGreaterThanOrEqual(0.3);
+    expect(s.flightAt[0]).toBeGreaterThan(s.pop);
+  });
+
   it('keeps the flip phase of a huge chest bounded', () => {
     const many = Array.from({ length: 24 }, (_, i) => ({ key: 'k' + i, unit: null, rarity: 'common' as const, count: 2, bonus: false }));
     const s = revealSchedule(many);
-    expect(s.lastFlipAt - s.rattle).toBeLessThan(3.2);
+    expect(s.lastFlipAt - s.pop).toBeLessThan(3.2);
   });
 });
 
@@ -145,8 +172,88 @@ describe('gem pack value', () => {
 });
 
 describe('chest reveal plan', () => {
-  it('tells the best rarity by a count of dots as well as by colour', () => {
-    expect((['common', 'rare', 'epic', 'legendary'] as const).map(ribbonDots)).toEqual([1, 2, 3, 4]);
+  const sch = revealSchedule(stacksOf({ cards: [card('common', 'w_paw'), card('epic', 'm_storm')], pity: { unit: null, cards: 0 } }));
+  const at = (t: number) => ({ ...chestPoseAt(newPose(), t, sch, 900) });
+
+  it('drops from above the screen, lands with a squash and springs back', () => {
+    expect(at(0).y).toBeCloseTo(-900, 5);
+    expect(at(sch.drop * 0.5).y).toBeGreaterThan(-900);
+    expect(at(sch.drop * 0.5).y).toBeLessThan(0);
+    const landed = at(sch.drop + 0.002);
+    expect(landed.y).toBe(0);
+    expect(landed.sy).toBeLessThan(0.9);
+    expect(landed.sx).toBeGreaterThan(1.1);
+    const settled = at(sch.drop + 0.35);
+    expect(Math.abs(settled.sx - 1)).toBeLessThan(0.02);
+    expect(Math.abs(settled.sy - 1)).toBeLessThan(0.02);
+  });
+
+  it('leaks light along the seam from the first frame and keeps every step a rattle brought', () => {
+    expect(at(0).light).toBeGreaterThan(0);
+    expect(at(0).crack).toBeGreaterThan(0);
+    let restLight = at(sch.drop).light;
+    let restCrack = at(sch.drop).crack;
+    for (const b of sch.bursts) {
+      const after = at(b.at + b.dur + 0.03);
+      expect(after.light).toBeGreaterThan(restLight);
+      expect(after.crack).toBeGreaterThan(restCrack);
+      restLight = after.light;
+      restCrack = after.crack;
+    }
+  });
+
+  it('shakes harder in each burst, holds still in the freeze and ends with the lid wide and the light full', () => {
+    const peak = (i: number) => {
+      const b = sch.bursts[i] as { at: number; dur: number };
+      let m = 0;
+      for (let k = 0; k <= 40; k++) m = Math.max(m, Math.abs(at(b.at + (b.dur * k) / 40).x));
+      return m;
+    };
+    for (let i = 1; i < sch.bursts.length; i++) expect(peak(i)).toBeGreaterThan(peak(i - 1));
+    const still = at(sch.freezeAt + 0.1);
+    expect(Math.abs(still.x)).toBeLessThan(0.001);
+    expect(Math.abs(still.rot)).toBeLessThan(0.001);
+    const end = at(sch.pop);
+    expect(end.crack).toBeGreaterThan(20);
+    expect(end.light).toBeGreaterThan(0.97);
+  });
+
+  it('piles up several chests into one view of cards, bonuses, gold and ids', () => {
+    const results = [
+      { id: 7, kind: 'gold', seed: 1, oddsVersion: 1, upgraded: 0, overflowGold: 5, batch: 7, cards: [card('common', 'w_paw'), card('rare', null)], pity: { unit: null, cards: 0 } },
+      { id: 8, kind: 'gold', seed: 2, oddsVersion: 1, upgraded: 0, overflowGold: 0, batch: 7, cards: [card('common', 'w_paw'), card('legendary', 'w_samurai')], pity: { unit: 'w_samurai', cards: 8 } },
+    ];
+    const pile = mergePile(results as ChestResult[]);
+    expect(pile).toMatchObject({ kind: 'gold', count: 2, overflowGold: 5, ids: [7, 8] });
+    expect(pile.bonuses).toEqual([{ unit: 'w_samurai', cards: 8 }]);
+    const merged = stacksOf(pile);
+    expect(merged.find((s) => s.key === 'w_paw')?.count).toBe(2);
+    expect(merged.find((s) => s.key === 'bonus:w_samurai')?.count).toBe(8);
+    expect(totalCards(merged)).toBe(4 + 8);
+    expect(bestRarity(merged)).toBe('legendary');
+    // Two bonuses for the same cat make one stack.
+    const twice = stacksOf({ cards: [], bonuses: [{ unit: 'w_samurai', cards: 8 }, { unit: 'w_samurai', cards: 8 }] });
+    expect(twice).toHaveLength(1);
+    expect(twice[0]?.count).toBe(16);
+  });
+
+  it('replays stored chests of one pile as one opening and lone chests one by one', () => {
+    const r = (id: number, batch?: number) => ({ id, kind: 'wooden', seed: id, oddsVersion: 1, upgraded: 0, overflowGold: 0, cards: [], pity: { unit: null, cards: 0 }, ...(batch !== undefined ? { batch } : {}) }) as ChestResult;
+    const list = [r(1), r(2, 2), r(3, 2), r(4, 2), r(5), r(6, 6), r(7, 6)];
+    expect(pilesOf(list).map((p) => p.map((x) => x.id))).toEqual([[1], [2, 3, 4], [5], [6, 7]]);
+  });
+
+  it('plays a single result or a list of them and nothing else', () => {
+    const r = { id: 1, kind: 'silver', seed: 1, oddsVersion: 1, upgraded: 0, overflowGold: 0, cards: [], pity: { unit: null, cards: 0 } };
+    expect(resultsOf(r)).toEqual([r]);
+    expect(resultsOf([r, r])).toHaveLength(2);
+    expect(resultsOf([])).toBeNull();
+    expect(resultsOf({ id: 'x' })).toBeNull();
+    expect(resultsOf([r, 5])).toBeNull();
+  });
+
+  it('shows "open all" from two chests on, never for more than the cap', () => {
+    expect([0, 1, 2, 4, 50, 51, 500].map(pileSize)).toEqual([0, 0, 2, 4, 50, 50, 50]);
   });
 
   it('adds a flourish with every rarity and gives the best card the big finish', () => {

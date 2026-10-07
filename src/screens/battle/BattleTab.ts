@@ -28,6 +28,12 @@ const UPDATE_EVERY = 0.25;
 let remembered: Selection | null = null;
 let seenRun = -2;
 
+/** The app flow moved the player on (the result screen's "next"): Home shows that chapter and level next, whatever the run just finished would have pointed at. */
+export function rememberSelection(sel: Selection): void {
+  remembered = clampSelection(profile.data.cleared, sel);
+  seenRun = profile.data.lastRun?.id ?? -1;
+}
+
 interface Entry {
   card: HomeCard;
   /** Feature that opens the card; null = open from the first run on. */

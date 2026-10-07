@@ -71,6 +71,8 @@ export function openSettings(onClose: () => void): ScreenScaffold {
       row.addChild(tg);
     };
     toggle(t('hud.set.flashes'), s.flashes, (v) => updateSettings({ flashes: v }));
+    // Applied on the spot (settings.ts sets the kit's switch and the effects' switch): the next thing that moves is already calm.
+    toggle(t('hud.set.reduceMotion'), s.reduceMotion, (v) => updateSettings({ reduceMotion: v }));
     toggle(t('hud.set.haptics'), s.haptics, (v) => updateSettings({ haptics: v }));
 
     const numRow = plate(TALL_H, t('hud.set.numbers'));

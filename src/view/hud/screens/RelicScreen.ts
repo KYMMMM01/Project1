@@ -39,10 +39,14 @@ import type { HudEnv } from '../env';
 import { PressCard, relicIcon } from '../kit';
 import { offerRoute } from '../policy';
 
+import { TOY_BURST, TOY_FLY, TOY_HANG } from '@/view/timing';
+
 const CARD_W = 672;
 const CARD_H = 216;
 const GAP = 18;
 const TOP = 152;
+/** Seconds the old cards of a reroll take to leave before the new ones are dealt. */
+const FAREWELL = 0.14;
 /** The mat the toy lies on: a square window at the card's left. */
 const MAT = 176;
 const MAT_PAD = 20;
@@ -99,9 +103,12 @@ export class RelicScreen {
     this.optionKey = key;
     const content = this.scaffold.content;
     // A card still being dealt must lose its tween with it: a tween writing to a destroyed container throws on every frame.
+    // A reroll sends the old cards off before the new ones are dealt; any other rebuild just replaces them.
+    const sendOff = fresh && this.cards.length > 0 && !motion.reduced;
     for (const c of this.cards) {
       this.bag.killKeyed(c);
-      c.destroy({ children: true });
+      if (sendOff) this.farewell(c);
+      else c.destroy({ children: true });
     }
     this.cards = [];
     this.head?.destroy({ children: true });
@@ -152,7 +159,7 @@ export class RelicScreen {
       }
       content.addChild(card);
       this.cards.push(card);
-      if (fresh && !motion.reduced) this.deal(card, i);
+      if (fresh && !motion.reduced) this.deal(card, i, sendOff ? FAREWELL : 0);
     });
     this.buildReroll(p);
   }
@@ -204,13 +211,31 @@ export class RelicScreen {
     return best;
   }
 
-  private deal(card: PressCard, i: number): void {
+  /** A card that is not wanted any more slips down and fades, then goes; it takes no taps meanwhile. */
+  private farewell(card: PressCard): void {
+    const y0 = card.y;
+    card.eventMode = 'none';
+    this.bag.runKeyed(card, {
+      duration: FAREWELL,
+      ease: Ease.cubicIn,
+      onUpdate: (k) => {
+        if (card.destroyed) return;
+        card.alpha = 1 - k;
+        card.y = y0 + 30 * k;
+      },
+      onComplete: () => {
+        if (!card.destroyed) card.destroy({ children: true });
+      },
+    });
+  }
+
+  private deal(card: PressCard, i: number, wait = 0): void {
     const y1 = card.y;
     card.y = y1 + 140;
     card.alpha = 0;
     this.bag.runKeyed(card, {
       duration: 0.28,
-      delay: 0.05 + i * 0.08,
+      delay: wait + 0.05 + i * 0.08,
       ease: Ease.backOut,
       onUpdate: (k) => {
         card.y = y1 + 140 * (1 - k);
@@ -234,14 +259,14 @@ export class RelicScreen {
     const def = id ? relicDef(id) : null;
     const fail = ctx.command('pickRelic', () => battle.pickRelic(index));
     if (fail !== null || !id || !def || !card) return;
-    audio.play('relic_pick');
     flyTo({
       from: card,
       to: ctx.anchor('relics'),
       count: 1,
       make: () => relicIcon(id, 80, def.rarity),
-      flight: [0.45, 0.55],
-      hang: [0.05, 0.08],
+      burstSeconds: TOY_BURST,
+      flight: [TOY_FLY, TOY_FLY],
+      hang: [TOY_HANG, TOY_HANG],
     });
     this.cards.forEach((c, i) => {
       if (i !== index) this.bag.runKeyed(c, { duration: 0.18, ease: Ease.cubicIn, onUpdate: (k) => (c.alpha = 1 - k) });
@@ -293,10 +318,8 @@ export class RelicScreen {
     if (this.busy) return;
     const { ctx, battle } = this.env;
     const fail = ctx.command('rerollRelics', () => battle.rerollRelics(paid));
-    if (fail === null) {
-      audio.play('whoosh');
-      this.render();
-    }
+    // The new offer reaches the HUD as an event, which rebuilds this screen: a second render here would redo the cards undealt.
+    if (fail === null) audio.play('whoosh');
   }
 
   private async pay(via: 'ad' | 'gems', btn: Button): Promise<void> {

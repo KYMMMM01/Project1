@@ -76,3 +76,19 @@ Six testers played the whole game; an engineer started on their `findings_battle
 | flow-relic-screen-tween-exception | FIXED. The deal and fade tweens are keyed per card and killed before `render()` destroys the card (a tween writing `y` to a destroyed container threw on every frame). A real-run repro was not possible from the sandbox; the debug `win()` flow with the toy screen open runs clean for 14 s. |
 
 REQUESTS: none. (The `SceneManager.cover` request of the polish pass still stands.)
+
+
+## 2026-10-07 owner feedback
+
+| Item | Root cause | Change | Where it is described |
+|---|---|---|---|
+| A. hand over the card text | the pick hand's body hung below its fingertip over the card text; the summon hand was placed once and sat on the label | hand comes down from a band above the recommended card (`pickHand`, tested); summon hand lies beside the button and follows resizes | `hud.md` |
+| B. laser unclear | the button only showed a one-line bubble; nothing on the board said what the dot did | explanation card (first presses and an info mark), lit lane, area ring, crosshair on marked enemies, caption with the real numbers, guided first use | `hud.md`, `field.md`, `fx.md` |
+| C. sunbeam cells faint | a 30 % tan patch and a 30 px sticker | lighter warm patch, cream and dashed border, turning rays, big sticker, sun mark on the cat, a tap explains | `fx.md`, `field.md` |
+| D. new cat lost on a crowded board | the cat popped in place; at reduced motion (the owner's) nothing else showed | tossed sticker, landing ring, NEW tag, result chip with the rank ladder; reduced motion keeps ring, tag and chip | `field.md`, `hud.md`, `director.md` |
+| E. reduce motion in battle | the setting existed only as a field | toggle in the pause menu's settings, applied at once | `hud.md` |
+| F. full motion | never seen on this machine | hit numbers spread along the HUD edge; preview pop-in killed with its card | `fx.md`, `hud.md` |
+
+Debug: `?scene=battle&...&laserguide=1` runs the laser's guided first use in a sandbox run (otherwise sandbox runs skip it). `window.__dbg.battle.lang('en')` switches the language (opening with a `lang=` query parameter next to `debug=1` was unreliable in the runner: `__dbg` appeared late).
+
+REQUESTS: see `hud.md` (home settings row, kit `popIn` guard).

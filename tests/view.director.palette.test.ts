@@ -27,8 +27,7 @@ describe('director palette', () => {
     for (const id of ENEMY_IDS) expect(ENEMY_TINT[id]).toBeTypeOf('number');
     for (const id of UNIT_IDS) {
       expect(UNIT_COLOR[id]).toBeTypeOf('number');
-      expect(SHOOT_CUE[id].volume).toBeGreaterThan(0);
-      expect(SHOOT_CUE[id].volume).toBeLessThanOrEqual(1);
+      expect(SHOOT_CUE[id].style).toMatch(/^(shot|swing|cast)$/);
     }
     for (const id of CLASS_IDS) expect(CLASS_COLOR[id]).toBeTypeOf('number');
     expect(Object.keys(STATUS_COLOR)).toHaveLength(8);

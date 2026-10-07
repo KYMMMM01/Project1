@@ -236,7 +236,7 @@ describe('VoiceLimiter', () => {
     l.request(0, 0.1, 5);
     l.reset();
     expect(l.active(0.2)).toBe(0);
-    expect(l.dropped).toEqual({ gap: 0, perId: 0, global: 0 });
+    expect(l.dropped).toEqual({ gap: 0, perId: 0, global: 0, bucket: 0, cap: 0, stolen: 0 });
     expect(l.request(0, 0.2, 1)).toBe(1);
   });
 

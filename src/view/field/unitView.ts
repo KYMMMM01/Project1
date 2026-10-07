@@ -6,7 +6,8 @@ import { popIn, type ZoneHandle } from '@/fx';
 import { cellCenterX, cellCenterY, cellCol } from '@/game/geometry';
 import { unitClass, unitRarity } from '@/game';
 import type { UnitId, UnitState } from '@/game/api';
-import { Color, backOut, type RarityId } from '@/ui';
+import { t } from '@/core/i18n';
+import { Color, Tag, backOut, motion, type RarityId } from '@/ui';
 import type { FieldArt } from './art';
 import { ANTICIPATION_SECONDS } from '@/view/timing';
 import { ATTACK_SECONDS, attackPose, breathe, coilPose, makePose, windStart } from './motion';
@@ -75,6 +76,12 @@ export class UnitView {
   private readonly rig = new Container();
   private readonly dome: Sprite;
   private readonly noAct: Sprite;
+  /** The sun sticker on a cat that stands in a sunbeam: the bonus is being applied. */
+  private readonly sunMark: Sprite;
+  /** The paper "NEW" tag on a cat that has just arrived (made when first needed, then kept with the pooled view). */
+  private newTag: Tag | null = null;
+  private newFrom = 0;
+  private newUntil = 0;
   private readonly pose = makePose();
   private spriteScale = 0.3;
   private phase = 0;
@@ -114,11 +121,14 @@ export class UnitView {
     this.dome = this.makeSprite(art.shield);
     this.dome.position.y = -46;
     this.noAct = this.makeSprite(art.noAct);
+    this.sunMark = this.makeSprite(art.sunMark);
+    this.sunMark.position.set(41, -92);
+    this.sunMark.alpha = 0;
     this.overhead.position.y = -106;
     this.deco.addChild(this.shadow, this.rank);
     this.body.addChild(this.sprite);
     this.rig.addChild(this.body);
-    this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.overhead);
+    this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.sunMark, this.overhead);
     this.root.eventMode = 'none';
     this.attackOpts = {
       duration: ATTACK_SECONDS,
@@ -175,6 +185,9 @@ export class UnitView {
     this.sprite.alpha = 1;
     this.dome.alpha = 0;
     this.noAct.alpha = 0;
+    this.sunMark.alpha = 0;
+    this.newUntil = 0;
+    if (this.newTag) this.newTag.visible = false;
     this.badge.scale.set(1);
     this.badge.alpha = 1;
     this.root.alpha = 1;
@@ -216,6 +229,19 @@ export class UnitView {
     this.attackOpts.duration = ATTACK_SECONDS * (1 - this.attackK0);
     this.coil = 0;
     this.attackTween = tweens.run(this.attackOpts);
+  }
+
+  /** Wear a "NEW" tag from `from` until `until` on the field's animation clock. */
+  markNew(from: number, until: number): void {
+    if (!this.newTag) {
+      this.newTag = new Tag({ text: t('view.new'), style: 'primary', shape: 'pill', fontSize: 24, tilt: -0.14 });
+      this.newTag.eventMode = 'none';
+      this.newTag.position.set(-38, -98);
+      this.root.addChild(this.newTag);
+    }
+    this.newTag.visible = false;
+    this.newFrom = from;
+    this.newUntil = until;
   }
 
   setPressed(v: boolean): void {
@@ -315,11 +341,35 @@ export class UnitView {
     this.dome.alpha = this.shield;
     this.noAct.alpha = this.blocked;
     this.noAct.scale.set(0.8 + 0.2 * this.blocked);
+    this.stickers(time);
     this.noAct.position.set(0, -100 + Math.sin(time * 3 + this.phase) * 2);
     // A lifted sticker casts a wider, fainter shadow on the paper below it.
     this.shadow.alpha = 0.34 - 0.12 * this.lift;
     this.shadow.scale.set(1 + 0.24 * this.lift);
     this.shadow.position.y = 1 + 5 * this.lift;
+  }
+
+  /** The two small stickers on a cat: the sun it stands in and the "NEW" tag of a fresh arrival. */
+  private stickers(time: number): void {
+    const sun = this.sun;
+    this.sunMark.alpha = sun > 0.02 ? 1 : 0;
+    // Pops on with a small overshoot when the light reaches the cat, then rocks a little like a sticker in a breeze.
+    this.sunMark.scale.set(0.8 * Math.min(1.25, sun * (1 + 0.5 * (1 - sun))));
+    this.sunMark.rotation = motion.reduced ? 0 : Math.sin(time * 2 + this.phase) * 0.14;
+    const tag = this.newTag;
+    if (!tag || this.newUntil === 0) return;
+    const left = this.newUntil - time;
+    if (left <= 0) {
+      tag.visible = false;
+      this.newUntil = 0;
+      return;
+    }
+    const age = time - this.newFrom;
+    const on = age >= 0 && this.root.visible;
+    tag.visible = on;
+    if (!on) return;
+    tag.scale.set(motion.reduced ? 1 : Ease.backOut(clamp01(age / 0.22)));
+    tag.alpha = clamp01(left / 0.3);
   }
 
   /**

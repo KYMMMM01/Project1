@@ -6,17 +6,20 @@
  * it is imported lazily from devtools.ts.
  */
 import type { SfxId } from './api';
-import { analyse, type SoundStats } from './analysis';
+import { attackSfx, critSfx, foeDieSfx, foeHitSfx, impactSfx } from './combat';
+import { ENEMY_IDS, UNIT_IDS } from '@/game/api';
+import { Rng } from '@/core/rng';
+import { analyse, signatureDistance, type Signature, type SoundStats } from './analysis';
 import { bakeVariant } from './bake';
 import { gainToDb } from './envelopes';
-import { FAMILIES } from './families';
+import { BOSS_DEATHS, FAMILIES, FOE_DEATHS, FOE_HITS, IMPACTS, RELEASES, type Family } from './families';
 import { createGraph } from './graph';
 import { MusicPlayer } from './music';
 import { CAT_TARGET } from './recipe';
 import { SOUNDS, sfxIndexOf, type SoundDef } from './sounds';
 import { SCORES, type MusicTrackId } from './scores';
 import { STEPS_PER_BAR, stepSeconds } from './sequencer';
-import { VoiceLimiter } from './voices';
+import { CUT_SECONDS, VoiceLimiter } from './voices';
 
 export interface ReportRow {
   id: string;
@@ -45,6 +48,11 @@ export interface ReportRow {
   modDepth: number;
   /** Time from 10 % to 90 % of the peak envelope in ms (mean over variants). */
   attackMs: number;
+  /** Share of the first ~21 ms between 2 and 6 kHz (the bite of a contact) and of the whole energy between 80 and 200 Hz (the body under it). */
+  snapFrac: number;
+  bodyFrac: number;
+  /** Fingerprint of the nominal variant, for the distinctness checks. */
+  sig: Signature;
   /** Decoded size of every variant at the report's sample rate, in bytes (float32 PCM). */
   bytes: number;
   /** Normalisation gain applied to the raw synth output. */
@@ -85,8 +93,12 @@ export interface SoundReport {
 const DC_LIMIT = 0.02;
 /** Decimal megabytes, the stricter reading of the budget. */
 const MB = 1_000_000;
-/** Budget for every pre-rendered buffer (SFX variants plus stingers); music is live-synthesised and costs none. */
-const MEMORY_BUDGET_MB = 8;
+/**
+ * Budget for every pre-rendered buffer (SFX variants plus stingers); music is live-synthesised and costs none. It was 8 MB for the 76 sounds
+ * of the first pass; the 64 weapon and enemy sounds (3 variants of 40 attacks and impacts and 18 reactions, 1 of each boss death) add about
+ * 6 MB, which is nothing next to what a phone gives a web page and is what a fight that sounds like a fight costs. (13.0 MB measured at 48 kHz, 11.9 MB at 44.1 kHz.)
+ */
+const MEMORY_BUDGET_MB = 14;
 
 async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
   const n = def.recipe.variants ?? 1;
@@ -135,6 +147,9 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
     modHz: round(mean((s) => s.modHz), 1),
     modDepth: round(mean((s) => s.modDepth), 2),
     attackMs: round(mean((s) => s.attackMs), 1),
+    snapFrac: round(mean((s) => s.snapFrac), 2),
+    bodyFrac: round(mean((s) => s.bodyFrac), 2),
+    sig: (all[0] as SoundStats).sig,
     bytes,
     gainDb: round(gainDb, 1),
     ok: issues.length === 0,
@@ -148,9 +163,9 @@ function round(v: number, digits: number): number {
 }
 
 /** Family targets: every member of a family has to measure inside the family's window (see families.ts). */
-function familyChecks(rows: ReportRow[]): Check[] {
+function familyChecks(rows: readonly ReportRow[], families: readonly Family[] = FAMILIES): Check[] {
   const by = new Map(rows.map((r) => [r.kind === 'stinger' ? `stinger:${r.id}` : r.id, r]));
-  return FAMILIES.map((fam) => {
+  return families.map((fam) => {
     const bad: string[] = [];
     for (const key of fam.members) {
       const r = by.get(key);
@@ -163,13 +178,77 @@ function familyChecks(rows: ReportRow[]): Check[] {
       if (r.centroidHz < fam.centroid[0] || r.centroidHz > fam.centroid[1]) bad.push(`${key} centroid ${r.centroidHz} Hz`);
       if (r.lowFrac > fam.maxLow) bad.push(`${key} low ${r.lowFrac}`);
       if (r.highFrac > fam.maxHigh) bad.push(`${key} high ${r.highFrac}`);
+      if (fam.minSnap !== undefined && r.snapFrac < fam.minSnap) bad.push(`${key} snap ${r.snapFrac}`);
+      if (fam.minBody !== undefined && r.bodyFrac < fam.minBody) bad.push(`${key} body ${r.bodyFrac}`);
     }
     return {
-      name: `family "${fam.name}": at most ${fam.maxMs} ms, attack <= ${fam.maxAttackMs} ms, centroid ${fam.centroid[0]}-${fam.centroid[1]} Hz, low <= ${fam.maxLow}, high <= ${fam.maxHigh}`,
+      name: `family "${fam.name}": at most ${fam.maxMs} ms, attack <= ${fam.maxAttackMs} ms, centroid ${fam.centroid[0]}-${fam.centroid[1]} Hz, low <= ${fam.maxLow}, high <= ${fam.maxHigh}${fam.minSnap === undefined ? '' : `, snap >= ${fam.minSnap}`}`,
       ok: bad.length === 0,
       detail: bad.length === 0 ? `${fam.members.length} sounds inside` : bad.join('; '),
     };
   });
+}
+
+/** Smallest distance between any two of `ids` by fingerprint, with the closest pair. */
+function closestPair(rows: ReadonlyMap<string, ReportRow>, ids: readonly string[]): { dist: number; pair: string } {
+  let dist = Infinity;
+  let pair = '';
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const a = rows.get(ids[i] as string);
+      const b = rows.get(ids[j] as string);
+      if (!a || !b) continue;
+      const d = signatureDistance(a.sig, b.sig);
+      if (d < dist) {
+        dist = d;
+        pair = `${ids[i]} / ${ids[j]}`;
+      }
+    }
+  }
+  return { dist: round(dist, 2), pair };
+}
+
+/** Two sounds this close are one sound to the ear: a unit is a clear difference in one respect (see analysis.ts SIG_UNIT). */
+export const MIN_DISTANCE = 1;
+const LINES = [
+  ['w_paw', 'w_sword', 'w_viking', 'w_samurai', 'w_tiger'],
+  ['r_sling', 'r_archer', 'r_ninja', 'r_gunner', 'r_star'],
+  ['m_snow', 'm_fire', 'm_storm', 'm_frost', 'm_cosmo'],
+  ['t_bell', 't_chef', 't_bard', 't_alch', 't_lucky'],
+] as const;
+
+/** The weapon and enemy sounds: each one unlike every other, every line bigger rank by rank, every contact crisp, the heavy ones weighty. */
+function combatChecks(rows: readonly ReportRow[]): Check[] {
+  const by = new Map(rows.filter((x) => x.kind === 'sfx').map((x) => [x.id, x]));
+  const get = (id: string): ReportRow => by.get(id) as ReportRow;
+  const checks: Check[] = [];
+  const check = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+
+  for (const [name, ids] of [['releases', RELEASES], ['impacts', IMPACTS], ['enemy hits', FOE_HITS], ['enemy deaths', FOE_DEATHS], ['boss deaths', BOSS_DEATHS]] as const) {
+    const c = closestPair(by, ids);
+    check(`no two ${name} are alike (fingerprint distance >= ${MIN_DISTANCE})`, c.dist >= MIN_DISTANCE, `closest ${c.pair} at ${c.dist}`);
+  }
+  for (const [kind, prefix] of [['release', 'atk_'], ['impact', 'imp_']] as const) {
+    for (const line of LINES) {
+      const rs = line.map((u) => get(`${prefix}${u}`));
+      const loud = rs.map((x) => x.loudRms);
+      const grows = (v: readonly number[], slack: number) => v.every((x, i) => i === 0 || x >= (v[i - 1] as number) * slack);
+      check(`${line[0]} line ${kind}s grow rank by rank (200 ms loudness, each at least 4 % above the one before)`, grows(loud, 1.04), loud.join(' < '));
+      const head = (rs[0] as ReportRow).durationMs + (rs[1] as ReportRow).durationMs;
+      const tail = (rs[3] as ReportRow).durationMs + (rs[4] as ReportRow).durationMs;
+      check(`${line[0]} line ${kind}s: the top two ranks are longer than the bottom two`, tail > head, `${head} ms < ${tail} ms`);
+    }
+  }
+  const imps = IMPACTS.map(get);
+  const rels = RELEASES.map(get);
+  const mean = (list: readonly ReportRow[], f: (x: ReportRow) => number) => list.reduce((a, x) => a + f(x), 0) / list.length;
+  check('every impact has a crisp start (A-weighted 2-6 kHz share of its first 20 ms >= 0.05)', imps.every((x) => x.snapFrac >= 0.05), imps.filter((x) => x.snapFrac < 0.05).map((x) => `${x.id} ${x.snapFrac}`).join(', ') || 'all');
+  const heavy = ['imp_w_viking', 'imp_w_tiger', 'imp_m_cosmo', 'imp_m_fire', 'imp_m_storm', 'imp_r_gunner'];
+  check('the heavy hitters carry a low body (80-200 Hz share >= 0.1)', heavy.every((id) => get(id).bodyFrac >= 0.1), heavy.map((id) => `${id.slice(4)} ${get(id).bodyFrac}`).join(', '));
+  check('impacts are louder than releases, releases louder than the UI', mean(imps, (x) => x.peak) > mean(rels, (x) => x.peak) && mean(rels, (x) => x.peak) > get('ui_click').peak, `${round(mean(imps, (x) => x.peak), 3)} > ${round(mean(rels, (x) => x.peak), 3)} > ${get('ui_click').peak}`);
+  check('releases are short (mean under 180 ms) and impacts shorter (mean under 140 ms)', mean(rels, (x) => x.durationMs) < 180 && mean(imps, (x) => x.durationMs) < 140, `${Math.round(mean(rels, (x) => x.durationMs))} ms, ${Math.round(mean(imps, (x) => x.durationMs))} ms`);
+  check('bosses die heavier and longer than any enemy', BOSS_DEATHS.every((id) => get(id).durationMs > Math.max(...FOE_DEATHS.map((d) => get(d).durationMs))) , BOSS_DEATHS.map((id) => `${id.slice(9)} ${get(id).durationMs}`).join(', '));
+  return checks;
 }
 
 /** Design-intent checks: the escalation ladder, the material of each family and the loudness order. */
@@ -197,9 +276,10 @@ function designChecks(rows: ReportRow[]): Check[] {
   check('star is a sticker pop (pitched, 400-900 Hz, attack under 4 ms)', r('star').centroidHz > 400 && r('star').centroidHz < 900 && r('star').attackMs < 4, `${r('star').centroidHz} Hz, attack ${r('star').attackMs} ms`);
 
   // Battle texture.
-  check('hit_heavy heavier than hit_light', r('hit_heavy').lowFrac > r('hit_light').lowFrac, `${r('hit_light').lowFrac} -> ${r('hit_heavy').lowFrac}`);
+  check('hit_heavy heavier than hit_light', r('hit_heavy').bodyFrac > r('hit_light').bodyFrac, `${r('hit_light').bodyFrac} -> ${r('hit_heavy').bodyFrac}`);
   check('hit_light is band limited (no sub)', r('hit_light').lowFrac < 0.35, `${r('hit_light').lowFrac}`);
-  check('crit is the same thwack made brighter and louder', r('crit').centroidHz > r('hit_heavy').centroidHz && r('crit').centroidHz > r('hit_light').centroidHz && r('crit').peak > r('hit_light').peak, `${r('hit_light').centroidHz}, ${r('hit_heavy').centroidHz} -> ${r('crit').centroidHz} Hz`);
+  check('hit_heavy is the weight under a heavy blow: body 80-200 Hz (>= 0.15) and a crisp start (snap >= 0.05)', r('hit_heavy').bodyFrac >= 0.15 && r('hit_heavy').snapFrac >= 0.05, `body ${r('hit_heavy').bodyFrac}, snap ${r('hit_heavy').snapFrac}`);
+  check('crit is a bright crack with a body under it, brighter than the heavy layer and louder than a plain hit', r('crit').centroidHz > r('hit_heavy').centroidHz && r('crit').snapFrac >= 0.2 && r('crit').bodyFrac >= 0.1 && r('crit').peak > r('hit_light').peak, `centroid ${r('hit_heavy').centroidHz} -> ${r('crit').centroidHz} Hz, snap ${r('crit').snapFrac}, body ${r('crit').bodyFrac}`);
   check('explosion and boss_die carry low end', r('explosion').lowFrac > 0.25 && r('boss_die').lowFrac > 0.25, `${r('explosion').lowFrac}, ${r('boss_die').lowFrac}`);
   check('boss_warning is a low mallet roll, not a siren (centroid under 500 Hz, 0.8-1.45 s)', r('boss_warning').centroidHz < 500 && r('boss_warning').durationMs >= 800 && r('boss_warning').durationMs <= 1450, `${r('boss_warning').centroidHz} Hz, ${r('boss_warning').durationMs} ms`);
   check('danger_alarm is a short heartbeat knock', r('danger_alarm').durationMs <= 330, `${r('danger_alarm').durationMs} ms`);
@@ -219,7 +299,8 @@ function designChecks(rows: ReportRow[]): Check[] {
 
   // Loudness order of the families, by peak: UI < shots/hits < combat < rewards < big.
   const peakOf = (id: string) => r(id).peak;
-  check('loudness order UI < hit < combat < reward < big (peak)', peakOf('ui_click') < peakOf('hit_heavy') && peakOf('hit_heavy') < peakOf('merge') && peakOf('merge') < peakOf('reward_claim') && peakOf('reward_claim') < peakOf('summon_mythic'), `${peakOf('ui_click')} < ${peakOf('hit_heavy')} < ${peakOf('merge')} < ${peakOf('reward_claim')} < ${peakOf('summon_mythic')}`);
+  check('loudness order UI < combat < reward < big (peak)', peakOf('ui_click') < peakOf('merge') && peakOf('merge') < peakOf('reward_claim') && peakOf('reward_claim') < peakOf('summon_mythic'), `${peakOf('ui_click')} < ${peakOf('merge')} < ${peakOf('reward_claim')} < ${peakOf('summon_mythic')}`);
+  checks.push(...combatChecks(rows));
 
   const stingers = rows.filter((x) => x.kind === 'stinger');
   check('stingers are 1-2.3 s', stingers.every((x) => x.durationMs >= 1000 && x.durationMs <= 2300), stingers.map((x) => `${x.id} ${x.durationMs}`).join(', '));
@@ -227,6 +308,51 @@ function designChecks(rows: ReportRow[]): Check[] {
   check('victory is a warm tune (centroid 500-1500 Hz)', (by.get('stinger:victory') as ReportRow).centroidHz > 500 && (by.get('stinger:victory') as ReportRow).centroidHz < 1500, `${(by.get('stinger:victory') as ReportRow).centroidHz} Hz`);
   check('mythic stinger sits within 3 dB of awaken', Math.abs(gainToDb(r('awaken').loudRms) - gainToDb(mythic.loudRms)) < 3, `${r('awaken').loudRms} vs ${mythic.loudRms}`);
   return [...checks, ...familyChecks(rows)];
+}
+
+export interface CombatReport {
+  table: string;
+  checks: Check[];
+  failing: string[];
+  /** The closest pairs of every group by fingerprint, to see which sounds are too alike while tuning. */
+  closest: Record<string, string[]>;
+  bytes: number;
+  elapsedMs: number;
+}
+
+/** The weapon and enemy sounds alone (and the layers around them): fast enough to run after every change of a recipe. */
+export async function runCombatReport(sampleRate: number): Promise<CombatReport> {
+  const t0 = performance.now();
+  const groups: Record<string, readonly SfxId[]> = { releases: RELEASES, impacts: IMPACTS, 'enemy hits': FOE_HITS, 'enemy deaths': FOE_DEATHS, 'boss deaths': BOSS_DEATHS };
+  const ids: SfxId[] = [...RELEASES, ...IMPACTS, ...FOE_HITS, ...FOE_DEATHS, ...BOSS_DEATHS, 'hit_light', 'hit_heavy', 'crit', 'ui_click'];
+  const rows: ReportRow[] = [];
+  for (const id of ids) rows.push(await rowFor(SOUNDS[sfxIndexOf(id)] as SoundDef, sampleRate));
+  const by = new Map(rows.map((x) => [x.id, x]));
+  const closest: Record<string, string[]> = {};
+  for (const [name, list] of Object.entries(groups)) {
+    const pairs: Array<{ d: number; pair: string }> = [];
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = by.get(list[i] as string) as ReportRow;
+        const b = by.get(list[j] as string) as ReportRow;
+        pairs.push({ d: signatureDistance(a.sig, b.sig), pair: `${(list[i] as string).slice(4)} / ${(list[j] as string).slice(4)}` });
+      }
+    }
+    closest[name] = pairs.sort((a, b) => a.d - b.d).slice(0, 6).map((p) => `${round(p.d, 2)} ${p.pair}`);
+  }
+  const checks = [...combatChecks(rows), ...familyChecks(rows, FAMILIES.filter((f) => f.members.every((m) => by.has(m))))];
+  const failing = [
+    ...rows.filter((x) => !x.ok).map((x) => `${x.id} ${x.issues.join(', ')}`),
+    ...checks.filter((c) => !c.ok).map((c) => `check: ${c.name} (${c.detail})`),
+  ];
+  return {
+    table: formatTable(rows),
+    checks,
+    failing,
+    closest,
+    bytes: rows.reduce((n, x) => n + x.bytes, 0),
+    elapsedMs: Math.round(performance.now() - t0),
+  };
 }
 
 export async function runReport(sampleRate: number): Promise<SoundReport> {
@@ -269,7 +395,7 @@ ${formatTable(stingers)}`,
 }
 
 function formatTable(rows: readonly ReportRow[]): string {
-  const head = 'id                 var  ms    peak  rms    loud   dc      0 end  cent  bright low   high  mod   atk   KB    gain  ok';
+  const head = 'id                 var  ms    peak  rms    loud   dc      0 end  cent  bright low   high  snap body mod   atk   KB    gain  ok';
   const lines = rows.map((x) =>
     [
       x.id.padEnd(18),
@@ -285,6 +411,8 @@ function formatTable(rows: readonly ReportRow[]): string {
       String(x.brightHz).padStart(6),
       x.lowFrac.toFixed(2),
       x.highFrac.toFixed(2),
+      x.snapFrac.toFixed(2),
+      x.bodyFrac.toFixed(2),
       (x.modDepth > 0.15 ? String(Math.round(x.modHz)) : '-').padStart(3),
       x.attackMs.toFixed(1).padStart(5),
       String(Math.round(x.bytes / 1024)).padStart(5),
@@ -402,6 +530,36 @@ interface MixEvent {
   at: number;
   id: SfxId;
   pitch?: number;
+  /** What the director would ask for (default 1). */
+  volume?: number;
+}
+
+/**
+ * A fight as the engine receives it, `speed` times as dense as the director's normal wave (16 impacts, each with its enemy's answer, 8 releases,
+ * 4 deaths, a crit and a heavy blow a second, 5 coins, a blast every 2 s), cats and enemies drawn at random: nothing repeats, which is the
+ * hardest case for the crowd control. The director thins this before it reaches the engine, so this is worse than the game.
+ */
+function fightEvents(seconds: number, speed: number): MixEvent[] {
+  const ev: MixEvent[] = [];
+  const rng = new Rng(7);
+  const unit = () => UNIT_IDS[Math.floor(rng.next() * UNIT_IDS.length)] as (typeof UNIT_IDS)[number];
+  const enemy = () => ENEMY_IDS[Math.floor(rng.next() * ENEMY_IDS.length)] as (typeof ENEMY_IDS)[number];
+  const add = (cue: { id: SfxId; volume: number; pitch: number }, at: number, volume = 1) => ev.push({ at, id: cue.id, pitch: cue.pitch, volume: cue.volume * volume });
+  for (let t = 0.2; t < seconds; t += 1 / (16 * speed)) {
+    add(impactSfx(unit()), t);
+    add(foeHitSfx(enemy()), t);
+  }
+  for (let t = 0.1; t < seconds; t += 1 / (8 * speed)) add(attackSfx(unit()), t);
+  for (let t = 0.3; t < seconds; t += 1 / (4 * speed)) add(foeDieSfx(enemy()), t);
+  for (let t = 0.5; t < seconds; t += 1 / speed) {
+    const u = unit();
+    add(impactSfx(u), t);
+    add(critSfx(u), t);
+  }
+  for (let t = 0.7; t < seconds; t += 1.1 / speed) ev.push({ at: t, id: 'hit_heavy', volume: 0.5 });
+  for (let t = 0.4; t < seconds; t += 0.2 / speed) ev.push({ at: t, id: 'coin' });
+  for (let t = 1; t < seconds; t += 2 / speed) ev.push({ at: t, id: 'explosion', volume: 0.35 });
+  return ev.sort((a, b) => a.at - b.at);
 }
 
 /** A battle's worth of overlapping effects: 16 hits/s, 4 deaths/s, 8 shots/s, 5 coins/s, a blast every 2 s. */
@@ -446,6 +604,8 @@ async function renderMixOnce(events: readonly MixEvent[], seconds: number, limit
 
   const baked = new Map<string, AudioBuffer[]>();
   const limiter = new VoiceLimiter(SOUNDS.map((d) => d.rule));
+  // The gain node behind every slot of the combat table: a full table fades the voice it replaces, like the engine does.
+  const seated: Array<GainNode | undefined> = [];
   let played = 0;
   for (const e of events) {
     const idx = sfxIndexOf(e.id);
@@ -459,16 +619,23 @@ async function renderMixOnce(events: readonly MixEvent[], seconds: number, limit
     }
     const buf = list[played % list.length] as AudioBuffer;
     const rate = (e.pitch ?? 1) * (def.recipe.rate ? 1 + Math.sin(played * 12.9898) * def.recipe.rate : 1);
-    const scale = limiter.request(idx, e.at, buf.duration / rate);
+    const volume = e.volume ?? 1;
+    const scale = limiter.request(idx, e.at, buf.duration / rate, volume);
     if (scale <= 0) continue;
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = rate;
     const g = ctx.createGain();
-    g.gain.value = scale;
+    g.gain.value = volume * scale;
     src.connect(g);
     g.connect(graph.sfxBus);
     src.start(e.at);
+    if (limiter.victim >= 0) {
+      const old = seated[limiter.victim];
+      old?.gain.setValueAtTime(old.gain.value, e.at);
+      old?.gain.linearRampToValueAtTime(0, e.at + CUT_SECONDS);
+    }
+    if (limiter.slot >= 0) seated[limiter.slot] = g;
     played++;
   }
   const out = await ctx.startRendering();
@@ -489,9 +656,9 @@ function windowedDb(ch: readonly Float32Array[], sampleRate: number): number[] {
 }
 
 /** Render a mix with and without the limiter to see how hard it works (pumping shows as a large RMS drop). */
-export async function renderMix(scenario: 'battle' | 'big', sampleRate: number): Promise<MixRow> {
+export async function renderMix(scenario: 'battle' | 'big' | 'fight' | 'fight3', sampleRate: number): Promise<MixRow> {
   const seconds = scenario === 'battle' ? 6 : 5;
-  const events = scenario === 'battle' ? battleEvents(seconds) : bigEvents();
+  const events = scenario === 'battle' ? battleEvents(seconds) : scenario === 'big' ? bigEvents() : fightEvents(seconds, scenario === 'fight3' ? 3 : 1);
   const on = await renderMixOnce(events, seconds, true, sampleRate);
   const off = await renderMixOnce(events, seconds, false, sampleRate);
   const a = windowedDb(on.ch, sampleRate);

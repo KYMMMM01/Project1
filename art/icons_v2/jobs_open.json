@@ -1,0 +1,26 @@
+[
+ {
+  "name": "icon_chest_wood_open",
+  "ref": [
+   "art/icons_v2/icon_chest_wood.png"
+  ],
+  "ref_note": "Image 1 is the CLOSED treasure chest icon from our game. Draw the SAME chest (same materials, colours, bands, studs, lock plate, proportions and viewing angle) but OPEN, in exactly the same rendering. Do not redesign it.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon, the opened state of a chest (shown about 300 px during the opening animation)\nSubject: the wooden chest with blue-grey iron bands from image 1 with its lid swung fully open backwards on its hinges, so the inside is visible. The inside is filled to the brim with flat warm golden-yellow light drawn as a simple flat shape (a bright cream-yellow fill with a slightly darker yellow rim), with four or five short flat triangular light rays fanning upward out of the opening and three small flat four-point star shapes above it. The open lid shows its plain inner side.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO blur, NO soft glow; slightly muted, natural colours.\nComposition: the chest sits at exactly the same position, size, angle and three-quarter view as in image 1, centred, generous padding above for the open lid, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_silver_open",
+  "ref": [
+   "art/icons_v2/icon_chest_silver.png"
+  ],
+  "ref_note": "Image 1 is the CLOSED treasure chest icon from our game. Draw the SAME chest (same materials, colours, bands, studs, lock plate, proportions and viewing angle) but OPEN, in exactly the same rendering. Do not redesign it.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon, the opened state of a chest (shown about 300 px during the opening animation)\nSubject: the silver chest with blue gem inlay from image 1 with its lid swung fully open backwards on its hinges, so the inside is visible. The inside is filled to the brim with flat warm golden-yellow light drawn as a simple flat shape (a bright cream-yellow fill with a slightly darker yellow rim), with four or five short flat triangular light rays fanning upward out of the opening and three small flat four-point star shapes above it. The open lid shows its plain inner side.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO blur, NO soft glow; slightly muted, natural colours.\nComposition: the chest sits at exactly the same position, size, angle and three-quarter view as in image 1, centred, generous padding above for the open lid, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no text, no letters, no numbers, no watermark, nothing cropped."
+ },
+ {
+  "name": "icon_chest_gold_open",
+  "ref": [
+   "art/icons_v2/icon_chest_gold.png"
+  ],
+  "ref_note": "Image 1 is the CLOSED treasure chest icon from our game. Draw the SAME chest (same materials, colours, bands, studs, lock plate, proportions and viewing angle) but OPEN, in exactly the same rendering. Do not redesign it.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game icon, the opened state of a chest (shown about 300 px during the opening animation)\nSubject: the ornate golden chest with red gems and cat-ear lid corners from image 1 with its lid swung fully open backwards on its hinges, so the inside is visible. The inside is filled to the brim with flat warm golden-yellow light drawn as a simple flat shape (a bright cream-yellow fill with a slightly darker yellow rim), with four or five short flat triangular light rays fanning upward out of the opening and three small flat four-point star shapes above it. The open lid shows its plain inner side.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO blur, NO soft glow; slightly muted, natural colours.\nComposition: the chest sits at exactly the same position, size, angle and three-quarter view as in image 1, centred, generous padding above for the open lid, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no text, no letters, no numbers, no watermark, nothing cropped."
+ }
+]

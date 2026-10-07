@@ -1,9 +1,10 @@
 import { debugExpose } from '@/core/debug';
 import { provide, services, type Shell } from '../contract';
 import { openUnitScreen } from '../cats/UnitScreen';
-import { isChestResult, playChestReveal } from './ChestReveal';
+import { playChestReveal } from './ChestReveal';
 import { setShell } from './context';
 import { openOddsScreen } from './OddsScreen';
+import { pilesOf, resultsOf } from './revealPlan';
 import { showRewardsPopup } from './rewards';
 import { openShopSection } from './ShopTab';
 import { isBundleParts } from './shopLogic';
@@ -16,8 +17,11 @@ import '../cats/strings';
  */
 export function installServices(shell: Shell): void {
   setShell(shell);
-  provide('revealChest', (result) => (isChestResult(result) ? playChestReveal(result) : Promise.resolve()));
-  provide('showRewards', (parts, title) => (isBundleParts(parts) ? showRewardsPopup(parts, title) : Promise.resolve()));
+  provide('revealChest', async (result) => {
+    // One result is one chest; a list is played pile by pile (chests opened in one go share a tag and are one opening).
+    for (const pile of pilesOf(resultsOf(result) ?? [])) await playChestReveal(pile);
+  });
+  provide('showRewards', (parts, title, held) => (isBundleParts(parts) ? showRewardsPopup(parts, title, held) : Promise.resolve()));
   provide('openOdds', (kind) => openOddsScreen(kind));
   provide('openShop', (section) => openShopSection(section));
   provide('openUnit', (id) => openUnitScreen(id));

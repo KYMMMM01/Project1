@@ -5,10 +5,12 @@
 import { SFX_IDS, type SfxId, type StingerId } from './api';
 import type { Cat, Recipe } from './recipe';
 import { BATTLE_RECIPES } from './sfx-battle';
+import { CAT_RECIPES } from './sfx-cats';
 import { COMBAT_RECIPES } from './sfx-combat';
+import { FOE_RECIPES } from './sfx-foes';
 import { UI_RECIPES } from './sfx-ui';
 import { STINGER_RECIPES } from './stingers';
-import type { VoiceRule } from './voices';
+import { BUCKET_FOE, BUCKET_IMPACT, BUCKET_SWING, type VoiceRule } from './voices';
 
 export interface SoundDef {
   index: number;
@@ -27,16 +29,33 @@ const CAT_RULE: Record<Cat, VoiceRule> = {
   reward: { maxVoices: 3, minGap: 0.04, falloff: 0 },
   fire: { maxVoices: 3, minGap: 0.08, falloff: 0.15 },
   hit: { maxVoices: 5, minGap: 0.04, falloff: 0.18 },
+  swing: { maxVoices: 2, minGap: 0.08, falloff: 0.12 },
+  impact: { maxVoices: 3, minGap: 0.05, falloff: 0.15 },
+  foe: { maxVoices: 2, minGap: 0.05, falloff: 0.15 },
+  finale: { maxVoices: 1, minGap: 0.5, falloff: 0 },
   combat: { maxVoices: 3, minGap: 0.06, falloff: 0 },
   big: { maxVoices: 2, minGap: 0.15, falloff: 0 },
   stinger: { maxVoices: 1, minGap: 0.5, falloff: 0 },
 };
 
 /**
- * The three recipe files each cover a slice of the ids. Typing the merge as a full Record makes the
+ * Which kind of fight sound a loudness family is: the three kinds are thinned and capped together (voices.ts). The old shots and hits
+ * join them, so everything the fight plays shares one budget.
+ */
+const BUCKET: Partial<Record<Cat, number>> = {
+  fire: BUCKET_SWING,
+  swing: BUCKET_SWING,
+  hit: BUCKET_IMPACT,
+  impact: BUCKET_IMPACT,
+  foe: BUCKET_FOE,
+  finale: BUCKET_FOE,
+};
+
+/**
+ * The recipe files each cover a slice of the ids. Typing the merge as a full Record makes the
  * compiler prove the slices add up: a new id in SFX_IDS without a recipe stops the build here.
  */
-const ALL: Record<SfxId, Recipe> = { ...UI_RECIPES, ...COMBAT_RECIPES, ...BATTLE_RECIPES };
+const ALL: Record<SfxId, Recipe> = { ...UI_RECIPES, ...COMBAT_RECIPES, ...BATTLE_RECIPES, ...CAT_RECIPES, ...FOE_RECIPES };
 
 export const SOUNDS: SoundDef[] = [];
 const sfxIndex = new Map<string, number>();
@@ -49,7 +68,7 @@ function add(id: string, recipe: Recipe, stinger: boolean): void {
     key: `${stinger ? 'stinger' : 'sfx'}:${id}`,
     id,
     recipe,
-    rule: { ...CAT_RULE[recipe.cat], ...recipe.rule },
+    rule: { ...CAT_RULE[recipe.cat], ...recipe.rule, prio: recipe.prio ?? 0, bucket: BUCKET[recipe.cat] ?? -1 },
     stinger,
   });
   (stinger ? stingerIndex : sfxIndex).set(id, index);
@@ -67,7 +86,7 @@ export function stingerIndexOf(id: StingerId): number {
   return stingerIndex.get(id) ?? -1;
 }
 
-const CAT_ORDER: readonly Cat[] = ['ui', 'tick', 'reward', 'fire', 'hit', 'combat', 'big', 'stinger'];
+const CAT_ORDER: readonly Cat[] = ['ui', 'tick', 'reward', 'fire', 'hit', 'swing', 'impact', 'foe', 'combat', 'big', 'finale', 'stinger'];
 
 /** Bake order for the idle pre-render: the sounds heard first and most often come first. */
 export const PRERENDER_ORDER: readonly number[] = SOUNDS.map((d) => d.index).sort(

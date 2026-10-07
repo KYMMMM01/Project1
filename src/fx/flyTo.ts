@@ -4,7 +4,7 @@ import { Pool } from '@/core/pool';
 import { Ease, uiTweens, type Tween, type Tweener } from '@/core/tween';
 import { TAU, rand } from '@/core/math';
 import { Color } from '@/ui/theme';
-import { flightAt, flightTotal, makeFlightPlan, planFlight, type FlightPlan, type FlightState } from './flyPath';
+import { flightAt, flightTotal, makeFlightPlan, planFlight, type FlightPlan, type FlightState, type FlyBounds } from './flyPath';
 import { REDUCED, fxSettings } from './settings';
 
 export interface FlyPoint {
@@ -95,6 +95,21 @@ function resolveEnd(e: FlyEnd, parent: Container, out: FlyPoint): FlyPoint {
   return out;
 }
 
+/** The screen in `parent`'s coordinates, pulled in by `inset` on every side: where an icon may rest and curve. */
+function screenBounds(parent: Container, inset: number, out: FlyBounds): FlyBounds {
+  game.overlayLayer.toGlobal(tmp.set(0, 0), tmp);
+  parent.toLocal(tmp, undefined, tmp);
+  const ax = tmp.x;
+  const ay = tmp.y;
+  game.overlayLayer.toGlobal(tmp.set(game.w, game.h), tmp);
+  parent.toLocal(tmp, undefined, tmp);
+  out.minX = Math.min(ax, tmp.x) + inset;
+  out.maxX = Math.max(ax, tmp.x) - inset;
+  out.minY = Math.min(ay, tmp.y) + inset;
+  out.maxY = Math.max(ay, tmp.y) - inset;
+  return out;
+}
+
 /**
  * Currency / reward fly-to-HUD: N icons burst out of a source with a pop, hang briefly, then
  * accelerate along curved paths into the target and land one after another. Everything runs in
@@ -115,6 +130,8 @@ export function flyTo(o: FlyToOpts): FlyHandle {
   const bulge = o.bulge ?? [80, 140];
   const size = o.size ?? 44;
   const phase = Math.random() * TAU;
+  // The burst and the curve are folded back onto the screen here, so no caller has to know where the edges are.
+  const bounds = screenBounds(parent, size / 2 + 6, { minX: 0, minY: 0, maxX: 0, maxY: 0 });
 
   const icons: (Container | null)[] = new Array<Container | null>(n).fill(null);
   const tweens: Tween[] = [];
@@ -163,6 +180,7 @@ export function flyTo(o: FlyToOpts): FlyHandle {
       burst,
       rand(hang[0], hang[1]) * speed,
       rand(flight[0], flight[1]) * speed,
+      bounds,
     );
     let icon: Container;
     let baseScale = 1;

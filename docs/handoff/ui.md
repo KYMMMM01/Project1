@@ -190,4 +190,32 @@ Also changed for the whole screen set (see the other notes): `ScreenScaffold` is
 ### REQUESTS (kit)
 
 1. `src/fx/flyTo.ts`: the burst of a flight starting next to a screen edge sends icons off-screen. The screens now pass a short `burstRadius` / `bulge` near the edges (`screens/shell/flight.ts`); a clamp inside `flyTo` would cover every caller.
-2. `src/audio`: `place` is used as the stamp's knock (volume 0.45). A dedicated short "stamp" sound would fit better.
+2. `src/audio`: `place` is used as the stamp's knock (volume 0.45). A dedicated short "stamp" sound would fit better. (Answered in the second pass below: the stamp now plays `reward_claim`.)
+
+### Second pass (the rest of the list)
+
+Same method; new capture helpers: `texts()` (every visible string with its design position, to find what to tap) and a retry of a timed-out screenshot in `steps()`. Two more pitfalls: a step of 0.25 s or more distorts any choreography that is a chain of awaited promises (the chest reveal showed cards "missing" at dt 0.5, they were just between continuations; a dt of 1 s also lets two tweens of one object end in the same update), so keep steps at or under 0.17 s and use `adv()` for the long gaps; and the Vite dev server reloads the page whenever any file is saved (the other half of the game is being edited all the time), so a run that suddenly reads `window.__cap` as undefined was reloaded mid-way, run it again.
+
+| Moment | Strip | Before | Change | After |
+|---|---|---|---|---|
+| Number count-up start (`CurrencyPill.setAmount(x, true)`) | measured per frame in `req1` (text and sound per tick) | A tween takes its first step on the tick after the call, and the tick sound played on every changed integer: a big number is shown abbreviated (`2만` to `2.01만` needs 100 more), so the sound came 1 to 3 frames before anything moved on screen | the first step is taken in the call itself; the tick plays only when the shown text changes; the tick of that first step is owed to the next frame (the one that draws it), so a roll that is put straight back in the same frame (`Shell.pending` after `refresh()` in every claim) stays silent | `0 + 400`: text `30` on the call, tick on the first drawn frame; `20000 + 800`: `2만` until the second frame, then `2.01만` with its tick; put back in the same frame: no sound |
+| Page landed (`ScreenScaffold.show`) | none (API) | the promise resolved on completion and also when the slide was killed, and nothing said so | `show(animate = true, onLanded?)`: `onLanded` runs on the frame the page has landed (at once without motion), never when `hide()` / `destroy()` cut the slide short; the promise is unchanged | the pre-run page starts its START bob when it has landed instead of while it rises |
+| Tooltip fade-out | `tip/strip_tp` | not re-captured | none | the bubble shrinks to its tail tip and fades in about 0.1 s, nothing left behind |
+| Refusal sound plus toast | sound logs of `cup`, `buy`, `short` | 15 sites played `ui_error` and then opened a warning / error toast that played `ui_error` again in the same frame | `refusalCue()` (`@/ui/press`): the cue and `noteRefusal()` in one call, used where a toast explains the refusal in the same handler | one cue per refusal |
+| Rubber-stamp sound | `cup`, `passall`, `cal`, `chestd` logs | the stamp's landing borrowed `place` at 0.45 | `stampThud()` plays `reward_claim` (the audio owner's rubber stamp: dull thud, paper slap, one kalimba ding) at 0.7 | see `routine.md`: a claim leaves its sound to the stamp's landing |
+
+`ScreenScaffold.show(animate, onLanded)` is additive: every existing call (`void scaffold.show(true)`) is unchanged.
+
+### REQUESTS (second pass)
+
+1. `src/audio`: `reward_claim` ends in a kalimba ding, which is right for "claimed" and a bit much for the "sold" and the level-up stamps (they sound on top of `purchase` / `upgrade`). An id that is only the stamp (thud and slap) would let `stampThud` pick by context.
+2. `src/platform/adapters/devOverlay.ts`: the dev purchase and ad sheets are DOM overlays in the old deep purple with a yellow button (see its header comment); they are what a tester sees between the shop and the reward popup. Their timing is CSS, not the game clock, so no strip can show it.
+
+
+## 2026-10-07 owner feedback
+
+**A. The selected tab's paper was too short.** Root cause: `Tab.redrawPaper` cut the cream tab `barH - STRIP_TOP + 30` tall from `y = -STRIP_TOP - 8`, so it ended 22 px above the bar's bottom edge and the 24 px label (centre line 102) hung out over the kraft strip; the hero tab had no paper at all, so its label always sat on the kraft. Now the paper is a pure box, `tabPaperBox(cell, barH, featured)` in `layoutMath.ts` (constants in `TAB_BAR`): it starts above the torn edge and runs `TAB_BAR.bleed` (40 px) past the bar's bottom *including `game.safeBottom`*, so its rounded corners, rim and shadow are always off the screen and no bottom edge is ever seen. The hero tab (selected) now stands on the same kind of cream paper, taller (top at -58, it has to hold the raised disc), with the coral disc on it; its disc keeps its own tape. The hit area of the hero follows. Nothing else of `TabBar` changed (names, options, badge, lock).
+Tests: `tests/ui.stack.test.ts` "tab bar paper" (icon and label inside the sheet, bottom edge past the screen with a 0 / 20 / 34 px inset, hero above its disc).
+Stills (scratchpad `shots/a/`): `sheet_ko` (all five tabs selected, 720 x 1280), `sheet_en_tall` (English, 720 x 1600 with a 34 px inset, badges on three tabs), and `shots/dm/sheet.png` (the kit gallery `?demo=ui&page=9`: hero, a plain tab with a badge, the badge-9+ tab).
+
+**Capture helpers** (`tools/ui_motion_capture.js`): `tall(on, inset)` replaces the page's visual viewport (720 x 1600 design space, optional home-indicator inset) so tall layouts can be captured; `snap(name)` is `shot` with the retry the runner needs when the tab is not the one being drawn. One more pitfall for whoever follows: while another engineer saves files, the dev server on 5173 reloads the page about every 20 s and a long capture dies halfway. I ran my captures on a frozen copy of the tree (a second Vite in the scratchpad on port 5174, `GAME_PORT=5174`), re-syncing only my own paths between runs.

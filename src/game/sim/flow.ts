@@ -17,6 +17,7 @@ import { addFish, addPurr, earnFish } from './economy';
 import { removeEnemy, spawnEnemy } from './enemies';
 import { luckShare } from './odds';
 import { captureSnapshot } from './snapshot';
+import { TUTORIAL_PICK_WAVE, tutorialWaveStart } from './tutorial';
 import type { Sim } from './sim';
 import type { SimEnemy } from './types';
 
@@ -29,6 +30,12 @@ export function markSun(s: Sim, cells: readonly number[]): void {
     s.sunbeams.push(c);
     s.sunCell[c] = 1;
   }
+}
+
+/** Lights `cells` and announces them (the tutorial's sunbeams arrive this way). */
+export function revealSun(s: Sim, cells: readonly number[]): void {
+  markSun(s, cells);
+  announceSun(s);
 }
 
 function announceSun(s: Sim): void {
@@ -227,9 +234,12 @@ export function startWave(s: Sim, wave: number): void {
   if (s.fx.tunnel) placeRandomCommon(s, s.rng.toy.next(), s.rng.toy.next());
   if (s.ev.has('waveStart')) s.ev.emit('waveStart', { wave, act: s.act, kind: s.waveKind, duration: s.waveDuration });
   s.phase = 'wave';
-  if (s.mode === 'tutorial' && wave === 3 && s.tutorialOffer) {
-    s.tutorialOffer = false;
-    openSummonOffer(s, true);
+  if (s.mode === 'tutorial') {
+    if (wave === TUTORIAL_PICK_WAVE && s.tutorialOffer) {
+      s.tutorialOffer = false;
+      openSummonOffer(s, true);
+    }
+    tutorialWaveStart(s, wave);
   }
 }
 

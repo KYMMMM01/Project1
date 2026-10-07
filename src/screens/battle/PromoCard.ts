@@ -1,9 +1,9 @@
 import { Container, Graphics } from 'pixi.js';
-import { audio } from '@/audio';
 import { t } from '@/core/i18n';
 import { bundleParts, describeBundle, iapSpec, profile } from '@/meta';
 import { iap } from '@/platform';
 import { Button, Color, Tag, drawIcon, fitLabel, toast, uiLabel } from '@/ui';
+import { refusalCue } from '@/ui/press';
 import { services, type Shell } from '../contract';
 import { CARD_PAD, HomeCard } from './HomeCard';
 import { PROMO_PRODUCT } from './promo';
@@ -65,7 +65,7 @@ export class PromoCard extends HomeCard {
       return;
     }
     if (outcome === 'failed') {
-      audio.play('ui_error');
+      refusalCue();
       toast(t('shop.buy.fail'), 'error');
       return;
     }

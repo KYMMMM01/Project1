@@ -1,10 +1,11 @@
 import { Graphics, Sprite, Texture, type Container } from 'pixi.js';
 import { Ease } from '@/core/tween';
-import { TAU, clamp01, lighten } from '@/core/math';
+import { TAU, clamp01, lighten, mixColor } from '@/core/math';
 import { drawDashedRect } from '@/ui/paper';
 import { Color } from '@/ui/theme';
 import { boltPointCount, buildBolt, strokeBolt } from './bolt';
 import { Loop, hash01, type FxEnv, type FxRect, type LoopOpts, type ZoneHandle } from './loops';
+import { drawSunMark } from './marks';
 import { Hue } from './palette';
 import { fxSettings } from './settings';
 import type { FxTexId } from './textures';
@@ -20,6 +21,8 @@ export interface ZoneOpts {
   scale?: number;
   /** laserDot, weakenSwirl and the radius zones only: track a display object instead of a fixed point. */
   follow?: Container;
+  /** laserDot only: radius of the marked area, drawn as a flat soft disc with a dashed edge round the dot (none when omitted). */
+  radius?: number;
 }
 
 export type HazardKind = 'wet' | 'zap';
@@ -59,31 +62,43 @@ function hazardOutline(loop: Loop, rect: FxRect): Graphics {
 }
 
 /**
- * A sunbeam cell: a warm flat patch of light with two pale bands leaning across it and a small sun
- * sticker in the corner. Quiet on purpose: the cats are the loudest thing on the board.
+ * A sunbeam cell has to read at a glance on every mat, so it is the loudest tile on the board short of a hazard: a clearly
+ * lighter warm patch, a cream edge with a dashed mustard line inside it, a ring of flat paper rays that turns slowly behind
+ * the cat, and a big sun sticker on the corner. Reduced motion keeps the same picture, still and a little stronger.
  */
 export function sunbeamCell(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHandle {
-  const c = o.color ?? Hue.gold;
-  const calm = fxSettings.reducedMotion;
+  const c = o.color ?? Color.mustard;
   const loop = new Loop(env, rect.x + rect.w / 2, rect.y + rect.h / 2, { fadeIn: 0.7, fadeOut: 0.5 });
-  const patch = loop.sprite('patch', c);
-  loop.fit(patch, 'patch', rect.w - 6, rect.h - 6);
-  const long = Math.max(rect.w, rect.h) * 1.1;
-  const wide = loop.sprite('beam', Hue.sun);
-  loop.fit(wide, 'beam', rect.w * 0.22, long);
-  wide.x = -rect.w * 0.12;
-  const thin = loop.sprite('beam', Hue.sun);
-  loop.fit(thin, 'beam', rect.w * 0.09, long * 0.9);
-  thin.x = rect.w * 0.16;
-  sticker(loop, -rect.w / 2 + 22, -rect.h / 2 + 22, 30, c, 'sun');
+  const w = rect.w;
+  const h = rect.h;
+  const patch = new Graphics();
+  patch.roundRect(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, 20).fill(mixColor(c, Color.paperLight, 0.58));
+  const rays = new Graphics();
+  const n = 10;
+  const reach = Math.min(w, h) / 2 - 4;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU;
+    const half = 0.17;
+    rays.poly([0, 0, Math.cos(a - half) * reach, Math.sin(a - half) * reach, Math.cos(a + half) * reach, Math.sin(a + half) * reach]);
+  }
+  rays.fill(c);
+  const edge = new Graphics();
+  edge.roundRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, 22).stroke({ width: 5, color: Color.paperLight });
+  drawDashedRect(edge, -w / 2 + 8, -h / 2 + 8, w - 16, h - 16, { radius: 17, color: Color.mustardDark, width: 4.5, dash: 13, gap: 9 });
+  const sun = new Graphics();
+  drawSunMark(sun, 25);
+  sun.position.set(-w / 2 + 21, -h / 2 + 21);
+  loop.own(patch);
+  loop.own(rays);
+  loop.own(edge);
+  loop.own(sun);
   loop.step = (age) => {
-    const slow = calm ? 0 : age;
-    const lean = -0.5 + 0.03 * Math.sin(slow * 0.7);
-    wide.rotation = lean;
-    thin.rotation = lean;
-    patch.alpha = 0.3 + 0.04 * Math.sin(slow * 1.2);
-    wide.alpha = 0.3;
-    thin.alpha = 0.34;
+    // Read per frame: the player may switch reduced motion on while the cell is lit.
+    const calm = fxSettings.reducedMotion;
+    patch.alpha = calm ? 0.92 : 0.86 + 0.06 * Math.sin(age * 1.3);
+    rays.rotation = calm ? 0.2 : age * 0.2;
+    rays.alpha = calm ? 0.52 : 0.36 + 0.1 * Math.sin(age * 0.9);
+    sun.rotation = calm ? 0 : 0.2 * Math.sin(age * 1.1);
   };
   return loop;
 }
@@ -96,8 +111,26 @@ export function sunbeamCell(env: FxEnv, rect: FxRect, o: ZoneOpts = {}): ZoneHan
 export function laserDot(env: FxEnv, x: number, y: number, o: ZoneOpts = {}): ZoneHandle {
   const c = o.color ?? Hue.alarm;
   const s = o.scale ?? 1;
-  const calm = fxSettings.reducedMotion;
   const loop = new Loop(env, x, y, loopOpts(o, { fadeIn: 0.12, fadeOut: 0.2, halfLife: 0.045 }));
+  // The marked area: every enemy inside it takes the laser's bonus and is the cats' first choice. Flat, with a cream rim under the dashes.
+  const reach = o.radius ?? 0;
+  const area = new Graphics();
+  if (reach > 0) {
+    area.circle(0, 0, reach).fill({ color: c, alpha: 0.1 });
+    area.circle(0, 0, reach - 2).stroke({ width: 9, color: W, alpha: 0.5 });
+    const dashes = 26;
+    for (let i = 0; i < dashes; i++) {
+      const a0 = (i / dashes) * TAU;
+      const span = (0.56 / dashes) * TAU;
+      for (let k = 0; k <= 3; k++) {
+        const a = a0 + (span * k) / 3;
+        if (k === 0) area.moveTo(Math.cos(a) * (reach - 2), Math.sin(a) * (reach - 2));
+        else area.lineTo(Math.cos(a) * (reach - 2), Math.sin(a) * (reach - 2));
+      }
+    }
+    area.stroke({ width: 5, color: c, cap: 'round' });
+    loop.own(area);
+  }
   const beam = loop.sprite('beam', c);
   loop.fit(beam, 'beam', 7 * s, 220 * s);
   beam.y = 110 * s;
@@ -112,6 +145,11 @@ export function laserDot(env: FxEnv, x: number, y: number, o: ZoneOpts = {}): Zo
   loop.fit(highlight, 'dot', 5 * s, 5 * s);
   highlight.position.set(-3 * s, -3 * s);
   loop.step = (age) => {
+    const calm = fxSettings.reducedMotion;
+    if (reach > 0) {
+      area.rotation = calm ? 0 : age * 0.3;
+      area.alpha = calm ? 1 : 0.88 + 0.12 * Math.sin(age * 3);
+    }
     for (let i = 0; i < 2; i++) {
       const ring = i === 0 ? ringA : ringB;
       const p = calm ? 0.5 : (age * 1.1 + i * 0.5) % 1;

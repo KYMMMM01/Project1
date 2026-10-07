@@ -10,7 +10,7 @@ import { fmt, fmtDuration } from '@/core/format';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
-import { Ease, uiTweens } from '@/core/tween';
+import { Ease, uiTweens, type Tween } from '@/core/tween';
 import { unitDef, unitRarity, type UnitId } from '@/game';
 import { accountProgress, errorKey, profile, type RunReward } from '@/meta';
 import { ads } from '@/platform';
@@ -39,11 +39,14 @@ import {
   uiLabel,
   type IconName,
 } from '@/ui';
+import type { NextRun } from '../../context';
+import { BAR_H_NEXT, BAR_H_PLAIN, nextText, resultBar } from '../../nextOffer';
 import { Coupon } from '../Coupon';
+import { claimAtHome } from '../homeClaim';
 import type { HudEnv } from '../env';
 import { CLASS_TAPE, fitSprite, unitPhoto, unitPortrait } from '../kit';
 import { bestCat } from '../planMath';
-import { luckLine, offerRoute, rewardTiles, soCloseWaves, unspentFish, type RewardTile } from '../policy';
+import { luckLine, offerRoute, paidBy, rewardTiles, soCloseWaves, unspentFish, type Paid, type RewardTile } from '../policy';
 import { currentSettings } from '../settings';
 
 export interface ResultHandlers {
@@ -84,7 +87,9 @@ export interface ResultHandle {
 
 export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, handlers: ResultHandlers): ResultHandle {
   const stats = env.battle.getStats();
-  const scaffold = new ScreenScaffold({ title: t('hud.res.title'), scroll: true, actionBarHeight: 170 });
+  // A won run may lead on to a next run (the app flow decides, once the run is paid out): that bar has room for a wide primary button over the other two.
+  const wantsNext = victory && env.ctx.run.next !== undefined;
+  const scaffold = new ScreenScaffold({ title: t('hud.res.title'), scroll: true, actionBarHeight: wantsNext ? BAR_H_NEXT : BAR_H_PLAIN });
   game.popupLayer.addChild(scaffold);
   const bag = new TweenBag();
   const c = scaffold.content;
@@ -278,6 +283,9 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   let goldT: BitmapText | null = null;
   let xpT: BitmapText | null = null;
   let goldTile: Container | null = null;
+  // What the run paid into the purse, for the coins that fly to the home bar when the page is left.
+  const paid: Paid = { gold: 0, gems: 0, tickets: 0 };
+  let homeClaim: Tween | null = null;
   const counters = new Map<BitmapText, number>();
 
   const countTo = (label: BitmapText, to: number): void => {
@@ -337,6 +345,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
 
   const showRewards = (reward: RunReward, levelBefore: number, levelAfter: number): void => {
     spinner.destroy();
+    Object.assign(paid, paidBy(reward.gold, reward.bundle));
     let ry = 0;
     const head = new PaperLabel({ text: t('hud.res.rewards'), size: 34, paper: 'kraft', padX: 34, padY: 8, seed: seed + 3 });
     head.position.set(head.uiBox.w / 2 + 6, 26);
@@ -425,6 +434,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
             }
             coupon.setSpent(t('hud.res.doubled'));
             audio.play('reward_claim');
+            paid.gold += r.value.gold;
             if (goldT) countTo(goldT, r.value.gold * 2);
             if (xpT) countTo(xpT, r.value.xp * 2);
             if (goldTile && !motion.reduced) popIn(bag, goldTile, { from: 0.9, duration: 0.25 });
@@ -473,15 +483,62 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   };
 
   // ── buttons ──
+  // With a next run on offer the answer comes after the meta layer has paid the run out, so the bar is filled then (at once otherwise).
   const bar = scaffold.actionBar;
-  const home = new Button({ label: t('hud.res.home'), icon: 'home', style: 'neutral', width: 230, height: 108, fontSize: 36 });
-  home.position.set(-205, 0);
-  home.onTap(() => handlers.exit());
-  const retry = new Button({ label: t('hud.res.retry'), icon: 'play', style: 'primary', width: 400, height: 124, fontSize: 52, tape: 'sky' });
-  retry.position.set(115, 0);
-  retry.onTap(() => handlers.retry());
-  bar.addChild(home, retry);
-  bag.call(1.2, () => alive && retry.startPulse({ times: -1 }));
+  let barBuilt = false;
+  const buildBar = (next: NextRun | null): void => {
+    if (!alive || barBuilt) return;
+    barBuilt = true;
+    const box = resultBar(next !== null, scaffold.contentWidth);
+    const home = new Button({ label: t('hud.res.home'), icon: 'home', style: 'neutral', width: box.home.w, height: box.home.h, fontSize: next ? 34 : 36 });
+    home.position.set(box.home.x, box.home.y);
+    home.onTap(() => {
+      // A second tap while the iris is closing asks again: one flight per way home.
+      homeClaim?.kill();
+      homeClaim = claimAtHome(paid);
+      handlers.exit();
+    });
+    const retry = new Button({
+      label: t('hud.res.retry'),
+      icon: 'play',
+      style: next ? 'info' : 'primary',
+      width: box.retry.w,
+      height: box.retry.h,
+      fontSize: next ? 34 : 52,
+      ...(next ? {} : { tape: 'sky' as const }),
+    });
+    retry.position.set(box.retry.x, box.retry.y);
+    retry.onTap(() => handlers.retry());
+    bar.addChild(home, retry);
+    let main: Button = retry;
+    if (next && box.next) {
+      const text = nextText(env.ctx.run.init, next);
+      const go = new Button({
+        label: text.label,
+        ...(text.sub ? { sublabel: text.sub } : {}),
+        icon: 'play',
+        style: 'primary',
+        width: box.next.w,
+        height: box.next.h,
+        fontSize: 40,
+        tape: 'sky',
+      });
+      go.position.set(box.next.x, box.next.y);
+      go.onTap(() => next.start());
+      bar.addChild(go);
+      main = go;
+      if (!motion.reduced) {
+        // The bar was empty a moment ago: the offer is slapped on first, the two others settle in under it.
+        popIn(bag, go, { from: 0.8, duration: 0.3, overshoot: 2.5 });
+        popIn(bag, home, { from: 0.8, duration: 0.25 });
+        popIn(bag, retry, { from: 0.8, duration: 0.25 });
+      }
+    }
+    bag.call(1.2, () => alive && main.startPulse({ times: -1 }));
+  };
+  const askNext = (): NextRun | null => (victory ? (env.ctx.run.next?.() ?? null) : null);
+  if (wantsNext) bag.call(2.5, () => buildBar(null));
+  else buildBar(null);
 
   // ── victory confetti ──
   if (victory && !motion.reduced) confetti(scaffold, bag);
@@ -501,16 +558,20 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   if (!motion.reduced) popIn(bag, title, { from: 0.2, duration: 0.4, overshoot: 2.5 });
 
   // ── settle the run with the meta layer ──
-  if (!showStatsOnly) {
+  if (showStatsOnly) {
+    if (wantsNext) buildBar(askNext());
+  } else {
     const before = accountProgress(profile.data.accountXp).level;
     void profile.finishRun(stats, { abandoned }).then((r) => {
       if (!alive) return;
       if (!r.ok) {
         spinner.destroy();
         toast(t(errorKey(r.error)), 'warning');
+        buildBar(null);
         return;
       }
       showRewards(r.value, before, accountProgress(profile.data.accountXp).level);
+      buildBar(askNext());
     });
   }
 

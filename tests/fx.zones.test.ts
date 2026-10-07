@@ -184,6 +184,7 @@ describe('zone presets', () => {
   const makers: ReadonlyArray<readonly [string, (env: FxEnv) => ReturnType<typeof sunbeamCell>]> = [
     ['sunbeamCell', (e) => sunbeamCell(e, rect)],
     ['laserDot', (e) => laserDot(e, 300, 300)],
+    ['laserDot with its marked area', (e) => laserDot(e, 300, 300, { radius: 130 })],
     ['wetPuddle', (e) => wetPuddle(e, rect)],
     ['zapCell', (e) => zapCell(e, rect)],
     ['weakenSwirl', (e) => weakenSwirl(e, 300, 300)],
@@ -207,7 +208,8 @@ describe('zone presets', () => {
       for (let i = 0; i < 60; i++) (h as Loop).update(DT);
       expect(h.alive).toBe(false);
       expect(ground.children.length).toBe(0);
-      expect(pool.idle).toBeGreaterThan(0);
+      // The sunbeam is cut from paper shapes of its own (destroyed with the loop); every other preset borrows pooled sprites.
+      if (name !== 'sunbeamCell') expect(pool.idle).toBeGreaterThan(0);
       await expect(h.done).resolves.toBeUndefined();
     });
 

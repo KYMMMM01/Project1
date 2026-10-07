@@ -196,12 +196,19 @@ export class ScreenScaffold extends Container {
     this.bgG.alpha = 1;
   }
 
-  /** Screen change in: the sheet rises into place and settles (260 ms), the floor and header fade in with it. Resolves when settled. */
-  show(animate = true): Promise<void> {
+  /**
+   * Screen change in: the sheet rises into place and settles (260 ms), the floor and header fade in with it.
+   * `onLanded` runs on the frame the page has landed (at once without motion), never when `hide()` or `destroy()` cuts the slide short:
+   * start a screen's own staging there instead of after a fixed delay. The promise resolves then too, and also when the slide is cut short.
+   */
+  show(animate = true, onLanded?: () => void): Promise<void> {
     this.visible = true;
     this.syncBack();
     this.rest();
-    if (!animate || motion.reduced) return Promise.resolve();
+    if (!animate || motion.reduced) {
+      onLanded?.();
+      return Promise.resolve();
+    }
     const settle = backOut(1.5);
     return this.bag.runKeyed(this.main, {
       duration: 0.26,
@@ -215,7 +222,10 @@ export class ScreenScaffold extends Container {
         this.main.y = RISE * (1 - e);
         this.titleLayer.y = -DROP * (1 - e);
       },
-      onComplete: () => this.rest(),
+      onComplete: () => {
+        this.rest();
+        onLanded?.();
+      },
     }).finished;
   }
 

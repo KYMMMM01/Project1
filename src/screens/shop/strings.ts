@@ -24,6 +24,7 @@ addStrings('ko', {
   'shop.free.gems': '바로 열기',
   'shop.chest.open': '열기',
   'shop.chest.openN': '열기 ({n})',
+  'shop.chest.openAll': '한번에 열기 ({n})',
   'shop.chest.buy': '사서 열기',
   'shop.chest.cards': '카드 {n}장',
   'shop.chest.odds': '확률',
@@ -95,6 +96,7 @@ addStrings('ko', {
   'reveal.wild': '만능',
   'reveal.bonus': '보너스',
   'reveal.total': '카드 {n}장',
+  'reveal.chests': '상자 {n}개를 열었어요',
   'reveal.wildTotal': '그중 만능 카드 {n}장',
   'reveal.overflow': '더 못 쓰는 카드는 골드 {n}(으)로 바꿨어요.',
 
@@ -133,6 +135,7 @@ addStrings('en', {
   'shop.free.gems': 'Open now',
   'shop.chest.open': 'Open',
   'shop.chest.openN': 'Open ({n})',
+  'shop.chest.openAll': 'Open all ({n})',
   'shop.chest.buy': 'Buy and open',
   'shop.chest.cards': '{n} cards',
   'shop.chest.odds': 'Odds',
@@ -206,6 +209,7 @@ addStrings('en', {
   'reveal.wild': 'Wild',
   'reveal.bonus': 'Bonus',
   'reveal.total': '{n} cards',
+  'reveal.chests': '{n} chests opened',
   'reveal.wildTotal': '{n} of them wild',
   'reveal.overflow': 'Cards you can no longer use became {n} gold.',
 

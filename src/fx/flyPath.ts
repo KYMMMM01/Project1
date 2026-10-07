@@ -23,6 +23,22 @@ export interface FlightState {
   scale: number;
 }
 
+/** The rectangle an icon's resting spot and curve have to stay inside (the screen, less half an icon). */
+export interface FlyBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** Folds `v` back into [lo, hi]: a point that would land outside bounces off the edge instead of piling up on it. */
+export function foldInto(v: number, lo: number, hi: number): number {
+  if (hi <= lo) return (lo + hi) / 2;
+  const r = v < lo ? 2 * lo - v : v > hi ? 2 * hi - v : v;
+  // A distance of more than one span would need a second fold; one fold plus a clamp is enough for a burst.
+  return r < lo ? lo : r > hi ? hi : r;
+}
+
 export function flightTotal(p: FlightPlan): number {
   return p.burst + p.hang + p.flight;
 }
@@ -33,7 +49,11 @@ export function makeFlightPlan(): FlightPlan {
 
 const ctl: Vec2 = { x: 0, y: 0 };
 
-/** Fills `plan` in place (icons are planned in a loop; no per-icon allocation). */
+/**
+ * Fills `plan` in place (icons are planned in a loop; no per-icon allocation). With `bounds` the resting spot
+ * is folded back into the rectangle and so is the curve's control point, so the whole flight stays inside it:
+ * a quadratic curve never leaves the triangle of its three points, and the target is inside by definition.
+ */
 export function planFlight(
   plan: FlightPlan,
   sx: number,
@@ -46,6 +66,7 @@ export function planFlight(
   burst: number,
   hang: number,
   flight: number,
+  bounds?: FlyBounds,
 ): FlightPlan {
   plan.sx = sx;
   plan.sy = sy;
@@ -53,9 +74,13 @@ export function planFlight(
   plan.by = sy + Math.sin(burstAngle) * burstDist;
   plan.tx = tx;
   plan.ty = ty;
+  if (bounds) {
+    plan.bx = foldInto(plan.bx, bounds.minX, bounds.maxX);
+    plan.by = foldInto(plan.by, bounds.minY, bounds.maxY);
+  }
   bezierControl(ctl, plan.bx, plan.by, tx, ty, bulge);
-  plan.cx = ctl.x;
-  plan.cy = ctl.y;
+  plan.cx = bounds ? foldInto(ctl.x, bounds.minX, bounds.maxX) : ctl.x;
+  plan.cy = bounds ? foldInto(ctl.y, bounds.minY, bounds.maxY) : ctl.y;
   plan.burst = burst;
   plan.hang = hang;
   plan.flight = flight;

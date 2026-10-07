@@ -2,13 +2,15 @@ import type { Container } from 'pixi.js';
 import { audio } from '@/audio';
 import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
-import { Color } from '@/ui';
+import { Color, motion } from '@/ui';
 import { hitFlash, shakeObject, squash } from '@/fx';
-import type { BattleEvents, UnitState } from '@/game/api';
+import type { BattleEvents, SummonSource, UnitState } from '@/game/api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
-import { unitRarityIndex } from '@/game';
+import { unitRarity, unitRarityIndex } from '@/game';
 import type { FieldEnv } from './env';
-import { MERGE_SECONDS, QUICK_REVEAL_WINDOW, REVEAL_DELAY, REVEAL_MS, REVEAL_OVERSHOOT, SLIDE_SECONDS } from '@/view/timing';
+import { Arrivals } from './arrivals';
+import { NEW_TAG_SECONDS, tossFor } from '../toss';
+import { MERGE_SECONDS, MOLT_SECONDS, QUICK_REVEAL_WINDOW, REVEAL_DELAY, REVEAL_MS, REVEAL_OVERSHOOT, SLIDE_SECONDS } from '@/view/timing';
 import { hopArc } from './motion';
 import { liftsAboveHud } from './policy';
 import { UnitView, type ExitMode } from './unitView';
@@ -37,6 +39,9 @@ export class UnitViews {
   private frame = 0;
   /** When the last legendary-or-better cat appeared: a second one soon after gets the short reveal, like its effect. */
   private lastBig = -99;
+  /** Summons whose cat has no view yet: where the sticker is tossed from (scene space) and why the cat came. */
+  private readonly arriving = new Map<number, { source: SummonSource; x: number; y: number }>();
+  private readonly arrivals: Arrivals;
 
   constructor(
     private readonly env: FieldEnv,
@@ -45,8 +50,10 @@ export class UnitViews {
   ) {
     this.layer.sortableChildren = true;
     this.pool = new Pool<UnitView>(() => new UnitView(env.art));
+    this.arrivals = new Arrivals(env, env.ctx.layers.overlay, env.ctx.layers.fxFront);
     const ev = env.battle.events;
     this.offs.push(
+      ev.on('summon', (e) => this.onSummon(e)),
       ev.on('attack', (e) => this.onAttack(e)),
       ev.on('move', (e) => this.onMove(e)),
       ev.on('swap', (e) => this.onSwap(e)),
@@ -120,10 +127,33 @@ export class UnitViews {
       const quick = tier >= 3 && this.env.time - this.lastBig < QUICK_REVEAL_WINDOW;
       if (tier >= 3) this.lastBig = this.env.time;
       const delay = quick ? (REVEAL_DELAY[2] ?? 0) : (REVEAL_DELAY[tier] ?? 0);
-      v.appear(this.env.ctx.ui, REVEAL_OVERSHOOT[tier] ?? 1.7, REVEAL_MS[tier] ?? 260, delay);
-    }
-    else v.root.visible = false;
+      const arrival = this.arriving.get(u.uid);
+      if (arrival) this.arrive(v, u, arrival.source, arrival.x, arrival.y, delay);
+      v.appear(this.env.ctx.ui, REVEAL_OVERSHOOT[tier] ?? 1.7, REVEAL_MS[tier] ?? 260, (arrival ? tossFor(arrival.source, motion.reduced) : 0) + delay);
+    } else v.root.visible = false;
+    this.arriving.delete(u.uid);
     return v;
+  }
+
+  /** A summon happened: remember where its sticker is tossed from, for the frame the view is made. */
+  private onSummon(e: BattleEvents['summon']): void {
+    const { ctx } = this.env;
+    // A pick of three lands from where the sheet was; every other toss leaves the summon button.
+    const from = e.source === 'choice' ? { x: ctx.layout.w / 2, y: ctx.layout.h * 0.46 } : ctx.anchor('summon');
+    this.arriving.set(e.unit.uid, { source: e.source, x: from.x, y: from.y });
+  }
+
+  /**
+   * The cat that has just been summoned gets found in three ways: a sticker flies in and lands on its cell, the cell flashes a
+   * dashed ring on the landing frame, and a "NEW" tag stays on the cat for a couple of seconds. The cat's own pop waits for the landing.
+   */
+  private arrive(v: UnitView, u: UnitState, source: SummonSource, x: number, y: number, delay: number): void {
+    const lead = tossFor(source, motion.reduced);
+    const rarity = unitRarity(u.id);
+    if (lead > 0) this.arrivals.toss(x, y, u.cell, rarity, () => this.arrivals.ring(u.cell, rarity));
+    else this.arrivals.ring(u.cell, rarity);
+    const from = this.env.time + lead + delay;
+    v.markNew(from, from + NEW_TAG_SECONDS);
   }
 
   private syncSwirl(v: UnitView, u: UnitState): void {
@@ -252,8 +282,8 @@ export class UnitViews {
     const old = this.byUid.get(e.from.uid);
     const result = this.create(e.result, 'hidden');
     const token = result.token;
-    if (old) this.startExit(old, 'spin', 0.24);
-    this.env.ctx.ui.call(0.22, () => {
+    if (old) this.startExit(old, 'spin', MOLT_SECONDS);
+    this.env.ctx.ui.call(MOLT_SECONDS, () => {
       if (result.token === token) this.reveal(result, 2.0, 300, false);
     });
   }
@@ -321,6 +351,8 @@ export class UnitViews {
   destroy(): void {
     for (const off of this.offs) off();
     this.offs.length = 0;
+    this.arriving.clear();
+    this.arrivals.destroy();
     for (const v of this.live) {
       v.swirl?.stop();
       v.root.destroy({ children: true });

@@ -1,14 +1,15 @@
 import { Container, NineSliceSprite, Sprite, type Texture } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { clamp, clamp01, damp, mixColor } from '@/core/math';
-import type { Tweener } from '@/core/tween';
-import { Color, TapeColors, paintTexture } from '@/ui';
-import { popIn } from '@/fx';
+import { Ease, type Tweener } from '@/core/tween';
+import { Color, TapeColors, motion, paintTexture } from '@/ui';
+import { popIn, squash } from '@/fx';
 import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
 import { FIELD_W } from '@/game/geometry';
 import type { FieldArt, StatusSticker } from './art';
 import { barSegments, type BarSegments } from './policy';
+import { BOSS_DROP } from '@/view/timing';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
 
 /** Longest side of the sprite is the radius times this: a cucumber (18) reads about 56 px, a boss (38) about 115. */
@@ -68,6 +69,9 @@ export class EnemyView {
   private readonly bar = new Container();
   private readonly badge: Sprite;
   private readonly sticker: Sprite;
+  /** The coral crosshair sticker over an enemy the laser has marked, and how far it has popped in (0..1). */
+  private readonly targetMark: Sprite;
+  private markK = 0;
   private readonly seg: BarSegments = { hp: 0, shield: 0 };
   private sickness: StatusSticker | null = null;
   private size = 56;
@@ -107,11 +111,13 @@ export class EnemyView {
     this.badge.visible = false;
     this.sticker = this.makeSprite(art.status.slow);
     this.sticker.visible = false;
+    this.targetMark = this.makeSprite(art.targetMark);
+    this.targetMark.visible = false;
     this.bar.addChild(this.barBack, this.barHp, this.barShield);
     this.bar.visible = false;
     this.body.addChild(this.sprite);
     this.lean.addChild(this.body);
-    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker);
+    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker, this.targetMark);
     this.root.eventMode = 'none';
   }
 
@@ -165,6 +171,9 @@ export class EnemyView {
     this.bar.position.set(0, -this.size * 0.56 - 10);
     this.sticker.position.set(this.barW / 2 + 8, -this.size * 0.56 - 12);
     this.sticker.visible = false;
+    this.targetMark.position.set(0, -this.size * 0.56 - 46);
+    this.targetMark.visible = false;
+    this.markK = 0;
     this.sickness = null;
     this.bar.visible = false;
     this.barShown = false;
@@ -194,8 +203,25 @@ export class EnemyView {
     return clamp(this.x, half, FIELD_W - half);
   }
 
-  appear(tweens: Tweener): void {
-    popIn(tweens, this.body, { ms: 230, overshoot: 1.6 });
+  /** Bodies pop in on the battle clock; a boss drops onto the lane on the real-time one, like the landing effect that meets it. */
+  appear(tweens: Tweener, ui: Tweener): void {
+    if (!this.isBoss || motion.reduced) {
+      popIn(tweens, this.body, { ms: 230, overshoot: 1.6 });
+      return;
+    }
+    const lift = this.size * 0.9;
+    this.body.y = -lift;
+    ui.run({
+      duration: BOSS_DROP,
+      ease: Ease.cubicIn,
+      onUpdate: (k) => {
+        this.body.y = -lift * (1 - k);
+      },
+      onComplete: () => {
+        this.body.y = 0;
+        squash(ui, this.body, 1.2, 0.84, 320);
+      },
+    });
   }
 
   /** Per-frame upkeep. `enemy` is null for a dead view that is still playing out. */
@@ -269,6 +295,14 @@ export class EnemyView {
       this.ring.alpha = 0.8 + 0.2 * Math.sin(time * 9);
       this.ring.rotation = time * 1.5;
     }
+    // The sticker pops on when the dot reaches the enemy and goes when it leaves; it breathes a little while it is there.
+    this.markK = damp(this.markK, e.focused ? 1 : 0, 0.045, dt);
+    this.targetMark.visible = this.markK > 0.02;
+    if (this.targetMark.visible) {
+      const k = Math.min(1.15, this.markK * (1 + 0.3 * (1 - this.markK)));
+      this.targetMark.scale.set(k * (1 + (motion.reduced ? 0 : 0.07 * Math.sin(time * 6))));
+      this.targetMark.rotation = motion.reduced ? 0 : time * 1.2;
+    }
     this.stun.visible = e.stunned;
     if (e.stunned) {
       this.stun.rotation = time * 5;
@@ -299,6 +333,8 @@ export class EnemyView {
     this.ring.visible = false;
     this.stun.visible = false;
     this.sticker.visible = false;
+    this.targetMark.visible = false;
+    this.markK = 0;
     this.sickness = null;
   }
 

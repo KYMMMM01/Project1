@@ -3,7 +3,7 @@ import '@/view/hud/strings';
 import { hasString } from '@/core/i18n';
 import {
   ALL_FAILS, HOLD_EVERY, HOLD_FIRST, HoldRepeater, failKeys, gaugeLevel, luckLine, nextSpeed, offerRoute, overflowLeft,
-  pityVisible, recommendPick, revealFlags, rewardTiles, soCloseWaves, speedSteps, summonView, traitOrder,
+  paidBy, pityVisible, recommendPick, revealFlags, rewardTiles, soCloseWaves, speedSteps, summonView, traitOrder,
 } from '@/view/hud/policy';
 
 describe('staged reveal', () => {
@@ -142,6 +142,11 @@ describe('result screen', () => {
       'gold:gold:120', 'xp:xp:40', 'gems:gems:12', 'chest:wooden:1', 'card:w_paw:2', 'wild:rare:1', 'cosmetic:rug_x:1',
     ]);
     expect(rewardTiles(0, 0, {})).toEqual([]);
+  });
+
+  it('counts what a run paid into the purse: its gold plus the bundle gold, gems and tickets', () => {
+    expect(paidBy(120, { gold: 30, gems: 12, tickets: 2, chests: { wooden: 1 } })).toEqual({ gold: 150, gems: 12, tickets: 2 });
+    expect(paidBy(0, {})).toEqual({ gold: 0, gems: 0, tickets: 0 });
   });
 });
 

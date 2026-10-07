@@ -19,6 +19,8 @@ export interface SettingsData {
   flashes: boolean;
   haptics: boolean;
   numbers: NumbersMode;
+  /** Off by default and never taken from the OS flag (see `motion` in the UI kit). */
+  reduceMotion: boolean;
   /** '' = follow the device language. */
   lang: Lang | '';
 }
@@ -29,10 +31,11 @@ const store = new SaveStore<SettingsData>({
   defaults: () => ({
     sfx: 0.8,
     music: 0.5,
-    shake: motion.reduced ? 'reduced' : 'full',
+    shake: 'full',
     flashes: true,
     haptics: true,
     numbers: 'full',
+    reduceMotion: false,
     lang: '',
   }),
 });
@@ -48,6 +51,10 @@ function apply(s: Partial<SettingsData>): void {
   }
   if (s.flashes !== undefined) setFxSettings({ flashes: s.flashes });
   if (s.numbers !== undefined) setFxSettings({ numbers: s.numbers });
+  if (s.reduceMotion !== undefined) {
+    motion.reduced = s.reduceMotion;
+    setFxSettings({ reducedMotion: s.reduceMotion });
+  }
   if (s.haptics !== undefined) setHapticsEnabled(s.haptics);
   if (s.lang) setLang(s.lang);
 }

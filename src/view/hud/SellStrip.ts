@@ -120,10 +120,15 @@ export class SellStrip {
     this.bag.runKeyed(this.root, {
       duration: 0.12,
       ease: Ease.cubicIn,
-      onUpdate: (k) => (this.root.alpha = 1 - k),
+      onUpdate: (k) => {
+        // The way it came in, reversed: lifted off the page.
+        this.root.alpha = 1 - k;
+        this.root.y = this.rect.y - 24 * k;
+      },
       onComplete: () => {
         this.root.visible = this.shown;
         this.root.alpha = 1;
+        this.root.y = this.rect.y;
       },
     });
   }

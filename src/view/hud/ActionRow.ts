@@ -2,14 +2,20 @@
  * The action row: summon-grade upgrade, the big SUMMON button, the round laser button, and above them
  * the six-step tracker toward the next pick-of-three and the "call next wave" button.
  */
-import { Container, type Text } from 'pixi.js';
+import { Container, Graphics, Rectangle, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { Button, Color, CooldownRing, drawIcon, IconButton, motion, popIn, punch, tooltip, TweenBag, uiLabel } from '@/ui';
+import { unitRarityIndex } from '@/game';
+import { Button, Color, CooldownRing, drawIcon, drawPaper, IconButton, motion, paperSeed, popIn, punch, tooltip, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
+import { startAim, stopAim } from '../aim';
+import { LaserCard } from './popups/LaserCard';
 import { SummonButton } from './SummonButton';
+import { SummonChips } from './SummonChip';
+import { REVEAL_DELAY } from '../timing';
+import { tossFor } from '../toss';
 
 const GRADE_X = 121;
 const LASER_X = 615;
@@ -21,6 +27,15 @@ const CALL_W = 236;
 const CALL_H = 84;
 /** The laser sits a little lower than the summon button's centre, so the call button above it clears its ring. */
 const LASER_DY = -4;
+/** The info mark sits off the button's lower right corner; its hit slot is a full 88 px square that overlaps the button as little as the screen's edge allows. */
+const INFO_DX = 74;
+const INFO_DY = 50;
+/** Seconds the lane stays lit after a press of the button (until the dot is down). */
+const AIM_FOR = 6;
+/** The result chips rest this far above the summon button's centre: just over its top edge, clear of the pills above. */
+const CHIP_LIFT = 112;
+/** The grade button's arrow sits here and hops from it when the grade goes up. */
+const ARROW_Y = -42;
 
 type LaserState = 'ready' | 'active' | 'cool' | '';
 
@@ -32,10 +47,17 @@ export class ActionRow {
   readonly summon: SummonButton;
   readonly laser = new Container();
   readonly callBtn: Button;
+  /** The round "i" next to the laser button: opens the explanation whenever the player wants it. */
+  readonly info = new Container();
+  /** Told when the player has been explained the laser (the card closed, however it closed) or has pressed the button to aim: the guided first use goes on from there. */
+  onExplained: (() => void) | null = null;
   /** Tracker and call-wave button: they share the row the selection sheet covers. */
   readonly util = new Container();
+  /** The result chip of each summon, above the button. */
+  private readonly chips = new SummonChips();
   private readonly bag = new TweenBag();
   readonly grade: Button;
+  private readonly gradeArrow: Container;
   private readonly laserBtn: IconButton;
   private readonly coolRing: CooldownRing;
   private readonly aimRing: CooldownRing;
@@ -54,6 +76,8 @@ export class ActionRow {
   private laserP = -1;
   private laserSeconds = '';
   private gradeReady: boolean | null = null;
+  private cardOpen = false;
+  private dead = false;
 
   constructor(private readonly env: HudEnv) {
     const b = env.battle;
@@ -63,8 +87,9 @@ export class ActionRow {
     this.grade = new Button({ label: '', style: 'kraft', width: 150, height: 120, fontSize: 38, fireOnDown: true, haptic: 'light', disabledMark: 'none' });
     // A small up arrow on the corner says "upgrade" without taking room from the level text.
     const up = drawIcon('arrow_up', 40);
-    up.position.set(-50, -42);
+    up.position.set(-50, ARROW_Y);
     this.grade.addChild(up);
+    this.gradeArrow = up;
     this.grade.onTap(() => {
       env.ctx.command('upgradeSummon', () => b.upgradeSummon());
     });
@@ -76,14 +101,13 @@ export class ActionRow {
     this.coolRing.visible = false;
     this.aimRing.visible = false;
     this.laserBtn = new IconButton({ icon: 'target', style: 'info', size: LASER_SIZE, fireOnDown: true, sfx: 'ui_click', haptic: false });
-    this.laserBtn.onTap(() => {
-      env.hints.used('laser');
-      tooltip.show(this.laser, { text: t(b.laser.active ? 'hud.laser.active' : b.laser.cooldown > 0 ? 'hud.laser.cool' : 'hud.laser.hint') }, 3);
-    });
+    this.laserBtn.onTap(() => this.pressLaser());
+    this.buildInfo();
     this.laserText = uiLabel('', { size: 26 });
     this.laserText.position.set(0, LASER_SIZE / 2 + 24);
     this.laser.addChild(this.coolRing, this.aimRing, this.laserBtn, this.laserText);
     this.laser.visible = r.laser;
+    this.info.visible = r.laser;
 
     for (let i = 0; i < PAWS; i++) {
       // The glyph's own colour is baked in, so a lit and a dim copy are swapped instead of tinted.
@@ -112,20 +136,102 @@ export class ActionRow {
     this.callBtn.visible = false;
 
     this.util.addChild(this.tracker, this.callBtn);
-    this.root.addChild(this.summon, this.grade, this.laser, this.util);
+    this.root.addChild(this.summon, this.grade, this.laser, this.info, this.util, this.chips.root);
 
     for (const type of ['summon', 'summonOffer'] as const) env.on(b.events, type, () => (this.trackerDirty = true));
     for (const type of ['fish', 'upgrade'] as const) env.on(b.events, type, () => (this.gradeDirty = true));
+    env.on(b.events, 'upgrade', ({ kind }) => {
+      if (kind === 'summon') this.hopArrow();
+    });
     env.on(b.events, 'summon', () => {
       if (++this.summonCount >= 2) env.hints.request('tracker', this.tracker);
+    });
+    // The chip names the cat on the frame its sticker pops on the board (after the toss and the rarity's own charge-up).
+    env.on(b.events, 'summon', ({ unit, source }) => {
+      const wait = tossFor(source, motion.reduced) + (REVEAL_DELAY[unitRarityIndex(unit.id)] ?? 0);
+      if (wait > 0) this.bag.call(wait, () => this.chips.show(unit.id));
+      else this.chips.show(unit.id);
     });
     env.on(b.events, 'waveStart', ({ wave }) => {
       if (wave >= 2) env.hints.request('laser', this.laser);
     });
     env.on(b.events, 'laser', () => {
+      stopAim();
       this.pop();
       // The dot is down: the "tap the path" tip has done its job.
       if (tooltip.target === this.laser) tooltip.hide();
+    });
+  }
+
+  /** The "i": a small cream sticker with a full-size touch slot. */
+  private buildInfo(): void {
+    const plate = new Graphics();
+    drawPaper(plate, -22, -22, { w: 44, h: 44, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, edgeWidth: 3, edgeAlpha: 1, seed: paperSeed(), shadow: 3, grain: false });
+    const mark = drawIcon('info', 28, Color.tealDark);
+    const slot = new Graphics();
+    slot.rect(-44, -44, 88, 88).fill({ color: Color.paper, alpha: 0.001 });
+    this.info.addChild(slot, plate, mark);
+    this.info.hitArea = new Rectangle(-44, -44, 88, 88);
+    this.info.eventMode = 'static';
+    this.info.cursor = 'pointer';
+    this.info.on('pointertap', () => void this.openCard(false));
+  }
+
+  /** The laser button: the first presses explain what the laser does; after that it lights the lane for the dot (the lane itself is the other way to place it). */
+  private pressLaser(): void {
+    const { env } = this;
+    const L = env.battle.laser;
+    env.hints.used('laser');
+    if (env.teach.cardDue) {
+      void this.openCard(true);
+    } else if (L.active) {
+      tooltip.show(this.laser, { text: t('hud.laser.active') }, 3);
+    } else if (L.cooldown > 0) {
+      tooltip.show(this.laser, { text: t('hud.laser.coolLeft', { s: String(Math.ceil(L.cooldown)) }) }, 3);
+    } else {
+      this.aim();
+    }
+  }
+
+  private aim(): void {
+    this.onExplained?.();
+    startAim(AIM_FOR);
+    tooltip.show(this.laser, { text: t('hud.laser.hint') }, AIM_FOR);
+  }
+
+  /** Open the explanation. `counted`: it came from a press of the button (the first ones always do), not from the info mark. */
+  private async openCard(counted: boolean): Promise<void> {
+    if (this.cardOpen || this.dead) return;
+    this.cardOpen = true;
+    const { env } = this;
+    tooltip.hide();
+    const L = env.battle.laser;
+    const ready = !L.active && L.cooldown <= 0;
+    if (counted) env.teach.noteOpened();
+    const result = await env.modal(new LaserCard(env, ready));
+    this.cardOpen = false;
+    if (this.dead) return;
+    this.onExplained?.();
+    if (result === 'use' && !L.active && L.cooldown <= 0) this.aim();
+  }
+
+  /** The grade went up: the arrow hops off the button and lands again with a small squash (the number itself just changes). */
+  private hopArrow(): void {
+    if (motion.reduced) return;
+    const up = this.gradeArrow;
+    this.bag.runKeyed(up, {
+      duration: 0.34,
+      ease: Ease.linear,
+      onUpdate: (k) => {
+        const air = Math.sin(Math.PI * Math.min(1, k / 0.8));
+        up.y = ARROW_Y - 16 * Math.max(0, air);
+        const land = k > 0.8 ? Math.sin(Math.PI * ((k - 0.8) / 0.2)) : 0;
+        up.scale.set(1 + 0.12 * air * 0.5 + 0.1 * land, 1 + 0.12 * air * 0.5 - 0.14 * land);
+      },
+      onComplete: () => {
+        up.y = ARROW_Y;
+        up.scale.set(1);
+      },
     });
   }
 
@@ -143,6 +249,8 @@ export class ActionRow {
     this.summon.position.set(360, summonY);
     this.grade.position.set(GRADE_X, summonY + 4);
     this.laser.position.set(LASER_X, summonY + LASER_DY);
+    this.info.position.set(LASER_X + INFO_DX, summonY + LASER_DY + INFO_DY);
+    this.chips.root.position.set(360, summonY - CHIP_LIFT);
     this.util.position.set(0, utilY);
     this.tracker.position.set(24, 0);
     this.callBtn.position.set(CALL_X, 6);
@@ -264,6 +372,7 @@ export class ActionRow {
 
   update(dt: number): void {
     this.summon.update(dt);
+    this.chips.update(dt);
     if (this.gradeDirty && this.env.reveal.gradeUpgrade) {
       this.gradeDirty = false;
       this.refreshGrade();
@@ -277,7 +386,10 @@ export class ActionRow {
   }
 
   destroy(): void {
+    this.dead = true;
+    stopAim();
     this.bag.killAll();
+    this.chips.destroy();
     this.root.destroy({ children: true });
   }
 }

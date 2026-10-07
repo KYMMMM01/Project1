@@ -3,6 +3,7 @@
  * source, projectile impacts and zone sounds. Everything here fires many times a second, so it only
  * reads pooled fx, preallocated colour tables and the rate gates.
  */
+import { attackSfx, critSfx, foeHitSfx, impactSfx } from '@/audio';
 import { lighten } from '@/core/math';
 import type { BattleEvents, EnemyState, StatusKind, UnitId, UnitState } from '@/game';
 import { UNIT_IDS, unitSpec } from '@/game';
@@ -109,7 +110,8 @@ export function mountCombat(stage: Stage, on: Bus): void {
     const u = e.unit;
     lastAttacker = u;
     const cue = SHOOT_CUE[u.id];
-    if (shootByUnit.ready(UNIT_INDEX[u.id], stage.now, 0.06)) stage.play(stage.rules.shoot, cue.sfx, cue.volume, cue.pitch, 0.05);
+    const release = attackSfx(u.id);
+    if (shootByUnit.ready(UNIT_INDEX[u.id], stage.now, 0.06)) stage.play(stage.rules.shoot, release.id, release.volume, release.pitch, 0.03);
     if (!sparks.take()) return;
     const cx = cellCenterX(u.cell);
     const cy = cellCenterY(u.cell);
@@ -154,8 +156,11 @@ export function mountCombat(stage: Stage, on: Bus): void {
       const strong = info.big && stage.gates.ready(Gate.critShake, stage.now, 0.4);
       fx.critBurst(x, y, { strong, scale: info.big ? 1.2 : 1 });
       fx.number(x, y - info.radius - 8 - lift, dealt, 'crit');
-      stage.play(stage.rules.hit, 'hit_light', 0.6, 1.1, 0.04);
-      stage.play(stage.rules.crit, 'crit', 0.55, 1, 0.03);
+      // A crit is the weapon's own impact with a bright crack on top (never a different weapon), and the enemy answers as usual.
+      const hitCue = impactSfx(e.unitId);
+      if (stage.play(stage.rules.hit, hitCue.id, hitCue.volume, hitCue.pitch, 0.03)) answerHit(en, e.killed);
+      const critCue = critSfx(e.unitId);
+      stage.play(stage.rules.crit, critCue.id, critCue.volume, critCue.pitch, 0.03);
       stage.buzz('tap', Gate.critBuzz, 0.2);
       if (info.big) stage.stop(33);
     } else {
@@ -173,9 +178,15 @@ export function mountCombat(stage: Stage, on: Bus): void {
         fx.number(x, y - info.radius - 6 - lift, value, big ? 'big' : 'damage', { key: en.uid });
       } else if (!merged) agg.suppress();
 
+      // The weapon's impact is always the base. A heavy blow, a hit on a boss or a killing blow lands one step harder and gets
+      // weight under it; the enemy answers in the voice of what it is made of (a killing blow is answered by its death instead).
       const heavy = info.big || dealt >= en.maxHp * 0.08;
-      if (heavy) stage.play(stage.rules.heavyHit, 'hit_heavy', 0.5, 1, 0.05);
-      else stage.play(stage.rules.hit, e.type === 'magic' ? 'zap' : 'hit_light', 0.5, 1, 0.06);
+      const hitCue = impactSfx(e.unitId);
+      const step = e.killed ? 1.25 : 1;
+      if (stage.play(heavy || e.killed ? stage.rules.heavyHit : stage.rules.hit, hitCue.id, hitCue.volume * step, hitCue.pitch, 0.03)) {
+        answerHit(en, e.killed);
+        if (heavy || e.killed) stage.direct('hit_heavy', e.killed ? 0.6 : 0.5, e.killed ? 1.15 : info.boss ? 0.8 : 1);
+      }
     }
 
     if (e.absorbed > 0 && perEnemy.ready(en.uid, SUB_SHIELD, stage.now, 0.1)) {
@@ -184,6 +195,19 @@ export function mountCombat(stage: Stage, on: Bus): void {
       if (density === 0) fx.number(x + 22, y - info.radius - 18, e.absorbed, 'damage', { color: SHIELD_COLOR, scale: 0.7 });
     }
   });
+
+  /** How an enemy answers a blow, by what it is made of; a killing blow gets none because its death follows. */
+  function answerHit(en: EnemyState, killed: boolean): void {
+    if (killed) return;
+    const cue = foeHitSfx(en.id);
+    stage.direct(cue.id, cue.volume, cue.pitch);
+  }
+
+  /** The weapon of a cat landing as an area strike: its own impact, a step louder than a single hit. */
+  function strikeSound(id: UnitId, pitch = 1): void {
+    const cue = impactSfx(id);
+    stage.direct(cue.id, cue.volume * 1.2, cue.pitch * pitch);
+  }
 
   /** A small spark per ordinary hit, rationed per frame and per second. */
   function lightSpark(x: number, y: number, ramp: readonly number[], scale: number): void {
@@ -289,7 +313,7 @@ export function mountCombat(stage: Stage, on: Bus): void {
     switch (id) {
       case 'w_sword':
         fx.slashArc(e.x, e.y, { angle: Math.atan2(e.y - cy, e.x - cx), scale: Math.max(0.85, e.radius / 70), color });
-        stage.direct('hit_heavy', 0.5, 1.1);
+        strikeSound('w_sword');
         break;
       case 'w_samurai': {
         const first = e.points[0];
@@ -297,7 +321,7 @@ export function mountCombat(stage: Stage, on: Bus): void {
         const a = en ? en.angle : 0;
         const r = e.radius;
         fx.slashLine(e.x - Math.cos(a) * r, e.y - Math.sin(a) * r, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, { color });
-        stage.direct('hit_heavy', 0.55, 1.4);
+        strikeSound('w_samurai');
         break;
       }
       case 'w_tiger':
@@ -306,19 +330,19 @@ export function mountCombat(stage: Stage, on: Bus): void {
           fx.shockwave(e.x, e.y, { color, radius: e.radius });
           fx.dustPuff(e.x, e.y, { scale: 1.4 });
           stage.shake(Trauma.t2, Gate.strikeShake, 0.4);
-          stage.play(stage.rules.big, 'boss_roar', 0.55, 1.5, 0.03);
+          strikeSound('w_tiger', 0.9);
           stage.buzz('medium');
         } else {
           fx.shockwave(e.x, e.y, { color, radius: e.radius * 0.9 });
           fx.dustPuff(e.x, e.y, { scale: 0.8 });
-          stage.direct('hit_heavy', 0.6, 0.8);
+          strikeSound('w_tiger');
         }
         break;
       case 'r_star': {
         const last = e.points[e.points.length - 1];
         if (last) fx.slashLine(cx, cy, last.x, last.y, { color, thickness: 0.7 });
         for (const p of e.points) ps.burst(STAR_POP, p.x, p.y, { colors: RAMP.r_star });
-        stage.direct('shoot_magic', 0.5, 1.5);
+        strikeSound('r_star');
         break;
       }
       case 'm_storm': {
@@ -336,7 +360,7 @@ export function mountCombat(stage: Stage, on: Bus): void {
           ax = p.x;
           ay = p.y;
         }
-        stage.direct('zap', 0.45, 1.1);
+        strikeSound('m_storm');
         break;
       }
       case 't_lucky':
@@ -363,7 +387,8 @@ export function mountCombat(stage: Stage, on: Bus): void {
       fx.shockwave(e.x, e.y, { color: UNIT_COLOR[p.unitId], radius: spec.radius * 0.9 });
       ps.burst(IMPACT_PUFF, e.x, e.y, { colors: ramp, scale: 1.6 });
       if (p.unitId === 'm_fire' && stage.gates.ready(Gate.strikeFx, stage.now, 0.25)) fx.explosion(e.x, e.y, { scale: 0.45, color: UNIT_COLOR.m_fire });
-      stage.play(stage.rules.heavyHit, 'explosion', 0.35, p.unitId === 'm_snow' ? 1.4 : 1, 0.06);
+      const landing = impactSfx(p.unitId);
+      stage.play(stage.rules.heavyHit, landing.id, landing.volume, landing.pitch, 0.06);
       return;
     }
     ps.burst(IMPACT_PUFF, e.x, e.y, { colors: ramp });

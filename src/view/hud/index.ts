@@ -16,8 +16,11 @@ import type { Weighted } from './bubbleMath';
 import { EnvImpl } from './env';
 import { HintBubble } from './HintBubble';
 import { Hints, onScreen } from './hints';
+import { LaserGuide } from './LaserGuide';
+import { LaserTeach } from './laserTeach';
 import { PauseMenu, type PauseAction } from './popups/PauseMenu';
 import { SummonPickPopup } from './popups/SummonPickPopup';
+import { stageHeldFor } from '@/view/staging';
 import { findTwins } from './planMath';
 import { canOpenPause, REVIVE_MIN_WAVES, revealFlags } from './policy';
 import { canOfferContinue, openContinue, type DefeatReason } from './screens/ContinueScreen';
@@ -53,6 +56,8 @@ class Hud implements HudPart {
   private boss!: BossBar;
   private bottom!: BottomPanel;
   private tutorial: Tutorial | null = null;
+  private guide: LaserGuide | null = null;
+  private readonly teach: LaserTeach;
   private relic: RelicScreen | null = null;
   private pick: SummonPickPopup | null = null;
   private result: ResultHandle | null = null;
@@ -74,6 +79,8 @@ class Hud implements HudPart {
   constructor(private readonly ctx: BattleContext) {
     void ensureSettings();
     this.hints = new Hints(!ctx.run.sandbox);
+    // A sandbox run skips the laser's guided first use unless the debug route asks for it (?laserguide=1).
+    this.teach = new LaserTeach(!ctx.run.sandbox, !ctx.run.sandbox || new URLSearchParams(window.location.search).get('laserguide') === '1');
     this.root.eventMode = 'passive';
     ctx.layers.hud.addChild(this.root);
     this.build();
@@ -93,7 +100,7 @@ class Hud implements HudPart {
   private build(): void {
     const ctx = this.ctx;
     const reveal = revealFlags(ctx.run.runsPlayed);
-    this.env = new EnvImpl(ctx, reveal, this.hints, this.root);
+    this.env = new EnvImpl(ctx, reveal, this.hints, this.root, this.teach);
     const env = this.env;
     this.top = new TopBar(env);
     this.bottom = new BottomPanel(env);
@@ -115,6 +122,18 @@ class Hud implements HudPart {
       }, (on) => this.bottom.actions.summon.attention(on));
     }
 
+    if (!env.tutorial && reveal.laser) {
+      const laser = this.bottom.actions.laser;
+      this.guide = new LaserGuide(env, () => {
+        // getBounds() is in screen pixels: both corners go through the HUD's own transform.
+        const b = laser.getBounds();
+        const tl = env.toHud(new Point(b.x, b.y));
+        const br = env.toHud(new Point(b.x + b.width, b.y + b.height));
+        return { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y };
+      });
+      this.bottom.actions.onExplained = () => this.guide?.explained();
+    }
+
     const battle = ctx.battle;
     env.on(ctx.events, 'refused', ({ command, fail }) => {
       if (command === 'summon' && fail === 'not_enough_fish') return;
@@ -123,7 +142,12 @@ class Hud implements HudPart {
     env.on(ctx.events, 'drag', ({ from }) => (this.dragging = from !== null));
     env.on(ctx.events, 'finished', ({ victory }) => this.onFinished(victory));
     env.on(battle.events, 'summonOffer', ({ options }) => this.openPick(options));
-    env.on(battle.events, 'relicOffer', () => this.showRelics());
+    env.on(battle.events, 'relicOffer', () => {
+      // The boss-defeated banner that this offer follows gets to finish first; the field is frozen under it meanwhile.
+      const wait = stageHeldFor();
+      if (wait > 0 && !this.relic) ctx.ui.call(wait, () => this.showRelics());
+      else this.showRelics();
+    });
     env.on(battle.events, 'defeat', ({ reason }) => (this.defeatReason = reason));
     // A banner or caption is about to take the top of the screen: a hint waits until it has gone.
     for (const type of ['waveStart', 'synergy', 'relicGain', 'actClear', 'bossAbility', 'hazardWarn', 'enrage', 'rescued'] as const) {
@@ -161,6 +185,8 @@ class Hud implements HudPart {
   private teardown(): void {
     this.tutorial?.destroy();
     this.tutorial = null;
+    this.guide?.destroy();
+    this.guide = null;
     this.hints.bind(null);
     this.bubble.destroy();
     this.env.dispose();
@@ -183,6 +209,8 @@ class Hud implements HudPart {
     add(this.bottom.actions.summon, 3);
     add(this.bottom.actions.laser, 1);
     add(this.bottom.actions.util, 1);
+    // The call button is an offer that comes and goes: a bubble over it hides the one thing the player may want to press.
+    add(this.bottom.actions.callBtn, 2.5);
     for (const u of this.ctx.battle.units) {
       const view = u ? this.ctx.unitView(u.uid) : null;
       if (view) add(view, 3);
@@ -350,6 +378,7 @@ class Hud implements HudPart {
   resize(layout: BattleLayout): void {
     this.layoutAll(layout);
     this.tutorial?.resize(layout);
+    this.guide?.resize(layout);
   }
 
   update(dt: number): void {
@@ -366,11 +395,12 @@ class Hud implements HudPart {
     this.tutorial?.update(dt);
     if (this.twinsFrames > 0) this.pointAtTwins();
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.
-    if (this.pick && this.env.battle.pending?.kind !== 'summon') this.pick.close();
+    if (this.pick && !this.pick.picking && this.env.battle.pending?.kind !== 'summon') this.pick.close();
     // A bubble never shows over a popup, a staged moment or a drag; while a cat is selected only the selection bar's own hints may.
     const quiet =
       !this.ctx.paused && this.env.modalCount === 0 && !this.dragging && !this.pauseOpen && !this.ending && !(this.tutorial?.flow.holding ?? false);
     this.hints.update(dt, quiet, this.ctx.selected !== null);
+    this.guide?.update(dt, !quiet);
   }
 
   destroy(): void {
@@ -383,6 +413,7 @@ class Hud implements HudPart {
     this.result?.destroy();
     this.result = null;
     this.hints.destroy();
+    this.teach.destroy();
     popups.closeAll();
     clearToasts();
     tooltip.hide();

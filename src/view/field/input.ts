@@ -31,6 +31,8 @@ export class FieldInput {
   hover = -1;
   /** True while the dragged unit is held over the sell zone. */
   selling = false;
+  /** A tap on an empty cell that nothing else claims (the field uses it to explain a sunbeam cell). */
+  onEmptyTap: ((cell: number) => void) | null = null;
 
   private readonly hit = new Container();
   private readonly local = new Point();
@@ -263,6 +265,7 @@ export class FieldInput {
         this.ctx.select(null);
         break;
       case 'none':
+        if (sel === null && (battle.units[cell] ?? null) === null) this.onEmptyTap?.(cell);
         break;
     }
   }

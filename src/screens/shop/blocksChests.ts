@@ -7,14 +7,18 @@ import { pityTarget } from '@/meta/chests';
 import { ODDS } from '@/meta/odds';
 import type { ChestKind } from '@/meta/types';
 import { ads } from '@/platform';
-import { Color, fitLabel, paperSeed, paperShape, ProgressBar, uiLabel } from '@/ui';
+import { Button, Color, fitLabel, paperSeed, paperShape, ProgressBar, uiLabel } from '@/ui';
 import { chestArt } from './art';
 import { actionButton, currencyButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
 import { countPill, PriceTag } from './paperBits';
-import { chestAction } from './shopLogic';
+import { chestAction, pileSize } from './shopLogic';
 
 const ART = 168;
 const COL = 236;
+/** The open button, the "open all" button under it (a step quieter and shorter) and the space between buttons in a column. */
+const OPEN_H = 96;
+const PILE_H = 88;
+const ROW_GAP = 12;
 /** Wide enough for the English word with its icon: the label may not be shortened or cut. */
 const ODDS_W = 176;
 
@@ -50,12 +54,20 @@ export function freeWaitText(waitMs: number): string {
   return t('shop.free.wait', { time: fmtDuration(waitMs / 1000) });
 }
 
+/** The "open all" button: from two chests on, directly under the open button, in mustard paper so the coral open button stays the loudest. */
+function pileButton(card: Container, kind: ChestKind, owned: number, rw: number, env: BlockEnv): Button {
+  const b = actionButton({ label: t('shop.chest.openAll', { n: pileSize(owned) }), width: rw, height: PILE_H, style: 'mustard', fontSize: 28 }, () => env.actions.openAllChests(kind));
+  card.addChild(b);
+  return b;
+}
+
 function buildFree(inner: Container, y: number, w: number, env: BlockEnv): number {
   const view = profile.freeChestView();
   const owned = profile.data.chests.wooden;
-  // While waiting there are two skip buttons (an ad, gems), one under the other so each label has the whole width.
-  const rows = (owned > 0 ? 1 : 0) + (view.ready ? 1 : 2);
-  const h = Math.max(262, 140 + rows * 108 + 10);
+  const pile = pileSize(owned) > 0;
+  // The open button, the pile button under it, then what the waiting chest offers: while waiting there are two skip buttons (an ad, gems), one under the other so each label has the whole width.
+  const heights = [...(owned > 0 ? [OPEN_H] : []), ...(pile ? [PILE_H] : []), ...(view.ready ? [OPEN_H] : [OPEN_H, OPEN_H])];
+  const h = Math.max(262, 148 + heights.reduce((a, b) => a + b, 0) + (heights.length - 1) * ROW_GAP + 14);
   const card = subCard(inner, PAD, y, w, h);
   chestOnShelf(card, 'wooden', h - 80, owned);
   const rw = w - COL - 20;
@@ -69,13 +81,17 @@ function buildFree(inner: Container, y: number, w: number, env: BlockEnv): numbe
   let ry = 148;
   if (owned > 0) {
     const b = actionButton({ label: t('shop.chest.openN', { n: owned }), width: rw, style: 'primary' }, () => env.actions.openChest('wooden'));
-    b.position.set(COL + rw / 2, ry + 48);
+    b.position.set(COL + rw / 2, ry + OPEN_H / 2);
     card.addChild(b);
-    ry += 108;
+    ry += OPEN_H + ROW_GAP;
+  }
+  if (pile) {
+    pileButton(card, 'wooden', owned, rw, env).position.set(COL + rw / 2, ry + PILE_H / 2);
+    ry += PILE_H + ROW_GAP;
   }
   if (view.ready) {
     const b = actionButton({ label: t('shop.free.take'), width: rw, style: 'success' }, () => env.actions.claimFreeChest());
-    b.position.set(COL + rw / 2, ry + 48);
+    b.position.set(COL + rw / 2, ry + OPEN_H / 2);
     card.addChild(b);
   } else {
     const adOk = view.skipsLeft > 0 && ads.canOffer('free_chest');
@@ -85,9 +101,9 @@ function buildFree(inner: Container, y: number, w: number, env: BlockEnv): numbe
     );
     ad.setEnabled(adOk);
     ad.onDisabledTap(() => env.actions.skipFreeChest('ad'));
-    ad.position.set(COL + rw / 2, ry + 48);
+    ad.position.set(COL + rw / 2, ry + OPEN_H / 2);
     const gem = currencyButton(t('shop.free.gems'), view.skipGems, 'gems', rw, () => env.actions.skipFreeChest('gems'), 'neutral');
-    gem.position.set(COL + rw / 2, ry + 48 + 108);
+    gem.position.set(COL + rw / 2, ry + OPEN_H / 2 + OPEN_H + ROW_GAP);
     card.addChild(ad, gem);
   }
   return h;
@@ -106,7 +122,8 @@ function buildPaid(inner: Container, y: number, w: number, env: BlockEnv, kind: 
       size: 26, color: pity.next ? Color.leafDark : Color.inkSoft, anchorX: 0, anchorY: 0, wrap: rw, lineHeight: 32, align: 'left',
     })
     : null;
-  const h = gold ? Math.max(372, 346 + Math.ceil(note?.height ?? 0)) : 296;
+  const pile = pileSize(owned) > 0;
+  const h = (gold ? Math.max(372, 346 + Math.ceil(note?.height ?? 0)) : 296) + (pile ? PILE_H + ROW_GAP : 0);
   const card = subCard(inner, PAD, y, w, h);
   chestOnShelf(card, kind, h - 84, owned);
   title(card, t('meta.chest.' + kind), rw);
@@ -127,11 +144,12 @@ function buildPaid(inner: Container, y: number, w: number, env: BlockEnv, kind: 
     card.addChild(bar, note);
   }
 
-  const by = h - 58;
+  const by = h - 58 - (pile ? PILE_H + ROW_GAP : 0);
   if (chestAction(owned) === 'open') {
     const b = actionButton({ label: t('shop.chest.openN', { n: owned }), width: rw, style: 'primary' }, () => env.actions.openChest(kind));
     b.position.set(COL + rw / 2, by);
     card.addChild(b);
+    if (pile) pileButton(card, kind, owned, rw, env).position.set(COL + rw / 2, h - 10 - PILE_H / 2);
   } else {
     const tag = new PriceTag({ width: rw, style: 'primary', currency: 'gems', amount: CHEST_GEM_PRICE[kind], label: t('shop.chest.buy') });
     tag.onTap(() => env.actions.buyChest(kind));

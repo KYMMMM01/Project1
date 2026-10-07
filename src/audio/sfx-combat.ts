@@ -1,10 +1,13 @@
 /**
  * Recipes: combat, flow and gacha. Frequent sounds (shots, hits, deaths) are short, band limited and
- * baked in several variants so a crowded wave stays a texture: a soft thwack for a plain hit, a paper
- * punch for a heavy one, the same thwack made brighter for a crit. The big ones (boss, chest) layer
+ * baked in several variants so a crowded wave stays a texture. The weapon of every cat has its own pair
+ * of sounds (sfx-cats.ts) and every material its own answer (sfx-foes.ts); what stays here are the
+ * layers that go on top of them: the weight under a heavy blow, the bright crack of a crit, a plain thwack
+ * for a hit that has no weapon (a relic) and the generic crumple. The big ones (boss, chest) layer
  * wood, felt and paper; none of them is a siren, a saw or a laser.
  */
 import type { SfxId } from './api';
+import { body, clack, snap } from './foley';
 import { bell, kalimba, knock, mallet, paper, pluck, puff, shake, stamp, thump, whoosh, type Recipe } from './recipe';
 import { hz } from './theory';
 
@@ -120,17 +123,18 @@ export const COMBAT_RECIPES = {
   hit_light: {
     cat: 'hit',
     len: 0.09,
-    ms: [30, 90],
+    ms: [25, 90],
     lp: 5000,
     variants: 3,
     rate: 0.06,
     rule: { maxVoices: 4, minGap: 0.045, falloff: 0.2 },
     build(s, v) {
-      // A soft thwack, and it must be pleasant at 15+ a second: a felt pat dropping 400 to 250 Hz with a grain of paper on
-      // top. Very short, band limited, no sub and no air.
+      // The hit of something that is not a cat's weapon (a relic): a soft thwack that stays pleasant at 15+ a second, a felt
+      // pat dropping 400 to 250 Hz with a grain of paper and a small bite on top. Very short, no sub.
       const p = v.j(0.08);
       thump(s, 400 * p, 250 * p, 0, 0.045, 0.8, 0.025);
       s.noise({ dur: 0.02, v: 0.7, a: 0.002, s: 0.005, filter: { t: 'bandpass', f: 1500 * p, q: 0.9 } });
+      snap(s, 0, 0.3, 3000, 0.01);
     },
   },
   hit_heavy: {
@@ -138,34 +142,39 @@ export const COMBAT_RECIPES = {
     trim: 4,
     len: 0.2,
     ms: [60, 220],
-    lp: 5000,
-    variants: 2,
+    lp: 6500,
+    variants: 3,
     rate: 0.05,
+    prio: 1,
     rule: { maxVoices: 2, minGap: 0.09, falloff: 0.15 },
     build(s, v) {
-      // A paper punch: a low pat with weight (280 to 110 Hz), a lowpassed slap that closes as it lands and a flat paper snap.
+      // The weight under a heavy blow, a killing blow or a hit on a boss. It rides on the weapon's own impact and never replaces it:
+      // a low drop through 170 to 80 Hz with a little saturation (the body), a closing low-passed slap, a woody crack and a bite.
       const p = v.j(0.06);
-      thump(s, 280 * p, 110, 0, 0.12, 0.8, 0.07, 0.25);
-      s.noise({ dur: 0.07, v: 1, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200, f2: 600, sw: 0.06 } });
-      s.noise({ dur: 0.014, v: 0.5, a: 0.001, s: 0.005, filter: { t: 'bandpass', f: 1200, q: 0.9 } });
+      body(s, 0, 170 * p, 80, 0.14, 1, 0.4);
+      s.noise({ dur: 0.07, v: 0.6, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200, f2: 600, sw: 0.06 } });
+      clack(s, 0, 420 * p, 0.35, 0.04);
+      snap(s, 0, 0.45, 3400, 0.012);
     },
   },
   crit: {
     cat: 'hit',
     trim: 3,
-    len: 0.16,
-    ms: [30, 200],
-    lp: 5000,
-    variants: 2,
+    len: 0.18,
+    ms: [40, 200],
+    lp: 7500,
+    variants: 3,
     rate: 0.03,
+    prio: 2,
     rule: { maxVoices: 3, minGap: 0.09, falloff: 0.1 },
     build(s, v) {
-      // The same thwack, only brighter and a touch louder (so it is the same instrument): the pat jumps to 480 Hz, the paper
-      // grain sits at 2.8 kHz and a wooden tok on top gives it the snap.
+      // The crit layer, always played together with the weapon's own impact (never in place of it, so a crit is the same weapon with
+      // more): a bright crack at 4.2 kHz, a ping (a sine at 2.4 kHz and its fifth, quickly gone) and a low body underneath.
       const p = v.j(0.03);
-      thump(s, 480 * p, 220, 0, 0.06, 0.9, 0.03);
-      s.noise({ dur: 0.018, v: 0.7, a: 0.002, s: 0.005, filter: { t: 'bandpass', f: 2800 * p, q: 1 } });
-      knock(s, 1500 * p, 0.01, 0.45, 0.05);
+      snap(s, 0, 1, 4200 * p, 0.014);
+      s.tone({ f: 2400 * p, dur: 0.13, v: 0.45, a: 0.002, d: 0.11, s: 0.01 });
+      s.tone({ f: 3600 * p, dur: 0.07, v: 0.2, a: 0.002, s: 0.01 });
+      body(s, 0, 150 * p, 80, 0.1, 0.8, 0.3);
     },
   },
   explosion: {
@@ -243,6 +252,7 @@ export const COMBAT_RECIPES = {
     variants: 3,
     rate: 0.08,
     climb: 12,
+    prio: 2,
     rule: { maxVoices: 6, minGap: 0.035, falloff: 0.15 },
     build(s, v) {
       // A paper ball crumpled and popped: a crackle (band-passed noise chopped at 60 Hz) and a soft sine pop falling 440 to 170 Hz.

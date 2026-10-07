@@ -9,7 +9,7 @@ import { Ease } from '@/core/tween';
 import { Trauma, screenFx, type FxHandle } from '@/fx';
 import { PATH_LENGTH, cellCenterX, cellCenterY, pathPoint, type PathPoint } from '@/game/geometry';
 import type { EnemyState } from '@/game';
-import { enemyDef, isWaveTarget } from '@/game';
+import { BOSS_APPEAR, enemyDef, isWaveTarget } from '@/game';
 import type { BannerService } from './banners';
 import { SOFT_RING, SPLASH_DROPS, SWEAT, WHIRL_LINE, WIND_IN } from './defs';
 import type { MusicService } from './music';
@@ -17,12 +17,16 @@ import { ABILITY_CAPTION } from './palette';
 import { WindowLimiter } from './policy';
 import { Gate, enemyInfo, type Bus, type Stage } from './stage';
 import { Hue } from '@/fx/palette';
+import { BOSS_DROP } from '@/view/timing';
 import { Color } from '@/ui/theme';
 
 const W = Hue.cream;
 const RED = Color.berry;
 const ZAP = Hue.zap;
 const WET = Hue.water;
+/** Seconds the warning ribbon takes to arrive and to leave. */
+const WARN_IN = 0.15;
+const WARN_OUT = 0.2;
 
 export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: MusicService): void {
   const ctx = stage.ctx;
@@ -51,9 +55,10 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
       'warning',
       3,
       { title: t('director.warning'), sub: t(boss ? 'director.bossIncoming' : 'director.eliteIncoming', { name }), color: boss ? Color.berry : Color.coral },
-      boss ? 1.9 : 1.4,
-      0.2,
-      0.2,
+      // The ribbon covers the lane's first run, where the big one lands: it has to be gone when BOSS_APPEAR comes.
+      BOSS_APPEAR - WARN_IN - WARN_OUT,
+      WARN_IN,
+      WARN_OUT,
     );
     stage.direct('boss_warning', boss ? 0.9 : 0.55);
     if (boss) {
@@ -70,8 +75,11 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
     const info = enemyInfo(en.id);
     if (!info.big) return;
     if (info.boss) {
-      fx.bossLanding(en.x, en.y, { scale: 1.1 });
-      stage.direct('boss_roar', 0.75);
+      // The boss drops for BOSS_DROP seconds (the field's view): the dust, the ring, the hit-stop and the roar are its landing.
+      stage.laterReal(BOSS_DROP, () => {
+        fx.bossLanding(en.x, en.y, { scale: 1.1 });
+        stage.direct('boss_roar', 0.75);
+      });
     } else {
       fx.dustPuff(en.x, en.y, { scale: 1.3 });
       fx.shockwave(en.x, en.y, { color: info.tint, radius: 110 });

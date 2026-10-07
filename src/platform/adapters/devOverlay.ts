@@ -1,14 +1,16 @@
 /**
  * Dev mock UI: DOM overlays above the canvas (not PixiJS) for the fake rewarded ad, the fake
- * interstitial and the fake purchase sheet. Styled like the game (deep purple panels, yellow primary
- * button, rounded, 'GameLatin'/'GameKR' from index.html). Follows docs/research/03 (U-01/02 press feel,
- * U-05/06 popup open/close timings, 3.2 touch targets) and is never smaller than 44 CSS px per button.
- * The overlay traps pointer/keyboard events so nothing underneath can be tapped, and removes itself,
- * its style element, its listeners and its timers completely when it closes. It also survives being
- * ripped out of the DOM from outside: the pending promise then settles as if the player closed it.
- * Only the dev adapter imports this file, so it never reaches another platform's build.
+ * interstitial and the fake purchase sheet. Drawn as cut paper like the rest of the game (the stylesheet
+ * and its tokens live in devOverlayStyle.ts; 'GameLatin'/'GameKR' come from index.html). Follows
+ * docs/research/03 (U-01/02 press feel, U-05/06 popup open/close timings, 3.2 touch targets) and is never
+ * smaller than 44 CSS px per button. The overlay traps pointer/keyboard events so nothing underneath can
+ * be tapped, and removes itself, its style element, its listeners and its timers completely when it
+ * closes. It also survives being ripped out of the DOM from outside: the pending promise then settles as
+ * if the player closed it. Only the dev adapter imports this file, so it never reaches another platform's build.
  */
 import { addStrings, hasString, t } from '@/core/i18n';
+import { motion } from '@/ui/motion';
+import { OVERLAY_CSS } from './devOverlayStyle';
 
 addStrings('ko', {
   'platform.ad.title': '광고 (테스트)',
@@ -35,6 +37,7 @@ addStrings('ko', {
   'platform.placement.free_chest': '무료 상자 건너뛰기',
   'platform.placement.patrol_double': '순찰 2배',
   'platform.placement.shop_refresh': '상점 새로고침',
+  'platform.placement.sweep_ticket': '소탕권',
 });
 addStrings('en', {
   'platform.ad.title': 'Ad (test)',
@@ -61,80 +64,13 @@ addStrings('en', {
   'platform.placement.free_chest': 'Skip chest wait',
   'platform.placement.patrol_double': 'Double patrol',
   'platform.placement.shop_refresh': 'Shop refresh',
+  'platform.placement.sweep_ticket': 'Sweep ticket',
 });
 
 export const OVERLAY_ID = 'lp-overlay';
 
 /** U-06: popup close is 140 ms; the root lingers that long (inert) so the fade can play. */
-const CLOSE_MS = 150;
-
-// u = CSS px per design unit (720 design units across the game canvas). Text sizes follow 3.2:
-// secondary >= 24, body 28-32, button labels 36-44, titles 48-64; primary CTA >= 120 high, others >= 96.
-const CSS = `
-.lp-root{position:fixed;inset:0;z-index:2147483000;background:rgba(11,6,24,.6);touch-action:none;
-  -webkit-user-select:none;user-select:none;outline:none;color:#fff;
-  font-family:'GameLatin','GameKR',system-ui,sans-serif;pointer-events:auto;animation:lp-dim .18s linear both}
-.lp-root.lp-out{pointer-events:none;animation:lp-dim-out .14s linear both}
-.lp-frame{position:absolute;display:flex;overflow:hidden}
-.lp-frame.center{align-items:center;justify-content:center}
-.lp-frame.sheet{align-items:flex-end;justify-content:center}
-.lp-card,.lp-sheet{box-sizing:border-box;background:#2b1d52;border:calc(var(--u)*6px) solid #140a2e;
-  box-shadow:0 calc(var(--u)*10px) 0 #140a2e,inset 0 calc(var(--u)*6px) 0 rgba(255,255,255,.09);
-  text-align:center}
-.lp-card{width:86%;border-radius:calc(var(--u)*40px);padding:calc(var(--u)*44px) calc(var(--u)*36px) calc(var(--u)*40px);
-  animation:lp-pop .24s cubic-bezier(.34,1.56,.64,1) both}
-.lp-sheet{width:100%;border-bottom:0;border-radius:calc(var(--u)*44px) calc(var(--u)*44px) 0 0;
-  padding:calc(var(--u)*20px) calc(var(--u)*40px) max(calc(var(--u)*48px),env(safe-area-inset-bottom));
-  animation:lp-up .24s cubic-bezier(.33,1,.68,1) both}
-.lp-out .lp-card{animation:lp-pop-out .14s cubic-bezier(.32,0,.67,0) both}
-.lp-out .lp-sheet{animation:lp-down .14s cubic-bezier(.32,0,.67,0) both}
-.lp-card>*,.lp-sheet>*{animation:lp-in .2s ease-out both}
-.lp-out .lp-card>*,.lp-out .lp-sheet>*{animation:none}
-.lp-card>:nth-child(2),.lp-sheet>:nth-child(2){animation-delay:40ms}
-.lp-card>:nth-child(3),.lp-sheet>:nth-child(3){animation-delay:80ms}
-.lp-card>:nth-child(4),.lp-sheet>:nth-child(4){animation-delay:120ms}
-.lp-card>:nth-child(5),.lp-sheet>:nth-child(5){animation-delay:160ms}
-.lp-card>:nth-child(n+6),.lp-sheet>:nth-child(n+6){animation-delay:200ms}
-.lp-grab{width:calc(var(--u)*120px);height:calc(var(--u)*10px);border-radius:99px;background:#4d3a86;margin:0 auto calc(var(--u)*26px)}
-.lp-tag{display:inline-block;padding:calc(var(--u)*4px) calc(var(--u)*20px);border-radius:99px;background:#140a2e;
-  color:#ffcf5c;font-size:max(12px,calc(var(--u)*26px));letter-spacing:.06em;margin-bottom:calc(var(--u)*18px)}
-.lp-title{margin:0;font-weight:400;font-size:max(20px,calc(var(--u)*56px));line-height:1.2;
-  -webkit-text-stroke:calc(var(--u)*6px) #140a2e;paint-order:stroke fill;text-shadow:0 calc(var(--u)*4px) 0 #140a2e}
-.lp-sub{margin:calc(var(--u)*12px) 0 0;color:#b9add6;font-size:max(14px,calc(var(--u)*30px))}
-.lp-price{margin:calc(var(--u)*14px) 0 0;color:#ffd23f;font-size:max(22px,calc(var(--u)*64px));
-  -webkit-text-stroke:calc(var(--u)*6px) #140a2e;paint-order:stroke fill}
-.lp-note,.lp-wait,.lp-msg{margin:calc(var(--u)*18px) 0 0;color:#b9add6;font-size:max(14px,calc(var(--u)*28px));min-height:1.3em}
-.lp-msg{color:#ff9ea6}
-.lp-bar{height:calc(var(--u)*26px);min-height:10px;margin:calc(var(--u)*34px) 0 0;border-radius:99px;background:#140a2e;overflow:hidden;
-  box-shadow:inset 0 calc(var(--u)*4px) 0 rgba(0,0,0,.35)}
-.lp-bar>i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(180deg,#ffe27a,#ffab2e)}
-.lp-actions{display:flex;flex-direction:column;gap:max(10px,calc(var(--u)*22px));margin-top:calc(var(--u)*34px)}
-.lp-btn{box-sizing:border-box;width:100%;border:0;border-radius:calc(var(--u)*34px);
-  font:inherit;font-size:max(17px,calc(var(--u)*42px));color:#fff;cursor:pointer;padding:0 calc(var(--u)*24px);
-  -webkit-text-stroke:calc(var(--u)*7px) var(--lp-stroke);paint-order:stroke fill;
-  transition:transform .16s cubic-bezier(.34,2,.64,1);-webkit-tap-highlight-color:transparent}
-.lp-btn:active:not(:disabled){transform:scale(.94);transition-duration:.06s;transition-timing-function:cubic-bezier(.5,1,.89,1)}
-.lp-btn:focus-visible{outline:calc(var(--u)*6px) solid #fff;outline-offset:calc(var(--u)*4px)}
-.lp-btn:disabled{filter:grayscale(.6) brightness(.8);cursor:default}
-.lp-btn[hidden]{display:block;visibility:hidden}
-.lp-primary{--lp-stroke:#8a3a00;min-height:max(56px,calc(var(--u)*120px));
-  background:linear-gradient(180deg,#ffe27a 0%,#ffb629 55%,#ff9410 100%);
-  box-shadow:0 calc(var(--u)*8px) 0 #bf5a05,inset 0 calc(var(--u)*5px) 0 rgba(255,255,255,.55)}
-.lp-neutral{--lp-stroke:#231a45;min-height:max(48px,calc(var(--u)*96px));
-  background:linear-gradient(180deg,#b7acdf 0%,#8678b8 55%,#6a5d9c 100%);
-  box-shadow:0 calc(var(--u)*8px) 0 #3b3166,inset 0 calc(var(--u)*5px) 0 rgba(255,255,255,.35)}
-@keyframes lp-dim{from{background:rgba(11,6,24,0)}to{background:rgba(11,6,24,.6)}}
-@keyframes lp-dim-out{from{background:rgba(11,6,24,.6)}to{background:rgba(11,6,24,0)}}
-@keyframes lp-pop{from{transform:scale(.8);opacity:0}to{transform:none;opacity:1}}
-@keyframes lp-pop-out{from{transform:none;opacity:1}to{transform:scale(.92);opacity:0}}
-@keyframes lp-up{from{transform:translateY(100%)}to{transform:none}}
-@keyframes lp-down{from{transform:none}to{transform:translateY(100%)}}
-@keyframes lp-in{from{transform:translateY(calc(var(--u)*12px));opacity:0}to{transform:none;opacity:1}}
-@media (prefers-reduced-motion:reduce){
-  .lp-root,.lp-root.lp-out,.lp-card,.lp-sheet,.lp-out .lp-card,.lp-out .lp-sheet,.lp-card>*,.lp-sheet>*{animation:none}
-  .lp-btn{transition:none}
-}
-`;
+export const CLOSE_MS = 150;
 
 interface OverlayHandle {
   root: HTMLElement;
@@ -195,10 +131,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return e;
 }
 
-function reducedMotion(): boolean {
-  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
 function placementLabel(id: string): string {
   const key = 'platform.placement.' + id;
   return hasString(key) ? t(key) : id;
@@ -210,7 +142,9 @@ function openOverlay(variant: 'center' | 'sheet', label: string): OverlayHandle 
   if (active) return null;
   const ac = new AbortController();
   const timers = new Set<number>();
-  const root = el('div', 'lp-root');
+  // The player's own setting, not the OS flag (see `motion`): a still sheet says the same thing.
+  const calm = motion.reduced;
+  const root = el('div', calm ? 'lp-root lp-calm' : 'lp-root');
   root.id = OVERLAY_ID;
   root.dataset.lp = 'root';
   root.tabIndex = -1;
@@ -218,7 +152,7 @@ function openOverlay(variant: 'center' | 'sheet', label: string): OverlayHandle 
   root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', label);
   const style = el('style');
-  style.textContent = CSS;
+  style.textContent = OVERLAY_CSS;
   const frame = el('div', 'lp-frame ' + variant);
   const card = el('div', variant === 'sheet' ? 'lp-sheet' : 'lp-card');
   frame.appendChild(card);
@@ -299,7 +233,7 @@ function openOverlay(variant: 'center' | 'sheet', label: string): OverlayHandle 
       }
       timers.clear();
       root.removeAttribute('id');
-      if (reducedMotion() || !root.isConnected) {
+      if (calm || !root.isConnected) {
         root.remove(); // takes the <style> and every child with it
       } else {
         root.classList.add('lp-out'); // inert (pointer-events:none) while it fades
@@ -427,6 +361,7 @@ export function showPurchaseSheet(o: {
     const ov = openOverlay('sheet', t('platform.iap.sheetTitle'));
     if (!ov) return resolve('cancelled');
     const grab = el('div', 'lp-grab');
+    const tag = el('div', 'lp-tag', 'TEST');
     const sub = el('p', 'lp-sub', t('platform.iap.sheetTitle'));
     const title = el('h2', 'lp-title', o.name);
     title.dataset.lp = 'name';
@@ -441,7 +376,7 @@ export function showPurchaseSheet(o: {
     pay.type = 'button';
     cancel.type = 'button';
     actions.append(pay, cancel);
-    ov.card.append(grab, sub, title, price, note, msg, actions);
+    ov.card.append(grab, tag, sub, title, price, note, msg, actions);
 
     const finish = (r: 'paid' | 'cancelled' | 'failed' | 'crashed'): void => {
       ov.close();

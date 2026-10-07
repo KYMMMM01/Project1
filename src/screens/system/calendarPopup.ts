@@ -1,10 +1,10 @@
 /** The 28-day attendance calendar as a wall calendar: date squares with a sticker each, claimed days stamped, today taped and circled, and bigger stickers on days 7 / 14 / 21 / 28. */
 import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
-import { audio } from '@/audio';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { errorKey, profile } from '@/meta';
-import { Button, Color, motion, Panel, Popup, tapeStrip, toast, TweenBag, uiLabel } from '@/ui';
+import { backOut, Button, Color, motion, Panel, Popup, tapeStrip, toast, TweenBag, uiLabel } from '@/ui';
+import { refusalCue } from '@/ui/press';
 import type { Shell } from '../contract';
 import { payout } from './kit/claimFx';
 import { StampMark } from './kit/marks';
@@ -23,6 +23,9 @@ const CELL_H = 120;
 const GAP = 8;
 const W = 680;
 const GRID_W = (COLS - 1) * CELL_W + BIG_W + (COLS - 1) * GAP;
+/** A new page: every square pops back on, one after another in reading order. */
+const TURN_SECONDS = 0.24;
+const TURN_BEAT = 0.012;
 
 class CalendarCell extends Container {
   private readonly bag = new TweenBag();
@@ -71,8 +74,9 @@ class CalendarCell extends Container {
     this.pivot.set(cw / 2, CELL_H / 2);
   }
 
-  sync(state: CellState, animate: boolean): void {
-    if (state === this.state) return;
+  /** `turn`: the page was just turned, and this square is stuck down afresh after that many seconds. */
+  sync(state: CellState, animate: boolean, turn?: number): void {
+    if (state === this.state && turn === undefined) return;
     this.chip?.setDim(state === 'claimed');
     this.stamp.visible = state === 'claimed';
     if (animate && state === 'claimed' && this.state !== 'claimed') this.stamp.slam();
@@ -81,9 +85,17 @@ class CalendarCell extends Container {
     this.state = state;
     this.bag.killAll();
     this.scale.set(1);
-    if (state === 'today' && !motion.reduced) {
+    const moving = !motion.reduced;
+    const lead = turn !== undefined && moving ? turn + TURN_SECONDS : 0;
+    if (turn !== undefined && moving) {
+      const pop = backOut(2);
+      this.scale.set(0);
+      this.bag.run({ duration: TURN_SECONDS, delay: turn, ease: Ease.linear, onUpdate: (k) => this.scale.set(pop(k)), onComplete: () => this.scale.set(1) });
+    }
+    if (state === 'today' && moving) {
       this.bag.run({
         duration: 1.1,
+        delay: lead,
         ease: Ease.sineInOut,
         repeat: -1,
         yoyo: true,
@@ -112,6 +124,7 @@ export class CalendarPopup extends Popup<void> {
   private readonly offChange: () => void;
   /** What the last sync drew: the profile changes often and a redraw of the same page would restart the pulses. */
   private drawn = '';
+  private drawnPage = -1;
   private claiming = false;
 
   constructor(private readonly host: Shell) {
@@ -174,7 +187,10 @@ export class CalendarPopup extends Popup<void> {
     const key = `${page.page}|${page.stamp}|${page.canClaim}|${view.comebackReady}`;
     if (key === this.drawn) return;
     this.drawn = key;
-    this.cells.forEach((cell) => cell.sync(calendarCellState(cell.day, page), animate));
+    // The page changed while the popup is open (midnight): a new calendar is stuck on.
+    const turned = this.drawnPage >= 0 && page.page !== this.drawnPage;
+    this.drawnPage = page.page;
+    this.cells.forEach((cell, i) => cell.sync(calendarCellState(cell.day, page), animate, turned ? i * TURN_BEAT : undefined));
     this.cycle.text = t('rt.sys.cal.cycle', { n: page.page });
     this.progress.text = t('rt.sys.cal.progress', { n: page.stamp, max: this.cells.length });
     this.claimBtn.setEnabled(page.canClaim);
@@ -189,7 +205,7 @@ export class CalendarPopup extends Popup<void> {
     try {
       const r = profile.claimCalendar();
       if (!r.ok) {
-        audio.play('ui_error');
+        refusalCue();
         toast(t(errorKey(r.error)), 'warning');
         this.sync(false);
         return;
@@ -206,7 +222,7 @@ export class CalendarPopup extends Popup<void> {
   private claimWelcome(): void {
     const r = profile.claimComeback();
     if (!r.ok) {
-      audio.play('ui_error');
+      refusalCue();
       toast(t(errorKey(r.error)), 'warning');
       this.sync(false);
       return;

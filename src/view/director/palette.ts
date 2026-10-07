@@ -78,36 +78,32 @@ export const SHIELD_COLOR: number = TapeColors.sky.base;
 /** shot: a muzzle flash at the cat; swing: a slash at the target; cast: a ring at the cat (zones, chains). */
 export type ShootStyle = 'shot' | 'swing' | 'cast';
 
+/** How an attack looks. What it sounds like lives in the audio module (`attackSfx`, `impactSfx`): every cat has its own pair. */
 export interface ShootCue {
-  sfx: SfxId;
-  /** Playback-rate multiplier: lower = heavier. */
-  pitch: number;
-  /** Linear gain: the most frequent sounds sit low in the mix. */
-  volume: number;
   style: ShootStyle;
 }
 
 export const SHOOT_CUE: Readonly<Record<UnitId, ShootCue>> = {
-  w_paw: { sfx: 'shoot_claw', pitch: 1.1, volume: 0.5, style: 'swing' },
-  w_sword: { sfx: 'shoot_claw', pitch: 0.9, volume: 0.6, style: 'swing' },
-  w_viking: { sfx: 'shoot_claw', pitch: 0.7, volume: 0.75, style: 'swing' },
-  w_samurai: { sfx: 'shoot_claw', pitch: 1.3, volume: 0.7, style: 'swing' },
-  w_tiger: { sfx: 'shoot_claw', pitch: 0.6, volume: 0.8, style: 'swing' },
-  r_sling: { sfx: 'shoot_arrow', pitch: 0.85, volume: 0.5, style: 'shot' },
-  r_archer: { sfx: 'shoot_arrow', pitch: 1, volume: 0.5, style: 'shot' },
-  r_ninja: { sfx: 'shoot_arrow', pitch: 1.35, volume: 0.45, style: 'shot' },
-  r_gunner: { sfx: 'shoot_cannon', pitch: 1, volume: 0.7, style: 'shot' },
-  r_star: { sfx: 'shoot_magic', pitch: 1.25, volume: 0.6, style: 'shot' },
-  m_snow: { sfx: 'shoot_ice', pitch: 1.1, volume: 0.5, style: 'shot' },
-  m_fire: { sfx: 'shoot_magic', pitch: 0.8, volume: 0.55, style: 'shot' },
-  m_storm: { sfx: 'shoot_lightning', pitch: 1, volume: 0.6, style: 'cast' },
-  m_frost: { sfx: 'shoot_ice', pitch: 0.75, volume: 0.6, style: 'cast' },
-  m_cosmo: { sfx: 'shoot_magic', pitch: 0.55, volume: 0.7, style: 'cast' },
-  t_bell: { sfx: 'shoot_magic', pitch: 1.6, volume: 0.35, style: 'shot' },
-  t_chef: { sfx: 'shoot_magic', pitch: 1.2, volume: 0.4, style: 'shot' },
-  t_bard: { sfx: 'shoot_magic', pitch: 1.0, volume: 0.45, style: 'shot' },
-  t_alch: { sfx: 'shoot_poison', pitch: 1, volume: 0.55, style: 'cast' },
-  t_lucky: { sfx: 'shoot_magic', pitch: 1.15, volume: 0.5, style: 'shot' },
+  w_paw: { style: 'swing' },
+  w_sword: { style: 'swing' },
+  w_viking: { style: 'swing' },
+  w_samurai: { style: 'swing' },
+  w_tiger: { style: 'swing' },
+  r_sling: { style: 'shot' },
+  r_archer: { style: 'shot' },
+  r_ninja: { style: 'shot' },
+  r_gunner: { style: 'shot' },
+  r_star: { style: 'shot' },
+  m_snow: { style: 'shot' },
+  m_fire: { style: 'shot' },
+  m_storm: { style: 'cast' },
+  m_frost: { style: 'cast' },
+  m_cosmo: { style: 'cast' },
+  t_bell: { style: 'shot' },
+  t_chef: { style: 'shot' },
+  t_bard: { style: 'shot' },
+  t_alch: { style: 'cast' },
+  t_lucky: { style: 'shot' },
 };
 
 /** Sound that goes with each status cue. Statuses without an entry are silent. */

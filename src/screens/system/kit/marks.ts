@@ -2,17 +2,37 @@
 import { Container, Graphics, type DestroyOptions } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
-import { Ease } from '@/core/tween';
+import { Ease, uiTweens } from '@/core/tween';
 import { Color, drawDashedRect, drawIcon, drawPaper, motion, paperSeed, TweenBag, uiLabel } from '@/ui';
 
-/** A stamp landing is a soft knock. Several land in one moment (a claim-all, a whole calendar page): only the first is heard. */
+/** The rubber-stamp sound of the audio set (a dull thud under a paper slap, then one ding). Several land in one moment (a claim-all, a whole calendar page): only the first is heard. */
 const THUD_GAP = 0.09;
 let lastThud = -1;
 
 export function stampThud(): void {
   if (game.time - lastThud < THUD_GAP) return;
   lastThud = game.time;
-  audio.play('place', { volume: 0.45 });
+  audio.play('reward_claim', { volume: 0.7 });
+}
+
+/** How long a slammed stamp takes to land and settle, and how recently it must have been slammed to count as "this moment". */
+const SLAM_SECONDS = 0.3;
+const SAME_MOMENT = 0.05;
+let slammedAt = -1;
+let settledAt = 0;
+
+/**
+ * Seconds until the stamp slammed in this very moment has settled, or null when none was. A claim that comes with a stamp leaves
+ * its sound to the stamp's landing and holds its reward sheet for the stamp to be seen first.
+ */
+export function stampPending(): number | null {
+  return game.time - slammedAt < SAME_MOMENT ? Math.max(0, settledAt - game.time) : null;
+}
+
+/** Resolves once the stamp slammed in this moment has settled (at once when there is none): open a sheet over the stamp only after it. */
+export function afterStamp(): Promise<void> {
+  const wait = stampPending();
+  return wait ? uiTweens.call(wait, () => undefined).finished : Promise.resolve();
 }
 
 /** The little paper square of a to-do line; a pen-drawn check appears in it when the line is done. Origin = centre. */
@@ -121,6 +141,8 @@ export class StampMark extends Container {
   /** The press: it drops from a little above, lands with a squash, and settles. */
   slam(): void {
     this.bag.killAll();
+    slammedAt = game.time;
+    settledAt = game.time + (motion.reduced ? 0 : SLAM_SECONDS);
     if (motion.reduced) {
       this.scale.set(1);
       this.alpha = 1;
@@ -128,11 +150,11 @@ export class StampMark extends Container {
       return;
     }
     // The knock is heard on the frame the stamp meets the paper (53 % of the fall below).
-    this.bag.call(0.3 * 0.53, stampThud);
+    this.bag.call(SLAM_SECONDS * 0.53, stampThud);
     this.scale.set(1.9);
     this.alpha = 0;
     this.bag.run({
-      duration: 0.3,
+      duration: SLAM_SECONDS,
       ease: Ease.linear,
       onUpdate: (k) => {
         if (k < 0.53) {

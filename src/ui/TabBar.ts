@@ -7,7 +7,7 @@ import { Ease } from '@/core/tween';
 import { Badge, type BadgeValue } from './Badge';
 import { tintToward } from './colors';
 import { drawIcon, type IconName } from './icons';
-import type { Box } from './layoutMath';
+import { TAB_BAR, tabPaperBox, type Box } from './layoutMath';
 import { backOut, motion, shakeX, TweenBag } from './motion';
 import { drawPaper, paperSeed, tapeStrip } from './paper';
 import { cacheStatic, refreshCache } from './shapes';
@@ -31,11 +31,11 @@ export interface TabBarOpts {
   featured?: number;
 }
 
-const BAR_H = 128;
+const BAR_H = TAB_BAR.h;
 const ICON = 58;
-const LABEL_Y = 102;
+const LABEL_Y = TAB_BAR.labelY;
 /** Where the kraft strip's torn top edge sits (the selected tab pokes up through it). */
-const STRIP_TOP = 22;
+const STRIP_TOP = TAB_BAR.strip;
 /** Unselected labels are filled in `Color.inkMid` (readable on kraft); this tint takes them to full ink when selected. */
 const SELECTED_TINT = tintToward(Color.inkMid, Color.ink);
 const TAPES: readonly TapeName[] = ['sky', 'yellow', 'pink', 'green'];
@@ -46,7 +46,7 @@ class Tab extends Container {
   readonly plateOff = new Graphics();
   /** Hero tab: the coral round button that fades in when selected. */
   readonly plateOn = new Container();
-  /** Other tabs: the cream paper tab that slides up when selected (redrawn for the cell width). */
+  /** The cream paper tab that slides up behind the selected tab (redrawn for the cell width and the bar's height). */
   readonly paper = new Container();
   readonly icon: Graphics;
   readonly text: Text;
@@ -92,17 +92,22 @@ class Tab extends Container {
     this.addChild(this.paper, this.iconWrap, this.text, this.badge);
   }
 
-  /** (Re)draw the cream tab that sticks up behind a selected, non-hero tab. */
+  /**
+   * (Re)draw the cream tab that sticks up behind the selected tab. It starts above the bar's torn edge and runs
+   * past the bottom of the screen, so it holds the icon and the label whole and never shows a bottom edge of its own.
+   */
   redrawPaper(cell: number, barH: number): void {
-    if (this.featured) return;
     for (const c of this.paper.removeChildren()) c.destroy({ children: true });
     const g = new Graphics();
-    const w = cell - 16;
-    const h = barH - STRIP_TOP + 30;
-    drawPaper(g, -w / 2, -STRIP_TOP - 8, { w, h, radius: 22, fill: Color.paperLight, edge: Color.kraftDark, shadow: 4, grain: false, seed: paperSeed() });
-    const tape = tapeStrip({ name: TAPES[this.index % TAPES.length] as TapeName, w: 62, h: 22, angle: this.index % 2 === 0 ? -3 : 3, pattern: 'gingham', seed: this.index + 11 });
-    tape.position.set(0, -STRIP_TOP - 6);
-    this.paper.addChild(g, tape);
+    const box = tabPaperBox(cell, barH, this.featured);
+    drawPaper(g, box.x, box.y, { w: box.w, h: box.h, radius: 22, fill: Color.paperLight, edge: Color.kraftDark, shadow: 4, grain: false, seed: paperSeed() });
+    this.paper.addChild(g);
+    // The raised disc of the hero tab carries its own tape.
+    if (!this.featured) {
+      const tape = tapeStrip({ name: TAPES[this.index % TAPES.length] as TapeName, w: 62, h: 22, angle: this.index % 2 === 0 ? -3 : 3, pattern: 'gingham', seed: this.index + 11 });
+      tape.position.set(0, -STRIP_TOP - 6);
+      this.paper.addChild(tape);
+    }
     refreshCache(this.paper);
   }
 }
@@ -110,8 +115,9 @@ class Tab extends Container {
 /**
  * Bottom navigation: a kraft strip with a torn top edge. Origin = top-left of the bar; layout(w, h)
  * pins it to the screen bottom and grows it by game.safeBottom so the home indicator never covers a
- * tab. The selected tab is a cream paper tab that sticks up through the tear, held by a piece of
- * tape, and its icon rises and bounces; the hero tab is always a raised round paper button.
+ * tab. The selected tab is a cream paper tab that sticks up through the tear and runs down past the
+ * screen's bottom edge, held by a piece of tape, and its icon rises and bounces; the hero tab is always
+ * a raised round paper button (coral on its own taller paper tab when selected).
  */
 export class TabBar extends Container {
   private readonly tabs: Tab[] = [];
@@ -232,7 +238,7 @@ export class TabBar extends Container {
       fitLabel(t.text, cell - 12, 24);
       t.redrawPaper(cell, barH);
       t.badge.position.set(ICON * 0.5 + 6, 34);
-      t.hitArea = new Rectangle(-cell / 2, t.featured ? -34 : -4, cell, barH + (t.featured ? 34 : 4));
+      t.hitArea = new Rectangle(-cell / 2, t.featured ? TAB_BAR.heroPaperTop : -4, cell, barH - (t.featured ? TAB_BAR.heroPaperTop : -4));
       this.apply(t);
     });
   }

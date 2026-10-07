@@ -1,4 +1,5 @@
 import type { Container } from 'pixi.js';
+import { audio } from '@/audio';
 import { game } from '@/core/game';
 
 /**
@@ -24,6 +25,12 @@ let refusedAt = -1;
 /** A control just said "no" with its own cue; an explanation opened by the same tap (a toast) stays quiet. */
 export function noteRefusal(): void {
   refusedAt = game.time;
+}
+
+/** The "no" cue for a refusal that is also explained by a toast in the same breath: the toast keeps quiet, so it is heard once. */
+export function refusalCue(): void {
+  audio.play('ui_error');
+  noteRefusal();
 }
 
 export function justRefused(): boolean {

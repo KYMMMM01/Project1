@@ -15,7 +15,7 @@ import {
 import {
   CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, DAILY_UNIT_LEVEL, DAILY_WAVES, ENEMY_CAP, LASER_RADIUS, MAX_TICKS_PER_STEP,
   MOLT_COST, MOLT_LIMIT, NORMAL_WAVE_TIME, OFFER_EVERY, OVERFLOW_GRACE, PREP_TIME, START_FISH, TICK, TUTORIAL_HP_MULT,
-  TUTORIAL_WAVES, TUTORIAL_WAVE_TIME, AWAKEN_COST, hpIndex, specialHp,
+  TUTORIAL_WAVES, TUTORIAL_WAVE_TIME, AWAKEN_COST, FIRST_SUN_CELLS, hpIndex, specialHp,
 } from '../data/balance';
 import { synergyTier } from '../data/classes';
 import { budgetMult } from '../data/enemies';
@@ -35,16 +35,16 @@ import { cmdSetLaser, refreshLaser, updateLaser, updateProjectiles, updateRelics
 import { BattleEmitter } from './emitter';
 import { updateEnemies } from './enemies';
 import {
-  buildStats, callBonusOf, canReviveNow, cmdCallNext, cmdPickRelic, cmdRerollRelics, cmdRevive, initSun, markSun, rebuildFx, startWave,
+  buildStats, callBonusOf, canReviveNow, cmdCallNext, cmdPickRelic, cmdRerollRelics, cmdRevive, initSun, markSun, rebuildFx, revealSun, startWave,
   targetKilled, updateAlarms, updateWave,
 } from './flow';
 import { updateHazards } from './hazards';
 import type { LuckTotals } from './odds';
 import type { SnapData } from './snapshot';
 import { Streams } from './streams';
+import { TUTORIAL_SCRIPT } from './tutorial';
 import type { HazardBatch, SimEnemy, SimProjectile, SimUnit, SimZone } from './types';
 
-const TUTORIAL_SCRIPT: readonly UnitId[] = ['w_paw', 'w_paw', 'r_sling'];
 
 function clampInt(v: number, lo: number, hi: number): number {
   const n = Math.floor(Number.isFinite(v) ? v : lo);
@@ -268,6 +268,7 @@ export class Sim implements BattleApi {
     this.paidRerollUsed = daily;
 
     if (snap) this.restore(snap);
+    else if (init.mode === 'tutorial') markSun(this, []);
     else initSun(this);
     rebuildFx(this);
     this.feederAt = this.time + (this.fx.feederEvery ?? 0);
@@ -414,7 +415,10 @@ export class Sim implements BattleApi {
   }
 
   pickSummon(index: number): Fail | null {
-    return cmdPickSummon(this, index);
+    const fail = cmdPickSummon(this, index);
+    // The tutorial's board has no sunbeams until the scripted pick is answered: the lesson on them starts with their arrival.
+    if (fail === null && this.mode === 'tutorial' && this.sunbeams.length === 0) revealSun(this, FIRST_SUN_CELLS);
+    return fail;
   }
 
   drop(from: number, to: number): Fail | null {

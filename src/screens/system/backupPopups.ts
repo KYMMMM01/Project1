@@ -4,9 +4,11 @@ import { audio } from '@/audio';
 import { fmt } from '@/core/format';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
+import { Ease } from '@/core/tween';
 import { errorKey, profile } from '@/meta';
 import type { BackupPreview } from '@/meta/profile';
-import { Button, Color, drawDashedLine, drawIcon, fitLabel, Panel, Popup, toast, TweenBag, uiLabel } from '@/ui';
+import { backOut, Button, Color, drawDashedLine, drawIcon, fitLabel, motion, Panel, Popup, toast, TweenBag, uiLabel } from '@/ui';
+import { refusalCue } from '@/ui/press';
 import { DomTextField } from './domField';
 import { paperSheet } from './kit/sheets';
 import { markProfileSeen } from './prefs';
@@ -18,6 +20,8 @@ const PAD = 40;
 const FIELD_H = 230;
 /** Height of one line of the receipt. */
 const ROW = 56;
+/** How far a new stage's sheet drops while it settles. */
+const STAGE_DROP = 16;
 
 /** Copy text through the async clipboard, falling back to the selection command; true when it worked. */
 async function copyText(field: DomTextField): Promise<boolean> {
@@ -128,6 +132,26 @@ export class CodeImportPopup extends Popup<boolean> {
     this.panel = panel;
     this.setContentSize(W + 80, h + 90);
     if (this.screenW > 0) this.layout(this.screenW, this.screenH);
+    if (this.opened) this.settle(panel);
+  }
+
+  /** A new stage is a new sheet laid down: it drops a little and settles (the field waits for it). */
+  private settle(panel: Panel): void {
+    if (motion.reduced) return;
+    const spring = backOut(1.8);
+    this.bag.run({
+      duration: 0.24,
+      ease: Ease.linear,
+      onUpdate: (k) => {
+        const e = spring(k);
+        panel.scale.set(0.93 + 0.07 * e);
+        panel.y = STAGE_DROP * (1 - e);
+      },
+      onComplete: () => {
+        panel.scale.set(1);
+        panel.y = 0;
+      },
+    });
   }
 
   /** Lays the stage out into `layer`; returns the height of the sheet it needs. */
@@ -145,7 +169,7 @@ export class CodeImportPopup extends Popup<boolean> {
     check.onTap(() => void this.check());
     this.layer.addChild(help, frame, paste, check);
     // Placed from the anchor's on-screen bounds, which are only right once the popup is on stage and has settled.
-    this.bag.call(this.opened ? 0.05 : 0.3, () => {
+    this.bag.call(this.opened && motion.reduced ? 0.05 : 0.3, () => {
       if (!this.closing && !anchor.destroyed) this.field.attach(anchor);
     });
     return by + 52 + 48;
@@ -219,7 +243,7 @@ export class CodeImportPopup extends Popup<boolean> {
     if (this.busy) return;
     const code = this.field.value.trim();
     if (!code) {
-      audio.play('ui_error');
+      refusalCue();
       toast(t('rt.sys.code.empty'), 'warning');
       return;
     }
@@ -228,7 +252,7 @@ export class CodeImportPopup extends Popup<boolean> {
     this.busy = false;
     if (this.destroyed) return;
     if (!r.ok) {
-      audio.play('ui_error');
+      refusalCue();
       toast(t(errorKey(r.error)), 'error');
       return;
     }
@@ -244,7 +268,7 @@ export class CodeImportPopup extends Popup<boolean> {
     if (r.ok) markProfileSeen();
     if (this.destroyed) return;
     if (!r.ok) {
-      audio.play('ui_error');
+      refusalCue();
       toast(t(errorKey(r.error)), 'error');
       this.render({ kind: 'input' });
       return;

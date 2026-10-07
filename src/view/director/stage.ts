@@ -168,10 +168,10 @@ export class Stage {
   }
 
   /** The same, pitched `step` degrees up the pentatonic scale (kill streaks, merge chains, coin ticks). */
-  playStep(rule: SoundRule, id: SfxId, step: number, volume = 1): boolean {
+  playStep(rule: SoundRule, id: SfxId, step: number, volume = 1, pitch = 1): boolean {
     if (!rule.allow(this.now)) return false;
     this.played[id] = (this.played[id] ?? 0) + 1;
-    audio.playStep(id, step, { volume });
+    audio.playStep(id, step, { volume, pitch });
     return true;
   }
 

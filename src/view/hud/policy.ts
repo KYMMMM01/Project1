@@ -233,6 +233,18 @@ export function rewardTiles(gold: number, xp: number, bundle: BundleLike): Rewar
   return out;
 }
 
+/** What a run paid into the purse, per currency the home bar shows. */
+export interface Paid {
+  gold: number;
+  gems: number;
+  tickets: number;
+}
+
+/** The currency a run paid: its gold and the bundle's gold, gems and tickets. */
+export function paidBy(gold: number, bundle: BundleLike): Paid {
+  return { gold: gold + (bundle.gold ?? 0), gems: bundle.gems ?? 0, tickets: bundle.tickets ?? 0 };
+}
+
 // ───────────────────────────── choices ─────────────────────────────
 
 export interface PickInfo {

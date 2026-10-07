@@ -7,6 +7,8 @@ import { Container, Rectangle, type FederatedPointerEvent, type Text } from 'pix
 import { t } from '@/core/i18n';
 import { Ease, type Tween } from '@/core/tween';
 import { enemyDef, relicDef, type EnemyId, type RelicId } from '@/game';
+import { motionSeconds } from '@/fx';
+import { TOY_FLIGHT } from '@/view/timing';
 import {
   Color,
   drawIcon,
@@ -34,9 +36,10 @@ import { slotCentre, slotWidth, topRects, type Rect, type TopRects } from './lay
 const SLOT_MAX = 56;
 const PREVIEW_MAX = 4;
 const PREVIEW_SLOT = 64;
+/** Seconds the cards of the wave that has begun take to leave before the next wave's are dealt. */
+const PREVIEW_LEAVE = 0.12;
 const TOY_MAX = 6;
 /** Seconds the picked toy's icon takes to fly from the choice screen to the row. */
-const TOY_FLIGHT = 0.6;
 
 /** Touch targets are at least 88 wide, so a strip is one target and the tap picks the icon nearest to the finger. */
 const STRIP_H = 96;
@@ -73,6 +76,8 @@ export class TopBar {
   private gaugeDirty = true;
   private waveDirty = true;
   private previewDirty = true;
+  /** What the cards show now (null before the first build): a change deals new cards in, the same list does not. */
+  private previewKey: string | null = null;
   private overflowing = false;
   private lastTimer = -1;
   private lastTimerText = '';
@@ -258,12 +263,21 @@ export class TopBar {
   // ───────────────────────── preview ─────────────────────────
 
   private refreshPreview(): void {
-    for (const s of this.slots) s.box.destroy({ children: true });
+    const entries = this.env.battle.previewWave();
+    const key = this.env.reveal.preview ? entries.map((en) => `${en.enemy}:${en.count}`).join(',') : '';
+    // The same cards again (a rebuild after a resize or a speed change) are swapped without ceremony.
+    const changed = key !== this.previewKey && this.previewKey !== null && !motion.reduced;
+    this.previewKey = key;
+    for (const s of this.slots) {
+      // A card still waiting to pop in must not be popped once it is gone (a resize rebuilds the row while the cards are being dealt).
+      s.pop?.kill();
+      if (changed) this.sendOff(s.box);
+      else s.box.destroy({ children: true });
+    }
     this.slots = [];
     this.previewIds = [];
     this.more.visible = false;
     if (!this.env.reveal.preview) return;
-    const entries = this.env.battle.previewWave();
     const shown = entries.slice(0, PREVIEW_MAX);
     const r = this.rects.preview;
     const slot = slotWidth(shown.length, r.w, PREVIEW_SLOT);
@@ -287,13 +301,33 @@ export class TopBar {
         box.addChild(mark);
       }
       this.previewLayer.addChild(box);
-      this.slots.push({ box });
+      // The next wave's cards are dealt in after the old ones have left: a small pop, one after the other.
+      const pop = changed ? popIn(this.bag, box, { from: 0.35, duration: 0.24, delay: PREVIEW_LEAVE + i * 0.05, overshoot: 2.4 }) : undefined;
+      this.slots.push({ box, pop });
     });
     if (entries.length > shown.length) {
       this.more.text = `+${entries.length - shown.length}`;
       this.more.visible = true;
     }
     this.layoutMore();
+  }
+
+  /** An old card slips down and fades before it goes (it takes no taps meanwhile). */
+  private sendOff(box: Container): void {
+    const y0 = box.y;
+    box.eventMode = 'none';
+    this.bag.run({
+      duration: PREVIEW_LEAVE,
+      ease: Ease.cubicIn,
+      onUpdate: (k) => {
+        if (box.destroyed) return;
+        box.alpha = 1 - k;
+        box.y = y0 + 8 * k;
+      },
+      onComplete: () => {
+        if (!box.destroyed) box.destroy({ children: true });
+      },
+    });
   }
 
   /** Index of the icon under the finger in a strip of `n` equal slots starting at `r.x`. */
@@ -358,7 +392,7 @@ export class TopBar {
 
   /** The toy appears when the card's icon (flown from the choice screen) would land. */
   private addToy(): void {
-    this.bag.call(TOY_FLIGHT, () => {
+    this.bag.call(motionSeconds(TOY_FLIGHT), () => {
       this.refreshToys(true);
       this.env.hints.request('toys', this.toyLayer);
     });

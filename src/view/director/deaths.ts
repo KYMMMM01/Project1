@@ -3,7 +3,7 @@
  * kill, the full boss death set piece, and the fish / purr that fly to the HUD afterwards.
  */
 import { Sprite } from 'pixi.js';
-import { audio } from '@/audio';
+import { audio, foeDieSfx } from '@/audio';
 import { t } from '@/core/i18n';
 import { clamp } from '@/core/math';
 import { Trauma } from '@/fx';
@@ -16,11 +16,15 @@ import { SHIELD_COLOR } from './palette';
 import { Gate, enemyInfo, type Bus, type EnemyInfo, type Stage } from './stage';
 import { Hue } from '@/fx/palette';
 import { Color } from '@/ui/theme';
+import { holdStage } from '@/view/staging';
 
 /** Explosion colour of a boss's mini blasts and final blast. */
 const BOSS_BLAST = Hue.fire;
 /** Mini explosions of the finale (fx.bossDeath fires six, 90 ms apart): sounds ride three of them. */
 const MINI_SOUNDS: readonly number[] = [0.12, 0.26, 0.43];
+/** The boss-defeated banner: seconds it holds, and its whole life with the pop-in and the exit. */
+const BOSS_BANNER_HOLD = 1;
+const BOSS_BANNER = BOSS_BANNER_HOLD + 0.4 + 0.3;
 
 export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, banners: BannerService, music: MusicService): void {
   const ctx = stage.ctx;
@@ -44,7 +48,7 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
       return;
     }
     if (info.elite) {
-      eliteDeath(info, e.x, e.y);
+      eliteDeath(en, info, e.x, e.y);
       return;
     }
     if (puffs.take()) {
@@ -53,10 +57,11 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
       else fx.deathPuff(e.x, e.y, { color: info.tint, scale });
     }
     const step = stage.killLadder.next(stage.now);
-    stage.playStep(stage.rules.die, 'enemy_die', step, 0.55);
+    const death = foeDieSfx(en.id);
+    stage.playStep(stage.rules.die, death.id, step, death.volume, death.pitch);
   });
 
-  function eliteDeath(info: EnemyInfo, x: number, y: number): void {
+  function eliteDeath(en: EnemyState, info: EnemyInfo, x: number, y: number): void {
     fx.deathPuff(x, y, { color: info.tint, scale: 1.7 });
     fx.explosion(x, y, { color: info.tint, scale: 0.7 });
     fx.coinBurst(x, y, { count: 12 });
@@ -64,13 +69,17 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
     stage.stop(50);
     stage.buzz('light');
     // Guide C-05: the elite's cry sits 3 semitones lower and 3 dB louder than a plain kill.
-    stage.play(stage.rules.eliteDie, 'enemy_die', 0.85, 0.84, 0.02);
+    const death = foeDieSfx(en.id);
+    stage.play(stage.rules.eliteDie, death.id, death.volume * 1.25, death.pitch * 0.84, 0.02);
     currency.claimBig(0.3);
     banners.push('caption', 'eliteDown', 2, { title: t('director.eliteDefeated'), color: SHIELD_COLOR }, 0.9, 0.15, 0.2);
     music.duck(DUCK_BY_TIER[2].depth, 0.4);
   }
 
-  /** Guide B-04: hit-stop into slow motion, flicker, six blasts, one final blast with one flash, loot, banner. */
+  /**
+   * Guide B-04: hit-stop into slow motion, flicker, six blasts, one final blast with one flash, loot, banner. The beats are
+   * in real time like the blasts they belong to (the particles ignore the slow motion), so the sound lands on its blast.
+   */
   function bossDeath(en: EnemyState, info: EnemyInfo, x: number, y: number): void {
     const b = ctx.battle;
     const last = b.init.mode !== 'endless' && b.wave >= b.totalWaves;
@@ -81,7 +90,9 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
     stage.bossSeqActive = true;
     stage.stop(150, true);
     stage.slow(0.3, 400);
-    stage.direct('boss_roar', 0.8, 0.62);
+    stage.direct('boss_roar', 0.5, 0.62);
+    const own = foeDieSfx(en.id);
+    stage.direct(own.id, own.volume, own.pitch);
     stage.buzz('heavy');
 
     const seq = fx.bossDeath(x, y - info.radius * 0.2, {
@@ -93,9 +104,9 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
         if (view && !view.destroyed) view.visible = false;
       },
     });
-    for (const at of MINI_SOUNDS) stage.later(at, () => stage.direct('explosion', 0.35, 0.9 + Math.random() * 0.4));
+    for (const at of MINI_SOUNDS) stage.laterReal(at, () => stage.direct('explosion', 0.35, 0.9 + Math.random() * 0.4));
 
-    stage.later(seq.impact, () => {
+    stage.laterReal(seq.impact, () => {
       stage.direct('boss_die', 1);
       stage.direct('explosion', 0.8, 0.7);
       stage.shake(Trauma.t5, Gate.eliteShake, 0.5);
@@ -110,10 +121,12 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
       }
     });
     // Loot: a shower of coins at the blast, then the fish fly to the HUD (guide: +1.4 s in the original, here 0.4 s after the blast).
-    stage.later(seq.impact + 0.35, () => fx.coinBurst(x, y, { count: 32, scale: 1.4 }));
+    stage.laterReal(seq.impact + 0.35, () => fx.coinBurst(x, y, { count: 32, scale: 1.4 }));
     currency.claimBig(seq.impact + 0.55);
-    stage.later(seq.impact + 0.5, () => {
-      banners.push('big', 'bossDown', 4, { title: t('director.bossDefeated'), color: Color.mustard }, 1, 0.4, 0.3);
+    // The banner pops in half a second after the blast and needs 1.7 s: whatever the finale opens next waits for it.
+    holdStage(seq.impact + 0.5 + BOSS_BANNER);
+    stage.laterReal(seq.impact + 0.5, () => {
+      banners.push('big', 'bossDown', 4, { title: t('director.bossDefeated'), color: Color.mustard }, BOSS_BANNER_HOLD, 0.4, 0.3);
       stage.direct('wave_clear', 0.6);
     });
     void seq.then(() => {

@@ -24,13 +24,17 @@ import { haptic } from '@/core/haptics';
 import type { HudEnv } from '../env';
 import { CLASS_ICON, PressCard, unitPortrait } from '../kit';
 import { planOf } from '../planMath';
+import { PICK, pickCardX, pickHand } from '../layoutMath';
 import { recommendPick } from '../policy';
 import { Hand } from '../Hand';
 
-const W = 690;
-const SCALE = 0.92;
-const CARD_W = 220 * SCALE;
-const GAP = 14;
+const W = PICK.w;
+const SCALE = PICK.scale;
+/** The cards sit lower than the text above them needs: the pointing hand has its own band between the sub line and the cards. */
+const CARD_Y = PICK.cardY;
+const PANEL_H = 664;
+/** Seconds the chosen card takes to spring up (and the others to slip away) before the sheet leaves. */
+const FAREWELL = 0.18;
 
 export class SummonPickPopup extends Popup<void> {
   private readonly bag = new TweenBag();
@@ -54,19 +58,19 @@ export class SummonPickPopup extends Popup<void> {
       unitClass,
     );
 
-    const h = 624;
+    const h = PANEL_H;
     const panel = new Panel({ width: W, height: h, title: t('hud.pick.title'), torn: 'bottom', tape: 'pink' });
     const c = panel.content;
     const sub = uiLabel(t('hud.pick.sub'), { size: 26, color: Color.inkSoft, wrap: W - 80 });
-    sub.position.set(W / 2, 84);
+    sub.position.set(W / 2, PICK.subY);
     c.addChild(sub);
 
     options.forEach((id, i) => {
       const def = unitDef(id);
-      const x = W / 2 + (i - (options.length - 1) / 2) * (CARD_W + GAP);
+      const x = pickCardX(i, options.length);
       const card = new PressCard(220, 292, () => this.choose(i), { holdLimit: HOLD_DELAY });
       card.scale.set(SCALE);
-      card.position.set(x, 290);
+      card.position.set(x, CARD_Y);
       const frame = new CardFrame({
         rarity: def.rarity,
         size: 'medium',
@@ -106,10 +110,13 @@ export class SummonPickPopup extends Popup<void> {
     if (guide) {
       this.hand = new Hand();
       this.hand.tap();
-      const rx = W / 2 + (this.recommended - (options.length - 1) / 2) * (CARD_W + GAP);
-      // The fingertip rests on the card's lower right corner so the hand never hides the name.
-      this.hand.scale.set(0.85);
-      this.hand.position.set(rx + 72, 398);
+      const { tip } = pickHand(this.recommended, options.length);
+      // The hand comes down from above the card and its fingertip rests on the photo's top edge: its body stays in the band under the
+      // sub line, so no card's name, class or "merges into" line is ever under it (pickHand, tested).
+      this.hand.rotation = Math.PI;
+      this.hand.scale.set(PICK.hand);
+      this.hand.position.set(tip.x, tip.y);
+      this.hand.alpha = 0;
       c.addChild(this.hand);
     } else {
       this.hand = null;
@@ -118,6 +125,12 @@ export class SummonPickPopup extends Popup<void> {
   }
 
   override onOpened(): void {
+    // The hand arrives after the cards have been dealt, so it never points at an empty spot.
+    const hand = this.hand;
+    if (hand) {
+      if (motion.reduced) hand.alpha = 1;
+      else this.bag.run({ duration: 0.2, delay: 0.55, ease: Ease.cubicOut, onUpdate: (k) => (hand.alpha = k) });
+    }
     if (motion.reduced) return;
     // Cards deal in one by one (U-10): rise, tilt, settle.
     this.cards.forEach((card, i) => {
@@ -143,21 +156,61 @@ export class SummonPickPopup extends Popup<void> {
     });
   }
 
+  /** True from the press until the sheet is gone: the HUD must not close it from under its own farewell. */
+  get picking(): boolean {
+    return this.picked;
+  }
+
+  /**
+   * The press is answered before anything else happens: the chosen card springs up, the other two slip down and
+   * fade, and only then the simulation is told and the sheet leaves, so the new cat's reveal plays on a clear board.
+   */
   private choose(index: number): void {
     if (this.picked) return;
-    const { ctx, battle } = this.env;
-    const fail = ctx.command('pickSummon', () => battle.pickSummon(index));
-    if (fail !== null) return;
     this.picked = true;
     audio.play('relic_pick', { volume: 0.7 });
     haptic('medium');
     this.hand?.destroy();
+    const still = motion.reduced;
     this.cards.forEach((card, i) => {
       card.setEnabled(false);
-      if (i === index) this.bag.run({ duration: 0.16, ease: Ease.cubicOut, onUpdate: (k) => card.scale.set(SCALE * (1 + 0.1 * k)) });
-      else this.bag.run({ duration: 0.16, ease: Ease.cubicIn, onUpdate: (k) => (card.alpha = 1 - 0.7 * k) });
+      const y0 = card.y;
+      if (i === index) {
+        this.bag.run({
+          duration: still ? 0 : FAREWELL,
+          ease: Ease.backOut,
+          onUpdate: (k) => {
+            card.scale.set(SCALE * (1 + 0.12 * k));
+            card.y = y0 - 14 * k;
+          },
+        });
+      } else {
+        this.bag.run({
+          duration: still ? 0 : FAREWELL,
+          ease: Ease.cubicIn,
+          onUpdate: (k) => {
+            card.alpha = 1 - 0.75 * k;
+            card.y = y0 + 26 * k;
+          },
+        });
+      }
     });
-    this.bag.call(0.16, () => this.close());
+    this.bag.call(still ? 0 : FAREWELL + 0.02, () => {
+      const { ctx, battle } = this.env;
+      const fail = ctx.command('pickSummon', () => battle.pickSummon(index));
+      if (fail === null) {
+        this.close();
+        return;
+      }
+      // The pick was refused after all: the cards come back and the player chooses again.
+      this.picked = false;
+      for (const card of this.cards) {
+        card.setEnabled(true);
+        card.alpha = 1;
+        card.scale.set(SCALE);
+        card.y = CARD_Y;
+      }
+    });
   }
 
   override destroy(options?: DestroyOptions): void {

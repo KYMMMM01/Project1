@@ -31,7 +31,7 @@ export function createDirector(ctx: BattleContext): DirectorPart {
 
   mountCombat(stage, bus);
   mountDeaths(stage, bus, currency, banners, music);
-  mountGrowth(stage, bus, banners, music);
+  mountGrowth(stage, bus, banners, music, currency);
   mountBoss(stage, bus, banners, music);
   mountFlow(stage, bus, banners, music);
   stage.addFrame((dt) => {

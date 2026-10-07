@@ -30,6 +30,42 @@ export interface SoundStats {
   modDepth: number;
   /** Milliseconds the first note takes to rise from 10 % to 90 % of its own peak: how soft or hard the touch is. */
   attackMs: number;
+  /**
+   * Share of the A-weighted energy of the first ~21 ms (one 1024-sample window from the start) that lies between 2 and 6 kHz: the crisp
+   * bite of a contact. A-weighted because a low body under it is mostly inaudible on a phone, so it must not drown the bite in the figure.
+   */
+  snapFrac: number;
+  /** Share of the whole spectral energy between 80 and 200 Hz: the low body of a heavy hit (what a phone speaker can still reproduce). */
+  bodyFrac: number;
+  /** What the sound looks like to a distinctness check: duration, brightness, how the brightness moves and the shape of the level. */
+  sig: Signature;
+}
+
+/**
+ * A fingerprint of a sound for telling two of them apart: `logMs` the natural log of the audible duration, `logHz` of the spectral
+ * centroid, `contour` how the centroid moves (its log relative to the mean, in four equal time slices: a pitch glide or a noise band
+ * sweeping up or down) and `env` the level in eight equal time slices, normalised to the loudest and square-rooted.
+ */
+export interface Signature {
+  logMs: number;
+  logHz: number;
+  contour: number[];
+  env: number[];
+}
+
+/** Differences that count as "one unit apart": 35 % in duration, 35 % in centroid, 0.25 in log-centroid movement, 0.2 in envelope. */
+const SIG_UNIT = { ms: 0.3, hz: 0.3, contour: 0.25, env: 0.2 } as const;
+
+/** Distance between two fingerprints in units (see SIG_UNIT): 0 identical, 1 clearly different in at least one respect. */
+export function signatureDistance(a: Signature, b: Signature): number {
+  const rms = (x: readonly number[], y: readonly number[]) => Math.sqrt(x.reduce((sum, v, i) => sum + (v - (y[i] ?? 0)) ** 2, 0) / Math.max(1, x.length));
+  const terms = [
+    (a.logMs - b.logMs) / SIG_UNIT.ms,
+    (a.logHz - b.logHz) / SIG_UNIT.hz,
+    rms(a.contour, b.contour) / SIG_UNIT.contour,
+    rms(a.env, b.env) / SIG_UNIT.env,
+  ];
+  return Math.sqrt(terms.reduce((sum, t) => sum + t * t, 0));
 }
 
 const SILENT_PEAK = 0.01;
@@ -178,7 +214,7 @@ function spectrum(
   sampleRate: number,
   start: number,
   end: number,
-): { centroidHz: number; brightHz: number; lowFrac: number; highFrac: number } {
+): { centroidHz: number; brightHz: number; lowFrac: number; highFrac: number; bodyFrac: number } {
   const re = new Float64Array(FFT_SIZE);
   const im = new Float64Array(FFT_SIZE);
   const bins = FFT_SIZE / 2;
@@ -202,6 +238,7 @@ function spectrum(
   let total = 0;
   let weighted = 0;
   let low = 0;
+  let mid = 0;
   let high = 0;
   let upper = 0;
   let upperWeighted = 0;
@@ -211,18 +248,111 @@ function spectrum(
     total += p;
     weighted += p * fHz;
     if (fHz < 200) low += p;
+    if (fHz >= 80 && fHz < 200) mid += p;
     if (fHz > 4000) high += p;
     if (fHz >= 300) {
       upper += p;
       upperWeighted += p * fHz;
     }
   }
-  if (total <= 0) return { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0 };
+  if (total <= 0) return { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0, bodyFrac: 0 };
   return {
     centroidHz: weighted / total,
     brightHz: upper > 0 ? upperWeighted / upper : 0,
     lowFrac: low / total,
     highFrac: high / total,
+    bodyFrac: mid / total,
+  };
+}
+
+const SNAP_FFT = 1024;
+
+/** Power weight of the A-weighting curve at `f` Hz (IEC 61672): what a listener hears of that frequency. */
+function aWeightPower(f: number): number {
+  const f2 = f * f;
+  const ra = (12194 ** 2 * f2 * f2) / ((f2 + 20.6 ** 2) * Math.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2)) * (f2 + 12194 ** 2));
+  return ra * ra;
+}
+
+/** A-weighted share of the energy in the first SNAP_FFT samples from `start` that lies between 2 and 6 kHz. */
+function snapShare(ch: readonly Float32Array[], sampleRate: number, start: number, end: number): number {
+  const re = new Float64Array(SNAP_FFT);
+  const im = new Float64Array(SNAP_FFT);
+  // A flat window with 5 % cosine ends: a Hann window would silence the very first milliseconds, which is where the bite is.
+  const taper = SNAP_FFT * 0.05;
+  for (let i = 0; i < SNAP_FFT; i++) {
+    let x = 0;
+    if (start + i < end) for (const c of ch) x += c[start + i] as number;
+    const edge = Math.min(i, SNAP_FFT - 1 - i);
+    re[i] = (x / ch.length) * (edge < taper ? 0.5 - 0.5 * Math.cos((Math.PI * edge) / taper) : 1);
+  }
+  fft(re, im);
+  const binHz = sampleRate / SNAP_FFT;
+  let total = 0;
+  let band = 0;
+  for (let k = 1; k < SNAP_FFT / 2; k++) {
+    const fHz = k * binHz;
+    const p = ((re[k] as number) ** 2 + (im[k] as number) ** 2) * aWeightPower(fHz);
+    total += p;
+    if (fHz >= 2000 && fHz <= 6000) band += p;
+  }
+  return total > 0 ? band / total : 0;
+}
+
+const SLICE_FFT = 256;
+
+/** Spectral centroid in Hz of each of `n` equal time slices of the audible region (a 256-point window every 128 samples inside a slice). */
+function sliceCentroids(ch: readonly Float32Array[], sampleRate: number, start: number, end: number, n: number): number[] {
+  const re = new Float64Array(SLICE_FFT);
+  const im = new Float64Array(SLICE_FFT);
+  const binHz = sampleRate / SLICE_FFT;
+  const out: number[] = [];
+  for (let k = 0; k < n; k++) {
+    const from = start + Math.floor(((end - start) * k) / n);
+    const to = start + Math.floor(((end - start) * (k + 1)) / n);
+    let total = 0;
+    let weighted = 0;
+    // A slice shorter than one window still gets one window, centred on it.
+    for (let o = Math.max(start, Math.min(from, to - SLICE_FFT)); o < Math.max(to - SLICE_FFT / 2, from + 1); o += SLICE_FFT / 2) {
+      for (let i = 0; i < SLICE_FFT; i++) {
+        let x = 0;
+        if (o + i < end) for (const c of ch) x += c[o + i] as number;
+        re[i] = (x / ch.length) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (SLICE_FFT - 1)));
+        im[i] = 0;
+      }
+      fft(re, im);
+      for (let b = 1; b < SLICE_FFT / 2; b++) {
+        const p = (re[b] as number) ** 2 + (im[b] as number) ** 2;
+        total += p;
+        weighted += p * b * binHz;
+      }
+    }
+    out.push(total > 0 ? weighted / total : 0);
+  }
+  return out;
+}
+
+const SIG_SLICES = 4;
+const SIG_ENV = 8;
+
+/** The fingerprint of the audible region (see `Signature`). */
+export function signatureOf(ch: readonly Float32Array[], sampleRate: number, start: number, end: number, centroidHz: number): Signature {
+  const cents = sliceCentroids(ch, sampleRate, start, end, SIG_SLICES).map((c) => Math.log(Math.max(60, c)));
+  const mean = cents.reduce((a, b) => a + b, 0) / cents.length;
+  const env: number[] = [];
+  for (let k = 0; k < SIG_ENV; k++) {
+    const from = start + Math.floor(((end - start) * k) / SIG_ENV);
+    const to = Math.max(from + 1, start + Math.floor(((end - start) * (k + 1)) / SIG_ENV));
+    let sum = 0;
+    for (const c of ch) for (let i = from; i < to; i++) sum += (c[i] as number) ** 2;
+    env.push(Math.sqrt(sum / ((to - from) * ch.length)));
+  }
+  const top = Math.max(...env, 1e-9);
+  return {
+    logMs: Math.log(Math.max(1, ((end - start) / sampleRate) * 1000)),
+    logHz: Math.log(Math.max(60, centroidHz)),
+    contour: cents.map((c) => c - mean),
+    env: env.map((e) => Math.sqrt(e / top)),
   };
 }
 
@@ -307,7 +437,7 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number, spectra
   }
   const n = region * ch.length;
   const window = Math.max(region, LOUD_WINDOW * sampleRate) * ch.length;
-  const spec = silent || !spectral ? { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0 } : spectrum(ch, sampleRate, start, end);
+  const spec = silent || !spectral ? { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0, bodyFrac: 0 } : spectrum(ch, sampleRate, start, end);
   const mod = silent || !spectral ? { hz: 0, depth: 0 } : modulation(ch, sampleRate, start, end);
 
   const first = ch.reduce((m, c) => Math.max(m, Math.abs(c[0] as number)), 0);
@@ -323,9 +453,63 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number, spectra
     endsNearZero: last < END_EDGE,
     silent,
     clipped: peak > CLIP_PEAK,
-    ...spec,
+    centroidHz: spec.centroidHz,
+    brightHz: spec.brightHz,
+    lowFrac: spec.lowFrac,
+    highFrac: spec.highFrac,
+    bodyFrac: spec.bodyFrac,
     modHz: mod.hz,
     modDepth: mod.depth,
     attackMs: silent ? 0 : attackTime(ch, sampleRate, start, end),
+    snapFrac: silent || !spectral ? 0 : snapShare(ch, sampleRate, start, end),
+    sig: silent || !spectral ? { logMs: 0, logHz: 0, contour: [], env: [] } : signatureOf(ch, sampleRate, start, end, spec.centroidHz),
   };
+}
+
+const SPECTROGRAM_FFT = 512;
+
+/**
+ * A picture of the audible region: `frames` equal time slices by `bins` equal frequency steps up to `maxHz` (row 0 the lowest), one byte
+ * per cell over 60 dB under the loudest cell. For looking at a sound (the hand-off's spectrogram sheets), not for measuring it.
+ */
+export function spectrogram(ch: readonly Float32Array[], sampleRate: number, frames: number, bins: number, maxHz: number): { ms: number; data: Uint8Array } {
+  const threshold = Math.max(1e-5, peakOf(ch) * 0.003);
+  const end = audibleEnd(ch, threshold);
+  const start = audibleStart(ch, threshold, end);
+  const region = Math.max(SPECTROGRAM_FFT, end - start);
+  const re = new Float64Array(SPECTROGRAM_FFT);
+  const im = new Float64Array(SPECTROGRAM_FFT);
+  const binHz = sampleRate / SPECTROGRAM_FFT;
+  const power = new Float64Array(frames * bins);
+  let top = 1e-30;
+  for (let f = 0; f < frames; f++) {
+    const from = start + Math.floor(((f + 0.5) * region) / frames) - SPECTROGRAM_FFT / 2;
+    for (let i = 0; i < SPECTROGRAM_FFT; i++) {
+      const idx = from + i;
+      let x = 0;
+      if (idx >= 0 && idx < end) for (const c of ch) x += c[idx] as number;
+      re[i] = (x / ch.length) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (SPECTROGRAM_FFT - 1)));
+      im[i] = 0;
+    }
+    fft(re, im);
+    const sum = new Float64Array(bins);
+    const count = new Float64Array(bins);
+    for (let k = 1; k < SPECTROGRAM_FFT / 2; k++) {
+      const row = Math.floor(((k * binHz) / maxHz) * bins);
+      if (row >= bins) break;
+      sum[row] = (sum[row] as number) + (re[k] as number) ** 2 + (im[k] as number) ** 2;
+      count[row] = (count[row] as number) + 1;
+    }
+    for (let b = 0; b < bins; b++) {
+      const p = (sum[b] as number) / Math.max(1, count[b] as number);
+      power[f * bins + b] = p;
+      if (p > top) top = p;
+    }
+  }
+  const data = new Uint8Array(frames * bins);
+  for (let i = 0; i < data.length; i++) {
+    const db = 10 * Math.log10(Math.max(1e-30, power[i] as number) / top);
+    data[i] = Math.round((Math.max(-60, db) + 60) * (255 / 60));
+  }
+  return { ms: ((end - start) / sampleRate) * 1000, data };
 }

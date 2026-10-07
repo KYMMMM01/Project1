@@ -20,9 +20,8 @@ import { NUDGE_FOR, TUTORIAL_SUMMONS, TutorialFlow, findMergePair, nudgeDue } fr
 /** How long the clock runs after a tap so the new kitten can pop in before the next prompt. */
 const BREATH = 0.75;
 const MARGIN = 18;
-/** The hand points at the button's top-right corner: its body then covers neither the cost label nor the screen's bottom edge. */
-const HAND_X = 0.84;
-const HAND_DY = 10;
+/** The pointing hand rests on the button's right edge: finger toward the button, body in the empty space beside it. */
+const HAND_SCALE = 0.85;
 
 export class Tutorial {
   readonly flow = new TutorialFlow();
@@ -134,9 +133,19 @@ export class Tutorial {
     this.pulse(true);
     const r = this.target();
     if (r) {
-      this.hand.position.set(r.x + r.w * HAND_X, r.y + HAND_DY);
+      this.pointAtButton(this.hand, r);
       this.hand.tap();
     }
+  }
+
+  /**
+   * The hand lies on the button's right edge, fingertip toward it at mid height, so neither the name of the button (it is longer
+   * in English) nor its price is under the hand. The staged reveal keeps the space beside the summon button empty on the first run.
+   */
+  private pointAtButton(hand: Hand, r: Rect): void {
+    hand.rotation = -Math.PI / 2;
+    hand.scale.set(HAND_SCALE);
+    hand.position.set(r.x + r.w - 4, r.y + r.h / 2);
   }
 
   private focusMerge(): void {
@@ -149,6 +158,8 @@ export class Tutorial {
     }
     // The clock keeps running here: the field ignores touches while any pause reason is active, and this step needs the drag.
     this.hold(false);
+    this.hand.rotation = 0;
+    this.hand.scale.set(1);
     this.drag = { a: pair[0], b: pair[1] };
     this.text = t('hud.tut.merge');
     this.target = () => this.mergeRect();
@@ -225,6 +236,8 @@ export class Tutorial {
       b.hitArea = new Rectangle(bx, by, bw, bh);
     });
     this.anchor.position.set(x + w / 2, y + h / 2);
+    // A resize or a moved button takes the hand with it.
+    if (this.flow.step === 'summon') this.pointAtButton(this.hand, r);
     this.say(x + w / 2, y);
   }
 
@@ -275,7 +288,7 @@ export class Tutorial {
     this.nudges++;
     this.nudgeLeft = NUDGE_FOR;
     const r = this.summonTarget();
-    this.nudgeHand.position.set(r.x + r.w * HAND_X, r.y + HAND_DY);
+    this.pointAtButton(this.nudgeHand, r);
     this.nudgeHand.visible = true;
     this.nudgeHand.tap();
     this.pulse(true);

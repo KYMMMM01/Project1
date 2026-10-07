@@ -90,7 +90,11 @@ async function steps(dts, o = {}) {
     const tag = o.tag ? '_' + o.tag.replace(/[^A-Za-z0-9-]/g, '') : '';
     const p = r.p ? '_p' + r.p.replace(/[^A-Za-z0-9.\-]/g, '~') : '';
     await sleep(60);
-    await shot(key + '_' + String(SHOT_IDX[key] = (SHOT_IDX[key] ?? -1) + 1).padStart(2, '0') + '_t' + r.t + tag + p);
+    const name = key + '_' + String(SHOT_IDX[key] = (SHOT_IDX[key] ?? -1) + 1).padStart(2, '0') + '_t' + r.t + tag + p;
+    // A screenshot now and then times out while the tab is not the one being drawn; the game is frozen, so shooting again is safe.
+    for (let tries = 0; ; tries++) {
+      try { await shot(name); break; } catch (e) { if (tries >= 3) throw e; await sleep(700); }
+    }
     probes.push(r.p);
   }
   return probes;
@@ -165,4 +169,43 @@ async function tapText(str, pick = 'last') {
   if (!p) throw new Error('no visible text: ' + str);
   await tap(p.x, p.y);
   return p;
+}
+// Every visible on-screen string, top to bottom (to find what a screen says before tapping it).
+async function texts() {
+  return await ev(() => {
+    const g = window.__dbg.game;
+    const hits = [];
+    const walk = (n, shown) => {
+      const vis = shown && n.visible !== false && n.alpha > 0.05;
+      if (!vis) return;
+      if (typeof n.text === 'string' && n.text) {
+        const p = n.getGlobalPosition();
+        const x = p.x / g.scale, y = p.y / g.scale;
+        if (x > 0 && x < g.w && y > 0 && y < g.h) hits.push(Math.round(y) + ':' + Math.round(x) + ' ' + n.text.slice(0, 24));
+      }
+      if (n.children) for (const c of n.children) walk(c, vis);
+    };
+    walk(g.app.stage, true);
+    return hits.sort((a, b) => parseInt(a) - parseInt(b)).join(' | ');
+  });
+}
+// A tall phone (720 x 1600 design space) and optionally a home-indicator inset, without a real device: the page's
+// visual viewport is replaced and the game lays itself out again. tall(false) puts the real viewport back.
+async function tall(on = true, inset = 0) {
+  await ev(([on, inset]) => {
+    const g = window.__dbg.game;
+    if (on) Object.defineProperty(window, 'visualViewport', { configurable: true, value: { width: 405, height: 900, scale: 1, offsetLeft: 0, offsetTop: 0, addEventListener() {}, removeEventListener() {} } });
+    else delete window.visualViewport;
+    g.layout();
+    if (inset > 0) { g.safeBottom = inset; g.events.emit('resize', { w: g.w, h: g.h }); }
+  }, [on, inset]);
+  await sleep(500);
+  await adv(0.4);
+}
+// One still of the frozen game, retried when the tab happens not to be the one being drawn.
+async function snap(name) {
+  await sleep(60);
+  for (let tries = 0; ; tries++) {
+    try { await shot(name); return; } catch (e) { if (tries >= 3) throw e; await sleep(700); }
+  }
 }

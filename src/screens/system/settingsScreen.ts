@@ -5,10 +5,12 @@ import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { getLang, i18nEvents, t, type Lang } from '@/core/i18n';
 import { isStorageVolatile, onStorageVolatile } from '@/core/save';
+import { uiTweens } from '@/core/tween';
 import type { NumbersMode } from '@/fx';
 import { profile } from '@/meta';
 import { iap } from '@/platform';
-import { Button, Color, drawIcon, fitLabel, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, uiLabel } from '@/ui';
+import { backOut, Button, Color, drawIcon, fitLabel, motion, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, TweenBag, uiLabel } from '@/ui';
+import { refusalCue } from '@/ui/press';
 import { currentSettings, ensureSettings, updateSettings } from '@/view/hud/settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '@/view/hud/settingsMath';
 import { CodeExportPopup, CodeImportPopup } from './backupPopups';
@@ -24,6 +26,10 @@ const SEG_H = 80;
 const SIDE = 28;
 const GAP = 20;
 const LINK_H = 88;
+/** The language strip's paper piece slides across before the screen changes language; then the new sheets settle into place one after another. */
+const LANG_SLIDE = 0.2;
+const RELAY_DROP = 18;
+const RELAY_BEAT = 0.05;
 
 const LINK_LABEL: Record<LegalLinkId, string> = {
   privacy: 'rt.sys.link.privacy',
@@ -54,6 +60,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   game.popupLayer.addChild(scaffold);
   let closed = false;
   let restoring = false;
+  const bag = new TweenBag();
 
   const labelOf = (row: Container, text: string, w: number, y: number, room: number): Text => {
     const label = uiLabel(text, { size: 32, anchorX: 0, align: 'left' });
@@ -142,7 +149,8 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
 
   const versionLabel = (): PaperLabel => new PaperLabel({ text: t('rt.sys.version', { v: GAME_VERSION }), size: 26, paper: 'kraft', padX: 28, padY: 8 });
 
-  const build = (): void => {
+  const build = (settle = false): void => {
+    let order = 0;
     for (const c of scaffold.content.removeChildren()) c.destroy({ children: true });
     scaffold.setTitle(t('rt.sys.settings'));
     const s = currentSettings();
@@ -157,6 +165,11 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     const add = (title: string, rows: readonly FormRow[]): void => {
       const sheet = formSheet(w, title, rows);
       sheet.view.position.set(0, y);
+      if (settle && !motion.reduced) {
+        const top = y;
+        sheet.view.y = top + RELAY_DROP;
+        bag.to(sheet.view, { y: top }, { duration: 0.26, delay: order++ * RELAY_BEAT, ease: backOut(1.6) });
+      }
       scaffold.content.addChild(sheet.view);
       y += sheet.height + GAP + LABEL_OVERHANG;
     };
@@ -167,14 +180,20 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     add(t('rt.sys.section.screen'), [
       segmentRow(t('rt.sys.shake'), SHAKE_MODES.map((m) => ({ id: m, label: t(`rt.sys.shake.${m}`) })), s.shake, (id) => updateSettings({ shake: id as ShakeMode })),
       toggleRow(t('rt.sys.flashes'), s.flashes, (v) => updateSettings({ flashes: v })),
+      // Applied at once (the kit's motion flag and the effect switch): the rest of the screen already moves less on the next frame.
+      toggleRow(t('rt.sys.reduceMotion'), s.reduceMotion, (v) => updateSettings({ reduceMotion: v })),
       segmentRow(t('rt.sys.numbers'), modes.map((m) => ({ id: m, label: t(`rt.sys.numbers.${m}`) })), s.numbers, (id) => updateSettings({ numbers: id as NumbersMode })),
       segmentRow(t('rt.sys.quality'), QUALITIES.map((q) => ({ id: q, label: t(`rt.sys.quality.${q}`) })), routinePrefs().quality, (id) => setQuality(id as Quality), t('rt.sys.quality.hint')),
     ]);
 
     add(t('rt.sys.section.game'), [
       toggleRow(t('rt.sys.haptics'), s.haptics, (v) => updateSettings({ haptics: v })),
-      // The screen is rebuilt by the i18n listener once the handler that changed the language has returned.
-      segmentRow(t('rt.sys.lang'), [{ id: 'ko', label: '한국어' }, { id: 'en', label: 'English' }], getLang(), (id) => updateSettings({ lang: id as Lang })),
+      // The strip's piece slides over first; the language changes when it has arrived and the i18n listener rebuilds the screen.
+      segmentRow(t('rt.sys.lang'), [{ id: 'ko', label: '한국어' }, { id: 'en', label: 'English' }], getLang(), (id) => {
+        uiTweens.call(motion.reduced ? 0 : LANG_SLIDE, () => {
+          if (!closed) updateSettings({ lang: id as Lang });
+        });
+      }),
     ]);
 
     const bw = (w - SIDE * 2 - GAP) / 2;
@@ -260,7 +279,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     if (closed || b.destroyed) return;
     b.setBusy(false);
     if (!r.ok) {
-      audio.play('ui_error');
+      refusalCue();
       toast(t('rt.sys.restore.fail'), 'warning');
       return;
     }
@@ -270,22 +289,18 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   };
 
   // The language segment lives inside the content that is rebuilt: rebuild after its handler has returned.
-  const offLang = i18nEvents.on('change', () => {
-    queueMicrotask(() => {
-      if (!closed) build();
-    });
-  });
+  const rebuild = (): void => {
+    if (!closed) build(true);
+  };
+  const offLang = i18nEvents.on('change', () => queueMicrotask(rebuild));
 
   // The notice at the top appears the moment the first write is lost, even with this screen already open.
-  const offVolatile = onStorageVolatile(() => {
-    queueMicrotask(() => {
-      if (!closed) build();
-    });
-  });
+  const offVolatile = onStorageVolatile(() => queueMicrotask(rebuild));
 
   const close = (): void => {
     if (closed) return;
     closed = true;
+    bag.killAll();
     offLang();
     offVolatile();
     current = null;
@@ -295,6 +310,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   dispose = () => {
     if (closed) return;
     closed = true;
+    bag.killAll();
     offLang();
     offVolatile();
     current = null;

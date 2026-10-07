@@ -114,4 +114,39 @@ Stepped frame by frame at full motion (method and tools in `docs/handoff/ui.md`;
 | Automatic popup | `autopop/strip_ap` | the first popup is the kit popup with its sticker popping in 80 ms later; queue gap 0.6 s: read from the code | none | the second popup of the queue was not reached (the script looked for a different button label) |
 | Points bar to the chest, chest claim, premium purchase celebration, backup code popup stages, language switch re-laying settings, day-28 page turn | not captured | | | |
 
-The stamp's knock (`stampThud`, sound `place` at 0.45, one per 90 ms) lives in `screens/system/kit/marks.ts`; `StampMark.slam` and the shop's `stampIn` both call it.
+The stamp's knock (`stampThud`, one per 90 ms; since the second pass the audio owner's `reward_claim`) lives in `screens/system/kit/marks.ts`; `StampMark.slam` and the shop's `stampIn` both call it.
+
+### Second pass
+
+| Moment | Strip | Before | Change | After |
+|---|---|---|---|---|
+| Daily-points chest claim | `chestd/strip_cc` | The reward sheet opened in the tap frame over a stamp that slammed behind the dim: the claimed state was never seen; the top bar rolled up and was put back when the sheet opened | `stampPending()` / `afterStamp()` in `kit/marks.ts`: a claim that stamps its line holds its sheet for the stamp (0.3 s); `payout` keeps the top bar's numbers back through the beat (`shell.pending`, `showRewards(parts, title, held)`) and leaves its own sound to the stamp's landing; `stampThud` plays the audio owner's rubber stamp (`reward_claim`) instead of `place` | stamp slams, `reward_claim` on its landing frame, the sheet follows, the pills stay put |
+| Tier card claim, weekly cup | `tier2/strip_cup` | same cause as above | same fix | `받았어요` slams (5.97), lands (6.02, sound), sheet opens at 6.27 (endless uses the same `TierCell` and `payout`, not captured on its own) |
+| Premium pass purchase | `prem/strip_pm`, `prem2/strip_pu` | The tab was rebuilt unlocked under the celebration popup, so the lane unlocking was never seen | the lane keeps its padlocks while the celebration is open (`heldLock`); when it closes the locks peel off one after another (lift, turn, fade, 0.3 s, lower tiers first, `PassCell.peelLock`) while the claim tags come up; "claim all" from the popup follows 0.45 s later | locks come off in view |
+| Claim-all on the pass | `passall/strip_pa` | Rings ripple in on every row together, combined sheet follows; the pills jumped to the new totals and back when the sheet opened | the same hold as the chest claim | pills stay at `2만 / 800`, one knock, sheet at 5.87 |
+| Language switch in settings | `lang/strip_lg` | The strip's piece did not get to slide: the whole screen was rebuilt in the new language in one frame | the language changes 0.2 s after the tap (the piece slides first), the new sheets drop 18 px and settle one after another (0.26 s, 0.05 s apart); an alpha fade was tried and left the toggles pale (cached textures baked at low alpha), a position settle is safe | slide, then settle |
+| Backup code popup stages | `code/strip_cs` | Input to preview cut the sheet to a new height in one frame | a new stage's sheet drops 16 px from 0.93 and settles (0.24 s); the text field waits for it | settles |
+| Calendar day 28 claim | `cal/strip_c28` | Stamp slam and `reward_claim` fine, sheet at once | the sheet waits for the stamp | stamp lands, then the sheet |
+| Calendar page turn | `cal2/strip_cn` | A new calendar replaced the finished one in one frame | the 28 squares pop back on in reading order (0.24 s each, 12 ms apart, back ease) and today's pulse starts after | page is turned |
+| Automatic notes, one after another | `auto/strip_ap`, `auto2/strip_q2` | Comeback note, reward sheet and level-up note each opened as the kit popup: right. The beat between two notes was 1.0 s instead of the intended 0.6 (the check runs every 0.4 s and the clock started at `-GAP_AFTER`) | the clock restarts at `CHECK_EVERY - GAP_AFTER`, the beat is 0.5 s | next note after about 0.5 s of bare home |
+| Toast plus refusal sound | logs | two identical cues in one frame in 15 places | `refusalCue()` (see `ui.md`) | one cue |
+
+The stamp's knock is no longer `place`: `stampThud` (`kit/marks.ts`) plays `reward_claim` at 0.7 (still one per 90 ms). Where a claim brings its own stamp (`StampMark.slam` in the same breath), `payout` and the shop's `feedback()` stay quiet and the landing carries the sound; with reduced motion the stamp lands at once and sounds then.
+
+### Could not capture (second pass)
+
+The backup export with its copy (the clipboard is blocked in the runner; the popup is the same sheet and toast), the endless tier claim on its own, the third and fourth notes of the queue (unlock note, gem pass).
+
+
+## 2026-10-07 owner feedback
+
+**D. "Reduce motion" in the settings.** A toggle row in the "Screen" sheet (`rt.sys.reduceMotion`: 움직임 줄이기 / Reduce motion), under "Flashes", wired to `updateSettings({ reduceMotion })` of `src/view/hud/settings.ts`; off by default and never taken from the OS. `updateSettings` applies it at once (`motion.reduced` and `fxSettings.reducedMotion`), saved with the other settings. Checked in the browser by tapping it: `[motion.reduced, fxSettings.reducedMotion]` went `[true, true]` and back to `false` (stills `shots/se/sheet.png`); `tests/screens.settings.test.ts` (default off, both flags flip and flip back).
+
+**E. The menus at full motion** (first time anyone saw them so). Stepped by hand with `game.tick(dt)`:
+| Moment | Strip | Finding | Change |
+|---|---|---|---|
+| Home start (iris out and in) | `e3/strip_enter` | The iris closes and opens in about 0.6 s, the battle tab is standing when it opens: right | none |
+| Home idle | `e1/strip_home` (idle frames) | The START paper bobs, nothing else moves: right | none |
+| Tab switch battle -> shop | `e1/strip_home` (toshop frames) | Cross-fade done in 0.13 s, the new tab's paper and the selected tab's paper land together: right | none |
+| Shop chests | `sc/sheet_ko`, `sw/sheet_en` | The blocks are dealt in (kit `SubCard.deal`), nothing waits for them | none |
+| Mission claim | `e2/strip_claim` | The stamp slammed (0.09 s) and the burst of coins started 0.06 s later right on top of it: for about half a second the pile hid the stamp, the one thing the player did | `payout` (`kit/claimFx.ts`): when a stamp is landing, the coin flight waits `min(stamp, 0.2)` s so the stamp is seen first. The balance still waits for the first coin (`shell.pending` is raised at once). Strip `e2b/strip_claim`: stamp alone at 5.59 to 5.73, coins from 5.83, the pill rolls at 6.55; the whole claim is 0.2 s longer and reads in order. |

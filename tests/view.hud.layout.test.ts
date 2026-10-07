@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BattleLayout } from '@/view/context';
-import { bottomRects, fitScale, slotCentre, slotWidth, topRects } from '@/view/hud/layoutMath';
+import { bottomRects, fitScale, PICK, pickCardX, pickHand, slotCentre, slotWidth, topRects } from '@/view/hud/layoutMath';
 
 function layout(h: number, safeTop = 0, safeBottom = 0): BattleLayout {
   const slack = Math.round((h - safeTop - safeBottom - 168 - 452 - 624) / 2);
@@ -119,4 +119,31 @@ describe('strip helpers', () => {
     expect(fitScale(400, 400, 720, 1280)).toBe(1);
     expect(fitScale(700, 1400, 720, 1280) * 1400).toBeLessThanOrEqual(1280 - 48);
   });
+});
+
+describe('the pointing hand of the pick of three', () => {
+  for (const n of [3, 2]) {
+    for (let i = 0; i < n; i++) {
+      it(`on card ${i + 1} of ${n} covers no card text and no part of the sub line`, () => {
+        const { tip, body } = pickHand(i, n);
+        // The fingertip is on the recommended card's photo, inside its own width.
+        const cx = pickCardX(i, n);
+        expect(Math.abs(tip.x - cx)).toBeLessThan((220 * PICK.scale) / 2);
+        expect(tip.y).toBeGreaterThan(PICK.cardY - PICK.frameHalf);
+        // Every card's name, class line and "merges into" lines sit below its photo frame: the hand ends at the fingertip, above them.
+        const textTop = PICK.cardY + PICK.frameHalf - 60;
+        expect(body.y + body.h).toBeLessThanOrEqual(textTop);
+        // The sub line above the cards is clear of the hand's body, whatever its width.
+        const subBottom = PICK.subY + PICK.subHalf;
+        expect(body.y).toBeGreaterThan(subBottom);
+        const subLeft = PICK.w / 2 - PICK.subW / 2;
+        const subRight = PICK.w / 2 + PICK.subW / 2;
+        const overlapsSubColumns = body.x < subRight && body.x + body.w > subLeft;
+        if (overlapsSubColumns) expect(body.y).toBeGreaterThan(subBottom);
+        // And it stays inside the sheet.
+        expect(body.x).toBeGreaterThanOrEqual(0);
+        expect(body.x + body.w).toBeLessThanOrEqual(PICK.w);
+      });
+    }
+  }
 });

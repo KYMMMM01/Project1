@@ -227,3 +227,27 @@ export function scaffoldLayout(
     bottomInset: actionBar ? 0 : safeBottom,
   };
 }
+
+/** Fixed measures of the bottom tab bar, in the bar's own space (y 0 = the top of its box, the torn edge sits at `strip`). */
+export const TAB_BAR = {
+  h: 128,
+  strip: 22,
+  /** Centre line of a tab's label and the half of its 24 px text height. */
+  labelY: 102,
+  labelHalf: 14,
+  /** Top of an ordinary selected tab's paper, and of the raised hero tab's (it has to hold its disc as well). */
+  paperTop: -30,
+  heroPaperTop: -58,
+  /** How far the paper is cut below the bar's bottom edge: past the screen, so no bottom edge is ever visible. */
+  bleed: 40,
+} as const;
+
+/**
+ * The cream paper behind a selected tab, relative to the tab's own origin (its centre line, bar top). It runs from above the
+ * torn edge to `bleed` below the bar including the safe-area inset (`barH`), so the icon and the label sit on it whole.
+ */
+export function tabPaperBox(cell: number, barH: number, featured: boolean): Box {
+  const w = cell - (featured ? 8 : 16);
+  const top = featured ? TAB_BAR.heroPaperTop : TAB_BAR.paperTop;
+  return { x: -w / 2, y: top, w, h: barH + TAB_BAR.bleed - top };
+}

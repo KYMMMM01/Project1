@@ -14,13 +14,16 @@ import type { IconName } from '@/ui/icons';
 import { Color, RARITY_ORDER, Rarity } from '@/ui/theme';
 import type { SfxId } from '@/audio/api';
 import type { BannerService } from './banners';
+import type { CurrencyService } from './currency';
 import { SPARKLE_UP, STAR_POP, THEME_SPRAY } from './defs';
 import type { MusicService } from './music';
 import { CLASS_COLOR, themeOf } from './palette';
 import { DUCK_BY_TIER, SummonRate, summonPlan } from './policy';
 import type { Bus, Stage } from './stage';
 import { Hue } from '@/fx/palette';
-import { MERGE_SECONDS, REVEAL_DELAY, SLIDE_SECONDS } from '@/view/timing';
+import { MERGE_SECONDS, MOLT_SECONDS, REVEAL_DELAY, SLIDE_SECONDS } from '@/view/timing';
+import { tossFor } from '@/view/toss';
+import { motion } from '@/ui/motion';
 
 const W = Hue.cream;
 const GOLD = Color.mustard;
@@ -35,7 +38,7 @@ const CLASS_ICON: Record<ClassId, IconName> = {
   trickster: 'class_trickster',
 };
 
-export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music: MusicService): void {
+export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music: MusicService, currency: CurrencyService): void {
   const ctx = stage.ctx;
   const fx = stage.fx;
   const ps = fx.ps;
@@ -69,23 +72,29 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     const tier = unitRarityIndex(u.id);
     const rapid = rate.note(stage.now);
     const plan = summonPlan(tier, rapid, stage.now - lastBig);
-    if (plan.thin) {
-      // Rapid tapping: the colour and the pop stay, the extra layers go.
-      fx.summonReveal(x, y, 0, { color: Rarity[RARITY_ORDER[tier] ?? 'common'].color, scale: 0.9 });
-    } else {
-      if (tier >= 3) lastBig = stage.now;
-      fx.summonReveal(x, y, tier, { quick: plan.quick });
-      const duck = DUCK_BY_TIER[tier];
-      if (duck) music.duck(duck.depth, duck.seconds);
-    }
-    if (!plan.thin) themeBurst(x, y, tier);
-    const sfx = plan.popOnly ? SUMMON_SFX[0] : SUMMON_SFX[tier];
-    // Every summon sound opens with the pop of the sticker landing, so it waits for the reveal (the effect charges in silence).
-    const lag = plan.thin ? 0 : (REVEAL_DELAY[plan.quick ? 2 : tier] ?? 0);
-    const volume = SUMMON_VOLUME[plan.popOnly ? 0 : tier] ?? 0.6;
-    if (sfx && lag > 0) stage.laterReal(lag, () => stage.play(stage.rules.summon, sfx, volume, 1, 0.03));
-    else if (sfx) stage.play(stage.rules.summon, sfx, volume, 1, 0.03);
-    sourceCue(e.source, x, y);
+    const play = (): void => {
+      if (plan.thin) {
+        // Rapid tapping: the colour and the pop stay, the extra layers go.
+        fx.summonReveal(x, y, 0, { color: Rarity[RARITY_ORDER[tier] ?? 'common'].color, scale: 0.9 });
+      } else {
+        if (tier >= 3) lastBig = stage.now;
+        fx.summonReveal(x, y, tier, { quick: plan.quick });
+        const duck = DUCK_BY_TIER[tier];
+        if (duck) music.duck(duck.depth, duck.seconds);
+      }
+      if (!plan.thin) themeBurst(x, y, tier);
+      const sfx = plan.popOnly ? SUMMON_SFX[0] : SUMMON_SFX[tier];
+      // Every summon sound opens with the pop of the sticker landing, so it waits for the reveal (the effect charges in silence).
+      const lag = plan.thin ? 0 : (REVEAL_DELAY[plan.quick ? 2 : tier] ?? 0);
+      const volume = SUMMON_VOLUME[plan.popOnly ? 0 : tier] ?? 0.6;
+      if (sfx && lag > 0) stage.laterReal(lag, () => stage.play(stage.rules.summon, sfx, volume, 1, 0.03));
+      else if (sfx) stage.play(stage.rules.summon, sfx, volume, 1, 0.03);
+      sourceCue(e.source, x, y);
+    };
+    // The cat's sticker is tossed from the button first (the field flies it): the reveal starts on the frame it lands.
+    const lead = tossFor(e.source, motion.reduced);
+    if (lead > 0) stage.laterReal(lead, play);
+    else play();
   });
 
   /** Free summons (relic, twin bells, offer picks) get a small sparkle so they read as a gift. */
@@ -122,8 +131,9 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     const x = cellCenterX(e.cell);
     const y = cellCenterY(e.cell) - 8;
     fx.moltPuff(x, y, { color: CLASS_COLOR[unitClass(e.result.id)] });
-    stage.direct('molt', 0.8);
-    stage.buzz('light');
+    // The sound peaks 0.22 s in (audio.md): started that much ahead of the sticker's pop.
+    stage.laterReal(MOLT_SECONDS - 0.22, () => stage.direct('molt', 0.8));
+    stage.laterReal(MOLT_SECONDS, () => stage.buzz('light'));
   });
 
   on('awaken', (e) => {
@@ -190,17 +200,32 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     }
   });
 
-  on('sunbeams', (e) => {
+  /** The new sunbeam cells light up with sparkles and a chime, but only on the cells that were not already lit. */
+  const lightSun = (cells: readonly number[]): void => {
     let fresh = 0;
-    for (const c of e.cells) {
+    for (const c of cells) {
       if (sunlit.includes(c)) continue;
       const x = cellCenterX(c);
       const y = cellCenterY(c);
       stage.later(fresh * 0.05, () => ps.burst(SPARKLE_UP, x, y, { colors: [W, Hue.sun, GOLD], count: 1.6, scale: 1.3 }));
       fresh++;
     }
-    sunlit = e.cells.slice();
+    sunlit = cells.slice();
     if (fresh > 0) stage.direct('sunbeam', 0.5);
+  };
+  /** The beams move when an act ends, under the boss-defeated banner and the toy screen: they show when the next wave starts. */
+  let sunLater: readonly number[] | null = null;
+
+  on('sunbeams', (e) => {
+    if (stage.bossSeqActive) sunLater = e.cells.slice();
+    else lightSun(e.cells);
+  });
+
+  on('waveStart', () => {
+    if (!sunLater) return;
+    const cells = sunLater;
+    sunLater = null;
+    lightSun(cells);
   });
 
   // The toy's icon flies from the choice card (the HUD owns that flight), so only the caption and the sound live here.
@@ -210,10 +235,18 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   });
 
   on('sell', (e) => {
-    const x = cellCenterX(e.cell);
-    const y = cellCenterY(e.cell);
+    // A sticker sold on the strip is far from its cell: the dust and the pay leave from where it is.
+    const view = ctx.unitView(e.unit.uid);
+    const g = view ? view.getGlobalPosition() : null;
+    const at = g ? ctx.layers.fxFront.toLocal(g) : null;
+    const x = at ? at.x : cellCenterX(e.cell);
+    const y = at ? at.y : cellCenterY(e.cell);
     fx.dustPuff(x, y, { scale: 0.9 });
     fx.coinBurst(x, y - 10, { count: 6, scale: 0.8 });
+    if (g) {
+      const scene = ctx.layers.overlay.toLocal(g);
+      currency.claimSale(scene.x, scene.y);
+    } else currency.claimSale(ctx.toSceneX(x), ctx.toSceneY(y));
     stage.direct('sell', 0.8);
     stage.buzz('light');
   });

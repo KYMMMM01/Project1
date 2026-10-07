@@ -53,17 +53,12 @@ export const FX_TIERS: Readonly<Record<FxTier, FxTierSpec>> = {
 /** Best first; a governor step down moves one entry to the right. */
 export const FX_TIER_ORDER: readonly FxTier[] = ['high', 'mid', 'low'];
 
-function systemPrefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
 export const fxSettings: FxSettings = {
   tier: 'mid',
   autoTier: true,
   quality: 1,
   flashes: true,
-  reducedMotion: systemPrefersReducedMotion(),
+  reducedMotion: false,
   numbers: 'full',
 };
 

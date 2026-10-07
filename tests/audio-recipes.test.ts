@@ -3,7 +3,9 @@ import { SFX_IDS } from '@/audio/api';
 import { FAMILIES, familyOf, type SoundKey } from '@/audio/families';
 import { CAT_TARGET, type Recipe } from '@/audio/recipe';
 import { BATTLE_RECIPES } from '@/audio/sfx-battle';
+import { CAT_RECIPES } from '@/audio/sfx-cats';
 import { COMBAT_RECIPES } from '@/audio/sfx-combat';
+import { FOE_RECIPES } from '@/audio/sfx-foes';
 import { UI_RECIPES } from '@/audio/sfx-ui';
 import {
   PRERENDER_ORDER,
@@ -72,10 +74,10 @@ describe('sound catalogue', () => {
     expect(SOUNDS.length).toBe(SFX_IDS.length + Object.keys(STINGER_RECIPES).length);
   });
 
-  it('splits the ids across the three recipe files without gaps or overlaps', () => {
+  it('splits the ids across the five recipe files without gaps or overlaps', () => {
     // The compiler already proves the merge covers SFX_IDS (sounds.ts types it as Record<SfxId, Recipe>);
     // this proves no id is defined twice, which a spread would silently resolve in favour of the last file.
-    const lists = [Object.keys(UI_RECIPES), Object.keys(COMBAT_RECIPES), Object.keys(BATTLE_RECIPES)];
+    const lists = [Object.keys(UI_RECIPES), Object.keys(COMBAT_RECIPES), Object.keys(BATTLE_RECIPES), Object.keys(CAT_RECIPES), Object.keys(FOE_RECIPES)];
     const all = lists.flat();
     expect(all.length).toBe(SFX_IDS.length);
     expect(new Set(all).size).toBe(SFX_IDS.length);
@@ -126,7 +128,9 @@ describe('sound catalogue', () => {
     }
     for (const fam of FAMILIES) {
       expect(fam.centroid[0]).toBeLessThan(fam.centroid[1]);
-      expect(fam.maxHigh).toBeLessThanOrEqual(0.1);
+      // The weapon and enemy sounds may carry up to 30 % of their energy above 4 kHz (the bite of a contact, a blade, a coin); nothing else may.
+      const bright = fam.members.every((m) => /^(atk_|imp_|foe_|crit$|hit_heavy$)/.test(m));
+      expect(fam.maxHigh).toBeLessThanOrEqual(bright ? 0.3 : 0.1);
     }
   });
 
@@ -274,19 +278,20 @@ describe('recipes', () => {
     expect(STINGER_MUFFLE.defeat).toBeLessThanOrEqual(500);
   });
 
-  it('declares duration windows that cap the decoded bank at about a quarter above the 8 MB budget', () => {
+  it('declares duration windows that cap the decoded bank under 24 MB', () => {
     // Node cannot render, so this bounds the bank from the declared maximum durations (which the
     // offline report enforces): mono float32 at 48 kHz, all variants. The report's measured total
-    // (7.9 MB at the time of writing) is the real check; this only stops the windows from drifting wide.
+    // (about 12 MB with the weapon and enemy sounds) against its 13 MB budget is the real check;
+    // this only stops the windows from drifting wide.
     const bytes = SOUNDS.reduce((n, d) => n + (d.recipe.variants ?? 1) * (d.recipe.ms[1] / 1000) * 48000 * 4, 0);
-    expect(bytes / 1e6).toBeLessThan(11);
+    expect(bytes / 1e6).toBeLessThan(24);
   });
 
-  it('band-limits rapid-fire ids below 5 kHz and keeps their level at or under the guide cap', () => {
+  it('band-limits rapid-fire ids (below 5 kHz for the old shots, below 7.5 kHz for the weapon sounds) and keeps their level at or under the guide cap', () => {
     for (const d of SOUNDS) {
       const r = d.recipe;
-      if (r.cat !== 'fire' && !(r.cat === 'hit' && r.rate)) continue;
-      expect(r.lp, d.key).toBeLessThanOrEqual(5000);
+      if (!['fire', 'hit', 'swing', 'impact', 'foe'].includes(r.cat) || !r.rate) continue;
+      expect(r.lp, d.key).toBeLessThanOrEqual(['fire', 'hit'].includes(r.cat) && d.id !== 'hit_heavy' && d.id !== 'crit' ? 5000 : 7500);
       expect(r.lp, d.key).toBeGreaterThan(0);
     }
     expect(CAT_TARGET.fire.peak).toBeLessThanOrEqual(0.26);

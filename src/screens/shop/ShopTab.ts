@@ -16,9 +16,11 @@ import { iap } from '@/platform';
 import { THEME_SPRAY } from '@/view/director/defs';
 import { themeOf } from '@/view/director/palette';
 import { confirmDialog, ScrollView, SegmentTabs, toast, uiLabel, type SegmentDef } from '@/ui';
+import { refusalCue } from '@/ui/press';
 import { services, type ContentArea, type Shell, type TabScreen } from '../contract';
 import { chestsBlock, freeWaitText } from './blocksChests';
 import { confirmChestBuy } from './ChestConfirm';
+import { afterStamp, stampPending } from '../system/kit/marks';
 import { dailyBlock } from './blocksDaily';
 import { gemsBlock, passBlock } from './blocksStore';
 import { cosmeticsBlock, detachRugPreviews, disposeRugPreviews, ticketsBlock } from './blocksStyle';
@@ -85,6 +87,7 @@ class ShopTab implements TabScreen {
 
   private readonly actions: ShopActions = {
     openChest: (kind) => void this.openAndReveal(kind),
+    openAllChests: (kind) => void this.openAndReveal(kind, true),
     buyChest: (kind) => void this.buyChest(kind),
     claimFreeChest: () => void this.claimFree(),
     skipFreeChest: (via) => void this.skipFree(via),
@@ -282,12 +285,13 @@ class ShopTab implements TabScreen {
   // ───────────────────────────── actions ─────────────────────────────
 
   private feedback(kind: 'purchase' | 'claim'): void {
-    audio.play(kind === 'purchase' ? 'purchase' : 'reward_claim');
+    // A card stamped "sold" is heard when the stamp lands.
+    if (stampPending() === null) audio.play(kind === 'purchase' ? 'purchase' : 'reward_claim');
     haptic('success');
   }
 
   private fail(code: Parameters<typeof errorKey>[0]): void {
-    audio.play('ui_error');
+    refusalCue();
     haptic('warning');
     toast(t(errorKey(code)), 'warning');
   }
@@ -322,11 +326,11 @@ class ShopTab implements TabScreen {
     });
   }
 
-  private async openAndReveal(kind: ChestKind): Promise<void> {
+  private async openAndReveal(kind: ChestKind, all = false): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
-      const r = await profile.openChest(kind);
+      const r = all ? await profile.openChests(kind) : await profile.openChest(kind);
       if (!r.ok) {
         this.fail(r.error);
         return;
@@ -410,6 +414,7 @@ class ShopTab implements TabScreen {
       return;
     }
     this.feedback(offer.kind === 'free' ? 'claim' : 'purchase');
+    await afterStamp();
     await services.showRewards(bundleParts(r.value), t('shop.sec.daily'));
   }
 
@@ -447,7 +452,7 @@ class ShopTab implements TabScreen {
       return;
     }
     if (outcome === 'failed') {
-      audio.play('ui_error');
+      refusalCue();
       toast(t('shop.buy.fail'), 'error');
       return;
     }

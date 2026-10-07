@@ -9,6 +9,7 @@ import type { BattleApi, Fail } from '@/game';
 import { popups, toast, tooltip, type Popup } from '@/ui';
 import type { BattleContext, BattleLayout } from '../context';
 import type { Hints } from './hints';
+import type { LaserTeach } from './laserTeach';
 import { failKeys, type Reveal } from './policy';
 
 export interface HudEnv {
@@ -17,6 +18,8 @@ export interface HudEnv {
   readonly sandbox: boolean;
   readonly reveal: Reveal;
   readonly hints: Hints;
+  /** What the player has been taught about the laser (the card's presses, the guided first use). */
+  readonly teach: LaserTeach;
   /** True in the tutorial run: forced steps, no offers. */
   readonly tutorial: boolean;
   layout(): BattleLayout;
@@ -51,6 +54,7 @@ export class EnvImpl implements HudEnv {
     readonly reveal: Reveal,
     readonly hints: Hints,
     private readonly root: Container,
+    readonly teach: LaserTeach,
   ) {
     this.battle = ctx.battle;
     this.sandbox = ctx.run.sandbox;

@@ -11,6 +11,7 @@ import type { BattleInit, BattleSnapshot } from '@/game';
 import { bundleParts, errorKey, profile } from '@/meta';
 import { BattleScene, setBattleCreatedHook, setBattleExit } from '@/scenes/BattleScene';
 import { HomeScene } from '@/scenes/HomeScene';
+import { rememberSelection } from '@/screens/battle';
 import { playClaim } from '@/screens/battle/claim';
 import { services, type StartRunRequest, type TabId } from '@/screens/contract';
 import { shell } from '@/screens/shell/controller';
@@ -18,8 +19,9 @@ import { continuePrompt } from '@/screens/shell/ContinuePrompt';
 import { openPreRun, type PreRunHandle, type SnackChoice } from '@/screens/shell/PreRunScreen';
 import '@/screens/shell/strings';
 import { confirmDialog, toast } from '@/ui';
-import type { RunConfig } from '@/view/context';
+import type { NextRun, RunConfig } from '@/view/context';
 import { gameplayStart, gameplayStop } from './lifecycle';
+import { nextRunPlan } from './nextRun';
 
 const IDLE_POLL_MS = 50;
 const IDLE_TRIES = 100;
@@ -38,6 +40,22 @@ export function installFlow(): void {
   setBattleExit(homeScene('battle'));
 }
 
+/**
+ * What the won result screen offers after this run, asked once the profile has paid it out. `start()` is the home
+ * screen's own path (pre-run page with rules and snack offers, the pending-run check, the platform play signals);
+ * once that run is opening, the home screen's chapter card follows it.
+ */
+function nextRunOf(init: BattleInit): () => NextRun | null {
+  return () => {
+    const last = profile.data.lastRun;
+    // The record has to be this battle's own run: a result that was never paid out leads nowhere.
+    if (!last || last.mode !== init.mode || last.chapter !== init.chapter || last.stake !== init.stake) return null;
+    const plan = nextRunPlan(profile.data.cleared, last);
+    if (!plan) return null;
+    return { ...plan, start: () => void startRun({ mode: 'chapter', ...plan }, () => rememberSelection(plan)) };
+  };
+}
+
 function runConfig(init: BattleInit, snapshot?: BattleSnapshot | null): RunConfig {
   return {
     init,
@@ -46,6 +64,7 @@ function runConfig(init: BattleInit, snapshot?: BattleSnapshot | null): RunConfi
     fxTheme: profile.equipped.fx,
     runsPlayed: profile.data.stats.runs,
     sandbox: false,
+    next: nextRunOf(init),
   };
 }
 
@@ -86,7 +105,7 @@ async function gotoWhenIdle(make: () => Scene, kind: TransitionKind): Promise<bo
 }
 
 /** Prepare a run with the meta layer (pays the snack, records the pending run) and open the battle. True when it is opening. */
-async function begin(request: StartRunRequest, snack: SnackChoice | undefined, beforeSwap?: () => void): Promise<boolean> {
+async function begin(request: StartRunRequest, snack: SnackChoice | undefined, beforeSwap?: () => void, onOpened?: () => void): Promise<boolean> {
   const prepared = await profile.prepareRun({
     mode: request.mode,
     ...(request.chapter !== undefined ? { chapter: request.chapter } : {}),
@@ -103,6 +122,7 @@ async function begin(request: StartRunRequest, snack: SnackChoice | undefined, b
     return make();
   }, 'iris');
   if (!opened) await profile.discardPendingRun();
+  else onOpened?.();
   return opened;
 }
 
@@ -130,13 +150,14 @@ async function dropInterruptedTutorial(): Promise<void> {
 
 /**
  * Shell.startRun: a run in progress is offered first; the tutorial starts at once; every other mode
- * goes through the pre-run page. Resolves when the battle is opening or the player backed out.
+ * goes through the pre-run page. Resolves when the battle is opening or the player backed out;
+ * `onOpened` runs when the battle is opening.
  */
-export async function startRun(request: StartRunRequest): Promise<void> {
+export async function startRun(request: StartRunRequest, onOpened?: () => void): Promise<void> {
   await dropInterruptedTutorial();
   if (profile.pendingRun) return offerContinue();
   if (request.mode === 'tutorial') {
-    await begin(request, undefined);
+    await begin(request, undefined, undefined, onOpened);
     return;
   }
   if (preRun) return;
@@ -151,7 +172,7 @@ export async function startRun(request: StartRunRequest): Promise<void> {
         begin(request, snack, () => {
           preRun?.destroy();
           preRun = null;
-        }).then((opened) => {
+        }, onOpened).then((opened) => {
           if (opened) resolve();
           return opened;
         }),
@@ -207,11 +228,10 @@ export async function chooseFirstScene(): Promise<() => Scene> {
 
 /** Chests opened (and paid out) in an earlier session whose reveal never finished: the player has not seen those cards yet. */
 async function replayReveals(): Promise<void> {
-  for (const result of [...profile.data.reveals]) {
-    if (!(scenes.current instanceof HomeScene)) return;
-    await services.revealChest(result);
-    shell.refresh();
-  }
+  if (profile.data.reveals.length === 0 || !(scenes.current instanceof HomeScene)) return;
+  // A pile opened in one go is replayed as one opening.
+  await services.revealChest([...profile.data.reveals]);
+  shell.refresh();
 }
 
 /** Called once the first scene is on screen: a reveal cut short last time is shown again, then a left-over run is offered. */

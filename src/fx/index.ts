@@ -17,3 +17,4 @@ export * from './flyTo';
 export * from './juice';
 export * from './screen';
 export * from './fx';
+export * from './marks';

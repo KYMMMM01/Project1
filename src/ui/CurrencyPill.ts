@@ -30,6 +30,8 @@ const H = 72;
 const TICK_MIN_DELTA = 25;
 const TICK_GAP = 0.05;
 const TICK_MAX_STEP = 8;
+/** One 60 fps frame: how far the count moves on the frame it is started. */
+const FIRST_STEP = 1 / 60;
 
 /**
  * HUD currency chip: a teal paper strip with the icon over its left end, a rolling number and an optional "+" shop button. Origin = centre.
@@ -105,27 +107,40 @@ export class CurrencyPill extends Container {
     const shown = this.num;
     const ticking = this.tickSfx !== false && Math.abs(to - from) >= TICK_MIN_DELTA;
     this.tickStep = 0;
-    let last = from;
+    const duration = countUpDuration(to - from);
+    let lastText = shown.text;
+    // The tick of a first step taken in the call itself is owed to the next frame, the one that draws it: a roll that is put back in the same frame stays silent.
+    let owed = false;
+    const tick = (): void => {
+      if (!ticking || game.time - this.tickAt < TICK_GAP) return;
+      this.tickAt = game.time;
+      if (this.tickSfx) audio.playStep(this.tickSfx, Math.min(TICK_MAX_STEP, this.tickStep++), { volume: 0.5 });
+    };
+    // A big number is shown abbreviated, so most integers change nothing on screen: tick only when the text changes.
+    const show = (k: number, first = false): void => {
+      if (owed) {
+        owed = false;
+        tick();
+      }
+      const text = formatCount(countUpValue(from, to, k));
+      if (text === lastText) return;
+      lastText = text;
+      shown.text = text;
+      this.fitNumber();
+      if (first) owed = true;
+      else tick();
+    };
     this.bag.runKeyed(shown, {
-      duration: countUpDuration(to - from),
+      duration,
       ease: Ease.cubicOut,
-      onUpdate: (k) => {
-        const v = countUpValue(from, to, k);
-        // Easing leaves many frames on the same integer: skip the glyph relayout for those.
-        if (v === last) return;
-        last = v;
-        shown.text = formatCount(v);
-        this.fitNumber();
-        if (ticking && game.time - this.tickAt >= TICK_GAP) {
-          this.tickAt = game.time;
-          if (this.tickSfx) audio.playStep(this.tickSfx, Math.min(TICK_MAX_STEP, this.tickStep++), { volume: 0.5 });
-        }
-      },
+      onUpdate: show,
       onComplete: () => {
         shown.text = formatCount(to);
         this.fitNumber();
       },
     });
+    // A tween first steps on the next tick, a frame late when the call comes after this tick's tweens: take the first step now.
+    show(Ease.cubicOut(FIRST_STEP / duration), true);
     if (to > from) this.punchIcon();
   }
 

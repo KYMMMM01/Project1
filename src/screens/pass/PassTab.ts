@@ -1,11 +1,11 @@
 /** The season pass tab: a sticker-collection track. A header with the season, the tier and the XP bar, then 30 tiers on two paper lanes. */
 import { Container, Graphics, type Text } from 'pixi.js';
-import { audio } from '@/audio';
 import { i18nEvents, t } from '@/core/i18n';
+import { uiTweens } from '@/core/tween';
 import { errorKey, profile } from '@/meta';
 import { mergeBundles } from '@/meta/bundle';
 import { featureHint } from '@/meta/features';
-import type { PassView } from '@/meta/routines';
+import type { PassRow, PassView } from '@/meta/routines';
 import type { Bundle, Result } from '@/meta/types';
 import { iap } from '@/platform';
 import {
@@ -22,6 +22,7 @@ import {
   toast,
   uiLabel,
 } from '@/ui';
+import { refusalCue } from '@/ui/press';
 import type { ContentArea, Shell, TabScreen } from '../contract';
 import { payout } from '../system/kit/claimFx';
 import { paperConfetti } from '../system/kit/confetti';
@@ -75,6 +76,8 @@ export class PassTab implements TabScreen {
   private busy = false;
   private claiming = false;
   private warning = false;
+  /** Between the premium purchase and the end of its celebration the lane still shows its locks, so that they are seen coming off. */
+  private heldLock = false;
   private sinceRefresh = 0;
   private offChange: (() => void) | null = null;
   private offLang: (() => void) | null = null;
@@ -143,7 +146,7 @@ export class PassTab implements TabScreen {
     drawPaper(this.track, x - TRACK_W / 2, first - 40, { w: TRACK_W, h: last - first + 80, kind: 'pill', fill: Color.track, edge: Color.kraftDark, shadow: 3, grain: false, seed: seed + 2 });
     this.trackReach = -1;
     v.free.forEach((free, i) => {
-      const row = new PassRowView(lane, free.tier, free, v.premiumRow[i] ?? free, v.premium, (track, kind, cell) => this.onCell(track, kind, cell, free.tier));
+      const row = new PassRowView(lane, free.tier, free, this.laneRow(v.premiumRow[i] ?? free), v.premium && !this.heldLock, (track, kind, cell) => this.onCell(track, kind, cell, free.tier));
       row.position.set(0, LANES_TOP + 8 + i * step);
       host.addChild(row);
       this.rows.push(row);
@@ -251,12 +254,16 @@ export class PassTab implements TabScreen {
     this.rows.forEach((row, i) => {
       const free = v.free[i];
       const prem = v.premiumRow[i];
-      if (free && prem) row.sync(free, prem, v.premium, free.tier === Math.max(1, v.tier) && v.tier > 0, animate);
+      if (free && prem) row.sync(free, this.laneRow(prem), v.premium && !this.heldLock, free.tier === Math.max(1, v.tier) && v.tier > 0, animate);
     });
     this.drawTrack(v);
   }
 
   /** The painted line behind the medals: kraft for the whole season, mustard up to the player's XP. */
+  private laneRow(row: PassRow): PassRow {
+    return this.heldLock && row.claimable ? { ...row, claimable: false } : row;
+  }
+
   private drawTrack(v: PassView): void {
     const g = this.trackFill;
     if (!g) return;
@@ -278,14 +285,14 @@ export class PassTab implements TabScreen {
         this.settle(() => profile.claimPass(track, tier), cell);
         break;
       case 'premium':
-        audio.play('ui_error');
+        refusalCue();
         if (this.canSell()) {
           toast(t('rt.pass.premiumLocked'), 'info');
           this.coupon?.nudge();
         }
         break;
       case 'notYet':
-        audio.play('ui_error');
+        refusalCue();
         toast(t('rt.pass.notYet'), 'info');
         break;
       case 'done':
@@ -299,7 +306,7 @@ export class PassTab implements TabScreen {
     try {
       const r = run();
       if (!r.ok) {
-        audio.play('ui_error');
+        refusalCue();
         toast(t(errorKey(r.error)), 'warning');
         this.syncAll(false);
         return;
@@ -324,7 +331,7 @@ export class PassTab implements TabScreen {
       const free = profile.claimAllPass('free');
       const premium = profile.claimAllPass('premium');
       if (!free.ok && !premium.ok) {
-        audio.play('ui_error');
+        refusalCue();
         toast(t(errorKey(free.error)), 'warning');
         this.syncAll(false);
         return;
@@ -345,14 +352,19 @@ export class PassTab implements TabScreen {
     this.coupon?.setBusy(false);
     if (outcome === 'cancelled') return;
     if (outcome !== 'purchased') {
-      audio.play('ui_error');
+      refusalCue();
       toast(t(outcome === 'unavailable' ? 'rt.pass.buyUnavailable' : 'rt.pass.buyFailed'), 'error');
       return;
     }
     this.shell.refresh();
     this.signature = '';
+    this.heldLock = true;
     this.ensureBuilt();
-    await this.celebrate();
+    try {
+      await this.celebrate();
+    } finally {
+      this.heldLock = false;
+    }
   }
 
   /** A new season wipes every tier nobody took: on each of its last days, the first visit to the tab says so once and offers to take them. */
@@ -411,7 +423,14 @@ export class PassTab implements TabScreen {
         tape: 'yellow',
       }),
     );
-    if (choice === 'claim' && !this.view.destroyed) this.claimAll();
+    this.heldLock = false;
+    if (this.view.destroyed) return;
+    this.syncAll(true);
+    if (choice === 'claim') {
+      // The locks come off first; the claim follows once the lane is open.
+      await uiTweens.call(0.45, () => undefined).finished;
+      if (!this.view.destroyed) this.claimAll();
+    }
   }
 
   private readonly onChange = (): void => {

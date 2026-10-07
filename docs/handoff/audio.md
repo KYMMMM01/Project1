@@ -2,8 +2,7 @@
 
 Every sound is synthesised with WebAudio at runtime: no audio files. SFX and stingers are rendered once
 by `OfflineAudioContext` into mono `AudioBuffer`s (on first use, plus idle slices after unlock); music is
-live-synthesised by a look-ahead sequencer. `src/audio/api.ts` is untouched (frozen contract, 70 SFX ids,
-4 music ids, 6 stingers).
+live-synthesised by a look-ahead sequencer. `src/audio/api.ts` is the frozen contract (4 music ids, 6 stingers, 70 SFX ids, which grew to 134 on 2026-10-07: only ids were added, see section 9).
 
 **2026-10-07 re-voicing.** The sounds were written for the old dark, glossy, neon "candy" look. The game is now cut
 paper on a wooden floor with matte sticker cats, so every sound was re-voiced as a material: paper, felt, wood,
@@ -401,3 +400,162 @@ A track change still enters on the outgoing track's next beat (at most 0.7 s) an
   8. The swap: `ui_tab` as a double slide against `place` for a plain move.
   9. Burn / poison / bleed cues (0.2-0.3 volume): useful or noise?
 * Optional requests (unchanged): `setDanger(level)` in `api.ts` for the low-HP state (the graph already has the `musicLpf` node it would drive); a way to duck the SFX bus too for a "silence beat" before legendary reveals.
+
+## 9. 2026-10-07 owner feedback: a sound for every weapon and every material
+
+Owner: "the hit sounds are all the same, so the hits feel flat. The gunner should make a gun sound, the bow a bow sound, the viking an axe on metal... and the enemies' hit sounds are a bit flat too."
+Everything in sections 1 to 8 still holds, except that the SFX catalogue grew from 70 to **134 ids** (`api.ts` only gained ids; nothing was renamed or removed) and the combat loudness families moved (section 9.5).
+
+### 9.1 What was wrong
+
+* **One sound per kind of event.** Twenty cats fired seven shared shots (`SHOOT_CUE`: the five warriors all `shoot_claw` at five pitches, three rangers `shoot_arrow`, seven casters and tricksters `shoot_magic`) and every hit was `hit_light`, `hit_heavy` or `zap`. The enemy never answered at all: a cucumber, a balloon and a clock were struck in silence. Variation was a pitch factor, not a different thing happening.
+* **This morning's re-voicing made it worse for combat.** It was right for menus and wrong for the heart of the game: all combat families sat at the UI level or below (`hit` peak 0.26, `fire` peak 0.20; the director played a plain hit at half volume), with no energy above 4 kHz, so a hit had no transient, only a felt pat.
+* **No crowd control that knew what a sound was.** The engine limiter thinned by id and by a density falloff, and the director's `SoundRule`s thinned by family, but nothing knew that a crit or a death matters more than the fourth plain hit of a frame, or kept variety when ten cats fired together.
+
+### 9.2 What exists now
+
+| file | role |
+|---|---|
+| `foley.ts` | the kit the weapon and enemy recipes are made of: `snap` (2-6 kHz bite), `body` (80-200 Hz weight), `clack`, `tink`, `whistle`, `boing`, `bubble`, `crackle`, `squelch`, plus level-corrected noise (`air`, `swish`, `dust`, `grain`, `rap`, `rattle`). Band-passed noise carries about a tenth of the power of a sine with the same gain, so every noise voice is lifted by 3.5 (`AIR`) and `v` means the same loudness for a tone and for noise |
+| `sfx-cats.ts` | 40 recipes: `atk_<unit>` (release) and `imp_<unit>` (impact) for each of the 20 cats. `RANK_TRIM` (0, 1.2, 2.4, 3.8, 5.4 dB) plus a per-recipe `db` keep every class line in order |
+| `sfx-foes.ts` | 24 recipes: `foe_<material>_hit` (10), `foe_<material>_die` (8), `foe_boss_<boss>` (6, one long death per boss) |
+| `combat.ts` | the lookups: `attackSfx(unit)`, `impactSfx(unit \| null)`, `critSfx(unit \| null)`, `foeHitSfx(enemy)`, `foeDieSfx(enemy)`. Each returns a frozen `{ id, volume, pitch }` made once at load (no allocation per call); `@/audio` re-exports them. The enemy to material table lives only here |
+| `voices.ts` | the crowd control (9.6): `VoiceRule.prio` and `.bucket`, `BUCKETS`, `COMBAT_CAP`, the combat table and `pickVictim` |
+| `engine.ts` | `SfxVoice.cut()` (12 ms fade, then stop), the voice behind each combat slot, `AudioStats.combatActive`, `combatActivePeak`, `sfxDropped.{bucket,cap,stolen}`, `prime(ids)` (dev: bake before a measurement) |
+| `analysis.ts` | three new measurements: `snapFrac`, `bodyFrac` and a `Signature` with `signatureDistance` (9.7), plus `spectrogram` for the sheets |
+| `report.ts`, `families.ts`, `devtools.ts`, `crowd.ts` | 33 new checks (80 in all, 47 before; `failing: []`), six new families (`hit` lost `hit_heavy` and `crit` to "weight and crack"), `window.__dbg.audio.combat()` (the weapon and enemy sounds alone, 4 s), `.crowd(speed, seconds)`, `.mix('fight' \| 'fight3')`, `.spec(key)` |
+| `src/demo/AudioDemo.ts` | a second grid page, "fight: cats and enemies" (9.9) |
+| `tests/audio-combat.test.ts` | 30 tests (9.8) |
+
+### 9.3 The 20 cats
+
+Measured in the browser (offline bake, 48 kHz, variant 0 for the fingerprint, all three variants for the numbers). `ms` audible length, `Hz` spectral centroid, `peak` of the normalised buffer before the director's volume (0.75 for a release, 0.8 for an impact).
+Release is the attack leaving the cat, impact is that weapon landing. Rows go weakest to strongest; each line grows in loudness (checked: each rank at least 4 % above the one before) and its top two ranks are longer than its bottom two.
+
+| cat | release | ms / Hz / peak | impact | ms / Hz / peak |
+|---|---|--:|---|--:|
+| w_paw (boxer) | a jab: narrow whiff 1.5 to 3.3 kHz, then the glove's pat | 81 / 1527 / 0.22 | glove on a cushion: low pat, leather slap, thin bite | 53 / 214 / 0.25 |
+| w_sword (wooden sword) | longer swish, hollow wooden hum, a small clack as the swing ends | 127 / 1445 / 0.25 | wood on wood: loud clack, cushion thud, bite | 62 / 510 / 0.51 |
+| w_viking (axe) | wide slow swish that peaks late, low hum, head thump | 195 / 873 / 0.29 | chunky low thud, chopped-wood burst, snap, short metallic ring (1.18 kHz) | 135 / 486 / 0.34 |
+| w_samurai (katana) | thin fast "shing": a narrow band rising 2.3 to 4.3 kHz, blade ring | 89 / 2919 / 0.45 | clean cut: snap, falling "tsk", light body, thin ring that carries on | 160 / 1181 / 0.61 |
+| w_tiger (polearm) | widest whoosh in the game, brown wind, shaft knock | 203 / 582 / 0.33 | deep double thud, pole whack, burst of wood, settling dust | 177 / 193 / 0.59 |
+| r_sling (slingshot) | rubber snap (980 to 210 Hz glide), tick, pebble hiss | 64 / 614 / 0.22 | pebble on cardboard: one dry tok | 41 / 461 / 0.24 |
+| r_archer (bow) | string twang (triangle, closing low-pass) + octave, then the arrow's whistle | 152 / 626 / 0.23 | arrow in a board: thunk, bite, quivering shaft | 118 / 786 / 0.51 |
+| r_ninja (shuriken) | noise chopped at 55 Hz climbing 1.9 to 3.1 kHz, whoosh, tiny edge ring | 85 / 2496 / 0.39 | steel tink + thunk, then a smaller tink as it bounces | 100 / 1831 / 0.44 |
+| r_gunner (cork gun) | hollow "pop" (540 to 200 Hz), air puff, cork squeak, recoil thump | 81 / 311 / 0.43 | cork on a tin plate: tok, tin ring, bite, low body | 88 / 690 / 0.41 |
+| r_star (moonlit bow) | glassy chime E6 in an echo, low bowstring, whistle, a breath of moonlight | 235 / 1445 / 0.39 | two glassy pings B6 then E6, soft pof, faint bite | 238 / 1655 / 0.52 |
+| m_snow (snowball) | soft low swish, the hand letting go | 88 / 1045 / 0.22 | "pof": powder burst, soft low thump, crunch of packed snow | 56 / 647 / 0.28 |
+| m_fire (match / fire) | match scratch (noise chopped at 100 Hz rising) and the whoosh of the flame | 211 / 467 / 0.25 | flame catching: whump, ember crackle, bite | 149 / 431 / 0.32 |
+| m_storm (lightning) | crackle gliding down, then a paper being torn (a band zipping 0.7 to 3.6 kHz at 130 Hz) | 104 / 2560 / 0.35 | hard crack, falling triangle (the charge draining), thump, crackle | 120 / 1171 / 0.52 |
+| m_frost (ice) | three crystals tinkling up (2.1, 2.6, 3.1 kHz) over a cold gust | 166 / 3045 / 0.30 | shatter: snap, three-ping cluster, crunch, small body | 87 / 2570 / 0.52 |
+| m_cosmo (black hole) | the "whoomp" played backwards: a low-pass opening 140 Hz to 1.7 kHz, a sine climbing 55 to 230 Hz, cut at the top | 230 / 272 / 0.30 | the whoomp forwards: two low drops (200 to 38 Hz), brown rumble, vacuum plop | 239 / 166 / 0.52 |
+| t_bell (hand bell) | one ding (E6) and the clapper's tick | 169 / 1346 / 0.22 | a smaller tink (A5) over a soft pat | 69 / 316 / 0.22 |
+| t_chef (frying pan) | pan tossed: swish, wobble in the air, handle tick | 93 / 1232 / 0.32 | tinny clang: partials at 640, 1390, 2160, 3100 Hz dying at different speeds | 109 / 1078 / 0.32 |
+| t_bard (lute) | a pluck that walks a G chord (G4 B4 D5 G5, 45 ms apart) | 244 / 585 / 0.21 | one plink: D5 and G5 plucked together, string slap, belly thump | 117 / 660 / 0.37 |
+| t_alch (glass vial) | glass clink, a bubble, fizz as the cork lifts | 141 / 2603 / 0.43 | fizzing splash: wet burst, three bubbles, fizz tail, plop, last shard | 220 / 1118 / 0.43 |
+| t_lucky (coins) | thumb snap, whoosh, the coin ringing and warbling as the spin slows | 219 / 2147 / 0.37 | four coin clinks (1.85, 2.35, 1.6, 2.8 kHz), a soft thud, a snap | 137 / 2082 / 0.52 |
+
+Means: releases 149 ms, impacts 124 ms (the report checks under 180 and 140). Every impact has a bite (A-weighted 2 to 6 kHz share of its first 21 ms at least 0.05; `snap` column) and every heavy hitter (viking, tiger, cosmo, fire, storm, gunner) a body (80 to 200 Hz share at least 0.1; viking 0.58, tiger 0.69, cosmo 0.62, fire 0.76, storm 0.42, gunner 0.10).
+
+### 9.4 What enemies are made of
+
+Each material has a hit reaction (heard under the weapon's impact, rationed with it) and most a death. A pitch factor in `combat.ts` tells enemies of one material apart.
+
+| material | enemies (pitch factor) | hit (ms / Hz) | death (ms / Hz) |
+|---|---|---|---|
+| juicy | cucumber, tangerine (1.25) | wet squish, plop, crunch (53 / 413) | a crack and "tok", a squelch sliding 1.5 kHz to 300 Hz, bubbles, a plop (172 / 610) |
+| fluff | dust | soft "pff" (71 / 319) | a cloud of dust sinking, fluff settling, a tiny squeak (200 / 1519) |
+| water | drop | "plip" (54 / 652) | splash, four bubbles climbing out, plop, three drips (246 / 921) |
+| rubber | balloon, balloon_small (1.4) | boing and squeak (68 / 392) | a real bang (a low-pass closing 5.2 to 1.5 kHz), snap, air, scraps flapping (137 / 694) |
+| plastic | cone (0.85), pill (1.4), spray (1.1), dryer (0.75) | hard hollow tok (27 / 919) | four toks hopping away and a rattle (268 / 2063) |
+| tin | clock | thin metal tink and a spring wobble (76 / 958) | three springs boinging away, loose gears ticking, one last ding A6 (490 / 1457) |
+| motor | roomba | dull bonk and a motor hiccup (67 / 266) | powers down: the note falls 330 to 70 Hz while the low-pass closes, a whine sinks, a clunk (505 / 284) |
+| paper | firecracker | dry tap on a paper tube (42 / 537) | crack and thump, two smaller pops, a cloud of powder, confetti (220 / 2289) |
+| glass | boss_needle (0.9), boss_blender (0.65) | clean high tink (67 / 1905) | (bosses only) |
+| cloud | boss_cloud | soft low thud, a rumble rolling away (124 / 152) | (boss only) |
+
+Bosses use their material's hit at a lower pitch (0.6 to 0.9) and full volume, and **a long death of their own**, played when the finale starts (the old `boss_roar` stays under it at 0.5, the blasts and `boss_die` follow): cucumber 680 ms (giant snap, a squelch sinking to 200 Hz, a slowing run of bubbles, a heavy plop), vacuum 1036 (powers down over most of a second, shudders three times, a low drum), blender 987 (a chopped whirr that slows, the jar cracking into glass pings), bath 1017 (a swell that bursts, a long slosh, bubbles, a big plop), cloud 1071 (a soft thunder crack, a 7 Hz rolling rumble sinking 300 to 90 Hz, rain on paper), needle 636 (glass crack, a shower of pings falling 3.2 to 1.4 kHz, the plunger popping out).
+
+### 9.5 Weight, layers and the mix
+
+* **The base is always the weapon's own impact.** A heavy blow (8 % of max HP, or any hit on a boss or elite) adds `hit_heavy`, which is now the weight layer (170 to 80 Hz drop, 80 % of its energy in the body, still with a bite). A **crit** adds `crit` on top of the same impact, never instead of it: a bright 4.2 kHz crack, a 2.4 kHz ping and its fifth, a low body (snap 0.89, body 0.55). The crack is tilted by class (warrior 0.92, ranger 1.08, mage 1.25, trickster 1.0). A **killing blow** lands one step harder (impact volume x1.25, `hit_heavy` at 1.15 pitch) and is answered by the enemy's death instead of its hit reaction; a **boss hit** is the boss's material hit at 0.6 to 0.9 pitch plus `hit_heavy` at 0.8.
+* **Loudness families** (`CAT_TARGET`, peak / RMS): new `swing` 0.22 / 0.034 (releases), `impact` 0.28 / 0.042, `foe` 0.25 / 0.037, `finale` 0.50 / 0.080 (boss deaths); `hit` raised 0.26 / 0.034 to 0.30 / 0.040. A rank adds up to 5.4 dB. The UI stays at 0.20 / 0.034. At the director's volumes (0.75, 0.8) the 200 ms loudness of a common impact is about 5 dB above a UI click's and a mythic one's about 15 dB (peaks 2 dB and 7.5 dB above), and an enemy's reaction sits under it. The new 'peak' values are lower than a first draft's (0.34 / 0.26) on purpose: the first draft put a tiger's thud above the mythic summon.
+* **Limiter and worst-case pile-ups** (offline, 5 to 6 s, the same graph as the game, battle music at full intensity underneath, the new crowd control in the loop):
+
+| scenario | peak with limiter | RMS | pumping | clipped | limiter-side drops |
+|---|--:|--:|--:|---|--:|
+| `battle` (the old stream: 16 hits/s, 8 shots/s, 4 deaths/s, coins, blasts) | 0.772 (was 0.728) | 0.109 | 2.0 dB (was 1.9) | no | 0 |
+| `big` (everything big at once over `battle`) | 0.915 (was 0.916) | 0.164 | 3.8 dB (was 3.7) | no | 0 |
+| `fight` (new: 16 impacts and 16 enemy answers, 8 releases, 4 deaths, a crit, a heavy blow, 5 coins a second, a blast every 2 s; random cats and enemies) | 0.796 | 0.168 | 0.9 dB | no | 1 |
+| `fight3` (the same at speed 3: 158 requests a second) | 0.855 | 0.208 | 1.5 dB | no | 51 |
+
+The fight is 3.7 dB louder on average than the old battle stream (RMS 0.168 against 0.109 including the music), with less pumping than before at the same density. Nothing clips anywhere: the largest peak of any baked sound is still `awaken` (0.933).
+
+### 9.6 Crowd control
+
+Every repeating weapon and enemy sound has **3 baked variants** (never the same twice in a row), a playback-rate jitter of 3 to 5 % and +-1 dB level jitter (`rate`), and its own `minGap` (0.05 to 0.12 s; a release 0.06 to 0.12, an impact 0.05, a death 0.04), `maxVoices` (1 to 4) and density `falloff` (0.12 to 0.15). On top of that, in `VoiceLimiter`:
+
+1. **Three buckets**: releases (with the old shots), impacts (with the old hits) and enemy answers (hits, deaths, bosses). In any 50 ms a bucket starts at most 2, 3 and 2 sounds, and the last of them must be a sound that has been silent for 120 ms: ten cats firing in one frame play two or three **different** weapons, not the loudest one three times.
+2. **Priorities** (`Recipe.prio`): 0 ordinary, 1 heavy impacts and `hit_heavy`, 2 crits and every enemy death, 3 a boss's death. From 2 up a sound skips the 50 ms thinning.
+3. **A cap of 10 combat voices at once** (`COMBAT_CAP`) on top of the global 24. When the table is full a newcomer replaces the voice of the lowest priority, then the quietest quarter of requested volume, then the oldest, but never one of higher priority than itself (a plain hit is dropped instead). The cut voice fades out in 12 ms and gives its per-sound and global places back at once.
+4. The director's own rules (`createRules`) still thin the stream first (at most about 10 releases and 16 impacts a second), so the engine rarely has to cut.
+
+**Voices and nodes, before and after** (`__dbg.audio.crowd(speed, 12)`, battle music at intensity 1, the stream is random cats and enemies straight into the engine, i.e. heavier than the director would send):
+
+| situation | requested | played | dropped (gap / per id / bucket / cap) | voices cut | pooled chains | most sources at once | most fight voices | music nodes live (peak) |
+|---|--:|--:|---|--:|--:|--:|--:|--:|
+| **before**, speed 3, old sounds (12 s) | 1211 | 765 | 446 / 0 / n.a. / n.a. | n.a. | 11 | 11 | n.a. | 90 (108) |
+| after, speed 1 (53 a second, what the director sends at x3 after its own thinning) | 637 | 620 | 8 / 3 / 6 / 0 | 8 | 14 | 14 | 10 | 90 (108) |
+| after, speed 3 (158 a second) | 1895 | 1293 | 121 / 9 / 339 / 133 | 611 | 20 | 20 | 10 | 90 (108) |
+
+At the worst stream there are 20 pooled chains (40 nodes) plus 20 sources plus 108 music nodes plus the fixed graph: about 180 nodes against 150 before, with 0 skipped music steps. The decoded bank grows from 7.0 MB to **13.0 MB at 48 kHz (12.0 MB at 44.1 kHz)**, all variants; the report's budget went from 8 to 14 MB for this reason.
+
+### 9.7 Proof that the sounds differ
+
+* **Fingerprints** (`analysis.ts`): audible length, spectral centroid, how the centroid moves (a pitch glide or a sweeping band) in four time slices, and the level in eight slices; `signatureDistance` counts a difference of 35 % in length or centroid, 0.25 in contour or 0.2 in envelope as one unit. The report fails any two sounds of one kind closer than 1 unit. Closest pairs measured: releases 1.54 (r_star / t_bell), impacts 1.43 (w_tiger / m_cosmo), enemy hits 1.35 (juicy / fluff), enemy deaths 1.60 (juicy / rubber), boss deaths 2.07 (cucumber / bath). (In the first draft the closest impacts were 0.59, t_chef / t_bard: two pitched clangs of the same length; the pan was brightened.)
+* **Spectrograms** of all 64 new sounds and the layers: `shots/audio/spectro_atk.png` (releases), `spectro_imp.png` (impacts), `spectro_foes.png` (hits and deaths by material), `spectro_bosses.png` (boss deaths and the layers), (made from `window.__dbg.audio.spec("sfx:<id>")`, which returns a 40 x 48 byte spectrogram of the baked sound, with a small PIL script that is not in the repo; they live in the session scratchpad `shots/audio`). Each tile is the audible length by 0 to 8 kHz; the swishes, the lines of pitched notes, the bite at the start of every impact and the low body of the heavy ones can be read off them.
+* The report and `window.__dbg.audio.combat()` (the weapon and enemy sounds only, 4 s): `failing: []`, 80 of 80 checks, 134 sounds and 6 stingers, no clipping, nothing silent, nothing starting or ending on a click.
+
+### 9.8 Tests
+
+`tests/audio-combat.test.ts` (30 tests): the catalogue (every cat has a release and an impact in the right loudness family, every enemy a hit and a death, six different boss deaths, the lookups allocate nothing and pair the sounds correctly, bosses are longer and priority 3), class lines grow (trim, length, layers), the structural distinctness of every kind from what the recipes ask for (span, pitch, glide, where the weight falls: closest pair above 0.6), the new measurements on synthetic signals (a low sine is all body and no bite, a 3 kHz click on a 150 Hz thud still counts, a fingerprint is 0 against itself and grows with each respect, a spectrogram puts 1 kHz in its row), the limiter (window thinning with the freshness rule, priority bypass, the cap, quiet before loud, low before high priority, a boss is never refused, a newcomer with nothing to take is dropped, a cut voice frees its places, non-fight sounds are untouched, reset) and the engine (the 11th weapon cuts the oldest voice: its source is stopped about 16 ms after the newcomer starts and its gain ramps to 0; a boss death takes a full table). Existing audio tests were updated for the five recipe files, the new families, the 24 MB declared-window bound and the wider band limit for weapon sounds. `npx vitest run`: 77 files pass, 1826 tests (one file, `tests/screens.shell.flow.test.ts`, cannot load: its `@/core/i18n` mock has no `addStrings` and the stack points at `src/game/index.ts`; it fails the same way with the audio index export taken out, so it is not from this work).
+
+### 9.9 `?demo=audio`
+
+Two pages behind the buttons above the grid. **all ids**: every SFX in catalogue order (134 now; the new ids are coloured red for weapons, amber for enemies). **fight: cats and enemies**: a row per cat (pair = release then impact 120 ms later, release, impact, crit = impact with its crit layer), a row per enemy (pair = hit then death, hit, die, x3 hits to hear the three variants rotate). The stress button (x1, x3, stop) now plays this fight instead of the old ids, and the HUD shows the fight voices (now / peak), the voices cut and the sounds thinned.
+
+### 9.10 Director lines changed (`src/view/director`, only what is played)
+
+| file:line | before | now |
+|---|---|---|
+| `combat.ts:6` | | `import { attackSfx, critSfx, foeHitSfx, impactSfx } from '@/audio'` |
+| `combat.ts:113-114` | `cue.sfx` at `cue.volume` and `cue.pitch` | `attackSfx(u.id)` (detune 0.03) |
+| `combat.ts:159-163` | crit: `hit_light` (1.1) and `crit` | the weapon's `impactSfx` + the enemy's answer + `critSfx` |
+| `combat.ts:181-189` | `hit_heavy`, or `zap` for magic, or `hit_light` | the weapon's `impactSfx` (louder on a killing blow, through the heavy rule on heavy blows, bosses and kills), the enemy's answer unless it died, `hit_heavy` as weight on heavy, boss and killing blows |
+| `combat.ts:199-210` | | `answerHit` and `strikeSound` (two small helpers: the enemy's reaction, an area strike's weapon sound) |
+| `combat.ts:316, 324, 333, 338, 345, 363` | `hit_heavy`, `hit_heavy`, `boss_roar`, `hit_heavy`, `shoot_magic`, `zap` for the sword, katana, tiger stomp, tiger blast, star and storm strikes | `strikeSound(unit)` |
+| `combat.ts:390-391` | `explosion` (snowballs at pitch 1.4) for area shots | the shooter's own `impactSfx` |
+| `deaths.ts:6, 60-61` | `enemy_die` at 0.55 | `foeDieSfx(en.id)` through the same kill ladder, with the enemy's pitch |
+| `deaths.ts:51, 64, 72-73` | elite: `enemy_die` at 0.84 pitch | `eliteDeath(en, ...)` plays `foeDieSfx` 3 semitones lower and 25 % louder |
+| `deaths.ts:93-95` | `boss_roar` at 0.8 | `boss_roar` at 0.5 and the boss's own long death |
+| `stage.ts:171-174` | `playStep(rule, id, step, volume)` | one more optional `pitch` |
+| `palette.ts:81-107` (+ `tests/view.director.palette.test.ts:30`) | `SHOOT_CUE` had `sfx`, `pitch`, `volume`, `style` | only `style`: the sound lives in the audio module |
+
+Not touched: `stage.ts` `createRules`, every other call site, timing. Every sound still fires on the frame that its visual lands.
+
+### 9.11 What a person with ears should listen to first
+
+1. **The crowded wave at speed 3 on a phone speaker**, in `?demo=audio` (stress x3) and in a real fight with 12+ cats: a lively fight or a rattle? If it is a rattle, the numbers to change are `BUCKETS` (`max`, `fresh`) and `COMBAT_CAP` in `voices.ts`, and the gaps in the director's `createRules`.
+2. **The twenty releases and impacts one by one** (fight page, "pair"): is the gunner a gun, the bow a bow, the viking an axe on steel, the katana a "shing"? The ones I trust least from the numbers alone: the black hole's reversed "whoomp" (does the backwards swell read as an inhale?), the viking's metallic ring (1.18 kHz, 180 ms: toy-like or too bell-like?), the lightning's paper-tear zip, the lute walking four notes at speed.
+3. **A class line, rank 1 to 5** with the "pair" button: related and clearly bigger each step? The ladders are measured as loudness (each at least 4 % above the last), length and weight; whether they feel like one family is an ear question.
+4. **Crits**: weapon + a bright crack. Too sharp at 4.2 to 5.3 kHz on a phone? (`crit` in `sfx-combat.ts`, the pitch tilt in `combat.ts`.)
+5. **Enemy answers under the weapon**: juicy squish, balloon squeak, clock tin. Do they make the hit richer or muddy it? The levels are `FOE_HIT_VOLUME` 0.65 and `FOE_DIE_VOLUME` 0.8 in `combat.ts`.
+6. **Deaths**: balloon pop, cucumber snap and squelch, the clock springing apart with its last ding, the vacuum powering down, the drop's splash; with a kill streak the ladder lifts them up to a fifth.
+7. **Boss deaths in a real finale**: each boss's own death over `boss_roar` (0.5), the blasts and `boss_die`. Three big sounds at the start of the finale: one event or a muddle?
+8. **Loudness against the music**: a fight is 3.7 dB louder than before. The music base is untouched.
+
+### 9.12 Requests
+
+* **Director owner (`stage.ts` `createRules`)**: the `shoot` (0.1 s), `hit` (0.06 s) and `die` (0.05 s) rules and the 9-per-0.3 s `chatter` pool run before the engine and cap the stream at about 10 releases and 16 impacts a second. That was right for one sound per event; with weapon sounds the engine now keeps variety by itself, so these gaps could shrink (for example `hit` to 0.03) if the board sounds sparse on a device. I left them alone because they are not "what is played".
+* **Director / field owner**: pass a stereo position. The engine pans; `stage.play` takes no `pan`. `clamp((x - 360) / 360, -0.6, 0.6)` for releases, impacts and deaths would spread a crowded board over the speakers and make it sound less like one point. (Same request as section 8.)
+* **Whoever owns `tests/screens.shell.flow.test.ts`**: it fails to load (`addStrings` missing from its `@/core/i18n` mock, reached through `src/game/index.ts`); not an audio change.

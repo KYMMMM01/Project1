@@ -27,11 +27,21 @@ interface Pending {
 
 type Kind = 'fish' | 'purr';
 
+/** What a sale paid, held for the one frame it takes the 'sell' event to say where the sticker was sold. */
+interface Sale {
+  x: number;
+  y: number;
+  fish: number;
+  purr: number;
+  at: number;
+}
+
 export class CurrencyService {
   private readonly ledgers: Record<Kind, FlightLedger> = { fish: new FlightLedger(12), purr: new FlightLedger(8) };
   private readonly ladders: Record<Kind, PitchLadder> = { fish: new PitchLadder(0.6, 5), purr: new PitchLadder(0.6, 5) };
   private readonly flights: FlyHandle[] = [];
   private pending: Pending | null = null;
+  private sale: Sale | null = null;
 
   constructor(private readonly stage: Stage) {}
 
@@ -45,6 +55,10 @@ export class CurrencyService {
     const ctx = this.stage.ctx;
     const x = e.x !== undefined ? ctx.toSceneX(e.x) : ctx.layout.w / 2;
     const y = e.y !== undefined ? ctx.toSceneY(e.y) : ctx.layout.fieldY + 300;
+    if (e.reason === 'sell') {
+      this.holdSale(x, y).fish += e.delta;
+      return;
+    }
     if (e.reason === 'kill' && e.delta >= BIG_KILL) {
       this.pending = { x, y, fish: e.delta, purr: this.pending?.purr ?? 0, at: this.stage.now };
       return;
@@ -57,6 +71,10 @@ export class CurrencyService {
     const ctx = this.stage.ctx;
     const x = e.x !== undefined ? ctx.toSceneX(e.x) : ctx.layout.w / 2;
     const y = e.y !== undefined ? ctx.toSceneY(e.y) : ctx.layout.fieldY + 300;
+    if (e.reason === 'sell') {
+      this.holdSale(x, y).purr += e.delta;
+      return;
+    }
     if (e.reason === 'boss') {
       // Paid just before the boss's enemyDie: it flies with the rest of the loot.
       const p = this.pending;
@@ -68,22 +86,41 @@ export class CurrencyService {
 
   /**
    * The death staging of the enemy that paid a big kill takes over its loot and releases it `delay`
-   * seconds later, on the battle clock so it stays in step with the slow-motion finale.
+   * seconds later, in real time, like the blasts of the finale it follows.
    */
   claimBig(delay: number): void {
     const p = this.pending;
     if (!p) return;
     this.pending = null;
-    if (p.fish > 0) this.launch('fish', p.x, p.y, p.fish, 'boss', delay, true);
-    if (p.purr > 0) this.launch('purr', p.x, p.y, p.purr, 'boss', delay, true);
+    if (p.fish > 0) this.launch('fish', p.x, p.y, p.fish, 'boss', delay);
+    if (p.purr > 0) this.launch('purr', p.x, p.y, p.purr, 'boss', delay);
+  }
+
+  /**
+   * A sale pays before it announces itself. The sticker may have been dragged off its cell and sold on the strip,
+   * so the pay leaves from where the sticker was sold, which only the 'sell' event knows.
+   */
+  claimSale(x: number, y: number): void {
+    const s = this.sale;
+    if (!s) return;
+    this.sale = null;
+    if (s.fish > 0) this.launch('fish', x, y, s.fish, 'sell', 0);
+    if (s.purr > 0) this.launch('purr', x, y, s.purr, 'sell', 0);
+  }
+
+  private holdSale(x: number, y: number): Sale {
+    this.sale ??= { x, y, fish: 0, purr: 0, at: this.stage.now };
+    return this.sale;
   }
 
   update(): void {
     const p = this.pending;
     if (p && this.stage.now - p.at > CLAIM_WAIT) this.claimBig(0);
+    const s = this.sale;
+    if (s && this.stage.now - s.at > CLAIM_WAIT) this.claimSale(s.x, s.y);
   }
 
-  private launch(kind: Kind, x: number, y: number, total: number, reason: string, delay: number, battleClock = false): void {
+  private launch(kind: Kind, x: number, y: number, total: number, reason: string, delay: number): void {
     const go = (): void => {
       const ledger = this.ledgers[kind];
       const n = ledger.grant(iconsFor(reason, total));
@@ -130,7 +167,6 @@ export class CurrencyService {
       if (kind === 'purr') this.stage.play(this.stage.rules.ui, 'purr', 0.5, 1, 0.03);
     };
     if (delay <= 0) go();
-    else if (battleClock) this.stage.later(delay, go);
     else this.stage.laterReal(delay, go);
   }
 

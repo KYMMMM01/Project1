@@ -26,7 +26,8 @@ import { loadRoutinePrefs, patchRoutinePrefs, prefsLoaded, routinePrefs } from '
 import './strings';
 
 const CHECK_EVERY = 0.4;
-const GAP_AFTER = 0.6;
+/** The beat of bare home between one note and the next (the clock is checked every CHECK_EVERY, so the wait counts up to that). */
+const GAP_AFTER = 0.5;
 
 const FEATURE_ICON: Readonly<Record<FeatureId, IconName>> = {
   speed2x: 'speed_2',
@@ -133,7 +134,7 @@ export class AutoPopups {
     } finally {
       this.busy = false;
       this.dirty = true;
-      this.clock = -GAP_AFTER;
+      this.clock = CHECK_EVERY - GAP_AFTER;
     }
   }
 

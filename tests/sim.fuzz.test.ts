@@ -98,7 +98,9 @@ function checkInvariants(b: BattleApi): void {
   }
   for (const p of b.projectiles) for (const v of [p.x, p.y, p.angle]) ok(finite(v), 'projectile NaN');
   for (const z of b.zones) for (const v of [z.x, z.y, z.radius, z.timeLeft]) ok(finite(v), 'zone NaN');
-  ok(b.sunbeams.length >= 4 && new Set(b.sunbeams).size === b.sunbeams.length, 'sunbeams');
+  // The tutorial's board has no sunbeams until its scripted pick-of-three (wave 3) is answered.
+  const noSunYet = b.init.mode === 'tutorial' && b.sunbeams.length === 0 && b.wave <= 3;
+  ok((b.sunbeams.length >= 4 || noSunYet) && new Set(b.sunbeams).size === b.sunbeams.length, 'sunbeams');
   ok((b.phase === 'choice') === (b.pending !== null), 'pending / phase');
   ok(b.overflowTime >= 0 && b.laser.cooldown >= 0 && finite(b.time), 'timers');
   ok(b.boss === null || b.enemies.includes(b.boss), 'boss reference');

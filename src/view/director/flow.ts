@@ -62,9 +62,13 @@ export function mountFlow(stage: Stage, on: Bus, banners: BannerService, music: 
   });
 
   on('actClear', (e) => {
-    banners.push('big', 'act', 2, { title: t('director.actClear', { act: e.act }), color: GOLD }, 1, 0.4, 0.3);
-    fx.waveClear();
-    stage.direct('wave_clear', 0.8);
+    // An act ends with its boss: the boss-defeated moment is already on stage with its own fanfare, and the toy screen
+    // that follows is titled with the act, so a second banner and fanfare would only repeat it.
+    if (!stage.bossSeqActive) {
+      banners.push('big', 'act', 2, { title: t('director.actClear', { act: e.act }), color: GOLD }, 1, 0.4, 0.3);
+      fx.waveClear();
+      stage.direct('wave_clear', 0.8);
+    }
     music.duck(0.35, 0.5);
   });
 
@@ -304,7 +308,7 @@ export function mountFlow(stage: Stage, on: Bus, banners: BannerService, music: 
       stage.slow(0.35, 400);
     }
     fx.confettiRain({ count: 90, y: -ctx.layout.fieldY - 30 });
-    stage.later(0.5, () => fx.confettiRain({ count: 50, y: -ctx.layout.fieldY - 30 }));
+    stage.laterReal(0.5, () => fx.confettiRain({ count: 50, y: -ctx.layout.fieldY - 30 }));
     screenFx.flash(Hue.sun, 0.4, 160);
     banners.push('big', 'victory', 5, { title: t('director.victory'), color: GOLD }, 1.5, 0.4, 0.3);
     stage.buzz('jackpot');

@@ -3,14 +3,20 @@ import type { Container } from 'pixi.js';
 import { audio } from '@/audio';
 import { hasTex, tex } from '@/core/assets';
 import { haptic } from '@/core/haptics';
+import { uiTweens } from '@/core/tween';
 import { flyTo } from '@/fx';
 import { flightTuning, originX } from '../../shell/flight';
 import type { BundlePart } from '@/meta/bundle';
 import { services, type Shell } from '../../contract';
+import { stampPending } from './marks';
 import { currencyOnly, currencyTotals, flightCount, textureKey, type CurrencyKind } from './parts';
 import { partIcon } from './rewardChip';
 
 const KINDS: readonly CurrencyKind[] = ['gold', 'gems', 'tickets'];
+/** The most a reward sheet keeps the top bar's numbers back: it stays open as long as the player likes. */
+const HOLD_BEHIND_SHEET = 90;
+/** How long a flight waits behind a stamp that is landing: the stamp has been seen by then. */
+const STAMP_SEEN = 0.2;
 
 export interface FlightOrigin {
   x: number;
@@ -25,35 +31,45 @@ export interface FlightOrigin {
 export function payout(shell: Shell, parts: readonly BundlePart[], from: Container | FlightOrigin, title?: string): Promise<void> {
   if (parts.length === 0) return Promise.resolve();
   haptic('success');
+  // A claim that stamps its line is heard when the stamp lands, and its sheet waits for the stamp to be seen first.
+  const stamp = stampPending();
+  if (stamp === null) audio.play('reward_claim');
   if (!currencyOnly(parts)) {
-    audio.play('reward_claim');
-    return services.showRewards(parts, title);
+    if (!stamp) return services.showRewards(parts, title);
+    // The top bar already knows the new balance: it keeps the old numbers back through the stamp's beat and behind the sheet.
+    const totals = currencyTotals(parts);
+    for (const kind of KINDS) if (totals[kind] > 0) shell.pending(kind, totals[kind], stamp + HOLD_BEHIND_SHEET);
+    return uiTweens.call(stamp, () => undefined).finished.then(() => services.showRewards(parts, title, true));
   }
-  audio.play('reward_claim');
   const totals = currencyTotals(parts);
-  const flights: Promise<void>[] = [];
-  for (const kind of KINDS) {
-    const total = totals[kind];
-    if (total <= 0) continue;
-    const key = textureKey({ kind, n: total });
-    let arrived = 0;
-    shell.pending(kind, total);
-    const to = shell.currencyAnchor(kind);
-    const handle = flyTo({
-      from,
-      to,
-      ...flightTuning(originX(from), to.x),
-      count: flightCount(total),
-      size: 52,
-      ...(key && hasTex(key) ? { texture: tex(key) } : { make: () => partIcon({ kind, n: total }, 52) }),
-      onArrive: () => {
-        arrived++;
-        shell.landed(kind);
-        // A tick on every third coin: a downpour of identical sounds reads as noise.
-        if (arrived % 3 === 1) audio.play(kind === 'gems' ? 'gem' : 'coin', { volume: 0.8 });
-      },
-    });
-    flights.push(handle.done);
-  }
-  return Promise.all(flights).then(() => undefined);
+  for (const kind of KINDS) if (totals[kind] > 0) shell.pending(kind, totals[kind]);
+  // The icons burst out of the stamped line: they wait a beat so the stamp is seen before the pile covers it.
+  const fly = (): Promise<void> => {
+    const flights: Promise<void>[] = [];
+    for (const kind of KINDS) {
+      const total = totals[kind];
+      if (total <= 0) continue;
+      const key = textureKey({ kind, n: total });
+      let arrived = 0;
+      const to = shell.currencyAnchor(kind);
+      const handle = flyTo({
+        from,
+        to,
+        ...flightTuning(originX(from), to.x),
+        count: flightCount(total),
+        size: 52,
+        ...(key && hasTex(key) ? { texture: tex(key) } : { make: () => partIcon({ kind, n: total }, 52) }),
+        onArrive: () => {
+          arrived++;
+          shell.landed(kind);
+          // A tick on every third coin: a downpour of identical sounds reads as noise.
+          if (arrived % 3 === 1) audio.play(kind === 'gems' ? 'gem' : 'coin', { volume: 0.8 });
+        },
+      });
+      flights.push(handle.done);
+    }
+    return Promise.all(flights).then(() => undefined);
+  };
+  if (!stamp) return fly();
+  return uiTweens.call(Math.min(stamp, STAMP_SEEN), () => undefined).finished.then(fly);
 }

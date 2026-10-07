@@ -9,6 +9,9 @@ import { fxTexture } from './textures';
 export type NumStyle = 'damage' | 'crit' | 'dot' | 'heal' | 'gold' | 'hurt' | 'big';
 
 const BAKED = 64;
+/** Width and height of the room a number takes along a clamped line: the next one lands beside it, not on it. */
+const SLOT_W = 62;
+const SLOT_Y = 34;
 /** How far a face colour is lightened toward cream: on artwork the digits are light with a brown stroke (kit rule), the hue still says the kind. */
 const FACE_LIGHT = 0.3;
 /** Width of the brown stroke at the baked size (the fill covers its inner half). */
@@ -220,7 +223,9 @@ export class FloatingNumbers {
     n.setBurst(def.burst);
     n.root.visible = true;
     n.tiltAmp = def.tilt * (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.4);
-    n.x = x + (o.noScatter ? 0 : (Math.random() * 2 - 1) * def.scatter);
+    const sx = x + (o.noScatter ? 0 : (Math.random() * 2 - 1) * def.scatter);
+    // A hit near the top of the screen is held at `minY`: several of them would end on one line and read as one long number.
+    n.x = Number.isFinite(this.minY) && y - def.rise <= this.minY + 8 ? this.freeX(sx, Math.max(this.minY, y - def.rise)) : sx;
     n.y = y;
     this.setText(n, value, def, o);
     this.layer.addChild(n.root);
@@ -259,6 +264,22 @@ export class FloatingNumbers {
   }
 
   /** Free one slot for a number of priority `prio`; false when everything alive outranks it. */
+  /** The nearest spot along a line (right first, then left, up to two numbers' width each way) that no live number is already on. */
+  private freeX(x: number, line: number): number {
+    for (let k = 0; k < 5; k++) {
+      const cand = x + (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * SLOT_W;
+      let free = true;
+      for (const a of this.active) {
+        if (Math.abs(a.root.x - cand) < SLOT_W && Math.abs(a.root.y - line) < SLOT_Y) {
+          free = false;
+          break;
+        }
+      }
+      if (free) return cand;
+    }
+    return x;
+  }
+
   private evictFor(prio: number): boolean {
     const list = this.active;
     let victim = -1;

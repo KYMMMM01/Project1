@@ -15,12 +15,13 @@ import { countPill, PriceTag } from './paperBits';
 const COLS = 3;
 const SLOT_H = 332;
 
-/** The cards seen sold the last time the block was built, to tell a purchase from a page that was already sold out. */
-let lastSold: { date: string; slots: ReadonlySet<number> } | null = null;
+/** The cards seen sold the last time the block was built, to tell a purchase from a page that was already sold out; `offers` tells a new deal from the same page again. */
+let lastSold: { date: string; slots: ReadonlySet<number>; offers: string } | null = null;
 
 /** One of the six daily cards: the item on a photo mat, its name, and a price tag; a bought card wears a "sold" stamp. */
-function slotCard(inner: Container, x: number, y: number, w: number, offer: ShopOffer, bought: boolean, justBought: boolean, env: BlockEnv): void {
+function slotCard(inner: Container, x: number, y: number, w: number, offer: ShopOffer, bought: boolean, justBought: boolean, deal: number | null, env: BlockEnv): void {
   const c = subCard(inner, x, y, w, SLOT_H);
+  if (deal !== null) c.deal(deal);
   const rar = offer.rarity ? Rarity[offer.rarity] : null;
   const mat = new Graphics();
   const pw = w - 24;
@@ -101,16 +102,20 @@ export const dailyBlock: Block = {
     const gap = 12;
     const sw = (w - gap * (COLS - 1)) / COLS;
     const top = 116;
-    const before = lastSold !== null && lastSold.date === String(view.date) ? lastSold.slots : null;
+    const prev = lastSold !== null && lastSold.date === String(view.date) ? lastSold : null;
+    const before = prev?.slots ?? null;
+    const offers = view.offers.map((o) => JSON.stringify(o.bundle)).join(',');
+    // New offers on the same day (the ad refresh) are dealt onto the page one after another; a new day or a first build just lies there.
+    const dealt = prev !== null && prev.offers !== offers;
     const sold = new Set<number>();
     view.offers.forEach((offer, i) => {
       const col = i % COLS;
       const row = Math.floor(i / COLS);
       const isSold = view.bought[i] === true;
       if (isSold) sold.add(i);
-      slotCard(inner, PAD + col * (sw + gap), top + row * (SLOT_H + gap), sw, offer, isSold, isSold && before !== null && !before.has(i), env);
+      slotCard(inner, PAD + col * (sw + gap), top + row * (SLOT_H + gap), sw, offer, isSold, isSold && before !== null && !before.has(i), dealt ? i : null, env);
     });
-    lastSold = { date: String(view.date), slots: sold };
+    lastSold = { date: String(view.date), slots: sold, offers };
     return { height: mountPage(root, 0, pageW, inner, top + 2 * SLOT_H + gap, opts) + GAP };
   },
 };

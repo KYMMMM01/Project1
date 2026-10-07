@@ -20,6 +20,8 @@ const h = vi.hoisted(() => {
     pending: null as Pending | null,
     runs: 0,
     reveals: [] as Array<{ id: number }>,
+    cleared: [0, 0, 0, 0, 0] as number[],
+    lastRun: null as null | { mode: string; chapter: number; stake: number; victory: boolean; firstClear: boolean },
   };
   const profile = {
     get pendingRun() {
@@ -31,6 +33,12 @@ const h = vi.hoisted(() => {
       },
       get reveals() {
         return state.reveals;
+      },
+      get cleared() {
+        return state.cleared;
+      },
+      get lastRun() {
+        return state.lastRun;
       },
     },
     equipped: { rug: 'default', fx: 'default' },
@@ -51,7 +59,7 @@ const h = vi.hoisted(() => {
   };
   const scenes = {
     current: new FakeHome() as FakeScene,
-    goto: vi.fn(async () => true),
+    goto: vi.fn(async (_make: () => unknown, _kind?: string) => true),
   };
   return {
     FakeScene,
@@ -68,6 +76,8 @@ const h = vi.hoisted(() => {
     revealChest: vi.fn(async () => undefined),
     showRewards: vi.fn(async () => undefined),
     refresh: vi.fn(),
+    remember: vi.fn(),
+    openPreRun: vi.fn(),
     gameplayStart: vi.fn(),
     gameplayStop: vi.fn(),
   };
@@ -75,16 +85,17 @@ const h = vi.hoisted(() => {
 
 vi.mock('@/core/debug', () => ({ debugEnabled: () => false }));
 vi.mock('@/core/game', () => ({ game: { w: 720, h: 1280 } }));
-vi.mock('@/core/i18n', () => ({ t: (key: string) => key }));
+vi.mock('@/core/i18n', () => ({ t: (key: string) => key, addStrings: () => undefined }));
 vi.mock('@/core/scene', () => ({ Scene: h.FakeScene, scenes: h.scenes }));
 vi.mock('@/meta', () => ({ profile: h.profile, bundleParts: () => [], errorKey: (e: string) => e }));
 vi.mock('@/scenes/BattleScene', () => ({ BattleScene: h.FakeBattle, setBattleCreatedHook: h.setHook, setBattleExit: vi.fn() }));
 vi.mock('@/scenes/HomeScene', () => ({ HomeScene: h.FakeHome }));
+vi.mock('@/screens/battle', () => ({ rememberSelection: h.remember }));
 vi.mock('@/screens/battle/claim', () => ({ playClaim: h.playClaim }));
 vi.mock('@/screens/contract', () => ({ services: { revealChest: h.revealChest, showRewards: h.showRewards } }));
 vi.mock('@/screens/shell/controller', () => ({ shell: { setLauncher: vi.fn(), refresh: h.refresh } }));
 vi.mock('@/screens/shell/ContinuePrompt', () => ({ continuePrompt: h.continuePrompt }));
-vi.mock('@/screens/shell/PreRunScreen', () => ({ openPreRun: vi.fn() }));
+vi.mock('@/screens/shell/PreRunScreen', () => ({ openPreRun: h.openPreRun }));
 vi.mock('@/screens/shell/strings', () => ({}));
 vi.mock('@/ui', () => ({ confirmDialog: h.confirmDialog, toast: h.toast }));
 vi.mock('@/app/lifecycle', () => ({ gameplayStart: h.gameplayStart, gameplayStop: h.gameplayStop }));
@@ -121,6 +132,8 @@ beforeEach(() => {
   h.state.pending = null;
   h.state.runs = 0;
   h.state.reveals = [];
+  h.state.cleared = [0, 0, 0, 0, 0];
+  h.state.lastRun = null;
   h.scenes.current = new h.FakeHome();
   h.continuePrompt.mockResolvedValue(false);
   h.confirmDialog.mockResolvedValue(true);
@@ -223,8 +236,10 @@ describe('a chest reveal cut short by closing the app', () => {
     h.state.pending = { init: { mode: 'chapter', chapter: 1, stake: 0, seed: 1 }, snapshot: { wave: 4 } };
     flow.afterFirstScene();
     await vi.waitFor(() => expect(h.continuePrompt).toHaveBeenCalled());
-    expect(h.revealChest.mock.calls.map((c) => (c as unknown as [{ id: number }])[0].id)).toEqual([4, 5]);
-    expect(h.revealChest.mock.invocationCallOrder[1]).toBeLessThan(h.continuePrompt.mock.invocationCallOrder[0] as number);
+    // One call with everything stored: the reveal service plays chests opened together as one opening, the others one by one.
+    expect(h.revealChest).toHaveBeenCalledTimes(1);
+    expect((h.revealChest.mock.calls[0] as unknown as [Array<{ id: number }>])[0].map((r) => r.id)).toEqual([4, 5]);
+    expect(h.revealChest.mock.invocationCallOrder[0]).toBeLessThan(h.continuePrompt.mock.invocationCallOrder[0] as number);
   });
 
   it('is not shown over a battle', () => {
@@ -232,5 +247,75 @@ describe('a chest reveal cut short by closing the app', () => {
     h.scenes.current = new h.FakeBattle(null);
     flow.afterFirstScene();
     expect(h.revealChest).not.toHaveBeenCalled();
+  });
+});
+
+describe('what the won result screen offers next', () => {
+  interface Offer {
+    chapter: number;
+    stake: number;
+    start(): void;
+  }
+  type Next = { run: { next?: () => Offer | null } };
+
+  /** The battle scene of a chapter run the flow built (through the continue path: it is the one that needs no pre-run page). */
+  async function chapterBattle(chapter: number, stake: number): Promise<Next> {
+    h.state.runs = 3;
+    h.state.pending = { init: { mode: 'chapter', chapter, stake, seed: 1 }, snapshot: { wave: 2 } };
+    h.continuePrompt.mockResolvedValue(true);
+    await flow.offerContinue();
+    const make = h.scenes.goto.mock.calls.at(-1)?.[0] as unknown as () => Next;
+    return make();
+  }
+
+  const won = (mode: string, chapter: number, stake: number, firstClear = true) => ({ mode, chapter, stake, victory: true, firstClear });
+
+  it('is nothing until the run has been paid out, and the next chapter once it has', async () => {
+    const battle = await chapterBattle(1, 0);
+    expect(battle.run.next?.()).toBeNull();
+    h.state.cleared = [1, 0, 0, 0, 0];
+    h.state.lastRun = won('chapter', 1, 0);
+    expect(battle.run.next?.()).toMatchObject({ chapter: 2, stake: 0 });
+  });
+
+  it('is nothing for a record that belongs to another run, a defeat or a daily run', async () => {
+    const battle = await chapterBattle(1, 0);
+    h.state.lastRun = won('chapter', 3, 0);
+    expect(battle.run.next?.()).toBeNull();
+    h.state.lastRun = { ...won('chapter', 1, 0), victory: false };
+    expect(battle.run.next?.()).toBeNull();
+    const daily = await (async () => {
+      h.state.runs = 3;
+      h.state.pending = { init: { mode: 'daily', chapter: 2, stake: 0, seed: 1 }, snapshot: { wave: 2 } };
+      await flow.offerContinue();
+      return (h.scenes.goto.mock.calls.at(-1)?.[0] as unknown as () => Next)();
+    })();
+    h.state.lastRun = won('daily', 2, 0);
+    expect(daily.run.next?.()).toBeNull();
+  });
+
+  it('leads from the tutorial to chapter 1', async () => {
+    const first = await flow.chooseFirstScene();
+    const battle = first() as unknown as Next;
+    h.state.lastRun = won('tutorial', 1, 0, false);
+    expect(battle.run.next?.()).toMatchObject({ chapter: 1, stake: 0 });
+  });
+
+  it('starts that run through the pre-run page, and only a started run moves the home screen to it', async () => {
+    const battle = await chapterBattle(1, 0);
+    h.state.cleared = [1, 0, 0, 0, 0];
+    h.state.lastRun = won('chapter', 1, 0);
+    h.state.pending = null;
+    battle.run.next?.()?.start();
+    await vi.waitFor(() => expect(h.openPreRun).toHaveBeenCalled());
+    const [request, handlers] = h.openPreRun.mock.calls[0] as unknown as [{ mode: string; chapter: number; stake: number }, { start(snack?: unknown): Promise<boolean>; cancel(): void }];
+    expect(request).toEqual({ mode: 'chapter', chapter: 2, stake: 0 });
+    // The player backs out of the page: nothing moved.
+    handlers.cancel();
+    expect(h.remember).not.toHaveBeenCalled();
+    // The player starts: the run is prepared the way the home screen's start does, and the chapter card follows.
+    expect(await handlers.start()).toBe(true);
+    expect(h.profile.prepareRun).toHaveBeenCalledWith({ mode: 'chapter', chapter: 2, stake: 0 });
+    expect(h.remember).toHaveBeenCalledWith({ chapter: 2, stake: 0 });
   });
 });

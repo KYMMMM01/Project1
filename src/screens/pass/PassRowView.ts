@@ -1,7 +1,8 @@
 /** One tier of the season pass: a sticker card on the free lane, the tier medal on the track, a sticker card on the premium lane. */
 import { Container, Graphics, Rectangle, type DestroyOptions } from 'pixi.js';
 import type { PassRow } from '@/meta/routines';
-import { Color, cacheStatic, drawDashedRect, drawIcon, PaperLabel, tapeStrip, uiLabel } from '@/ui';
+import { Ease } from '@/core/tween';
+import { Color, cacheStatic, drawDashedRect, drawIcon, motion, PaperLabel, TweenBag, tapeStrip, uiLabel } from '@/ui';
 import { bindPress, type PressBinding } from '@/ui/press';
 import { t } from '@/core/i18n';
 import { StampMark } from '../system/kit/marks';
@@ -30,6 +31,9 @@ export class PassCell extends Container {
   private tag: PaperLabel | null = null;
   private tapKind: CellTap = 'notYet';
   private claimed = false;
+  private readonly bag = new TweenBag();
+  /** Where the card sits in the season: the lower tiers lose their lock first. */
+  private readonly order: number;
 
   constructor(
     private readonly w: number,
@@ -40,6 +44,7 @@ export class PassCell extends Container {
     onTap: (kind: CellTap) => void,
   ) {
     super();
+    this.order = tier;
     const h = PASS_ROW_H;
     const parts = partsOf(row.reward);
     const many = parts.length > 1;
@@ -95,7 +100,11 @@ export class PassCell extends Container {
       this.lock.rotation = 0.1;
       this.addChild(this.lock);
     }
-    if (this.lock) this.lock.visible = locked;
+    if (this.lock) {
+      const wasLocked = this.lock.visible;
+      this.lock.visible = locked;
+      if (animate && wasLocked && !locked) this.peelLock(this.lock);
+    }
 
     if (row.claimed && !this.stamp) {
       this.stamp = new StampMark({ size: 40, tilt: -0.22 });
@@ -114,7 +123,34 @@ export class PassCell extends Container {
     else this.tapKind = 'notYet';
   }
 
+  /** The padlock sticker is peeled off the card: it lifts, turns and fades, a little later for each higher tier. */
+  private peelLock(lock: Container): void {
+    if (motion.reduced) return;
+    const { x, y } = lock.position;
+    const rot = lock.rotation;
+    lock.visible = true;
+    this.bag.run({
+      duration: 0.3,
+      delay: Math.min(0.3, this.order * 0.015),
+      ease: Ease.cubicOut,
+      onUpdate: (k) => {
+        lock.alpha = 1 - k;
+        lock.scale.set(1 + 0.35 * k);
+        lock.rotation = rot + 0.5 * k;
+        lock.position.set(x, y - 16 * k);
+      },
+      onComplete: () => {
+        lock.visible = false;
+        lock.alpha = 1;
+        lock.scale.set(1);
+        lock.rotation = rot;
+        lock.position.set(x, y);
+      },
+    });
+  }
+
   override destroy(options?: DestroyOptions): void {
+    this.bag.killAll();
     this.press.dispose();
     super.destroy(options);
   }

@@ -6,7 +6,7 @@ import { SaveStore, deepFill } from '@/core/save';
 import { emptyCounters } from '@/platform/adPolicy';
 import { emptyLedger } from '@/platform/iapService';
 import { DAILY_MISSIONS, WEEKLY_MISSIONS } from './data/schedule';
-import { CHAPTER_COUNT, MAX_LEVEL, TRAINING_MAX, TREAT_SLOTS } from './data/economy';
+import { CHAPTER_COUNT, CHEST_BULK_MAX, MAX_LEVEL, TRAINING_MAX, TREAT_SLOTS } from './data/economy';
 import { SHOP_SLOTS } from './data/catalog';
 import { MAX_STAKE } from '@/game/data/roster';
 import { freshDay, freshWeek } from './missions';
@@ -19,7 +19,7 @@ export const SAVE_KEY = 'meowguard.profile';
 /** Upper bound for any counter: keeps a damaged or hand-edited save from overflowing the UI. */
 const COUNTER_MAX = 2_000_000_000;
 const ORDERS_KEPT = 300;
-const REVEALS_KEPT = 20;
+const REVEALS_KEPT = CHEST_BULK_MAX;
 
 function zeroed<K extends string>(keys: readonly K[], v = 0): Record<K, number> {
   const out = {} as Record<K, number>;

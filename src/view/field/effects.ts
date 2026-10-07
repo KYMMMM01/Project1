@@ -127,7 +127,7 @@ export class FieldEffects {
   private syncLaser(): void {
     const l = this.env.battle.laser;
     if (l.active) {
-      if (!this.laser?.alive) this.laser = this.env.ctx.fx.laserDot(l.x, l.y);
+      if (!this.laser?.alive) this.laser = this.env.ctx.fx.laserDot(l.x, l.y, { radius: l.radius });
       else this.laser.moveTo(l.x, l.y);
     } else if (this.laser) {
       this.laser.stop();

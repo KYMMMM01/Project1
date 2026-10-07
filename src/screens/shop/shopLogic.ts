@@ -3,6 +3,7 @@ import { t } from '@/core/i18n';
 import { bundleParts, type BundlePart } from '@/meta/bundle';
 import type { CosmeticRow } from '@/meta/economy';
 import type { IapSpec } from '@/meta/data/catalog';
+import { CHEST_BULK_MAX } from '@/meta/data/economy';
 import type { Bundle, ChestKind } from '@/meta/types';
 
 export const SHOP_SECTIONS = ['chests', 'daily', 'gems', 'pass', 'piggy', 'cosmetics', 'tickets'] as const;
@@ -28,6 +29,11 @@ export function gemBonusPercent(spec: IapSpec, specs: readonly IapSpec[]): numbe
 /** What a chest card's main button does: open one the player owns, or buy and open one. */
 export function chestAction(owned: number): 'open' | 'buy' {
   return owned > 0 ? 'open' : 'buy';
+}
+
+/** How many chests "open all" opens in one go, or 0 when the button is not shown (it takes two chests to make a pile). */
+export function pileSize(owned: number): number {
+  return owned >= 2 ? Math.min(Math.floor(owned), CHEST_BULK_MAX) : 0;
 }
 
 export type CosmeticStatus =

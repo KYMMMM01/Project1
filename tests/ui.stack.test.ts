@@ -249,3 +249,37 @@ describe('popup stack', () => {
     wide.close();
   });
 });
+
+describe('tab bar paper', () => {
+  const GEOMETRY: readonly [string, number, number][] = [
+    ['1280 screen', 144, 0],
+    ['tall screen with a home indicator', 144, 34],
+    ['five tabs on the narrowest design width', 128, 20],
+  ];
+
+  for (const [name, cell, safe] of GEOMETRY) {
+    for (const featured of [false, true]) {
+      it(`holds the icon and the label whole and runs past the bottom edge: ${name}, ${featured ? 'hero' : 'plain'} tab`, async () => {
+        const { tabPaperBox, TAB_BAR } = await import('@/ui/layoutMath');
+        const barH = TAB_BAR.h + safe;
+        const box = tabPaperBox(cell, barH, featured);
+        const bottom = box.y + box.h;
+        // The label (24 px text on its centre line) and the selected icon (58 px at 1.22, 30 px down) are inside the sheet.
+        expect(box.y).toBeLessThan(TAB_BAR.labelY - TAB_BAR.labelHalf);
+        expect(bottom).toBeGreaterThan(TAB_BAR.labelY + TAB_BAR.labelHalf);
+        expect(box.y).toBeLessThanOrEqual(30 - (58 * 1.22) / 2);
+        // The paper's own rounded corners, rim (2 px wobble) and shadow (4 px) all fall below the bar: no edge of it is ever seen.
+        expect(bottom).toBeGreaterThanOrEqual(barH + 22 + 2 + 4);
+        // Narrower than its cell, so neighbours never overlap it.
+        expect(box.w).toBeLessThan(cell);
+        expect(box.x).toBeCloseTo(-box.w / 2, 9);
+      });
+    }
+  }
+
+  it('the hero paper rises above its raised disc', async () => {
+    const { tabPaperBox, TAB_BAR } = await import('@/ui/layoutMath');
+    // Selected hero disc: radius 54 at scale 1.1, centre 20 px below the bar top.
+    expect(tabPaperBox(144, TAB_BAR.h, true).y).toBeLessThan(20 - 54 * 1.1);
+  });
+});

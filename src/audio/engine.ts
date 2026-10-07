@@ -20,7 +20,7 @@ import { STINGER_DUCK, STINGER_MUFFLE } from './stingers';
 import { Synth, nodeStats, resetNodeStats } from './synth';
 import { stepRatio } from './theory';
 import { CAT_TARGET } from './recipe';
-import { GLOBAL_VOICE_CAP, VoiceLimiter } from './voices';
+import { COMBAT_CAP, CUT_SECONDS, GLOBAL_VOICE_CAP, VoiceLimiter } from './voices';
 
 const MAX_VOICE_OBJECTS = GLOBAL_VOICE_CAP + 8;
 /** A suspend/resume that has not settled by now is abandoned so later gestures can retry. */
@@ -45,11 +45,14 @@ class SfxVoice {
   readonly gain: GainNode;
   readonly pan: StereoPannerNode | null;
   private src: AudioBufferSourceNode | null = null;
+  /** Place in the engine's combat table while this voice is a fight sound, otherwise -1. */
+  slot = -1;
 
   constructor(
     ctx: AudioContext,
     dest: AudioNode,
     private readonly free: SfxVoice[],
+    private readonly onFree: (voice: SfxVoice) => void,
   ) {
     this.gain = ctx.createGain();
     if (typeof ctx.createStereoPanner === 'function') {
@@ -65,8 +68,19 @@ class SfxVoice {
   readonly onEnded = (): void => {
     this.src?.disconnect();
     this.src = null;
+    this.onFree(this);
     this.free.push(this);
   };
+
+  /** Fade out within a few ms and stop: the voice gives its place to a more important sound. */
+  cut(ctx: AudioContext): void {
+    const now = ctx.currentTime;
+    const g = this.gain.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(0, now + CUT_SECONDS);
+    this.src?.stop(now + CUT_SECONDS + 0.004);
+  }
 
   start(ctx: AudioContext, buf: AudioBuffer, when: number, rate: number, volume: number, pan: number): void {
     const src = ctx.createBufferSource();
@@ -95,7 +109,10 @@ export interface AudioStats {
   sfxActive: number;
   sfxActivePeak: number;
   sfxPlayed: number;
-  sfxDropped: { gap: number; perId: number; global: number };
+  sfxDropped: { gap: number; perId: number; global: number; bucket: number; cap: number; stolen: number };
+  /** Fight voices sounding now (the cap is `COMBAT_CAP`) and the most there have been since the last reset. */
+  combatActive: number;
+  combatActivePeak: number;
   /**
    * WebAudio nodes this engine keeps alive: the fixed graph, the pooled SFX voices (gain + panner each, one source
    * node per sound that is playing) and the tracked music / live-synthesis nodes with the peak since the last reset.
@@ -122,6 +139,12 @@ export class AudioEngine implements AudioApi {
   private music_: MusicPlayer | null = null;
   private readonly limiter = new VoiceLimiter(SOUNDS.map((d) => d.rule));
   private readonly freeVoices: SfxVoice[] = [];
+  /** The voice behind every slot of the limiter's combat table, so a full table can cut the oldest quiet one. */
+  private readonly combatVoices: Array<SfxVoice | null> = new Array<SfxVoice | null>(COMBAT_CAP).fill(null);
+  private readonly releaseCombat = (voice: SfxVoice): void => {
+    if (voice.slot >= 0 && this.combatVoices[voice.slot] === voice) this.combatVoices[voice.slot] = null;
+    voice.slot = -1;
+  };
   private voiceCount = 0;
 
   private inited = false;
@@ -148,6 +171,7 @@ export class AudioEngine implements AudioApi {
   private duckFloor = 1;
   private played = 0;
   private activePeak = 0;
+  private combatPeak = 0;
 
   get unlocked(): boolean {
     return this.ctx?.state === 'running';
@@ -189,6 +213,7 @@ export class AudioEngine implements AudioApi {
     this.bank = null;
     this.music_ = null;
     this.freeVoices.length = 0;
+    this.combatVoices.fill(null);
     this.voiceCount = 0;
     this.limiter.reset();
     this.lastVariant.fill(-1);
@@ -236,6 +261,7 @@ export class AudioEngine implements AudioApi {
     this.music_.setIntensity(this.intensity);
     this.everRan = false;
     this.freeVoices.length = 0;
+    this.combatVoices.fill(null);
     this.voiceCount = 0;
     this.limiter.reset();
     this.prerenderStarted = false;
@@ -519,16 +545,31 @@ export class AudioEngine implements AudioApi {
       this.lastVariant[idx] = v;
     }
     const buf = buffers[v] as AudioBuffer;
-    const scale = this.limiter.request(idx, when, buf.duration / rate);
+    const scale = this.limiter.request(idx, when, buf.duration / rate, volume);
     if (scale <= 0) return false;
     const voice = this.acquireVoice(ctx, g.sfxBus);
     if (!voice) return false;
+    this.seatCombat(ctx, voice);
     voice.start(ctx, buf, when, rate, volume * scale, pan);
     this.played++;
     this.duckFor(idx);
     const active = this.limiter.active(ctx.currentTime);
     if (active > this.activePeak) this.activePeak = active;
+    const fighting = this.limiter.combatActive(ctx.currentTime);
+    if (fighting > this.combatPeak) this.combatPeak = fighting;
     return true;
+  }
+
+  /** A fight sound takes its place in the combat table; the voice it replaces (the oldest quiet one) is faded out. */
+  private seatCombat(ctx: AudioContext, voice: SfxVoice): void {
+    const { slot, victim } = this.limiter;
+    if (slot < 0) return;
+    if (victim >= 0) {
+      this.combatVoices[victim]?.cut(ctx);
+      this.combatVoices[victim] = null;
+    }
+    voice.slot = slot;
+    this.combatVoices[slot] = voice;
   }
 
   private acquireVoice(ctx: AudioContext, dest: AudioNode): SfxVoice | undefined {
@@ -536,7 +577,7 @@ export class AudioEngine implements AudioApi {
     for (let v = this.freeVoices.pop(); v; v = this.freeVoices.pop()) if (v.gain.context === ctx) return v;
     if (this.voiceCount >= MAX_VOICE_OBJECTS) return undefined;
     this.voiceCount++;
-    return new SfxVoice(ctx, dest, this.freeVoices);
+    return new SfxVoice(ctx, dest, this.freeVoices, this.releaseCombat);
   }
 
   /** Live synthesis for browsers without OfflineAudioContext: same recipe, no normalisation pass. */
@@ -544,7 +585,7 @@ export class AudioEngine implements AudioApi {
     const g = this.graph;
     const def = SOUNDS[idx];
     if (!g || !def) return false;
-    const scale = this.limiter.request(idx, when, def.recipe.len / rate);
+    const scale = this.limiter.request(idx, when, def.recipe.len / rate, volume);
     if (scale <= 0) return false;
     const out = ctx.createGain();
     out.gain.value = CAT_TARGET[def.recipe.cat].peak * 0.8 * volume * scale;
@@ -584,6 +625,13 @@ export class AudioEngine implements AudioApi {
     if (d) this.duck(d.depth, d.seconds);
   }
 
+  /** Bake these sounds now (dev tooling: a measurement must not start before the bank has what it plays). */
+  async prime(ids: readonly SfxId[]): Promise<void> {
+    const bank = this.bank;
+    if (!bank) return;
+    for (const id of ids) await bank.ensure(sfxIndexOf(id));
+  }
+
   /** Counters for the debug hooks and the demo's HUD. */
   stats(): AudioStats {
     const ctx = this.ctx;
@@ -602,6 +650,8 @@ export class AudioEngine implements AudioApi {
       sfxActivePeak: this.activePeak,
       sfxPlayed: this.played,
       sfxDropped: { ...this.limiter.dropped },
+      combatActive: this.limiter.combatActive(now),
+      combatActivePeak: this.combatPeak,
       nodes: {
         pooledVoices: this.voiceCount,
         sfxSources: this.voiceCount - this.freeVoices.length,
@@ -624,7 +674,8 @@ export class AudioEngine implements AudioApi {
   resetStats(): void {
     this.activePeak = 0;
     this.played = 0;
-    this.limiter.dropped = { gap: 0, perId: 0, global: 0 };
+    this.limiter.dropped = { gap: 0, perId: 0, global: 0, bucket: 0, cap: 0, stolen: 0 };
+    this.combatPeak = 0;
     resetNodeStats();
     this.music_?.resetStats();
   }

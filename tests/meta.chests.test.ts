@@ -3,9 +3,10 @@ import { Rng } from '@/core/rng';
 import {
   applyGuarantees, chestTotals, drawChest, pityTarget, rarityCounts, rollRarities, type DrawState,
 } from '@/meta/chests';
+import { CHEST_BULK_MAX } from '@/meta/data/economy';
 import { ODDS, ODDS_VERSION, type OddsTable } from '@/meta/odds';
 import { UNITS_BY_RARITY } from '@/meta/units';
-import { BASE_UNITS, CHEST_KINDS, CHEST_RARITIES, type BaseUnitId, type ChestKind, type ChestRarity } from '@/meta/types';
+import { BASE_UNITS, CHEST_KINDS, CHEST_RARITIES, type BaseUnitId, type ChestKind, type ChestRarity, type ChestResult } from '@/meta/types';
 import { createTestProfile } from '@/meta/testing';
 
 /** Critical chi-square values at p = 0.001 by degrees of freedom. */
@@ -259,5 +260,101 @@ describe('opening a chest through the profile', () => {
     expect(rig.profile.buyChest('gold').ok).toBe(true);
     expect(rig.profile.data.gems).toBe(0);
     expect(rig.profile.data.chests).toMatchObject({ silver: 1, gold: 1 });
+  });
+});
+
+describe('opening a pile of chests', () => {
+  async function stocked(kind: ChestKind, n: number) {
+    const rig = await createTestProfile();
+    rig.profile.data.chests[kind] = n;
+    return rig;
+  }
+
+  /** The stored results without the pile tag (a pile marks its chests, single opens do not). */
+  const plain = (results: readonly ChestResult[]): ChestResult[] => results.map(({ batch: _batch, ...rest }) => rest);
+
+  for (const kind of CHEST_KINDS) {
+    it(`${kind}: a pile equals the same number of single opens on the same random stream`, async () => {
+      const pile = await stocked(kind, 6);
+      const singles = await stocked(kind, 6);
+      const opened = await pile.profile.openChests(kind, 6);
+      expect(opened.ok).toBe(true);
+      if (!opened.ok) return;
+      const each: ChestResult[] = [];
+      for (let i = 0; i < 6; i++) {
+        const r = await singles.profile.openChest(kind);
+        if (r.ok) each.push(r.value);
+      }
+      expect(plain(opened.value)).toEqual(each);
+      expect(pile.profile.data.cards).toEqual(singles.profile.data.cards);
+      expect(pile.profile.data.wild).toEqual(singles.profile.data.wild);
+      expect(pile.profile.data.gold).toBe(singles.profile.data.gold);
+      expect(pile.profile.data.goldOpened).toBe(singles.profile.data.goldOpened);
+      expect(pile.profile.data.nextRevealId).toBe(singles.profile.data.nextRevealId);
+      expect(pile.profile.data.chests[kind]).toBe(0);
+      expect(plain(pile.profile.data.reveals)).toEqual(plain(singles.profile.data.reveals));
+    });
+  }
+
+  it('lets the pity bonus land on the tenth gold chest in the middle of a pile, as it would one by one', async () => {
+    const pile = await stocked('gold', 5);
+    const singles = await stocked('gold', 5);
+    pile.profile.data.goldOpened = 7;
+    singles.profile.data.goldOpened = 7;
+    const opened = await pile.profile.openChests('gold', 5);
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    // Chests 8, 9, 10, 11, 12 of the cycle: only the tenth carries the bonus.
+    expect(opened.value.map((r) => r.pity.cards)).toEqual([0, 0, 8, 0, 0]);
+    expect(opened.value[2]?.pity.unit).not.toBeNull();
+    const each: ChestResult[] = [];
+    for (let i = 0; i < 5; i++) {
+      const r = await singles.profile.openChest('gold');
+      if (r.ok) each.push(r.value);
+    }
+    expect(plain(opened.value)).toEqual(each);
+    expect(pile.profile.data.cards).toEqual(singles.profile.data.cards);
+    expect(pile.profile.data.goldOpened).toBe(12);
+    expect(pile.profile.oddsOf('gold').pity?.counter).toBe(2);
+  });
+
+  it('can carry two bonuses in one pile, each aimed at the cat that needed it then', async () => {
+    const rig = await stocked('gold', 12);
+    rig.profile.data.goldOpened = 9;
+    const opened = await rig.profile.openChests('gold', 12);
+    expect(opened.ok && opened.value.filter((r) => r.pity.cards > 0)).toHaveLength(2);
+  });
+
+  it('is stored before it resolves and replays as one pile after a restart', async () => {
+    const rig = await stocked('wooden', 4);
+    const opened = await rig.profile.openChests('wooden', 4);
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const first = opened.value[0]?.id as number;
+    expect(opened.value.map((r) => r.batch)).toEqual([first, first, first, first]);
+    const again = await createTestProfile({ keepStorage: true });
+    expect(again.profile.data.reveals).toEqual(opened.value);
+    expect(again.profile.data.chests.wooden).toBe(0);
+    for (const r of opened.value) again.profile.ackReveal(r.id);
+    expect(again.profile.data.reveals).toEqual([]);
+  });
+
+  it('opens what is owned when asked for more, never more than the cap, and refuses an empty stock', async () => {
+    const rig = await stocked('wooden', 3);
+    const some = await rig.profile.openChests('wooden', 10);
+    expect(some.ok && some.value).toHaveLength(3);
+    expect(await rig.profile.openChests('wooden', 2)).toEqual({ ok: false, error: 'nothing_to_claim' });
+    expect(await rig.profile.openChests('silver', 0)).toEqual({ ok: false, error: 'nothing_to_claim' });
+    const many = await stocked('wooden', CHEST_BULK_MAX + 9);
+    const capped = await many.profile.openChests('wooden');
+    expect(capped.ok && capped.value).toHaveLength(CHEST_BULK_MAX);
+    expect(many.profile.data.chests.wooden).toBe(9);
+    expect(many.profile.data.reveals).toHaveLength(CHEST_BULK_MAX);
+  });
+
+  it('marks nothing on a lone chest', async () => {
+    const rig = await stocked('silver', 2);
+    const one = await rig.profile.openChests('silver', 1);
+    expect(one.ok && one.value[0]?.batch).toBeUndefined();
   });
 });

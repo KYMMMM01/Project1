@@ -1,13 +1,17 @@
 import { Container, Graphics, Rectangle, type FederatedPointerEvent, type FederatedWheelEvent, type Text } from 'pixi.js';
-import { audio, audioStats, SFX_IDS, type MusicId, type SfxId, type StingerId } from '@/audio';
+import { attackSfx, audio, audioStats, critSfx, foeDieSfx, foeHitSfx, impactSfx, SFX_IDS, type CombatCue, type MusicId, type SfxId, type StingerId } from '@/audio';
 import { game } from '@/core/game';
+import { ENEMY_IDS, UNIT_IDS, type EnemyId } from '@/game/api';
 import { clamp, darken, lighten } from '@/core/math';
 import { Scene } from '@/core/scene';
 import { Ease, type Tweener } from '@/core/tween';
 import { fitWidth, label } from '@/ui/text';
 import { Color } from '@/ui/theme';
 
-/** ?demo=audio: tap targets for every SFX, the music tracks, intensity, stingers, the step ladder and volume. */
+/**
+ * ?demo=audio: tap targets for every SFX, the music tracks, intensity, stingers, the step ladder and volume. The grid has two pages:
+ * "all ids" (every SFX in catalogue order) and "fight" (each cat's release and impact, each enemy's hit and death, boss deaths).
+ */
 
 const PAD = 16;
 const GAP = 8;
@@ -25,12 +29,24 @@ function familyColor(id: SfxId): number {
   if (BATTLE_VERBS.includes(id)) return Color.tealDark;
   if (id.startsWith('ui_') || id === 'place' || id === 'pickup') return Color.infoDark;
   if (id.startsWith('summon') || id.startsWith('merge') || id === 'upgrade' || id === 'sell') return Color.violetDark;
+  if (id.startsWith('atk_') || id.startsWith('imp_')) return Color.dangerDark;
+  if (id.startsWith('foe_')) return Color.mustardDark;
   if (id.startsWith('shoot') || id.startsWith('hit') || id === 'crit' || id === 'explosion' || id.startsWith('boss') || id === 'enemy_die') return Color.dangerDark;
   if (['freeze', 'stun', 'buff', 'heal'].includes(id)) return Color.mustardDark;
   if (['wave_start', 'wave_clear', 'danger_alarm', 'countdown_tick', 'whoosh', 'relic_pick'].includes(id)) return Color.successDark;
   if (id.startsWith('chest') || id.startsWith('card') || id.startsWith('reel') || id === 'jackpot' || id === 'gamble_fail') return Color.berryDark;
   return Color.primaryDark;
 }
+
+/** One tap target of the grid. */
+interface Cell {
+  label: string;
+  color: number;
+  play: () => void;
+}
+
+/** Seconds between the release of an attack and its impact when the demo plays them as a pair. */
+const FLIGHT = 0.12;
 
 class DemoButton extends Container {
   private readonly bg = new Graphics();
@@ -103,6 +119,8 @@ export default class AudioDemo extends Scene {
   private readonly gridMask = new Graphics();
   private readonly gridFlash = new Graphics();
   private readonly gridBg = new Graphics();
+  private cells: Array<Cell | null> = [];
+  private readonly modeButtons: DemoButton[] = [];
   private sfxVolText!: Text;
   private musicVolText!: Text;
   private stressButton!: DemoButton;
@@ -131,6 +149,7 @@ export default class AudioDemo extends Scene {
   private nextShot = 0;
   private nextCoin = 0;
   private nextBoom = 0;
+  private nextCrit = 0;
 
   constructor() {
     super();
@@ -212,9 +231,22 @@ export default class AudioDemo extends Scene {
     this.updateVolText();
     y += 26;
 
+    const modes: Array<['all' | 'fight', string]> = [['all', 'all ids'], ['fight', 'fight: cats and enemies']];
+    const mw2 = (game.w - PAD * 2 - GAP) / 2;
+    modes.forEach(([mode, text], i) => {
+      const b = new DemoButton(mw2, 44, text, Color.neutralDark, this.tweens, () => this.setMode(mode), 20);
+      b.position.set(PAD + i * (mw2 + GAP), y);
+      this.modeButtons.push(b);
+      this.addChild(b);
+    });
+    y += 50;
+
     this.gridTop = y + 4;
+    this.cells = this.allCells();
     this.buildGrid();
+    this.initGridEvents();
     this.addChild(this.gridBg, this.gridView, this.gridMask);
+    this.setMode('all');
     this.layoutGrid();
     this.refreshHud();
   }
@@ -243,28 +275,108 @@ export default class AudioDemo extends Scene {
     return y + 22;
   }
 
+  /** Every SFX in catalogue order. */
+  private allCells(): Array<Cell | null> {
+    return SFX_IDS.map((id) => ({ label: id, color: familyColor(id), play: () => audio.play(id) }));
+  }
+
+  private playCue(cue: CombatCue, volume = 1): void {
+    audio.play(cue.id, { volume: cue.volume * volume, pitch: cue.pitch });
+  }
+
+  /**
+   * The fight page. A row per cat: the pair (release, then the impact a moment later), the release, the impact, and the impact with its
+   * crit layer on top. A row per enemy: its hit then its death, the hit, the death, and three hits in a row (to hear the variants rotate).
+   */
+  private fightCells(): Array<Cell | null> {
+    const out: Array<Cell | null> = [];
+    const cat = Color.dangerDark;
+    for (const u of UNIT_IDS) {
+      out.push(
+        {
+          label: `${u} pair`,
+          color: darken(cat, 0.15),
+          play: () => {
+            this.playCue(attackSfx(u));
+            this.tweens.call(FLIGHT, () => this.playCue(impactSfx(u)));
+          },
+        },
+        { label: 'release', color: cat, play: () => this.playCue(attackSfx(u)) },
+        { label: 'impact', color: cat, play: () => this.playCue(impactSfx(u)) },
+        {
+          label: 'crit',
+          color: Color.berryDark,
+          play: () => {
+            this.playCue(impactSfx(u));
+            this.playCue(critSfx(u));
+          },
+        },
+      );
+    }
+    const foe = Color.mustardDark;
+    const hit = (id: EnemyId): void => this.playCue(foeHitSfx(id));
+    for (const e of ENEMY_IDS) {
+      out.push(
+        {
+          label: `${e} pair`,
+          color: darken(foe, 0.15),
+          play: () => {
+            hit(e);
+            this.tweens.call(0.3, () => this.playCue(foeDieSfx(e)));
+          },
+        },
+        { label: 'hit', color: foe, play: () => hit(e) },
+        { label: 'die', color: foe, play: () => this.playCue(foeDieSfx(e)) },
+        {
+          label: 'x3 hits',
+          color: Color.berryDark,
+          play: () => {
+            hit(e);
+            this.tweens.call(0.09, () => hit(e));
+            this.tweens.call(0.18, () => hit(e));
+          },
+        },
+      );
+    }
+    return out;
+  }
+
+  private setMode(mode: 'all' | 'fight'): void {
+    this.cells = mode === 'all' ? this.allCells() : this.fightCells();
+    this.modeButtons.forEach((b, i) => b.setColor((i === 0) === (mode === 'all') ? Color.success : Color.neutralDark));
+    this.buildGrid();
+    this.setScroll(0);
+  }
+
+  /** (Re)draw the grid from `cells`: backgrounds first, labels on top. */
   private buildGrid(): void {
+    for (const child of this.gridContent.removeChildren()) if (child !== this.gridFlash) child.destroy();
     const cw = (game.w - PAD * 2 - GAP * (COLS - 1)) / COLS;
     const g = new Graphics();
-    SFX_IDS.forEach((id, i) => {
+    this.cells.forEach((cell, i) => {
+      if (!cell) return;
       const col = i % COLS;
       const row = Math.floor(i / COLS);
       const x = col * (cw + GAP);
       const y = row * (CELL_H + GAP);
-      const c = familyColor(id);
+      const c = cell.color;
       g.roundRect(x, y, cw, CELL_H, 12).fill(darken(c, 0.35)).stroke({ width: 3, color: Color.outline });
       g.roundRect(x, y, cw, CELL_H - 6, 12).fill(c);
       g.roundRect(x + 6, y + 4, cw - 12, 7, 4).fill({ color: lighten(c, 0.45), alpha: 0.5 });
-      const t = label(id, { size: 19 });
+      const t = label(cell.label, { size: 19 });
       t.position.set(x + cw / 2, y + (CELL_H - 6) / 2);
       fitWidth(t, cw - 12);
       this.gridContent.addChild(t);
     });
-    // Backgrounds first, labels on top.
     this.gridContent.addChildAt(g, 0);
     this.gridContent.addChild(this.gridFlash);
+    this.contentH = Math.ceil(this.cells.length / COLS) * (CELL_H + GAP) - GAP;
+    this.gridFlash.clear();
+    this.gridFlash.alpha = 0;
+  }
+
+  private initGridEvents(): void {
     this.gridView.addChild(this.gridContent);
-    this.contentH = Math.ceil(SFX_IDS.length / COLS) * (CELL_H + GAP) - GAP;
     this.gridView.eventMode = 'static';
     this.gridView.on('pointerdown', this.onDown);
     this.gridView.on('pointermove', this.onMove);
@@ -317,9 +429,9 @@ export default class AudioDemo extends Scene {
     if (col < 0 || col >= COLS || row < 0) return;
     const inCellX = p.x - col * (cw + GAP) <= cw;
     const inCellY = p.y - row * (CELL_H + GAP) <= CELL_H;
-    const id = SFX_IDS[row * COLS + col];
-    if (!id || !inCellX || !inCellY) return;
-    audio.play(id);
+    const cell = this.cells[row * COLS + col];
+    if (!cell || !inCellX || !inCellY) return;
+    cell.play();
     this.flashCell(col, row, cw);
   };
 
@@ -393,7 +505,7 @@ export default class AudioDemo extends Scene {
       return;
     }
     this.stressScale = 1;
-    this.nextHit = this.nextDie = this.nextShot = this.nextCoin = this.nextBoom = 0;
+    this.nextHit = this.nextDie = this.nextShot = this.nextCoin = this.nextBoom = this.nextCrit = 0;
     this.stressLast = performance.now();
     // A wall-clock timer, not the frame loop: the sounds must keep their rate even when frames are slow.
     this.stressTimer = setInterval(() => {
@@ -421,7 +533,11 @@ export default class AudioDemo extends Scene {
     }
   }
 
-  /** A battle's worth of overlapping sounds: 16 hits/s, 4 deaths/s, 8 shots/s, 5 coins/s, a blast every 2 s (all times the stress scale). */
+  /**
+   * A battle's worth of overlapping sounds, straight into the engine (the director would thin them first): 16 weapon impacts a second,
+   * each with its enemy's answer, 8 releases, 4 deaths, a crit a second, 5 coins and a blast every 2 s (all times the stress scale).
+   * Cats and enemies are picked at random, which is the hardest case for the crowd control: nothing repeats.
+   */
   private runStress(realDt: number): void {
     const dt = realDt * this.stressScale;
     this.nextHit -= dt;
@@ -429,17 +545,27 @@ export default class AudioDemo extends Scene {
     this.nextShot -= dt;
     this.nextCoin -= dt;
     this.nextBoom -= dt;
+    this.nextCrit -= dt;
+    const unit = () => UNIT_IDS[Math.floor(Math.random() * UNIT_IDS.length)] as (typeof UNIT_IDS)[number];
+    const enemy = () => ENEMY_IDS[Math.floor(Math.random() * ENEMY_IDS.length)] as EnemyId;
     while (this.nextHit <= 0) {
-      audio.play('hit_light', { pan: Math.random() * 1.2 - 0.6 });
+      this.playCue(impactSfx(unit()));
+      this.playCue(foeHitSfx(enemy()));
       this.nextHit += 1 / 16;
     }
     while (this.nextDie <= 0) {
-      audio.play('enemy_die', { pan: Math.random() - 0.5 });
+      this.playCue(foeDieSfx(enemy()));
       this.nextDie += 0.25;
     }
     while (this.nextShot <= 0) {
-      audio.play(Math.random() < 0.5 ? 'shoot_arrow' : 'shoot_magic');
+      this.playCue(attackSfx(unit()));
       this.nextShot += 1 / 8;
+    }
+    while (this.nextCrit <= 0) {
+      const u = unit();
+      this.playCue(impactSfx(u));
+      this.playCue(critSfx(u));
+      this.nextCrit += 1;
     }
     while (this.nextCoin <= 0) {
       audio.play('coin');
@@ -461,6 +587,7 @@ export default class AudioDemo extends Scene {
     this.hud.text =
       `${s.state}${s.muted ? ' (muted)' : ''} | baked ${s.baked}/${s.total} ${(s.bakedKB / 1024).toFixed(1)} MB | sfx live ${s.sfxActive} (peak ${s.sfxActivePeak})` +
       (m ? ` | music ${m.track}${wanted}${paused} voices ${m.liveVoices}/${m.liveVoicesMax} overlap ${m.peakOverlap}` : '') +
+      ` | fight ${s.combatActive} (peak ${s.combatActivePeak}) cut ${s.sfxDropped.stolen} thinned ${s.sfxDropped.bucket + s.sfxDropped.cap}` +
       ` | nodes pool ${n.pooledVoices} src ${n.sfxSources} music ${n.musicLive}/${n.musicPeak}` +
       (s.musicLpfHz < 19000 ? ` | lpf ${s.musicLpfHz} Hz` : '');
     fitWidth(this.hud, game.w - PAD * 2);

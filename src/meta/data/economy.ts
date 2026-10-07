@@ -103,6 +103,12 @@ export const ROLLBACK_SLACK_MS = 5 * 60_000;
 /** A wooden chest is never sold. */
 export const CHEST_GEM_PRICE: Readonly<Record<ChestKind, number>> = { wooden: 0, silver: 150, gold: 500 };
 
+/**
+ * Most chests of one kind opened in a single go. The stored reveals kept for a replay after a crash cover a whole
+ * pile, so a pile never loses its first chests to the cap.
+ */
+export const CHEST_BULK_MAX = 50;
+
 // ───────────────────────────── piggy bank ─────────────────────────────
 
 export const PIGGY_PER_RUN = 6;

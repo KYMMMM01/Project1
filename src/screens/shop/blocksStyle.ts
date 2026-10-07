@@ -21,6 +21,9 @@ const COLS = 2;
 /** Skin previews are expensive to bake, so each one is built once and re-parented when the block is rebuilt. */
 const rugCache = new Map<string, Container>();
 
+/** What was equipped the last time the block was built, to tell a new choice (tape slapped on) from a page that was already so. */
+const wasEquipped = new Map<CosmeticRow['kind'], string>();
+
 /** Take every cached preview out of the tree so rebuilding the block does not destroy them. */
 export function detachRugPreviews(): void {
   for (const c of rugCache.values()) c.parent?.removeChild(c);
@@ -93,6 +96,9 @@ function cosmeticCard(inner: Container, x: number, y: number, w: number, row: Co
     const tape = tapeStrip({ name: 'yellow', w: 84, h: 28, angle: -22, pattern: 'dots' });
     tape.position.set(26, 14);
     c.addChild(tape);
+    const before = wasEquipped.get(row.kind);
+    if (before !== undefined && before !== row.id) c.slap(tape);
+    wasEquipped.set(row.kind, row.id);
   }
   const name = uiLabel(t('meta.cos.' + row.id), { size: 28 });
   fitLabel(name, w - 28, 28);

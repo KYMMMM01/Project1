@@ -2,17 +2,13 @@ import { Ease, Tween, uiTweens, type EaseFn, type TweenOpts, type TweenProps } f
 
 /** Global motion preferences. Components consult these instead of reading the media query themselves. */
 export const motion = {
-  /** Loops, big pops and shine sweeps are skipped when true (OS "reduce motion" or a settings toggle). */
+  /**
+   * Loops, big pops and shine sweeps are skipped when true. Only the player's own "reduce motion"
+   * setting turns it on: the OS flag is not followed, because many desktop players switch system
+   * animations off for speed and a game without its motion reads as broken.
+   */
   reduced: false,
 };
-
-if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-  const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-  motion.reduced = mq.matches;
-  mq.addEventListener('change', (e) => {
-    motion.reduced = e.matches;
-  });
-}
 
 const backCache = new Map<number, EaseFn>();
 
@@ -95,6 +91,11 @@ interface Scalable {
   scale: { x: number; y: number; set(x: number, y?: number): void };
 }
 
+/** A display object destroyed mid-tween (its owner forgot the tween) must end the tween, not throw every frame. */
+function isGone(obj: object): boolean {
+  return (obj as { destroyed?: boolean }).destroyed === true;
+}
+
 /** Pop an object in: scale `from` -> 1 with an overshoot, and fade it in if it has alpha. */
 export function popIn(
   bag: TweenBag,
@@ -104,35 +105,42 @@ export function popIn(
   const from = opts.from ?? 0;
   obj.scale.set(from);
   obj.alpha = 0;
-  return bag.run({
+  const tw = bag.run({
     duration: opts.duration ?? 0.22,
     delay: opts.delay ?? 0,
     ease: backOut(opts.overshoot ?? 2.0),
     onUpdate: (k) => {
+      if (isGone(obj)) return void tw.kill();
       const s = from + (1 - from) * k;
       obj.scale.set(s);
       obj.alpha = Math.min(1, k * 4);
     },
     onComplete: () => {
+      if (isGone(obj)) return;
       obj.scale.set(1);
       obj.alpha = 1;
       opts.onDone?.();
     },
   });
+  return tw;
 }
 
 /** Quick scale punch 1 -> 1+amount -> 1 (counter changes, badge updates). */
 export function punch(bag: TweenBag, obj: Scalable, amount = 0.2, duration = 0.18, base = 1): Tween {
-  return bag.runKeyed(obj.scale, {
+  const tw = bag.runKeyed(obj.scale, {
     duration,
     ease: Ease.linear,
     onUpdate: (k) => {
+      if (isGone(obj)) return void tw.kill();
       // Fast attack, springy settle.
       const e = k < 0.35 ? Ease.quadOut(k / 0.35) : 1 - Ease.sineInOut((k - 0.35) / 0.65);
       obj.scale.set(base * (1 + amount * e));
     },
-    onComplete: () => obj.scale.set(base),
+    onComplete: () => {
+      if (!isGone(obj)) obj.scale.set(base);
+    },
   });
+  return tw;
 }
 
 /** Decaying horizontal shake around `baseX` (disabled-button tap, "not enough currency"). */

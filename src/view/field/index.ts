@@ -11,10 +11,12 @@ import { EnemyViews } from './enemies';
 import type { FieldEnv } from './env';
 import { FieldInput } from './input';
 import { dropLook } from './policy';
+import { LaserView } from './laser';
 import { DragPreview } from './preview';
 import { Projectiles } from './projectiles';
 import { buildRug, RUG_X, RUG_Y } from './rug';
 import { rugSkin } from './rugSkins';
+import { SunNote } from './sunNote';
 import { UnitViews } from './units';
 import { buildWalkway } from './walkway';
 
@@ -50,6 +52,12 @@ export function createField(ctx: BattleContext): FieldPart {
   const shots = new Projectiles(env, layers.projectiles);
   const effects = new FieldEffects(env);
   const input = new FieldInput(env, layers.floor, layers.zones, layers.projectiles, units, cells);
+  const sunNote = new SunNote(env, layers.fxFront);
+  // The lit lane goes on the ground effects' layer (under the enemies and cats); the dot's tag over the cats.
+  const laser = new LaserView(env, layers.zones, layers.fxFront);
+  input.onEmptyTap = (cell) => {
+    if (sunNote.lit(cell)) sunNote.show(cell);
+  };
   /** Hits near the entrance rise toward the top HUD: they stop at its lower edge (a sticker's own half height clear) instead of vanishing under the pills. */
   const NUMBER_CLEAR = 52;
   /** And off the screen's side edges, an 8 px margin in. */
@@ -94,6 +102,7 @@ export function createField(ctx: BattleContext): FieldPart {
       input.update(dt);
       updateCells(dt);
       cells.update(dt, env.time);
+      laser.update(dt, env.time);
       ground.update(dt);
     },
     resize(layout: BattleLayout): void {
@@ -104,6 +113,8 @@ export function createField(ctx: BattleContext): FieldPart {
     destroy(): void {
       offRefused();
       input.destroy();
+      sunNote.destroy();
+      laser.destroy();
       effects.destroy();
       shots.destroy();
       enemies.destroy();

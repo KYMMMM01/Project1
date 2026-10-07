@@ -142,13 +142,19 @@ export class LineFrame extends Container {
 
   setState(s: FrameState): void {
     this.setLevel(s.level);
+    let fill = 0;
     if (this.bar) {
       const p = s.progress;
       this.bar.visible = true;
       if (p) {
         this.bar.setColor(p.maxed ? 'gold' : p.have >= p.needed ? 'green' : 'blue');
         this.bar.setLabel(p.maxed ? t('cats.max') : barText(p));
-        this.bar.setValue(p.needed > 0 ? p.have / p.needed : 1, false);
+        const next = p.needed > 0 ? p.have / p.needed : 1;
+        // The bar fills first, and the ready sticker is stuck on when it has arrived.
+        if (next !== this.bar.value) {
+          fill = this.stated ? Math.min(0.55, 0.22 + Math.abs(next - this.bar.value) * 0.5) : 0;
+          this.bar.setValue(next, this.stated);
+        }
       }
     }
     if (this.stated && s.ready === this.ready) return;
@@ -158,7 +164,7 @@ export class LineFrame extends Container {
     this.readySticker.visible = s.ready && this.mode === 'card';
     if (this.readySticker.visible && !was && !motion.reduced) {
       this.readySticker.scale.set(0);
-      this.bag.to(this.readySticker.scale, { x: 1, y: 1 }, { duration: 0.3, ease: backOut(2.8) });
+      this.bag.to(this.readySticker.scale, { x: 1, y: 1 }, { duration: 0.3, delay: fill, ease: backOut(2.8) });
     } else {
       this.readySticker.scale.set(1);
     }

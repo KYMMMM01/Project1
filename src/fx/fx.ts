@@ -750,16 +750,21 @@ export class Fx {
 
     // Impact.
     this.burst(
-      { tex: 'disc', prio: 3, count: 1, life: 0.2, delay: charge, size: 90, sizeEnd: 320, colors: [W, hi, c], alpha: 0.85, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 3, count: 1, life: 0.15, delay: charge, size: 90, sizeEnd: 320, colors: [W, hi, c], alpha: 0.85, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.burst(
-      { tex: 'starburst', prio: 3, count: 1, life: 0.3, delay: charge, size: 160, sizeEnd: 420, rot: [0, TAU], colors: [W, hi], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
+      { tex: 'starburst', prio: 3, count: 1, life: 0.2, delay: charge, size: 160, sizeEnd: 420, rot: [0, TAU], colors: [W, hi], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
       x, y, m,
     );
-    this.pillar(x, y + 40, c, W, s, 190, 720, 0.95, charge);
+    // The guardian pops on this frame and is biggest about 0.2 s later: the column is slimmer and gone by then, and the
+    // second ring is born outside the sticker's footprint, so nothing white crosses it at its biggest.
+    this.pillar(x, y + 40, c, W, s, 150, 720, 0.8, charge, 0.32);
     this.shockwave(x, y, { color: c, radius: 330, scale: s, delay: charge });
-    this.shockwave(x, y, { color: W, radius: 250, scale: s, delay: charge + 0.2 });
+    this.burst(
+      { tex: 'ring', prio: 3, count: 1, life: 0.42, delay: charge + 0.12, size: 230, sizeEnd: 520, colors: [W, hi], alpha: 0.7, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
+      x, y, m,
+    );
     this.burst(
       {
         tex: 'star', prio: 3, count: 14, life: [0.6, 1.0], delay: charge, speed: [260, 700], drag: 2.6, size: [30, 54], sizeEnd: [8, 14], spin: [-6, 6],
@@ -802,17 +807,17 @@ export class Fx {
   }
 
   /** Vertical light column rising from (x,y) with a bright narrow core. */
-  private pillar(x: number, y: number, c: number, core: number, s: number, width: number, height: number, alpha: number, delay = 0): void {
+  private pillar(x: number, y: number, c: number, core: number, s: number, width: number, height: number, alpha: number, delay = 0, life = 0.62): void {
     this.burst(
       {
-        tex: 'pillar', prio: 2, count: 1, life: 0.62, delay, size: width, sizeEnd: width * 0.45, sizeY: height * 0.3, sizeYEnd: height,
+        tex: 'pillar', prio: 2, count: 1, life, delay, size: width, sizeEnd: width * 0.45, sizeY: height * 0.3, sizeYEnd: height,
         sizeEase: Ease.cubicOut, colors: [W, core, c], alpha, fadeIn: 0.06, fadeOut: 0.65,
       },
       x, y, { scale: s },
     );
     this.burst(
       {
-        tex: 'pillar', prio: 2, count: 1, life: 0.46, delay, size: width * 0.34, sizeEnd: width * 0.12, sizeY: height * 0.4, sizeYEnd: height * 1.1,
+        tex: 'pillar', prio: 2, count: 1, life: life * 0.74, delay, size: width * 0.34, sizeEnd: width * 0.12, sizeY: height * 0.4, sizeYEnd: height * 1.1,
         sizeEase: Ease.cubicOut, colors: [W, W], alpha: alpha, fadeIn: 0.04, fadeOut: 0.7,
       },
       x, y, { scale: s },
@@ -1444,7 +1449,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'disc', prio: 1, count: 1, life: 0.22, delay: suck, size: 40, sizeEnd: 150, colors: [hi, c], alpha: 0.6, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
+      { tex: 'disc', prio: 1, count: 1, life: 0.18, delay: suck - 0.04, size: 40, sizeEnd: 130, colors: [hi, c], alpha: 0.85, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
       x, y, m,
     );
     this.shockwave(x, y, { color: c, radius: 100, scale: s, delay: suck });
@@ -1457,8 +1462,9 @@ export class Fx {
     );
     this.burst(
       {
-        tex: 'smoke', prio: 1, count: 4, life: [0.4, 0.7], delay: suck, shape: { type: 'circle', r: 14 }, speed: [30, 90], drag: 3, size: [34, 48],
-        sizeEnd: [70, 96], rot: [0, TAU], colors: [lighten(c, 0.6), c], alpha: 0.45, fadeIn: 0.1, fadeOut: 0.6,
+        // The puffs leave the new sticker alone: they start on a ring around it and drift outward instead of clustering over it.
+        tex: 'smoke', prio: 1, count: 6, life: [0.3, 0.5], delay: suck, shape: { type: 'ring', r: 58, width: 8 }, speed: [40, 90], drag: 3, size: [24, 34],
+        sizeEnd: [40, 56], rot: [0, TAU], colors: [lighten(c, 0.6), c], alpha: 0.4, fadeIn: 0.1, fadeOut: 0.6,
       },
       x, y, m,
     );

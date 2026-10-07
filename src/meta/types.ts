@@ -97,6 +97,8 @@ export interface ChestResult {
   overflowGold: number;
   /** Number of cards the guarantee had to upgrade (0 for almost every chest). */
   upgraded: number;
+  /** Set on every chest of a pile opened in one go (the id of the first one): a replay after a crash shows the pile as one opening. */
+  batch?: number;
 }
 
 // ───────────────────────────── persisted profile ─────────────────────────────

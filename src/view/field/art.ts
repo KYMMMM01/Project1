@@ -11,6 +11,7 @@ import { TAU, mixColor } from '@/core/math';
 import { Color, RARITY_ORDER, Rarity, TapeColors, drawDashedRect, drawIcon, drawPaperFace, type IconName, type RarityId } from '@/ui';
 import type { ClassId } from '@/game/api';
 import { CELL_H, CELL_W } from '@/game/geometry';
+import { drawPaw, drawSunMark, drawTargetMark } from '@/fx';
 import type { ProjectileShape } from './projectileLooks';
 
 const CLASS_ICON: Record<ClassId, IconName> = {
@@ -110,6 +111,12 @@ export interface FieldArt {
   /** Kraft strip an enemy's health bar is painted into (9-slice). */
   barTrack: Texture;
   projectile: Record<ProjectileShape, Texture>;
+  /** The sun sticker of a sunbeam cell's corner and of a cat standing in the light. */
+  sunMark: Texture;
+  /** The coral crosshair on an enemy the laser has marked. */
+  targetMark: Texture;
+  /** The sticker a summon tosses from the button to its cell, in the rarity's colour (the colour comes first). */
+  toss: Record<RarityId, Texture>;
 }
 
 let cached: FieldArt | null = null;
@@ -171,6 +178,9 @@ export function fieldArt(): FieldArt {
     ),
     barTrack: bake(gfx((g) => g.roundRect(-20, -6, 40, 12, 6).fill(Color.track).stroke({ width: 1.8, color: Color.kraftDark })), 44, 16),
     projectile: bakeProjectiles(),
+    sunMark: bake(gfx((g) => drawSunMark(g, 19)), 48, 48),
+    targetMark: bake(gfx((g) => drawTargetMark(g, 19)), 48, 48),
+    toss: bakeTosses(),
   };
   return cached;
 }
@@ -188,6 +198,22 @@ function bakeRanks(): Record<RarityId, Texture> {
     for (let i = 0; i < pips; i++) g.circle((i - (pips - 1) / 2) * 13, 0, 4.8).fill(CREAM).stroke({ width: 1.5, color: r.dark });
     out[id] = bake(g, w + 8, 36);
   });
+  return out;
+}
+
+function bakeTosses(): Record<RarityId, Texture> {
+  const out = {} as Record<RarityId, Texture>;
+  for (const id of RARITY_ORDER) {
+    const c = new Container();
+    c.addChild(
+      gfx((g) => {
+        disc(g, 25, Rarity[id].color);
+        g.circle(0, 0, 25).stroke({ width: 2, color: Rarity[id].dark });
+      }),
+      gfx((g) => drawPaw(g, 1.5)),
+    );
+    out[id] = bake(c, 64, 64);
+  }
   return out;
 }
 

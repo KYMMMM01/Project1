@@ -80,7 +80,7 @@ export class EnemyViews {
     this.layer.addChild(v.root);
     this.byUid.set(e.uid, v);
     this.live.push(v);
-    v.appear(this.env.ctx.tweens);
+    v.appear(this.env.ctx.tweens, this.env.ctx.ui);
     return v;
   }
 

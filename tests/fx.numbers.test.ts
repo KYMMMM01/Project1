@@ -200,3 +200,23 @@ describe('FloatingNumbers bounds', () => {
     expect(right?.y).toBeGreaterThanOrEqual(100);
   });
 });
+
+describe('FloatingNumbers on the clamped top line', () => {
+  it('places hits that would pile up on the HUD edge side by side', () => {
+    const n = make(10);
+    n.minY = 100;
+    for (const v of [11, 23, 30]) n.show(300, 112, v, 'damage', { noScatter: true });
+    const xs = n.layer.children.map((c) => c.x).sort((a, b) => a - b);
+    expect(xs).toHaveLength(3);
+    expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(60);
+    expect(xs[2] - xs[1]).toBeGreaterThanOrEqual(60);
+  });
+
+  it('leaves hits in the open where they are', () => {
+    const n = make(10);
+    n.minY = 100;
+    n.show(300, 600, 11, 'damage', { noScatter: true });
+    n.show(300, 600, 23, 'damage', { noScatter: true });
+    expect(n.layer.children.map((c) => c.x)).toEqual([300, 300]);
+  });
+});

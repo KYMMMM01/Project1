@@ -69,8 +69,11 @@ export interface Shell {
 export interface ScreenServices {
   /** Play the chest-opening sequence for an already decided result (meta `ChestResult`), then resolve. */
   revealChest(result: unknown): Promise<void>;
-  /** Show a "you received" popup for a reward bundle (meta `BundlePart[]`), flying currencies to the top bar. */
-  showRewards(parts: unknown, title?: string): Promise<void>;
+  /**
+   * Show a "you received" popup for a reward bundle (meta `BundlePart[]`), flying currencies to the top bar.
+   * `held`: the caller already told the shell to keep the top bar's numbers back for these parts (`Shell.pending`), so the sheet does not.
+   */
+  showRewards(parts: unknown, title?: string, held?: boolean): Promise<void>;
   /** Open the odds screen of a chest kind ('wooden' | 'silver' | 'gold'). */
   openOdds(kind: string): void;
   openSettings(): void;
@@ -90,7 +93,7 @@ export function provide<K extends keyof ScreenServices>(name: K, fn: ScreenServi
 /** Call a service if someone provides it. Promise-returning services resolve immediately when absent. */
 export const services: ScreenServices = {
   revealChest: (result) => registry.revealChest?.(result) ?? Promise.resolve(),
-  showRewards: (parts, title) => registry.showRewards?.(parts, title) ?? Promise.resolve(),
+  showRewards: (parts, title, held) => registry.showRewards?.(parts, title, held) ?? Promise.resolve(),
   openOdds: (kind) => registry.openOdds?.(kind),
   openSettings: () => registry.openSettings?.(),
   openCalendar: () => registry.openCalendar?.(),

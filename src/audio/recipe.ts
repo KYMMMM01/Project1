@@ -12,15 +12,21 @@ import type { VoiceRule } from './voices';
  * Loudness family. Normalisation brings every baked buffer to its family's target: UI is the quietest,
  * shots and hits stay a texture under the rest, rewards and the big battle moments are the loudest.
  */
-export type Cat = 'ui' | 'tick' | 'fire' | 'hit' | 'combat' | 'reward' | 'big' | 'stinger';
+export type Cat = 'ui' | 'tick' | 'fire' | 'hit' | 'swing' | 'impact' | 'foe' | 'combat' | 'reward' | 'big' | 'finale' | 'stinger';
 
 export const CAT_TARGET: Record<Cat, { peak: number; rms: number }> = {
   ui: { peak: 0.2, rms: 0.034 },
   tick: { peak: 0.24, rms: 0.038 },
   fire: { peak: 0.2, rms: 0.028 },
-  hit: { peak: 0.26, rms: 0.034 },
+  hit: { peak: 0.3, rms: 0.04 },
+  // The weapon sounds are the heart of the game, so they sit above the UI and the old shots: a release is the lighter half
+  // of a pair, the impact the louder, what an enemy is made of sits between, and a boss's last breath is a big moment.
+  swing: { peak: 0.22, rms: 0.034 },
+  foe: { peak: 0.25, rms: 0.037 },
+  impact: { peak: 0.28, rms: 0.042 },
   combat: { peak: 0.4, rms: 0.062 },
   reward: { peak: 0.46, rms: 0.075 },
+  finale: { peak: 0.5, rms: 0.08 },
   big: { peak: 0.7, rms: 0.115 },
   stinger: { peak: 0.74, rms: 0.12 },
 };
@@ -48,6 +54,12 @@ export interface Recipe {
   climb?: number;
   /** Music dip the engine starts together with this sound: the awakening takes the room for a moment. */
   duck?: { depth: number; seconds: number };
+  /**
+   * Combat voice priority (0 default): when the cap on simultaneous combat voices is full, a sound may take the place of the
+   * oldest voice of equal or lower priority, and at 2 and above it also skips the per-window thinning. 1 heavy hits, 2 crits,
+   * killing blows and deaths, 3 a boss's death.
+   */
+  prio?: number;
   rule?: Partial<VoiceRule>;
   build(s: Synth, v: Variant): void;
 }

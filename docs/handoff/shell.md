@@ -143,3 +143,24 @@ Stepped frame by frame at full motion (method and tools in `docs/handoff/ui.md`,
 ### REQUESTS
 
 - The result screen / `src/scenes/BattleScene.ts`: after a win the home scene is built fresh, so its pills roll from zero. A `Shell.pending(kind, amount)` call for the run's rewards before the scene change would make them roll up with the coins like the other claims.
+
+### Second pass
+
+| Moment | Strip | Before | Change | After |
+|---|---|---|---|---|
+| Return from a battle with rewards | `ret2/strip_rt` | Right: the result page is cut away by the iris (0.38 s), the dark holds for the scene change, the home opens (0.45 s) with the coins already flying from the middle (`view/hud/homeClaim.ts`, `Shell.pending` before the first frame), the pills keep their old numbers until the first coin lands (`3.04만` at the end), the battle tab is on the picked chapter, the badges are drawn with the new state | none | same. The `coin_many` sound is on the frame the scene swaps, about 0.1 s before the iris shows the burst: inside a beat, left alone (the call is in the HUD's file) |
+| Continue prompt after a simulated kill | `cont/strip_cp` | Opens as a kit popup over the home; "give up" closes it and opens the "really?" dialog after a 0.1 s bare home: right | none | same |
+| START bob on the pre-run page | (code, see `ui.md`) | began while the page was still rising, so the lift and the rise added up | `PreRunScreen` starts the bob in `scaffold.show(true, onLanded)` | the button floats once the page has settled |
+| Tooltip fade-out | `tip/strip_tp` | not re-captured | none | see `ui.md` |
+
+### Could not capture (second pass)
+
+The first play of the logo and the CSS splash fade (as before: they happen before the page can be frozen). The automatic unlock note in the queue never came up in two runs (the level-up note took its place), so only comeback, its reward sheet and level-up were seen.
+
+## 2026-10-07 owner feedback
+
+**F. "Next chapter" after a win.** `RunConfig.next` (see `src/view/context.ts`) is now supplied for every run the app flow builds (home start, retry, continue, tutorial). The battle owner only has to call `run.next?.()` when the won result screen is built (after `finishRun` has paid out: it returns null before, and for a result that was never recorded) and draw a button from `{ chapter, stake, start() }`; `start()` needs no further care.
+- **Decision** (`src/app/nextRun.ts`, pure, `nextRunPlan(cleared, lastRun)`; `tests/screens.shell.nextRun.test.ts`): from `profile.data.cleared` and `profile.data.lastRun` after the payout. A defeat, a daily and an endless run offer nothing; the tutorial leads to chapter 1 at butler level 0. A chapter run leads to the next chapter at the same butler level when `canPlayStake` says so, otherwise to that chapter at the highest level the player may play (a won chapter always unlocks the next one, so there is always level 0). After the last chapter: the same chapter at the next butler level, only when this win is the first clear (so that level "just unlocked") and the level exists; otherwise null.
+- **Path** (`src/app/flow.ts`): `nextRunOf(init)` builds the closure; it only answers for the run this battle played (the record's mode, chapter and level must match). `start()` calls `startRun({ mode: 'chapter', chapter, stake }, onOpened)`, the very function the home screen's start button is wired to: the "run in progress" offer (`offerContinue`), the pre-run page with rules and snack offers, `prepareRun` (pending-run record), the `iris` transition and the platform play signals (`gameplayStart` in the battle's created hook). `startRun` gained an optional second argument `onOpened`, called once the battle is opening (not when the player backs out of the page). The flow uses it to call `rememberSelection({ chapter, stake })` (new, exported from `@/screens/battle`): the battle tab then shows that chapter and level when the home scene is rebuilt, and treats the finished run as seen, so Home afterwards shows the same place instead of what the finished run alone would have pointed at.
+- **Replay of stored reveals** (`afterFirstScene`): one call, `services.revealChest([...profile.data.reveals])`; the service plays chests opened together as one pile and the others one by one (see `collection.md`).
+- Checked in the browser (Aside, `?scene=home&tab=battle&fresh=1`): chapter 1 started from the home screen, `__dbg.battle.win()`, `scenes.current.run.next()` -> `{ chapter: 2, stake: 0 }` (null before the win), `.start()` -> the pre-run page opens over the result screen, START -> battle of chapter 2 level 0, a rebuilt home scene shows "챕터 2". Unit tests: `tests/screens.shell.flow.test.ts` (new block: null before the payout and for another run's record, tutorial -> chapter 1, pre-run page request, cancelling moves nothing, starting prepares the run and moves the chapter card), `tests/screens.shell.nextRun.test.ts`.

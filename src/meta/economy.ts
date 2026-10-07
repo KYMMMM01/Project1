@@ -7,6 +7,7 @@ import { Rng } from '@/core/rng';
 import { chestTotals, drawChest, pityTarget } from './chests';
 import { ProfileCore } from './core';
 import {
+  CHEST_BULK_MAX,
   CHEST_GEM_PRICE,
   MAX_LEVEL,
   PLACEMENTS,
@@ -199,8 +200,31 @@ export class EconomyProfile extends ProfileCore {
    * resolves, so an animation can never show something other than what was stored.
    */
   async openChest(kind: ChestKind): Promise<Result<ChestResult>> {
+    const opened = await this.openChests(kind, 1);
+    return opened.ok ? ok(opened.value[0] as ChestResult) : opened;
+  }
+
+  /**
+   * Open up to `count` chests of one kind in one go (at most `CHEST_BULK_MAX`, never more than are owned). Every chest
+   * is drawn and credited by the same step a single open uses, one after the other, each with its own seed, so the odds,
+   * the guarantees, the pity counter (a bonus lands on the tenth gold chest even in the middle of a pile) and the overflow
+   * all advance chest by chest, and a pile equals the same number of single opens. Nothing is shown before the
+   * whole pile is stored and written to disk.
+   */
+  async openChests(kind: ChestKind, count: number = CHEST_BULK_MAX): Promise<Result<ChestResult[]>> {
+    const n = Math.min(Math.floor(count), this.data.chests[kind], CHEST_BULK_MAX);
+    if (!(n >= 1)) return fail('nothing_to_claim');
+    const batch = n > 1 ? this.data.nextRevealId : undefined;
+    const results: ChestResult[] = [];
+    for (let i = 0; i < n; i++) results.push(this.applyChest(kind, batch));
+    this.commit();
+    await this.flush();
+    return ok(results);
+  }
+
+  /** Draw one chest from the inventory, credit its cards and store the result for the reveal (the caller commits). */
+  private applyChest(kind: ChestKind, batch: number | undefined): ChestResult {
     const d = this.data;
-    if (d.chests[kind] <= 0) return fail('nothing_to_claim');
     const seed = this.deps.seed() >>> 0;
     const table = ODDS[kind];
     const draw = drawChest(table, { levels: d.levels, cards: d.cards, goldOpened: d.goldOpened }, new Rng(seed));
@@ -219,16 +243,15 @@ export class EconomyProfile extends ProfileCore {
       pity: draw.pity,
       overflowGold,
       upgraded: draw.upgraded,
+      ...(batch !== undefined ? { batch } : {}),
     };
     d.reveals.push(result);
-    if (d.reveals.length > 20) d.reveals.shift();
+    if (d.reveals.length > CHEST_BULK_MAX) d.reveals.shift();
     this.deps.analytics.track('chest_open', {
       chest: kind, cards: result.cards.length, upgraded: result.upgraded, pity: draw.pity.cards, odds: table.version,
     });
     this.events.emit('chest', result);
-    this.commit();
-    await this.flush();
-    return ok(result);
+    return result;
   }
 
   /** The animation finished (or was skipped): forget the stored reveal. */

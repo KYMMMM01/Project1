@@ -1,11 +1,11 @@
 /** The missions tab: daily and weekly sub-tabs over one scrolling body. */
 import { Container } from 'pixi.js';
-import { audio } from '@/audio';
 import { i18nEvents, t } from '@/core/i18n';
 import { errorKey, profile } from '@/meta';
 import { featureHint } from '@/meta/features';
 import type { Bundle, Result } from '@/meta/types';
 import { Badge } from '@/ui/Badge';
+import { refusalCue } from '@/ui/press';
 import { ScrollView } from '@/ui/ScrollView';
 import { SegmentTabs } from '@/ui/TabBar';
 import { toast } from '@/ui/Toast';
@@ -170,7 +170,7 @@ export class MissionsTab implements TabScreen {
     try {
       const r = run();
       if (!r.ok) {
-        audio.play('ui_error');
+        refusalCue();
         toast(t(errorKey(r.error)), 'warning');
         this.syncAll(false);
         return;

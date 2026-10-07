@@ -31,6 +31,19 @@ export interface RunConfig {
   runsPlayed: number;
   /** Debug runs skip meta bookkeeping (no rewards, no saves, no ads). */
   sandbox: boolean;
+  /**
+   * What the won result screen offers as "next" (usually the next chapter). Asked after the run's
+   * rewards and unlocks are applied; null or absent means there is nothing to move on to.
+   */
+  next?: () => NextRun | null;
+}
+
+/** The run a victory leads on to, decided by the app flow. */
+export interface NextRun {
+  chapter: number;
+  stake: number;
+  /** Leaves this battle and opens that run (through the pre-run page or directly: the flow's call). */
+  start(): void;
 }
 
 /** Scene-space rectangles (design pixels). Recomputed on resize. */

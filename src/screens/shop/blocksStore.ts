@@ -170,6 +170,9 @@ function gemPassCoupon(inner: Container, y: number, w: number, env: BlockEnv): n
   return h;
 }
 
+/** The pool the piggy bar showed the last time the block was built. */
+let lastPool: number | null = null;
+
 function piggyCard(inner: Container, y: number, w: number, env: BlockEnv): number {
   const p = profile.piggyView();
   const canBreak = storeOpen() && p.gems > 0;
@@ -183,9 +186,16 @@ function piggyCard(inner: Container, y: number, w: number, env: BlockEnv): numbe
   const bw = w - x0 - 22;
   const desc = uiLabel(t('shop.piggy.desc'), { size: 26, color: Color.inkSoft, anchorX: 0, anchorY: 0, wrap: bw, lineHeight: 32, align: 'left' });
   desc.position.set(x0, 22);
-  const bar = new ProgressBar({ width: bw, height: 52, color: 'cyan', label: t('shop.piggy.pool', { n: fmt(p.gems), cap: fmt(p.cap) }) });
+  const bar = new ProgressBar({ width: bw, height: 52, color: 'cyan', format: (v) => t('shop.piggy.pool', { n: fmt(Math.round(v * PIGGY_CAP)), cap: fmt(p.cap) }) });
   bar.position.set(x0 + bw / 2, 128);
-  bar.setValue(p.gems / PIGGY_CAP, false);
+  // The pool moves from what the last build showed: it fills as gems drop in (the pig bumps) and drains when the bank is broken.
+  const was = lastPool ?? p.gems;
+  bar.setValue(was / PIGGY_CAP, false);
+  if (was !== p.gems) {
+    bar.setValue(p.gems / PIGGY_CAP, true);
+    if (p.gems > was) card.bump(art);
+  }
+  lastPool = p.gems;
   card.addChild(desc, bar);
   const note = p.gems === 0 ? t('shop.piggy.empty') : !p.freeBreakReady ? tn('meta.piggy.free', p.daysUntilFree, { days: p.daysUntilFree, n: fmt(p.freeBreakGems) }) : '';
   if (note) {

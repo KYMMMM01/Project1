@@ -37,6 +37,7 @@ vi.mock('@/core/haptics', () => ({ haptic: spies.haptic }));
 import { game } from '@/core/game';
 import { Tweener } from '@/core/tween';
 import { Fx } from '@/fx/fx';
+import { MOLT_SECONDS } from '@/view/timing';
 import { TimeFreeze } from '@/fx/freeze';
 import { ScreenFx, Trauma } from '@/fx/screen';
 import { setFxSettings } from '@/fx/settings';
@@ -111,6 +112,10 @@ describe('Fx presets', () => {
       }
       expect((t[0] as { impact: number }).impact).toBe(0);
       expect((t[4] as { impact: number }).impact).toBeCloseTo(0.38);
+    });
+
+    it('a moult sucks in for exactly the time the field gives the old sticker to spin away', () => {
+      expect(fx.moltPuff(0, 0).impact).toBe(MOLT_SECONDS);
     });
 
     it('clamps odd tiers', () => {
