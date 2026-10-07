@@ -2,8 +2,8 @@ import { Container, Graphics, Point } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
-import { clamp } from '@/core/math';
 import { Ease } from '@/core/tween';
+import { placeBubble } from './bubblePlace';
 import { backOut, motion, TweenBag } from './motion';
 import { drawSpeechBubble, paperSeed } from './paper';
 import { uiLabel } from './text';
@@ -46,25 +46,30 @@ class TooltipManager {
     const b = target.getBounds();
     const topLeft = game.overlayLayer.toLocal(new Point(b.x, b.y));
     const botRight = game.overlayLayer.toLocal(new Point(b.x + b.width, b.y + b.height));
-    const cx = (topLeft.x + botRight.x) / 2;
 
     const title = content.title ? uiLabel(content.title, { size: 30, color: Color.coralDark }) : null;
     const body = uiLabel(content.text, { size: 26, wrap: MAX_W - PAD * 2, lineHeight: 34 });
     const w = Math.min(MAX_W, Math.max(title?.width ?? 0, body.width) + PAD * 2);
     const h = PAD * 2 + body.height + (title ? title.height + 4 : 0);
 
-    // Prefer above the target; flip below when the notch/top bar would clip it.
-    const above = topLeft.y - ARROW - h >= game.safeTop + MARGIN;
-    const x = clamp(cx - w / 2, MARGIN, game.w - MARGIN - w);
-    const arrowX = clamp(cx - x, 34, w - 34);
+    // Above the target when there is room, below when the notch or top bar would clip it, and always inside the safe area.
+    const place = placeBubble({
+      anchor: { x: topLeft.x, y: topLeft.y, w: botRight.x - topLeft.x, h: botRight.y - topLeft.y },
+      w,
+      h,
+      bounds: { x: MARGIN, y: game.safeTop + MARGIN, w: game.w - MARGIN * 2, h: game.h - game.safeTop - game.safeBottom - MARGIN * 2 },
+      arrow: ARROW,
+      inset: 34,
+    });
+    const arrowX = place.tailX;
     // Local frame: origin at the arrow tip so the pop animation grows out of the target.
-    const bodyY = above ? -ARROW - h : ARROW;
+    const bodyY = place.y - place.tipY;
     const g = new Graphics();
     // Cream paper, a hand-drawn brown line and a small tail whose tip is the local origin.
     drawSpeechBubble(g, -arrowX, bodyY, w, h, {
       radius: 26,
       seed: paperSeed(),
-      tail: { side: above ? 'bottom' : 'top', x: arrowX, len: ARROW, half: 13 },
+      tail: { side: place.side, x: arrowX, len: ARROW, half: 13 },
     });
 
     const bubble = new Container();
@@ -77,7 +82,7 @@ class TooltipManager {
     }
     body.position.set(-arrowX + w / 2, ty + body.height / 2);
     bubble.addChild(body);
-    bubble.position.set(x + arrowX, above ? topLeft.y : botRight.y);
+    bubble.position.set(place.tipX, place.tipY);
     bubble.eventMode = 'none';
     game.overlayLayer.addChild(bubble);
     this.bubble = bubble;

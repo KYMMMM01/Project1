@@ -2,21 +2,20 @@
  * First-encounter lessons: the card that explains a thing the first time the player meets it in a real run. A card is shown at
  * most once per player (taught when it is dismissed, or when the player does the thing it is about), never while a popup, a drag,
  * a staged banner or a tutorial lesson is going on, never two at once, and it holds the battle still while the player reads.
- * The same bubble machinery also explains a refused command next to the control that was pressed.
+ * A refused command is explained next to the control that was pressed, as one of the battle's information bubbles (src/view/info.ts).
  */
 import type { Container } from 'pixi.js';
 import { t } from '@/core/i18n';
 import type { GuideProgress } from '@/guide';
 import { topicTeach, topicTitle } from '@/guide';
-import { tooltip } from '@/ui';
-import type { Weighted } from './bubbleMath';
+import { info } from '../info';
 import { unionRect } from './bubbleMath';
 import type { HintBubble } from './HintBubble';
-import type { LessonBubble } from './LessonBubble';
+import type { BubbleSpec, LessonBubble } from './LessonBubble';
 import type { Rect } from './layoutMath';
 import type { HintId } from './policy';
 
-/** A refusal is a sentence, not a lesson: it leaves sooner. */
+/** A refusal is a sentence, not a lesson: it leaves sooner than an enemy's card. */
 export const EXPLAIN_FOR = 2.6;
 /** Quiet time between two cards so they never pile up at the start of a run. */
 const GAP = 7;
@@ -32,11 +31,26 @@ interface Pending {
   onSelection: boolean;
 }
 
-/** What the HUD lends the lessons: the bubbles to draw with and the rectangles they should keep clear of. */
+/** The card of a first-encounter topic, pointing at `target` (a rectangle in scene space). */
+export function encounterCard(id: HintId, target: Rect): BubbleSpec {
+  return {
+    topic: id,
+    title: topicTitle(id),
+    text: topicTeach(id),
+    target,
+    width: CARD_W,
+    tile: CARD_TILE,
+    buttons: [
+      { label: t('guide.card.got'), style: 'primary', width: 220 },
+      { label: t('guide.card.more'), style: 'neutral', width: 0 },
+    ],
+  };
+}
+
+/** What the HUD lends the lessons: the bubbles to draw with (the card, and the info bubble for measuring what a card points at). */
 export interface HintHost {
   bubble: HintBubble;
   card: LessonBubble;
-  avoid(): Weighted[];
   /** Holds the battle still until the returned function is called. */
   hold(): () => void;
   /** Open the guidebook on a topic (the card's "more" button). */
@@ -58,8 +72,6 @@ export class Hints {
   private holdoff = 0;
   private live: Pending | null = null;
   private release: (() => void) | null = null;
-  /** Seconds left of a refusal bubble (it takes the place of any card while it is up). */
-  private saying = 0;
   /** While set, only these topics may ask for a card (the tutorial run teaches the rest itself). */
   only: ReadonlySet<HintId> | null = null;
 
@@ -82,7 +94,6 @@ export class Hints {
   /** The HUD (re)built its parts: draw with these bubbles from now on, or with none (null) while they are gone. */
   bind(host: HintHost | null): void {
     this.interrupt();
-    this.endSaying();
     this.host = host;
   }
 
@@ -112,6 +123,7 @@ export class Hints {
   /** A banner or caption is about to take the top of the screen: no card comes up (or stays) for `seconds`. */
   hold(seconds: number): void {
     this.holdoff = Math.max(this.holdoff, seconds);
+    info.close();
     if (this.live && !this.live.onSelection) this.interrupt();
   }
 
@@ -120,9 +132,7 @@ export class Hints {
     const host = this.host;
     if (!host || !onScreen(target)) return false;
     if (this.live) this.interrupt();
-    host.bubble.show(target, text, host.avoid(), 'above');
-    this.saying = EXPLAIN_FOR;
-    return true;
+    return info.show(target, target, { text }, { seconds: EXPLAIN_FOR, prefer: 'above' });
   }
 
   /** Drop everything still waiting (the target is gone, the screen changed). */
@@ -131,19 +141,15 @@ export class Hints {
   }
 
   update(dt: number, allowed: boolean, selecting: boolean): void {
-    if (this.saying > 0) {
-      this.saying -= dt;
-      if (this.saying <= 0 || !allowed) this.endSaying();
-      return;
-    }
+    if (!allowed && info.key !== null) info.close();
     if (this.holdoff > 0) this.holdoff -= dt;
     if (this.live) {
-      // A kit tooltip (an enemy card the player pressed) is the answer to a tap: the lesson steps aside for it.
-      if (!allowed || tooltip.visible || this.live.onSelection !== selecting || this.live.target.destroyed) this.interrupt();
+      // An information bubble (an enemy card the player pressed) is the answer to a tap: the lesson steps aside for it.
+      if (!allowed || info.visible || this.live.onSelection !== selecting || this.live.target.destroyed) this.interrupt();
       return;
     }
     if (this.quiet > 0) this.quiet -= dt;
-    if (!allowed || !this.progress.ready || this.quiet > 0 || this.holdoff > 0 || tooltip.visible || !this.host) return;
+    if (!allowed || !this.progress.ready || this.quiet > 0 || this.holdoff > 0 || info.visible || !this.host) return;
     const at = this.queue.findIndex((q) => q.onSelection === selecting);
     const next = at >= 0 ? this.queue.splice(at, 1)[0] : undefined;
     if (!next) return;
@@ -153,21 +159,11 @@ export class Hints {
   }
 
   private open(host: HintHost, hint: Pending): void {
+    info.close();
     let box: Rect = host.bubble.boundsOf(hint.target);
     if (hint.also) box = unionRect(box, host.bubble.boundsOf(hint.also));
     host.card.show(
-      {
-        topic: hint.id,
-        title: topicTitle(hint.id),
-        text: topicTeach(hint.id),
-        target: box,
-        width: CARD_W,
-        tile: CARD_TILE,
-        buttons: [
-          { label: t('guide.card.got'), style: 'primary', width: 220 },
-          { label: t('guide.card.more'), style: 'neutral', width: 0 },
-        ],
-      },
+      encounterCard(hint.id, box),
       (i) => {
         const more = i === 1;
         this.progress.markTaught(hint.id);
@@ -177,12 +173,6 @@ export class Hints {
     );
     this.release = host.hold();
     this.live = hint;
-  }
-
-  private endSaying(): void {
-    if (this.saying === 0) return;
-    this.saying = 0;
-    this.host?.bubble.hide();
   }
 
   /** The card is done with: it goes, the battle runs on, and the next one waits a moment. */
@@ -208,7 +198,6 @@ export class Hints {
 
   destroy(): void {
     this.queue.length = 0;
-    this.host?.bubble.hide();
     this.host?.card.hide(false);
     this.release?.();
     this.release = null;

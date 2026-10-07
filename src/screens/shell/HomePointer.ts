@@ -3,18 +3,20 @@
  * card the topic is about and the tutorial's paper hand tapping at it. It does not block anything: the first tap anywhere sends it
  * away (and still reaches the control under it). One pointer at a time; a new one replaces the old.
  */
-import { Bounds, Container, Graphics, Point } from 'pixi.js';
+import { Bounds, Container, Graphics, Point, Text } from 'pixi.js';
 import { game } from '@/core/game';
-import { Color, Dim, drawDashedRect, motion, paperSeed, TweenBag } from '@/ui';
+import { Color, Dim, drawDashedRect, fadeTo, motion, paperSeed, TweenBag } from '@/ui';
 import { Hand } from '@/view/hud/Hand';
 import { shell } from './controller';
-import { handAbove, pointerRect, type PointRect } from './pointerMath';
+import { pawFor, pointerRect, type PointRect } from './pointerMath';
 
 /** What the pointer shows: a control or card, or several that make up one (the butler-level tags). It answers anew each time, since blocks rebuild. */
 export type PointTarget = Container | readonly Container[];
 export type PointResolver = () => PointTarget | null;
+/** The part of the screen the paw may cover: the page of the home screen by default, the body of a full-screen sheet otherwise. */
+export type PointRoom = () => PointRect;
 
-const HAND_SCALE = 0.72;
+const homeRoom: PointRoom = () => shell.area;
 /** Seconds between two measurements of where the target is. */
 const MEASURE_EVERY = 0.1;
 /** The spotlight is softer than the tutorial's: the page stays easy to read around the window. */
@@ -36,16 +38,19 @@ class Pointer extends Container {
   private readonly from = new Point();
   private readonly to = new Point();
   private readonly found: PointRect = { x: 0, y: 0, w: 0, h: 0 };
+  private readonly part: PointRect = { x: 0, y: 0, w: 0, h: 0 };
   private readonly window: PointRect = { x: 0, y: 0, w: 0, h: 0 };
   private clock = 0;
   private drawnW = 0;
   private drawnH = 0;
   private pulsing = false;
+  private tapping = false;
   private leaving = false;
   private readonly offFrame: () => void;
 
   constructor(
     private readonly resolve: PointResolver,
+    private readonly room: PointRoom,
     private readonly onGone: () => void,
   ) {
     super();
@@ -56,7 +61,35 @@ class Pointer extends Container {
     game.app.stage.on('pointerdown', this.leave, this);
     if (motion.reduced) return;
     this.alpha = 0;
-    this.bag.run({ duration: FADE, onUpdate: (k) => (this.alpha = k) });
+    fadeTo(this.bag, this, 1, { duration: FADE });
+  }
+
+  /** `c`'s bounds in this layer's space, written to `out`. */
+  private rectOf(c: Container, out: PointRect): PointRect {
+    const b = c.getBounds(false, this.bounds);
+    this.toLocal(this.from.set(b.minX, b.minY), undefined, this.to);
+    out.x = this.to.x;
+    out.y = this.to.y;
+    this.toLocal(this.from.set(b.maxX, b.maxY), undefined, this.to);
+    out.w = this.to.x - out.x;
+    out.h = this.to.y - out.y;
+    return out;
+  }
+
+  /** The lines of writing on the target, which the paw keeps off. */
+  private writing(): PointRect[] {
+    const out: PointRect[] = [];
+    const walk = (c: Container): void => {
+      for (const child of c.children) {
+        if (!child.visible) continue;
+        if (child instanceof Text) {
+          if (child.text) out.push(this.rectOf(child, { x: 0, y: 0, w: 0, h: 0 }));
+        } else walk(child);
+      }
+    };
+    const target = this.resolve();
+    if (target) for (const c of target instanceof Container ? [target] : target) walk(c);
+    return out;
   }
 
   /** Where the target is now in this layer's space, as the window round it; false when it is gone or hidden. */
@@ -71,13 +104,11 @@ class Pointer extends Container {
     for (let i = 0; i < list.length; i++) {
       const c = list[i] as Container;
       if (!shown(c)) return false;
-      const b = c.getBounds(false, this.bounds);
-      this.toLocal(this.from.set(b.minX, b.minY), undefined, this.to);
-      minX = Math.min(minX, this.to.x);
-      minY = Math.min(minY, this.to.y);
-      this.toLocal(this.from.set(b.maxX, b.maxY), undefined, this.to);
-      maxX = Math.max(maxX, this.to.x);
-      maxY = Math.max(maxY, this.to.y);
+      const r = this.rectOf(c, this.part);
+      minX = Math.min(minX, r.x);
+      minY = Math.min(minY, r.y);
+      maxX = Math.max(maxX, r.x + r.w);
+      maxY = Math.max(maxY, r.y + r.h);
     }
     if (!(maxX > minX && maxY > minY)) return false;
     this.found.x = minX;
@@ -113,12 +144,14 @@ class Pointer extends Container {
       this.pulsing = true;
       this.bag.runKeyed(this.ring, { duration: 0.6, yoyo: true, repeat: -1, onUpdate: (k) => (this.ring.alpha = 0.55 + 0.45 * k) });
     }
-    // The fingertip touches the window's near edge: the hand comes down from above when there is room, up from below otherwise.
-    const above = handAbove(this.window, shell.area.y);
-    this.hand.rotation = above ? Math.PI : 0;
-    this.hand.scale.set(HAND_SCALE);
-    this.hand.position.set(x + w / 2, above ? y + 12 : y + h - 12);
-    this.hand.tap();
+    // The paw reaches in from below at a slant, its tip on the target, and stays on the page and off the target's writing.
+    const paw = pawFor(this.found, this.room(), this.writing());
+    this.hand.place(paw.x, paw.y, paw.rotation);
+    // Patting goes on across repaints; only the first one starts it.
+    if (!this.tapping) {
+      this.tapping = true;
+      this.hand.tap();
+    }
   }
 
   private update(dt: number): void {
@@ -147,8 +180,7 @@ class Pointer extends Container {
       gone();
       return;
     }
-    const from = this.alpha;
-    this.bag.run({ duration: FADE, onUpdate: (k) => (this.alpha = from * (1 - k)), onComplete: gone });
+    fadeTo(this.bag, this, 0, { duration: FADE, onDone: gone });
   }
 
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
@@ -162,9 +194,9 @@ class Pointer extends Container {
 let active: Pointer | null = null;
 
 /** Show the pointer over `parent` (a scene or the popup layer), on top of what is there. False when the target is not on screen. */
-export function showPointer(parent: Container, resolve: PointResolver): boolean {
+export function showPointer(parent: Container, resolve: PointResolver, room: PointRoom = homeRoom): boolean {
   clearPointer();
-  const p: Pointer = new Pointer(resolve, () => {
+  const p: Pointer = new Pointer(resolve, room, () => {
     if (active === p) active = null;
   });
   parent.addChild(p);

@@ -185,3 +185,14 @@ Not reached: the daily gem-pass popup (needs the pass bought; it is the same `No
 **5. Final captures** (scratchpad `shots/f1_full`, `shots/f1_reduced`, comparison sheets `cmp1.png` and `cmp2.png`): home, shop, cats, missions, pass, the sweep pointer, the settings sheet and the guidebook at full motion and with "reduce motion" on (`motion.reduced` read in the page: false / true). Same layout and the same walker result in both (the only difference is the start button's bob); no page errors.
 
 REQUESTS: the test ad sheet's empty gap (above); nothing else.
+
+## 2026-10-07 fixups
+
+**2. The paw on the home side** (`shell/HomePointer.ts`, `shell/pointerMath.ts`; `tests/screens.shell.pointer.test.ts`, 8 tests). The pointer still turned the whole `Hand` container by half a turn and scaled it to 0.72 (a 100 px paw lying with its arm over the label, tapping at the window's edge). It now uses the hand's own API like the tutorial does: `Hand.place(x, y, rotation)` and `Hand.tap()` at full size (`PAW_LENGTH` 140), and the geometry is `pawFor(target, room, texts)`:
+- the tip lands on the part of the target the page shows (`visiblePart`; a card scrolled half out is pointed at where it can be seen); `tipSpot` gives the first spot, a wide card (150 px or more) offers three more (lower right, lower left, middle of the lower edge);
+- `placePaw` (battle's `handMath`: from below at a 15 to 35 degree slant first) is run per spot with `room` as its bounds; the cost adds the target's own lines of writing (every visible `Text` under the target, measured when the window is painted) and a tip that would land on a line; the cheapest wins. So the paw reaches in from below at a slant, never lies flat or upside down, never leaves `room`, and keeps off the text it points at as far as the target allows.
+- `room` is the page between the bars (`shell.area`, so neither the screen edge nor the tab bar cuts it); `showPointer(parent, resolve, room)` takes another one: the settings sheet passes `scaffold.bodyRect`.
+- Patting goes on across repaints (only the first paint starts `tap()`); `handAbove` and `HAND_ROOM` are gone with the old placement. Fade in and out go through `fadeTo` (see `ui.md`).
+- Seen at full motion: the guidebook "try it" on ten points (battle.calendar, daily, stakes; cats.cards, wild; shop.free, chests; missions; pass) in Korean 720 x 1280 (scratchpad `shots/ptr1_sheet.png`) and a 12-frame tap strip on the free chest button (`shots/ptr2/strip_tap.png`): the arm comes in along its own line, touches (ring at the tip), draws back. Unit tests cover 720 x 1280 and 720 x 1600 (inset 44 / 34) rooms with a small icon, a wide card with two lines of text, a card on the last row, an icon at the right edge, one in the lower left corner and a tall card.
+
+**3. Art swap of the chapter card** now slides through a settled keyed tween (see `ui.md` item 2); the cats tab's layout stops a running rise.

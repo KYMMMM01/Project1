@@ -21,12 +21,12 @@ import {
   ProgressBar,
   punch,
   TweenBag,
-  tooltip,
   uiLabel,
   type BarColor,
 } from '@/ui';
 import { profile } from '@/meta';
 import type { BattleLayout } from '../context';
+import { info } from '../info';
 import type { HudEnv } from './env';
 import { GAUGE_H, GaugeStrip } from './GaugeStrip';
 import { enemyPortrait, relicIcon } from './kit';
@@ -364,14 +364,14 @@ export class TopBar {
     if (!id || !box) return;
     this.env.hints.used('toys');
     const def = relicDef(id);
-    tooltip.show(box, { title: t(def.nameKey), text: def.descText() }, 6);
+    info.tap(`toy:${id}`, box, { title: t(def.nameKey), text: def.descText() });
   }
 
   private showEnemy(target: Container, id: EnemyId): void {
     const def = enemyDef(id);
     const lines = [t(def.descKey)];
     for (const tr of traitOrder(def.traits)) lines.push(`${t(`trait.${tr}.name`)}: ${t(`trait.${tr}.desc`)}`);
-    tooltip.show(target, { title: t(def.nameKey), text: lines.join('\n') }, 6);
+    info.tap(`enemy:${id}`, target, { title: t(def.nameKey), text: lines.join('\n') });
   }
 
   // ───────────────────────── toys ─────────────────────────

@@ -33,7 +33,7 @@ const W = PICK.w;
 const SCALE = PICK.scale;
 /** The cards sit lower than the text above them needs: the pointing hand has its own band between the sub line and the cards. */
 const CARD_Y = PICK.cardY;
-const PANEL_H = 664;
+const PANEL_H = PICK.h;
 /** Seconds the chosen card takes to spring up (and the others to slip away) before the sheet leaves. */
 const FAREWELL = 0.18;
 
@@ -111,13 +111,11 @@ export class SummonPickPopup extends Popup<void> {
 
     if (guide) {
       this.hand = new Hand();
-      this.hand.tap();
-      const { tip } = pickHand(this.recommended, options.length);
-      // The hand comes down from above the card and its fingertip rests on the photo's top edge: its body stays in the band under the
+      const { tip, rotation } = pickHand(this.recommended, options.length);
+      // The paw comes down from above the card and its fingertip rests on the photo's top edge: its arm stays in the band under the
       // sub line, so no card's name, class or "merges into" line is ever under it (pickHand, tested).
-      this.hand.rotation = Math.PI;
-      this.hand.scale.set(PICK.hand);
-      this.hand.position.set(tip.x, tip.y);
+      this.hand.place(tip.x, tip.y, rotation);
+      this.hand.tap();
       this.hand.alpha = 0;
       c.addChild(this.hand);
     } else {

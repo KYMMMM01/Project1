@@ -73,3 +73,12 @@ Known gaps from above, closed: the replay row, the home highlight, and the two R
 - The skip button's geometry is `layoutMath.skipRect` (top row only); `HudEnv.skip` / `setSkip` tell the top bar to cut the enemy strip.
 - The laser guide's bubble waits while any lesson, popup, drag or selected cat is up.
 - Tutorial playtest facts for the hand-off: 19 lessons in 118 game seconds, no stall; a page reload drops a tutorial run (so a play-through has to stay in one page); the "next" offer after the tutorial reads "다음: 챕터 1 거실".
+
+## 2026-10-07 fixups
+
+- The guidebook's "try it" pointer is the home pointer of `shell.md` ("fixups" item 2): the paw is 140 px, reaches in from below at a slant and keeps off the target's writing. The page fade of the guidebook (`fadeIn`) goes through the kit's `fadeTo`, so a page switch while the fade is running cannot leave the content part-way (`ui.md` fixups item 2).
+- Text overflow: the unlock, reward, calendar, settings, odds and unit screens and the five home tabs were walked with the new `overflow()` probe in Korean and English at 720 x 1280 and 1600 (`ui.md` fixups item 3). The guidebook's own list and pages were not part of that walk (the "try it" pointer was checked through its points).
+
+## 2026-10-07 fixups (battle side)
+
+The guidebook's "try it" line and every refused command's reason are information bubbles of the battle (`Hints.explain` opens one through `info.show`, keyed by the control): a tap elsewhere closes them, as does the 2.6 s timer. The paw (`Hand.ts`, `handMath.ts`) is the cat's-paw sticker; `hud.md` "2026-10-07 fixups" says where it lies in each lesson.

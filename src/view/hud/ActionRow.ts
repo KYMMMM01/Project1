@@ -8,10 +8,11 @@ import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { unitRarityIndex } from '@/game';
-import { Button, Color, CooldownRing, drawIcon, drawPaper, IconButton, motion, paperSeed, popIn, punch, tooltip, TweenBag, uiLabel } from '@/ui';
+import { Button, Color, CooldownRing, drawIcon, drawPaper, IconButton, motion, paperSeed, popIn, punch, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
 import type { RevealKey } from './policy';
 import { startAim, stopAim } from '../aim';
+import { info } from '../info';
 import { LaserCard } from './popups/LaserCard';
 import { SummonButton } from './SummonButton';
 import { SummonChips } from './SummonChip';
@@ -33,6 +34,8 @@ const INFO_DX = 74;
 const INFO_DY = 50;
 /** Seconds the lane stays lit after a press of the button (until the dot is down). */
 const AIM_FOR = 6;
+/** Key of the laser button's own bubble (src/view/info.ts): its state while it works or recharges, and the "tap the walkway" line. */
+const LASER_TIP = 'laser';
 /** The result chips rest this far above the summon button's centre: just over its top edge, clear of the pills above. */
 const CHIP_LIFT = 112;
 /** The grade button's arrow sits here and hops from it when the grade goes up. */
@@ -161,7 +164,7 @@ export class ActionRow {
       stopAim();
       this.pop();
       // The dot is down: the "tap the path" tip has done its job.
-      if (tooltip.target === this.laser) tooltip.hide();
+      info.close(true, LASER_TIP);
     });
   }
 
@@ -206,9 +209,9 @@ export class ActionRow {
     if (env.teach.cardDue) {
       void this.openCard(true);
     } else if (L.active) {
-      tooltip.show(this.laser, { text: t('hud.laser.active') }, 3);
+      info.tap(LASER_TIP, this.laser, { text: t('hud.laser.active') }, { seconds: 3 });
     } else if (L.cooldown > 0) {
-      tooltip.show(this.laser, { text: t('hud.laser.coolLeft', { s: String(Math.ceil(L.cooldown)) }) }, 3);
+      info.tap(LASER_TIP, this.laser, { text: t('hud.laser.coolLeft', { s: String(Math.ceil(L.cooldown)) }) }, { seconds: 3 });
     } else {
       this.aim();
     }
@@ -217,7 +220,7 @@ export class ActionRow {
   private aim(): void {
     this.onExplained?.();
     startAim(AIM_FOR);
-    tooltip.show(this.laser, { text: t('hud.laser.hint') }, AIM_FOR);
+    info.show(LASER_TIP, this.laser, { text: t('hud.laser.hint') }, { seconds: AIM_FOR });
   }
 
   /** Open the explanation. `counted`: it came from a press of the button (the first ones always do), not from the info mark. */
@@ -225,7 +228,7 @@ export class ActionRow {
     if (this.cardOpen || this.dead) return;
     this.cardOpen = true;
     const { env } = this;
-    tooltip.hide();
+    info.close();
     const L = env.battle.laser;
     const ready = !L.active && L.cooldown <= 0;
     if (counted) env.teach.noteOpened();

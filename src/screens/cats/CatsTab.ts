@@ -79,6 +79,8 @@ class CatsTab implements TabScreen {
   }
 
   private layout(): void {
+    // The pages are put at their final place and alpha below; a rise still running would carry them back to the old place.
+    this.bag.killAll();
     let y = LABEL_OVER - 6;
     this.wild.position.set(SIDE, y);
     y += this.wild.stripH + GAP;

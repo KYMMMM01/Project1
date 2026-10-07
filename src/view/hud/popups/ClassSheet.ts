@@ -3,11 +3,12 @@
  * with their counts, merge and awaken arrows), the three synergy steps explained against that ladder,
  * and the class upgrade button. Opened by tapping a class chip.
  */
-import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
+import { Container, Graphics, Point, type DestroyOptions, type Text } from 'pixi.js';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { CLASS_UPGRADE_BONUS, SYNERGY_TIER_AT, classDef, type ClassId } from '@/game';
 import { Hand } from '../Hand';
+import { FROM_BELOW, pawBounds, placePaw, tipSpot } from '../handMath';
 import { Button, Color, drawDashedRect, drawIcon, drawPaper, drawPaperFace, fitLabel, Panel, paperSeed, Popup, punch, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
 import { ClassLadder, LADDER_H } from '../ClassLadder';
@@ -118,14 +119,12 @@ export class ClassSheet extends Popup<void> {
       env.ctx.command('upgradeClass', () => env.battle.upgradeClass(classId));
     });
     c.addChild(this.levelT, this.noteT, this.upBtn);
-    // The tutorial's upgrade lesson: a hand beside the button (the sheet is where the lesson goes on).
+    // The tutorial's upgrade lesson: a paw on the button (the sheet is where the lesson goes on). It lies on the popup itself, in screen
+    // space, so it keeps its size when the sheet is fitted to a short screen and can be placed against the screen's edges.
     if (env.lesson() === 'class_upgrade' && showUpgrade) {
       this.hand = new Hand();
-      this.hand.rotation = -Math.PI / 2;
-      this.hand.scale.set(0.8);
-      this.hand.position.set(W / 2 + 160 + 4, UPGRADE_Y + 146);
-      this.hand.tap();
-      c.addChild(this.hand);
+      this.hand.visible = false;
+      this.addChild(this.hand);
     }
     if (!showUpgrade) this.levelT.visible = this.noteT.visible = this.upBtn.visible = false;
 
@@ -137,6 +136,39 @@ export class ClassSheet extends Popup<void> {
       this.subs.add(ev.on(type, () => this.refresh(true)));
     }
     this.refresh(false);
+  }
+
+  override layout(w: number, h: number): void {
+    super.layout(w, h);
+    if (this.hand?.visible) this.pawOnButton();
+  }
+
+  override onOpened(): void {
+    // The paw arrives once the sheet has settled, so it never points at a button that is still on its way.
+    this.bag.call(0.4, () => this.pawOnButton());
+  }
+
+  /** The paw's tip on the upgrade button's free side (its label stays clear), the arm coming in from where the screen has room. */
+  private pawOnButton(): void {
+    const hand = this.hand;
+    if (!hand || hand.destroyed || !this.parent) return;
+    const b = this.upBtn.getBounds();
+    const a = this.toLocal(new Point(b.x, b.y));
+    const z = this.toLocal(new Point(b.x + b.width, b.y + b.height));
+    const { tip, label } = tipSpot({ x: a.x, y: a.y, w: z.x - a.x, h: z.y - a.y });
+    const pose = placePaw({
+      tips: [tip],
+      bounds: pawBounds(this.env.layout()),
+      keep: [{ ...label, weight: 3 }],
+      prefer: FROM_BELOW,
+    });
+    hand.place(tip.x, tip.y, pose.rotation);
+    hand.tap();
+    if (!hand.visible) {
+      hand.visible = true;
+      hand.alpha = 0;
+      this.bag.run({ duration: 0.2, onUpdate: (k) => (hand.alpha = k) });
+    }
   }
 
   /** Dots for the different cats of the class on the board: lit up to the count, one per kind the step asks for. */

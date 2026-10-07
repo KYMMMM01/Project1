@@ -163,3 +163,8 @@ Removed: `ribbonDots`, the ribbon, the old burst that swelled and faded the clos
 
 - Alignment audit of the cats tab (five filters), the unit screens, every shop section, the odds screens, the chest reveal and its summaries (single and pile) and the reward popup: see `shell.md` "2026-10-07 last gaps", item 4. One fix here: the Butler pass card's perk line and a pack's contents line were joined with " · ", and a wrapped line could start with the dot (`strings.ts` `shop.butler.perks`, `blocksStore.ts`): both are comma lists now. A chest-info line ("카드 24장 · 골목대장 1장은 꼭 나와요") keeps its dot (it fits one line in both languages).
 - `BlockBuild.points` (new, optional): named parts of a block that the guidebook's "try it" can point at. The chests block offers `free` and `chests` (the silver card). `ShopTab.pointAt('shop.free' | 'shop.chests')` looks them up anew each time because blocks rebuild.
+
+## 2026-10-07 fixups
+
+- Cached icons, stickers and button faces of the shop, cats and chest screens were baked at the alpha of a fading parent (washed out, ghosted outlines); fixed once for the whole kit in `src/ui/bakeFix.ts` (`ui.md` fixups item 1). Nothing of the chest reveal's own fades needed changing (they end in their own `onComplete` and the stage is destroyed afterwards).
+- `cats/CatsTab.layout()` stops a running page rise first (a resize or a profile change during the rise used to carry the pages back to their old y).

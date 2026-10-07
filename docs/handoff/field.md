@@ -99,3 +99,7 @@ Tests: `view.field.sun.test.ts`; the field's pure parts live in `toss.ts` (`view
 ## 2026-10-07 last gaps
 
 Performance of a crowded wave: see `fx.md` ("the crowded wave got slower, and why"). Field side: `EnemyView.flash` (a persistent flat copy of the body that is only faded, so a hit changes no structure; it replaces `hitFlash` on enemies), `policy.depthKey` / `depthFrame` (the enemy layer is sorted every 4th frame, key rounded to 6 px), `FieldEffects.update(dt)` looks up who stands in an area or ring every 0.1 s (the zone tag holds 0.6 s). Tests: `view.field.policy.test.ts`.
+
+## 2026-10-07 fixups
+
+`SunNote.show(cell)` asks `info.tap('sun:<cell>', anchor, text)` (`src/view/info.ts`; the HUD draws it): the same lit cell again closes the note, another lit cell replaces it, a tap elsewhere or 5 s closes it (see `hud.md`). The field no longer uses the kit tooltip.

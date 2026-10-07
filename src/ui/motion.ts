@@ -29,6 +29,8 @@ export function backOut(s: number): EaseFn {
 export class TweenBag {
   private list: Tween[] = [];
   private keyed = new Map<object, Tween>();
+  /** End-state painters of the running settled tweens, see runSettled(). */
+  private settlers = new Map<Tween, () => void>();
 
   to<T extends object>(target: T, props: TweenProps<T>, opts: TweenOpts): Tween {
     return this.track(uiTweens.to(target, props, opts));
@@ -44,15 +46,35 @@ export class TweenBag {
 
   /** Property-less tween that replaces any earlier one started for the same `key`. */
   runKeyed(key: object, opts: TweenOpts): Tween {
-    this.keyed.get(key)?.kill();
+    this.stop(this.keyed.get(key));
     const tw = this.run(opts);
     this.keyed.set(key, tw);
     return tw;
   }
 
-  /** Stop the keyed tween for `key`, leaving the object where it is. */
+  /**
+   * A keyed tween that never leaves its object half-way: `settle` paints the end state when the tween
+   * is cut short by killKeyed(), killAll() or a plain runKeyed() on the same key. Starting another
+   * runSettled() on the key is a restart instead: the old run just stops and the new one carries on
+   * from wherever the object is. `settle` must be safe to call on a destroyed object.
+   */
+  runSettled(key: object, opts: TweenOpts, settle: () => void): Tween {
+    const old = this.keyed.get(key);
+    if (old) this.settlers.delete(old);
+    const tw = this.runKeyed(key, {
+      ...opts,
+      onComplete: () => {
+        this.settlers.delete(tw);
+        opts.onComplete?.();
+      },
+    });
+    this.settlers.set(tw, settle);
+    return tw;
+  }
+
+  /** Stop the keyed tween for `key`; a settled one is left at its end state, any other where it is. */
   killKeyed(key: object): void {
-    this.keyed.get(key)?.kill();
+    this.stop(this.keyed.get(key));
     this.keyed.delete(key);
   }
 
@@ -70,10 +92,19 @@ export class TweenBag {
   }
 
   killAll(): void {
-    for (const tw of this.list) tw.kill();
+    for (const tw of this.list) this.stop(tw);
     this.list.length = 0;
-    for (const tw of this.keyed.values()) tw.kill();
+    for (const tw of this.keyed.values()) this.stop(tw);
     this.keyed.clear();
+  }
+
+  private stop(tw: Tween | undefined): void {
+    if (!tw) return;
+    tw.kill();
+    const settle = this.settlers.get(tw);
+    if (!settle) return;
+    this.settlers.delete(tw);
+    settle();
   }
 
   private track(tw: Tween): Tween {
@@ -96,7 +127,12 @@ function isGone(obj: object): boolean {
   return (obj as { destroyed?: boolean }).destroyed === true;
 }
 
-/** Pop an object in: scale `from` -> 1 with an overshoot, and fade it in if it has alpha. */
+/**
+ * Pop an object in: scale `from` -> 1 with an overshoot, and fade it in if it has alpha. Keyed on the
+ * object: calling it again restarts the pop, and killKeyed(obj) / killAll() / a plain runKeyed(obj)
+ * leave the object full size and opaque instead of stranded half-way (or invisible, during `delay`).
+ * `onDone` runs after a complete pop only.
+ */
 export function popIn(
   bag: TweenBag,
   obj: Scalable & { alpha: number },
@@ -105,23 +141,71 @@ export function popIn(
   const from = opts.from ?? 0;
   obj.scale.set(from);
   obj.alpha = 0;
-  const tw = bag.run({
-    duration: opts.duration ?? 0.22,
-    delay: opts.delay ?? 0,
-    ease: backOut(opts.overshoot ?? 2.0),
-    onUpdate: (k) => {
-      if (isGone(obj)) return void tw.kill();
-      const s = from + (1 - from) * k;
-      obj.scale.set(s);
-      obj.alpha = Math.min(1, k * 4);
+  const settle = (): void => {
+    if (isGone(obj)) return;
+    obj.scale.set(1);
+    obj.alpha = 1;
+  };
+  const tw = bag.runSettled(
+    obj,
+    {
+      duration: opts.duration ?? 0.22,
+      delay: opts.delay ?? 0,
+      ease: backOut(opts.overshoot ?? 2.0),
+      onUpdate: (k) => {
+        if (isGone(obj)) return void tw.kill();
+        const s = from + (1 - from) * k;
+        obj.scale.set(s);
+        obj.alpha = Math.min(1, k * 4);
+      },
+      onComplete: () => {
+        if (isGone(obj)) return;
+        settle();
+        opts.onDone?.();
+      },
     },
-    onComplete: () => {
-      if (isGone(obj)) return;
-      obj.scale.set(1);
-      obj.alpha = 1;
-      opts.onDone?.();
+    settle,
+  );
+  return tw;
+}
+
+/**
+ * Fade an object to `alpha` from wherever it is now. Keyed on the object like popIn: a fade the other
+ * way round simply takes over from the current alpha, and a kill through the bag lands on `alpha`.
+ * With reduced motion the alpha is set at once. `onDone` runs after a complete fade only.
+ */
+export function fadeTo(
+  bag: TweenBag,
+  obj: { alpha: number },
+  alpha: number,
+  opts: { duration?: number; delay?: number; ease?: EaseFn; onDone?: () => void } = {},
+): Tween {
+  const settle = (): void => {
+    if (!isGone(obj)) obj.alpha = alpha;
+  };
+  if (motion.reduced) {
+    bag.killKeyed(obj);
+    settle();
+    return bag.run({ duration: 0, onComplete: opts.onDone });
+  }
+  const from = obj.alpha;
+  const tw = bag.runSettled(
+    obj,
+    {
+      duration: opts.duration ?? 0.2,
+      delay: opts.delay ?? 0,
+      ease: opts.ease ?? Ease.linear,
+      onUpdate: (k) => {
+        if (isGone(obj)) return void tw.kill();
+        obj.alpha = from + (alpha - from) * k;
+      },
+      onComplete: () => {
+        settle();
+        if (!isGone(obj)) opts.onDone?.();
+      },
     },
-  });
+    settle,
+  );
   return tw;
 }
 

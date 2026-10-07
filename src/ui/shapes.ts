@@ -1,6 +1,7 @@
 import { Container, Graphics, type Texture } from 'pixi.js';
 import { game } from '@/core/game';
 import { clamp, mixColor } from '@/core/math';
+import './bakeFix';
 import { Color } from './theme';
 import { drawPaper, drawPaperFace, drawPaperShadow, edgeTone, type PaperOpts } from './paper';
 import { hash32, paintPath, type TornSides } from './paperMath';

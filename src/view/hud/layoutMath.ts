@@ -4,6 +4,7 @@
  */
 import { FIELD_H } from '@/game/geometry';
 import type { BattleLayout } from '../context';
+import { pawBox, pawRotation } from './handMath';
 
 export interface Rect {
   x: number;
@@ -152,19 +153,20 @@ export function fitScale(contentW: number, contentH: number, screenW: number, sc
 /** The pick sheet in its own coordinates: three photo cards in a row under the sub line, each with a class line and a "merges into" pair of lines below. */
 export const PICK = {
   w: 690,
+  /** Height of the sheet: the text under the cards ends 62 px lower than it did before the paw's band was added over them. */
+  h: 726,
   /** Card width (a card is 220 x 292 scaled by `scale`) and the gap between cards. */
   scale: 0.92,
   gap: 14,
-  /** Centre line of the cards, and the sub line above them (centre y, half height, width of the widest text). */
-  cardY: 330,
+  /** Centre line of the cards (the band over them holds the paw), and the sub line above them (centre y, half height, width of the widest text). */
+  cardY: 392,
   subY: 84,
   subHalf: 34,
   subW: 610,
   /** Half height of a photo frame (292 x scale / 2): the text of a card starts under it. */
   frameHalf: 134,
-  /** The pointing hand: scale, and how far its fingertip sits inside the frame's top edge. */
-  hand: 0.8,
-  tipInside: 22,
+  /** How far its fingertip sits inside the frame's top edge. */
+  tipInside: 26,
 } as const;
 
 /** Centre x of card `i` of `n`. */
@@ -173,13 +175,12 @@ export function pickCardX(i: number, n: number): number {
 }
 
 /**
- * Where the tutorial's hand points at card `i` of `n`: the fingertip on the photo's top edge, the hand coming down from the band between
- * the sub line and the cards (it leans left on the first card so its body clears the sub line's left end). Returns the fingertip and the
- * rectangle the whole hand covers, so a test can say that no card's name, class or "merges into" line is under it.
+ * Where the tutorial's paw points at card `i` of `n`: the fingertip on the photo's top edge, the arm coming down from the band between the
+ * sub line and the cards, leaning away from the sheet's middle on the outer cards. Returns the fingertip, the turn of the paw and the
+ * rectangle the whole paw covers, so a test can say that no card's name, class or "merges into" line and no part of the sub line is under it.
  */
-export function pickHand(i: number, n: number): { tip: Point; body: Rect } {
-  const tip = { x: pickCardX(i, n) + (i === 0 ? -14 : 34), y: PICK.cardY - PICK.frameHalf + PICK.tipInside };
-  // A hand turned half way round (fingertip down): the art spans x -36..62 and y 0..108 around its fingertip, scaled, then flipped.
-  const s = PICK.hand;
-  return { tip, body: { x: tip.x - 62 * s, y: tip.y - 108 * s, w: 98 * s, h: 108 * s } };
+export function pickHand(i: number, n: number): { tip: Point; rotation: number; body: Rect } {
+  const tip = { x: pickCardX(i, n), y: PICK.cardY - PICK.frameHalf + PICK.tipInside };
+  const rotation = pawRotation(i * 2 + 1 > n ? 'upperLeft' : 'upperRight', 0.44);
+  return { tip, rotation, body: pawBox(tip, rotation) };
 }

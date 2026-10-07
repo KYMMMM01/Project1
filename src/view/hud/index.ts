@@ -8,7 +8,7 @@ import { Container, Point } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
 import { i18nEvents, t } from '@/core/i18n';
 import { closeGuide, GuideProgress, guideProgress, openGuide, topicTeach, type TopicId, type TryControl } from '@/guide';
-import { clearToasts, confirmDialog, popups, toast, tooltip } from '@/ui';
+import { clearToasts, confirmDialog, popups, toast } from '@/ui';
 import type { UnitId } from '@/game';
 import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
 import type { BattleContext, BattleLayout, HudAnchor, HudPart } from '../context';
@@ -18,13 +18,14 @@ import type { Weighted } from './bubbleMath';
 import { watchEncounters } from './encounterWatch';
 import { EnvImpl } from './env';
 import { HintBubble } from './HintBubble';
-import { Hints, onScreen } from './hints';
+import { encounterCard, Hints, onScreen } from './hints';
 import { LessonBubble } from './LessonBubble';
 import { LaserGuide } from './LaserGuide';
 import { LaserTeach } from './laserTeach';
 import { PauseMenu, type PauseAction } from './popups/PauseMenu';
 import { SummonPickPopup } from './popups/SummonPickPopup';
 import { stageHeldFor } from '@/view/staging';
+import { info } from '../info';
 import { findTwins } from './planMath';
 import { canOpenPause, REVIVE_MIN_WAVES, revealFlags, type RevealKey } from './policy';
 import { canOfferContinue, openContinue, type DefeatReason } from './screens/ContinueScreen';
@@ -101,6 +102,18 @@ class Hud implements HudPart {
       topic: () => this.tutorial?.topic ?? null,
       left: () => this.tutorial?.script.remaining.map((s) => s.id) ?? [],
       card: () => this.hints.liveId,
+      cardBody: () => this.card.rect,
+      noteBody: () => this.tutorial?.noteRect ?? null,
+      info: () => (info.visible ? String(info.key) : null),
+      /** Lay a first-encounter card of `topic` on a target rectangle and say where its body fell (then take it away, unless `keep`). */
+      probeCard: (topic: TopicId, target: Rect, keep = false) => {
+        this.card.show(encounterCard(topic, target), () => undefined);
+        const body = this.card.rect;
+        if (!keep) this.card.hide(false);
+        return body;
+      },
+      /** The same for an information bubble with `text`: where its body fell. */
+      probeInfo: (text: string, title: string | undefined, target: Rect, prefer: 'above' | 'below') => this.bubble.probe(target, { text, ...(title ? { title } : {}) }, prefer),
       laser: () => this.guide?.flow.step ?? null,
       rectOf: (target: Target) => this.tutorialHost().rectOf(target),
       progress: this.progress,
@@ -142,12 +155,14 @@ class Hud implements HudPart {
     this.root.addChild(this.top.root, this.bottom.root, this.boss.root);
     this.top.pauseBtn.onTap(() => void this.openPause());
     this.layoutAll(ctx.layout);
-    this.bubble = new HintBubble(env, ctx.layers.overlay);
+    this.bubble = new HintBubble(env, ctx.layers.overlay, () => this.avoidList());
     this.card = new LessonBubble(env, ctx.layers.overlay);
+    // Every information bubble of the battle (this HUD's, the field's sunbeam note, the lessons' lines) is drawn by this one view; a lesson's note has the space first.
+    info.bind(this.bubble);
+    info.canOpen = () => !(this.tutorial?.noteUp ?? false);
     this.hints.bind({
       bubble: this.bubble,
       card: this.card,
-      avoid: () => this.avoidList(),
       hold: () => env.holdPause(),
       openGuide: (id) => this.openGuideAt(id, false),
     });
@@ -160,7 +175,7 @@ class Hud implements HudPart {
     }
     // The laser's guided first use: a normal run starts it by itself, the tutorial run when its laser lesson begins.
     const laser = this.bottom.actions.laser;
-    this.guide = new LaserGuide(env, () => this.boundsRect(laser), !lessons);
+    this.guide = new LaserGuide(env, () => this.boundsRect(laser), !lessons, () => this.avoidList());
     this.bottom.actions.onExplained = () => this.guide?.explained();
     watchEncounters(env, {
       gauge: this.top.gauge, waveLabel: this.top.waveLabel, previewLayer: this.top.previewLayer, boss: this.boss.root, chips: this.bottom.classes.root,
@@ -215,6 +230,8 @@ class Hud implements HudPart {
     this.guide?.destroy();
     this.guide = null;
     this.hints.bind(null);
+    info.canOpen = null;
+    info.bind(null);
     this.bubble.destroy();
     this.card.destroy();
     this.env.dispose();
@@ -333,6 +350,7 @@ class Hud implements HudPart {
         }
       },
       pulse: (on) => this.bottom.actions.summon.attention(on),
+      keepClear: () => this.avoidList(),
       laserGuided: () => this.teach.guided,
       startLaserGuide: () => this.guide?.arm(),
     };
@@ -345,7 +363,7 @@ class Hud implements HudPart {
       this.pauseOpen = true;
       this.ctx.setPaused('user', true);
     }
-    tooltip.hide();
+    info.close();
     openGuide({
       ...(topic ? { topic } : {}),
       progress: this.progress,
@@ -444,8 +462,8 @@ class Hud implements HudPart {
   }
 
   private pauseMenu(): Promise<PauseAction> {
-    // An enemy card the player left open must not stay on top of the menu (the kit's tooltip layer is above popups).
-    tooltip.hide();
+    // An enemy card the player left open must not stay under the menu.
+    info.close();
     return popups.open(new PauseMenu(this.env));
   }
 
@@ -542,6 +560,8 @@ class Hud implements HudPart {
   }
 
   resize(layout: BattleLayout): void {
+    // A bubble points at where its source was: after a re-layout it would point at nothing.
+    info.close();
     this.layoutAll(layout);
     this.tutorial?.resize(layout);
     this.guide?.resize(layout);
@@ -555,6 +575,9 @@ class Hud implements HudPart {
       this.bottom.invalidate();
     }
     this.lastTime = time;
+    // An information bubble runs out by itself, and gives way to whatever takes the screen (a popup, the pause menu, the result).
+    if (this.env.modalCount > 0 || this.pauseOpen || this.ending) info.close();
+    info.update(dt);
     this.top.update();
     this.boss.update();
     this.bottom.update(dt);
@@ -587,7 +610,6 @@ class Hud implements HudPart {
     this.teach.destroy();
     popups.closeAll();
     clearToasts();
-    tooltip.hide();
     for (const reason of ['user', 'tutorial', 'popup'] as const) this.ctx.setPaused(reason, false);
     this.root.destroy({ children: true });
   }

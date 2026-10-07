@@ -4,6 +4,7 @@ import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { onStorageVolatile } from '@/core/save';
 import { Ease } from '@/core/tween';
+import { keepInside } from './bubblePlace';
 import { drawIcon, type IconName } from './icons';
 import { backOut, motion, TweenBag } from './motion';
 import { drawPaper, paperSeed, tapeStrip } from './paper';
@@ -31,6 +32,8 @@ const LINE_H = 38;
 const MAX_LINES = 2;
 /** Centre line below the safe area: under the home currency row and the battle wave bar, so a toast never hides a number that just changed. */
 const REST_Y = 262;
+/** The pill keeps this far from the screen edges and the notch. */
+const MARGIN = 14;
 
 /** Messages are capped at two lines: longer text is cut with an ellipsis rather than growing the pill. */
 function capLines(label: Text): void {
@@ -42,7 +45,7 @@ function capLines(label: Text): void {
   }
 }
 
-function buildToast(text: string, kind: ToastKind): { view: Container; label: Text } {
+function buildToast(text: string, kind: ToastKind): { view: Container; label: Text; w: number; h: number } {
   const k = KIND[kind];
   const pal = ButtonPalettes[k.style];
   const label = uiLabel(text, { size: 30, wrap: 520, lineHeight: LINE_H });
@@ -64,7 +67,7 @@ function buildToast(text: string, kind: ToastKind): { view: Container; label: Te
   label.position.set(34, 0);
   const view = new Container();
   view.addChild(art, label);
-  return { view, label };
+  return { view, label, w, h };
 }
 
 /**
@@ -112,12 +115,15 @@ class ToastManager {
     }
     this.current = item;
     this.leaving = false;
-    const { view } = buildToast(item.text, item.kind);
+    const { view, w, h } = buildToast(item.text, item.kind);
     this.view = view;
     view.eventMode = 'none';
     game.overlayLayer.addChild(view);
-    const y = game.safeTop + REST_Y;
-    view.x = game.w / 2;
+    // The usual spot, pushed in when a caller's long message or a short screen would leave the pill off the safe area.
+    const rest = { x: game.w / 2 - w / 2, y: game.safeTop + REST_Y - h / 2, w, h };
+    const move = keepInside(rest, { x: MARGIN, y: game.safeTop + MARGIN, w: game.w - MARGIN * 2, h: game.h - game.safeTop - game.safeBottom - MARGIN * 2 });
+    const y = game.safeTop + REST_Y + move.dy;
+    view.x = game.w / 2 + move.dx;
     // A refused tap has already played its own error cue; a second one on top would double it.
     if (!justRefused()) audio.play(item.kind === 'error' || item.kind === 'warning' ? 'ui_error' : 'ui_tab', { volume: 0.6 });
 

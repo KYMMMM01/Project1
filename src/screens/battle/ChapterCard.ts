@@ -8,7 +8,7 @@ import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
-import { Ease } from '@/core/tween';
+import { Ease, type EaseFn } from '@/core/tween';
 import { MAX_STAKE, stakeText } from '@/game';
 import { profile } from '@/meta';
 import {
@@ -259,8 +259,43 @@ export class ChapterCard extends Container {
     }
     fresh.alpha = 0;
     fresh.x = dir * 70;
-    this.bag.to(fresh, { alpha: 1, x: 0 }, { duration: 0.26, ease: Ease.cubicOut });
-    this.bag.to(old, { alpha: 0, x: -dir * 70 }, { duration: 0.2, ease: Ease.cubicIn, onComplete: () => old.destroy({ children: true }) });
+    this.slide(fresh, 1, 0, 0.26, Ease.cubicOut);
+    this.slide(old, 0, -dir * 70, 0.2, Ease.cubicIn, () => old.destroy({ children: true }));
+  }
+
+  /**
+   * Slide and fade a picture to a pose. It is keyed on the picture, so a swap that arrives while the
+   * picture is still sliding in turns it round from where it is, and a cut-off run (the card goes away)
+   * still lands on the pose and still destroys a picture that was leaving.
+   */
+  private slide(art: Container, alpha: number, x: number, duration: number, ease: EaseFn, done?: () => void): void {
+    const a0 = art.alpha;
+    const x0 = art.x;
+    const end = (): void => {
+      if (art.destroyed) return;
+      art.alpha = alpha;
+      art.x = x;
+    };
+    this.bag.runSettled(
+      art,
+      {
+        duration,
+        ease,
+        onUpdate: (k) => {
+          if (art.destroyed) return;
+          art.alpha = a0 + (alpha - a0) * k;
+          art.x = x0 + (x - x0) * k;
+        },
+        onComplete: () => {
+          end();
+          done?.();
+        },
+      },
+      () => {
+        end();
+        done?.();
+      },
+    );
   }
 
   private refreshChips(): void {

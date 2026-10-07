@@ -7,21 +7,24 @@
 import { Container, Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { damp } from '@/core/math';
-import { Color, Dim, drawDashedRect, paperSeed, tooltip } from '@/ui';
+import { Color, Dim, drawDashedRect, paperSeed } from '@/ui';
 import type { EnemyState } from '@/game';
 import type { BattleLayout } from '../context';
 import { startAim, stopAim } from '../aim';
+import { info } from '../info';
 import type { HudEnv } from './env';
 import { Hand } from './Hand';
+import { FROM_BELOW, type Keep, pawBounds, pawRotation, type PawFrom, placePaw, soften, tipSpot } from './handMath';
 import type { Rect } from './layoutMath';
 import { guideDue, LaserGuideFlow, SEE_FOR, type GuideStep } from './laserGuideFlow';
 
 const MARGIN = 16;
 /** Seconds into the last step after which the closing line replaces the one that names the marks. */
 const SEE_SPLIT = SEE_FOR * 0.55;
-const HAND_SCALE = 0.8;
-/** Beside the button the hand is smaller: its body (about 76 px) then ends before the summon button's label does in English. */
-const BESIDE_SCALE = 0.7;
+/** Tilt of the paw riding the lane, off the vertical. */
+const RIDE_TILT = 0.44;
+/** Key of the guide's own bubble (src/view/info.ts). */
+const SAY = 'laser-guide';
 
 /** The enemy furthest along the loop, or null: the dot is best put where the enemies are about to be. */
 export function leadEnemy(enemies: ReadonlyArray<EnemyState>): EnemyState | null {
@@ -53,6 +56,8 @@ export class LaserGuide {
     private readonly target: () => Rect,
     /** A normal run starts the guide by itself; the tutorial run holds it back until its laser lesson begins (`arm`). */
     private armed = true,
+    /** What the paw should keep off: the cats, the buttons, the lane (the HUD's own list of what a bubble should not cover). */
+    private readonly keep: () => readonly Keep[] = () => [],
   ) {
     this.layout = env.layout();
     this.dim.eventMode = 'none';
@@ -92,7 +97,7 @@ export class LaserGuide {
     if (flow.step === 'wait') {
       const L = battle.laser;
       // Another bubble on screen (a hint, an enemy card) counts as busy too: the guide waits for its turn.
-      const world = { phase: battle.phase, enemies: battle.enemyCount, ready: !L.active && L.cooldown <= 0, busy: busy || (tooltip.visible && tooltip.target !== this.anchor) };
+      const world = { phase: battle.phase, enemies: battle.enemyCount, ready: !L.active && L.cooldown <= 0, busy: busy || (info.visible && info.key !== SAY) };
       if (!teach.ready || !reveal.laser || !this.armed || !guideDue(world)) return;
       hints.used('laser');
       flow.start();
@@ -115,9 +120,9 @@ export class LaserGuide {
     const step = this.flow.step;
     if (step === 'wait' || step === 'done') return;
     if (modal) {
-      // A card or the selection sheet is up: the guide waits behind it (the kit's bubble would sit on top of it).
+      // A card or the selection sheet is up: the guide waits behind it.
       this.layer.visible = false;
-      if (tooltip.target === this.anchor) tooltip.hide();
+      info.close(true, SAY);
       return;
     }
     this.layer.visible = true;
@@ -150,15 +155,15 @@ export class LaserGuide {
       this.dim.rect(0, 0, this.layout.w, this.layout.h).fill({ color: Dim.backdrop, alpha: Dim.backdropAlpha * 0.8 });
       this.dim.roundRect(x, y, w, h, 40).cut();
       drawDashedRect(this.ring, x, y, w, h, { radius: 40, color: Color.paper, width: 5, seed: this.seed });
-      // The hand lies on the button's left edge, finger toward it: the call-wave offer above the button and the seconds under it stay clear.
-      this.hand.rotation = Math.PI / 2;
-      this.hand.scale.set(BESIDE_SCALE);
-      this.hand.position.set(x + 6, r.y + r.h / 2);
+      // The paw pats the button from the side that has room (the screen ends right under it, so it comes down from above), off the
+      // call-wave offer over the button, the seconds under it and the "i" mark on its corner.
+      const { tip } = tipSpot(r);
+      const pose = placePaw({ tips: [tip], bounds: pawBounds(this.layout), keep: soften(this.keep()), prefer: FROM_BELOW });
+      this.hand.place(tip.x, tip.y, pose.rotation);
       this.hand.tap();
       this.anchorAt(r.x + r.w / 2, y);
     } else if (step === 'place') {
       this.line = t('hud.laserGuide.place');
-      this.hand.scale.set(HAND_SCALE);
       this.hand.tap();
       this.handX = this.handY = 0;
       this.follow(1);
@@ -181,21 +186,22 @@ export class LaserGuide {
     const first = this.handX === 0 && this.handY === 0;
     this.handX = first ? tx : damp(this.handX, tx, 0.1, dt);
     this.handY = first ? ty : damp(this.handY, ty, 0.1, dt);
-    // Above the middle of the field the hand hangs down from its fingertip, below it the hand comes down onto the spot.
-    const below = this.handY > this.layout.h * 0.45;
-    this.hand.rotation = below ? Math.PI : 0;
+    // Above the middle of the field the arm trails below the spot, below it the arm comes down from above; near the right edge it leans left.
+    const arm: PawFrom = this.handY > this.layout.h * 0.45 ? (this.handX > this.layout.w * 0.6 ? 'upperLeft' : 'upperRight') : this.handX > this.layout.w * 0.6 ? 'lowerLeft' : 'lowerRight';
+    this.hand.turnTo(pawRotation(arm, RIDE_TILT));
     this.hand.position.set(this.handX, this.handY);
   }
+
 
   private anchorAt(x: number, y: number): void {
     this.anchor.position.set(x, y);
   }
 
-  /** The kit's bubble on the invisible marker, brought back whenever something else hid it. */
+  /** The words on the invisible marker, brought back whenever something else hid them. */
   private keepSaying(text: string): void {
-    if (tooltip.visible && tooltip.target === this.anchor && this.said === text) return;
+    if (info.visible && info.key === SAY && this.said === text) return;
     this.said = text;
-    tooltip.show(this.anchor, { text });
+    info.show(SAY, this.anchor, { text }, { sticky: true, prefer: 'above' });
   }
 
   private hide(): void {
@@ -203,11 +209,11 @@ export class LaserGuide {
     this.layer.visible = false;
     this.shown = '';
     this.said = '';
-    if (tooltip.target === this.anchor) tooltip.hide();
+    info.close(true, SAY);
   }
 
   destroy(): void {
-    if (tooltip.target === this.anchor) tooltip.hide();
+    info.close(false, SAY);
     stopAim();
     this.layer.destroy({ children: true });
   }

@@ -36,6 +36,7 @@ export interface BubbleSpec {
 
 export class LessonBubble {
   private view: Container | null = null;
+  private box: Rect | null = null;
   private readonly bag = new TweenBag();
   private readonly exitBag = new TweenBag();
   private readonly leaving = new Set<Container>();
@@ -47,6 +48,11 @@ export class LessonBubble {
 
   get visible(): boolean {
     return this.view !== null;
+  }
+
+  /** Where the card's body lies in scene space (what a hand must keep off), or null when no card is up. */
+  get rect(): Rect | null {
+    return this.box;
   }
 
   show(spec: BubbleSpec, onButton: (index: number) => void): void {
@@ -63,12 +69,12 @@ export class LessonBubble {
     const l = this.env.layout();
     const bounds: Rect = { x: 0, y: l.safeTop + BUBBLE_MARGIN, w: l.w, h: l.h - l.safeBottom - l.safeTop - BUBBLE_MARGIN * 2 };
     const fit = placeCard({ target: spec.target, w: W, h, bounds, arrow: ARROW, panelTop: bottomRects(l).top, boardBottom: l.fieldY + FIELD_H });
-    const bodyY = fit.above ? -ARROW - h : ARROW;
+    const bodyY = fit.above ? -fit.tail - h : fit.tail;
     const g = new Graphics();
     drawSpeechBubble(g, -fit.tailX, bodyY, W, h, {
       radius: 28,
       seed: paperSeed(),
-      tail: { side: fit.above ? 'bottom' : 'top', x: fit.tailX, len: ARROW, half: 14 },
+      tail: { side: fit.above ? 'bottom' : 'top', x: fit.tailX, len: fit.tail, half: 14 },
     });
     const view = new Container();
     view.eventMode = 'passive';
@@ -103,9 +109,10 @@ export class LessonBubble {
       });
     }
 
-    view.position.set(fit.x + fit.tailX, fit.above ? fit.y + h + ARROW : fit.y - ARROW);
+    view.position.set(fit.x + fit.tailX, fit.above ? fit.y + h + fit.tail : fit.y - fit.tail);
     this.layer.addChild(view);
     this.view = view;
+    this.box = { x: fit.x, y: fit.y, w: W, h };
     if (!motion.reduced) popIn(this.bag, view, { from: 0.7, duration: 0.18, overshoot: 2 });
   }
 
@@ -113,6 +120,7 @@ export class LessonBubble {
     const view = this.view;
     this.bag.killAll();
     this.view = null;
+    this.box = null;
     if (!view || view.destroyed) return;
     if (!animate || motion.reduced) {
       view.destroy({ children: true });

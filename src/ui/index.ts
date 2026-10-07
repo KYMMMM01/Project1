@@ -41,6 +41,7 @@ export {
 export { toast, clearToasts, type ToastKind } from './Toast';
 export { CurrencyPill, TopBar, type CurrencyPillOpts, type TopBarOpts } from './CurrencyPill';
 export { tooltip, attachTooltip, HOLD_DELAY, type TooltipContent, type TooltipOpts } from './Tooltip';
+export { keepInside, placeBubble, type BubblePlace, type BubbleSpec } from './bubblePlace';
 export { CardFrame, type CardFrameOpts, type CardSize } from './CardFrame';
 export { RarityPips, type RarityPipsOpts } from './RarityPips';
 export { ClassChip, CLASS_CHIP_H, CLASS_CHIP_W, CLASS_TIERS, type ClassChipOpts } from './ClassChip';

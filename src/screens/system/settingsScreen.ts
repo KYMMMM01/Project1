@@ -312,7 +312,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
         const button = backupButton;
         if (!button) return;
         scaffold.scroller?.scrollToShow(button, 60);
-        showPointer(game.popupLayer, () => backupButton);
+        showPointer(game.popupLayer, () => backupButton, () => scaffold.bodyRect);
       };
     },
     replay: { ask: askReplayTutorial, start: startReplay },

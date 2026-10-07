@@ -11,13 +11,16 @@ import { t } from '@/core/i18n';
 import { CLASS_IDS, type UnitId, unitRarityIndex } from '@/game';
 import { CELL_COUNT, CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
 import { topicTeach, type TopicId } from '@/guide';
-import { Button, Color, confirmDialog, Dim, drawDashedRect, motion, paperSeed, toast, TweenBag, tooltip } from '@/ui';
+import { Button, Color, confirmDialog, Dim, drawDashedRect, motion, paperSeed, toast, TweenBag } from '@/ui';
 import type { BattleLayout } from '../context';
+import { info } from '../info';
 import type { EnvImpl } from './env';
 import { Hand } from './Hand';
+import { dragPrefer, FROM_BELOW, type Keep, pawBounds, placePaw, soften, tipSpot } from './handMath';
+import { unitPortrait } from './kit';
 import { LessonBubble } from './LessonBubble';
 import { LessonFx } from './LessonFx';
-import { type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from './layoutMath';
+import { bottomRects, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from './layoutMath';
 import { findTwins } from './planMath';
 import { REVEAL_KEYS, type RevealKey } from './policy';
 import { FIRST_SUMMON_AFTER, NUDGE_FOR, nudgeDue } from './tutorialFlow';
@@ -29,7 +32,10 @@ import {
 const BREATH = 0.75;
 const MARGIN = 18;
 const HOLE_GRID = 12;
-const HAND_SCALE = 0.72;
+/** The nudge's bubble lies over the summon button: the paw keeps off this much of the space above it. */
+const NUDGE_ROOM = 130;
+/** Key of the nudge's own bubble (src/view/info.ts). */
+const NUDGE = 'nudge';
 const NOTE_W = 620;
 const NOTE_TILE = 92;
 /** Seconds between two measurements of where things are (a lesson does not need them every frame). */
@@ -44,6 +50,8 @@ export interface TutorialHost {
   /** The control a revealed key brings in, as a rectangle (for the starburst); null for keys without a place of their own. */
   rectOfReveal(key: RevealKey): Rect | null;
   pulse(on: boolean): void;
+  /** What a paw should keep off where it can: the cats, the buttons and the lane (weighed, the HUD's list for its bubbles). */
+  keepClear(): readonly Keep[];
   /** The laser's guided first use has been done (it runs on its own, see LaserGuide.ts). */
   laserGuided(): boolean;
   /** The guided first use of the laser should run now. */
@@ -63,6 +71,8 @@ export class Tutorial {
   private readonly blockers: Container[] = [];
   private readonly hand = new Hand();
   private readonly nudgeHand = new Hand();
+  /** An invisible patch laid on the summon button, which the nudge's bubble points at (a bubble needs something with a size to point at). */
+  private readonly nudgeMark = new Graphics();
   private readonly noteLayer = new Container();
   private readonly note: LessonBubble;
   private readonly fx: LessonFx;
@@ -82,6 +92,8 @@ export class Tutorial {
   private nudgeLeft = 0;
   private nudges = 0;
   private rect: Rect = NO_RECT;
+  /** The spotlight's window as last painted (holeOf keeps it still while the control only breathes). */
+  private hole: Rect = NO_RECT;
   private pair: [number, number] | null = null;
   private cat = -1;
   private sunTo = -1;
@@ -125,11 +137,12 @@ export class Tutorial {
     this.layer.addChild(this.dim, ...this.blockers, this.ring, this.hand);
     this.layer.visible = false;
     this.nudgeHand.visible = false;
+    this.nudgeMark.eventMode = 'none';
     this.note = new LessonBubble(env, this.noteLayer);
     // From the back: the dim and the hand, the celebrations (they show through the window and over the dim), the note, the nudge.
     parent.addChild(this.layer);
     this.fx = new LessonFx(parent);
-    parent.addChild(this.noteLayer, this.nudgeHand);
+    parent.addChild(this.noteLayer, this.nudgeMark, this.nudgeHand);
 
     this.skipBtn = new Button({ label: t('guide.skip'), style: 'kraft', width: SKIP_W, height: SKIP_FACE, fontSize: 24, radius: 10, sfx: 'ui_click' });
     // The paper is as tall as the speed button next to it; the touch target is the full 88 px.
@@ -317,7 +330,7 @@ export class Tutorial {
     this.host.pulse(false);
     this.setHold(false);
     this.breath = 0;
-    if (tooltip.target === this.nudgeHand) tooltip.hide();
+    info.close(true, NUDGE);
   }
 
   private setHold(on: boolean): void {
@@ -453,11 +466,21 @@ export class Tutorial {
 
   /** The spotlight's window round a rectangle, snapped to a coarse grid: a button that breathes must not make the note pop in again every frame. */
   private holeOf(r: Rect): Rect {
-    if (r.w <= 0) return NO_RECT;
+    if (r.w <= 0) {
+      this.hole = NO_RECT;
+      return NO_RECT;
+    }
     const snap = (v: number): number => Math.round(v / HOLE_GRID) * HOLE_GRID;
     const x = Math.max(0, snap(r.x - MARGIN));
     const y = Math.max(0, snap(r.y - MARGIN));
-    return { x, y, w: Math.min(this.layout.w - x, snap(r.x + r.w + MARGIN) - x), h: snap(r.y + r.h + MARGIN) - y };
+    const next = { x, y, w: Math.min(this.layout.w - x, snap(r.x + r.w + MARGIN) - x), h: snap(r.y + r.h + MARGIN) - y };
+    // A button that breathes can sit on the edge between two grid steps and flip between them every beat: the window stays where it was
+    // until the control has really moved (a flip would repaint the note and start its paw over each time).
+    const was = this.hole;
+    const still = was.w > 0 && Math.abs(next.x - was.x) <= HOLE_GRID && Math.abs(next.y - was.y) <= HOLE_GRID
+      && Math.abs(next.w - was.w) <= HOLE_GRID * 2 && Math.abs(next.h - was.h) <= HOLE_GRID * 2;
+    if (!still) this.hole = next;
+    return this.hole;
   }
 
   private textOf(step: StepDef): string {
@@ -496,11 +519,13 @@ export class Tutorial {
       blocker.hitArea = new Rectangle(bx, by, bw, bh);
     });
     this.host.pulse(step.id === 'summon');
-    this.placeHand(step, target);
     if (hole.w <= 0) {
       this.note.hide();
+      this.placeHand(step, target);
       return;
     }
+    // A lesson's note has the space first: an information bubble the player opened gives way.
+    info.close();
     this.note.show(
       {
         topic: step.id,
@@ -513,11 +538,23 @@ export class Tutorial {
       },
       () => this.script.tapOk(),
     );
+    // The paw comes in after the note has found its place, so it can keep off it.
+    this.placeHand(step, target);
+  }
+
+  /** What the paw must not lie on besides the label of what it points at: the lesson's note and the skip button, then the cats and buttons. */
+  private pawKeep(): Keep[] {
+    const keep: Keep[] = soften(this.host.keepClear());
+    const card = this.note.rect;
+    if (card) keep.push({ ...card, weight: 3 });
+    if (this.skipLayer.visible) keep.push({ ...skipRect(topRects(this.layout), this.env.reveal.speed), weight: 2 });
+    return keep;
   }
 
   /**
-   * The hand: a drag between two cells (merge, sun), a tap on a cat, or lying beside a control with its fingertip toward it (on the
-   * button's right edge for the left half of the screen, its left edge for the right half, so its body is never off screen).
+   * The paw: a drag between two cells (merge, sun) that picks the cat up and carries it, a pat on a cat, or a pat on a control. Its tip is
+   * on the spot (off the control's label when the control is wide), and it reaches in from the side that keeps it on the screen and off
+   * the note, the label and the cats where it can (handMath.placePaw).
    */
   private placeHand(step: StepDef, target: Target): void {
     const h = this.hand;
@@ -527,48 +564,45 @@ export class Tutorial {
       h.visible = false;
       return;
     }
-    h.rotation = 0;
-    h.scale.set(1);
     const ctx = this.env.ctx;
     const cell = (c: number): { x: number; y: number } => ({ x: ctx.toSceneX(cellCenterX(c)), y: ctx.toSceneY(cellCenterY(c)) });
+    const units = this.env.battle.units;
+    const keep = this.pawKeep();
+    const drag = (from: number, to: number): void => {
+      const a = cell(from);
+      const b = cell(to);
+      const pose = placePaw({ tips: [a, b], bounds: pawBounds(this.layout), keep, prefer: dragPrefer(a, b) });
+      const id = units[from]?.id;
+      h.turnTo(pose.rotation);
+      h.drag(a.x, a.y, b.x, b.y, id ? unitPortrait(id, 104) : null);
+    };
     if (target === 'pair' && this.pair) {
-      const a = cell(this.pair[0]);
-      const b = cell(this.pair[1]);
-      h.position.set(a.x, a.y);
-      h.drag(a.x, a.y, b.x, b.y);
+      drag(this.pair[0], this.pair[1]);
     } else if (target === 'sun' && this.cat >= 0 && this.sunTo >= 0) {
-      const a = cell(this.cat);
-      const b = cell(this.sunTo);
-      h.position.set(a.x, a.y);
-      h.drag(a.x, a.y, b.x, b.y);
+      drag(this.cat, this.sunTo);
     } else if ((target === 'cat' || target === 'sellcat') && this.cat >= 0) {
-      const a = cell(this.cat);
-      h.position.set(a.x, a.y + 14);
-      h.tap();
-    } else if ((target === 'molt' || target === 'sell' || target === 'speed') && this.rect.w > 0) {
-      // The selection sheet's buttons stand shoulder to shoulder, and the speed button has the skip button on its left: the hand comes up from below the one that is lit.
-      h.scale.set(HAND_SCALE);
-      h.position.set(this.rect.x + this.rect.w / 2, this.rect.y + this.rect.h - 14);
-      h.tap();
-    } else if (target === 'chips' && this.rect.w > 0) {
-      // The whole row is lit; the hand taps the first chip, coming down from above it.
-      h.rotation = Math.PI;
-      h.scale.set(HAND_SCALE);
-      h.position.set(this.rect.x + 100, this.rect.y + this.rect.h * 0.55);
-      h.tap();
+      const c = cell(this.cat);
+      this.pat(h, { x: c.x + 10, y: c.y - 6 }, keep);
     } else if (this.rect.w > 0 && target !== 'sun' && target !== 'cat' && target !== 'sellcat' && target !== 'pair') {
-      this.lieBeside(h, this.rect);
-      h.tap();
+      // The whole chip row is lit; the paw pats the first chip.
+      const r = target === 'chips' ? { x: this.rect.x + 20, y: this.rect.y, w: 150, h: this.rect.h } : this.rect;
+      const { tip, label } = tipSpot(r);
+      if (r.w >= 150) keep.push({ ...label, weight: 3 });
+      if (target === 'chips') {
+        // The fish and purr counters lie right under the chips.
+        const rows = bottomRects(this.layout);
+        keep.push({ x: 0, y: rows.top + rows.currencyY - 44, w: this.layout.w, h: 88, weight: 2 });
+      }
+      this.pat(h, tip, keep);
     } else {
       h.visible = false;
     }
   }
 
-  private lieBeside(hand: Hand, r: Rect): void {
-    const toRight = r.x + r.w / 2 <= this.layout.w / 2 + 1;
-    hand.rotation = toRight ? -Math.PI / 2 : Math.PI / 2;
-    hand.scale.set(HAND_SCALE);
-    hand.position.set(toRight ? r.x + r.w - 4 : r.x + 4, r.y + r.h / 2);
+  private pat(hand: Hand, tip: { x: number; y: number }, keep: readonly Keep[]): void {
+    const pose = placePaw({ tips: [tip], bounds: pawBounds(this.layout), keep, prefer: FROM_BELOW });
+    hand.place(tip.x, tip.y, pose.rotation);
+    hand.tap();
   }
 
   // ───────────────────────── nudges outside the lessons ─────────────────────────
@@ -601,14 +635,21 @@ export class Tutorial {
     this.nudgeLeft = waiting ? 1e9 : NUDGE_FOR;
     const r = this.host.rectOf('summon');
     if (!r) return;
-    // Every control is out by now: the hand comes down onto the button from above instead of lying beside it.
-    this.nudgeHand.rotation = Math.PI;
-    this.nudgeHand.scale.set(HAND_SCALE);
-    this.nudgeHand.position.set(r.x + r.w / 2, r.y + 10);
+    // The button lies at the bottom of the screen: the paw reaches in from where there is room, off the line of words over the button.
+    const { tip, label } = tipSpot(r);
     this.nudgeHand.visible = true;
+    const pose = placePaw({
+      tips: [tip],
+      bounds: pawBounds(this.layout),
+      keep: [...soften(this.host.keepClear()), { ...label, weight: 3 }, { x: r.x, y: r.y - NUDGE_ROOM, w: r.w, h: NUDGE_ROOM, weight: 3 }],
+      prefer: FROM_BELOW,
+    });
+    this.nudgeHand.place(tip.x, tip.y, pose.rotation);
     this.nudgeHand.tap();
     this.host.pulse(true);
-    tooltip.show(this.nudgeHand, { text: t(waiting ? 'guide.skip.start' : 'hud.tut.more') }, waiting ? 600 : NUDGE_FOR);
+    this.nudgeMark.clear().rect(0, 0, r.w, r.h).fill({ color: Color.paper, alpha: 0.01 });
+    this.nudgeMark.position.set(r.x, r.y);
+    info.show(NUDGE, this.nudgeMark, { text: t(waiting ? 'guide.skip.start' : 'hud.tut.more') }, { sticky: true, prefer: 'above' });
   }
 
   private endNudge(): void {
@@ -617,7 +658,7 @@ export class Tutorial {
     this.nudgeHand.visible = false;
     this.nudgeLeft = 0;
     this.host.pulse(false);
-    if (tooltip.target === this.nudgeHand) tooltip.hide();
+    info.close(true, NUDGE);
   }
 
   /** After the last lesson (or a skip) the tutorial only keeps the nudges. */
@@ -694,6 +735,16 @@ export class Tutorial {
     return this.script.active?.id ?? null;
   }
 
+  /** A lesson's note is on screen: no information bubble opens over it. */
+  get noteUp(): boolean {
+    return this.note.visible;
+  }
+
+  /** Where the note's body lies in scene space (the QA hooks tap its button), or null. */
+  get noteRect(): Rect | null {
+    return this.note.rect;
+  }
+
   /** True while a lesson holds the clock or is up on the field (hints and cards wait). */
   get active(): boolean {
     return this.script.active !== null && !this.skipped;
@@ -715,11 +766,12 @@ export class Tutorial {
     this.note.destroy();
     this.fx.destroy();
     this.host.pulse(false);
-    if (tooltip.target === this.nudgeHand) tooltip.hide();
+    info.close(false, NUDGE);
     this.layer.destroy({ children: true });
     this.noteLayer.destroy({ children: true });
     this.skipLayer.destroy({ children: true });
     this.nudgeHand.destroy({ children: true });
+    this.nudgeMark.destroy();
     this.env.setSkip(null);
     this.env.lessonOf = null;
     this.env.noteTo = null;

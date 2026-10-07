@@ -8,7 +8,7 @@ import { game } from '@/core/game';
 import { i18nEvents, t } from '@/core/i18n';
 import { mixColor } from '@/core/math';
 import {
-  bindPress, Button, Color, fitLabel, motion, PaperLabel, paperSeed, paperShape, ScreenScaffold, SegmentTabs, tapeStrip, TweenBag, uiLabel,
+  bindPress, Button, Color, fadeTo, fitLabel, motion, PaperLabel, paperSeed, paperShape, ScreenScaffold, SegmentTabs, tapeStrip, TweenBag, uiLabel,
 } from '@/ui';
 import { Ease } from '@/core/tween';
 import { illustration } from './Illustration';
@@ -64,7 +64,7 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
   const fadeIn = (): void => {
     if (motion.reduced) return;
     scaffold.content.alpha = 0;
-    bag.runKeyed(scaffold.content, { duration: 0.14, ease: Ease.cubicOut, onUpdate: (k) => (scaffold.content.alpha = k), onComplete: () => (scaffold.content.alpha = 1) });
+    fadeTo(bag, scaffold.content, 1, { duration: 0.14, ease: Ease.cubicOut });
   };
 
   const clear = (): void => {

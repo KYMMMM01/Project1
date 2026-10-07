@@ -23,11 +23,11 @@ import {
   paperSeed,
   Rarity,
   rarityName,
-  tooltip,
   TweenBag,
   uiLabel,
   type IconName,
 } from '@/ui';
+import { info } from '../info';
 import type { Rect } from './layoutMath';
 import type { HudEnv } from './env';
 import { BuildPlanView } from './BuildPlanView';
@@ -35,6 +35,8 @@ import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE, tapArea, unitPhoto } from './kit'
 import { MoltPicker } from './popups/MoltPicker';
 
 /** Sell and awaken are wider than molt: a cat that also pays purr says both amounts on the sell button, and awaken carries its reason, all in 24 px text. */
+/** Seconds a cat's full skill text stays up (it is the longest line a bubble carries). */
+const SKILL_FOR = 8;
 const BTN_W = 186;
 const AWAKEN_W = 214;
 const SELL_W = 240;
@@ -206,6 +208,7 @@ export class SelectionSheet {
   }
 
   private hide(): void {
+    info.close();
     this.shownKey = '';
     this.buttonsKey = '';
     if (motion.reduced || !this.root.visible) {
@@ -296,11 +299,11 @@ export class SelectionSheet {
       // A cut line says so: an info mark closes it, and the whole band around it opens the full text.
       skill.text = this.fullSkill;
       this.fitLine(skill, lineW - INFO_W);
-      const info = drawIcon('info', 26);
-      info.position.set(TEXT_X + lineW - 13, 98);
-      d.addChild(info);
+      const mark = drawIcon('info', 26);
+      mark.position.set(TEXT_X + lineW - 13, 98);
+      d.addChild(mark);
       tapArea(skill, 0, -44, lineW, 88);
-      skill.on('pointerdown', () => tooltip.show(skill, { title: t(def.nameKey), text: this.fullSkill }, 8));
+      skill.on('pointerdown', () => info.tap(`skill:${def.id}`, skill, { title: t(def.nameKey), text: this.fullSkill }, { seconds: SKILL_FOR }));
     }
     d.addChild(skill);
 

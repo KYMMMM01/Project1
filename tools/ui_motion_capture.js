@@ -9,6 +9,7 @@
 //   await frames(12, { key: 'press', dt: 1/30, probe: '() => ...' })   tick + shoot, 12 times
 //   await steps([1/60, 1/60, 1/30, 1/15], { key: 'k', tag: 'x' })      one shot per listed step
 //   await sfxLog()                          sound calls since the last call, with capture time
+//   await overflow(label)                   visible Text that is not wholly on the screen (prints OVERFLOW <label> ...)
 //   await down(x, y); await up(); await tap(x, y)   real pointer events (design coordinates)
 //
 // Shots are named <key>_<index>_t<ms>[_<tag>][_p<probe>].png so the tiler can label them.
@@ -208,4 +209,34 @@ async function snap(name) {
   for (let tries = 0; ; tries++) {
     try { await shot(name); return; } catch (e) { if (tries >= 3) throw e; await sleep(700); }
   }
+}
+// Visible Text that is not wholly on the screen (design space, 720 wide), and Graphics of the popup on top. A scrolled list
+// is clipped by a mask on some ancestor: its texts may run past the bottom, so only sideways overflow counts there.
+// Returns the lines it found (and prints them).
+async function overflow(label = '') {
+  const found = await ev(() => {
+    const g = window.__dbg.game;
+    const s = g.scale;
+    const out = [];
+    let scanned = 0;
+    const walk = (n, shown, masked) => {
+      const vis = shown && n.visible !== false && n.alpha > 0.02;
+      if (!vis) return;
+      const m = masked || !!n.mask;
+      if (typeof n.text === 'string' && n.text.trim()) {
+        scanned++;
+        const b = n.getBounds();
+        const x0 = b.minX / s, x1 = b.maxX / s, y0 = b.minY / s, y1 = b.maxY / s;
+        const sideways = x0 < -0.5 || x1 > g.w + 0.5;
+        const vertical = !m && (y0 < -0.5 || y1 > g.h + 0.5);
+        if ((sideways || vertical) && x1 > 0 && x0 < g.w + 400) out.push(Math.round(x0) + '..' + Math.round(x1) + ' x ' + Math.round(y0) + '..' + Math.round(y1) + ' "' + n.text.slice(0, 40) + '"');
+      }
+      if (n.children) for (const c of n.children) walk(c, vis, m);
+    };
+    walk(g.app.stage, true, false);
+    return { out, scanned };
+  });
+  const lines = found.out;
+  console.log('OVERFLOW ' + label + ' [' + found.scanned + ' texts] ' + (lines.length ? lines.length + ': ' + lines.slice(0, 8).join(' | ') : 'none'));
+  return lines;
 }

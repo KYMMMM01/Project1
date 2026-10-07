@@ -7,7 +7,8 @@ import { Emitter } from '@/core/events';
 import { hasString, t } from '@/core/i18n';
 import type { BattleApi, Fail } from '@/game';
 import type { GuideProgress, TopicId } from '@/guide';
-import { popups, toast, tooltip, type Popup } from '@/ui';
+import { popups, toast, type Popup } from '@/ui';
+import { info } from '../info';
 import type { BattleContext, BattleLayout } from '../context';
 import type { Hints } from './hints';
 import type { LaserTeach } from './laserTeach';
@@ -120,8 +121,8 @@ export class EnvImpl implements HudEnv {
   }
 
   modal<R>(popup: Popup<R>): Promise<R> {
-    // An enemy card the player left open must not stay on top of the popup (the kit's tooltip layer is above popups).
-    tooltip.hide();
+    // An enemy card the player left open must not stay on screen under the popup.
+    info.close();
     const release = this.holdPause();
     return popups.open(popup).finally(release);
   }

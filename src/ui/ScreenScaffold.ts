@@ -244,15 +244,18 @@ export class ScreenScaffold extends Container {
       this.syncBack();
       return Promise.resolve();
     }
+    // A page that is still rising leaves from where it is, not from its resting pose.
+    const a0 = this.main.alpha;
+    const y0 = this.main.y;
     return this.bag.runKeyed(this.main, {
       duration: 0.14,
       ease: Ease.cubicIn,
       onUpdate: (k) => {
-        const a = 1 - k;
+        const a = a0 * (1 - k);
         this.bgG.alpha = a;
         this.main.alpha = a;
         this.titleLayer.alpha = a;
-        this.main.y = RISE * 0.4 * k;
+        this.main.y = y0 + (RISE * 0.4 - y0) * k;
       },
       onComplete: () => {
         this.rest();
