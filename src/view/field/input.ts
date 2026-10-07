@@ -105,7 +105,9 @@ export class FieldInput {
     if (area === 'board') {
       this.pressCell = cellAt(x, y);
       this.cells.press(this.pressCell);
-      this.view = this.units.atCell(this.pressCell);
+      const pressed = this.units.atCell(this.pressCell);
+      // A summon's cat is unseen until its reveal lands (up to 0.4 s for the top ranks): it cannot be picked up before it shows.
+      this.view = pressed?.root.visible ? pressed : null;
       if (this.view) {
         this.mode = 'unit';
         this.view.setPressed(true);

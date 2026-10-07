@@ -4,21 +4,25 @@
  */
 import { Container, Graphics, Point, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
-import type { CurrencyReason } from '@/game';
 import { t } from '@/core/i18n';
 import { Button, Color, CurrencyPill, drawPaper, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
+import { landings } from '@/view/landings';
 import type { HudEnv } from './env';
 import { tapArea } from './kit';
 import { pityVisible } from './policy';
 
-/** Seconds the fly-to-HUD icons take: the number catches up when they land. */
-const FLIGHT = 0.5;
-const FLY_REASONS: ReadonlySet<CurrencyReason> = new Set<CurrencyReason>(['kill', 'boss', 'wave', 'act', 'call']);
+/** A flight that never lands (cancelled by a pause menu, a cap) must not leave the number short for ever. */
+const FALLBACK = 3;
 
-/** Keeps the shown amount equal to the real one minus gains still in the air. */
+interface Gain {
+  left: number;
+}
+
+/** Keeps the shown amount equal to the real one minus gains still in the air; each icon that lands pays its share in. */
 class Counter {
   private total: number;
   private pending = 0;
+  private readonly gains: Gain[] = [];
 
   constructor(
     readonly pill: CurrencyPill,
@@ -32,20 +36,39 @@ class Counter {
   reset(total: number): void {
     this.total = total;
     this.pending = 0;
+    this.gains.length = 0;
     this.pill.setAmount(total, false);
   }
 
   apply(total: number, delta: number, delayed: boolean): void {
     this.total = total;
     if (delta > 0 && delayed) {
+      const gain: Gain = { left: delta };
+      this.gains.push(gain);
       this.pending += delta;
-      this.bag.call(FLIGHT, () => {
-        this.pending = Math.max(0, this.pending - delta);
-        this.pill.setAmount(this.total - this.pending, true);
-      });
+      this.bag.call(FALLBACK, () => this.settle(gain, gain.left));
     } else {
       this.pill.setAmount(total - this.pending, true);
     }
+  }
+
+  /** An icon touched the pill: its share of the oldest gains in the air shows now. */
+  landed(amount: number): void {
+    let rest = amount;
+    for (const gain of this.gains) {
+      if (rest <= 0) break;
+      const take = Math.min(gain.left, rest);
+      this.settle(gain, take);
+      rest -= take;
+    }
+  }
+
+  private settle(gain: Gain, take: number): void {
+    if (take <= 0) return;
+    gain.left -= take;
+    if (gain.left <= 0) this.gains.splice(this.gains.indexOf(gain), 1);
+    this.pending = Math.max(0, this.pending - take);
+    this.pill.setAmount(this.total - this.pending, true);
   }
 }
 
@@ -99,11 +122,12 @@ export class CurrencyRow {
 
     this.root.addChild(this.fish, this.purr, this.pity, this.odds);
 
-    env.on(b.events, 'fish', ({ total, delta, reason }) => this.fishCounter.apply(total, delta, FLY_REASONS.has(reason)));
+    env.on(b.events, 'fish', ({ total, delta, reason }) => this.fishCounter.apply(total, delta, reason !== 'start'));
     env.on(b.events, 'purr', ({ total, delta, reason }) => {
-      this.purrCounter.apply(total, delta, FLY_REASONS.has(reason));
+      this.purrCounter.apply(total, delta, reason !== 'start');
       if (delta > 0 && r.purr) env.hints.request('purr', this.purr);
     });
+    env.on(landings, 'landed', ({ kind, amount }) => (kind === 'fish' ? this.fishCounter : this.purrCounter).landed(amount));
     env.on(b.events, 'pity', () => this.refreshPity());
     env.on(b.events, 'summon', () => this.refreshPity());
     env.on(env.ctx.events, 'refused', ({ fail }) => {

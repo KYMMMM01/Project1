@@ -1,10 +1,10 @@
 import { Container } from 'pixi.js';
-import { audio } from '@/audio';
 import { t } from '@/core/i18n';
+import { Ease } from '@/core/tween';
 import { CLASS_IDS, type ClassId } from '@/game/api';
 import { profile } from '@/meta';
 import type { UnitView } from '@/meta/economy';
-import { ScrollView, SegmentTabs } from '@/ui';
+import { ScrollView, SegmentTabs, TweenBag, motion } from '@/ui';
 import type { ContentArea, TabScreen } from '../contract';
 import { ClassSheet } from './ClassSheet';
 import { CLASS_GROUPS, cardProgress, isUpgradeReady, upgradeReadyCount, visibleGroups, type ClassFilter } from './collection';
@@ -16,6 +16,8 @@ const NAV_H = 100;
 /** Room above a sheet for the label that hangs over its top edge. */
 const LABEL_OVER = 40;
 const GAP = 22;
+/** How far a page rises into place when the filter changes. */
+const RISE_PX = 30;
 
 /**
  * The cats tab: a class filter on top, then the wild cards in hand and one page per class showing its fixed line
@@ -34,6 +36,7 @@ class CatsTab implements TabScreen {
   private dirty = true;
   private builtW = 0;
   private offProfile: (() => void) | null = null;
+  private readonly bag = new TweenBag();
 
   constructor() {
     this.scroll = new ScrollView({ width: 720, height: 900, padding: 0, paddingBottom: 24 });
@@ -64,9 +67,9 @@ class CatsTab implements TabScreen {
     });
     nav.onSelect((id) => {
       this.filter = id as ClassFilter;
-      audio.play('ui_tab');
       this.layout();
       this.scroll.scrollToTop(false);
+      this.rise();
     });
     nav.position.set(this.area.x + this.area.w / 2, this.area.y + 8 + 44);
     this.view.addChild(nav);
@@ -81,12 +84,40 @@ class CatsTab implements TabScreen {
     for (const g of CLASS_GROUPS) {
       const sheet = this.sheets.get(g.classId) as ClassSheet;
       sheet.visible = shown.has(g.classId);
+      sheet.alpha = 1;
       if (!sheet.visible) continue;
       y += LABEL_OVER;
       sheet.position.set(SIDE, y);
       y += sheet.sheetH + GAP;
     }
     this.scroll.refresh();
+  }
+
+  /** The pages of the picked class settle in one after another instead of blinking into place. */
+  private rise(): void {
+    this.bag.killAll();
+    if (motion.reduced) return;
+    let order = 0;
+    for (const g of CLASS_GROUPS) {
+      const sheet = this.sheets.get(g.classId) as ClassSheet;
+      if (!sheet.visible) continue;
+      const y0 = sheet.y;
+      sheet.alpha = 0;
+      sheet.y = y0 + RISE_PX;
+      this.bag.run({
+        duration: 0.26,
+        delay: order++ * 0.06,
+        ease: Ease.cubicOut,
+        onUpdate: (k) => {
+          sheet.alpha = Math.min(1, k * 2.5);
+          sheet.y = y0 + RISE_PX * (1 - k);
+        },
+        onComplete: () => {
+          sheet.alpha = 1;
+          sheet.y = y0;
+        },
+      });
+    }
   }
 
   private refreshViews(): void {
@@ -136,6 +167,7 @@ class CatsTab implements TabScreen {
   destroy(): void {
     this.offProfile?.();
     this.offProfile = null;
+    this.bag.killAll();
     this.view.destroy({ children: true });
   }
 }

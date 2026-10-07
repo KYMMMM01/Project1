@@ -134,7 +134,7 @@ class ChestReveal {
     ribbon.position.set(0, CHEST_SIZE * 0.1);
     this.chest.addChild(art, ribbon);
 
-    this.skip = new Button({ label: t('reveal.skip'), icon: 'fast_forward', style: 'kraft', width: SKIP_W, height: 96, fontSize: 28 });
+    this.skip = new Button({ label: t('reveal.skip'), icon: 'fast_forward', style: 'kraft', width: SKIP_W, height: 96, fontSize: 28, sfx: false });
     this.skip.onTap(() => this.skipToEnd());
     this.done = new Button({ label: t('reveal.done'), style: 'primary', width: 380, height: 112, fontSize: 46, tape: 'pink' });
     this.done.visible = false;
@@ -555,6 +555,7 @@ class ChestReveal {
     this.fx.clear();
     this.views.forEach((v, i) => {
       const slot = this.slotOf(i);
+      const arriving = !v.placed;
       v.shown = true;
       v.placed = true;
       v.card.visible = true;
@@ -563,6 +564,7 @@ class ChestReveal {
       v.card.scale.set(this.grid.scale);
       v.card.rotation = 0;
       v.card.showFace();
+      if (arriving) this.settleIn(v, i);
       v.card.count.text = 'x' + formatCount(v.stack.count);
       // A skipped card keeps the tape its rarity earns but not the stamp: the summary stays readable.
       v.stamp?.destroy({ children: true });
@@ -573,6 +575,28 @@ class ChestReveal {
       } else if (flourishOf(v.stack.rarity, false).tape) this.slapTape(v, false);
     });
     this.finish();
+  }
+
+  /** A card the skip brought to its slot does not blink on: it pops up there, one after another. */
+  private settleIn(v: StackView, index: number): void {
+    if (motion.reduced) return;
+    const s = this.grid.scale;
+    const spring = backOut(2);
+    v.card.alpha = 0;
+    v.card.scale.set(s * 0.7);
+    this.bag.run({
+      duration: 0.22,
+      delay: Math.min(0.24, index * 0.025),
+      ease: Ease.linear,
+      onUpdate: (k) => {
+        v.card.scale.set(s * (0.7 + 0.3 * spring(k)));
+        v.card.alpha = Math.min(1, k * 4);
+      },
+      onComplete: () => {
+        v.card.scale.set(s);
+        v.card.alpha = 1;
+      },
+    });
   }
 
   private leave(): void {

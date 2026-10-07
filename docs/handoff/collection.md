@@ -100,3 +100,22 @@ Six testers played the whole game; their reports for this area are in `docs/qa/f
 
 - The piggy bank's "free break in N days" line goes through `tn` (English singular "After 1 day").
 - `RewardSheet` (`rewards.ts`) declares `PANEL_W + 48`, so the popup is no longer scaled to 0.978 and its 24 px text stays at 24 (body scale read back as 1).
+
+## 2026-10-07 motion review
+
+Stepped frame by frame at full motion (method and tools in `docs/handoff/ui.md`; strips in the session scratchpad `shots/<folder>/`).
+
+| Moment | Strip | Before | Change | After |
+|---|---|---|---|---|
+| Class filter on the cats tab | `cats/strip_cats` | The picked class page appeared in one frame, and the tap played `ui_tab` twice (the segment and the tab) | pages rise 30 px and fade in one after another (0.26 s, 60 ms apart); the duplicate sound is gone | pages settle in, one cue |
+| Opening the unit screen | `unit/strip_unitopen` | Page change as the kit scaffold (fade + rise); hero, pedestal and sunburst arrive with it: fine | the kit scaffold change (rise with settle, floor fades with it) | same |
+| Level-up celebration | `unit/strip_lvup` | Right: confetti and level sticker from the tap, the stamp drops from 2.4 to 1 (0.2 s) and lands with a bump, numbers roll over 0.55 s | the stamp's landing now has a knock (`place`, 0.45) on the landing frame (`stampThud`) | impact is heard where it is seen |
+| Reward popup (purchase, claim) | `reward/strip_rw`, `strip_rwc` | Sheet opens, first sticker 0.22 s later, then one every 0.16 s with its chime on the pop frame, counts roll, Claim pops; on Claim the icons fly to the top bar: good | pills now wait for the landing (see the shell note) | sheet closes, icons fly, numbers roll when they land |
+| Chest reveal, gold | `reveal_gold/strip_gold` | Drop with a growing shadow, dust and shake on landing (`chest_shake` on the landing frame), rattle, burst with a flat sunburst and confetti, cards launch in arcs: good | none | same |
+| Chest reveal, wooden, skip in the middle | `reveal_wood/strip_wood` | After skip every card, the footer label and the OK button appeared in one frame, and the skip button's click played twice | the cards the skip brings to their slots pop up one after another (0.22 s, 25 ms apart); the skip button is silent (`skipToEnd` plays the click itself, also for a tap on the floor and Escape) | staggered pop, one click |
+| Shop section jump | `sold/strip_sold` (sound log) | The segment highlight followed the list through every section it scrolled past, one `ui_tab` each | `jumpTo` holds the highlight on the asked-for section for 0.75 s and the following highlight is silent (`SegmentTabs.select(id, animate, silent)`) | one cue, no flicker; read from the sound log, not seen in a strip |
+| "Sold" stamp on a daily card | `sold/strip_sold` | The stamp was drawn in place | a card sold just now slams its stamp on (`StampMark.slam`, berry); a card already sold when the block is built keeps it static | the slam happens under the reward sheet that follows a purchase, so it is hardly seen |
+
+### Could not capture
+
+Silver chest (same schedule as the others with a different ribbon), wild cards being applied on the unit screen, the dev-store purchase flow end to end (only the reward sheet it ends in), equipping a mat with its preview, the piggy bank, the chest summary after a full unskipped reveal.

@@ -150,3 +150,7 @@ REQUESTS: `src/demo/FxDemo.ts` (the gallery chrome, outside my paths) still draw
 ## 2026-10-07 QA fixes
 
 See `battle.md`. Numbers are one stroked bitmap font per colour now (no edge font, no cream ring, no shadow) with `minX / minY / maxX` bounds; `hitSpark` lost its translucent disc, `critBurst` its fading ring, and `buffAura`'s steady disc became a ring outline.
+
+## 2026-10-07 motion review
+
+Full table in `director.md`. fx side: `Fx` is now built on the battle's real-time clock (`BattleScene`: `new Fx(layers.fxFront, this.ui, ...)`), so an effect's own beats (`after()`: impact shake, level-up flourish) share the clock of the particles they time instead of drifting under hit-stop, slow motion and 3x speed. The filled flash discs that cover a new sticker at its reveal are shorter and a little lighter: merge impact 0.24 to 0.14 s, epic 0.2 to 0.13 s, legendary 0.28 to 0.16 s (alpha 0.85), mythic 0.34 to 0.2 s (alpha 1 to 0.85). The pillar and the large rings still cross the mythic cat for about 0.3 s after its pop; it is clear by 0.9 s.

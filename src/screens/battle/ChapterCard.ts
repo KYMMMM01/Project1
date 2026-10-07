@@ -18,6 +18,7 @@ import {
   PaperLabel,
   Tag,
   TweenBag,
+  backOut,
   cacheStatic,
   drawDashedRect,
   drawIcon,
@@ -106,6 +107,8 @@ export class ChapterCard extends Container {
   private readonly swipe = new Container();
   private readonly dots = new Graphics();
   private readonly bubble = new Graphics();
+  /** Where the bubble's tail is drawn now (card space); -1 until the first draw. */
+  private tipX = -1;
   private readonly prev = new IconButton({ icon: 'back', style: 'neutral', size: 80 });
   private readonly next = new IconButton({ icon: 'back', style: 'neutral', size: 80 });
   private readonly calendar = new IconButton({ icon: 'calendar', style: 'info', size: 80 });
@@ -150,10 +153,7 @@ export class ChapterCard extends Container {
       const chip = new Button({ label: String(s), width: this.chipW, height: CHIP_H, fontSize: 44, radius: 20, style: 'neutral', sfx: 'ui_click' });
       chip.position.set(PAD + this.chipW / 2 + s * (this.chipW + 10), CHIP_Y + CHIP_H / 2);
       chip.onTap(() => this.pick(s));
-      chip.onDisabledTap(() => {
-        toast(t('battle.stake.locked'), 'info');
-        audio.play('ui_error');
-      });
+      chip.onDisabledTap(() => toast(t('battle.stake.locked'), 'info'));
       const stamp = buildStamp();
       stamp.position.set(this.chipW / 2 - 12, -CHIP_H / 2 + 10);
       stamp.visible = false;
@@ -180,7 +180,7 @@ export class ChapterCard extends Container {
     this.sel = clamped;
     this.showArt(dir, animate);
     this.refreshChips();
-    this.refreshRule();
+    this.refreshRule(animate && dir === 0);
     this.drawDots();
   }
 
@@ -189,7 +189,7 @@ export class ChapterCard extends Container {
     this.sel = clampSelection(profile.data.cleared, this.sel);
     this.showArt(0, false);
     this.refreshChips();
-    this.refreshRule();
+    this.refreshRule(false);
     this.drawDots();
   }
 
@@ -214,7 +214,7 @@ export class ChapterCard extends Container {
     if (stake === this.sel.stake) return;
     this.sel = { ...this.sel, stake };
     this.refreshChips();
-    this.refreshRule();
+    this.refreshRule(true);
     this.handlers.onChange(this.sel);
   }
 
@@ -271,11 +271,46 @@ export class ChapterCard extends Container {
   }
 
   /** The bubble under the tags: the rule the picked level adds, with its tail pointing at that tag. */
-  private refreshRule(): void {
+  private refreshRule(animate: boolean): void {
     const { chapter, stake } = this.sel;
     const open = chapterUnlocked(profile.data.cleared, chapter);
-    this.ruleText.text = !open ? t('battle.chapter.locked') : stake === 0 ? t('battle.stake.base') : stakeText(stake);
+    const text = !open ? t('battle.chapter.locked') : stake === 0 ? t('battle.stake.base') : stakeText(stake);
+    const changed = this.ruleText.text !== text;
+    this.ruleText.text = text;
     const tipX = PAD + this.chipW / 2 + stake * (this.chipW + 10);
+    const from = this.tipX;
+    this.bag.killKeyed(this.bubble);
+    if (!animate || motion.reduced || from < 0 || from === tipX) {
+      this.drawBubble(tipX);
+      return;
+    }
+    // The tail glides to the tag that was picked and the new rule slides in beside it.
+    const spring = backOut(1.8);
+    this.bag.runKeyed(this.bubble, {
+      duration: 0.22,
+      ease: Ease.linear,
+      onUpdate: (k) => this.drawBubble(from + (tipX - from) * spring(k)),
+      onComplete: () => this.drawBubble(tipX),
+    });
+    if (!changed) return;
+    const text0 = this.ruleText;
+    const y0 = BUBBLE_Y + BUBBLE_H / 2 + 2;
+    this.bag.runKeyed(text0, {
+      duration: 0.2,
+      ease: Ease.cubicOut,
+      onUpdate: (k) => {
+        text0.alpha = k;
+        text0.y = y0 + 10 * (1 - k);
+      },
+      onComplete: () => {
+        text0.alpha = 1;
+        text0.y = y0;
+      },
+    });
+  }
+
+  private drawBubble(tipX: number): void {
+    this.tipX = tipX;
     const g = this.bubble;
     g.clear();
     drawSpeechBubble(g, 28, BUBBLE_Y, W - 56, BUBBLE_H, { radius: 26, seed: this.seed, tail: { side: 'top', x: tipX - 28, len: 18, half: 15 } });

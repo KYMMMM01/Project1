@@ -163,3 +163,31 @@ Verified: `npx tsc --noEmit` clean in `src/ui`, `src/core`, `src/demo`, `tests/u
 - **CurrencyPill "+"**: now a cream paper disc (`neutral` IconButton, 58 px) with the ink plus, instead of leaf green on the teal strip. Users: the home top bar (gold, gems, tickets) and `?demo=ui`; the battle currency row has no "+".
 - **Dead code**: the gradient and glow helpers of `shapes.ts` and `rgba()` are deleted (see the list above); `src/ui` has no gradient left at all.
 - **Applied from the QA requests**: HUD `ProgressBar.labelSize` (battle countdown bar) and the reward sheet's `PANEL_W + 48` content width (its scale is 1, read back in the browser).
+
+## 2026-10-07 motion review
+
+First look at the kit in motion: every frame below was stepped by hand with `game.tick(dt)` at full motion (the Aside tab reports reduced motion, so QA had only seen the reduced paths). Method and tools: `tools/ui_motion.sh <key> <moment.js>` runs a moment through the Aside runner, `tools/ui_motion_capture.js` is its prelude (`scene`, `richHome`, `steps`, `frames`, `down` / `up` / `tap`, `posOf`, `textPos`, `sfxLog`, `tile`), `tools/ui_motion_tile.py` tiles the numbered shots into a labelled strip. The page keeps rendering with `ticker.speed = 0` (a stopped ticker makes the browser time out on screenshots) and the capture advances the game itself; sound calls are logged against the capture clock so the frame of impact can be compared. Things the method taught: a module the dev server changed is imported as `?t=...`, so a plain `import()` is a second copy of `motion` (take the URL from `performance.getEntriesByType('resource')`); a scene built while the OS flag was on keeps its loops off (rebuild the home scene once full motion is on); promise continuations (a transition's `await tween.finished`) only run when the script yields between ticks.
+
+Strips are in the session scratchpad `shots/<folder>/strip_*.png`.
+
+| Moment | Strip | Before | Change | After |
+|---|---|---|---|---|
+| Large primary button, press and release | `btn/strip_big` | Right already: pointerdown snaps (0.97, tint, shadow 0.55), release springs 0.28 s (lift 1.5 px, 1.035, 1.6 degrees alternating) | none | same. `IconButton` extends `Button`, so round and small buttons are the same code |
+| Disabled button tapped | `btn/strip_dis` | Shake fine, but sound stacked: the button's own `ui_error` plus the toast's `ui_error` (warning) or `ui_tab` (info) on the same frame | `press.ts` `noteRefusal()` / `justRefused()`: a toast opened in the same tap stays quiet; duplicate `audio.play('ui_error')` removed from the START and stake-tag handlers | one cue per refusal |
+| Popup open / close | `pop/strip_pop` | Good: 0.82 to 1 with a back ease in 0.18 s, dim fades with it, 0.12 s cubic-in out | none | same |
+| Full-screen page open / close | `scaf/strip_scaf` | The floor and header appeared on frame one and vanished on the last frame (a hard cut) while only the content faded | sheet rises 36 px and settles (back 1.5, 0.26 s), header drops 14 px, floor and header fade with it; leaving sinks 14 px in 0.14 s | cross-fades cleanly (also seen in `settings/strip_set`, `unit/strip_unitopen`, `h_start/strip_startp`) |
+| Toast in / out | `toast/strip_toast` | Rises 56 px with a back ease, leaves 40 px up in 0.2 s: good (the exit window was missed by one beat, read from the code) | none | same |
+| Tooltip | `tip/strip_tip` | Opened with a pop from the tail tip; closing destroyed it in one frame | 0.1 s shrink and fade from the tail tip, apart from the opening tween so a new tooltip cannot cut it short | not re-captured (two runs timed out on a reload) |
+| Toggle, slider thumb | `ctl1/strip_tog`, `strip_sld` | Knob slides 0.2 s with a back ease, thumb grows 1.14 and settles: good | none | same |
+| Segmented control, tab bar | `ctl4/strip_seg`, `ctl3/strip_tab` | Paper piece slides with a small overshoot; selected tab rises with its tape, the hero circle turns cream: good | none | same |
+| Progress bar fill | `ctl2/strip_bar` | A bar with `format` showed its end value (`100%`) from the first frame while the fill was still moving | the derived label is set from the painted edge in `setFill` | label follows the fill |
+| Number count-up (currency pill) | `ctl2/strip_cnt` | Roll 0.4 to 0.8 s with the icon punch and tick sounds: good | none | same |
+| Card frames re-laid | `ctl4/strip_seg` | Cards resize and the NEW tags grow with them: good | none | same |
+| Scroll rubber band and indicator | `scroll/strip_rub` | Band stops at about 65 px, spring back over 0.45 s, indicator fades: good | none | same |
+
+Also changed for the whole screen set (see the other notes): `ScreenScaffold` is what every full-screen page uses, `Button.setLift(px)` raises the paper off its shadow (START bob), `SegmentTabs.select(id, animate, silent)` lets a list that follows its scroll move the highlight without a sound.
+
+### REQUESTS (kit)
+
+1. `src/fx/flyTo.ts`: the burst of a flight starting next to a screen edge sends icons off-screen. The screens now pass a short `burstRadius` / `bulge` near the edges (`screens/shell/flight.ts`); a clamp inside `flyTo` would cover every caller.
+2. `src/audio`: `place` is used as the stamp's knock (volume 0.45). A dedicated short "stamp" sound would fit better.

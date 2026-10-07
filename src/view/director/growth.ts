@@ -20,6 +20,7 @@ import { CLASS_COLOR, themeOf } from './palette';
 import { DUCK_BY_TIER, SummonRate, summonPlan } from './policy';
 import type { Bus, Stage } from './stage';
 import { Hue } from '@/fx/palette';
+import { MERGE_SECONDS, REVEAL_DELAY, SLIDE_SECONDS } from '@/view/timing';
 
 const W = Hue.cream;
 const GOLD = Color.mustard;
@@ -79,7 +80,11 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     }
     if (!plan.thin) themeBurst(x, y, tier);
     const sfx = plan.popOnly ? SUMMON_SFX[0] : SUMMON_SFX[tier];
-    if (sfx) stage.play(stage.rules.summon, sfx, SUMMON_VOLUME[plan.popOnly ? 0 : tier] ?? 0.6, 1, 0.03);
+    // Every summon sound opens with the pop of the sticker landing, so it waits for the reveal (the effect charges in silence).
+    const lag = plan.thin ? 0 : (REVEAL_DELAY[plan.quick ? 2 : tier] ?? 0);
+    const volume = SUMMON_VOLUME[plan.popOnly ? 0 : tier] ?? 0.6;
+    if (sfx && lag > 0) stage.laterReal(lag, () => stage.play(stage.rules.summon, sfx, volume, 1, 0.03));
+    else if (sfx) stage.play(stage.rules.summon, sfx, volume, 1, 0.03);
     sourceCue(e.source, x, y);
   });
 
@@ -96,16 +101,16 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     const x = cellCenterX(e.cell);
     const y = cellCenterY(e.cell) - 8;
     const step = stage.mergeLadder.next(stage.now);
-    // The burst opens with a short suck (0.17 s) that lines up with the materials travelling in.
+    // The burst opens with a short suck that lines up with the materials travelling in (MERGE_SECONDS).
     fx.mergeBurst(x, y, color, 1 + tier * 0.08);
-    stage.later(0.17, () => {
+    stage.laterReal(MERGE_SECONDS, () => {
       stage.playStep(stage.rules.merge, tier >= 2 ? 'merge_big' : 'merge', step + tier, tier >= 2 ? 0.85 : 0.75);
     });
-    if (tier >= 2) stage.later(0.17, () => reveal(x, y, tier, 1.15));
+    if (tier >= 2) stage.laterReal(MERGE_SECONDS, () => reveal(x, y, tier, 1.15));
     themeBurst(x, y, tier);
     if (e.jumped) {
       // Snack stick: the unit skipped a rarity, so it gets a second ring, a rising flourish and a gold chime.
-      stage.later(0.2, () => {
+      stage.laterReal(0.2, () => {
         fx.levelUp(x, y, { color: GOLD, scale: 0.8 });
         ps.burst(STAR_POP, x, y, { colors: [W, GOLD], count: 2, scale: 1.3 });
         stage.direct('level_up', 0.55);
@@ -213,18 +218,23 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     stage.buzz('light');
   });
 
+  // The sticker hops for SLIDE_SECONDS and lands with a squash: the dust, the sound and the buzz belong to the landing.
   on('move', (e) => {
-    fx.dustPuff(cellCenterX(e.to), cellCenterY(e.to) + 18, { scale: 0.7 });
-    stage.play(stage.rules.ui, 'place', 0.5, 1, 0.04);
-    stage.buzz('tap');
+    stage.laterReal(SLIDE_SECONDS * 0.85, () => {
+      fx.dustPuff(cellCenterX(e.to), cellCenterY(e.to) + 18, { scale: 0.7 });
+      stage.play(stage.rules.ui, 'place', 0.5, 1, 0.04);
+      stage.buzz('tap');
+    });
   });
 
   on('swap', (e) => {
-    fx.dustPuff(cellCenterX(e.a.cell), cellCenterY(e.a.cell) + 18, { scale: 0.6 });
-    fx.dustPuff(cellCenterX(e.b.cell), cellCenterY(e.b.cell) + 18, { scale: 0.6 });
     // A trade is a double slide (the page-turn sound), so it is told apart from a plain move by ear.
-    stage.play(stage.rules.ui, 'ui_tab', 0.8, 1, 0.03);
-    stage.buzz('tap');
+    stage.laterReal(SLIDE_SECONDS * 0.85, () => {
+      fx.dustPuff(cellCenterX(e.a.cell), cellCenterY(e.a.cell) + 18, { scale: 0.6 });
+      fx.dustPuff(cellCenterX(e.b.cell), cellCenterY(e.b.cell) + 18, { scale: 0.6 });
+      stage.play(stage.rules.ui, 'ui_tab', 0.8, 1, 0.03);
+      stage.buzz('tap');
+    });
   });
 
   stage.onDestroy(() => {

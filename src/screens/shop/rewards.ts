@@ -160,6 +160,9 @@ class RewardSheet extends Popup<void> {
   }
 }
 
+/** The most a sheet may keep the top bar's numbers back: it stays open as long as the player likes. */
+const SHEET_HOLD = 90;
+
 /**
  * The "you received" popup for a bundle. When the player claims, every currency tile sends a few icons
  * flying to the matching spot in the top bar, and the bar is refreshed when the last one lands.
@@ -167,6 +170,8 @@ class RewardSheet extends Popup<void> {
 export async function showRewardsPopup(parts: readonly BundlePart[], title?: string): Promise<void> {
   if (parts.length === 0) return;
   const shell = getShell();
+  // The profile already holds the currency: the top bar keeps its old numbers behind the sheet and rolls up as the icons land.
+  if (shell) for (const p of parts) if (p.kind === 'gold' || p.kind === 'gems' || p.kind === 'tickets') shell.pending(p.kind, p.n, SHEET_HOLD);
   await popups.open(
     new RewardSheet(parts, title ?? t('rewards.title'), (points) => {
       if (!shell) return;
@@ -186,6 +191,7 @@ export async function showRewardsPopup(parts: readonly BundlePart[], title?: str
           to: shell.currencyAnchor(kind),
           count: flyIconCount(p.n, 8),
           make: (): Container => currencyArt(kind, 48),
+          onArrive: () => shell.landed(kind),
           onDone: landed,
         });
       }

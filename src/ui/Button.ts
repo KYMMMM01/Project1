@@ -9,7 +9,7 @@ import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { motion, shakeX, TweenBag } from './motion';
 import { drawPaperFace, drawPaperShadow, paperSeed, tapeStrip, type PaperOpts } from './paper';
-import { clearActivePress, inScrollHost, setActivePress, type Pressable } from './press';
+import { clearActivePress, inScrollHost, noteRefusal, setActivePress, type Pressable } from './press';
 import { refreshCache } from './shapes';
 import { fitLabel, uiLabel } from './text';
 import { ButtonPalettes, Color, Hit, MIN_FONT, mutedPalette, type ButtonPalette, type ButtonStyleId, type TapeName } from './theme';
@@ -65,6 +65,8 @@ export class Button extends Container implements Pressable {
   /** Pulse / shake target; the press animation lives one level deeper on `face`. */
   protected readonly body = new Container();
   protected readonly face = new Container();
+  /** Carries `face` clear of its shadow (setLift): the press animation stays on `face`, the shadow stays where it was. */
+  private readonly lifter = new Container();
   private readonly shadowG = new Graphics();
   private readonly faceG = new Graphics();
   private readonly content = new Container();
@@ -128,7 +130,8 @@ export class Button extends Container implements Pressable {
     this.uiBox = { x: -w / 2, y: -h / 2, w, h: h + this.lip };
 
     this.face.addChild(this.faceG, this.content);
-    this.body.addChild(this.shadowG, this.face);
+    this.lifter.addChild(this.face);
+    this.body.addChild(this.shadowG, this.lifter);
     this.addChild(this.body);
 
     this.redraw();
@@ -250,6 +253,12 @@ export class Button extends Container implements Pressable {
       this.body.addChild(this.badgeView);
     }
     this.badgeView.set(value);
+    return this;
+  }
+
+  /** Hold the paper `px` above its shadow (an idle float); the shadow does not follow, so the gap shows the height. */
+  setLift(px: number): this {
+    this.lifter.y = -px;
     return this;
   }
 
@@ -425,6 +434,7 @@ export class Button extends Container implements Pressable {
     if (!this.isEnabled) {
       shakeX(this.bag, this.body, 0, 6, 3, 0.18);
       audio.play('ui_error', { volume: 0.5 });
+      noteRefusal();
       haptic('warning');
       this.disabledFn?.();
       return;

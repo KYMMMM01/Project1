@@ -19,6 +19,9 @@ export class LevelBadge extends Container {
   private readonly bag = new TweenBag();
   private level = -1;
   private fraction = 0;
+  /** A level-up sequence is running toward this fraction; the same state arriving again must not restart it. */
+  private sequencing = false;
+  private sequenceTarget = -1;
 
   constructor() {
     super();
@@ -33,23 +36,58 @@ export class LevelBadge extends Container {
     this.addChild(base, this.ring, lv, this.numberT);
   }
 
-  /** Show `level` and the share of the next level already earned. Animates the ring and punches on a level up. */
+  /**
+   * Show `level` and the share of the next level already earned. Animates the ring; on a level up it
+   * fills to the brim first, the sticker takes the new number with a punch, and the next ring starts from empty.
+   */
   set(level: number, into: number, need: number, animate = true): void {
     const target = xpFraction(into, need);
+    if (this.sequencing && level === this.level && target === this.sequenceTarget) return;
     const leveled = this.level >= 0 && level > this.level;
-    if (level !== this.level) {
-      this.level = level;
-      this.numberT.text = String(level);
-      fitWidth(this.numberT, NUMBER_MAX_W);
-      if (leveled && animate && !motion.reduced) punch(this.bag, this, 0.18, 0.3);
-    }
+    this.level = level;
     const from = this.fraction;
+    this.sequencing = false;
     this.bag.killKeyed(this.ring);
-    if (!animate || motion.reduced || from === target) {
+    if (!animate || motion.reduced) {
+      this.showLevel(level);
       this.fraction = target;
       this.drawRing(target);
       return;
     }
+    if (leveled) {
+      this.sequencing = true;
+      this.sequenceTarget = target;
+      this.bag.runKeyed(this.ring, {
+        duration: Math.min(0.55, 0.22 + (1 - from) * 0.5),
+        ease: Ease.cubicOut,
+        onUpdate: (k) => {
+          this.fraction = from + (1 - from) * k;
+          this.drawRing(this.fraction);
+        },
+        onComplete: () => {
+          this.showLevel(level);
+          punch(this.bag, this, 0.18, 0.3);
+          this.fillFrom(0, target);
+        },
+      });
+      return;
+    }
+    this.showLevel(level);
+    if (from === target) {
+      this.drawRing(target);
+      return;
+    }
+    this.fillFrom(from, target);
+  }
+
+  private showLevel(level: number): void {
+    this.numberT.text = String(level);
+    fitWidth(this.numberT, NUMBER_MAX_W);
+  }
+
+  private fillFrom(from: number, target: number): void {
+    this.fraction = from;
+    this.drawRing(from);
     this.bag.runKeyed(this.ring, {
       duration: 0.5,
       ease: Ease.cubicOut,
@@ -60,6 +98,7 @@ export class LevelBadge extends Container {
       onComplete: () => {
         this.fraction = target;
         this.drawRing(target);
+        this.sequencing = false;
       },
     });
   }

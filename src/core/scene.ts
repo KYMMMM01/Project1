@@ -77,10 +77,14 @@ export class SceneManager {
   private drawCover(): void {
     const g = this.cover;
     g.clear();
-    g.rect(0, 0, game.w, game.h).fill(Color.inkDeep);
     if (this.irisActive && this.irisR > 0.5) {
-      g.circle(game.w / 2, game.h / 2, this.irisR).cut();
+      // A stroke wide enough to reach every corner is the cover with a round hole in it. A hole cut out of a
+      // rectangle only triangulates while the circle lies wholly inside it: wider than that the cover went solid.
+      const reach = this.maxIris();
+      g.circle(game.w / 2, game.h / 2, this.irisR + reach).stroke({ width: reach * 2, color: Color.inkDeep });
+      return;
     }
+    g.rect(0, 0, game.w, game.h).fill(Color.inkDeep);
   }
 
   private maxIris(): number {

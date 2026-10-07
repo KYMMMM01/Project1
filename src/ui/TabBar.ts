@@ -401,14 +401,15 @@ export class SegmentTabs extends Container {
     return this;
   }
 
-  select(id: string, animate = true): void {
+  /** `silent` follows a change that has its own cue (a list scrolling past sections). */
+  select(id: string, animate = true, silent = false): void {
     if (id === this.selected) {
       this.paint();
       return;
     }
     const to = this.cellX(this.indexOf(id));
     this.selected = id;
-    audio.play('ui_tab');
+    if (!silent) audio.play('ui_tab');
     const from = this.hiX;
     this.bag.killAll();
     if (animate && !motion.reduced) {

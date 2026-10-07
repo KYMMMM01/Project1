@@ -3,6 +3,7 @@ import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { clamp } from '@/core/math';
+import { Ease } from '@/core/tween';
 import { backOut, motion, TweenBag } from './motion';
 import { drawSpeechBubble, paperSeed } from './paper';
 import { uiLabel } from './text';
@@ -34,6 +35,8 @@ const MARGIN = 14;
 class TooltipManager {
   private bubble: Container | null = null;
   private readonly bag = new TweenBag();
+  /** Bubbles on their way out: apart from `bag`, so the next show() cannot cut a leaving one short. */
+  private readonly leaving = new TweenBag();
   private owner: Container | null = null;
 
   /** Show the bubble for `target` now. It stays until hide() (or `autoHide` seconds). */
@@ -101,11 +104,26 @@ class TooltipManager {
 
   hide(): void {
     this.bag.killAll();
-    if (this.bubble) {
-      this.bubble.destroy({ children: true });
-      this.bubble = null;
-    }
+    const b = this.bubble;
+    this.bubble = null;
     this.owner = null;
+    if (!b) return;
+    if (motion.reduced) {
+      b.destroy({ children: true });
+      return;
+    }
+    // The bubble's origin is the tail tip, so it shrinks back into the thing that was held.
+    const s0 = b.scale.x;
+    const a0 = b.alpha;
+    this.leaving.run({
+      duration: 0.1,
+      ease: Ease.cubicIn,
+      onUpdate: (k) => {
+        b.scale.set(s0 * (1 - 0.12 * k));
+        b.alpha = a0 * (1 - k);
+      },
+      onComplete: () => b.destroy({ children: true }),
+    });
   }
 
   get visible(): boolean {

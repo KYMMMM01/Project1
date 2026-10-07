@@ -68,8 +68,9 @@ class Context implements BattleContext {
   ) {
     this.layout = layout;
     // Effect presets that ask for a hit-stop go through this clock, so they respect the same caps as everything else.
+    // Their own beats (an impact after a charge) run in real time with the particles they time, which the hit-stop does not slow.
     this.hitStop = createHitStop([this.fxClock]);
-    this.fx = new Fx(layers.fxFront, this.tweens, { freeze: this.hitStop.freeze });
+    this.fx = new Fx(layers.fxFront, this.ui, { freeze: this.hitStop.freeze });
   }
 
   get speed(): number {

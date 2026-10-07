@@ -275,7 +275,7 @@ export class PassTab implements TabScreen {
   private onCell(track: PassTrackId, kind: CellTap, cell: PassCell, tier: number): void {
     switch (kind) {
       case 'claim':
-        this.settle(profile.claimPass(track, tier), cell);
+        this.settle(() => profile.claimPass(track, tier), cell);
         break;
       case 'premium':
         audio.play('ui_error');
@@ -293,39 +293,46 @@ export class PassTab implements TabScreen {
     }
   }
 
-  private settle(r: Result<Bundle>, from: Container): void {
-    if (!r.ok) {
-      audio.play('ui_error');
-      toast(t(errorKey(r.error)), 'warning');
-      this.syncAll(false);
-      return;
-    }
-    this.finishClaim(r.value, from);
-  }
-
-  private finishClaim(reward: Bundle, from: Container): void {
+  /** Run a claim command with the change guard already up (see MissionsTab.settle), then give the feedback. */
+  private settle(run: () => Result<Bundle>, from: Container): void {
     this.claiming = true;
     try {
-      this.shell.refresh();
-      this.syncAll(true);
+      const r = run();
+      if (!r.ok) {
+        audio.play('ui_error');
+        toast(t(errorKey(r.error)), 'warning');
+        this.syncAll(false);
+        return;
+      }
+      this.finishClaim(r.value, from);
     } finally {
       this.claiming = false;
     }
+  }
+
+  private finishClaim(reward: Bundle, from: Container): void {
+    this.shell.refresh();
+    this.syncAll(true);
     void payout(this.shell, partsOf(reward), from, t('rt.common.reward'));
   }
 
   /** Take every open tier of both lanes in one go and show one combined reward. */
   private claimAll(): void {
     const sum = openRewards(profile.passView());
-    const free = profile.claimAllPass('free');
-    const premium = profile.claimAllPass('premium');
-    if (!free.ok && !premium.ok) {
-      audio.play('ui_error');
-      toast(t(errorKey(free.error)), 'warning');
-      this.syncAll(false);
-      return;
+    this.claiming = true;
+    try {
+      const free = profile.claimAllPass('free');
+      const premium = profile.claimAllPass('premium');
+      if (!free.ok && !premium.ok) {
+        audio.play('ui_error');
+        toast(t(errorKey(free.error)), 'warning');
+        this.syncAll(false);
+        return;
+      }
+      this.finishClaim(sum, this.claimAllBtn ?? this.view);
+    } finally {
+      this.claiming = false;
     }
-    this.finishClaim(sum, this.claimAllBtn ?? this.view);
   }
 
   private async buy(): Promise<void> {
@@ -437,7 +444,9 @@ export class PassTab implements TabScreen {
     if (!sc) return;
     sc.refresh();
     const contentH = LANES_TOP + 8 + 30 * (PASS_ROW_H + PASS_ROW_GAP) + SIDE * 2 + 16;
-    sc.scrollTo(scrollTargetFor(focusTier(profile.passView()), sc.viewHeight, contentH, LANES_TOP + 8), false);
+    // From wherever the list was left the track glides to the tier reached (instantly when it is already close).
+    const target = scrollTargetFor(focusTier(profile.passView()), sc.viewHeight, contentH, LANES_TOP + 8);
+    sc.scrollTo(target, Math.abs(target - sc.scrollY) > 120);
   }
 
   hide(): void {

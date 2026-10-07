@@ -4,6 +4,7 @@
  * lives on the battle's overlay layer, below any popup, so a popup never has a bubble over its title.
  */
 import { Container, Graphics, Point } from 'pixi.js';
+import { Ease } from '@/core/tween';
 import { drawSpeechBubble, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
 import { BUBBLE_MARGIN, placeBubble, unionRect, type Weighted } from './bubbleMath';
@@ -17,6 +18,9 @@ export class HintBubble {
   private view: Container | null = null;
   private owner: Container | null = null;
   private readonly bag = new TweenBag();
+  /** Bubbles on their way out: each shrinks and fades in a tenth of a second instead of blinking off. */
+  private readonly exitBag = new TweenBag();
+  private readonly leaving = new Set<Container>();
   private readonly tl = new Point();
   private readonly br = new Point();
 
@@ -72,14 +76,37 @@ export class HintBubble {
     if (!motion.reduced) popIn(this.bag, view, { from: 0.6, duration: 0.16, overshoot: 2 });
   }
 
-  hide(): void {
+  hide(animate = true): void {
+    const view = this.view;
     this.bag.killAll();
-    this.view?.destroy({ children: true });
     this.view = null;
     this.owner = null;
+    if (!view || view.destroyed) return;
+    if (!animate || motion.reduced) {
+      view.destroy({ children: true });
+      return;
+    }
+    const s0 = view.scale.x;
+    const a0 = view.alpha;
+    this.leaving.add(view);
+    this.exitBag.run({
+      duration: 0.1,
+      ease: Ease.quadIn,
+      onUpdate: (k) => {
+        view.scale.set(s0 * (1 - 0.2 * k));
+        view.alpha = a0 * (1 - k);
+      },
+      onComplete: () => {
+        this.leaving.delete(view);
+        view.destroy({ children: true });
+      },
+    });
   }
 
   destroy(): void {
-    this.hide();
+    this.hide(false);
+    this.exitBag.killAll();
+    for (const v of this.leaving) v.destroy({ children: true });
+    this.leaving.clear();
   }
 }

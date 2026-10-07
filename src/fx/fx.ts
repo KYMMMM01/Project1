@@ -523,7 +523,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'disc', prio: 2, count: 1, life: 0.24, delay: suck, size: 50, sizeEnd: 210, colors: [W, hi, color], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.75 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.14, delay: suck, size: 50, sizeEnd: 190, colors: [W, hi, color], alpha: 0.85, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.75 },
       x, y, m,
     );
     this.burst(
@@ -634,7 +634,7 @@ export class Fx {
       x, y + 20, m,
     );
     this.burst(
-      { tex: 'disc', prio: 2, count: 1, life: 0.2, size: 70, sizeEnd: 170, colors: [W, glow, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.13, size: 70, sizeEnd: 160, colors: [W, glow, c], alpha: 0.85, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.after(impact, () => {
@@ -677,7 +677,7 @@ export class Fx {
       x, y, m,
     );
     this.burst(
-      { tex: 'disc', prio: 2, count: 1, life: 0.28, size: 90, sizeEnd: 260, colors: [W, hi, c], alpha: 0.95, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 2, count: 1, life: 0.16, size: 90, sizeEnd: 240, colors: [W, hi, c], alpha: 0.85, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.after(impact, () => {
@@ -750,7 +750,7 @@ export class Fx {
 
     // Impact.
     this.burst(
-      { tex: 'disc', prio: 3, count: 1, life: 0.34, delay: charge, size: 90, sizeEnd: 340, colors: [W, hi, c], alpha: 1, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
+      { tex: 'disc', prio: 3, count: 1, life: 0.2, delay: charge, size: 90, sizeEnd: 320, colors: [W, hi, c], alpha: 0.85, sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.8 },
       x, y, m,
     );
     this.burst(

@@ -16,6 +16,7 @@ export function makePose(): Pose {
 /** Seconds of one attack animation: wind-up, strike and recoil. */
 export const ATTACK_SECONDS = 0.3;
 
+/** Where the wind-up ends and the strike begins, as a fraction of the attack. */
 const WIND = 0.26;
 const STRIKE = 0.46;
 const PULL_BACK = -0.3;
@@ -49,6 +50,19 @@ export function attackPose(k: number, out: Pose): Pose {
     out.sx = 0.94 + 0.06 * Ease.quadOut(p) + s * 0.6;
     out.sy = 1.1 - 0.1 * Ease.quadOut(p) - s;
   }
+  return out;
+}
+
+/** Attack progress at which the wind-up pose has reached `coil` (0..1): the inverse of its ease, so a coiled cat continues without a jump. */
+export function windStart(coil: number): number {
+  return WIND * (1 - Math.sqrt(1 - Math.min(0.999, Math.max(0, coil))));
+}
+
+/** The wind-up pose held at `coil` (0..1) while a cat's charge is about to release: it presses down and leans back. */
+export function coilPose(coil: number, out: Pose): Pose {
+  out.lunge = PULL_BACK * coil;
+  out.sx = 1 + 0.09 * coil;
+  out.sy = 1 - 0.1 * coil;
   return out;
 }
 

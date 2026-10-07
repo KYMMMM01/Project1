@@ -156,7 +156,6 @@ export class ProgressBar extends Container {
     const next = Number.isFinite(v) ? clamp01(v) : 0;
     const prev = this.target;
     this.target = next;
-    if (this.format) this.setLabel(this.format(next));
     this.bag.killAll();
     if (!animate || motion.reduced) {
       this.apply(next);
@@ -201,7 +200,6 @@ export class ProgressBar extends Container {
     this.target = v;
     this.setFill(v);
     this.setGhost(v);
-    if (this.format) this.setLabel(this.format(v));
   }
 
   private widthFor(v: number): number {
@@ -210,6 +208,8 @@ export class ProgressBar extends Container {
 
   private setFill(v: number): void {
     this.shown = v;
+    // A derived label follows the painted edge instead of announcing the end value before the fill gets there.
+    if (this.format) this.setLabel(this.format(v));
     const w = this.widthFor(v);
     this.fill.visible = w > 0;
     this.fill.width = Math.max(w, 1);

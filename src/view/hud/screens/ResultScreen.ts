@@ -10,11 +10,12 @@ import { fmt, fmtDuration } from '@/core/format';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
-import { Ease } from '@/core/tween';
+import { Ease, uiTweens } from '@/core/tween';
 import { unitDef, unitRarity, type UnitId } from '@/game';
 import { accountProgress, errorKey, profile, type RunReward } from '@/meta';
 import { ads } from '@/platform';
 import {
+  backOut,
   Button,
   Color,
   countUpDuration,
@@ -43,6 +44,7 @@ import type { HudEnv } from '../env';
 import { CLASS_TAPE, fitSprite, unitPhoto, unitPortrait } from '../kit';
 import { bestCat } from '../planMath';
 import { luckLine, offerRoute, rewardTiles, soCloseWaves, unspentFish, type RewardTile } from '../policy';
+import { currentSettings } from '../settings';
 
 export interface ResultHandlers {
   retry(): void;
@@ -55,6 +57,11 @@ const TILE_GAP = 24;
 const ROW_H = 54;
 const SHEET_H = 480;
 const COUPON_H = 120;
+
+/** Seconds after the page opens before the home track starts under it: the director's stinger has rung out by then. */
+const MUSIC_DELAY = 1.4;
+/** The home track sits at this share of the player's music volume under the result page, and comes up to full when it is left. */
+const MUSIC_QUIET = 0.45;
 
 const TILE_ICON: Record<RewardTile['kind'], IconName> = {
   gold: 'coin',
@@ -124,6 +131,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   drawDashedRect(cut, 14, 14, W - 28, SHEET_H - 28, { radius: 22 });
   sheet.addChild(page, cut);
 
+  let photoParts: Container[] = [];
   const cat = bestCat(stats, env.battle.units, unitRarity);
   if (cat) {
     const def = unitDef(cat);
@@ -136,6 +144,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const rank = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkSoft });
     rank.position.set(136, 316);
     sheet.addChild(photo, name, rank);
+    photoParts = [photo, name, rank];
   }
 
   const cells: Array<{ icon: IconName; label: string; value: string }> = [
@@ -150,7 +159,10 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   const listR = W - 40;
   const listY = 32;
   const lines = new Graphics();
+  const rows: Container[] = [];
   cells.forEach((cell, i) => {
+    const row = new Container();
+    rows.push(row);
     const cy = listY + i * ROW_H + ROW_H / 2;
     const icon = drawIcon(cell.icon, 38);
     icon.position.set(listX + 19, cy);
@@ -159,7 +171,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const value = uiLabel(cell.value, { size: 34, anchorX: 1, align: 'right' });
     fitLabel(value, listR - listX - 150, 34, 0.7);
     value.position.set(listR, cy);
-    sheet.addChild(icon, label, value);
+    row.addChild(icon, label, value);
+    sheet.addChild(row);
     if (i > 0) drawDashedLine(lines, listX, listY + i * ROW_H, listR, listY + i * ROW_H, { color: Color.kraftDark, width: 2, dash: 8, gap: 8, alpha: 0.7 });
   });
   sheet.addChild(lines);
@@ -172,6 +185,86 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   sheet.addChild(luckT, seedT);
   c.addChild(sheet);
   y += SHEET_H + 32;
+
+  // ── the page is laid down piece by piece: the sheet, the photo slapped on, then the numbers one by one ──
+  /** A piece of the page waits unseen, then rises a little and settles, like paper laid on paper. */
+  const lay = (obj: Container, delay: number, dx: number, dy: number): void => {
+    if (motion.reduced) return;
+    const x1 = obj.x;
+    const y1 = obj.y;
+    obj.alpha = 0;
+    bag.run({
+      duration: 0.3,
+      delay,
+      ease: backOut(1.6),
+      onUpdate: (k) => {
+        if (obj.destroyed) return;
+        obj.x = x1 + dx * (1 - k);
+        obj.y = y1 + dy * (1 - k);
+        obj.alpha = Math.min(1, k * 3);
+      },
+      onComplete: () => {
+        if (obj.destroyed) return;
+        obj.x = x1;
+        obj.y = y1;
+        obj.alpha = 1;
+      },
+    });
+  };
+  const sheetY = sheet.y;
+  const PAGE_AT = 0.3;
+  const PHOTO_AT = PAGE_AT + 0.3;
+  const ROWS_AT = PHOTO_AT + 0.2;
+  const ROW_STEP = 0.08;
+  if (!motion.reduced) {
+    page.alpha = 0;
+    cut.alpha = 0;
+    bag.run({
+      duration: 0.36,
+      delay: PAGE_AT,
+      ease: backOut(1.4),
+      onUpdate: (k) => {
+        if (page.destroyed) return;
+        sheet.y = sheetY + 44 * (1 - k);
+        page.alpha = Math.min(1, k * 3);
+        cut.alpha = page.alpha;
+      },
+      onComplete: () => {
+        sheet.y = sheetY;
+        page.alpha = 1;
+        cut.alpha = 1;
+      },
+    });
+    const photo = photoParts[0];
+    if (photo) {
+      // The photo is slapped on: it lands from above, a little too big, squashes onto the page and settles once.
+      photo.alpha = 0;
+      const rot = photo.rotation;
+      bag.run({
+        duration: 0.34,
+        delay: PHOTO_AT,
+        ease: Ease.linear,
+        onUpdate: (k) => {
+          if (photo.destroyed) return;
+          const e = backOut(2.2)(Ease.quadOut(k));
+          photo.scale.set(1.5 - 0.5 * e);
+          photo.rotation = rot - 0.16 * (1 - e);
+          photo.alpha = Math.min(1, k * 6);
+        },
+        onComplete: () => {
+          photo.scale.set(1);
+          photo.rotation = rot;
+          photo.alpha = 1;
+        },
+      });
+      // The sound is the slap: the photo reaches the page about a third of the way through its drop.
+      bag.call(PHOTO_AT + 0.11, () => alive && audio.play('place', { volume: 0.6 }));
+      for (const p of photoParts.slice(1)) lay(p, PHOTO_AT + 0.15, 0, 10);
+    }
+    rows.forEach((row, i) => lay(row, ROWS_AT + i * ROW_STEP, 22, 0));
+    lay(luckT, ROWS_AT + rows.length * ROW_STEP, 0, 8);
+    lay(seedT, ROWS_AT + rows.length * ROW_STEP + 0.1, 0, 0);
+  }
 
   // ── rewards ──
   const rewardLayer = new Container();
@@ -394,10 +487,17 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   if (victory && !motion.reduced) confetti(scaffold, bag);
 
   void scaffold.show(true);
-  if (victory) {
-    audio.stinger('victory');
-    haptic('success');
-  } else audio.stinger('defeat');
+  if (victory) haptic('success');
+  // The stinger is the director's (it rang when the run ended, a second one here would repeat it). The page only brings
+  // the home track in quietly once that has died away, and hands it back at full volume when it is left.
+  const musicBase = currentSettings().music;
+  let musicOn = false;
+  bag.call(MUSIC_DELAY, () => {
+    if (!alive) return;
+    musicOn = true;
+    audio.setMusicVolume(musicBase * MUSIC_QUIET);
+    audio.music('home', 3);
+  });
   if (!motion.reduced) popIn(bag, title, { from: 0.2, duration: 0.4, overshoot: 2.5 });
 
   // ── settle the run with the meta layer ──
@@ -420,6 +520,16 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       alive = false;
       release();
       bag.killAll();
+      if (musicOn) {
+        // The home scene asks for the same track, which then simply goes on; its volume comes up instead of jumping.
+        const from = musicBase * MUSIC_QUIET;
+        uiTweens.run({
+          duration: 1.2,
+          ease: Ease.quadOut,
+          onUpdate: (k) => audio.setMusicVolume(from + (musicBase - from) * k),
+          onComplete: () => audio.setMusicVolume(musicBase),
+        });
+      }
       scaffold.destroy({ children: true });
     },
   };

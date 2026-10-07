@@ -12,6 +12,7 @@ import {
   backOut, bindPress, ButtonPalettes, cacheStatic, Color, drawDashedLine, drawIcon, edgeTone, fitLabel, motion, Panel, paperSeed,
   TweenBag, uiLabel, type ButtonStyleId, type PressBinding, type TapeName,
 } from '@/ui';
+import { stampThud } from '../system/kit/marks';
 import { couponPath, cutPoly, lowered, type CouponCut } from './cutMath';
 
 /* ---------------------------------------------------------------- titled page */
@@ -111,6 +112,7 @@ export function stampMark(text: string, o: StampOpts = {}): Container {
 export function stampIn(bag: TweenBag, stamp: Container, delay = 0, onLand?: () => void): void {
   const tilt = stamp.rotation;
   if (motion.reduced) {
+    stampThud();
     onLand?.();
     return;
   }
@@ -127,6 +129,7 @@ export function stampIn(bag: TweenBag, stamp: Container, delay = 0, onLand?: () 
     },
     onComplete: () => {
       stamp.rotation = tilt;
+      stampThud();
       onLand?.();
       bag.run({
         duration: 0.22,

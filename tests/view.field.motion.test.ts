@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACK_SECONDS, attackPose, breathe, deathScale, hopArc, makePose, stepRate, walkBob, walkTilt } from '@/view/field/motion';
+import { ATTACK_SECONDS, attackPose, breathe, coilPose, deathScale, hopArc, makePose, stepRate, walkBob, walkTilt, windStart } from '@/view/field/motion';
+import { MERGE_SECONDS, REVEAL_DELAY, REVEAL_MS, REVEAL_OVERSHOOT, SLIDE_SECONDS } from '@/view/timing';
 import { Color, TapeColors } from '@/ui/theme';
 import { DEFAULT_RUG, RUG_SKINS, cellPaper, rugSkin, type RugPattern } from '@/view/field/rugSkins';
 
@@ -111,5 +112,38 @@ describe('rug skins', () => {
     expect(d.paper).toBe(Color.paper);
     expect(d.pattern).toBe('plain');
     expect(d.dash).toBe(Color.teal);
+  });
+});
+
+describe('attack anticipation', () => {
+  it('a cat coiled to any degree continues into the attack without a jump', () => {
+    for (const coil of [0, 0.3, 0.6, 1]) {
+      const a = coilPose(coil, makePose());
+      const b = attackPose(Math.max(1e-6, windStart(coil)), makePose());
+      expect(b.sx).toBeCloseTo(a.sx, 3);
+      expect(b.sy).toBeCloseTo(a.sy, 3);
+      expect(b.lunge).toBeCloseTo(a.lunge, 3);
+    }
+  });
+
+  it('a fully coiled cat starts at the strike and the start never passes it', () => {
+    expect(windStart(0)).toBe(0);
+    expect(windStart(1)).toBeLessThan(0.26 + 1e-9);
+    expect(windStart(0.4)).toBeLessThan(windStart(0.8));
+  });
+});
+
+describe('sticker timing', () => {
+  it('each rank reveals later, springs further and settles slower than the one below', () => {
+    for (let i = 1; i < REVEAL_DELAY.length; i++) {
+      expect(REVEAL_DELAY[i]).toBeGreaterThan(REVEAL_DELAY[i - 1] as number);
+      expect(REVEAL_OVERSHOOT[i]).toBeGreaterThan(REVEAL_OVERSHOOT[i - 1] as number);
+      expect(REVEAL_MS[i]).toBeGreaterThan(REVEAL_MS[i - 1] as number);
+    }
+  });
+
+  it('a hop and a merge are short enough never to hold the board up', () => {
+    expect(SLIDE_SECONDS).toBeLessThan(0.25);
+    expect(MERGE_SECONDS).toBeLessThan(0.25);
   });
 });

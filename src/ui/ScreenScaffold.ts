@@ -5,7 +5,7 @@ import { backGesture } from './backGesture';
 import { IconButton } from './IconButton';
 import { boxOf } from './layout';
 import { scaffoldLayout, type SafeRect } from './layoutMath';
-import { motion, TweenBag } from './motion';
+import { backOut, motion, TweenBag } from './motion';
 import { popups } from './Popup';
 import { ScrollView } from './ScrollView';
 import { drawFloor, drawPaper, PaperLabel, paperSeed } from './paper';
@@ -31,6 +31,9 @@ export interface ScreenScaffoldOpts {
 
 const BACK_SIZE = 72;
 const SIDE = 24;
+/** How far the body rises (and the header drops) while the page settles in. */
+const RISE = 36;
+const DROP = 14;
 const live: ScreenScaffold[] = [];
 let keyBound = false;
 
@@ -184,34 +187,39 @@ export class ScreenScaffold extends Container {
     this.scroller?.refresh();
   }
 
-  /** Screen change in: content cross-fades while rising 24 px (160 ms). Resolves when settled. */
+  /** Page resting state: nothing faded, nothing offset. */
+  private rest(): void {
+    this.main.y = 0;
+    this.main.alpha = 1;
+    this.titleLayer.y = 0;
+    this.titleLayer.alpha = 1;
+    this.bgG.alpha = 1;
+  }
+
+  /** Screen change in: the sheet rises into place and settles (260 ms), the floor and header fade in with it. Resolves when settled. */
   show(animate = true): Promise<void> {
     this.visible = true;
     this.syncBack();
-    this.main.y = 0;
-    this.main.alpha = 1;
-    this.titleLayer.alpha = 1;
+    this.rest();
     if (!animate || motion.reduced) return Promise.resolve();
-    this.main.alpha = 0;
-    this.main.y = 24;
-    this.titleLayer.alpha = 0;
+    const settle = backOut(1.5);
     return this.bag.runKeyed(this.main, {
-      duration: 0.16,
-      ease: Ease.cubicOut,
+      duration: 0.26,
+      ease: Ease.linear,
       onUpdate: (k) => {
-        this.main.alpha = k;
-        this.main.y = 24 * (1 - k);
-        this.titleLayer.alpha = k;
+        const a = Math.min(1, k * 3.5);
+        const e = settle(k);
+        this.bgG.alpha = a;
+        this.main.alpha = a;
+        this.titleLayer.alpha = a;
+        this.main.y = RISE * (1 - e);
+        this.titleLayer.y = -DROP * (1 - e);
       },
-      onComplete: () => {
-        this.main.alpha = 1;
-        this.main.y = 0;
-        this.titleLayer.alpha = 1;
-      },
+      onComplete: () => this.rest(),
     }).finished;
   }
 
-  /** Screen change out (120 ms fade); the caller destroys or removes the scaffold afterwards. */
+  /** Screen change out (140 ms): the page sinks a little as everything fades; the caller destroys or removes the scaffold afterwards. */
   hide(animate = true): Promise<void> {
     if (!animate || motion.reduced) {
       this.visible = false;
@@ -219,13 +227,17 @@ export class ScreenScaffold extends Container {
       return Promise.resolve();
     }
     return this.bag.runKeyed(this.main, {
-      duration: 0.12,
+      duration: 0.14,
       ease: Ease.cubicIn,
       onUpdate: (k) => {
-        this.main.alpha = 1 - k;
-        this.titleLayer.alpha = 1 - k;
+        const a = 1 - k;
+        this.bgG.alpha = a;
+        this.main.alpha = a;
+        this.titleLayer.alpha = a;
+        this.main.y = RISE * 0.4 * k;
       },
       onComplete: () => {
+        this.rest();
         this.visible = false;
         this.syncBack();
       },

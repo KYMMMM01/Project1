@@ -37,11 +37,12 @@ export class SummonButton extends Container {
       tape: 'pink',
       fireOnDown: true,
       haptic: 'medium',
-      sfx: 'ui_click',
     });
     this.addChild(this.btn);
     this.btn.onTap(() => {
       this.lastOk = this.press();
+      // The click belongs to a summon that happened: a refusal answers with the error sound alone.
+      if (this.lastOk) audio.play('ui_click');
     });
     // The Button's own pointerdown (registered first) has already fired the summon by now.
     this.btn.on('pointerdown', () => {

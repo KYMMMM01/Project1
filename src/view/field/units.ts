@@ -6,15 +6,15 @@ import { Color } from '@/ui';
 import { hitFlash, shakeObject, squash } from '@/fx';
 import type { BattleEvents, UnitState } from '@/game/api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
+import { unitRarityIndex } from '@/game';
 import type { FieldEnv } from './env';
+import { MERGE_SECONDS, QUICK_REVEAL_WINDOW, REVEAL_DELAY, REVEAL_MS, REVEAL_OVERSHOOT, SLIDE_SECONDS } from '@/view/timing';
 import { hopArc } from './motion';
 import { liftsAboveHud } from './policy';
 import { UnitView, type ExitMode } from './unitView';
 
 /** A recycled view rests this long before reuse, so a juice tween that is still finishing cannot touch its next owner. */
 const COOLDOWN = 0.45;
-const MERGE_FLIGHT = 0.12;
-const SLIDE = 0.16;
 
 /** How long the field keeps an awakened unit's old view and hides the new one, waiting for the director's cut-in to take over. */
 const AWAKEN_OLD_HOLD = 0.9;
@@ -35,6 +35,8 @@ export class UnitViews {
   private readonly pool: Pool<UnitView>;
   private readonly offs: Array<() => void> = [];
   private frame = 0;
+  /** When the last legendary-or-better cat appeared: a second one soon after gets the short reveal, like its effect. */
+  private lastBig = -99;
 
   constructor(
     private readonly env: FieldEnv,
@@ -113,7 +115,13 @@ export class UnitViews {
     this.layer.addChild(v.root);
     this.byUid.set(u.uid, v);
     this.live.push(v);
-    if (mode === 'pop') v.appear(this.env.ctx.tweens, 1.7, 260);
+    if (mode === 'pop') {
+      const tier = unitRarityIndex(u.id);
+      const quick = tier >= 3 && this.env.time - this.lastBig < QUICK_REVEAL_WINDOW;
+      if (tier >= 3) this.lastBig = this.env.time;
+      const delay = quick ? (REVEAL_DELAY[2] ?? 0) : (REVEAL_DELAY[tier] ?? 0);
+      v.appear(this.env.ctx.ui, REVEAL_OVERSHOOT[tier] ?? 1.7, REVEAL_MS[tier] ?? 260, delay);
+    }
     else v.root.visible = false;
     return v;
   }
@@ -135,7 +143,7 @@ export class UnitViews {
     v.swirl?.stop();
     v.swirl = null;
     const token = v.token;
-    this.env.ctx.tweens.run({
+    this.env.ctx.ui.run({
       duration: seconds,
       ease: mode === 'fly' ? Ease.cubicIn : Ease.quadIn,
       onUpdate: (k) => {
@@ -156,13 +164,13 @@ export class UnitViews {
     }
     v.retire();
     v.root.parent?.removeChild(v.root);
-    this.env.ctx.tweens.call(COOLDOWN, () => this.pool.release(v));
+    this.env.ctx.ui.call(COOLDOWN, () => this.pool.release(v));
   }
 
   private reveal(v: UnitView, overshoot: number, ms: number, flash: boolean): void {
     v.awaiting = false;
-    v.appear(this.env.ctx.tweens, overshoot, ms);
-    if (flash) hitFlash(this.env.ctx.tweens, v.sprite, { ms: 60, peak: 0.85 });
+    v.appear(this.env.ctx.ui, overshoot, ms);
+    if (flash) hitFlash(this.env.ctx.ui, v.sprite, { ms: 60, peak: 0.85 });
   }
 
   /** An awakened unit is revealed by the director; if nobody did it in time the field does. */
@@ -192,9 +200,9 @@ export class UnitViews {
     const ox = v.offX;
     const oy = v.offY;
     const token = v.token;
-    const tweens = this.env.ctx.tweens;
+    const tweens = this.env.ctx.ui;
     v.moveTween = tweens.run({
-      duration: SLIDE,
+      duration: SLIDE_SECONDS,
       ease: Ease.cubicOut,
       onUpdate: (k) => {
         if (v.token !== token) return;
@@ -232,10 +240,10 @@ export class UnitViews {
       flying.exitFromY = flying.y;
       flying.exitToX = result.homeX(e.cell);
       flying.exitToY = result.homeY(e.cell);
-      this.startExit(flying, 'fly', MERGE_FLIGHT);
+      this.startExit(flying, 'fly', MERGE_SECONDS);
     }
-    if (target) this.startExit(target, 'hold', MERGE_FLIGHT);
-    ctx.tweens.call(MERGE_FLIGHT, () => {
+    if (target) this.startExit(target, 'hold', MERGE_SECONDS);
+    ctx.ui.call(MERGE_SECONDS, () => {
       if (result.token === token) this.reveal(result, 2.1, 260, true);
     });
   }
@@ -245,7 +253,7 @@ export class UnitViews {
     const result = this.create(e.result, 'hidden');
     const token = result.token;
     if (old) this.startExit(old, 'spin', 0.24);
-    this.env.ctx.tweens.call(0.22, () => {
+    this.env.ctx.ui.call(0.22, () => {
       if (result.token === token) this.reveal(result, 2.0, 300, false);
     });
   }
@@ -269,7 +277,7 @@ export class UnitViews {
   refuse(cell: number): void {
     const v = this.atCell(cell);
     if (!v) return;
-    const { tweens } = this.env.ctx;
+    const tweens = this.env.ctx.ui;
     shakeObject(tweens, v.body, 6, 180);
     hitFlash(tweens, v.sprite, { ms: 120, color: Color.berry, peak: 0.55 });
     audio.play('ui_error', { volume: 0.5 });
@@ -293,7 +301,7 @@ export class UnitViews {
     const ox = v.offX;
     const oy = v.offY;
     const token = v.token;
-    const tweens = this.env.ctx.tweens;
+    const tweens = this.env.ctx.ui;
     v.moveTween?.kill();
     v.moveTween = tweens.run({
       duration: 0.2,

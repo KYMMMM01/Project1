@@ -119,6 +119,14 @@ export class HomeScene extends Scene implements HomeSurface {
     return this.topBar.iconPosition(kind);
   }
 
+  pending(kind: CurrencyKind, amount: number, seconds?: number): void {
+    this.topBar.pending(kind, amount, seconds);
+  }
+
+  landed(kind: CurrencyKind): void {
+    this.topBar.landed(kind);
+  }
+
   refresh(animate = true): void {
     this.topBar.sync(animate);
     this.syncBadges();

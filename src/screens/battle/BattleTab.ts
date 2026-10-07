@@ -1,5 +1,4 @@
 import { Container } from 'pixi.js';
-import { audio } from '@/audio';
 import { t } from '@/core/i18n';
 import { featureHint, profile, type FeatureId } from '@/meta';
 import { Button, ScrollView, TweenBag, toast } from '@/ui';
@@ -88,7 +87,6 @@ export class BattleTab implements TabScreen {
     this.start.onTap(() => this.go());
     this.start.onDisabledTap(() => {
       toast(t('battle.chapter.locked'), 'info');
-      audio.play('ui_error');
     });
     this.bobber.addChild(this.start);
     this.startSlot.addChild(this.bobber);
@@ -122,11 +120,11 @@ export class BattleTab implements TabScreen {
       this.applySelection(selectionAfterRun(profile.data.cleared, last, this.chapter.selection), true);
     }
     this.syncAll();
-    startBob(this.bag, this.bobber);
+    startBob(this.bag, this.bobber, this.start);
   }
 
   hide(): void {
-    stopBob(this.bag, this.bobber);
+    stopBob(this.bag, this.bobber, this.start);
   }
 
   resize(area: ContentArea): void {

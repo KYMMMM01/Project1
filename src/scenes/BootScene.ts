@@ -70,7 +70,8 @@ export class BootScene extends Scene {
           setTimeout(tryGo, 16);
           return;
         }
-        void scenes.goto(next, services ? 'none' : 'fade').then(() => {
+        // With a title moment the splash is long gone, so the art leaves through the fade cover; the splash itself needs none.
+        void scenes.goto(next, services && this.titleMs <= 0 ? 'none' : 'fade').then(() => {
           if (services && this.titleMs <= 0) hideSplash();
           onShown?.();
         });

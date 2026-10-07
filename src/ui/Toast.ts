@@ -7,6 +7,7 @@ import { Ease } from '@/core/tween';
 import { drawIcon, type IconName } from './icons';
 import { backOut, motion, TweenBag } from './motion';
 import { drawPaper, paperSeed, tapeStrip } from './paper';
+import { justRefused } from './press';
 import { cacheStatic } from './shapes';
 import './strings';
 import { uiLabel } from './text';
@@ -117,7 +118,8 @@ class ToastManager {
     game.overlayLayer.addChild(view);
     const y = game.safeTop + REST_Y;
     view.x = game.w / 2;
-    audio.play(item.kind === 'error' || item.kind === 'warning' ? 'ui_error' : 'ui_tab', { volume: 0.6 });
+    // A refused tap has already played its own error cue; a second one on top would double it.
+    if (!justRefused()) audio.play(item.kind === 'error' || item.kind === 'warning' ? 'ui_error' : 'ui_tab', { volume: 0.6 });
 
     if (motion.reduced) {
       view.y = y;

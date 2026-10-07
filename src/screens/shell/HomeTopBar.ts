@@ -1,9 +1,9 @@
-import { Container, Point } from 'pixi.js';
+import { Container, Point, type DestroyOptions } from 'pixi.js';
 import { DESIGN_W, game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { fmt } from '@/core/format';
 import { profile, accountProgress } from '@/meta';
-import { CurrencyPill, IconButton, ProgressBar } from '@/ui';
+import { CurrencyPill, IconButton, ProgressBar, TweenBag, motion } from '@/ui';
 import type { CurrencyKind } from '../contract';
 import { TOP_PAD_TOP, TOP_PILL_H, TOP_ROW_GAP, TOP_ROW_H, pillRow } from './layoutMath';
 import { BADGE_R, LevelBadge } from './LevelBadge';
@@ -15,6 +15,8 @@ const PILL_GAP = 33;
 const BADGE_SLOT = BADGE_R * 2 + 12;
 const SETTINGS_SLOT = 88;
 const KINDS: readonly CurrencyKind[] = ['gold', 'gems', 'tickets'];
+/** How long a pill keeps its old amount when a flight was announced and nothing lands. */
+const PENDING_MAX = 2.5;
 const ICON = { gold: 'coin', gems: 'gem', tickets: 'ticket' } as const;
 /** The design width never changes, so the XP bar is built once at the width the row leaves free. */
 const XP_BAR_W = DESIGN_W - SIDE * 2 - BADGE_SLOT - SETTINGS_SLOT - 32;
@@ -34,6 +36,12 @@ export class HomeTopBar extends Container {
   private readonly badge = new LevelBadge();
   private readonly xpBar = new ProgressBar({ width: XP_BAR_W, height: 40, color: 'blue', label: '' });
   private readonly settingsBtn = new IconButton({ icon: 'settings', style: 'neutral', size: 80 });
+  /** Currency already in the profile that is still on its way to the pill (a flight in the air). */
+  private readonly deferred: Record<CurrencyKind, number> = { gold: 0, gems: 0, tickets: 0 };
+  private readonly bag = new TweenBag();
+  private level = -1;
+  /** A level-up is running toward this bar fraction; the same state arriving again must not restart it. */
+  private rising: number | null = null;
 
   constructor(handlers: TopBarHandlers) {
     super();
@@ -68,13 +76,59 @@ export class HomeTopBar extends Container {
   /** Read the profile: currencies roll to the new amounts, the level sticker and XP bar follow. */
   sync(animate = true): void {
     const d = profile.data;
-    this.pills.gold.setAmount(d.gold, animate);
-    this.pills.gems.setAmount(d.gems, animate);
-    this.pills.tickets.setAmount(d.tickets, animate);
+    for (const k of KINDS) this.pills[k].setAmount(Math.max(0, d[k] - this.deferred[k]), animate);
     const p = accountProgress(d.accountXp);
     this.badge.set(p.level, p.into, p.need, animate);
-    this.xpBar.setValue(p.need > 0 ? p.into / p.need : 0, animate);
-    this.xpBar.setLabel(t('shell.xp', { a: fmt(p.into), b: fmt(p.need) }));
+    const fraction = p.need > 0 ? p.into / p.need : 0;
+    const label = t('shell.xp', { a: fmt(p.into), b: fmt(p.need) });
+    if (this.rising === fraction && p.level === this.level) return;
+    const leveled = this.level >= 0 && p.level > this.level;
+    this.level = p.level;
+    this.rising = null;
+    this.bag.killKeyed(this.xpBar);
+    if (leveled && animate && !motion.reduced) {
+      // Like the badge ring: fill to the brim, then the next level's bar starts again from empty.
+      const wait = Math.min(0.55, 0.22 + (1 - this.xpBar.value) * 0.5);
+      this.rising = fraction;
+      this.xpBar.setValue(1);
+      this.bag.runKeyed(this.xpBar, {
+        duration: wait,
+        onComplete: () => {
+          this.xpBar.setValue(0, false);
+          this.xpBar.setLabel(label);
+          this.xpBar.setValue(fraction);
+          this.rising = null;
+        },
+      });
+      return;
+    }
+    this.xpBar.setValue(fraction, animate);
+    this.xpBar.setLabel(label);
+  }
+
+  override destroy(options?: DestroyOptions): void {
+    this.bag.killAll();
+    super.destroy(options);
+  }
+
+  /** A flight of `amount` is on its way: the pill goes back to what it showed before, and counts up when the first icon lands. */
+  pending(kind: CurrencyKind, amount: number, seconds = PENDING_MAX): void {
+    if (motion.reduced || amount <= 0) return;
+    this.deferred[kind] += amount;
+    this.pills[kind].setAmount(Math.max(0, profile.data[kind] - this.deferred[kind]), false);
+    this.bag.call(seconds, () => this.release(kind));
+  }
+
+  /** A flying icon reached `kind`'s pill: the icon bumps; the first of a flight also starts the number rolling to the new amount. */
+  landed(kind: CurrencyKind): void {
+    this.pills[kind].punchIcon();
+    this.release(kind);
+  }
+
+  private release(kind: CurrencyKind): void {
+    if (this.deferred[kind] === 0) return;
+    this.deferred[kind] = 0;
+    this.sync(true);
   }
 
   /** Centre of a currency icon in this bar's parent space (scene space). */

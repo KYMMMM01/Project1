@@ -93,3 +93,13 @@ See `battle.md` for the report-by-report list. HUD side: `HintBubble.ts` + `bubb
 ## 2026-10-07 finishing pass
 
 - **Countdown bar**: the "3초" / wave seconds text is the bar's own label now (`ProgressBar` with `labelSize: 24`, `setLabel` when the text changes); the separate overlay `Text` in `TopBar` is gone.
+
+## 2026-10-07 motion review
+
+Full table in `director.md`. HUD side:
+
+- `CurrencyRow.ts`: the shown number pays each flying icon's share when the icon lands (`landings`, `src/view/landings.ts`), for every gain the director flies (everything but `start`); 3 s fallback, a capped flight pays at once.
+- `SelectionSheet.ts`: slides in with a small settle (`backOut(1.3)`, 0.26 s), slides down and fades in 0.16 s on leaving, no taps on a leaving sheet.
+- `SummonButton.ts`: the click sound only for a summon that happened, a refusal answers with the error sound alone.
+- `HintBubble.ts`: 0.1 s shrink and fade on leaving.
+- `ResultScreen.ts`: the page is laid down in order (title, sheet 0.3 s, photo slapped on 0.6 s with the `place` sound on the landing frame, six rows 0.08 s apart, luck and seed lines); no second stinger (the director's rang when the run ended); the home track comes in 1.4 s after the page opens at 45 % of the player's music volume, and leaving ramps the volume back over 1.2 s (the home scene's `audio.music('home')` then simply goes on).

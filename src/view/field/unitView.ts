@@ -6,9 +6,10 @@ import { popIn, type ZoneHandle } from '@/fx';
 import { cellCenterX, cellCenterY, cellCol } from '@/game/geometry';
 import { unitClass, unitRarity } from '@/game';
 import type { UnitId, UnitState } from '@/game/api';
-import { Color, type RarityId } from '@/ui';
+import { Color, backOut, type RarityId } from '@/ui';
 import type { FieldArt } from './art';
-import { ATTACK_SECONDS, attackPose, breathe, makePose } from './motion';
+import { ANTICIPATION_SECONDS } from '@/view/timing';
+import { ATTACK_SECONDS, attackPose, breathe, coilPose, makePose, windStart } from './motion';
 import { unitTint } from './policy';
 
 /** Where a unit's feet stand relative to its cell centre: the sprite reaches up from here. */
@@ -82,6 +83,10 @@ export class UnitView {
   private dirX = 1;
   private dirY = 0;
   private attackK = -1;
+  /** Progress the running attack started from (a cat already coiled skips the wind-up it has shown). */
+  private attackK0 = 0;
+  /** 0..1 how far the cat has coiled for the shot that its charge is about to release. */
+  private coil = 0;
   private attackTween: Tween | null = null;
   private readonly attackOpts: TweenOpts;
   private blocked = 0;
@@ -119,7 +124,7 @@ export class UnitView {
       duration: ATTACK_SECONDS,
       ease: Ease.linear,
       onUpdate: (k) => {
-        this.attackK = k;
+        this.attackK = this.attackK0 + (1 - this.attackK0) * k;
       },
       onComplete: () => {
         this.attackK = -1;
@@ -159,6 +164,7 @@ export class UnitView {
     this.exit = 'none';
     this.exitK = 0;
     this.attackK = -1;
+    this.coil = 0;
     this.blocked = this.weak = this.sun = this.shield = this.press = this.lift = this.select = this.lean = 0;
     this.pressed = false;
     this.awaiting = false;
@@ -169,6 +175,8 @@ export class UnitView {
     this.sprite.alpha = 1;
     this.dome.alpha = 0;
     this.noAct.alpha = 0;
+    this.badge.scale.set(1);
+    this.badge.alpha = 1;
     this.root.alpha = 1;
     this.root.scale.set(1);
     this.root.visible = true;
@@ -201,7 +209,12 @@ export class UnitView {
       this.dirY = dy / len;
     }
     if (Math.abs(dx) > 6) this.facingTarget = dx > 0 ? 1 : -1;
-    this.attackK = 0;
+    // The release sits on the strike: the cat has been coiling since its charge neared full, and one that was not
+    // (a shot fired the instant an enemy walked in) still skips most of the wind-up so the lunge is not late.
+    this.attackK0 = windStart(Math.max(this.coil, 0.6));
+    this.attackK = this.attackK0;
+    this.attackOpts.duration = ATTACK_SECONDS * (1 - this.attackK0);
+    this.coil = 0;
     this.attackTween = tweens.run(this.attackOpts);
   }
 
@@ -217,6 +230,10 @@ export class UnitView {
       this.weak = damp(this.weak, unit.weakened > 0 ? 1 : 0, 0.1, dt);
       this.sun = damp(this.sun, unit.sunlit ? 1 : 0, 0.25, dt);
       this.shield = damp(this.shield, unit.shielded ? 1 : 0, 0.15, dt);
+      // The last stretch of the charge coils the cat back; a cat held at full charge waiting for a target stays relaxed.
+      const lead = ANTICIPATION_SECONDS / Math.max(0.2, unit.stats.interval);
+      const wait = 1 - unit.charge;
+      this.coil = wait > 0 && wait < lead ? 1 - wait / lead : 0;
     }
     this.press = damp(this.press, this.pressed ? 1 : 0, 0.03, dt);
     this.lift = damp(this.lift, this.dragging ? 1 : 0, 0.04, dt);
@@ -250,6 +267,7 @@ export class UnitView {
     // Pose.
     const pose = this.pose;
     if (this.attackK >= 0) attackPose(this.attackK, pose);
+    else if (this.coil > 0) coilPose(this.coil, pose);
     else breathe(time, this.phase, 1 - 0.5 * this.weak, pose);
     let k = (1 - 0.06 * this.press) * (1 + 0.12 * this.lift) * (1 + 0.022 * this.select * Math.sin(time * 7));
     // A lifted sticker tilts the way it is being pulled and leans a little to one side.
@@ -304,24 +322,55 @@ export class UnitView {
     this.shadow.position.y = 1 + 5 * this.lift;
   }
 
-  /** Pop in: the cat scales up with a back-out while its base and shadow grow in underneath. */
-  appear(tweens: Tweener, overshoot: number, ms: number): void {
-    this.root.visible = true;
-    popIn(tweens, this.body, { ms, overshoot });
-    this.deco.alpha = 0;
-    this.deco.scale.set(0.5);
-    tweens.run({
-      duration: (ms / 1000) * 0.8,
-      ease: Ease.backOut,
-      onUpdate: (k) => {
-        this.deco.scale.set(0.5 + 0.5 * k);
-        this.deco.alpha = clamp01(k * 1.6);
-      },
-      onComplete: () => {
-        this.deco.scale.set(1);
-        this.deco.alpha = 1;
-      },
-    });
+  /**
+   * Pop in: the cat scales up with a back-out while its base and shadow grow in underneath and the class
+   * sticker is slapped on a beat later. With a `delay` nothing shows until it is over (a summon charges on an
+   * empty cell first).
+   */
+  appear(tweens: Tweener, overshoot: number, ms: number, delay = 0): void {
+    const token = this.token;
+    const show = (): void => {
+      if (token !== this.token) return;
+      this.root.visible = true;
+      popIn(tweens, this.body, { ms, overshoot });
+      this.deco.alpha = 0;
+      this.deco.scale.set(0.5);
+      tweens.run({
+        duration: (ms / 1000) * 0.8,
+        ease: Ease.backOut,
+        onUpdate: (k) => {
+          this.deco.scale.set(0.5 + 0.5 * k);
+          this.deco.alpha = clamp01(k * 1.6);
+        },
+        onComplete: () => {
+          this.deco.scale.set(1);
+          this.deco.alpha = 1;
+        },
+      });
+      this.badge.scale.set(0);
+      this.badge.alpha = 0;
+      tweens.run({
+        duration: 0.2,
+        delay: (ms / 1000) * 0.3,
+        ease: backOut(2.4),
+        onUpdate: (k) => {
+          if (token !== this.token) return;
+          this.badge.scale.set(Math.max(0, k));
+          this.badge.alpha = clamp01(k * 3);
+        },
+        onComplete: () => {
+          if (token !== this.token) return;
+          this.badge.scale.set(1);
+          this.badge.alpha = 1;
+        },
+      });
+    };
+    if (delay > 0) {
+      this.root.visible = false;
+      tweens.call(delay, show);
+    } else {
+      show();
+    }
   }
 
   /** Take everything off screen; the view is about to be pooled. */

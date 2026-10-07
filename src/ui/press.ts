@@ -1,4 +1,5 @@
 import type { Container } from 'pixi.js';
+import { game } from '@/core/game';
 
 /**
  * Tracks the one control that is currently held down. A ScrollView calls cancelActivePress() the
@@ -16,6 +17,17 @@ export function setActivePress(p: Pressable | null): void {
 
 export function clearActivePress(p: Pressable): void {
   if (active === p) active = null;
+}
+
+let refusedAt = -1;
+
+/** A control just said "no" with its own cue; an explanation opened by the same tap (a toast) stays quiet. */
+export function noteRefusal(): void {
+  refusedAt = game.time;
+}
+
+export function justRefused(): boolean {
+  return game.time - refusedAt < 0.12;
 }
 
 export function cancelActivePress(): void {

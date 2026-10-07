@@ -6,6 +6,7 @@ import { haptic } from '@/core/haptics';
 import { flyIconCount, flyTo, type FlyEnd } from '@/fx';
 import type { BundlePart } from '@/meta';
 import { drawIcon } from '@/ui';
+import { flightTuning, originX } from '../shell/flight';
 import type { CurrencyKind, Shell } from '../contract';
 
 const FLY_SIZE = 56;
@@ -43,13 +44,19 @@ export function playClaim(origin: FlyEnd, parts: readonly BundlePart[], shell: S
     if (part.kind === 'gold') sound = 'coin_many';
     else if (part.kind === 'gems' && sound !== 'coin_many') sound = 'gem';
     const kind = part.kind;
+    shell.pending(kind, part.n);
+    const to = shell.currencyAnchor(kind);
     flyTo({
       from: origin,
-      to: shell.currencyAnchor(kind),
+      to,
+      ...flightTuning(originX(origin), to.x),
       count: iconCountFor(part.n),
       size: FLY_SIZE,
       ...flightArt(kind),
-      onArrive: (i) => audio.playStep(kind === 'gold' ? 'coin' : 'gem', Math.min(i, 6), { volume: 0.5 }),
+      onArrive: (i) => {
+        audio.playStep(kind === 'gold' ? 'coin' : 'gem', Math.min(i, 6), { volume: 0.5 });
+        shell.landed(kind);
+      },
       onDone: () => shell.refresh(),
     });
   }

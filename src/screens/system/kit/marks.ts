@@ -1,7 +1,19 @@
 /** Things inked onto paper when something is done: a hand-drawn check in a box, and a rubber stamp. */
 import { Container, Graphics, type DestroyOptions } from 'pixi.js';
+import { audio } from '@/audio';
+import { game } from '@/core/game';
 import { Ease } from '@/core/tween';
 import { Color, drawDashedRect, drawIcon, drawPaper, motion, paperSeed, TweenBag, uiLabel } from '@/ui';
+
+/** A stamp landing is a soft knock. Several land in one moment (a claim-all, a whole calendar page): only the first is heard. */
+const THUD_GAP = 0.09;
+let lastThud = -1;
+
+export function stampThud(): void {
+  if (game.time - lastThud < THUD_GAP) return;
+  lastThud = game.time;
+  audio.play('place', { volume: 0.45 });
+}
 
 /** The little paper square of a to-do line; a pen-drawn check appears in it when the line is done. Origin = centre. */
 export class CheckBox extends Container {
@@ -112,8 +124,11 @@ export class StampMark extends Container {
     if (motion.reduced) {
       this.scale.set(1);
       this.alpha = 1;
+      stampThud();
       return;
     }
+    // The knock is heard on the frame the stamp meets the paper (53 % of the fall below).
+    this.bag.call(0.3 * 0.53, stampThud);
     this.scale.set(1.9);
     this.alpha = 0;
     this.bag.run({

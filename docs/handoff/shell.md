@@ -114,3 +114,32 @@ Rejected: none. Forwarded: see REQUESTS.
 
   Set them where the build runs, e.g. `VITE_PRIVACY_URL=https://example.com/privacy VITE_TERMS_URL=https://example.com/terms VITE_SUPPORT_URL=mailto:help@example.com npm run build` (or in `.env.production`). Web pages open in a new tab with `noopener,noreferrer` (the platform layer has no link opener; if a channel needs one, change `openLegalLink` only); a `mailto:` goes to the mail app. The keys are typed in `src/vite-env.d.ts`; the pure part (which rows show) is tested in `tests/screens.system.links.test.ts`.
 - **Piggy bank line** in the shop reads `tn('meta.piggy.free', days, ...)`, so English says "After 1 day".
+
+## 2026-10-07 motion review
+
+Stepped frame by frame at full motion (method and tools in `docs/handoff/ui.md`, "2026-10-07 motion review"; strips in the session scratchpad `shots/<folder>/`).
+
+| Moment | Strip | Before | Change | After |
+|---|---|---|---|---|
+| CSS splash to title | `title/strip_title`, `title2/strip_logo` | The splash card fades out in 0.35 s (CSS opacity) under the key art: fine. The logo's first play could not be caught (see below); a replay shows the plate dropping with a back ease and the paw popping and waving: right | none | same |
+| Title into the first scene | `title2/strip_logo` | Hard cut: the key art was replaced by the home scene in one frame (`goto(..., 'none')`, meant for the splash that covers it) | with a title moment the hand-over goes through the fade cover (0.2 s out, 0.25 s in) | art dips out, home fades in |
+| Iris into and out of a battle | `iris/strip_iris` | Broken: the cover is a rectangle with a round hole, and a hole larger than the rectangle does not triangulate, so for the first 60 % of the close and the last 55 % of the open the whole screen was solid dark and the circle only appeared at the very end (`core/scene.ts`) | the cover is a stroked ring wide enough to reach every corner, no hole | the circle sweeps in and out; 0.38 s cubic-in close, 0.45 s cubic-out open |
+| Level sticker and XP ring on a level-up | `v_level/strip_lv` | The ring and the bar unwound backwards (78 % to 25 %) and the number changed at once | both fill to the brim together, the sticker takes the new number with its punch, the next level starts from empty; a second refresh during the sequence no longer cuts it (`LevelBadge`, `HomeTopBar`) | one continuous fill |
+| Currency pill receiving flying coins | `v_fly/strip_fly`, `v_land/strip_land` | The number rolled the moment the reward was granted, 0.8 s before the first coin arrived, and the icon only punched once after the last | `Shell.pending(kind, n)` puts the pill back to its old amount while a flight is on its way, `Shell.landed(kind)` bumps the icon per coin and starts the roll at the first one (claims on the battle tab, missions, calendar, reward sheet; the sheet holds the pills back for as long as it is open) | coins land, icon bumps, number rolls (2만 to 2.08만 in `strip_land`) |
+| Chapter card previous / next | `h_chapter/strip_chap` | New photo slides in 70 px while the old slides out, cubic ease, labels cross-fade: reads well | none | same |
+| Butler level tag, rule bubble | `h_chapter/strip_tagp`, `v_bob/strip_tag2` | Tail jumped to the new tag and the rule text swapped in one frame | tail glides with a small overshoot (0.22 s) and the new rule slides up 10 px while fading in | follows the pick |
+| START idle bob and press | `h_start/strip_bob`, `v_bob/strip_bob2` | The whole button (shadow included) moved 7 px: no depth, barely visible | `Button.setLift`: the paper rises 9 px off its flat shadow, the shadow stays (also on the pre-run page's start button) | reads as a float |
+| START press into the pre-run page | `h_start/strip_startp` | Press fine; the page's floor popped in while the content faded | the scaffold change above | page rises and settles over the home |
+| Home cards, tab swap | `pass/strip_pass` | Cross-fade 0.2 s in (cubic-out) / 0.1 s out: fine | none | same |
+| Patrol claim | `h_cards/strip_claim` | Button turns grey at once, coins burst from it and hang: fine | burst and curve kept short beside the screen edge | same |
+| Free chest / patrol becoming ready | `h_cards/strip_ready` | The card swaps state in one frame, the button pulses three beats: fine | none | same |
+| Returning home with rewards | not captured | needs a played battle | | |
+
+### Could not capture
+
+- The first play of the logo: the splash and the title start before the page can be frozen, so the title strips show the plate already settled (a replay of `Logo.play` is in `title2`; its first three frames show the cream plate without its text, which is the replay starting from a settled state, not what a player sees).
+- Returning from a battle with rewards (the home scene counting up behind the result) and the CSS splash fade itself (not on the game clock).
+
+### REQUESTS
+
+- The result screen / `src/scenes/BattleScene.ts`: after a win the home scene is built fresh, so its pills roll from zero. A `Shell.pending(kind, amount)` call for the run's rewards before the scene change would make them roll up with the coins like the other claims.

@@ -9,13 +9,17 @@ import { ads } from '@/platform';
 import { Color, drawIcon, drawPaperFace, fitLabel, Rarity, uiLabel } from '@/ui';
 import { partArt } from './art';
 import { actionButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
-import { countPill, PriceTag, stampMark } from './paperBits';
+import { StampMark } from '../system/kit/marks';
+import { countPill, PriceTag } from './paperBits';
 
 const COLS = 3;
 const SLOT_H = 332;
 
+/** The cards seen sold the last time the block was built, to tell a purchase from a page that was already sold out. */
+let lastSold: { date: string; slots: ReadonlySet<number> } | null = null;
+
 /** One of the six daily cards: the item on a photo mat, its name, and a price tag; a bought card wears a "sold" stamp. */
-function slotCard(inner: Container, x: number, y: number, w: number, offer: ShopOffer, bought: boolean, env: BlockEnv): void {
+function slotCard(inner: Container, x: number, y: number, w: number, offer: ShopOffer, bought: boolean, justBought: boolean, env: BlockEnv): void {
   const c = subCard(inner, x, y, w, SLOT_H);
   const rar = offer.rarity ? Rarity[offer.rarity] : null;
   const mat = new Graphics();
@@ -44,11 +48,13 @@ function slotCard(inner: Container, x: number, y: number, w: number, offer: Shop
   const bw = w - 20;
   if (bought) {
     c.alpha = 0.9;
-    const stamp = stampMark(t('shop.daily.bought'), { size: 28, maxWidth: w - 16, tilt: -0.18 });
+    const stamp = new StampMark({ text: t('shop.daily.bought'), size: 28, maxWidth: w - 16, tilt: -0.18, color: Color.berryDark });
     stamp.position.set(w / 2, by - 6);
     const done = drawIcon('check', 40, Color.leafDark);
     done.position.set(w / 2, 92);
     c.addChild(done, stamp);
+    // A card sold just now gets its stamp pressed on; one that was already sold when the page was built simply wears it.
+    if (justBought) stamp.slam();
     return;
   }
   const tag =
@@ -95,11 +101,16 @@ export const dailyBlock: Block = {
     const gap = 12;
     const sw = (w - gap * (COLS - 1)) / COLS;
     const top = 116;
+    const before = lastSold !== null && lastSold.date === String(view.date) ? lastSold.slots : null;
+    const sold = new Set<number>();
     view.offers.forEach((offer, i) => {
       const col = i % COLS;
       const row = Math.floor(i / COLS);
-      slotCard(inner, PAD + col * (sw + gap), top + row * (SLOT_H + gap), sw, offer, view.bought[i] === true, env);
+      const isSold = view.bought[i] === true;
+      if (isSold) sold.add(i);
+      slotCard(inner, PAD + col * (sw + gap), top + row * (SLOT_H + gap), sw, offer, isSold, isSold && before !== null && !before.has(i), env);
     });
+    lastSold = { date: String(view.date), slots: sold };
     return { height: mountPage(root, 0, pageW, inner, top + 2 * SLOT_H + gap, opts) + GAP };
   },
 };

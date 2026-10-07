@@ -10,6 +10,7 @@ import { FlightLedger, PitchLadder, iconsFor, shareOf } from './policy';
 import type { Stage } from './stage';
 import { Hue } from '@/fx/palette';
 import { Color } from '@/ui/theme';
+import { landings } from '@/view/landings';
 
 /** A kill worth at least this much fish (elites, bosses) waits one tick for its death staging to claim it. */
 const BIG_KILL = 15;
@@ -86,7 +87,11 @@ export class CurrencyService {
     const go = (): void => {
       const ledger = this.ledgers[kind];
       const n = ledger.grant(iconsFor(reason, total));
-      if (n === 0) return;
+      if (n === 0) {
+        // Nothing could be sent (the air is full): the counter must not wait for icons that will never land.
+        landings.emit('landed', { kind, amount: total });
+        return;
+      }
       const ctx = this.stage.ctx;
       const small = reason === 'kill' || reason === 'unit' || reason === 'sell';
       const opts: FlyToOpts = {
@@ -97,7 +102,9 @@ export class CurrencyService {
         tweens: ctx.ui,
         onArrive: (i) => {
           ledger.land();
-          this.arrive(kind, shareOf(total, n, i), total);
+          const share = shareOf(total, n, i);
+          landings.emit('landed', { kind, amount: share });
+          this.arrive(kind, share, total);
         },
       };
       if (kind === 'fish') {

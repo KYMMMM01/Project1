@@ -287,7 +287,7 @@ export function openPreRun(request: StartRunRequest, handlers: PreRunHandlers): 
   go.onTap(() => void run(undefined, go));
   locks.add(go);
   scaffold.actionBar.addChild(go);
-  startBob(bag, go);
+  startBob(bag, go, go);
 
   void scaffold.show(true);
   audio.play('whoosh');

@@ -15,6 +15,8 @@ export interface HomeSurface {
   readonly area: ContentArea;
   goTab(id: TabId): void;
   currencyAnchor(kind: CurrencyKind): { x: number; y: number };
+  pending(kind: CurrencyKind, amount: number, seconds?: number): void;
+  landed(kind: CurrencyKind): void;
   refresh(): void;
 }
 
@@ -60,6 +62,14 @@ class ShellController implements Shell {
 
   currencyAnchor(kind: CurrencyKind): { x: number; y: number } {
     return this.surface?.currencyAnchor(kind) ?? { x: game.w / 2, y: game.safeTop + 60 };
+  }
+
+  pending(kind: CurrencyKind, amount: number, seconds?: number): void {
+    this.surface?.pending(kind, amount, seconds);
+  }
+
+  landed(kind: CurrencyKind): void {
+    this.surface?.landed(kind);
   }
 
   refresh(): void {

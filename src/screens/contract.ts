@@ -52,6 +52,13 @@ export interface Shell {
   goTab(id: TabId): void;
   /** Scene-space centre of a currency icon in the top bar (target for reward flights). */
   currencyAnchor(kind: CurrencyKind): { x: number; y: number };
+  /**
+   * A flight of `amount` is about to carry currency the profile already holds to `kind`'s pill: the pill keeps
+   * showing what it had until the first icon lands (or `seconds` pass, if no flight ever comes).
+   */
+  pending(kind: CurrencyKind, amount: number, seconds?: number): void;
+  /** One flying icon reached its pill: the icon bumps, and the first landing starts the number rolling to the new amount. */
+  landed(kind: CurrencyKind): void;
   /** Re-read the profile into the top bar and the tab badges (call after any claim or purchase). */
   refresh(): void;
   /** Go through the pre-run screen (snack offer) and into the battle. Resolves when the battle scene is opening. */

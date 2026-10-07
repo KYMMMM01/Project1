@@ -97,3 +97,21 @@ REQUESTS (outside my paths): (1) `src/meta` (`rollSeason` in `pass.ts`, the prof
 - **Settings, storage notice**: while `isStorageVolatile()` is true the sheet starts with a quiet kraft strip with the info icon: "Progress may not be saved in this browser mode." (`rt.sys.volatile`). The one-time toast can be missed, this stays. The screen listens to `onStorageVolatile` and rebuilds when the first lost write happens with the settings already open. Checked by making `Storage.prototype.setItem` throw and saving: the strip appeared with the screen open.
 - **Settings, About** (`rt.sys.section.about`): after the erase note, a sheet with one neutral paper button per configured link and the version line as its last row; see `docs/handoff/shell.md` for the three `VITE_*_URL` variables. With none set there is no sheet and the version line sits where it always did.
 - `npm run font` was run for the new Hangul (`rt.sys.volatile`, `rt.sys.section.about`, `rt.sys.link.*`).
+
+## 2026-10-07 motion review
+
+Stepped frame by frame at full motion (method and tools in `docs/handoff/ui.md`; strips in the session scratchpad `shots/<folder>/`).
+
+| Moment | Strip | Before | Change | After |
+|---|---|---|---|---|
+| Mission claim: check, pen line, stamp | `mission/strip_mis` | None of it played: the profile announces its change from inside `claimMission`, the tab's `claiming` guard went up only after the command returned, so the row was brought to its claimed state silently first and the later animated sync saw nothing new | the guard goes up before the command (`MissionsTab.settle(() => ...)`, same in `PassTab`) | the check is written in, the pen line grows across the title, the stamp drops from 1.9 to 0.95 and lands, coins burst and fly |
+| Daily / weekly chest strip, tier cards | same code path | same cause | same fix | not captured separately |
+| Pass cell claim | `pass2/strip_pc` | the stamp ring never animated (same cause) | same fix; the knock sounds on the landing frame | ring ripples in, gems burst, `place` on the landing frame |
+| Claim-all | `pass/strip_passc` | combined reward sheet after the tap: good | same guard fix; only the first knock sounds when many stamps land together | same |
+| Pass track auto-scroll | `pass/strip_pass` | jumped to the current tier in one frame on every visit | glides there (cubic-out, 0.2 to 0.55 s) when it is more than 120 px away | track slides to the tier reached |
+| Settings opening | `settings/strip_set` | fine, with the kit scaffold change | rise with settle | same |
+| Calendar opening, a day stamped | `calendar/strip_cal`, `strip_calc` | stamp slam and coin burst fine; the burst from the first column sent coins off the left edge | `flightTuning` keeps burst and curve short near an edge (`screens/shell/flight.ts`) | burst stays on screen |
+| Automatic popup | `autopop/strip_ap` | the first popup is the kit popup with its sticker popping in 80 ms later; queue gap 0.6 s: read from the code | none | the second popup of the queue was not reached (the script looked for a different button label) |
+| Points bar to the chest, chest claim, premium purchase celebration, backup code popup stages, language switch re-laying settings, day-28 page turn | not captured | | | |
+
+The stamp's knock (`stampThud`, sound `place` at 0.45, one per 90 ms) lives in `screens/system/kit/marks.ts`; `StampMark.slam` and the shop's `stampIn` both call it.

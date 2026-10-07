@@ -1,6 +1,7 @@
 import { Container } from 'pixi.js';
 import { audio } from '@/audio';
 import { debugExpose } from '@/core/debug';
+import { game } from '@/core/game';
 import { fmt } from '@/core/format';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
@@ -55,6 +56,8 @@ class ShopTab implements TabScreen {
   private tick = 0;
   private busy = false;
   private syncing = false;
+  /** Game time before which scrolling does not move the section highlight (a jump is under way). */
+  private spyResume = 0;
   private navKey = '';
   private offProfile: (() => void) | null = null;
   private offScroll: (() => void) | null = null;
@@ -160,17 +163,19 @@ class ShopTab implements TabScreen {
 
   /** Keep the tab highlight on the section in view. */
   private spy(y: number): void {
-    if (!this.nav || this.syncing) return;
+    if (!this.nav || this.syncing || game.time < this.spyResume) return;
     let current: BlockState | undefined;
     for (const s of this.states) if (s.shown && s.top - 80 <= y + 4) current = s;
     if (current && this.nav.selectedId !== current.block.id) {
       this.syncing = true;
-      this.nav.select(current.block.id, true);
+      this.nav.select(current.block.id, true, true);
       this.syncing = false;
     }
   }
 
   jumpTo(id: ShopSectionId): void {
+    // The list scrolls past the sections in between: the highlight stays on the one asked for until it arrives.
+    this.spyResume = game.time + 0.75;
     let top: number | null = null;
     for (const s of this.states) {
       if (!s.shown) continue;

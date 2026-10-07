@@ -4,6 +4,7 @@ import { audio } from '@/audio';
 import { hasTex, tex } from '@/core/assets';
 import { haptic } from '@/core/haptics';
 import { flyTo } from '@/fx';
+import { flightTuning, originX } from '../../shell/flight';
 import type { BundlePart } from '@/meta/bundle';
 import { services, type Shell } from '../../contract';
 import { currencyOnly, currencyTotals, flightCount, textureKey, type CurrencyKind } from './parts';
@@ -36,14 +37,18 @@ export function payout(shell: Shell, parts: readonly BundlePart[], from: Contain
     if (total <= 0) continue;
     const key = textureKey({ kind, n: total });
     let arrived = 0;
+    shell.pending(kind, total);
+    const to = shell.currencyAnchor(kind);
     const handle = flyTo({
       from,
-      to: shell.currencyAnchor(kind),
+      to,
+      ...flightTuning(originX(from), to.x),
       count: flightCount(total),
       size: 52,
       ...(key && hasTex(key) ? { texture: tex(key) } : { make: () => partIcon({ kind, n: total }, 52) }),
       onArrive: () => {
         arrived++;
+        shell.landed(kind);
         // A tick on every third coin: a downpour of identical sounds reads as noise.
         if (arrived % 3 === 1) audio.play(kind === 'gems' ? 'gem' : 'coin', { volume: 0.8 });
       },

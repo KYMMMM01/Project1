@@ -11,6 +11,7 @@ import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { classDef, unitClass, unitDef, type Fail, type UnitState } from '@/game';
 import {
+  backOut,
   Button,
   Color,
   drawDashedRect,
@@ -177,14 +178,16 @@ export class SelectionSheet {
 
   private show(): void {
     this.root.visible = true;
+    this.root.interactiveChildren = true;
     if (motion.reduced) return;
     const y1 = this.rect.y;
+    // The sheet slides up from below and lands with a small settle, like a page laid on the pile.
     this.bag.runKeyed(this.root, {
-      duration: 0.2,
-      ease: Ease.cubicOut,
+      duration: 0.26,
+      ease: backOut(1.3),
       onUpdate: (k) => {
         this.root.y = y1 + 36 * (1 - k);
-        this.root.alpha = Math.min(1, k * 2.2);
+        this.root.alpha = Math.min(1, k * 3);
       },
       onComplete: () => {
         this.root.y = y1;
@@ -197,12 +200,34 @@ export class SelectionSheet {
   }
 
   private hide(): void {
-    this.bag.killKeyed(this.root);
-    this.root.visible = false;
-    this.root.alpha = 1;
-    this.root.y = this.rect.y;
     this.shownKey = '';
     this.buttonsKey = '';
+    if (motion.reduced || !this.root.visible) {
+      this.rest();
+      return;
+    }
+    // It slides back down while the chips fade in, instead of vanishing on one frame; no taps land on a leaving sheet.
+    const y1 = this.rect.y;
+    const from = this.root.y;
+    const a0 = this.root.alpha;
+    this.root.interactiveChildren = false;
+    this.bag.runKeyed(this.root, {
+      duration: 0.16,
+      ease: Ease.quadIn,
+      onUpdate: (k) => {
+        this.root.y = from + (y1 + 30 - from) * k;
+        this.root.alpha = a0 * (1 - k);
+      },
+      onComplete: () => this.rest(),
+    });
+  }
+
+  private rest(): void {
+    this.bag.killKeyed(this.root);
+    this.root.visible = false;
+    this.root.interactiveChildren = true;
+    this.root.alpha = 1;
+    this.root.y = this.rect.y;
   }
 
   // ───────────────────────── content ─────────────────────────

@@ -45,11 +45,11 @@ export class MissionsTab implements TabScreen {
   private offLang: (() => void) | null = null;
 
   private readonly actions: MissionActions = {
-    claimMission: (scope, index, from) => this.settle(profile.claimMission(scope, index), from),
-    claimDailyChest: (from) => this.settle(profile.claimDailyChest(), from),
-    claimWeeklyChest: (from) => this.settle(profile.claimWeeklyChest(), from),
-    claimCup: (tier, from) => this.settle(profile.claimCup(tier), from),
-    claimEndless: (tier, from) => this.settle(profile.claimEndless(tier), from),
+    claimMission: (scope, index, from) => this.settle(() => profile.claimMission(scope, index), from),
+    claimDailyChest: (from) => this.settle(() => profile.claimDailyChest(), from),
+    claimWeeklyChest: (from) => this.settle(() => profile.claimWeeklyChest(), from),
+    claimCup: (tier, from) => this.settle(() => profile.claimCup(tier), from),
+    claimEndless: (tier, from) => this.settle(() => profile.claimEndless(tier), from),
     openOdds: (kind) => services.openOdds(kind),
     goBattle: () => this.shell.goTab('battle'),
     goDaily: () => this.select('daily'),
@@ -160,22 +160,27 @@ export class MissionsTab implements TabScreen {
     this.scroller?.refresh();
   }
 
-  /** Apply the outcome of a claim command: feedback on success, a toast and a resync on refusal. */
-  private settle(r: Result<Bundle>, from: Container): void {
-    if (!r.ok) {
-      audio.play('ui_error');
-      toast(t(errorKey(r.error)), 'warning');
-      this.syncAll(false);
-      return;
-    }
+  /**
+   * Run a claim command and apply its outcome: feedback on success, a toast and a resync on refusal.
+   * The profile announces the change from inside the command, so the guard goes up before it runs; otherwise
+   * the row would be brought to its claimed state silently first and the check, pen line and stamp never play.
+   */
+  private settle(run: () => Result<Bundle>, from: Container): void {
     this.claiming = true;
     try {
+      const r = run();
+      if (!r.ok) {
+        audio.play('ui_error');
+        toast(t(errorKey(r.error)), 'warning');
+        this.syncAll(false);
+        return;
+      }
       this.shell.refresh();
       this.syncAll(true);
+      void payout(this.shell, partsOf(r.value), from, t('rt.common.reward'));
     } finally {
       this.claiming = false;
     }
-    void payout(this.shell, partsOf(r.value), from, t('rt.common.reward'));
   }
 
   private readonly onChange = (): void => {

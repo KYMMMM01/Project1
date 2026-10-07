@@ -3,6 +3,7 @@
  * accounting and the music intensity maths. No Pixi, no audio, no clocks of its own: every method
  * takes `now` in seconds, so each rule can be unit-tested and none of them allocates in a fight.
  */
+import { QUICK_REVEAL_WINDOW } from '../timing';
 
 /** Minimum gap between two firings of the same small-integer id. */
 export class GapGate {
@@ -447,7 +448,7 @@ export function summonPlan(tier: number, rapid: boolean, sinceBig: number): Summ
   return {
     popOnly: cheap && rapid,
     thin: cheap && rapid,
-    quick: tier >= 3 && sinceBig < 3,
+    quick: tier >= 3 && sinceBig < QUICK_REVEAL_WINDOW,
   };
 }
 

@@ -64,3 +64,13 @@ Known gaps now: touch input on a real phone, as before.
 ## 2026-10-07 QA fixes
 
 See `battle.md`. Field side: `decideTap` never swaps (a tap selects, moves or merges), the `pick` cell look for the move targets of a selected cat, `previewBelow(row, rows, hiddenAbove, hiddenBelow, roomAbove, roomBelow)` with the preview hidden on release, the sell tag with the purr, the 26 px rank tag, the opaque dashed shield ring, `EnemyView.drawX()` keeping big bodies on screen, number bounds from the layout (`clampNumbers`).
+
+## 2026-10-07 motion review
+
+Seen frame by frame at full motion (full table in `director.md`, "2026-10-07 motion review"). What changed in the field:
+
+- `src/view/timing.ts` (new, shared with the director): `SLIDE_SECONDS`, `MERGE_SECONDS`, `REVEAL_DELAY` / `REVEAL_OVERSHOOT` / `REVEAL_MS` per rank, `QUICK_REVEAL_WINDOW`, `ANTICIPATION_SECONDS`.
+- `units.ts`: every sticker tween (pop, hop, merge flight and hold, molt, sell, refusal, drag spring-back) runs on `ctx.ui`; a summon holds its cat until the effect's impact (rank delay, short reveal when a second legendary-or-better follows within 3 s); a merge's materials arrive on the burst (`MERGE_SECONDS`).
+- `unitView.ts`: `appear(tweens, overshoot, ms, delay)` hides the whole view during the delay, pops the body, grows the shadow and rank tag, then slaps the class sticker on; the attack coils from the unit's `charge` (`coilPose`) and starts from that coil (`windStart`), so the lunge is on the release frame.
+- `input.ts`: a cat that has not shown yet cannot be picked up.
+- Tests: `view.field.motion.test.ts` (coil continuity, rank ladder, hop and merge lengths).
