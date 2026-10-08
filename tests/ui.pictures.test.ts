@@ -30,12 +30,12 @@ function artOf(id: PictureId): string | null {
 }
 
 describe('kit pictures: one picture per currency and countable reward', () => {
-  it('every picture with art names an image file that ships, and only the sweep ticket is still drawn', () => {
+  it('every picture names an image file that ships', () => {
     for (const id of PICTURE_IDS) {
       const key = artOf(id);
       if (key !== null) expect(existsSync(join(ART_DIR, `${key}.webp`)), `${id} -> ${key}`).toBe(true);
     }
-    expect(PICTURE_IDS.filter((id) => artOf(id) === null)).toEqual(['tickets']);
+    expect(PICTURE_IDS.filter((id) => artOf(id) === null)).toEqual([]);
   });
 
   it('the chest scene finds each closed chest and its two poses under the picture key', () => {

@@ -1,0 +1,11 @@
+[
+ {
+  "name": "icon_ticket",
+  "ref": [
+   "art/icons_v2/icon_gold.png",
+   "art/icons_v2/icon_gem.png"
+  ],
+  "ref_note": "The attached images are approved currency icons of the same game: match their rendering exactly (thick dark-brown outline, clean white sticker border, matte flat colours, level of detail). Draw the new object described below.",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game currency icon shown small (about 56 px)\nSubject: a sweep ticket: one chunky golden-yellow admission ticket with a half-round notch cut into each short side, a dashed tear line near one end, and a small broom symbol with a tiny star in its centre. Tilted about 15 degrees.\nStyle: 2D cartoon sticker icon with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO gradients, NO glow, NO sparkle. One bold simple silhouette that reads at thumbnail size.\nComposition: centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single object, no text, no letters, no numbers, no watermark, nothing cropped."
+ }
+]

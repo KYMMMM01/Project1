@@ -16,7 +16,7 @@ export const PICTURES = {
   gold: { art: 'icon_gold', glyph: 'coin' },
   gems: { art: 'icon_gem', glyph: 'gem' },
   /** No painted picture yet: the drawn ticket is the one picture of the sweep ticket everywhere. */
-  tickets: { art: null, glyph: 'ticket' },
+  tickets: { art: 'icon_ticket', glyph: 'ticket' },
   fish: { art: 'icon_fish', glyph: 'fish' },
   purr: { art: 'icon_purr', glyph: 'purr' },
   xp: { art: 'icon_xp', glyph: 'xp' },
