@@ -343,25 +343,25 @@ export class Fx {
     const m: BurstMods = { scale: o.scale ?? 1 };
     this.burst(
       {
-        tex: 'star', prio: 2, count: 1, life: 0.24, size: 26, sizeEnd: 112, rot: [-0.3, 0.3], spin: [-1.4, 1.4],
+        tex: 'star', prio: 2, count: 1, life: 0.2, size: 18, sizeEnd: 62, rot: [-0.3, 0.3], spin: [-1.4, 1.4],
         colors: [W, hi, c], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.45,
       },
       x, y, m,
     );
     this.burst(
-      { tex: 'starburst', prio: 2, count: 1, life: 0.2, size: 60, sizeEnd: 170, rot: [0, TAU], colors: [W, hi], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
+      { tex: 'starburst', prio: 2, count: 1, life: 0.16, size: 34, sizeEnd: 84, rot: [0, TAU], colors: [W, hi], sizeEase: Ease.cubicOut, fadeIn: 0, fadeOut: 0.7 },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'spark', prio: 2, count: 12, life: [0.22, 0.42], speed: [340, 740], drag: 4.2, alignVel: true, stretch: 0.0022,
-        size: [28, 46], sizeEnd: [8, 10], colors: [W, hi, deep], fadeIn: 0, fadeOut: 0.55,
+        tex: 'spark', prio: 2, count: 10, life: [0.2, 0.34], speed: [200, 420], drag: 4.2, alignVel: true, stretch: 0.0018,
+        size: [16, 26], sizeEnd: [5, 7], colors: [W, hi, deep], fadeIn: 0, fadeOut: 0.55,
       },
       x, y, m,
     );
     this.burst(
       {
-        tex: 'sparkle', prio: 2, count: 4, life: [0.4, 0.62], speed: [50, 190], drag: 2.5, size: [26, 44], sizeEnd: [6, 10],
+        tex: 'sparkle', prio: 2, count: 4, life: [0.34, 0.5], speed: [40, 120], drag: 2.5, size: [14, 24], sizeEnd: [4, 7],
         spin: [-3, 3], rot: [0, TAU], colors: [W, c], fadeIn: 0.1, fadeOut: 0.5,
       },
       x, y, m,
@@ -1210,10 +1210,10 @@ export class Fx {
     const r = (o.radius ?? 56) * (o.scale ?? 1);
     const oy = o.offsetY ?? 0;
     const handles = [
-      // A steady flat ring round the target so the aura reads even between pulses: an outline, never a tinted disc.
+      // A steady thin ring round the target so the aura reads even between pulses: a line, never a tinted disc, never wider than the body it rings.
       this.ps.emit(
         {
-          tex: 'ringThick', prio: 0, life: 0.9, size: r * 1.8, sizeEnd: r * 1.95, sizeY: r * 1.8 * 0.8, sizeYEnd: r * 1.95 * 0.8, colors: [c], fadeIn: 0.15, fadeOut: 0.25,
+          tex: 'ring', prio: 0, life: 0.9, size: r * 1.8, sizeEnd: r * 1.9, sizeY: r * 1.8 * 0.8, sizeYEnd: r * 1.9 * 0.8, colors: [c], alpha: 0.5, fadeIn: 0.15, fadeOut: 0.25,
         },
         0, 0, 2.4, { follow: target, offsetY: oy },
       ),
@@ -1229,8 +1229,8 @@ export class Fx {
       handles.push(
         this.ps.emit(
           {
-            tex: 'ring', prio: 0, life: 0.95, size: r * 0.9, sizeEnd: r * 2.5, sizeY: r * 0.9 * 0.8, sizeYEnd: r * 2.5 * 0.8,
-            sizeEase: Ease.cubicOut, colors: [hi, c], alpha: 0.85, fadeIn: 0.05, fadeOut: 0.75,
+            tex: 'ring', prio: 0, life: 0.95, size: r * 0.9, sizeEnd: r * 1.9, sizeY: r * 0.9 * 0.8, sizeYEnd: r * 1.9 * 0.8,
+            sizeEase: Ease.cubicOut, colors: [hi, c], alpha: 0.4, fadeIn: 0.05, fadeOut: 0.75,
           },
           0, 0, 1.3, { follow: target, offsetY: oy },
         ),
@@ -1391,9 +1391,13 @@ export class Fx {
     return this.areas.ready(kind);
   }
 
-  /** The hostile ring round an enemy: speed comets for the clock's haste, healing crosses for the pill's mending. Move it with `moveTo`. */
-  enemyRing(kind: Extract<DiscKind, 'haste' | 'heal'>, x: number, y: number, radius: number): AreaHandle {
-    return this.areas.disc(kind, x, y, radius);
+  /**
+   * The hostile ring round an enemy that carries an aura: one thin line `radius` px from its middle (the body's size and a few pixels),
+   * strokes for the clock's haste and beads for the pill's mending. `reach` (the aura's real radius) is drawn faintly for its first
+   * moments when given. Move it with `moveTo`.
+   */
+  enemyRing(kind: Extract<DiscKind, 'haste' | 'heal'>, x: number, y: number, radius: number, reach = 0): AreaHandle {
+    return this.areas.disc(kind, x, y, radius, reach);
   }
 
   /* ---- one-shot specials -------------------------------------------------------------------- */

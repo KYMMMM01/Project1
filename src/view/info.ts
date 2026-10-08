@@ -92,6 +92,7 @@ class InfoBubbles {
   private readonly rule = new InfoRule();
   /** Asked before a player's tap opens a bubble: a lesson card on screen has the space. */
   canOpen: (() => boolean) | null = null;
+  private readonly listeners = new Set<(key: unknown) => void>();
 
   private readonly onDown = (): void => {
     if (!this.rule.isOpen) return;
@@ -111,6 +112,16 @@ class InfoBubbles {
     }
     this.view = view;
     if (view) window.addEventListener('pointerdown', this.onDown, true);
+  }
+
+  /** `fn` is told the key of every bubble that opens (a toy's, a cell's...): the field lights what a bubble is about. Returns the way to stop listening. */
+  listen(fn: (key: unknown) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private opened(key: unknown): void {
+    for (const fn of this.listeners) fn(key);
   }
 
   /** The rule's state, for the lessons that wait for a bubble to go and for the debug hooks. */
@@ -135,6 +146,7 @@ class InfoBubbles {
       return false;
     }
     this.view.show(target, content, opts.prefer ?? 'above', false);
+    this.opened(key);
     return true;
   }
 
@@ -144,6 +156,7 @@ class InfoBubbles {
     const sticky = opts.sticky ?? false;
     this.rule.open(key, sticky ? 0 : (opts.seconds ?? INFO_FOR), sticky);
     this.view.show(target, content, opts.prefer ?? 'above', sticky);
+    this.opened(key);
     return true;
   }
 

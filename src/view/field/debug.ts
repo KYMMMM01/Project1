@@ -7,12 +7,13 @@ import { setLang } from '@/core/i18n';
 import { scenes } from '@/core/scene';
 import { BootScene } from '@/scenes/BootScene';
 import { BattleScene, setBattleCreatedHook } from '@/scenes/BattleScene';
-import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type UnitId } from '@/game';
+import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type RelicId, type UnitId } from '@/game';
 import { createBot } from '@/game/sim/bots';
 import { spawnEnemy, killEnemy, removeEnemy } from '@/game/sim/enemies';
 import { scheduleHazard } from '@/game/sim/hazards';
 import { makeUnit, refresh } from '@/game/sim/board';
 import { addFish, addPurr } from '@/game/sim/economy';
+import { gainRelic } from '@/game/sim/flow';
 import { Sim } from '@/game/sim/sim';
 import { audio } from '@/audio';
 import { warm } from '@/fx';
@@ -137,6 +138,10 @@ export function installBattleDebug(scene: BattleScene): void {
       s.units.fill(null);
       for (const [cell, id] of Object.entries(units)) s.units[Number(cell)] = makeUnit(s, id, Number(cell), 0);
       refresh(s);
+    },
+    /** Pick toy `id` as if the player had chosen it (its effect, its marks on the board and the shelf's icon follow). */
+    relic(id: RelicId): void {
+      gainRelic(need(), id);
     },
     /** `hp` scales the health (a strip of one weapon needs an enemy that is still there at the end). */
     spawn(id: EnemyId, count = 1, from = 220, hp = 1): void {

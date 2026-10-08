@@ -114,7 +114,12 @@ export interface FieldArt {
   shieldRing: Readonly<Record<RingLook, readonly Texture[]>>;
   /** The sticker a summon tosses from the button to its cell, in the rarity's colour (the colour comes first). */
   toss: Record<RarityId, Texture>;
+  /** The thin rounded frame a positional toy draws round a cell it boosts, white (tint it), baked at each of `TOY_INSETS` so the frames of toys on one cell nest. */
+  toyFrame: readonly Texture[];
 }
+
+/** How far in from the cell's edge each nested toy frame lies, px: the outermost first. */
+export const TOY_INSETS: readonly number[] = [4, 9, 14];
 
 let cached: FieldArt | null = null;
 
@@ -179,6 +184,9 @@ export function fieldArt(): FieldArt {
     targetMark: bake(gfx((g) => drawTargetMark(g, 19)), 48, 48),
     shieldRing: bakeShieldRings(),
     toss: bakeTosses(),
+    toyFrame: TOY_INSETS.map((inset) =>
+      bake(gfx((g) => g.roundRect(-CELL_W / 2 + inset, -CELL_H / 2 + inset, CELL_W - 2 * inset, CELL_H - 2 * inset, 20 - inset / 2).stroke({ width: 2.6, color: Color.white, join: 'round' })), CELL_W, CELL_H),
+    ),
   };
   return cached;
 }
@@ -370,4 +378,42 @@ function bakeShieldRings(): Record<RingLook, Texture[]> {
     }
   }
   return out;
+}
+
+const chips = new Map<number, Texture>();
+const badges = new Map<number, Texture>();
+
+/** The round chip that carries a positional toy's icon at the start of the board: a cream face in the toy's colour, drawn once per colour. */
+export function toyChip(color: number): Texture {
+  let t = chips.get(color);
+  if (!t) {
+    t = bake(
+      gfx((g) => {
+        g.circle(1.2, 2.4, 15).fill({ color: Color.shadow, alpha: 0.3 });
+        g.circle(0, 0, 15).fill(CREAM);
+        g.circle(0, 0, 13.4).stroke({ width: 3, color });
+      }),
+      36,
+      36,
+    );
+    chips.set(color, t);
+  }
+  return t;
+}
+
+/** The tiny up-arrow badge of a cat that stands where a toy boosts it: a sticker in the toy's colour with a cream arrow, drawn once per colour. */
+export function toyBadge(color: number): Texture {
+  let t = badges.get(color);
+  if (!t) {
+    t = bake(
+      gfx((g) => {
+        disc(g, 8, color);
+        g.poly([0, -5, 5, 0.4, 2, 0.4, 2, 5, -2, 5, -2, 0.4, -5, 0.4]).fill(CREAM);
+      }),
+      24,
+      24,
+    );
+    badges.set(color, t);
+  }
+  return t;
 }

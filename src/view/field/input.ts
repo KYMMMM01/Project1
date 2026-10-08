@@ -33,6 +33,8 @@ export class FieldInput {
   selling = false;
   /** A tap on an empty cell that nothing else claims (the field uses it to explain a sunbeam cell). */
   onEmptyTap: ((cell: number) => void) | null = null;
+  /** Asked first with a press's field position: true when something small drawn over the board (a toy's chip) takes it. */
+  onPress: ((x: number, y: number) => boolean) | null = null;
 
   private readonly hit = new Container();
   private readonly local = new Point();
@@ -97,6 +99,7 @@ export class FieldInput {
     this.toField(e);
     const x = this.local.x;
     const y = this.local.y;
+    if (this.onPress?.(x, y)) return;
     this.pointerId = e.pointerId;
     this.downX = x;
     this.downY = y;

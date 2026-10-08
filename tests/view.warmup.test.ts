@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Texture } from 'pixi.js';
 
-const KEYS = ['enemy_cucumber', 'enemy_clock', 'enemy_pill', 'boss_vacuum', 'unit_w_paw', 'relic_lucky_coin', 'icon_chest_wood', 'icon_hand', 'icon_fish', 'bg_kitchen', 'fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_burst_ring', 'fx_shot_arrow', 'fx_badge_shield'];
+const KEYS = ['enemy_cucumber', 'enemy_clock', 'enemy_pill', 'boss_vacuum', 'unit_w_paw', 'relic_lucky_coin', 'icon_chest_wood', 'icon_hand', 'icon_fish', 'bg_kitchen', 'fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_burst_ring', 'fx_shot_arrow', 'fx_badge_shield'];
 
 vi.mock('@/core/assets', () => ({
   imageKeys: () => KEYS,
@@ -113,7 +113,7 @@ describe('the battle warm-up', () => {
   it('puts the drawn pictures of every ground area, and the other battle effects, on the card ahead of the first fight', () => {
     const { b } = fake({});
     new BattleWarmup(b as unknown as BattleApi);
-    for (const key of ['fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_shot_arrow', 'fx_badge_shield']) {
+    for (const key of ['fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_shot_arrow', 'fx_badge_shield']) {
       expect(warm.has(`img:${key}`)).toBe(true);
     }
     drain();
@@ -139,9 +139,9 @@ describe('the battle warm-up', () => {
     const at = (key: string): number => order.indexOf(key);
     expect(at('pipe:particles')).toBe(0);
     expect(at('img:enemy_clock')).toBeLessThan(at('img:enemy_pill'));
-    expect(at('img:fx_foe_haste')).toBeLessThan(at('img:fx_foe_heal'));
     expect(at('img:enemy_pill')).toBeLessThan(at('img:unit_w_paw'));
-    expect(at('img:fx_foe_heal')).toBeLessThan(at('img:fx_zone_frost'));
+    // A carrier's ring is a line of the shared atlas: no picture of its own is asked for.
+    expect(order.some((k) => k.includes('fx_foe'))).toBe(false);
   });
 
   it('looks at the preview again only when the wave or the phase has moved', () => {

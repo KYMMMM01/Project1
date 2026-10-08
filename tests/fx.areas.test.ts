@@ -394,11 +394,12 @@ describe('how each area is built', () => {
     const layer = new AreaLayer(new Container());
     layer.disc('frost', 0, 0, 100);
     layer.disc('frost', 400, 0, 100);
-    layer.disc('haste', 0, 0, 120);
-    layer.disc('haste', 0, 0, 120);
+    layer.disc('haste', 0, 0, 29, 120);
+    layer.disc('haste', 0, 0, 29, 120);
     advance(layer, 1.5);
     expect((partsOf(rootOf(layer, 1))[0] as Sprite).alpha).toBeCloseTo(0.92, 2);
-    expect((partsOf(rootOf(layer, 3))[0] as Sprite).alpha).toBeCloseTo(0.78, 2);
+    expect((partsOf(rootOf(layer, 3))[0] as Sprite).alpha).toBeCloseTo(0.8, 2);
+    expect((partsOf(rootOf(layer, 2))[0] as Sprite).alpha).toBeCloseTo(0.8, 2);
     layer.destroy();
   });
 
@@ -418,8 +419,8 @@ describe('how each area is built', () => {
 
   it('the hostile rings turn and beat: chevrons run clockwise, the heal ring turns back and pulses', () => {
     const layer = new AreaLayer(new Container());
-    layer.disc('haste', 0, 0, 120);
-    layer.disc('heal', 0, 0, 120);
+    layer.disc('haste', 0, 0, 29, 120);
+    layer.disc('heal', 0, 0, 29, 120);
     advance(layer, 0.6);
     const haste = partsOf(rootOf(layer, 0))[0] as Sprite;
     const heal = partsOf(rootOf(layer, 1))[0] as Sprite;
@@ -449,10 +450,70 @@ describe('how each area is built', () => {
 
   it('names the drawn pictures of every kind, and each one is a picture the build makes', () => {
     expect([...DISC_KINDS].sort()).toEqual(['brew', 'frost', 'haste', 'heal', 'void']);
-    for (const kind of DISC_KINDS) {
-      expect(AREA_PICTURES[kind].length).toBeGreaterThan(1);
-      for (const id of AREA_PICTURES[kind]) expect(PAINT_IDS).toContain(id);
-    }
+    for (const kind of DISC_KINDS) for (const id of AREA_PICTURES[kind]) expect(PAINT_IDS).toContain(id);
+    for (const kind of ['frost', 'brew', 'void'] as const) expect(AREA_PICTURES[kind].length).toBeGreaterThan(1);
+    // A carrier's ring is a thin line from the shared atlas: it needs no picture of its own.
+    expect(AREA_PICTURES.haste).toEqual([]);
+    expect(AREA_PICTURES.heal).toEqual([]);
+  });
+
+  describe('the rings of an aura carrier', () => {
+    /** The drawn circle of a ring: the picture's width on screen times the share of it the circle fills (the test atlas cell is 64 px). */
+    const across = (root: Container, part: Sprite, fill: number): number => part.scale.x * 64 * root.scale.x * fill;
+
+    it('is one thin line the size of the body and a few pixels, not the reach of the aura', () => {
+      for (const kind of ['haste', 'heal'] as const) {
+        const layer = new AreaLayer(new Container());
+        layer.disc(kind, 0, 0, 29, 120);
+        advance(layer, 2);
+        const root = rootOf(layer);
+        const ring = partsOf(root)[0] as Sprite;
+        expect(across(root, ring, 110 / 128)).toBeCloseTo(58, 0);
+        expect(ring.alpha).toBeLessThanOrEqual(0.85);
+        expect(ring.alpha).toBeGreaterThan(0.4);
+        // No stack of rings, no spreading landing ring, nothing but the line (and its hidden hint).
+        expect(partsOf(root).filter((p) => p.visible).length).toBe(1);
+        expect(root.children[1]?.visible).toBe(false);
+        layer.destroy();
+      }
+    });
+
+    it('shows its reach faintly for the first moments only, then fades it away', () => {
+      const layer = new AreaLayer(new Container());
+      layer.disc('haste', 0, 0, 29, 120);
+      advance(layer, 0.2);
+      const root = rootOf(layer);
+      const hint = partsOf(root)[1] as Sprite;
+      expect(hint.visible).toBe(true);
+      expect(hint.alpha).toBeGreaterThan(0.2);
+      expect(hint.alpha).toBeLessThanOrEqual(0.35);
+      // The hint's circle is the aura's real radius across.
+      expect(across(root, hint, 240 / 256)).toBeCloseTo(240, -1);
+      advance(layer, 0.5);
+      expect(hint.alpha).toBeLessThan(0.3);
+      advance(layer, 1);
+      expect(hint.visible).toBe(false);
+      layer.destroy();
+    });
+
+    it('draws no hint for a ring that is not asked to (another ring of its kind already shows the reach)', () => {
+      const layer = new AreaLayer(new Container());
+      layer.disc('heal', 0, 0, 29);
+      advance(layer, 0.2);
+      expect((partsOf(rootOf(layer))[1] as Sprite).visible).toBe(false);
+      layer.destroy();
+    });
+
+    it('keeps its size and stands still under reduced motion', () => {
+      setFxSettings({ reducedMotion: true });
+      const layer = new AreaLayer(new Container());
+      layer.disc('haste', 0, 0, 29, 120);
+      advance(layer, 0.5);
+      const root = rootOf(layer);
+      expect(across(root, partsOf(root)[0] as Sprite, 110 / 128)).toBeCloseTo(58, 0);
+      expect((partsOf(root)[0] as Sprite).rotation).toBe(0);
+      layer.destroy();
+    });
   });
 });
 

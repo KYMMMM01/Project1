@@ -11,7 +11,7 @@ vi.mock('@/fx/textures', () => ({
 import { Emitter } from '@/core/events';
 import { setFxSettings } from '@/fx/settings';
 import { ENEMY_IDS, UNIT_IDS, type BattleEvents, type EnemyId, type UnitId } from '@/game/api';
-import { WeaponMarks } from '@/view/field/weaponMarks';
+import { WeaponMarks, blowSize, lineLength, slashWidth } from '@/view/field/weaponMarks';
 import { isSoft, materialOf, reactionOf } from '@/view/field/reactions';
 import { weaponStyle, WEAPON_IDS } from '@/view/weapons';
 import type { FieldEnv } from '@/view/field/env';
@@ -177,6 +177,38 @@ describe('weapon marks', () => {
     ev.emit('attack', attack('r_gunner'));
     expect(marks.count).toBe(2);
     marks.destroy();
+  });
+
+  it('a swing is brief, under 0.18 s: the arc of a sword, the line of a katana and the sweep of a polearm are gone before the enemies are hidden for long', () => {
+    for (const id of ['w_sword', 'w_samurai', 'w_tiger'] as UnitId[]) {
+      const { env, layer, ev } = makeEnv();
+      const marks = new WeaponMarks(env, layer);
+      ev.emit('attack', attack(id));
+      ev.emit('strike', { unitId: id, relic: null, x: 300, y: 100, radius: 110, points: [] });
+      expect(marks.count, id).toBe(1);
+      run(marks, 0.17);
+      expect(marks.count, id).toBe(0);
+      marks.destroy();
+    }
+  });
+
+  it('the swing of a weapon is as wide as the weapon reaches, never more than a lane and a little, and the burst of a blow about the size of the enemy', () => {
+    // The sword cleaves 70 px, the polearm stomps 110 px: the crescent follows, and stops at about the width of the lane (82 px).
+    expect(slashWidth(70)).toBeCloseTo(66.5, 5);
+    expect(slashWidth(110)).toBeLessThanOrEqual(92);
+    expect(slashWidth(110)).toBeGreaterThan(slashWidth(70));
+    expect(slashWidth(500)).toBeLessThanOrEqual(92);
+    expect(slashWidth(5)).toBeGreaterThanOrEqual(48);
+    // The katana's line is as long as the stretch it cuts, and a long reach does not make it a wall.
+    expect(lineLength(110)).toBe(110);
+    expect(lineLength(400)).toBeLessThanOrEqual(120);
+    expect(lineLength(10)).toBeGreaterThanOrEqual(70);
+    // A heavy weapon, a crit and a boss only add a little to a burst: never more than 30 % over the picture's own size.
+    for (const weight of [0.6, 1, 1.4, 1.7]) {
+      for (const crit of [false, true]) for (const big of [false, true]) expect(blowSize(weight, crit, big)).toBeLessThanOrEqual(1.3);
+    }
+    expect(blowSize(1, false, false)).toBe(1);
+    expect(blowSize(0.7, true, true)).toBeGreaterThan(0.7);
   });
 
   it('is pooled: thousands of blows build no more than the cap, and nothing is created while it runs', () => {

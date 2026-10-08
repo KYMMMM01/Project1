@@ -41,6 +41,9 @@ export const FX_TEX_IDS = [
   'sun',
   'tail',
   'bubble',
+  'auraDash',
+  'auraBead',
+  'auraReach',
 ] as const;
 
 export type FxTexId = (typeof FX_TEX_IDS)[number];
@@ -81,6 +84,13 @@ const smooth = (e0: number, e1: number, x: number): number => {
 /** Signed distance in atlas px -> coverage; 1 px wide anti-aliasing. */
 const aa = (d: number): number => clamp01(0.5 - d);
 const len = Math.hypot;
+
+/** 1 along `count` short strokes round a circle (each covering the share `from`..`to` of its period, soft ends), 0 between them. */
+function strokes(x: number, y: number, count: number, from: number, to: number): number {
+  const turn = (Math.atan2(y, x) / (2 * Math.PI)) * count;
+  const t = turn - Math.floor(turn);
+  return smooth(from - 0.06, from, t) * (1 - smooth(to, to + 0.06, t));
+}
 
 function sdSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): { d: number; t: number } {
   const pax = px - ax;
@@ -469,6 +479,18 @@ const CELLS: Cell[] = [
       return Math.max(rim, film, hl);
     },
   },
+  // The rings a hostile aura carrier wears: all three are thin lines, white, tinted by the kind (`areas.ts`). The haste ring is a gauge of
+  // twelve short strokes, the heal ring a plain line with four beads, and the reach is a faint dotted circle at the aura's real radius.
+  { id: 'auraDash', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 55) - 3.2) * strokes(x, y, 12, 0.1, 0.62) },
+  {
+    id: 'auraBead',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => Math.max(aa(Math.abs(len(x, y) - 55) - 2.6), aa(Math.min(len(Math.abs(x) - 55, y), len(x, Math.abs(y) - 55)) - 6)),
+  },
+  { id: 'auraReach', w: 256, h: 256, ax: 0.5, ay: 0.5, paint: (x, y) => aa(Math.abs(len(x, y) - 120) - 1.6) * strokes(x, y, 48, 0.1, 0.55) },
 ];
 
 interface Packed {

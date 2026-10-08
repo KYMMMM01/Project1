@@ -4,18 +4,18 @@ import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { lerp, mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
+import { barX, CHIP_BARS, CHIP_DISC, CHIP_PIPS, CLASS_CHIP_BORDER_MAX, CLASS_CHIP_H, CLASS_CHIP_RADIUS, CLASS_CHIP_RING_INSET, CLASS_CHIP_SELECT_OUTSET, CLASS_CHIP_W, classChipTape } from './classChipMath';
 import { drawIcon, type IconName } from './icons';
 import type { Box } from './layoutMath';
 import { backOut, motion, TweenBag } from './motion';
 import { bindPress, inScrollHost, type PressBinding } from './press';
 import { RarityPips } from './RarityPips';
-import { drawDashedRect, drawPaper, paperSeed, tapeStrip } from './paper';
+import { drawDashedInset, drawPaper, paperSeed, tapeStrip, type PaperOpts } from './paper';
 import { cacheStatic, refreshCache } from './shapes';
 import { HOLD_DELAY } from './Tooltip';
 import { Color, Hit } from './theme';
 
-export const CLASS_CHIP_W = 168;
-export const CLASS_CHIP_H = 76;
+export { CLASS_CHIP_H, CLASS_CHIP_W };
 /** Synergy steps a class can reach. */
 export const CLASS_TIERS = 3;
 
@@ -44,19 +44,14 @@ const TIER_LOOK: readonly TierLook[] = [
   { edge: Color.kraftDark, width: 2, alpha: 0.5 },
   { edge: Color.bronze, width: 4, alpha: 0.95 },
   { edge: Color.stone, width: 4, alpha: 0.95 },
-  { edge: Color.mustardDark, width: 5, alpha: 1 },
+  { edge: Color.mustardDark, width: CLASS_CHIP_BORDER_MAX, alpha: 1 },
 ];
-
-const BAR_W = 17;
-const BAR_GAP = 5;
-const BAR_H = [13, 21, 29] as const;
-const BAR_BASE = 31;
-const RIGHT_CX = 38;
 
 /**
  * Compact class badge: class glyph on a paper medallion, the five rarity pips, and a three-step synergy
  * marker (rising bars, so the tier is readable without colour). A tier-up punches the chip and
- * sends out a ring; a press dips and darkens it on the pointerdown frame. Origin = centre, about 168 x 76.
+ * sends out a ring; a press dips and darkens it on the pointerdown frame. Origin = centre, 168 x 84; every part lies in the content box
+ * that `classChipMath` describes (the cut edge moved in by `CLASS_CHIP_PAD` on all four sides).
  */
 export class ClassChip extends Container {
   readonly uiBox: Box = { x: -CLASS_CHIP_W / 2, y: -CLASS_CHIP_H / 2, w: CLASS_CHIP_W, h: CLASS_CHIP_H + 4 };
@@ -92,28 +87,27 @@ export class ClassChip extends Container {
 
     // Medallion: the glyph sits on a round well so every class reads at the same weight.
     const med = new Graphics();
-    const mx = -CLASS_CHIP_W / 2 + 42;
-    drawPaper(med, mx - 31, -31, { w: 62, h: 62, kind: 'circle', fill: mixColor(this.accent, Color.white, 0.55), edge: Color.kraftDark, shadow: 3, grain: false, seed: this.seed + 1 });
+    const d = CHIP_DISC;
+    drawPaper(med, d.cx - d.r, d.cy - d.r, { w: d.r * 2, h: d.r * 2, kind: 'circle', fill: mixColor(this.accent, Color.white, 0.55), edge: Color.kraftDark, shadow: d.shadow, grain: false, seed: this.seed + 1 });
     cacheStatic(med);
-    const icon = drawIcon(opts.icon, 46);
-    icon.position.set(mx, 0);
+    const icon = drawIcon(opts.icon, d.icon);
+    icon.position.set(d.cx, d.cy);
 
-    this.ring.position.set(mx, 0);
-    this.ring.circle(0, 0, 40).stroke({ width: 6, color: this.accent });
+    this.ring.position.set(d.cx, d.cy);
+    this.ring.circle(0, 0, d.r + 9).stroke({ width: 6, color: this.accent });
     this.ring.alpha = 0;
 
-    this.pips = new RarityPips({ owned: opts.owned, size: 13, gap: 5 });
-    this.pips.position.set(RIGHT_CX, -22);
+    this.pips = new RarityPips({ owned: opts.owned, size: CHIP_PIPS.size, gap: CHIP_PIPS.gap });
+    this.pips.position.set(CHIP_PIPS.x, CHIP_PIPS.y);
 
-    const barsX = RIGHT_CX - (BAR_W * CLASS_TIERS + BAR_GAP * (CLASS_TIERS - 1)) / 2;
     for (let i = 0; i < CLASS_TIERS; i++) {
-      const h = BAR_H[i] as number;
+      const h = CHIP_BARS.heights[i] as number;
       const g = new Container();
-      g.position.set(barsX + i * (BAR_W + BAR_GAP), BAR_BASE);
+      g.position.set(barX(i), CHIP_BARS.base);
       const dim = new Graphics();
-      dim.roundRect(0, -h, BAR_W, h, 4).fill({ color: Color.paperDim, alpha: 0.9 }).stroke({ width: 2.5, color: Color.kraftDark, alpha: 0.6 });
+      dim.roundRect(0, -h, CHIP_BARS.w, h, 4).fill({ color: Color.paperDim, alpha: 0.9 }).stroke({ width: CHIP_BARS.stroke, color: Color.kraftDark, alpha: 0.6 });
       const lit = new Graphics();
-      lit.roundRect(0, -h, BAR_W, h, 4).fill(this.accent).stroke({ width: 2.5, color: Color.mustardDark, alpha: 0.7, alignment: 0 });
+      lit.roundRect(0, -h, CHIP_BARS.w, h, 4).fill(this.accent).stroke({ width: CHIP_BARS.stroke, color: Color.mustardDark, alpha: 0.7, alignment: 0 });
       g.addChild(dim, lit);
       this.bars.push({ g, lit, dim });
     }
@@ -210,14 +204,17 @@ export class ClassChip extends Container {
     const h = CLASS_CHIP_H;
     const look = TIER_LOOK[tier] as TierLook;
     // Each synergy step restyles the border (thickness and colour), not just its colour.
-    drawPaper(g, -w / 2, -h / 2, { w, h, radius: 26, fill: Color.paperLight, edge: look.edge, edgeWidth: look.width, edgeAlpha: look.alpha, shadow: 5, grain: false, seed: this.seed });
+    const sheet: PaperOpts = { w, h, radius: CLASS_CHIP_RADIUS, fill: Color.paperLight, edge: look.edge, edgeWidth: look.width, edgeAlpha: look.alpha, shadow: 5, grain: false, seed: this.seed };
+    drawPaper(g, -w / 2, -h / 2, sheet);
+    // Both dashed lines are the cut edge moved in or out, so each keeps one distance from it all the way round.
     if (tier >= CLASS_TIERS) {
-      drawDashedRect(g, -w / 2 + 7, -h / 2 + 7, w - 14, h - 14, { radius: 20, color: this.accent, width: 2.5, dash: 9, gap: 7, seed: this.seed + 2 });
+      drawDashedInset(g, -w / 2, -h / 2, sheet, CLASS_CHIP_RING_INSET, { color: this.accent, width: 2.5, dash: 9, gap: 7 });
     }
     if (this.selectedFlag) {
-      drawDashedRect(g, -w / 2 - 6, -h / 2 - 6, w + 12, h + 12, { radius: 32, color: Color.teal, width: 3.5, seed: this.seed + 3 });
-      const tape = tapeStrip({ name: 'sky', w: 46, h: 18, angle: -22, pattern: 'dots', seed: this.seed });
-      tape.position.set(-w / 2 + 22, -h / 2 + 2);
+      drawDashedInset(g, -w / 2, -h / 2, sheet, -CLASS_CHIP_SELECT_OUTSET, { color: Color.teal, width: 3.5 });
+      const spot = classChipTape(1);
+      const tape = tapeStrip({ name: 'sky', w: spot.w, h: spot.h, angle: spot.angle, pattern: 'dots', seed: this.seed });
+      tape.position.set(spot.x, spot.y);
       this.plate.addChild(tape);
       this.selTape = tape;
     }

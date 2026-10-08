@@ -17,6 +17,7 @@ import { Projectiles } from './projectiles';
 import { buildRug, RUG_X, RUG_Y } from './rug';
 import { rugSkin } from './rugSkins';
 import { SunNote } from './sunNote';
+import { ToyMarks } from './toyMarks';
 import { UnitViews } from './units';
 import { FieldWarmup } from './warmup';
 import { buildWalkway } from './walkway';
@@ -42,6 +43,8 @@ export function createField(ctx: BattleContext): FieldPart {
   layers.floor.addChild(walkway, rug);
 
   const cells = new CellLayer(layers.floor, layers.projectiles, art);
+  // Where the toys that boost a row or a ring of cells work: over the cats, under the shots.
+  const toys = new ToyMarks(env, layers.floor, layers.projectiles, art);
   const preview = new DragPreview(env, layers.floor, layers.projectiles);
   // Field space, above the HUD (the overlay layer, under the director's banners): where a cat is shown while it is held over the sell strip.
   const lift = new Container();
@@ -60,6 +63,7 @@ export function createField(ctx: BattleContext): FieldPart {
   const sunNote = new SunNote(env, layers.fxFront);
   // The lit lane goes on the ground effects' layer (under the enemies and cats); the dot's tag over the cats.
   const laser = new LaserView(env, layers.zones, layers.fxFront);
+  input.onPress = (x, y) => toys.tapAt(x, y);
   input.onEmptyTap = (cell) => {
     if (sunNote.lit(cell)) sunNote.show(cell);
   };
@@ -112,6 +116,7 @@ export function createField(ctx: BattleContext): FieldPart {
       input.update(dt);
       updateCells(dt);
       cells.update(dt, env.time);
+      toys.update(dt, input.dragFrom ?? -1);
       laser.update(dt, env.time);
       ground.update(dt);
       spares.update(dt);
@@ -125,6 +130,7 @@ export function createField(ctx: BattleContext): FieldPart {
       offRefused();
       input.destroy();
       sunNote.destroy();
+      toys.destroy();
       laser.destroy();
       effects.destroy();
       marks.destroy();

@@ -16,40 +16,40 @@ const PI = Math.PI;
 
 /** Three streaks and a flash: the ordinary hit. About 5 particles. */
 export const HIT_SPARK: EmitDef = {
-  tex: 'spark', prio: 0, count: 3, life: [0.12, 0.2], speed: [220, 460], drag: 5, alignVel: true, stretch: 0.0024,
-  size: [26, 40], sizeEnd: [8, 10], colors: [W], fadeIn: 0, fadeOut: 0.55,
+  tex: 'spark', prio: 0, count: 3, life: [0.12, 0.18], speed: [150, 320], drag: 5, alignVel: true, stretch: 0.0018,
+  size: [16, 26], sizeEnd: [5, 7], colors: [W], fadeIn: 0, fadeOut: 0.55,
 };
 
 export const HIT_FLASH: EmitDef = {
-  tex: 'disc', prio: 0, count: 1, life: 0.12, size: 46, sizeEnd: 82, colors: [W], alpha: 0.8, fadeIn: 0, fadeOut: 0.85,
+  tex: 'disc', prio: 0, count: 1, life: 0.1, size: 28, sizeEnd: 52, colors: [W], alpha: 0.75, fadeIn: 0, fadeOut: 0.85,
   sizeEase: Ease.cubicOut,
 };
 
 /** Frame 1 of the muzzle cue: a round flash (guide C-01). */
 export const MUZZLE_FLASH: EmitDef = {
-  tex: 'disc', prio: 0, count: 1, life: 0.07, size: 42, sizeEnd: 18, colors: [W], alpha: 0.9, fadeIn: 0, fadeOut: 0.8,
+  tex: 'disc', prio: 0, count: 1, life: 0.07, size: 26, sizeEnd: 12, colors: [W], alpha: 0.9, fadeIn: 0, fadeOut: 0.8,
 };
 
 /** Frames 2-3: the flash stretches into the shape of the shot. */
 export const MUZZLE_STREAK: EmitDef = {
-  tex: 'spark', prio: 0, count: 2, life: [0.07, 0.12], speed: [260, 420], spread: 0.3, drag: 4, alignVel: true,
-  stretch: 0.002, size: [24, 34], sizeEnd: [8, 10], colors: [W], fadeIn: 0,
+  tex: 'spark', prio: 0, count: 2, life: [0.07, 0.12], speed: [200, 320], spread: 0.3, drag: 4, alignVel: true,
+  stretch: 0.0015, size: [16, 22], sizeEnd: [5, 7], colors: [W], fadeIn: 0,
 };
 
 /** A spell gathering at the caster: zones, chains and other attacks with no projectile. */
 export const CAST_RING: EmitDef = {
-  tex: 'ring', prio: 0, count: 1, life: 0.24, size: 30, sizeEnd: 104, colors: [W], alpha: 0.8, fadeIn: 0, fadeOut: 0.8,
+  tex: 'ring', prio: 0, count: 1, life: 0.2, size: 20, sizeEnd: 64, colors: [W], alpha: 0.7, fadeIn: 0, fadeOut: 0.8,
   sizeEase: Ease.cubicOut,
 };
 
 /** Where a projectile lands: a small flash and a few motes. */
 export const IMPACT_PUFF: EmitDef = {
-  tex: 'disc', prio: 0, count: 1, life: 0.16, size: 36, sizeEnd: 78, colors: [W], alpha: 0.8, fadeIn: 0, fadeOut: 0.8,
+  tex: 'disc', prio: 0, count: 1, life: 0.14, size: 22, sizeEnd: 48, colors: [W], alpha: 0.75, fadeIn: 0, fadeOut: 0.8,
   sizeEase: Ease.cubicOut,
 };
 
 export const IMPACT_MOTES: EmitDef = {
-  tex: 'dot', prio: 0, count: 3, life: [0.16, 0.28], speed: [60, 190], drag: 3.5, size: [6, 10], sizeEnd: 2, colors: [W],
+  tex: 'dot', prio: 0, count: 3, life: [0.16, 0.26], speed: [50, 130], drag: 3.5, size: [4, 7], sizeEnd: 2, colors: [W],
   fadeIn: 0,
 };
 
@@ -61,18 +61,18 @@ export const FIZZLE: EmitDef = {
 
 /** A pale blue glance of a shield soaking a hit. */
 export const SHIELD_GLANCE: EmitDef = {
-  tex: 'ring', prio: 1, count: 1, life: 0.22, size: 22, sizeEnd: 70, colors: [W], alpha: 0.9, fadeIn: 0, fadeOut: 0.8,
+  tex: 'ring', prio: 1, count: 1, life: 0.2, size: 16, sizeEnd: 46, colors: [W], alpha: 0.85, fadeIn: 0, fadeOut: 0.8,
   sizeEase: Ease.cubicOut,
 };
 
 export const SHIELD_SPARK: EmitDef = {
-  tex: 'sparkle', prio: 0, count: 3, life: [0.25, 0.4], speed: [50, 150], drag: 3, size: [12, 20], sizeEnd: [3, 6], spin: [-4, 4],
+  tex: 'sparkle', prio: 0, count: 3, life: [0.25, 0.4], speed: [40, 110], drag: 3, size: [8, 13], sizeEnd: [3, 5], spin: [-4, 4],
   rot: [0, TAU], colors: [W], fadeIn: 0.1, fadeOut: 0.5,
 };
 
 /** Rings of a piercing arrow's burst at each enemy it passes. */
 export const STAR_POP: EmitDef = {
-  tex: 'star', prio: 1, count: 4, life: [0.3, 0.5], speed: [120, 300], drag: 3, size: [18, 30], sizeEnd: [5, 9], spin: [-6, 6],
+  tex: 'star', prio: 1, count: 4, life: [0.26, 0.42], speed: [90, 200], drag: 3, size: [12, 20], sizeEnd: [4, 6], spin: [-6, 6],
   rot: [0, TAU], colors: [W], fadeIn: 0, fadeOut: 0.5,
 };
 

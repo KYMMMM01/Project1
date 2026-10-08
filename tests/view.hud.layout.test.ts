@@ -1,4 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import {
+  barX,
+  CHIP_BARS,
+  CHIP_DISC,
+  CHIP_PIPS,
+  CLASS_CHIP_BORDER_MAX,
+  CLASS_CHIP_H,
+  CLASS_CHIP_PAD,
+  CLASS_CHIP_RING_INSET,
+  CLASS_CHIP_SELECT_OUTSET,
+  CLASS_CHIP_W,
+  classChipParts,
+  classChipTape,
+  inContent,
+  tapeCorners,
+  type Pt,
+} from '@/ui/classChipMath';
+import { wobbleAmp } from '@/ui/paperMath';
 import type { BattleLayout } from '@/view/context';
 import { bottomRects, FACE, fitScale, gaugeWidth, PICK, pickCardX, pickHand, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from '@/view/hud/layoutMath';
 
@@ -137,3 +155,83 @@ describe('the pointing hand of the pick of three', () => {
     }
   }
 });
+
+describe('the class chip', () => {
+  const parts = classChipParts();
+  const box = (names: (n: string) => boolean): { x0: number; x1: number; y0: number; y1: number } => {
+    const pts = parts.filter((p) => names(p.name)).flatMap((p) => p.pts);
+    return { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), y1: Math.max(...pts.map((p) => p.y)) };
+  };
+
+  it('holds the well, the five pips with the star and the three bars, each in its content box', () => {
+    expect(parts.map((p) => p.name)).toEqual(['disc', 'pip0', 'pip1', 'pip2', 'pip3', 'star', 'bar0', 'bar1', 'bar2']);
+    for (const part of parts) {
+      for (const p of part.pts) expect(inContent(p.x, p.y), `${part.name} at ${p.x.toFixed(1)}, ${p.y.toFixed(1)}`).toBe(true);
+    }
+  });
+
+  it('keeps the content box at least 8 px from the border, the tier-3 ring and the hand-cut wobble apart from it', () => {
+    const wobble = wobbleAmp(CLASS_CHIP_W, CLASS_CHIP_H);
+    expect(CLASS_CHIP_PAD).toBeGreaterThanOrEqual(8 + wobble);
+    // Border (inside the cut), then the ring (2.5 px wide, centred on its inset), then at least 2 px of paper before the content, wobble included.
+    expect(CLASS_CHIP_RING_INSET - 2.5 / 2).toBeGreaterThan(CLASS_CHIP_BORDER_MAX);
+    expect(CLASS_CHIP_PAD - (CLASS_CHIP_RING_INSET + 2.5 / 2) - wobble).toBeGreaterThanOrEqual(2);
+    // The selected chip's line runs outside the cut edge, never inside the content.
+    expect(CLASS_CHIP_SELECT_OUTSET).toBeGreaterThan(0);
+  });
+
+  it('pads the well evenly: as far from the left edge as the pad, centred between the top and bottom', () => {
+    expect(CHIP_DISC.cx - CHIP_DISC.r + CLASS_CHIP_W / 2).toBeCloseTo(CLASS_CHIP_PAD, 5);
+    const top = CHIP_DISC.cy - CHIP_DISC.r + CLASS_CHIP_H / 2;
+    const bottom = CLASS_CHIP_H / 2 - (CHIP_DISC.cy + CHIP_DISC.r + CHIP_DISC.shadow);
+    expect(top).toBeGreaterThanOrEqual(CLASS_CHIP_PAD);
+    expect(bottom).toBeGreaterThanOrEqual(CLASS_CHIP_PAD);
+    expect(Math.abs(top - bottom)).toBeLessThanOrEqual(CHIP_DISC.shadow);
+  });
+
+  it('sets the pip row on the content box top and the bars on its bottom, the well clear of both', () => {
+    const pips = box((n) => n.startsWith('pip') || n === 'star');
+    const bars = box((n) => n.startsWith('bar'));
+    const disc = box((n) => n === 'disc');
+    expect(Math.abs(pips.y0 - -(CLASS_CHIP_H / 2 - CLASS_CHIP_PAD))).toBeLessThanOrEqual(1);
+    expect(Math.abs(bars.y1 - (CLASS_CHIP_H / 2 - CLASS_CHIP_PAD))).toBeLessThanOrEqual(1.5);
+    expect(pips.y1 + 6).toBeLessThanOrEqual(bars.y0);
+    expect(disc.x1 + 6).toBeLessThanOrEqual(Math.min(pips.x0, bars.x0));
+    // Pips and bars share one centre line.
+    expect(CHIP_PIPS.x).toBe(CHIP_BARS.x);
+    expect(barX(0) + (CHIP_BARS.w * 3 + CHIP_BARS.gap * 2) / 2).toBeCloseTo(CHIP_BARS.x, 5);
+  });
+
+  for (const variant of [0, 1]) {
+    it(`lays tape ${variant} over the top-left corner and over none of the content`, () => {
+      const spot = classChipTape(variant);
+      const quad = tapeCorners(spot);
+      const edges: Pt[] = [];
+      for (let i = 0; i < 4; i++) {
+        const a = quad[i] as Pt;
+        const b = quad[(i + 1) % 4] as Pt;
+        for (let k = 0; k <= 40; k++) edges.push({ x: a.x + ((b.x - a.x) * k) / 40, y: a.y + ((b.y - a.y) * k) / 40 });
+      }
+      for (const p of edges) expect(inContent(p.x, p.y)).toBe(false);
+      // Nothing of the content lies under it either (the content's centre and the well's rim).
+      for (const part of parts) for (const p of part.pts) expect(insideQuad(quad, p)).toBe(false);
+      // It sits on the corner, and sticks out of the chip's left side by no more than a thumb of paper (the first chip is 12 px from the screen).
+      expect(Math.min(...quad.map((p) => p.x))).toBeGreaterThanOrEqual(-CLASS_CHIP_W / 2 - 10);
+      expect(Math.min(...quad.map((p) => p.y))).toBeGreaterThanOrEqual(-CLASS_CHIP_H / 2 - 16);
+    });
+  }
+});
+
+function insideQuad(q: readonly Pt[], p: Pt): boolean {
+  let sign = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = q[i] as Pt;
+    const b = q[(i + 1) % 4] as Pt;
+    const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    if (cross === 0) continue;
+    const s = cross > 0 ? 1 : -1;
+    if (sign === 0) sign = s;
+    else if (s !== sign) return false;
+  }
+  return true;
+}

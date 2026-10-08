@@ -111,6 +111,20 @@ describe('the bubbles of the battle, as the HUD, the field and the lessons ask f
     vi.runAllTimers();
   };
 
+  it('tells a listener the key of every bubble that opens, so the field can light what the bubble of a toy is about', () => {
+    const keys: unknown[] = [];
+    const off = info.listen((key) => keys.push(key));
+    touch(() => info.tap('toy:cat_tower', target, { text: 'a' }));
+    touch(() => info.show('refused', target, { text: 'b' }));
+    // The same source again closes its bubble: nothing opened, nothing said.
+    touch(() => info.tap('toy:cat_tower', target, { text: 'a' }));
+    touch(() => info.tap('toy:cat_tower', target, { text: 'a' }));
+    expect(keys).toEqual(['toy:cat_tower', 'refused', 'toy:cat_tower']);
+    off();
+    touch(() => info.tap('enemy:cucumber', target, { text: 'c' }));
+    expect(keys).toHaveLength(3);
+  });
+
   it('a tap on an enemy card opens its bubble, the same card again closes it', () => {
     touch(() => info.tap('enemy:cucumber', target, { text: 'a' }));
     expect(info.visible).toBe(true);

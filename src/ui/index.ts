@@ -50,6 +50,7 @@ export { keepInside, placeBubble, type BubblePlace, type BubbleSpec } from './bu
 export { CardFrame, type CardFrameOpts, type CardSize } from './CardFrame';
 export { RarityPips, type RarityPipsOpts } from './RarityPips';
 export { ClassChip, CLASS_CHIP_H, CLASS_CHIP_W, CLASS_TIERS, type ClassChipOpts } from './ClassChip';
+export { classChipTape } from './classChipMath';
 export { OddsTable, type OddsRow, type OddsTableOpts } from './OddsTable';
 export { ScreenScaffold, type ScreenScaffoldOpts } from './ScreenScaffold';
 export { bindPress, cancelActivePress, type PressBinding, type PressHandlers } from './press';

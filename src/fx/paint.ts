@@ -14,7 +14,6 @@ export const PAINT_IDS = [
   'bolt_0', 'bolt_1', 'bolt_2', 'bolt_3', 'bolt_4', 'bolt_5',
   'badge_shield', 'shard_0', 'shard_1', 'shard_2', 'shard_3', 'shard_4',
   'zone_frost', 'zone_snow', 'zone_hole', 'zone_holearms', 'zone_ooze', 'zone_puddle',
-  'foe_haste', 'foe_heal',
 ] as const;
 
 export type PaintId = (typeof PAINT_IDS)[number];

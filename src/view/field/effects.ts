@@ -7,6 +7,9 @@ import type { ZoneMark } from './art';
 import type { EnemyViews } from './enemies';
 import type { FieldEnv } from './env';
 import type { Projectiles } from './projectiles';
+import { AuraPlan, NO_RING, RING_AND_REACH } from './auraPlan';
+import { bodySize, bodyX } from './policy';
+import { ringWidth } from './shieldRing';
 
 /** The patch of light is mustard paper: warm, flat, and quieter than a cat. */
 const SUN_COLOR = Color.mustard;
@@ -17,14 +20,23 @@ const ZAP = 2;
 /** Who stands in which area is looked up this often (seconds): the tag stays up for 0.6 s after the last look, so a tenth is more than the eye can tell. */
 const TOUCH_EVERY = 0.1;
 
-/** At most this many enemy rings are drawn at once: a wave of clocks would otherwise be a field of overlapping circles. */
-const MAX_RINGS = 4;
+/** Enemies that carry a ring: the clock's haste and the pill's mending. `radius` is the reach the simulation uses, `size` the drawn body and `diameter` the thin ring that hugs it. */
+/** A carrier's reach is only hinted while it is this young (seconds): one that inherits a ring when its neighbour dies does not announce itself again. */
+const HINT_WITHIN = 1.5;
 
-/** Enemies that carry a ring: the clock's haste and the pill's mending, with the reach the simulation uses. */
-const RING_OF: Partial<Record<EnemyId, { mark: 'haste' | 'heal'; radius: number }>> = {};
+interface Carrier {
+  mark: 'haste' | 'heal';
+  kind: number;
+  radius: number;
+  size: number;
+  diameter: number;
+}
+const RING_OF: Partial<Record<EnemyId, Carrier>> = {};
 for (const id of ENEMY_IDS) {
   const aura = enemySpec(id).aura;
-  if (aura) RING_OF[id] = { mark: aura.kind, radius: aura.radius };
+  if (!aura) continue;
+  const size = bodySize(enemySpec(id).radius, false);
+  RING_OF[id] = { mark: aura.kind, kind: aura.kind === 'haste' ? 0 : 1, radius: aura.radius, size, diameter: ringWidth(size) };
 }
 
 /** A set of live handles keyed by a number: the owner looks each one up every frame (which marks it seen) and `sweep` stops those nobody asked for. */
@@ -36,6 +48,10 @@ class Roster {
   /** Start of a frame's pass. */
   begin(): void {
     this.seen.fill(false);
+  }
+
+  has(key: number): boolean {
+    return this.keys.indexOf(key) >= 0;
   }
 
   get(key: number): AreaHandle | null {
@@ -95,6 +111,8 @@ export class FieldEffects {
   private readonly hazardTotal = new Float32Array(CELL_COUNT);
   private readonly zones = new Roster();
   private readonly rings = new Roster();
+  private readonly plan = new AuraPlan();
+  private readonly carriers: EnemyState[] = [];
   private laser: ZoneHandle | null = null;
   private readonly off: () => void;
   /** Seconds until the next look at who stands in an area. */
@@ -213,22 +231,40 @@ export class FieldEffects {
     this.zones.sweep();
   }
 
-  /** A ring round each clock and pill (the first few), following it; enemies inside it wear the ring's tag. */
+  /**
+   * One thin ring hugging each clock and pill, following it (rings of one kind that would overlap are one: `AuraPlan`); the enemies in
+   * reach wear the sticker of what is done to them, and nothing else marks them.
+   */
   private syncRings(look: boolean): void {
     const enemies = this.env.battle.enemies;
-    this.rings.begin();
+    const { plan, carriers } = this;
+    plan.reset();
+    carriers.length = 0;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i] as EnemyState;
       const ring = RING_OF[e.id];
       if (!ring) continue;
+      if (plan.add(ring.kind, bodyX(e.x, ring.size), e.y, ring.diameter, ring.radius, this.rings.has(e.uid)) >= 0) carriers.push(e);
+    }
+    plan.decide();
+    this.rings.begin();
+    for (let i = 0; i < carriers.length; i++) {
+      const show = plan.show[i] as number;
+      if (show === NO_RING) continue;
+      const e = carriers[i] as EnemyState;
+      const ring = RING_OF[e.id] as Carrier;
       let h = this.rings.get(e.uid);
       if (!h) {
-        if (this.rings.size >= MAX_RINGS) continue;
-        h = this.env.ground.enemyRing(ring.mark, e.x, e.y, ring.radius);
+        h = this.env.ground.enemyRing(ring.mark, plan.x[i] as number, e.y, ring.diameter / 2, show === RING_AND_REACH && e.age < HINT_WITHIN ? ring.radius : 0);
         this.rings.add(e.uid, h);
       }
-      h.moveTo(e.x, e.y);
-      if (!look) continue;
+      h.moveTo(plan.x[i] as number, e.y);
+    }
+    this.rings.sweep();
+    if (!look) return;
+    for (let i = 0; i < carriers.length; i++) {
+      const e = carriers[i] as EnemyState;
+      const ring = RING_OF[e.id] as Carrier;
       const reach = ring.radius + 4;
       for (let k = 0; k < enemies.length; k++) {
         const o = enemies[k] as EnemyState;
@@ -238,7 +274,6 @@ export class FieldEffects {
         if (dx * dx + dy * dy <= reach * reach) this.enemies.zoneTouch(o.uid, ring.mark);
       }
     }
-    this.rings.sweep();
   }
 
   private syncLaser(): void {

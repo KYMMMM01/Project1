@@ -5,7 +5,7 @@
  */
 import { Container } from 'pixi.js';
 import { CLASS_IDS, type ClassId } from '@/game';
-import { ClassChip, CLASS_CHIP_H, CLASS_CHIP_W, motion, popIn, tapeStrip, TweenBag } from '@/ui';
+import { ClassChip, classChipTape, motion, popIn, tapeStrip, TweenBag } from '@/ui';
 import type { HudEnv } from './env';
 import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE } from './kit';
 
@@ -38,8 +38,9 @@ export class ClassRow {
           open(id);
         },
       });
-      const tape = tapeStrip({ name: CLASS_TAPE[id], w: 56, h: 22, angle: i % 2 === 0 ? -20 : 16, pattern: i % 2 === 0 ? 'dots' : 'gingham' });
-      tape.position.set(-CLASS_CHIP_W / 2 + 26, -CLASS_CHIP_H / 2 + 2);
+      const spot = classChipTape(i);
+      const tape = tapeStrip({ name: CLASS_TAPE[id], w: spot.w, h: spot.h, angle: spot.angle, pattern: i % 2 === 0 ? 'dots' : 'gingham' });
+      tape.position.set(spot.x, spot.y);
       const holder = new Container();
       holder.position.set(FIRST_X + i * STEP, 0);
       holder.addChild(chip, tape);

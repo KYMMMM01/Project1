@@ -125,7 +125,7 @@ class ShotView {
     const settle = calm ? 1 : clamp01(age / LAUNCH);
     const base = this.bodyW / Math.max(1, this.body.texture.width);
     // A small stretch at the launch: long and thin for a shot that points along its path, a pop for one that spins.
-    const swell = 1 + 0.22 * arc;
+    const swell = 1 + 0.1 * arc;
     let sx = base * swell;
     let sy = base * swell;
     if (look.oriented) {
@@ -183,28 +183,28 @@ function shed(fx: Fx, look: ProjectileLook, x: number, y: number, heading: numbe
   const color = kind.color;
   switch (kind.kind) {
     case 'dust':
-      fx.fleck(paint('burst_puff'), bx, by, { life: 0.35, size: 14 * k, sizeEnd: 28 * k, rot: rand(0, TAU), color, alpha: 0.8, vx: rand(-14, 14), vy: rand(-18, 4), fadeAt: 0.3 });
+      fx.fleck(paint('burst_puff'), bx, by, { life: 0.3, size: 8 * k, sizeEnd: 16 * k, rot: rand(0, TAU), color, alpha: 0.7, vx: rand(-10, 10), vy: rand(-12, 3), fadeAt: 0.3 });
       break;
     case 'snow':
-      fx.fleck(fxTexture('crystal'), bx + rand(-6, 6), by + rand(-6, 6), { life: 0.55, size: 15 * k, sizeEnd: 7, rot: rand(0, TAU), spin: rand(-4, 4), color, alpha: 0.95, vx: rand(-20, 20), vy: rand(10, 40), gravity: 80, fadeAt: 0.4 });
+      fx.fleck(fxTexture('crystal'), bx + rand(-6, 6), by + rand(-6, 6), { life: 0.45, size: 9 * k, sizeEnd: 4, rot: rand(0, TAU), spin: rand(-4, 4), color, alpha: 0.95, vx: rand(-14, 14), vy: rand(6, 26), gravity: 70, fadeAt: 0.4 });
       break;
     case 'ember':
-      fx.fleck(fxTexture('spark'), bx + rand(-5, 5), by + rand(-5, 5), { life: 0.36, size: 17 * k, sizeEnd: 5, rot: back + rand(-0.6, 0.6), color: Math.random() < 0.5 ? color : Light.gold, alpha: 0.95, vx: Math.cos(back) * 70, vy: Math.sin(back) * 70 - 30, drag: 3, fadeAt: 0.3 });
+      fx.fleck(fxTexture('spark'), bx + rand(-3, 3), by + rand(-3, 3), { life: 0.3, size: 10 * k, sizeEnd: 3, rot: back + rand(-0.6, 0.6), color: Math.random() < 0.5 ? color : Light.gold, alpha: 0.95, vx: Math.cos(back) * 50, vy: Math.sin(back) * 50 - 20, drag: 3, fadeAt: 0.3 });
       break;
     case 'glint':
-      fx.fleck(paint('burst_glint'), bx + rand(-4, 4), by + rand(-4, 4), { life: 0.24, size: 22 * k, sizeEnd: 8, rot: rand(0, 1.5), color, alpha: 0.95, fadeAt: 0.3 });
+      fx.fleck(paint('burst_glint'), bx + rand(-3, 3), by + rand(-3, 3), { life: 0.2, size: 13 * k, sizeEnd: 5, rot: rand(0, 1.5), color, alpha: 0.95, fadeAt: 0.3 });
       break;
     case 'sparkle':
-      fx.fleck(fxTexture('sparkle'), bx + rand(-8, 8), by + rand(-8, 8), { life: 0.4, size: 15 * k, sizeEnd: 4, rot: rand(0, 1.5), spin: rand(-3, 3), color, alpha: 0.95, vx: rand(-18, 18), vy: rand(-18, 18), fadeAt: 0.4 });
+      fx.fleck(fxTexture('sparkle'), bx + rand(-5, 5), by + rand(-5, 5), { life: 0.34, size: 9 * k, sizeEnd: 3, rot: rand(0, 1.5), spin: rand(-3, 3), color, alpha: 0.95, vx: rand(-12, 12), vy: rand(-12, 12), fadeAt: 0.4 });
       break;
     case 'steam':
-      fx.fleck(paint('burst_puff'), bx, by - 6, { life: 0.5, size: 12 * k, sizeEnd: 24 * k, rot: rand(0, TAU), color, alpha: 0.7, vy: -34, vx: rand(-8, 8), fadeAt: 0.3 });
+      fx.fleck(paint('burst_puff'), bx, by - 4, { life: 0.45, size: 7 * k, sizeEnd: 14 * k, rot: rand(0, TAU), color, alpha: 0.65, vy: -26, vx: rand(-6, 6), fadeAt: 0.3 });
       break;
     case 'puff':
-      fx.fleck(paint('burst_puff'), bx, by, { life: 0.42, size: 14 * k, sizeEnd: 32 * k, rot: rand(0, TAU), color, alpha: 0.8, vx: rand(-10, 10), vy: rand(-22, -4), fadeAt: 0.3 });
+      fx.fleck(paint('burst_puff'), bx, by, { life: 0.36, size: 8 * k, sizeEnd: 18 * k, rot: rand(0, TAU), color, alpha: 0.7, vx: rand(-8, 8), vy: rand(-16, -3), fadeAt: 0.3 });
       break;
     case 'bubble':
-      fx.fleck(fxTexture('bubble'), bx + rand(-8, 8), by + rand(-8, 8), { life: 0.5, size: 8 * k, sizeEnd: 20 * k, color, alpha: 0.9, vx: rand(-8, 8), vy: rand(-40, -14), fadeAt: 0.4 });
+      fx.fleck(fxTexture('bubble'), bx + rand(-5, 5), by + rand(-5, 5), { life: 0.45, size: 5 * k, sizeEnd: 12 * k, color, alpha: 0.9, vx: rand(-6, 6), vy: rand(-30, -10), fadeAt: 0.4 });
       break;
   }
 }
@@ -356,21 +356,21 @@ function landing(fx: Fx, id: UnitId, x: number, y: number): void {
     fx.fleck(tex, x, y, { life, size, sizeEnd: end, color, alpha: 0.95, rot: rand(0, TAU), fadeAt: 0.35 });
   };
   if (id === 'm_frost') {
-    flash(paint('burst_star'), 60, 120, Light.ice, 0.22);
-    flash(paint('burst_ring'), 40, 150, Light.iceEdge, 0.4);
+    flash(paint('burst_star'), 30, 62, Light.ice, 0.2);
+    flash(paint('burst_ring'), 20, 76, Light.iceEdge, 0.34);
     for (let i = 0; i < 5; i++) {
       const dir = (i / 5) * TAU + rand(-0.3, 0.3);
-      fx.fleck(fxTexture('crystal'), x, y, { life: 0.6, size: 18, sizeEnd: 8, rot: dir, spin: rand(-6, 6), color: Light.iceWhite, vx: Math.cos(dir) * 150, vy: Math.sin(dir) * 150 - 40, gravity: 260, drag: 1.2, fadeAt: 0.5 });
+      fx.fleck(fxTexture('crystal'), x, y, { life: 0.5, size: 11, sizeEnd: 5, rot: dir, spin: rand(-6, 6), color: Light.iceWhite, vx: Math.cos(dir) * 100, vy: Math.sin(dir) * 100 - 30, gravity: 220, drag: 1.2, fadeAt: 0.5 });
     }
   } else if (id === 'm_cosmo') {
-    flash(paint('burst_ring'), 30, 170, Light.voidRim, 0.45);
-    flash(paint('burst_glint'), 60, 30, Light.voidRim, 0.3);
+    flash(paint('burst_ring'), 16, 84, Light.voidRim, 0.38);
+    flash(paint('burst_glint'), 34, 16, Light.voidRim, 0.26);
   } else if (id === 't_alch') {
-    fx.fleck(paint('burst_puff'), x, y, { life: 0.5, size: 40, sizeEnd: 100, color: Light.lime, alpha: 0.85, rot: rand(0, TAU), fadeAt: 0.4 });
-    flash(paint('burst_ring'), 30, 140, Light.lime, 0.35);
+    fx.fleck(paint('burst_puff'), x, y, { life: 0.42, size: 22, sizeEnd: 54, color: Light.lime, alpha: 0.8, rot: rand(0, TAU), fadeAt: 0.4 });
+    flash(paint('burst_ring'), 16, 72, Light.lime, 0.3);
     for (let i = 0; i < 6; i++) {
       const dir = (i / 6) * TAU + rand(-0.3, 0.3);
-      fx.fleck(fxTexture('droplet'), x, y, { life: 0.5, size: 13, sizeEnd: 8, rot: dir + Math.PI / 2, color: Light.lime, vx: Math.cos(dir) * 140, vy: Math.sin(dir) * 120 - 120, gravity: 620, fadeAt: 0.6 });
+      fx.fleck(fxTexture('droplet'), x, y, { life: 0.45, size: 9, sizeEnd: 5, rot: dir + Math.PI / 2, color: Light.lime, vx: Math.cos(dir) * 100, vy: Math.sin(dir) * 90 - 90, gravity: 560, fadeAt: 0.6 });
     }
   }
 }

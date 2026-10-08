@@ -3,8 +3,8 @@
  * dark-brown outline) and built in layers: a base that sits on the floor and shows the real reach, one drawn layer turning above it, and
  * a few flat particles that belong to the thing (flakes falling in the blizzard, scraps and stars spiralling into the black hole's core,
  * bubbles rising and popping from the potion). Nothing is added as light. Friendly areas are round and cool or magical (ice blue, lime,
- * violet); hostile ones are hot and hard-edged (the haste ring is orange with dark chevrons, the heal ring crimson with crosses; wet
- * and live cells keep their hazard tape), so a friend and a foe differ by shape, colour family and motion.
+ * violet); hostile ones are small and quiet (the haste and heal rings are one thin line hugging the carrier's body, in the colour of the
+ * sticker its helped enemies wear; wet and live cells keep their hazard tape), so a friend and a foe differ by shape, colour family and motion.
  *
  * Every area has the same life: it lands (the base grows with an overshoot and a flat ring spreads from it), it loops, it warns (for
  * the last second the base draws in and blinks) and it lifts away. Under reduced motion the picture is the same and still, the
@@ -71,10 +71,21 @@ export const AREA_PICTURES: Readonly<Record<DiscKind, readonly PaintId[]>> = {
   frost: ['zone_frost', 'zone_snow', 'burst_ring'],
   brew: ['zone_ooze', 'burst_ring'],
   void: ['zone_hole', 'zone_holearms', 'burst_ring'],
-  haste: ['foe_haste', 'burst_ring'],
-  heal: ['foe_heal', 'burst_ring'],
+  haste: [],
+  heal: [],
 };
 export const DISC_KINDS: readonly DiscKind[] = ['frost', 'brew', 'void', 'haste', 'heal'];
+/** The ring of a carrier is `AURA_RING` of its picture across, the reach hint `AURA_HINT` (the share of the cell the drawn circle fills). */
+const AURA_RING = 110 / 128;
+const AURA_HINT = 240 / 256;
+/** The picture's size that makes the ring `2 * REF` across (a view is then scaled to the carrier's real size). */
+const AURA_BOX = (2 * REF) / AURA_RING;
+/** How opaque a carrier's ring is: it is a mark to find the carrier by, not a thing to look at. */
+const AURA_ALPHA = 0.8;
+/** The reach hint of a new carrier: held for this long after landing, then faded over the next `HINT_FADE`, at most this opaque. */
+const HINT_HOLD = 0.3;
+const HINT_FADE = 0.8;
+const HINT_ALPHA = 0.32;
 /** The areas that are friends and may pile up (the hostile rings follow their enemy and never do). */
 const FRIENDLY: ReadonlySet<DiscKind> = new Set<DiscKind>(['frost', 'brew', 'void']);
 
@@ -130,8 +141,8 @@ interface DiscLook {
   enter: number;
   /** The base pulls in to this share while it lifts away (the black hole to its core). */
   exitShrink: number;
-  /** The colour of the ring that spreads as the area lands. */
-  land: number;
+  /** The colour of the ring that spreads as the area lands (null: none; a carrier's ring just opens). */
+  land: number | null;
   build(v: DiscArea): void;
   /** Layers that turn: every frame, a few sprites. `crowd` (0..1) is how much older areas lie over this one. */
   spin(v: DiscArea, age: number, warn: number, calm: boolean, crowd: number): void;
@@ -306,40 +317,58 @@ const VOID: DiscLook = {
   },
 };
 
-// ───────────────────────────── hostile rings round an enemy: speed chevrons and healing crosses ─────────────────────────────
+// ───────────────────────────── hostile rings round an enemy: speed and mending ─────────────────────────────
+
+/**
+ * A carrier's reach, drawn faintly at the aura's real radius for the first moments of its life, then gone: where its help reaches is
+ * worth a glance when it appears and clutter after that.
+ */
+function reachHint(v: DiscArea, age: number, tint: number): void {
+  const hint = v.hint as Part;
+  const fade = clamp01(1 - (age - HINT_HOLD) / HINT_FADE);
+  hint.s.visible = v.hintK > 0 && fade > 0;
+  if (!hint.s.visible) return;
+  const w = (2 * REF * v.hintK) / AURA_HINT;
+  hint.size(w, w);
+  hint.s.tint = tint;
+  hint.s.alpha = HINT_ALPHA * fade;
+}
 
 const HASTE: DiscLook = {
-  from: 0.7,
-  enter: 0.3,
-  exitShrink: 0.15,
-  land: Light.hotComet,
+  from: 0.8,
+  enter: 0.25,
+  exitShrink: 0.1,
+  land: null,
   build(v) {
-    v.base = new Pic('foe_haste', SPAN * REF, v.layer);
+    v.ring = new Part('auraDash', Color.coral, AURA_BOX, AURA_BOX, v.layer);
+    v.hint = new Part('auraReach', Color.coral, 2 * REF, 2 * REF, v.layer);
   },
-  spin(v, age, warn, calm) {
-    const ring = v.base as Pic;
-    // The chevrons run clockwise, faster as it winds up; the ring itself never stops. It is a warning, not a wall: the enemies inside stay easy to read.
-    ring.s.rotation = calm ? 0 : age * (1.1 + 0.6 * warn);
-    ring.s.alpha = 0.78;
+  spin(v, age, _warn, calm) {
+    // A gauge of short strokes turning slowly: one thin line, no fill, never in the way of what it rings.
+    (v.ring as Part).s.rotation = calm ? 0 : age * 0.9;
+    (v.ring as Part).s.alpha = AURA_ALPHA;
+    reachHint(v, age, Color.coral);
   },
   animate() {},
 };
 
 const HEAL: DiscLook = {
-  from: 0.7,
-  enter: 0.3,
-  exitShrink: 0.15,
-  land: Light.bloodCross,
+  from: 0.8,
+  enter: 0.25,
+  exitShrink: 0.1,
+  land: null,
   build(v) {
-    v.base = new Pic('foe_heal', SPAN * REF, v.layer);
+    v.ring = new Part('auraBead', Color.berry, AURA_BOX, AURA_BOX, v.layer);
+    v.hint = new Part('auraReach', Color.berry, 2 * REF, 2 * REF, v.layer);
   },
   spin(v, age, _warn, calm) {
-    const ring = v.base as Pic;
-    // A slow turn the other way and a heartbeat: two beats, a rest.
+    // A plain line with four beads and a slow two-beat pulse.
+    const ring = v.ring as Part;
+    const beat = calm ? 0 : Math.pow(Math.max(0, Math.sin(age * 5.2)), 6) * 0.035;
+    ring.size(AURA_BOX * (1 + beat), AURA_BOX * (1 + beat));
     ring.s.rotation = calm ? 0 : -age * 0.35;
-    const beat = calm ? 0 : Math.pow(Math.max(0, Math.sin(age * 5.2)), 6) * 0.05 + Math.pow(Math.max(0, Math.sin(age * 5.2 - 0.9)), 6) * 0.03;
-    ring.s.scale.set(((SPAN * REF) / Math.max(1, ring.s.texture.width)) * (1 + beat));
-    ring.s.alpha = 0.78;
+    ring.s.alpha = AURA_ALPHA;
+    reachHint(v, age, Color.berry);
   },
   animate() {},
 };
@@ -365,6 +394,11 @@ class DiscArea implements Pooled {
   readonly root = new Container();
   readonly layer = new Container();
   base: Pic | null = null;
+  /** A carrier's thin ring and its reach hint (hostile rings only). */
+  ring: Part | null = null;
+  hint: Part | null = null;
+  /** The hint's reach as a multiple of the ring's radius (0: no hint: another carrier's circle already shows the reach here). */
+  hintK = 0;
   swirl: Pic | null = null;
   arms: Pic | null = null;
   hole: Pic | null = null;
@@ -407,12 +441,12 @@ class DiscArea implements Pooled {
     this.land.anchor.set(0.5);
     this.land.eventMode = 'none';
     this.land.visible = false;
-    this.land.tint = look.land;
+    if (look.land !== null) this.land.tint = look.land;
     this.root.addChild(this.land);
   }
 
   /** `every` is the layer's current motif interval: the first move of the motif waits a share of it that depends on the slot. */
-  start(x: number, y: number, radius: number, every: number, serial: number): void {
+  start(x: number, y: number, radius: number, every: number, serial: number, reach: number): void {
     this.gen++;
     this.active = true;
     this.left = Infinity;
@@ -421,6 +455,7 @@ class DiscArea implements Pooled {
     this.leaving = false;
     this.leaveAge = 0;
     this.radius = radius;
+    this.hintK = reach > 0 ? reach / radius : 0;
     this.serial = serial;
     this.crowd = 0;
     this.crowdWant = 0;
@@ -496,7 +531,7 @@ class DiscArea implements Pooled {
     look.spin(this, age, warn, calm, this.crowd);
     // The landing ring: one flat ring spreads from the area's edge as it lands.
     const lk = clamp01(age / LAND);
-    this.land.visible = !calm && lk < 1;
+    this.land.visible = !calm && lk < 1 && look.land !== null;
     if (this.land.visible) {
       const d = 2 * REF * (0.7 + 0.5 * Ease.cubicOut(lk));
       this.land.scale.set(d / Math.max(1, this.land.texture.width));
@@ -793,11 +828,11 @@ export class AreaLayer {
     return free;
   }
 
-  /** A round area of `radius` design px at (x, y). */
-  disc(kind: DiscKind, x: number, y: number, radius: number): AreaHandle {
+  /** A round area of `radius` design px at (x, y); a hostile ring may also draw its `reach` (design px) faintly for its first moments. */
+  disc(kind: DiscKind, x: number, y: number, radius: number, reach = 0): AreaHandle {
     const free = this.freeOf(kind);
     const v = free.pop() ?? this.make(kind, free);
-    v.start(x, y, radius, this.motifEvery(), ++this.serial);
+    v.start(x, y, radius, this.motifEvery(), ++this.serial, reach);
     this.crowdWait = 0;
     return this.begin(v);
   }

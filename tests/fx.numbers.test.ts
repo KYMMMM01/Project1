@@ -32,8 +32,8 @@ import { NUMBER_LEVELS, setFxSettings } from '@/fx/settings';
 
 const DT = 1 / 60;
 /** Digits of a thin (ordinary) number are this many px high in the baked face, with their outline: the ink the player sees. */
-const INK_THIN = 54;
-const INK_THICK = 59;
+const INK_THIN = 57;
+const INK_THICK = 62;
 
 function make(cap = 40): FloatingNumbers {
   const n = new FloatingNumbers(new Container(), cap);
@@ -292,6 +292,8 @@ describe('one number per enemy', () => {
 describe('size and weight', () => {
   const settle = (style: NumStyle, value: number): { scale: number; alpha: number } => {
     const n = make();
+    // The size of a style is measured with the whole width of the screen to stand in (a side stretch of the lane draws a long figure smaller).
+    n.area.keepX0 = n.area.keepX1 = 0;
     const t = enemy(1, 45, 300);
     world(n, [t]);
     hit(n, t, value, style);
@@ -300,45 +302,51 @@ describe('size and weight', () => {
     return { scale: c.scale.x, alpha: c.alpha };
   };
 
-  it('ordinary numbers are about 21 px high with a thin outline and 70 to 80% opaque', () => {
+  it('ordinary numbers are about 28 to 30 px high with a medium outline and fully opaque', () => {
     for (const v of [5, 80, 900, 5000]) {
       const { scale, alpha } = settle('damage', v);
       const px = scale * INK_THIN;
-      expect(px).toBeGreaterThanOrEqual(19.5);
-      expect(px).toBeLessThanOrEqual(22.5);
-      expect(alpha).toBeGreaterThanOrEqual(0.7);
-      expect(alpha).toBeLessThanOrEqual(0.8);
-    }
-  });
-
-  it('crits and killing blows are bigger, 30 to 36 px with a heavy outline, and fully opaque', () => {
-    for (const style of ['crit', 'kill', 'big'] as const) {
-      const { scale, alpha } = settle(style, 700);
-      expect(scale * INK_THICK).toBeGreaterThanOrEqual(29);
-      expect(scale * INK_THICK).toBeLessThanOrEqual(37);
+      expect(px).toBeGreaterThanOrEqual(27.5);
+      expect(px).toBeLessThanOrEqual(30.5);
       expect(alpha).toBe(1);
     }
   });
 
-  it('a damage-over-time tick is smaller and quieter than a hit', () => {
+  it('crits and killing blows are bigger, 40 to 44 px with a heavy outline, and fully opaque', () => {
+    for (const style of ['crit', 'kill'] as const) {
+      const { scale, alpha } = settle(style, 700);
+      expect(scale * INK_THICK).toBeGreaterThanOrEqual(39.5);
+      expect(scale * INK_THICK).toBeLessThanOrEqual(44.5);
+      expect(alpha).toBe(1);
+    }
+    const boss = settle('big', 700);
+    expect(boss.scale * INK_THICK).toBeLessThanOrEqual(46.5);
+    expect(boss.alpha).toBe(1);
+  });
+
+  it('a damage-over-time tick is about 22 px high, smaller and quieter than a hit', () => {
     const tick = settle('dot', 90);
     const plain = settle('damage', 90);
+    expect(tick.scale * INK_THIN).toBeGreaterThanOrEqual(20.5);
+    expect(tick.scale * INK_THIN).toBeLessThanOrEqual(23.5);
     expect(tick.scale).toBeLessThan(plain.scale);
     expect(tick.alpha).toBeLessThan(plain.alpha);
   });
 
-  it('ordinary numbers live about half a second, big ones longer', () => {
+  it('ordinary numbers live about 0.7 seconds, big ones a little longer', () => {
     const n = make();
     const t = enemy(1, 45, 300);
     world(n, [t]);
     hit(n, t, 50);
-    frames(n, 0.45);
+    frames(n, 0.65);
     expect(n.count).toBe(1);
     frames(n, 0.1);
     expect(n.count).toBe(0);
     hit(n, t, 50, 'crit');
-    frames(n, 0.6);
+    frames(n, 0.8);
     expect(n.count).toBe(1);
+    frames(n, 0.1);
+    expect(n.count).toBe(0);
   });
 
   describe('with real glyph widths', () => {
@@ -348,18 +356,30 @@ describe('size and weight', () => {
 
     const wideOf = (c: Container): number => (c.children[0] as unknown as { width: number }).width * c.scale.x;
 
-    it('draws a long figure smaller rather than wider: 72 px at most for an ordinary number, 74 for a big one', () => {
+    it('draws a long figure smaller rather than wider: 100 px at most for an ordinary number, 112 for a big one', () => {
       const n = make();
-      const list = [enemy(1, 45, 120), enemy(2, 45, 480)];
+      // On the top stretch a figure has the whole length of the lane to stand along.
+      const list = [enemy(1, 200, 44, { angle: 0 }), enemy(2, 500, 44, { angle: 0 })];
       world(n, list);
       const [a, b] = list as [NumberTarget, NumberTarget];
       hit(n, a, 8644, 'damage');
       hit(n, b, 8644, 'crit');
       frames(n, 0.2);
       const [plain, crit] = shown(n);
-      expect(wideOf(plain as Container)).toBeLessThanOrEqual(72.5);
-      expect(wideOf(crit as Container)).toBeLessThanOrEqual(74.5);
+      expect(wideOf(plain as Container)).toBeLessThanOrEqual(100.5);
+      expect(wideOf(crit as Container)).toBeLessThanOrEqual(112.5);
       expect(wideOf(crit as Container)).toBeGreaterThan(wideOf(plain as Container));
+    });
+
+    it('on a side stretch a long figure is drawn small enough for the strip between the screen and the board, not left out', () => {
+      const n = make();
+      const left = enemy(1, 45, 300);
+      const right = enemy(2, 675, 300, { angle: Math.PI / 2 });
+      world(n, [left, right]);
+      hit(n, left, 8644, 'crit');
+      hit(n, right, 8644, 'damage');
+      expect(n.count).toBe(2);
+      for (const c of shown(n)) expect(wideOf(c)).toBeLessThanOrEqual(84);
     });
 
     it('a short one is not touched', () => {
@@ -427,14 +447,23 @@ describe('where it stands', () => {
     }
   });
 
-  it('on the bottom stretch it goes below the feet, not onto the cats of the board', () => {
+  it('on the bottom stretch it goes below the feet when the bottom panel leaves room, never onto the cats of the board', () => {
     const n = make();
+    n.area.maxY = 660;
     const t = enemy(1, 360, 580, { angle: Math.PI });
     world(n, [t]);
     hit(n, t, 50);
     const c = shown(n)[0] as Container;
     expect(ink(c).y0).toBeGreaterThan(t.y + t.bottom - 1);
-    expect(ink(c).y1).toBeLessThanOrEqual(642);
+    expect(ink(c).y1).toBeLessThanOrEqual(660);
+    // With less room it stands beside the body instead, and is still clear of the board and of the body.
+    const tight = make();
+    world(tight, [t]);
+    hit(tight, t, 50);
+    const d = shown(tight)[0] as Container;
+    expect(cut(ink(d), box(t))).toBe(false);
+    expect(ink(d).y1).toBeLessThanOrEqual(642);
+    expect(ink(d).y0).toBeGreaterThanOrEqual(530);
   });
 
   it('a big figure that is wider than the lane is nudged in from the screen edge and stops short of the board', () => {
@@ -487,7 +516,7 @@ describe('where it stands', () => {
     b.y = (at.y0 + at.y1) / 2 - 10;
     frames(n, 0.03);
     expect(n.count).toBe(1);
-    expect(c.alpha).toBeLessThan(0.78);
+    expect(c.alpha).toBeLessThan(0.9);
     frames(n, 0.1);
     expect(n.count).toBe(0);
   });
@@ -718,8 +747,8 @@ describe('the faces', () => {
     vi.resetModules();
     const { ensureNumberFonts } = await import('@/fx/numbers');
     ensureNumberFonts();
-    expect(font.installed.some((f) => f.stroke < 10)).toBe(true);
-    expect(font.installed.some((f) => f.stroke > 10)).toBe(true);
+    expect(font.installed.some((f) => f.stroke === 10)).toBe(true);
+    expect(font.installed.some((f) => f.stroke === 15)).toBe(true);
     for (const f of font.installed) {
       const chars = (f.chars as unknown[]).flat().join('');
       for (const ch of '만억조') expect(chars).toContain(ch);

@@ -64,17 +64,43 @@ beforeEach(() => setFxSettings({ reducedMotion: false, tier: 'mid' }));
 describe('what each cat throws', () => {
   const FIRING = UNIT_IDS.filter((id) => unitSpec(id).projectileSpeed > 0);
 
-  it('gives every cat that fires a travelling shot its own painted picture, at a size that reads on a phone', () => {
+  it('gives every cat that fires a travelling shot its own painted picture', () => {
     const seen = new Set<string>();
     for (const id of FIRING) {
       const look = projectileLook(id);
       expect(PAINT_IDS).toContain(look.paint);
-      expect(look.size).toBeGreaterThanOrEqual(30);
-      expect(look.size).toBeLessThanOrEqual(100);
       seen.add(look.paint);
     }
     expect(FIRING.length).toBe(11);
     expect(seen.size).toBe(FIRING.length);
+  });
+
+  it('draws each shot at the size it has next to a 90 px cat: small things 18 to 26 px, arrows and shards 30 to 38 px, thrown balls and flasks 24 to 32 px', () => {
+    const small: UnitId[] = ['r_sling', 'r_ninja', 'r_gunner', 't_bell', 't_bard', 't_lucky'];
+    const long: UnitId[] = ['r_archer', 'r_star', 't_chef'];
+    const thrown: UnitId[] = ['m_snow', 'm_fire'];
+    for (const id of small) expect(projectileLook(id).size, id).toBeGreaterThanOrEqual(18);
+    for (const id of small) expect(projectileLook(id).size, id).toBeLessThanOrEqual(26);
+    for (const id of long) expect(projectileLook(id).size, id).toBeGreaterThanOrEqual(30);
+    for (const id of long) expect(projectileLook(id).size, id).toBeLessThanOrEqual(38);
+    for (const id of thrown) expect(projectileLook(id).size, id).toBeGreaterThanOrEqual(24);
+    for (const id of thrown) expect(projectileLook(id).size, id).toBeLessThanOrEqual(32);
+    const cast = (id: UnitId): number => (castLook(id) as NonNullable<ReturnType<typeof castLook>>).look.size;
+    expect(cast('m_frost')).toBeGreaterThanOrEqual(30);
+    expect(cast('m_frost')).toBeLessThanOrEqual(38);
+    for (const id of ['m_cosmo', 't_alch'] as UnitId[]) {
+      expect(cast(id)).toBeGreaterThanOrEqual(24);
+      expect(cast(id)).toBeLessThanOrEqual(32);
+    }
+  });
+
+  it('shortens and thins the trails with the shots: nothing trails more than 45 px long or thicker than half of the shot', () => {
+    const looks = [...FIRING.map((id) => projectileLook(id)), ...(['m_frost', 'm_cosmo', 't_alch'] as UnitId[]).map((id) => (castLook(id) as NonNullable<ReturnType<typeof castLook>>).look)];
+    for (const look of looks) {
+      if (!look.streak) continue;
+      expect(look.streak.length).toBeLessThanOrEqual(45);
+      expect(look.streak.width).toBeLessThanOrEqual(look.size / 2 + 1);
+    }
   });
 
   it('points arrows, shards and the fireball along their path, and spins the shuriken, the pebble and the ladle', () => {
@@ -108,12 +134,13 @@ describe('what each cat throws', () => {
     expect(castSeconds('w_paw', 300)).toBe(0);
   });
 
-  it('a higher rank throws a bigger shot with a bolder streak, up to a quarter bigger', () => {
+  it('a higher rank throws a bigger shot with a bolder streak, at most a fifth bigger', () => {
     expect(rankOf('w_paw')).toBe(0);
     expect(rankOf('w_tiger')).toBe(4);
     expect(rankOf('r_sling')).toBeLessThan(rankOf('r_star'));
     expect(rankSize('r_sling')).toBe(1);
-    expect(rankSize('r_star')).toBeCloseTo(1.24, 5);
+    expect(rankSize('r_star')).toBeCloseTo(1.2, 5);
+    for (const id of UNIT_IDS) expect(rankSize(id)).toBeLessThanOrEqual(1.2 + 1e-9);
     expect(rankTrail('r_star')).toBeGreaterThan(rankTrail('r_sling'));
   });
 });

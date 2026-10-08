@@ -12,8 +12,8 @@ export type NumStyle = 'damage' | 'crit' | 'kill' | 'dot' | 'soak' | 'heal' | 'g
 const BAKED = 64;
 /** Height of a digit in the baked face, and the stroke's two widths: the digits of an ordinary number carry a thin outline, a big one a thick one. */
 const CAP_HEIGHT = 47;
-const STROKE_THIN = 7;
-const STROKE_THICK = 12;
+const STROKE_THIN = 10;
+const STROKE_THICK = 15;
 /** The digits' ink sits this far below the middle of the line the text object measures (baked px). */
 const INK_DROP = 4.7;
 /** How far a number's pop may exceed its resting size: places are kept clear for that much. */
@@ -31,6 +31,10 @@ const CHARS = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×만억조'];
 const MERGE_WINDOW = 0.3;
 /** A merged hit lets its number live this much longer from the pop: the new figure is read for about a third of a second at least. */
 const MERGE_AGE = 0.12;
+/** A body whose heading is this far off the horizontal (|sin|) is on a side stretch of the lane, where a number has only the strip between the screen's edge and the board. */
+const SIDE_LANE = 0.7;
+/** Room kept between the strip's two edges and a number standing in it. */
+const SIDE_GAP = 2;
 /** Places searched for per frame (a search is the dearest thing a hit can ask for in a crowd): past this the hits of the frame are not shown. */
 const TRIES_PER_FRAME = 3;
 /** After a number found no place its enemy is not looked for again for this long: the lane has not changed much, and the hits go on adding up. */
@@ -119,39 +123,39 @@ interface StyleDef {
 
 const STYLES: Record<NumStyle, StyleDef> = {
   damage: {
-    face: Color.coral, thin: true, ink: [20, 22], width: 72, life: 0.5, rise: 14, out: 10, alpha: 0.78,
+    face: Color.coral, thin: true, ink: [28, 30], width: 100, life: 0.7, rise: 16, out: 10, alpha: 1,
     pop: [0.7, 1.1, 1], popSeconds: 0.08, tilt: 0, prio: 1, gate: 'hit', quiet: false, prefix: '', suffix: '',
   },
   crit: {
-    face: Color.mustard, thin: false, ink: [30, 34], width: 74, life: 0.8, rise: 22, out: 14, alpha: 1,
+    face: Color.mustard, thin: false, ink: [40, 44], width: 112, life: 0.85, rise: 24, out: 14, alpha: 1,
     pop: [0.55, 1.2, 1], popSeconds: 0.14, tilt: 0.05, prio: 2, gate: 'always', quiet: false, prefix: '', suffix: '!',
   },
   kill: {
-    face: Color.coral, thin: false, ink: [30, 34], width: 74, life: 0.8, rise: 22, out: 14, alpha: 1,
+    face: Color.coral, thin: false, ink: [40, 44], width: 112, life: 0.85, rise: 24, out: 14, alpha: 1,
     pop: [0.55, 1.2, 1], popSeconds: 0.14, tilt: 0, prio: 2, gate: 'always', quiet: false, prefix: '', suffix: '',
   },
   big: {
-    face: Color.mustard, thin: false, ink: [32, 36], width: 76, life: 0.9, rise: 24, out: 14, alpha: 1,
+    face: Color.mustard, thin: false, ink: [42, 46], width: 120, life: 0.95, rise: 26, out: 14, alpha: 1,
     pop: [0.5, 1.25, 1], popSeconds: 0.16, tilt: 0.05, prio: 3, gate: 'always', quiet: false, prefix: '', suffix: '!',
   },
   dot: {
-    face: Color.teal, thin: true, ink: [15, 17], width: 44, life: 0.5, rise: 10, out: 8, alpha: 0.62,
+    face: Color.teal, thin: true, ink: [21, 23], width: 64, life: 0.55, rise: 10, out: 8, alpha: 0.85,
     pop: [0.8, 1.05, 1], popSeconds: 0.08, tilt: 0, prio: 0, gate: 'tick', quiet: true, prefix: '', suffix: '',
   },
   soak: {
-    face: Color.teal, thin: true, ink: [15, 17], width: 44, life: 0.5, rise: 10, out: 8, alpha: 0.62,
+    face: Color.teal, thin: true, ink: [21, 23], width: 64, life: 0.55, rise: 10, out: 8, alpha: 0.85,
     pop: [0.8, 1.05, 1], popSeconds: 0.08, tilt: 0, prio: 0, gate: 'soak', quiet: true, prefix: '', suffix: '',
   },
   heal: {
-    face: Color.leaf, thin: true, ink: [22, 24], width: 72, life: 0.7, rise: 18, out: 0, alpha: 0.9,
+    face: Color.leaf, thin: true, ink: [28, 30], width: 100, life: 0.7, rise: 18, out: 0, alpha: 1,
     pop: [0.6, 1.15, 1], popSeconds: 0.12, tilt: 0, prio: 1, gate: 'extras', quiet: false, prefix: '+', suffix: '',
   },
   gold: {
-    face: Color.mustard, thin: true, ink: [22, 24], width: 72, life: 0.7, rise: 18, out: 0, alpha: 0.9,
+    face: Color.mustard, thin: true, ink: [28, 30], width: 100, life: 0.7, rise: 18, out: 0, alpha: 1,
     pop: [0.6, 1.15, 1], popSeconds: 0.12, tilt: 0, prio: 1, gate: 'extras', quiet: false, prefix: '+', suffix: '',
   },
   hurt: {
-    face: Color.berry, thin: false, ink: [26, 30], width: 80, life: 0.8, rise: 20, out: 0, alpha: 1,
+    face: Color.berry, thin: false, ink: [34, 38], width: 112, life: 0.85, rise: 22, out: 0, alpha: 1,
     pop: [0.5, 1.2, 1], popSeconds: 0.14, tilt: 0, prio: 2, gate: 'always', quiet: false, prefix: '-', suffix: '',
   },
 };
@@ -232,6 +236,8 @@ class Num {
   dx = 0;
   dy = 0;
   scale = 1;
+  /** The widest its digits may be drawn (px): its style's, or less on a side stretch of the lane. */
+  cap = 0;
   tiltAmp = 0;
   /** Half the width of the digits at scale 1. */
   half = 0;
@@ -352,7 +358,8 @@ export class FloatingNumbers {
     this.triesThisFrame++;
     const text = figure(def, typeof value === 'number' ? total : value);
     const wide = measure(text);
-    const scale = scaleOf(def, total, wide, o);
+    const cap = this.widthFor(def, t, x);
+    const scale = scaleOf(def, total, wide, o, cap);
     // The crowd rule first (it is cheap and refuses most): a number that may not be shown need not look for a place.
     if (!this.reserve(def, level, total, t ? t.x : x, t ? t.y : y)) {
       this.skipped++;
@@ -381,7 +388,8 @@ export class FloatingNumbers {
     n.holds = t !== null && t.boss;
     n.value = total;
     n.setText(text);
-    n.scale = scaleOf(def, total, n.half * 2, o);
+    n.cap = cap;
+    n.scale = scaleOf(def, total, n.half * 2, o, cap);
     n.ox = this.spot.ox;
     n.oy = this.spot.oy;
     n.dx = this.spot.dx;
@@ -583,7 +591,19 @@ export class FloatingNumbers {
   /** Show `value` on a number that is alive: its text is laid out and its size follows the real width. */
   private setText(n: Num, value: number | string, o: NumberOpts): void {
     n.setText(figure(n.def, value));
-    n.scale = scaleOf(n.def, typeof value === 'number' ? value : 0, n.half * 2, o);
+    n.scale = scaleOf(n.def, typeof value === 'number' ? value : 0, n.half * 2, o, n.cap);
+  }
+
+  /**
+   * The widest a figure of `def` may be drawn for body `t` (or for a point at `x` with no body): the style's own width, and on a side stretch of the lane no more than the strip
+   * between the screen's edge and the board holds (a longer figure is drawn smaller there rather than not at all).
+   */
+  private widthFor(def: StyleDef, t: NumberTarget | null, x: number): number {
+    const a = this.area;
+    const side = t ? Math.abs(Math.sin(t.angle)) >= SIDE_LANE : x < a.keepX0 || x > a.keepX1;
+    if (!side || a.keepX1 <= a.keepX0) return def.width;
+    const strip = Math.min(a.keepX0 - a.minX, a.maxX - a.keepX1) - 2 * SIDE_GAP;
+    return Math.min(def.width, strip / PEAK);
   }
 
   private apply(n: Num): void {
@@ -634,14 +654,14 @@ function measure(text: string): number {
 }
 
 /** The scale a figure of `magnitude` and `width` (baked px) is drawn at: its style's size, smaller when it would be wider than the style allows. */
-function scaleOf(def: StyleDef, magnitude: number, width: number, o: NumberOpts): number {
+function scaleOf(def: StyleDef, magnitude: number, width: number, o: NumberOpts, cap: number): number {
   // Size grows with log10 of the magnitude (a 4-digit hit reads a little bigger than a 2-digit one).
   const k = clamp(Math.log10(Math.max(1, Math.abs(magnitude))) / 3, 0, 1);
   const px = def.ink[0] + (def.ink[1] - def.ink[0]) * k;
   const scale = (px / (CAP_HEIGHT + (def.thin ? STROKE_THIN : STROKE_THICK))) * (o.scale ?? 1);
   // A long figure is drawn smaller rather than wider than a number may be: "864,408!" must not span the lane.
   const wide = width * scale;
-  return wide > def.width ? (scale * def.width) / wide : scale;
+  return wide > cap ? (scale * cap) / wide : scale;
 }
 
 /**
