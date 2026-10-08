@@ -1,5 +1,6 @@
 /** Pure plan of the chest reveal: which card stacks come out, in what order, how fast, and where they land. */
 import { RARITY_OF, UNITS_BY_RARITY } from '@/meta/units';
+import { climbSeed } from './climb';
 import { CHEST_KINDS, CHEST_RARITIES, type BaseUnitId, type ChestCard, type ChestKind, type ChestRarity, type ChestResult } from '@/meta/types';
 
 export interface RevealStack {
@@ -15,6 +16,9 @@ export interface RevealStack {
 export function rarityRank(r: ChestRarity): number {
   return CHEST_RARITIES.indexOf(r);
 }
+
+/** The best card of a chest whose best rank is at least this one first shows as a dark silhouette. */
+export const SILHOUETTE_FROM = 2;
 
 /** The tenth-gold-chest bonus: which unit and how many cards (none when `cards` is 0). */
 export interface Bonus {
@@ -62,12 +66,14 @@ export interface Pile {
   overflowGold: number;
   /** Stored reveal ids: all of them are acknowledged when the reveal ends. */
   ids: number[];
+  /** Made from the stored results, so a replay stages the climb the same way (it picks the climb pattern). */
+  seed: number;
 }
 
 /** Merge the stored results of one pile into the view the reveal plays (one chest, one rattle, one summary). */
 export function mergePile(results: readonly ChestResult[]): Pile {
   const first = results[0];
-  const pile: Pile = { kind: first ? first.kind : 'wooden', count: results.length, cards: [], bonuses: [], overflowGold: 0, ids: [] };
+  const pile: Pile = { kind: first ? first.kind : 'wooden', count: results.length, cards: [], bonuses: [], overflowGold: 0, ids: [], seed: climbSeed(results) };
   for (const r of results) {
     pile.cards.push(...r.cards);
     if (r.pity.unit && r.pity.cards > 0) pile.bonuses.push(r.pity);

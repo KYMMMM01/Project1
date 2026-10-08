@@ -76,6 +76,17 @@ export function flipPose(out: CardPose, k: number, toX: number, toY: number, toS
   return out;
 }
 
+/** The silhouette waiting on stage: it gathers itself (a slow swell) and shivers harder as the peel comes. */
+export function shadePose(out: CardPose, age: number, dur: number, toX: number, toY: number, toScale: number): CardPose {
+  const k = dur > 0 ? Math.min(1, age / dur) : 1;
+  out.x = toX + Math.sin(age * 58) * 2.2 * k;
+  out.y = toY;
+  out.s = toScale * (1 + 0.07 * Math.sin(Math.min(1, k * 1.4) * (Math.PI / 2)) + 0.01 * Math.sin(age * 7));
+  out.flipX = 1;
+  out.rot = Math.sin(age * 37) * 0.025 * k;
+  return out;
+}
+
 /** Face up on stage: a breath of life; the best card of an epic or legendary chest swells and settles. */
 export function showPose(out: CardPose, age: number, dur: number, swell: boolean, toX: number, toY: number, toScale: number): CardPose {
   const k = dur > 0 ? Math.min(1, age / dur) : 1;

@@ -36,9 +36,10 @@ vi.mock('@/core/assets', async (original) => {
 
 import { uiTweens } from '@/core/tween';
 import { motion } from '@/ui';
-import { Sunburst } from '../src/screens/shop/chestLight';
+import { Color, Rarity } from '@/ui';
+import { CrackLight, stageColors, Sunburst } from '../src/screens/shop/chestLight';
 import { newPose, popPose, windupPose } from '../src/screens/shop/chestPose';
-import { CHEST_SIZE, ChestStage, tellColors } from '../src/screens/shop/ChestStage';
+import { CHEST_SIZE, ChestStage } from '../src/screens/shop/ChestStage';
 import { RevealFlow } from '../src/screens/shop/revealFlow';
 import type { RevealStack } from '../src/screens/shop/revealPlan';
 
@@ -56,19 +57,27 @@ describe('the chest of a reveal', () => {
     pictures.clear();
   });
 
-  it('tells each rarity by its own light, pale enough to read as light', () => {
-    const cores = RARITIES.map((r) => tellColors(r).core);
+  it('starts the stage on plain cream paper and gives every rank after it a colour of its own, pale enough to read as light', () => {
+    const quiet = stageColors(0);
+    expect(quiet.core).toBe(Color.paperLight);
+    expect(quiet.edge).toBe(Rarity.common.light);
+    const cores = [0, 1, 2, 3].map((rank) => stageColors(rank).core);
+    const edges = [0, 1, 2, 3].map((rank) => stageColors(rank).edge);
     expect(new Set(cores).size).toBe(4);
-    for (const r of RARITIES) {
-      const { core } = tellColors(r);
+    expect(new Set(edges).size).toBe(4);
+    for (const rank of [0, 1, 2, 3]) {
+      const { core } = stageColors(rank);
       const mean = (((core >> 16) & 255) + ((core >> 8) & 255) + (core & 255)) / 3;
       expect(mean).toBeGreaterThan(190);
     }
+    // Out of range ranks are the nearest one: nothing throws and nothing is invented.
+    expect(stageColors(-3)).toBe(stageColors(0));
+    expect(stageColors(9)).toBe(stageColors(3));
   });
 
   it('without its pictures (the drawn chest) goes through the whole fall, shake and pop and settles', () => {
     for (const best of RARITIES) {
-      const stage = new ChestStage('wooden', best, 1);
+      const stage = new ChestStage('wooden', 1);
       const flow = new RevealFlow(one(best), () => undefined);
       const pose = newPose();
       for (let i = 0; i < 400; i++) {
@@ -86,7 +95,7 @@ describe('the chest of a reveal', () => {
   });
 
   it('puts the cards\' exit above the chest and a pile\'s count on it', () => {
-    const stage = new ChestStage('gold', 'epic', 4);
+    const stage = new ChestStage('gold', 4);
     expect(stage.opening.y).toBeLessThan(0);
     expect(stage.halfH).toBeGreaterThan(100);
     stage.destroy({ children: true });
@@ -98,7 +107,7 @@ describe('the chest of a reveal', () => {
       pictures.set('icon_chest_silver', { w, h });
       pictures.set('icon_chest_silver_open', { w: ow, h: oh });
       pictures.set('icon_chest_silver_ajar', { w: w + 20, h: h + 40 });
-      const stage = new ChestStage('silver', 'epic', 1);
+      const stage = new ChestStage('silver', 1);
       const fit = CHEST_SIZE / Math.max(w, h);
       expect(stage.halfH).toBeCloseTo((h * fit) / 2, 3);
       expect(stage.bodyW).toBeCloseTo(w * fit, 3);
@@ -124,7 +133,7 @@ describe('the chest of a reveal', () => {
     };
     pictures.set('icon_chest_gold', { w: 400, h: 400 });
     pictures.set('icon_chest_gold_open', { w: 400, h: 500 });
-    const plain = new ChestStage('gold', 'rare', 1);
+    const plain = new ChestStage('gold', 1);
     const pose = newPose();
     pose.ajar = true;
     plain.apply(pose);
@@ -135,7 +144,7 @@ describe('the chest of a reveal', () => {
     plain.destroy({ children: true });
 
     pictures.set('icon_chest_gold_ajar', { w: 400, h: 420 });
-    const rich = new ChestStage('gold', 'rare', 1);
+    const rich = new ChestStage('gold', 1);
     const labelOf = (stage: ChestStage): string[] => {
       const out: string[] = [];
       const walk = (c: { visible: boolean; children?: unknown[]; texture?: Texture }): void => {
@@ -160,7 +169,7 @@ describe('the chest of a reveal', () => {
 
   it('leaves its picture whole: one sprite of the whole texture, no halves cut along a seam', () => {
     pictures.set('icon_chest_wood', { w: 400, h: 400 });
-    const stage = new ChestStage('wooden', 'legendary', 3);
+    const stage = new ChestStage('wooden', 3);
     const rig = stage.children[1] as { children: { texture?: Texture }[] };
     const pics = rig.children.filter((c) => c.texture?.label?.startsWith('icon_chest_wood'));
     expect(pics).toHaveLength(1);
@@ -168,28 +177,82 @@ describe('the chest of a reveal', () => {
     stage.destroy({ children: true });
   });
 
-  it('opens at once without motion: the tag is gone and no tween is left running', () => {
+  it("hangs nothing on the chest that could say what is inside: no label, no tag, only pictures, the light and a pile's count", () => {
+    for (const count of [1, 3]) {
+      const stage = new ChestStage('gold', count);
+      const texts: string[] = [];
+      const walk = (c: { children?: unknown[]; text?: unknown }): void => {
+        if (typeof c.text === 'string') texts.push(c.text);
+        for (const k of (c.children ?? []) as (typeof c)[]) walk(k);
+      };
+      walk(stage);
+      expect(texts).toEqual([]);
+      // The light, the picture and, on a pile, the count that says how many: nothing hangs from a corner.
+      const rig = stage.children[1] as { children: unknown[] };
+      expect(rig.children).toHaveLength(count > 1 ? 3 : 2);
+      stage.destroy({ children: true });
+    }
+  });
+
+  it('opens at once without motion: the open picture takes over and the light is out', () => {
     motion.reduced = true;
-    const stage = new ChestStage('silver', 'rare', 1);
+    const stage = new ChestStage('silver', 1);
+    stage.setLight(0xffffff, 0xcccccc);
+    stage.apply({ ...newPose(), glow: 1 });
     stage.open();
     run(0.1);
-    expect(() => stage.apply(newPose())).not.toThrow();
+    expect(() => stage.apply({ ...newPose(), glow: 1 })).not.toThrow();
+    stage.destroy({ children: true });
+  });
+
+  it("lets the light leak out behind the picture on a hop, in the stage's colour, and puts it out when the lid is open", () => {
+    pictures.set('icon_chest_gold', { w: 400, h: 400 });
+    pictures.set('icon_chest_gold_open', { w: 400, h: 500 });
+    const stage = new ChestStage('gold', 1);
+    const rig = stage.children[1] as { children: { texture?: Texture }[] };
+    const crack = rig.children[0] as unknown as { visible: boolean; alpha: number; children: { tint: number }[] };
+    // The first thing in the rig, so every picture is drawn over it and only what lies past the picture's edge shows.
+    expect(rig.children[1]?.texture?.label?.startsWith('icon_chest_gold')).toBe(true);
+    expect(crack.visible).toBe(false);
+    stage.setLight(0x112233, 0x445566);
+    stage.apply({ ...newPose(), glow: 1 });
+    expect(crack.visible).toBe(true);
+    expect(crack.alpha).toBe(1);
+    expect(crack.children[0]?.tint).toBe(0x445566);
+    expect(crack.children[1]?.tint).toBe(0x112233);
+    stage.apply({ ...newPose(), glow: 0.3 });
+    expect(crack.alpha).toBeLessThan(0.5);
+    stage.apply({ ...newPose(), glow: 0 });
+    expect(crack.visible).toBe(false);
+    stage.apply({ ...newPose(), glow: 1 });
+    stage.open();
+    expect(crack.visible).toBe(false);
+    stage.apply({ ...newPose(), glow: 1 });
+    expect(crack.visible).toBe(false);
     stage.destroy({ children: true });
   });
 });
 
 describe('the sunburst', () => {
-  it('grows behind the closed chest and never shrinks, then swells at the pop and spins up before it settles to a slow turn', () => {
+  it('widens behind the closed chest with every promotion and never shrinks, then swells at the pop and spins up before it settles to a slow turn', () => {
     const sun = new Sunburst(0xffffff, 0xcccccc, 600, 0.5);
     sun.update(0);
     const small = sun.scale.x;
     sun.setLevel(0.5);
-    sun.update(0.1);
+    sun.update(1);
     const mid = sun.scale.x;
     expect(mid).toBeGreaterThan(small);
+    // The widening is eased, not a jump.
+    const eased = new Sunburst(0xffffff, 0xcccccc, 600, 0.5);
+    eased.update(0);
+    eased.setLevel(1);
+    eased.update(0.05);
+    expect(eased.scale.x).toBeGreaterThan(small);
+    expect(eased.scale.x).toBeLessThan(0.9);
+    eased.destroy({ children: true });
     sun.setLevel(0.2);
-    sun.update(0.1);
-    expect(sun.scale.x).toBeCloseTo(mid, 5);
+    sun.update(1);
+    expect(sun.scale.x).toBeCloseTo(mid, 3);
     sun.burst(0.6);
     sun.update(0.01);
     const before = sun.rotation;
@@ -236,6 +299,77 @@ describe('the sunburst', () => {
     sun.destroy({ children: true });
   });
 
+  it('flips to the colour it is given: the long rays take the edge, the short ones the core', () => {
+    const sun = new Sunburst(0x111111, 0x222222, 600, 0.5);
+    const tints = (): number[] => (sun.children as unknown as { tint: number }[]).map((c) => c.tint);
+    expect(tints().filter((t, i) => (i % 2 === 0 ? t === 0x222222 : t === 0x111111))).toHaveLength(14);
+    sun.setTint(0xaa0000, 0x00bb00);
+    expect(tints().filter((t, i) => (i % 2 === 0 ? t === 0x00bb00 : t === 0xaa0000))).toHaveLength(14);
+    sun.destroy({ children: true });
+  });
+
+  it('can be a second ring of other rays that turns the other way, faster or slower on demand, and stays hidden until it is wanted', () => {
+    const sun = new Sunburst(0xffffff, 0xcccccc, 600, 0.5, false, { rays: 10, dir: -1 });
+    expect(sun.children).toHaveLength(10);
+    sun.setLevel(1);
+    sun.update(2);
+    const a = sun.rotation;
+    sun.update(0.1);
+    expect(sun.rotation).toBeLessThan(a);
+    const slow = a - sun.rotation;
+    sun.setSpin(3);
+    const b = sun.rotation;
+    sun.update(0.1);
+    expect(b - sun.rotation).toBeGreaterThan(slow * 2);
+    sun.setOn(false);
+    sun.update(0.1);
+    expect(sun.visible).toBe(false);
+    sun.setOn(true);
+    sun.update(0.1);
+    expect(sun.visible).toBe(true);
+    sun.destroy({ children: true });
+  });
+
+  it('eases to the opacity it is asked for before the pop, bolder for a better colour, and takes it at once without motion', () => {
+    const sun = new Sunburst(0xffffff, 0xcccccc, 600, 0.3);
+    sun.update(0);
+    expect(sun.alpha).toBeCloseTo(0.3, 3);
+    sun.setBody(0.8);
+    sun.update(0.05);
+    expect(sun.alpha).toBeGreaterThan(0.3);
+    expect(sun.alpha).toBeLessThan(0.8);
+    sun.update(2);
+    expect(sun.alpha).toBeCloseTo(0.8, 2);
+    sun.destroy({ children: true });
+    const still = new Sunburst(0xffffff, 0xcccccc, 600, 0.3, true);
+    still.setBody(0.7);
+    still.update(0.01);
+    expect(still.alpha).toBeCloseTo(0.7, 3);
+    still.destroy({ children: true });
+  });
+
+  it('kicks harder and spins up when punched (a promotion), then settles; a kick is no swell without motion', () => {
+    const sun = new Sunburst(0xffffff, 0xcccccc, 600, 0.5);
+    sun.setLevel(0.5);
+    sun.update(2);
+    const calm = sun.scale.x;
+    sun.punch();
+    sun.update(0.05);
+    expect(sun.scale.x).toBeGreaterThan(calm * 1.15);
+    sun.update(1.5);
+    expect(sun.scale.x).toBeCloseTo(calm, 3);
+    sun.destroy({ children: true });
+    const still = new Sunburst(0xffffff, 0xcccccc, 600, 0.5, true);
+    still.setLevel(0.5);
+    still.update(1);
+    const rest = still.scale.x;
+    still.punch();
+    still.update(0.05);
+    expect(still.scale.x).toBe(rest);
+    expect(still.rotation).toBe(0);
+    still.destroy({ children: true });
+  });
+
   it('is still without motion: the same burst, no turning and no pop', () => {
     const sun = new Sunburst(0xffffff, 0xcccccc, 600, 0.5, true);
     sun.setLevel(0.6);
@@ -245,5 +379,22 @@ describe('the sunburst', () => {
     expect(sun.rotation).toBe(0);
     expect(sun.alpha).toBeCloseTo(0.4, 2);
     sun.destroy({ children: true });
+  });
+});
+
+describe('the light out of the lid', () => {
+  it("is a fan of wedges pointing up that takes the stage's colour and follows the glow it is given", () => {
+    const light = new CrackLight(300);
+    expect(light.visible).toBe(false);
+    light.setTint(0x010101, 0x020202);
+    const tints = (light.children as unknown as { tint: number }[]).map((c) => c.tint);
+    expect(tints.filter((t, i) => t === (i % 2 === 0 ? 0x020202 : 0x010101))).toHaveLength(light.children.length);
+    for (const c of light.children) expect(Math.sin(c.rotation)).toBeLessThan(-0.4);
+    light.setGlow(0.5);
+    const half = light.scale.x;
+    light.setGlow(1);
+    expect(light.scale.x).toBeGreaterThan(half);
+    expect(light.alpha).toBe(1);
+    light.destroy({ children: true });
   });
 });

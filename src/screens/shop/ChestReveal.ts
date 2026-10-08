@@ -7,23 +7,23 @@ import { clamp, lerp, mixColor, TAU } from '@/core/math';
 import { Ease, uiTweens } from '@/core/tween';
 import { Fx, fxTex, screenFx, type EmitDef } from '@/fx';
 import { profile } from '@/meta';
-import type { ChestRarity, ChestResult } from '@/meta/types';
+import { CHEST_RARITIES, type ChestRarity, type ChestResult } from '@/meta/types';
 import {
   backOut, Button, Color, countUpDuration, countUpValue, drawFloor, formatCount, motion, PaperLabel, Rarity, rarityName,
   tapeStrip, TweenBag, type TapeName,
 } from '@/ui';
-import { flipPose, flyPose, newCardPose, risePose, showPose, STAGE_GAP, stageScale, stageX, wobblePose } from './cardMotion';
-import { Sunburst } from './chestLight';
-import { newPose, popPose, shakeOffset, windupPose } from './chestPose';
-import { CHEST_SIZE, ChestStage, tellColors } from './ChestStage';
+import { flipPose, flyPose, newCardPose, risePose, shadePose, showPose, STAGE_GAP, stageScale, stageX, wobblePose } from './cardMotion';
+import { stageColors, Sunburst, type StageColors } from './chestLight';
+import { crownLift, newPose, popPose, shakeOffset, windupPose } from './chestPose';
+import { CHEST_SIZE, ChestStage } from './ChestStage';
+import { TOP_RANK } from './climb';
 import { stampMark } from './paperBits';
 import { stampThud } from '../system/kit/marks';
 import { RevealCard } from './RevealCard';
 import { FLIP_TURN, RevealFlow, TIMES, type BeatState, type FlowEvent } from './revealFlow';
 import {
-  bestRarity, flourishOf, gridLayout, mergePile, nameBlockOf, PLATE, rarityRank, stacksOf, stampFrom, stampSpot, totalCards, type GridLayout, type Pile, type RevealStack,
+  flourishOf, gridLayout, mergePile, nameBlockOf, PLATE, rarityRank, stacksOf, stampFrom, stampSpot, totalCards, type GridLayout, type Pile, type RevealStack,
 } from './revealPlan';
-import './revealStrings';
 
 interface StackView {
   stack: RevealStack;
@@ -32,6 +32,8 @@ interface StackView {
   side: number;
   /** The face is up. */
   shown: boolean;
+  /** The face is up but veiled: the cat is a dark silhouette until it peels away. */
+  veiled: boolean;
   /** The card has landed in its slot and follows it when the screen is resized. */
   placed: boolean;
   /** Seconds since the last wobble tick, and the landing bump (1 just landed, 0 settled). */
@@ -46,7 +48,7 @@ interface StackView {
   stamp?: Container;
 }
 
-/** Width of the skip button and the gap to the title on the header row. */
+/** Width of the skip button, the only control on the screen until the summary. */
 const SKIP_W = 220;
 /** The floor is drawn this much bigger than the screen on every side, so a shaken screen never shows its edge. */
 const FLOOR_MARGIN = 24;
@@ -69,6 +71,15 @@ const FLOURISH: Record<ChestRarity, { shake: number; haptic: 'light' | 'medium' 
   epic: { shake: 0.25, haptic: 'medium', sfx: 'summon_epic' },
   legendary: { shake: 0.55, haptic: 'jackpot', sfx: 'summon_legendary' },
 };
+
+/** How wide the sunburst behind the chest is at each rank of the stage's colour (it widens with every promotion). */
+const LEVEL = [0.08, 0.45, 0.72, 1] as const;
+/** How opaque the sunburst is at each rank: plain cream is quiet, and the colours must hold against the orange of the wood (a pale one on it turns grey). */
+const BODY = [0.3, 0.62, 0.72, 0.82] as const;
+
+/** The warm dark the floor dims to while the top rank's show is on, and how dark. */
+const DIM_COLOR = Color.inkDeep;
+const DIM_MAX = 0.55;
 
 /** Opacity of the sunburst behind the card on stage, by the rank that is on stage. */
 const SUN_PEAK: Record<ChestRarity, number> = { common: 0.1, rare: 0.14, epic: 0.2, legendary: 0.3 };
@@ -118,11 +129,14 @@ interface Slot {
 /**
  * Full-screen chest opening. The result is already decided and stored by the meta layer; this only replays it, and the order and
  * timing come from `RevealFlow`, which this class feeds frame times and taps and whose events it answers on the very frame they fall due
- * (a sound, a haptic, a shake and the picture all happen together). The chest drops and lands with a squash, shakes in bursts that
- * throw paper in the best rarity's colour (a tap starts the next burst at once), holds its breath and pops open: a jump, a flat
- * sunburst, a confetti cannon, four-point stars and one warm flash. Then one stack of cards at a time (commons together) shoots up to
- * centre stage face down, wobbles, flips, shows itself with a flourish that grows with its rank and flies down into its place in the
- * summary grid, which builds up at the bottom. Skippable from the first frame; the summary is the final layout of the same cards.
+ * (a sound, a haptic, a shake and the picture all happen together). Nothing on screen says what is inside: the chest drops onto a plain
+ * cream paper sunburst and hops and rattles in beats, and the stage's colour (the sunburst, the paper bits, the light in the lid's crack)
+ * is promoted rank by rank on those beats, a ring snapping out and a chime a step higher each time, up to the best rank inside. The top
+ * rank changes the whole stage (the floor dims, a second ring of gold rays, the chest lifts off the floor). Then the held breath and
+ * the pop: a jump, a flat sunburst, a confetti cannon, four-point stars and a warm flash. Then one stack of cards at a time (commons
+ * together) shoots up to centre stage face down, wobbles, flips, shows itself with a flourish that grows with its rank (the best card of
+ * a good chest as a dark silhouette first) and flies down into its place in the summary grid, which builds up at the bottom. The skip
+ * button in the top corner is the only control until the summary; the summary is the final layout of the same cards.
  */
 class ChestReveal {
   private readonly bag = new TweenBag();
@@ -136,12 +150,10 @@ class ChestReveal {
   private readonly ui = new Container();
   private readonly floor = new Graphics();
   private readonly title: PaperLabel;
-  private readonly hint: PaperLabel;
   private readonly fx: Fx;
   private readonly offUpdate: () => void;
   private readonly offResize: () => void;
   private readonly stacks: RevealStack[];
-  private readonly best: ChestRarity;
   private readonly flow: RevealFlow;
   private readonly views: StackView[] = [];
   private readonly skip: Button;
@@ -151,6 +163,10 @@ class ChestReveal {
   private readonly onKey: (e: KeyboardEvent) => void;
   private readonly stage: ChestStage;
   private readonly burst: Sunburst;
+  /** The second ring of rays of the top rank's show, turning the other way. */
+  private readonly burst2: Sunburst;
+  /** The warm dark over the floor while the top rank's show is on. */
+  private readonly dim = new Graphics();
   private readonly pose = newPose();
   private readonly cardPose = newCardPose();
   private readonly slot: Slot = { x: 0, y: 0, s: 1 };
@@ -168,12 +184,13 @@ class ChestReveal {
   /** Seconds since the first cards left the chest (it sinks and fades from then on), or -1. */
   private exitAge = -1;
   private hopMark = 0;
+  /** The colour the stage shows now (a rank), kept in step with the director's. */
+  private stageRank = 0;
   /** Where the chest's foot stands on the floor (it sinks from there when it leaves). */
   private footY = 0;
   private spreading = false;
   private flipped = 0;
   private landed = 0;
-  private hintGone = false;
   private finished = false;
   private leaving = false;
   private tornDown = false;
@@ -182,23 +199,27 @@ class ChestReveal {
 
   constructor(private readonly pile: Pile) {
     this.stacks = stacksOf(pile);
-    this.best = bestRarity(this.stacks);
-    this.flow = new RevealFlow(this.stacks, (e) => this.onEvent(e), motion.reduced);
+    this.flow = new RevealFlow(this.stacks, (e) => this.onEvent(e), { still: motion.reduced, seed: pile.seed });
     this.closed = new Promise<void>((r) => {
       this.resolve = r;
     });
     this.summaryLines = 1 + (pile.count > 1 ? 1 : 0) + (pile.overflowGold > 0 ? 1 : 0);
 
-    // A tap anywhere on the floor is the next burst of the wind-up, and after the pop hurries the card on stage.
+    // A tap anywhere on the floor is the next beat of the wind-up, and after the pop hurries the card on stage (it is not advertised).
     this.floor.eventMode = 'static';
     this.floor.on('pointertap', () => this.onTap());
 
+    // The chest's name is part of the summary: while it opens the skip button is the only thing on the screen besides the stage.
     this.title = new PaperLabel({ text: t('meta.chest.' + pile.kind), size: 48, paper: Color.paperLight, padX: 44 });
-    this.hint = new PaperLabel({ text: t('reveal.tap'), size: 30, paper: Color.paperLight, padX: 30 });
+    this.title.visible = false;
 
-    this.stage = new ChestStage(pile.kind, this.best, pile.count);
-    const tell = tellColors(this.best);
-    this.burst = new Sunburst(tell.core, tell.edge, game.w * 1.1, 0.36, motion.reduced);
+    this.stage = new ChestStage(pile.kind, pile.count);
+    const start = stageColors(0);
+    this.burst = new Sunburst(start.core, start.edge, game.w * 1.1, BODY[0], motion.reduced);
+    const crown = stageColors(TOP_RANK);
+    this.burst2 = new Sunburst(Color.paperLight, crown.edge, game.w * 0.85, 0.5, motion.reduced, { rays: 10, dir: -1 });
+    this.burst2.setOn(false);
+    this.dim.alpha = 0;
 
     this.skip = new Button({ label: t('reveal.skip'), icon: 'fast_forward', style: 'kraft', width: SKIP_W, height: 96, fontSize: 28, sfx: false });
     this.skip.onTap(() => this.skipToEnd());
@@ -207,12 +228,12 @@ class ChestReveal {
     this.done.onTap(() => this.leave());
 
     // The stage is a static event target, so any picture over the floor that can be hit would swallow the tap that is meant for the floor.
-    for (const c of [this.raysLayer, this.chestLayer, this.gridLayer, this.flashLayer, this.fxHost, this.title, this.hint, this.summary]) c.eventMode = 'none';
-    this.raysLayer.addChild(this.burst);
+    for (const c of [this.dim, this.raysLayer, this.chestLayer, this.gridLayer, this.flashLayer, this.fxHost, this.title, this.summary]) c.eventMode = 'none';
+    this.raysLayer.addChild(this.burst, this.burst2);
     this.chestLayer.addChild(this.stage);
     this.gridLayer.sortableChildren = true;
-    this.shaker.addChild(this.floor, this.raysLayer, this.chestLayer, this.gridLayer, this.flashLayer, this.fxHost);
-    this.ui.addChild(this.title, this.hint, this.summary, this.skip, this.done);
+    this.shaker.addChild(this.floor, this.dim, this.raysLayer, this.chestLayer, this.gridLayer, this.flashLayer, this.fxHost);
+    this.ui.addChild(this.title, this.summary, this.skip, this.done);
     this.root.addChild(this.shaker, this.ui);
     game.popupLayer.addChild(this.root);
     // The app may take the screen down at any time (a scene change, a reset): the promise still resolves, once.
@@ -269,15 +290,16 @@ class ChestReveal {
     drawFloor(this.floor, W, H);
     this.floor.position.set(-FLOOR_MARGIN, -FLOOR_MARGIN);
     this.floor.hitArea = new Rectangle(0, 0, W, H);
+    this.dim.clear().rect(0, 0, W, H).fill(DIM_COLOR);
+    this.dim.position.set(-FLOOR_MARGIN, -FLOOR_MARGIN);
   }
 
-  /** The title shares the header row with the skip button (it is centred in the space left of it) until the button is gone. */
+  /** The skip button is in the top right corner; the title takes the header row once the button is gone. */
   private layoutFixed(): void {
     const W = game.w;
     const H = game.h;
-    const span = W - 24 - SKIP_W - 16 - 24;
-    this.title.setMaxWidth(this.finished ? W - 48 : span);
-    this.title.position.set(this.finished ? W / 2 : 24 + span / 2, game.safeTop + 74);
+    this.title.setMaxWidth(W - 48);
+    this.title.position.set(W / 2, game.safeTop + 74);
     this.skip.position.set(W - 24 - SKIP_W / 2, game.safeTop + 74);
     this.done.position.set(W / 2, H - game.safeBottom - 100);
     this.summary.position.set(W / 2, H - game.safeBottom - 205);
@@ -292,7 +314,6 @@ class ChestReveal {
     const home = this.chestHome();
     this.footY = home.y + this.stage.halfH;
     this.stage.position.set(home.x, this.footY);
-    this.hint.position.set(home.x, this.footY + 72);
   }
 
   /** Where the cards leave the chest: its opening, in screen space (the open chest does not move any more). */
@@ -310,7 +331,7 @@ class ChestReveal {
         card.visible = false;
         this.gridLayer.addChild(card);
         this.views[si] = {
-          stack, card, side: si % 2 === 0 ? -1 : 1, shown: false, placed: false, tickAge: 9, bump: 0, fromX: 0, fromY: 0, fromS: 1, s: 1,
+          stack, card, side: si % 2 === 0 ? -1 : 1, shown: false, veiled: beat.plan.veiled, placed: false, tickAge: 9, bump: 0, fromX: 0, fromY: 0, fromS: 1, s: 1,
         };
       }
     });
@@ -374,7 +395,9 @@ class ChestReveal {
   private start(): void {
     this.placeStage();
     audio.play('whoosh', { volume: 0.7 });
+    this.stage.setLight(stageColors(0).core, stageColors(0).edge);
     this.poseChest();
+    this.burst.setLevel(LEVEL[0]);
     this.burst.update(0);
   }
 
@@ -393,29 +416,30 @@ class ChestReveal {
     this.moveCards(dt);
     this.fx.update(dt);
     this.burst.update(dt);
+    this.burst2.update(dt);
     this.shakeFrame(dtReal);
     if (this.exitAge >= 0 && this.stage.visible) this.exitChest(dt);
-    if (!this.hintGone && !motion.reduced) this.hint.y = this.footY + 72 + Math.sin(this.clock * 6) * 5;
   }
 
   private poseChest(): void {
     const c = this.flow.chest;
     if (!motion.reduced) {
-      if (c.phase === 'open') popPose(this.pose, c.age);
+      if (c.phase === 'open') popPose(this.pose, c.age, crownLift(c.crown));
       else windupPose(this.pose, c, this.footY + 20);
+    } else {
+      // No hops, but the light in the lid's crack still shows the colour once the stage has one.
+      this.pose.glow = c.rank > 0 && c.phase !== 'open' ? 0.6 : 0;
     }
     this.stage.apply(this.pose);
     if (c.phase === 'burst') {
       // A little dust and a haptic tick at every landing between two hops.
-      const hops = 2 + c.burst;
-      const hopsDone = Math.floor(Math.min(1, c.age / c.burstDur) * hops);
-      if (hopsDone > this.hopMark && hopsDone < hops) {
+      const hopsDone = Math.floor(Math.min(1, c.age / c.burstDur) * c.hops);
+      if (hopsDone > this.hopMark && hopsDone < c.hops) {
         this.hopMark = hopsDone;
         haptic('tap');
         this.fx.dustPuff(this.stage.x, this.stage.y, { scale: 0.45 + 0.4 * c.power });
       }
     }
-    this.burst.setLevel(c.fan);
   }
 
   /** The sunburst sits behind the chest until the pop, then follows the card that is on stage. */
@@ -425,6 +449,7 @@ class ChestReveal {
     if (c.phase !== 'open') {
       const home = this.chestHome();
       b.position.set(home.x, home.y);
+      this.burst2.position.set(home.x, home.y);
       return;
     }
     let tx = this.stage.x;
@@ -480,8 +505,17 @@ class ChestReveal {
             flipPose(p, k, sx, sy, ss);
             if (k >= FLIP_TURN) this.turnUp(v);
             break;
+          case 'shade':
+            this.turnUp(v);
+            shadePose(p, b.age, b.dur, sx, sy, ss);
+            break;
+          case 'peel':
+            flipPose(p, k, sx, sy, ss);
+            if (k >= FLIP_TURN) this.unveil(v);
+            break;
           case 'show':
             this.turnUp(v);
+            this.unveil(v);
             showPose(p, b.age, b.dur, b.plan.last && rank >= 2, sx, sy, ss);
             break;
           case 'fly': {
@@ -540,11 +574,17 @@ class ChestReveal {
       case 'land':
         this.land();
         break;
+      case 'promote':
+        this.promote(e.from, e.to);
+        break;
       case 'burst':
         this.burstStart(e.index, e.power);
         break;
-      case 'hold':
-        this.hold(e.duration);
+      case 'stall':
+        this.stall(e.duration);
+        break;
+      case 'creak':
+        this.creak();
         break;
       case 'pop':
         this.pop();
@@ -558,6 +598,12 @@ class ChestReveal {
       case 'flip':
         this.flipStart();
         break;
+      case 'shade':
+        this.shade();
+        break;
+      case 'peel':
+        this.peel();
+        break;
       case 'show':
         this.show(e.beat);
         break;
@@ -570,6 +616,7 @@ class ChestReveal {
       case 'summary':
         this.finish();
         break;
+      case 'hold':
       case 'wobble':
         break;
     }
@@ -584,51 +631,131 @@ class ChestReveal {
     this.ring(this.stage.x, this.stage.y - 6, Color.paperLight, CHEST_SIZE * 1.1, 0.7);
   }
 
-  /** A burst of the wind-up: the rattle sound, a haptic, paper bits and puffs in the colour of the best rarity thrown off the chest. */
+  /** A beat of the wind-up: the rattle sound, a haptic, paper bits and puffs in the stage's colour thrown off the chest. */
   private burstStart(index: number, power: number): void {
-    audio.play('chest_shake', { volume: 0.55 + 0.45 * power, pitch: 0.94 + 0.08 * index });
+    audio.play('chest_shake', { volume: 0.55 + 0.45 * power, pitch: 0.94 + 0.08 * Math.min(index, 4) });
     haptic(power > 0.9 ? 'medium' : 'light');
-    this.hideHint();
     this.hopMark = 0;
     this.kick(0.04 + 0.08 * power);
-    const colors = tellColors(this.best);
+    const colors = stageColors(this.stageRank);
     const top = this.stage.y - this.stage.halfH * 1.7;
     this.fx.ps.burst({ ...PUFF, palette: [colors.core, colors.edge] }, this.stage.x, top, { count: 0.6 + 0.8 * power, scale: 0.8 + 0.4 * power });
-    this.popPaper(this.stage.x, top + 20, this.best, 0.5 + 0.7 * power);
+    this.stagePaper(this.stage.x, top + 20, 0.5 + 0.7 * power);
   }
 
-  /** The held breath: the open sound starts its creak so that its pop lands on the pop frame. */
-  private hold(duration: number): void {
-    audio.play('chest_open', { delay: Math.max(0, duration - TIMES.creak) });
-    // The guide's silent beat before the biggest moment.
-    if (this.best === 'legendary') audio.duck(1, duration);
-    this.hideHint();
+  /**
+   * The stage's colour is promoted: the sunburst, the light in the lid and the paper bits take the new colour, a ring of it snaps outward,
+   * the sunburst flips and widens, and a chime sounds a step higher than the last (it is the same step for the same colour, so a leap over
+   * a rank sounds higher too). The higher ranks add to it, the top rank changes the whole stage.
+   */
+  private promote(from: number, to: number): void {
+    this.stageRank = to;
+    const colors = stageColors(to);
+    this.stage.setLight(colors.core, colors.edge);
+    this.burst.setTint(colors.core, colors.edge);
+    this.burst.setLevel(LEVEL[to] ?? 1);
+    this.burst.setBody(BODY[to] ?? 0.8);
+    this.burst.setSpin(1);
+    this.burst.punch();
+    audio.playStep('star', 2 * to, { volume: 0.8 });
+    haptic(to >= 2 ? 'heavy' : 'medium');
+    if (to === 2) audio.play('summon_epic', { volume: 0.45 });
+    if (to >= TOP_RANK) this.crown(colors);
+    if (motion.reduced) return;
+    this.kick(0.06 + 0.06 * to);
+    const mid = this.footY - this.stage.halfH;
+    const tone = Rarity[CHEST_RARITIES[to] as ChestRarity].color;
+    const ring = mixColor(colors.edge, tone, 0.5);
+    this.ring(this.stage.x, mid, ring, CHEST_SIZE * (1.5 + 0.15 * to), 0.9, true);
+    // The better colours add rings: one more from the epic rank up, one more again for a leap over two ranks.
+    if (to >= 2) this.ring(this.stage.x, mid, colors.core, CHEST_SIZE * (1.8 + 0.15 * to), 0.8, true, 0.12);
+    if (to - from >= 2) this.ring(this.stage.x, mid, ring, CHEST_SIZE * 1.3, 0.8, true, 0.06);
+    this.stagePaper(this.stage.x, mid - this.stage.halfH * 0.6, 1 + 0.4 * to);
   }
 
-  /** The pop: the open picture, a jump and recoil, the sunburst, one warm flash, a short shake, the cannon, stars and paper, the heaviest haptic. */
+  /** The top rank: the stage itself changes before the pop. The floor dims, a second ring of rays turns the other way, the music ducks and a sting plays. */
+  private crown(colors: StageColors): void {
+    audio.play('summon_legendary', { volume: 0.85, pitch: 0.9 });
+    audio.stinger('mythic');
+    audio.duck(1, 2.2);
+    this.burst.setSpin(2.4);
+    this.burst2.setOn(true);
+    this.burst2.setTint(Color.paperLight, colors.edge);
+    this.burst2.setLevel(1);
+    if (motion.reduced) {
+      this.dim.alpha = DIM_MAX * 0.7;
+      return;
+    }
+    // The first of the two flashes of the top rank (the pop is the second): the colour cracks to gold.
+    screenFx.flash(mixColor(Color.paperLight, colors.edge, 0.6), 0.3, 140);
+    this.bag.run({
+      duration: 0.6,
+      ease: Ease.cubicOut,
+      onUpdate: (k) => {
+        this.dim.alpha = DIM_MAX * k;
+      },
+    });
+    this.ring(this.stage.x, this.footY - this.stage.halfH, colors.edge, CHEST_SIZE * 2.4, 0.7, true, 0.2);
+    this.ring(this.stage.x, this.footY - 6, Color.mustard, CHEST_SIZE * 1.6, 0.6, false, 0.1);
+  }
+
+  /** The late promotion's breath: the sunburst all but stops turning and the music drops, as if the chest were about to open. */
+  private stall(duration: number): void {
+    this.burst.setSpin(0.12);
+    audio.duck(0.7, duration);
+  }
+
+  /** The last of the held breath: the open sound starts its creak, so that its pop lands on the pop frame. */
+  private creak(): void {
+    audio.play('chest_open');
+  }
+
+  /** The pop: the open picture, a jump and recoil, the sunburst, a warm flash, a short shake, the cannon, stars and paper, the heaviest haptic. The top rank's is bigger. */
   private pop(): void {
-    const colors = tellColors(this.best);
+    const rank = this.stageRank;
+    const top = rank >= TOP_RANK;
+    const id = CHEST_RARITIES[rank] as ChestRarity;
+    const colors = stageColors(rank);
     this.stage.open();
-    this.hideHint();
     const at = this.openingPoint();
     this.burst.burst(motion.reduced ? 0.3 : 0.42);
-    haptic(this.best === 'legendary' ? 'jackpot' : 'heavy');
-    screenFx.flash(mixColor(Color.paperLight, Rarity[this.best].light, 0.5), 0.4, 150);
+    this.burst.setSpin(1);
+    this.burst2.stop(0.6);
+    this.fadeDim();
+    haptic(top ? 'jackpot' : 'heavy');
+    screenFx.flash(mixColor(Color.paperLight, Rarity[id].light, 0.5), 0.4, 150);
     if (motion.reduced) return;
-    this.kick(this.best === 'legendary' ? 0.6 : this.best === 'epic' ? 0.45 : 0.35);
+    this.kick(top ? 0.7 : rank === 2 ? 0.45 : 0.35);
     this.starburst(at.x, at.y, colors.core);
     this.ring(this.stage.x, this.stage.y - 6, Color.paperLight, CHEST_SIZE * 1.5, 0.8);
+    if (top) this.ring(at.x, at.y, colors.edge, CHEST_SIZE * 2.2, 0.7, true, 0.06);
     const palette = [colors.core, colors.edge, Color.paperLight, Color.mustard];
-    const big = this.best === 'common' ? 1 : 1.3;
-    this.fx.ps.burst({ ...STARS, palette }, at.x, at.y, { scale: Math.min(1.4, big), count: this.best === 'common' ? 0.8 : 1.2 });
-    this.popPaper(at.x, at.y, this.best, this.best === 'common' ? 1.6 : 2.4);
-    const rs = Rarity[this.best];
+    this.fx.ps.burst({ ...STARS, palette }, at.x, at.y, { scale: rank === 0 ? 1 : 1.3, count: rank === 0 ? 0.8 : top ? 1.8 : 1.2 });
+    this.popPaper(at.x, at.y, id, rank === 0 ? 1.6 : top ? 3.2 : 2.4);
+    const rs = Rarity[id];
     const cannon = { ...CANNON, palette: [rs.color, rs.dark, rs.light, Color.paperLight, Color.mustard] };
     const half = this.stage.bodyW * 0.45;
-    const mods = { count: this.best === 'common' ? 0.7 : 1.2 };
+    const mods = { count: rank === 0 ? 0.7 : top ? 1.8 : 1.2 };
     this.fx.ps.burst({ ...cannon, dir: -Math.PI / 2 + 0.5 }, at.x - half, at.y + 70, mods);
     this.fx.ps.burst({ ...cannon, dir: -Math.PI / 2 - 0.5 }, at.x + half, at.y + 70, mods);
-    if (this.best !== 'common') this.fx.confettiRain({ count: this.best === 'rare' ? 30 : 50, x: at.x, y: at.y - 220, width: CHEST_SIZE });
+    if (rank > 0) this.fx.confettiRain({ count: rank === 1 ? 30 : top ? 80 : 50, x: at.x, y: at.y - 220, width: top ? CHEST_SIZE * 2.2 : CHEST_SIZE });
+  }
+
+  /** The warm dark over the floor lifts once the chest has opened. */
+  private fadeDim(): void {
+    const from = this.dim.alpha;
+    if (from <= 0) return;
+    if (motion.reduced) {
+      this.dim.alpha = 0;
+      return;
+    }
+    this.bag.run({
+      duration: 0.9,
+      ease: Ease.cubicOut,
+      onUpdate: (k) => {
+        this.dim.alpha = from * (1 - k);
+      },
+    });
   }
 
   /** A beat leaves the opening: the backs shoot up to centre stage. */
@@ -663,11 +790,23 @@ class ChestReveal {
     this.flipped++;
   }
 
-  /** The back is edge-on: the face takes over and the count starts to tick up. */
+  /** The back is edge-on: the face takes over (a veiled card as a silhouette) and the count starts to tick up. */
   private turnUp(v: StackView): void {
     if (v.shown) return;
     v.shown = true;
-    v.card.showFace();
+    v.card.showFace(v.veiled);
+    if (!v.veiled) this.countUp(v);
+  }
+
+  /** The silhouette is edge-on: the real portrait takes over and the count starts to tick up. */
+  private unveil(v: StackView): void {
+    if (!v.veiled) return;
+    v.veiled = false;
+    v.card.unveil();
+    this.countUp(v);
+  }
+
+  private countUp(v: StackView): void {
     const total = v.stack.count;
     if (total <= 1 || motion.reduced) {
       v.card.count.text = 'x' + formatCount(total);
@@ -691,6 +830,21 @@ class ChestReveal {
     });
   }
 
+  /** The silhouette is up: a low thud and the rays behind it flare. */
+  private shade(): void {
+    audio.play('reel_stop', { volume: 0.7, pitch: 0.65 });
+    haptic('medium');
+    this.burst.punch();
+    this.kick(0.15);
+  }
+
+  /** The silhouette peels away: the card turns once more, its sound a step higher than the flip before. */
+  private peel(): void {
+    audio.playStep('card_flip', Math.min(this.flipped, 10));
+    haptic('light');
+    this.flipped++;
+  }
+
   /** The flip has landed: the flourish of the rank (a settle, a tape slap, a stamp, a ribbon, the sunburst, confetti, a breath of slow motion). */
   private show(bi: number): void {
     const beat = this.flow.beats[bi] as BeatState;
@@ -705,6 +859,7 @@ class ChestReveal {
     beat.plan.stacks.forEach((si, j) => {
       const v = this.views[si] as StackView;
       this.turnUp(v);
+      this.unveil(v);
       const x = stageX(n, j, game.w / 2);
       const y = this.stageY();
       if (plan.dust) {
@@ -787,45 +942,39 @@ class ChestReveal {
     });
   }
 
-  /** A flat ring of dust on the floor, squashed to an ellipse, growing and fading. */
-  private ring(x: number, y: number, color: number, size: number, alpha: number): void {
+  /** A flat ring growing and fading: squashed to an ellipse on the floor (dust), or round and snapping outward from the chest (a promotion). It starts after `delay` seconds. */
+  private ring(x: number, y: number, color: number, size: number, alpha: number, round = false, delay = 0): void {
     const info = fxTex('ring');
     const ring = new Sprite(info.texture);
     ring.anchor.set(info.ax, info.ay);
     ring.tint = color;
     ring.position.set(x, y);
+    ring.alpha = 0;
     this.flashLayer.addChild(ring);
     this.bag.run({
-      duration: 0.45,
+      duration: round ? 0.4 : 0.45,
+      delay,
       ease: Ease.cubicOut,
       onUpdate: (k) => {
         const s = (size / info.w) * (0.3 + 1.2 * k);
-        ring.scale.set(s, s * 0.3);
+        ring.scale.set(s, round ? s : s * 0.3);
         ring.alpha = alpha * (1 - k);
       },
       onComplete: () => ring.destroy(),
     });
   }
 
+  /** Paper bits in the stage's colour (and only that) thrown from (x, y): what a beat of the wind-up throws. */
+  private stagePaper(x: number, y: number, size: number): void {
+    const colors = stageColors(this.stageRank);
+    const rs = Rarity[CHEST_RARITIES[this.stageRank] as ChestRarity];
+    this.fx.ps.burst({ ...PAPER_POP, palette: [colors.core, colors.edge, rs.color, rs.dark] }, x, y, { scale: Math.min(1.4, size), count: size });
+  }
+
   /** Paper bits in the rarity's colours thrown from (x, y). */
   private popPaper(x: number, y: number, rarity: ChestRarity, size: number): void {
     const rs = Rarity[rarity];
     this.fx.ps.burst({ ...PAPER_POP, palette: [rs.color, rs.dark, rs.light, Color.paperLight, Color.mustard] }, x, y, { scale: Math.min(1.4, size), count: size });
-  }
-
-  private hideHint(): void {
-    if (this.hintGone) return;
-    this.hintGone = true;
-    this.bag.run({
-      duration: motion.reduced ? 0.01 : 0.2,
-      ease: Ease.linear,
-      onUpdate: (k) => {
-        this.hint.alpha = 1 - k;
-      },
-      onComplete: () => {
-        this.hint.visible = false;
-      },
-    });
   }
 
   /** A strip of tape slapped across the card's top corner. */
@@ -912,16 +1061,15 @@ class ChestReveal {
     this.finished = true;
     for (const id of this.pile.ids) profile.ackReveal(id);
     this.skip.visible = false;
-    this.hideHint();
     this.burst.stop(0.5);
-    // With the skip button gone the title has the whole row: it slides to the middle of the screen.
-    const fromX = this.title.x;
-    this.title.setMaxWidth(game.w - 48);
+    // With the skip button gone the title has the whole row: the chest's name comes in with the summary.
+    this.title.visible = true;
+    this.title.alpha = 0;
     this.bag.run({
       duration: motion.reduced ? 0.01 : 0.25,
       ease: Ease.cubicOut,
       onUpdate: (k) => {
-        this.title.x = lerp(fromX, game.w / 2, k);
+        this.title.alpha = k;
       },
     });
     const wild = this.stacks.filter((s) => !s.unit).reduce((a, s) => a + s.count, 0);
@@ -1004,9 +1152,8 @@ class ChestReveal {
     this.bag.killAll();
     audio.play('ui_click');
     this.chestLayer.visible = false;
-    // Its fade was one of the tweens just stopped: it must not stay half faded over the cards.
-    this.hint.visible = false;
-    this.hintGone = true;
+    this.dim.alpha = 0;
+    this.burst2.stop(0.2);
     this.burst.stop(0.2);
     this.fx.clear();
     this.flashLayer.removeChildren().forEach((c) => c.destroy());
@@ -1022,6 +1169,8 @@ class ChestReveal {
       v.bump = 0;
       v.card.visible = true;
       v.card.alpha = 1;
+      v.veiled = false;
+      v.card.unveil();
       v.card.showFace();
       this.placeCard(v, i);
       if (arriving) this.settleIn(v, i);
