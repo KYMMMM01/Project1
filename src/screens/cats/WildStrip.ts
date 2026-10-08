@@ -6,6 +6,8 @@ import { cacheStatic, Color, currencyIcon, fitLabel, paperShape, Rarity, rarityN
 
 const H = 104;
 const LEFT = 150;
+const CHIP_W = 36;
+const CHIP_GAP = 8;
 
 /**
  * The wild cards in hand, one count per rarity: a cream strip with a rarity-coloured mat chip for each, so the
@@ -13,7 +15,7 @@ const LEFT = 150;
  */
 export class WildStrip extends Container {
   readonly stripH = H;
-  private readonly counts: { rarity: ChestRarity; text: Text }[] = [];
+  private readonly counts: { rarity: ChestRarity; text: Text; chip: Graphics; cx: number }[] = [];
   private readonly cellW: number;
 
   constructor(w: number) {
@@ -37,18 +39,22 @@ export class WildStrip extends Container {
       const chip = new Graphics();
       chip.roundRect(-18, -16, 36, 32, 9).fill(rar.color).stroke({ width: 2, color: rar.dark, alpha: 0.8, alignment: 0 });
       cacheStatic(chip);
-      chip.position.set(cx - this.cellW * 0.2, 72);
+      chip.position.set(cx, 72);
       const count = uiLabel('', { size: 30 });
-      count.position.set(cx + this.cellW * 0.14, 72);
+      count.position.set(cx, 72);
       this.addChild(name, chip, count);
-      this.counts.push({ rarity, text: count });
+      this.counts.push({ rarity, text: count, chip, cx });
     });
   }
 
   set(wild: Readonly<Record<ChestRarity, number>>): void {
     for (const c of this.counts) {
       c.text.text = '×' + fmt(wild[c.rarity]);
-      fitLabel(c.text, this.cellW * 0.46, 30);
+      fitLabel(c.text, this.cellW - CHIP_W - CHIP_GAP - 12, 30);
+      // The swatch and its count are one centred group, so a long count pushes the swatch left instead of running into it.
+      const group = CHIP_W + CHIP_GAP + c.text.width;
+      c.chip.x = c.cx - group / 2 + CHIP_W / 2;
+      c.text.x = c.chip.x + CHIP_W / 2 + CHIP_GAP + c.text.width / 2;
     }
   }
 }
