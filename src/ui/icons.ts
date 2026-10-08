@@ -1,13 +1,15 @@
-import { Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite } from 'pixi.js';
+import { hasTex, tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
 import { Color } from './theme';
 import { luma, shade } from './colors';
+import { GLYPH_PICTURE, PICTURES, type PictureDef, type PictureGlyph, type PictureId } from './pictures';
 import { cacheStatic } from './shapes';
 
 export const ICON_NAMES = [
   'close', 'back', 'settings', 'sound_on', 'sound_off', 'music', 'lock', 'check', 'plus', 'minus',
   'play', 'pause', 'fast_forward', 'info', 'question', 'home', 'cards', 'shop', 'trophy', 'mission',
-  'gift', 'star', 'crown', 'paw', 'heart', 'clock', 'ad', 'coin', 'gem', 'energy',
+  'gift', 'star', 'crown', 'paw', 'heart', 'clock', 'ad', 'coin', 'gem', 'xp', 'energy',
   'arrow_up', 'swords', 'shield', 'reroll', 'sell', 'skull', 'chest', 'fish', 'lucky_clover', 'dice', 'warning',
   'purr', 'laser', 'sun', 'molt', 'wave_call', 'class_warrior', 'class_ranger', 'class_mage', 'class_trickster',
   'target', 'sweep', 'ticket', 'calendar', 'wardrobe', 'share', 'code', 'speed_1', 'speed_2', 'speed_3', 'eye',
@@ -191,7 +193,6 @@ const REMAP = new Map<number, number>([
   [0x4da6ff, Color.teal],
   [0x2a82ec, Color.tealDark],
   [0x7cd4ff, 0x8fd3e6],
-  [0x4ee3ff, Color.gem],
   [0xa767ff, Color.violet],
   [0x2b1b5e, 0x5b4333],
   [0x432a8c, 0x6e5440],
@@ -704,15 +705,23 @@ const ICONS: Record<IconName, IconDef> = {
     },
   },
   gem: {
-    color: 0x4ee3ff,
+    color: 0xe8467f,
     draw: (k, c) => {
-      k.solid(c, (p) => p.rpoly([-36, -12, -19, -34, 19, -34, 36, -12, 0, 40], 5));
-      k.detail(WHITE, (p) => p.poly([-19, -34, 19, -34, 11, -12, -11, -12]), 0.42);
-      k.detail(WHITE, (p) => p.poly([-36, -12, -19, -34, -11, -12]), 0.22);
-      k.detail(0x000000, (p) => p.poly([36, -12, 19, -34, 11, -12]), 0.08);
-      k.detail(WHITE, (p) => p.poly([-36, -12, -11, -12, 0, 40]), 0.16);
-      k.detail(0x000000, (p) => p.poly([36, -12, 11, -12, 0, 40]), 0.16);
-      k.detail(WHITE, (p) => p.poly([-28, -22, -22, -28, -17, -20, -23, -15]), 0.85);
+      // The shop's gem: a faceted pink cat head, ears up.
+      k.solid(c, (p) => p.rpoly([-32, -50, -8, -30, 8, -30, 32, -50, 42, -12, 40, 6, 22, 30, 0, 42, -22, 30, -40, 6, -42, -12], 3));
+      k.detail(WHITE, (p) => p.poly([-8, -30, 8, -30, 7, -8, -7, -8]), 0.34);
+      k.detail(WHITE, (p) => p.poly([-32, -50, -8, -30, -16, -9, -42, -12]), 0.2);
+      k.detail(0x000000, (p) => p.poly([32, -50, 8, -30, 16, -9, 42, -12]), 0.1);
+      k.detail(WHITE, (p) => p.poly([-42, -12, -16, -9, -7, -8, 0, 42, -22, 30, -40, 6]), 0.12);
+      k.detail(0x000000, (p) => p.poly([42, -12, 16, -9, 7, -8, 0, 42, 22, 30, 40, 6]), 0.18);
+      k.detail(WHITE, (p) => p.poly([-27, -36, -22, -42, -18, -36, -23, -30]), 0.85);
+    },
+  },
+  xp: {
+    color: 0x3f7fe0,
+    draw: (k, c) => {
+      k.solid(c, (p) => p.star(0, 3, 46, 22, 5, 7));
+      k.detail([0xd4ecff, 0x8ccbff], (p) => p.rpoly([0, -18, 17, 2, 7, 2, 7, 24, -7, 24, -7, 2, -17, 2], 3));
     },
   },
   energy: {
@@ -788,7 +797,7 @@ const ICONS: Record<IconName, IconDef> = {
     },
   },
   fish: {
-    color: 0xff8a5c,
+    color: 0x6fa9d6,
     draw: (k, c) => {
       k.solid(shade(c, -0.05), (p) => p.rpoly([20, 0, 45, -20, 40, 0, 45, 20], 5));
       k.solid(shade(c, -0.05), (p) => p.rpoly([-8, -15, 6, -32, 15, -14], 4));
@@ -1065,14 +1074,46 @@ export interface IconOpts {
 }
 
 /**
- * A crisp vector icon, centred on the origin and `size` px square. `color` replaces the icon's main
- * body colour (e.g. tint a star grey for "unearned"); accents keep their own colours.
+ * The pure vector drawing of an icon name, centred on the origin and `size` px square. `color` replaces the icon's main
+ * body colour (e.g. tint a star grey for "unearned"); accents keep their own colours. It is also the stand-in of a picture (see
+ * currencyIcon); to show a currency or reward, ask for it with drawIcon or currencyIcon so the painted art is used.
  */
-export function drawIcon(name: IconName, size: number, color?: number, opts: IconOpts = {}): Graphics {
+export function drawGlyph(name: IconName, size: number, color?: number, opts: IconOpts = {}): Graphics {
   const g = new Graphics();
   const def = ICONS[name];
   const ink = new Ink(g, size, opts.outline ?? Color.outline);
   def.draw(ink, color ?? matte(def.color));
   if (opts.cache ?? true) cacheStatic(g);
   return g;
+}
+
+/**
+ * The picture of a currency or countable reward, centred on the origin and fitted into a `size` px square: its painted art when it is
+ * loaded, otherwise the drawn stand-in (`color` tints the stand-in only). The sprite sits in a container so a caller that scales the
+ * result (a flying icon) keeps the fit.
+ */
+export function currencyIcon(id: PictureId, size: number, color?: number): Container {
+  const def: PictureDef = PICTURES[id];
+  const c = new Container();
+  if (def.art !== null && hasTex(def.art)) {
+    const s = new Sprite(tex(def.art));
+    s.anchor.set(0.5);
+    s.scale.set(size / Math.max(1, s.texture.width, s.texture.height));
+    c.addChild(s);
+  } else {
+    c.addChild(drawGlyph(def.glyph, size, color ?? def.color));
+  }
+  return c;
+}
+
+/**
+ * A crisp icon, centred on the origin and `size` px square. An icon that stands for a currency or reward ('coin', 'gem', 'fish',
+ * 'purr', 'ticket', 'xp', 'chest') is drawn as that thing's picture, so it looks the same here as in the shop; every other name is
+ * the vector drawing (see drawGlyph for `color` and `opts`, which a picture ignores).
+ */
+export function drawIcon(name: Exclude<IconName, PictureGlyph>, size: number, color?: number, opts?: IconOpts): Graphics;
+export function drawIcon(name: IconName, size: number, color?: number, opts?: IconOpts): Container;
+export function drawIcon(name: IconName, size: number, color?: number, opts: IconOpts = {}): Container {
+  const id: PictureId | undefined = (GLYPH_PICTURE as Partial<Record<IconName, PictureId>>)[name];
+  return id === undefined ? drawGlyph(name, size, color, opts) : currencyIcon(id, size, color);
 }

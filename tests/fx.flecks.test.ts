@@ -10,12 +10,11 @@ function run(layer: FleckLayer, seconds: number): void {
   for (let t = 0; t < seconds - 1e-9; t += DT) layer.update(DT);
 }
 
-const normalOf = (layer: FleckLayer): Container => layer.root.children[0] as Container;
-const lightsOf = (layer: FleckLayer): Container => layer.root.children[1] as Container;
+const normalOf = (layer: FleckLayer): Container => layer.root;
 
 beforeEach(() => setFxSettings({ tier: 'mid', reducedMotion: false }));
 
-describe('painted flecks', () => {
+describe('flecks', () => {
   it('moves under its speed and gravity, spins, and is gone when its life is over', () => {
     const layer = new FleckLayer(new Container());
     expect(layer.spawn(tex(), 10, 20, { life: 0.5, vx: 100, vy: -200, gravity: 400, spin: 2, rot: 1, size: 20 })).toBe(true);
@@ -32,20 +31,13 @@ describe('painted flecks', () => {
     layer.destroy();
   });
 
-  it('draws a light in the additive container and the rest in the normal one, whichever way the sprite was used before', () => {
+  it('draws every fleck plainly, in one container, with no additive blending anywhere', () => {
     const layer = new FleckLayer(new Container());
-    layer.spawn(tex(), 0, 0, { life: 0.1, size: 10, add: true });
-    layer.spawn(tex(), 0, 0, { life: 0.1, size: 10 });
-    expect(lightsOf(layer).blendMode).toBe('add');
-    expect(normalOf(layer).blendMode).not.toBe('add');
-    expect(lightsOf(layer).children.length).toBe(1);
-    expect(normalOf(layer).children.length).toBe(1);
-    run(layer, 0.2);
-    // The pooled sprite that was a light is a plain fleck now.
     layer.spawn(tex(), 0, 0, { life: 0.1, size: 10 });
     layer.spawn(tex(), 0, 0, { life: 0.1, size: 10 });
-    expect(lightsOf(layer).children.length + normalOf(layer).children.length).toBe(2);
-    expect(normalOf(layer).children.length).toBe(2);
+    expect(layer.root.children.length).toBe(2);
+    for (const child of layer.root.children) expect(child.blendMode).not.toBe('add');
+    expect(layer.root.blendMode).not.toBe('add');
     layer.destroy();
   });
 
@@ -81,10 +73,10 @@ describe('painted flecks', () => {
   it('pools: spawning and ending flecks over and over builds no more sprites than were ever alive at once', () => {
     const layer = new FleckLayer(new Container());
     for (let i = 0; i < 400; i++) {
-      layer.spawn(tex(), 0, 0, { life: 0.05, size: 10, add: i % 2 === 0 });
+      layer.spawn(tex(), 0, 0, { life: 0.05, size: 10 });
       if (i % 5 === 4) run(layer, 0.1);
     }
-    expect(lightsOf(layer).children.length + normalOf(layer).children.length).toBeLessThanOrEqual(5);
+    expect(normalOf(layer).children.length).toBeLessThanOrEqual(5);
     layer.destroy();
   });
 

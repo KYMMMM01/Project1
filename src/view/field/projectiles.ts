@@ -1,13 +1,13 @@
 import { Container, Sprite, type Texture } from 'pixi.js';
 import { Pool } from '@/core/pool';
-import { TAU, clamp01, lighten, rand } from '@/core/math';
+import { TAU, clamp01, rand } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { FLECK_CAP, Light, fxSettings, fxTexture, paint, type Fx } from '@/fx';
 import type { BattleEvents, ProjectileState, UnitId } from '@/game/api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { FieldArt } from './art';
 import type { FieldEnv } from './env';
-import { castLook, castSeconds, projectileLook, rankLight, rankSize, type ProjectileLook } from './projectileLooks';
+import { castLook, castSeconds, projectileLook, rankSize, rankTrail, type ProjectileLook } from './projectileLooks';
 
 const SPIN_FLIP_RATE = 14;
 /** Seconds a shot takes to settle from its stretched launch shape. */
@@ -20,34 +20,32 @@ const SHED_ROOM = 0.55;
 /** Where each cell's cat stands: the cells never move, so their centres are looked up once. */
 const CENTRES = Array.from({ length: CELL_COUNT }, (_, c) => ({ x: cellCenterX(c), y: cellCenterY(c) }));
 
-/** The containers every shot's sprites live in, back to front: shadows on the ground, the painted streaks, the pictures, and the additive lights over them. */
+/** The containers every shot's sprites live in, back to front: shadows on the ground, the flat streaks, and the pictures. */
 interface ShotLayers {
   readonly shadows: Container;
   readonly streaks: Container;
   readonly bodies: Container;
-  readonly lights: Container;
 }
 
 /**
- * One shot in flight: its painted picture, a soft streak behind it, a light round it (additive, in the shared light layer), the
- * ground shadow running along the straight line for a thrown one, and whatever it sheds as it goes. Its path is drawn in world space: a lobbed
- * shot is lifted straight up the screen over the stretch it has to cover, and a turning picture follows the tangent of what it drew.
+ * One shot in flight: its picture, a flat tapered streak behind it, the ground shadow running along the straight line for a thrown
+ * one, and whatever it sheds as it goes. Its path is drawn in world space: a lobbed shot is lifted straight up the screen over the
+ * stretch it has to cover, and a turning picture follows the tangent of what it drew.
  */
 class ShotView {
   private readonly shadow = new Sprite();
   private readonly body = new Sprite();
-  private readonly streak = new Sprite(fxTexture('glow'));
-  private readonly glow = new Sprite(fxTexture('glow'));
+  private readonly streak = new Sprite(fxTexture('tail'));
   private look: ProjectileLook | null = null;
   uid = 0;
   mark = 0;
-  /** The cat type that threw it (its rank sets the size and the light). */
+  /** The cat type that threw it (its rank sets the size and the streak). */
   unitId: UnitId = 'w_paw';
   private phase = 0;
   private born = 0;
   private bodyW = 40;
   private rank = 1;
-  private light = 1;
+  private trail = 1;
   /** Where the shot was first seen: the arc is drawn over the stretch from here to the target. */
   private x0 = 0;
   private y0 = 0;
@@ -63,17 +61,15 @@ class ShotView {
     this.shadow.texture = shadow;
     this.shadow.anchor.set(0.5);
     this.body.anchor.set(0.5);
-    // The streak trails from just ahead of the picture's middle; the light is centred on it.
-    this.streak.anchor.set(0.8, 0.5);
-    this.glow.anchor.set(0.5);
-    for (const s of [this.shadow, this.body, this.streak, this.glow]) {
+    // The streak's full end sits just ahead of the picture's middle, and the picture covers it.
+    this.streak.anchor.set(0.85, 0.5);
+    for (const s of [this.shadow, this.body, this.streak]) {
       s.eventMode = 'none';
       s.visible = false;
     }
     layers.shadows.addChild(this.shadow);
     layers.streaks.addChild(this.streak);
     layers.bodies.addChild(this.body);
-    layers.lights.addChild(this.glow);
   }
 
   configure(uid: number, unitId: UnitId, look: ProjectileLook, x: number, y: number, angle: number, time: number): void {
@@ -89,27 +85,20 @@ class ShotView {
     this.heading = angle;
     this.shedAt = time;
     this.rank = rankSize(unitId);
-    this.light = rankLight(unitId);
+    this.trail = rankTrail(unitId);
     const texture = paint(look.paint);
     this.body.texture = texture;
-    this.body.tint = look.tint ?? 0xffffff;
     this.bodyW = look.size * this.rank;
     this.body.visible = true;
     this.shadow.visible = look.lob > 0;
     this.shadow.alpha = 0.3;
     this.shadow.scale.set(0.4);
-    const rich = fxSettings.tier !== 'low';
     const s = look.streak;
     this.streak.visible = s !== null;
     if (s) {
       this.streak.tint = s.color;
-      this.streak.scale.set((s.length * this.rank) / 64, (s.width * this.rank) / 64);
-    }
-    const g = look.glow;
-    this.glow.visible = g !== null && rich;
-    if (g) {
-      this.glow.tint = g.color;
-      this.glow.scale.set((g.size * this.bodyW) / 64);
+      const t = this.streak.texture;
+      this.streak.scale.set((s.length * this.rank) / Math.max(1, t.width), (s.width * this.rank) / Math.max(1, t.height));
     }
   }
 
@@ -163,12 +152,7 @@ class ShotView {
     if (s) {
       this.streak.position.set(bx, by);
       this.streak.rotation = this.heading;
-      this.streak.alpha = s.alpha * this.light * clamp01(age / 0.05);
-    }
-    const g = look.glow;
-    if (g && this.glow.visible) {
-      this.glow.position.set(bx, by);
-      this.glow.alpha = g.alpha * this.light * (calm ? 1 : 0.85 + 0.15 * Math.sin(t * 14));
+      this.streak.alpha = Math.min(1, s.alpha * this.trail) * clamp01(age / 0.05);
     }
     if (!calm && time >= this.shedAt && look.shed) {
       this.shedAt = time + SHED_EVERY[fxSettings.tier];
@@ -180,11 +164,10 @@ class ShotView {
     this.body.visible = false;
     this.shadow.visible = false;
     this.streak.visible = false;
-    this.glow.visible = false;
   }
 
   destroy(): void {
-    for (const s of [this.shadow, this.body, this.streak, this.glow]) s.destroy();
+    for (const s of [this.shadow, this.body, this.streak]) s.destroy();
   }
 }
 
@@ -195,32 +178,33 @@ function shed(fx: Fx, look: ProjectileLook, x: number, y: number, heading: numbe
   const bx = x + Math.cos(back) * w * 0.25;
   const by = y + Math.sin(back) * w * 0.25;
   const k = rank;
-  switch (look.shed) {
+  const kind = look.shed;
+  if (!kind) return;
+  const color = kind.color;
+  switch (kind.kind) {
     case 'dust':
-      fx.fleck(paint('burst_puff'), bx, by, { life: 0.35, size: 14 * k, sizeEnd: 30 * k, rot: rand(0, TAU), color: Light.dust, alpha: 0.35, vx: rand(-14, 14), vy: rand(-18, 4), fadeAt: 0.2 });
+      fx.fleck(paint('burst_puff'), bx, by, { life: 0.35, size: 14 * k, sizeEnd: 28 * k, rot: rand(0, TAU), color, alpha: 0.8, vx: rand(-14, 14), vy: rand(-18, 4), fadeAt: 0.3 });
       break;
     case 'snow':
-      fx.fleck(fxTexture('crystal'), bx + rand(-6, 6), by + rand(-6, 6), { life: 0.55, size: 15 * k, sizeEnd: 7, rot: rand(0, TAU), spin: rand(-4, 4), color: Light.iceWhite, alpha: 0.9, vx: rand(-20, 20), vy: rand(10, 40), gravity: 80, fadeAt: 0.4 });
+      fx.fleck(fxTexture('crystal'), bx + rand(-6, 6), by + rand(-6, 6), { life: 0.55, size: 15 * k, sizeEnd: 7, rot: rand(0, TAU), spin: rand(-4, 4), color, alpha: 0.95, vx: rand(-20, 20), vy: rand(10, 40), gravity: 80, fadeAt: 0.4 });
       break;
     case 'ember':
-      fx.fleck(fxTexture('spark'), bx + rand(-5, 5), by + rand(-5, 5), { life: 0.36, size: 17 * k, sizeEnd: 5, rot: back + rand(-0.6, 0.6), color: Math.random() < 0.5 ? Light.warm : Light.gold, alpha: 0.95, vx: Math.cos(back) * 70, vy: Math.sin(back) * 70 - 30, drag: 3, add: true, fadeAt: 0.3 });
+      fx.fleck(fxTexture('spark'), bx + rand(-5, 5), by + rand(-5, 5), { life: 0.36, size: 17 * k, sizeEnd: 5, rot: back + rand(-0.6, 0.6), color: Math.random() < 0.5 ? color : Light.gold, alpha: 0.95, vx: Math.cos(back) * 70, vy: Math.sin(back) * 70 - 30, drag: 3, fadeAt: 0.3 });
       break;
     case 'glint':
-      fx.fleck(paint('burst_glint'), bx + rand(-4, 4), by + rand(-4, 4), { life: 0.24, size: 24 * k, sizeEnd: 8, rot: rand(0, 1.5), color: lighten(look.glow ? look.glow.color : Light.cold, 0.4), alpha: 0.9, add: true, fadeAt: 0.2 });
+      fx.fleck(paint('burst_glint'), bx + rand(-4, 4), by + rand(-4, 4), { life: 0.24, size: 22 * k, sizeEnd: 8, rot: rand(0, 1.5), color, alpha: 0.95, fadeAt: 0.3 });
       break;
     case 'sparkle':
-      fx.fleck(fxTexture('sparkle'), bx + rand(-8, 8), by + rand(-8, 8), { life: 0.4, size: 15 * k, sizeEnd: 4, rot: rand(0, 1.5), spin: rand(-3, 3), color: lighten(look.glow ? look.glow.color : Light.cold, 0.5), alpha: 0.95, vx: rand(-18, 18), vy: rand(-18, 18), add: true, fadeAt: 0.3 });
+      fx.fleck(fxTexture('sparkle'), bx + rand(-8, 8), by + rand(-8, 8), { life: 0.4, size: 15 * k, sizeEnd: 4, rot: rand(0, 1.5), spin: rand(-3, 3), color, alpha: 0.95, vx: rand(-18, 18), vy: rand(-18, 18), fadeAt: 0.4 });
       break;
     case 'steam':
-      fx.fleck(paint('burst_puff'), bx, by - 6, { life: 0.5, size: 12 * k, sizeEnd: 26 * k, rot: rand(0, TAU), color: Light.steam, alpha: 0.3, vy: -34, vx: rand(-8, 8), fadeAt: 0.2 });
+      fx.fleck(paint('burst_puff'), bx, by - 6, { life: 0.5, size: 12 * k, sizeEnd: 24 * k, rot: rand(0, TAU), color, alpha: 0.7, vy: -34, vx: rand(-8, 8), fadeAt: 0.3 });
       break;
     case 'puff':
-      fx.fleck(paint('burst_puff'), bx, by, { life: 0.42, size: 14 * k, sizeEnd: 36 * k, rot: rand(0, TAU), color: Light.smoke, alpha: 0.38, vx: rand(-10, 10), vy: rand(-22, -4), fadeAt: 0.15 });
+      fx.fleck(paint('burst_puff'), bx, by, { life: 0.42, size: 14 * k, sizeEnd: 32 * k, rot: rand(0, TAU), color, alpha: 0.8, vx: rand(-10, 10), vy: rand(-22, -4), fadeAt: 0.3 });
       break;
     case 'bubble':
-      fx.fleck(fxTexture('bubble'), bx + rand(-8, 8), by + rand(-8, 8), { life: 0.5, size: 8 * k, sizeEnd: 20 * k, color: Light.brew, alpha: 0.9, vx: rand(-8, 8), vy: rand(-40, -14), fadeAt: 0.4 });
-      break;
-    default:
+      fx.fleck(fxTexture('bubble'), bx + rand(-8, 8), by + rand(-8, 8), { life: 0.5, size: 8 * k, sizeEnd: 20 * k, color, alpha: 0.9, vx: rand(-8, 8), vy: rand(-40, -14), fadeAt: 0.4 });
       break;
   }
 }
@@ -255,9 +239,8 @@ export class Projectiles {
     private readonly env: FieldEnv,
     layer: Container,
   ) {
-    this.layers = { shadows: new Container(), streaks: new Container(), bodies: new Container(), lights: new Container() };
-    this.layers.lights.blendMode = 'add';
-    const stack = [this.layers.shadows, this.layers.streaks, this.layers.bodies, this.layers.lights];
+    this.layers = { shadows: new Container(), streaks: new Container(), bodies: new Container() };
+    const stack = [this.layers.shadows, this.layers.streaks, this.layers.bodies];
     for (const c of stack) c.eventMode = 'none';
     layer.addChild(...stack);
     this.pool = new Pool<ShotView>(
@@ -363,28 +346,28 @@ export class Projectiles {
     this.flights.length = 0;
     this.byUid.clear();
     this.pool.drain((v) => v.destroy());
-    for (const c of [this.layers.shadows, this.layers.streaks, this.layers.bodies, this.layers.lights]) c.destroy({ children: true });
+    for (const c of [this.layers.shadows, this.layers.streaks, this.layers.bodies]) c.destroy({ children: true });
   }
 }
 
 /** Where a cast lands: the area opens here, and the thing that was thrown bursts. */
 function landing(fx: Fx, id: UnitId, x: number, y: number): void {
   const flash = (tex: Texture, size: number, end: number, color: number, life: number): void => {
-    fx.fleck(tex, x, y, { life, size, sizeEnd: end, color, alpha: 0.95, add: true, rot: rand(0, TAU), fadeAt: 0.25 });
+    fx.fleck(tex, x, y, { life, size, sizeEnd: end, color, alpha: 0.95, rot: rand(0, TAU), fadeAt: 0.35 });
   };
   if (id === 'm_frost') {
-    flash(paint('burst_star'), 60, 130, Light.cold, 0.22);
-    flash(paint('burst_ring'), 40, 170, Light.iceRim, 0.4);
+    flash(paint('burst_star'), 60, 120, Light.ice, 0.22);
+    flash(paint('burst_ring'), 40, 150, Light.iceEdge, 0.4);
     for (let i = 0; i < 5; i++) {
       const dir = (i / 5) * TAU + rand(-0.3, 0.3);
       fx.fleck(fxTexture('crystal'), x, y, { life: 0.6, size: 18, sizeEnd: 8, rot: dir, spin: rand(-6, 6), color: Light.iceWhite, vx: Math.cos(dir) * 150, vy: Math.sin(dir) * 150 - 40, gravity: 260, drag: 1.2, fadeAt: 0.5 });
     }
   } else if (id === 'm_cosmo') {
-    flash(paint('burst_ring'), 30, 190, Light.voidOrb, 0.45);
-    flash(paint('burst_glint'), 70, 30, Light.voidRim, 0.3);
+    flash(paint('burst_ring'), 30, 170, Light.voidRim, 0.45);
+    flash(paint('burst_glint'), 60, 30, Light.voidRim, 0.3);
   } else if (id === 't_alch') {
-    fx.fleck(paint('burst_puff'), x, y, { life: 0.5, size: 40, sizeEnd: 110, color: Light.brew, alpha: 0.55, rot: rand(0, TAU), fadeAt: 0.2 });
-    flash(paint('burst_ring'), 30, 150, Light.brew, 0.35);
+    fx.fleck(paint('burst_puff'), x, y, { life: 0.5, size: 40, sizeEnd: 100, color: Light.lime, alpha: 0.85, rot: rand(0, TAU), fadeAt: 0.4 });
+    flash(paint('burst_ring'), 30, 140, Light.lime, 0.35);
     for (let i = 0; i < 6; i++) {
       const dir = (i / 6) * TAU + rand(-0.3, 0.3);
       fx.fleck(fxTexture('droplet'), x, y, { life: 0.5, size: 13, sizeEnd: 8, rot: dir + Math.PI / 2, color: Light.lime, vx: Math.cos(dir) * 140, vy: Math.sin(dir) * 120 - 120, gravity: 620, fadeAt: 0.6 });

@@ -1,21 +1,23 @@
 /**
- * Ground areas: the patches that stay on the floor for a while. They are painted, not cut from paper, and drawn in layers: a base that
- * sits on the floor with a soft edge (so the reach is still plain), one or two painted layers turning at different speeds above it, a few
- * particles that belong to the thing (flakes falling and swirling in the blizzard, scraps and sparks spiralling into the black hole's
- * core, bubbles rising and popping from the potion) and a light drawn additively on top. Friendly areas are cool or magical colours with
- * a soft bright rim (ice blue, lime, violet and ember; the rim is painted in a mid tone, because light added to a pale kitchen floor is only white); hostile ones are hot and hard-edged (the haste ring is orange chevrons, the heal
- * ring crimson crosses; wet and live cells keep their hazard tape), so a friend and a foe differ by shape, colour family and motion.
+ * Ground areas: the patches that stay on the floor for a while. They are drawn in the game's own cartoon style (flat colours, a thick
+ * dark-brown outline) and built in layers: a base that sits on the floor and shows the real reach, one drawn layer turning above it, and
+ * a few flat particles that belong to the thing (flakes falling in the blizzard, scraps and stars spiralling into the black hole's core,
+ * bubbles rising and popping from the potion). Nothing is added as light. Friendly areas are round and cool or magical (ice blue, lime,
+ * violet); hostile ones are hot and hard-edged (the haste ring is orange with dark chevrons, the heal ring crimson with crosses; wet
+ * and live cells keep their hazard tape), so a friend and a foe differ by shape, colour family and motion.
  *
- * Every area has the same life: it lands (the base grows with an overshoot and a ring of light spreads from it), it loops, it warns (for
- * the last second the base draws in and blinks and the rim flashes) and it lifts away. Under reduced motion the picture is the same and
- * still, the ending shown by a smaller, dimmer base and a steady rim. A low tier drops the extra layers and half the particles first.
+ * Every area has the same life: it lands (the base grows with an overshoot and a flat ring spreads from it), it loops, it warns (for
+ * the last second the base draws in and blinks) and it lifts away. Under reduced motion the picture is the same and still, the
+ * ending shown by a smaller, dimmer base. A low tier drops half the particles first. Areas that pile up on the lane thin out: the
+ * newer of two friendly areas that overlap is fainter and keeps fewer particles, so a late wave with a dozen of them is a patchwork you can
+ * still read the enemies through, not a wall.
  *
  * Views are pooled: the sprites of an area are built once and handed on to the next one, so starting a zone allocates only its small
  * handle and nothing is allocated per frame. The shapes are built at a reference radius and scaled.
  */
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { Ease } from '@/core/tween';
-import { TAU, clamp01, lighten, mixColor } from '@/core/math';
+import { TAU, clamp01, damp, lighten, mixColor } from '@/core/math';
 import { Color } from '@/ui/theme';
 import { drawHazardFrame } from './hazardFrame';
 import { hash01, type FxRect, type ZoneHandle } from './loops';
@@ -39,6 +41,8 @@ export interface AreaHandle extends ZoneHandle {
 
 /** Radius the disc shapes are built at; a view is scaled to the real reach. */
 const REF = 100;
+/** The drawn base is this many reach radii across, so it is the reach and a rim, not a bigger patch. */
+const SPAN = 2.1;
 const EXIT = 0.32;
 /** Real seconds of warning before an area ends. */
 export const AREA_WARN = 1;
@@ -46,7 +50,7 @@ export const AREA_WARN = 1;
 const BLINK_HZ = 2;
 /** The shortest warning, for an area that only lasts a moment. */
 const MIN_WARN = 0.35;
-/** The ring of light that spreads from a landing area. */
+/** The ring that spreads from a landing area. */
 const LAND = 0.45;
 /** This many areas or fewer move their motifs every frame. */
 const FEW_AREAS = 6;
@@ -54,10 +58,15 @@ const FEW_AREAS = 6;
 const MOTIF_SLACK = 0.002;
 /** Areas that start together are spread over this many frames of motif updates. */
 const STAGGER = 4;
+/** Two friendly areas overlap when their centres are closer than this share of their radii added; seconds between looks at who overlaps. */
+const OVERLAP = 0.75;
+const CROWD_EVERY = 0.2;
+/** How many older areas on top of it make an area as faint as it goes. */
+const CROWD_FULL = 3;
 
 const CREAM = Hue.cream;
 
-/** The painted pictures each kind of disc is made of, in the order a warm-up should upload them. */
+/** The drawn pictures each kind of disc is made of, in the order a warm-up should upload them. */
 export const AREA_PICTURES: Readonly<Record<DiscKind, readonly PaintId[]>> = {
   frost: ['zone_frost', 'zone_snow', 'burst_ring'],
   brew: ['zone_ooze', 'burst_ring'],
@@ -66,6 +75,8 @@ export const AREA_PICTURES: Readonly<Record<DiscKind, readonly PaintId[]>> = {
   heal: ['foe_heal', 'burst_ring'],
 };
 export const DISC_KINDS: readonly DiscKind[] = ['frost', 'brew', 'void', 'haste', 'heal'];
+/** The areas that are friends and may pile up (the hostile rings follow their enemy and never do). */
+const FRIENDLY: ReadonlySet<DiscKind> = new Set<DiscKind>(['frost', 'brew', 'void']);
 
 /** One atlas shape as a sprite sized in design px (the atlas cell's own size is divided out). */
 class Part {
@@ -95,7 +106,7 @@ class Part {
   }
 }
 
-/** One painted picture as a sprite `w` design px wide, centred. */
+/** One drawn picture as a sprite `w` design px wide, centred. */
 class Pic {
   readonly s: Sprite;
 
@@ -119,20 +130,18 @@ interface DiscLook {
   enter: number;
   /** The base pulls in to this share while it lifts away (the black hole to its core). */
   exitShrink: number;
-  /** The soft additive light over the area: colour, width in reference radii, opacity. */
-  glow: { color: number; size: number; alpha: number };
-  /** The ring painted round the edge, or null. */
-  rim: { color: number; size: number; alpha: number } | null;
+  /** The colour of the ring that spreads as the area lands. */
+  land: number;
   build(v: DiscArea): void;
-  /** Layers that turn: every frame, a few sprites. */
-  spin(v: DiscArea, age: number, warn: number, calm: boolean): void;
-  /** Particles: only when the layer says the motif is due. `n` is the share of them a low tier keeps (0..1). */
+  /** Layers that turn: every frame, a few sprites. `crowd` (0..1) is how much older areas lie over this one. */
+  spin(v: DiscArea, age: number, warn: number, calm: boolean, crowd: number): void;
+  /** Particles: only when the layer says the motif is due. `share` is the part of them kept (0..1). */
   animate(v: DiscArea, age: number, warn: number, calm: boolean, share: number): void;
 }
 
-/** Hide the particles beyond the share a weaker tier keeps; they are only toggled when the share changes. */
+/** Hide the particles beyond the share a weaker tier or a crowded lane keeps; they are only toggled when the share changes. */
 function keep(parts: readonly Part[], share: number): number {
-  const n = Math.max(1, Math.ceil(parts.length * share));
+  const n = Math.max(0, Math.ceil(parts.length * share));
   for (let i = 0; i < parts.length; i++) {
     const v = i < n;
     const s = (parts[i] as Part).s;
@@ -141,40 +150,28 @@ function keep(parts: readonly Part[], share: number): number {
   return n;
 }
 
-// ───────────────────────────── frost: an ice sheet with snow swirling over it ─────────────────────────────
+// ───────────────────────────── frost: an ice patch with a swirl of snow over it ─────────────────────────────
 
-const FLAKES = 8;
-const GLINTS = 4;
+const FLAKES = 6;
 
 const FROST: DiscLook = {
   from: 0.35,
   enter: 0.42,
   exitShrink: 0.12,
-  glow: { color: Light.ice, size: 2.5, alpha: 0.16 },
-  rim: { color: Light.iceEdge, size: 2.02, alpha: 0.75 },
+  land: Light.iceEdge,
   build(v) {
-    v.base = new Pic('zone_frost', 2.32 * REF, v.layer);
-    // Not quite opaque: the lane and the enemies on it read through the ice.
-    v.base.s.alpha = 0.84;
-    v.swirlA = new Pic('zone_snow', 1.9 * REF, v.layer);
-    v.swirlB = new Pic('zone_snow', 1.15 * REF, v.layer);
-    v.swirlA.s.alpha = 0;
-    v.swirlB.s.alpha = 0;
-    for (let i = 0; i < FLAKES; i++) v.flakes.push(new Part('crystal', i % 3 === 0 ? Light.ice : CREAM, 18, 18, v.layer));
-    for (let i = 0; i < GLINTS; i++) v.glints.push(new Part('sparkle', CREAM, 14, 14, v.layer));
+    v.base = new Pic('zone_frost', SPAN * REF, v.layer);
+    v.swirl = new Pic('zone_snow', 1.55 * REF, v.layer);
+    v.swirl.s.alpha = 0;
+    for (let i = 0; i < FLAKES; i++) v.flakes.push(new Part('crystal', i % 2 === 0 ? CREAM : Light.ice, 16, 16, v.layer));
   },
-  spin(v, age, warn, calm) {
+  spin(v, age, warn, calm, crowd) {
     const k = calm ? 0.2 : 1 + 0.8 * warn;
     const grown = clamp01((age - 0.15) / 0.5);
-    const a = v.swirlA as Pic;
-    const b = v.swirlB as Pic;
-    a.s.rotation = age * 0.5 * k;
-    b.s.rotation = -age * 0.95 * k;
-    a.s.alpha = 0.7 * grown * (1 - 0.4 * warn);
-    b.s.alpha = 0.55 * grown * (1 - 0.4 * warn);
-    const base = v.base as Pic;
-    const breathe = calm ? 1 : 1 + 0.012 * Math.sin(age * 2.2);
-    base.s.scale.set(((2.32 * REF) / Math.max(1, base.s.texture.width)) * breathe);
+    const swirl = v.swirl as Pic;
+    swirl.s.rotation = age * 0.5 * k;
+    swirl.s.alpha = 0.85 * grown * (1 - 0.4 * warn) * (1 - 0.7 * crowd);
+    (v.base as Pic).s.alpha = 0.92 * (1 - 0.45 * crowd);
   },
   animate(v, age, warn, calm, share) {
     const n = keep(v.flakes, share);
@@ -185,57 +182,40 @@ const FROST: DiscLook = {
       const cyc = Math.floor(phase);
       const t = phase - cyc;
       const a0 = hash01(cyc * 7.1 + j * 3.3) * TAU;
-      const r0 = (0.25 + 0.6 * hash01(cyc * 5.3 + j * 1.9)) * 0.82 * REF;
+      const r0 = (0.25 + 0.6 * hash01(cyc * 5.3 + j * 1.9)) * 0.8 * REF;
       const ang = a0 + t * 1.6 + (calm ? 0 : age * 0.35);
       const rad = r0 * (1 - 0.35 * t);
       const f = v.flakes[j] as Part;
       f.at(Math.cos(ang) * rad, Math.sin(ang) * rad * 0.8 + (t - 0.5) * 30, t * 2.4 + j);
-      const size = (13 + 7 * hash01(j * 2.7)) * (1 - 0.3 * t);
+      const size = (12 + 6 * hash01(j * 2.7)) * (1 - 0.3 * t);
       f.size(size, size);
       f.s.alpha = Math.pow(Math.sin(Math.PI * t), 0.7) * (1 - 0.6 * warn);
-    }
-    // A few glints sparkle on the ice.
-    const g = keep(v.glints, share);
-    for (let i = 0; i < g; i++) {
-      const phase = calm ? 0.4 + 0.1 * i : age / (1.1 + 0.3 * i) + i * 0.27;
-      const cyc = Math.floor(phase);
-      const t = phase - cyc;
-      const a0 = hash01(cyc * 3.7 + i * 8.1) * TAU;
-      const r0 = Math.sqrt(hash01(cyc * 6.1 + i * 2.3)) * 0.78 * REF;
-      const s = v.glints[i] as Part;
-      s.at(Math.cos(a0) * r0, Math.sin(a0) * r0 * 0.85, t * 1.2);
-      const d = 8 + 12 * Math.sin(Math.PI * t);
-      s.size(d, d);
-      s.s.alpha = Math.sin(Math.PI * t) * (1 - 0.5 * warn);
     }
   },
 };
 
 // ───────────────────────────── brew: a green pool with bubbles rising and popping ─────────────────────────────
 
-const BUBBLES = 9;
-const WISPS = 3;
+const BUBBLES = 7;
 const SPLASH = 6;
 
 const BREW: DiscLook = {
   from: 0.3,
   enter: 0.4,
   exitShrink: 0.25,
-  glow: { color: Light.lime, size: 2.3, alpha: 0.3 },
-  rim: null,
+  land: Light.lime,
   build(v) {
-    v.base = new Pic('zone_ooze', 2.2 * REF, v.layer);
-    v.base.s.alpha = 0.8;
-    for (let i = 0; i < WISPS; i++) v.wisps.push(new Part('smoke', mixColor(Light.lime, CREAM, 0.45), 60, 60, v.layer));
+    v.base = new Pic('zone_ooze', SPAN * REF, v.layer);
     for (let i = 0; i < BUBBLES; i++) v.bubbles.push(new Part('bubble', lighten(Color.leaf, 0.6), 10, 10, v.layer));
     for (let i = 0; i < SPLASH; i++) v.drops.push(new Part('droplet', mixColor(Light.lime, CREAM, 0.2), 10, 15, v.layer));
   },
-  spin(v, age, _warn, calm) {
+  spin(v, age, _warn, calm, crowd) {
     const base = v.base as Pic;
     // The pool wobbles like a liquid: a slow swell and a small turn.
     const swell = calm ? 1 : 1 + 0.03 * Math.sin(age * 2.4);
-    base.s.scale.set(((2.2 * REF) / Math.max(1, base.s.texture.width)) * swell);
+    base.s.scale.set(((SPAN * REF) / Math.max(1, base.s.texture.width)) * swell);
     base.s.rotation = calm ? 0 : 0.05 * Math.sin(age * 1.3);
+    base.s.alpha = 0.92 * (1 - 0.45 * crowd);
   },
   animate(v, age, warn, calm, share) {
     const n = keep(v.bubbles, share);
@@ -250,20 +230,9 @@ const BREW: DiscLook = {
       b.at(Math.cos(a0) * r0 + Math.sin(t * 9 + i) * 4, Math.sin(a0) * r0 * 0.7 + 22 - t * 52);
       // It swells as it rises, then pops: the film opens out and is gone.
       const pop = t > 0.82 ? (t - 0.82) / 0.18 : 0;
-      const d = (8 + 18 * Math.min(1, t / 0.82)) * (1 + 0.8 * pop);
+      const d = (8 + 16 * Math.min(1, t / 0.82)) * (1 + 0.8 * pop);
       b.size(d, d);
       b.s.alpha = clamp01(t / 0.1) * (1 - pop) * (1 - 0.55 * warn);
-    }
-    // Faint green steam drifts up from the pool.
-    const w = keep(v.wisps, share);
-    for (let i = 0; i < w; i++) {
-      const phase = calm ? 0.4 + 0.2 * i : age / (3 + 0.6 * i) + i / WISPS;
-      const t = phase - Math.floor(phase);
-      const wi = v.wisps[i] as Part;
-      wi.at((i - 1) * 0.35 * REF + Math.sin(t * 5 + i * 2) * 8, 10 - t * 70, t * 0.6);
-      const d = (50 + 40 * t) * (1 + 0.1 * i);
-      wi.size(d, d);
-      wi.s.alpha = 0.22 * Math.sin(Math.PI * t) * (1 - warn);
     }
     // Landing splash: drops fly out of the pool for the first half second.
     for (let i = 0; i < SPLASH; i++) {
@@ -279,38 +248,36 @@ const BREW: DiscLook = {
   },
 };
 
-// ───────────────────────────── void: a black hole, its arms turning, scraps and sparks falling into the core ─────────────────────────────
+// ───────────────────────────── void: a black hole, its arms turning, scraps and stars falling into the core ─────────────────────────────
 
-const SCRAPS = 12;
-const STARS = 5;
+const SCRAPS = 8;
+const STARS = 4;
 
 const VOID: DiscLook = {
   from: 0.12,
   enter: 0.5,
   exitShrink: 0.88,
-  glow: { color: Light.voidEmber, size: 1.1, alpha: 0.5 },
-  rim: { color: Light.voidRim, size: 2.1, alpha: 0.5 },
+  land: Light.voidRim,
   build(v) {
-    v.shade = new Part('glow', Light.voidShade, 2.7 * REF, 2.7 * REF, v.layer);
-    v.arms = new Pic('zone_holearms', 2.25 * REF, v.layer);
-    v.hole = new Pic('zone_hole', 2.05 * REF, v.layer);
-    for (let i = 0; i < SCRAPS; i++) v.scraps.push(new Part(i % 3 === 0 ? 'spark' : i % 3 === 1 ? 'confetti' : 'shard', Light.voidScraps[i % Light.voidScraps.length] as number, 14, 9, v.layer));
+    v.hole = new Pic('zone_hole', SPAN * REF, v.layer);
+    v.arms = new Pic('zone_holearms', 1.6 * REF, v.layer);
+    for (let i = 0; i < SCRAPS; i++) v.scraps.push(new Part(i % 2 === 0 ? 'spark' : 'confetti', Light.voidScraps[i % Light.voidScraps.length] as number, 14, 9, v.layer));
     for (let i = 0; i < STARS; i++) v.stars.push(new Part('sparkle', CREAM, 12, 12, v.layer));
   },
-  spin(v, age, warn, calm) {
+  spin(v, age, warn, calm, crowd) {
     const k = calm ? 0.2 : 1 + 2.2 * warn;
     const arms = v.arms as Pic;
     const hole = v.hole as Pic;
     arms.s.rotation = age * 1.25 * k;
-    arms.s.alpha = 0.85;
+    arms.s.alpha = 0.9 * (1 - 0.6 * crowd);
     hole.s.rotation = -age * 0.3 * k;
+    hole.s.alpha = 0.95 * (1 - 0.45 * crowd);
     // The core breathes and swells in the warning, as if the hole were about to close or burst.
     const beat = calm ? 0 : 0.025 * Math.sin(age * 3.1) + 0.06 * warn * Math.sin(age * 14);
-    hole.s.scale.set(((2.05 * REF) / Math.max(1, hole.s.texture.width)) * (1 + beat + 0.05 * warn));
-    (v.shade as Part).s.alpha = 0.55;
+    hole.s.scale.set(((SPAN * REF) / Math.max(1, hole.s.texture.width)) * (1 + beat + 0.05 * warn));
   },
   animate(v, age, warn, calm, share) {
-    // Scraps and sparks spiral in from the rim and shrink to nothing at the core: this thing eats what is near it.
+    // Scraps spiral in from the rim and shrink to nothing at the core: this thing eats what is near it.
     const n = keep(v.scraps, share);
     for (let i = 0; i < n; i++) {
       const rate = (1 + 0.5 * warn) / (1.4 + 0.12 * (i % 4));
@@ -332,7 +299,7 @@ const VOID: DiscLook = {
       const r = REF * (0.55 + 0.07 * Math.sin(age * 1.7 + i * 2));
       const s = v.stars[i] as Part;
       s.at(Math.cos(a) * r, Math.sin(a) * r, a);
-      const d = 8 + 7 * Math.sin(age * 5 + i * 1.7);
+      const d = 8 + 6 * Math.sin(age * 5 + i * 1.7);
       s.size(Math.max(3, d), Math.max(3, d));
       s.s.alpha = 0.9 - 0.5 * warn;
     }
@@ -341,73 +308,40 @@ const VOID: DiscLook = {
 
 // ───────────────────────────── hostile rings round an enemy: speed chevrons and healing crosses ─────────────────────────────
 
-const COMETS = 6;
-const CROSSES = 6;
-
 const HASTE: DiscLook = {
   from: 0.7,
   enter: 0.3,
   exitShrink: 0.15,
-  glow: { color: Light.hot, size: 2.3, alpha: 0.22 },
-  rim: null,
+  land: Light.hotComet,
   build(v) {
-    v.shade = new Part('glow', Light.hotShade, 2.3 * REF, 2.3 * REF, v.layer);
-    v.base = new Pic('foe_haste', 2.33 * REF, v.layer);
-    // The ring is a warning, not a wall: the enemies inside it stay easy to read.
-    v.base.s.alpha = 0.82;
-    for (let i = 0; i < COMETS; i++) v.comets.push(new Part('spark', Light.hotComet, 30, 7, v.layer));
+    v.base = new Pic('foe_haste', SPAN * REF, v.layer);
   },
   spin(v, age, warn, calm) {
     const ring = v.base as Pic;
-    // The chevrons run clockwise, faster as it winds up; the ring itself never stops.
+    // The chevrons run clockwise, faster as it winds up; the ring itself never stops. It is a warning, not a wall: the enemies inside stay easy to read.
     ring.s.rotation = calm ? 0 : age * (1.1 + 0.6 * warn);
-    (v.shade as Part).s.alpha = 0.16 * (calm ? 1 : 0.7 + 0.3 * Math.sin(age * 6));
+    ring.s.alpha = 0.78;
   },
-  animate(v, age, _warn, calm, share) {
-    const n = keep(v.comets, share);
-    for (let i = 0; i < n; i++) {
-      const a = (calm ? 0 : age * 2.1) + (i / COMETS) * TAU;
-      const c = v.comets[i] as Part;
-      c.at(Math.cos(a) * 0.93 * REF, Math.sin(a) * 0.93 * REF, a + Math.PI / 2);
-    }
-  },
+  animate() {},
 };
 
 const HEAL: DiscLook = {
   from: 0.7,
   enter: 0.3,
   exitShrink: 0.15,
-  glow: { color: Light.blood, size: 2.3, alpha: 0.2 },
-  rim: null,
+  land: Light.bloodCross,
   build(v) {
-    v.shade = new Part('glow', Light.bloodShade, 2.3 * REF, 2.3 * REF, v.layer);
-    v.base = new Pic('foe_heal', 2.33 * REF, v.layer);
-    v.base.s.alpha = 0.82;
-    for (let i = 0; i < CROSSES; i++) v.crosses.push(new Part('plus', Light.bloodCross, 16, 16, v.layer));
+    v.base = new Pic('foe_heal', SPAN * REF, v.layer);
   },
   spin(v, age, _warn, calm) {
     const ring = v.base as Pic;
     // A slow turn the other way and a heartbeat: two beats, a rest.
     ring.s.rotation = calm ? 0 : -age * 0.35;
     const beat = calm ? 0 : Math.pow(Math.max(0, Math.sin(age * 5.2)), 6) * 0.05 + Math.pow(Math.max(0, Math.sin(age * 5.2 - 0.9)), 6) * 0.03;
-    ring.s.scale.set(((2.33 * REF) / Math.max(1, ring.s.texture.width)) * (1 + beat));
-    (v.shade as Part).s.alpha = 0.14 * (1 + 4 * beat);
+    ring.s.scale.set(((SPAN * REF) / Math.max(1, ring.s.texture.width)) * (1 + beat));
+    ring.s.alpha = 0.78;
   },
-  animate(v, age, _warn, calm, share) {
-    const n = keep(v.crosses, share);
-    for (let i = 0; i < n; i++) {
-      const phase = calm ? 0.3 + 0.1 * i : age / 2.4 + i / CROSSES;
-      const cyc = Math.floor(phase);
-      const t = phase - cyc;
-      const a0 = hash01(cyc * 9.1 + i * 2.9) * TAU;
-      const r0 = Math.sqrt(hash01(cyc * 4.7 + i)) * 0.6 * REF;
-      const c = v.crosses[i] as Part;
-      c.at(Math.cos(a0) * r0, Math.sin(a0) * r0 * 0.8 + 24 - t * 50);
-      const k = 11 + 8 * Math.sin(Math.PI * t);
-      c.size(k, k);
-      c.s.alpha = Math.sin(Math.PI * t);
-    }
-  },
+  animate() {},
 };
 
 const LOOKS: Readonly<Record<DiscKind, DiscLook>> = { frost: FROST, brew: BREW, void: VOID, haste: HASTE, heal: HEAL };
@@ -426,41 +360,35 @@ interface Pooled {
   moveTo(x: number, y: number): void;
 }
 
-/** One disc area: the base and its turning layers and particles under one root, and the lights it keeps in the layer's additive container. */
+/** One disc area: the base and its turning layer and particles under one root. */
 class DiscArea implements Pooled {
   readonly root = new Container();
   readonly layer = new Container();
   base: Pic | null = null;
-  swirlA: Pic | null = null;
-  swirlB: Pic | null = null;
+  swirl: Pic | null = null;
   arms: Pic | null = null;
   hole: Pic | null = null;
-  shade: Part | null = null;
   readonly flakes: Part[] = [];
-  readonly glints: Part[] = [];
   readonly bubbles: Part[] = [];
-  readonly wisps: Part[] = [];
   readonly drops: Part[] = [];
   readonly scraps: Part[] = [];
   readonly stars: Part[] = [];
-  readonly comets: Part[] = [];
-  readonly crosses: Part[] = [];
   gen = 0;
   active = false;
   left = Infinity;
   span = AREA_WARN;
   handle: Handle | null = null;
-  /** The soft additive light (in the layer's light container, so a crowd of them is one blend change). */
-  private readonly glow: Part;
-  /** The ring round the edge and the ring of light that spreads from it as the area lands: painted, so they show on a pale floor too. */
-  private readonly rim: Sprite;
+  /** Start order: of two overlapping areas the one with the higher number is the newer, and is the one that thins out. */
+  serial = 0;
+  /** How many older friendly areas lie over this one, as a share of `CROWD_FULL` (set by the layer; `crowd` follows it smoothly). */
+  crowdWant = 0;
+  radius = REF;
+  /** The ring that spreads from the area's edge as it lands: flat, in the colour of the kind. */
   private readonly land: Sprite;
   private age = 0;
   private leaving = false;
   private leaveAge = 0;
-  private radius = REF;
-  /** Whether the extra layers (the second swirl, the glow) are showing: a low tier hides them. */
-  private rich = true;
+  private crowd = 0;
   /** Time on the area's own clock at which its motif is next moved (see `AreaLayer.update`). */
   private motifAt = 0;
 
@@ -469,30 +397,22 @@ class DiscArea implements Pooled {
     private readonly look: DiscLook,
     /** Which of the layer's views this is: areas started together move their motifs on different frames. */
     readonly slot: number,
-    lights: Container,
     private readonly onRelease: (v: DiscArea) => void,
   ) {
     this.root.eventMode = 'none';
     this.root.visible = false;
     this.root.addChild(this.layer);
     look.build(this);
-    this.glow = new Part('glow', look.glow.color, 64, 64, lights);
-    this.glow.s.visible = false;
-    this.rim = new Sprite(paint('burst_ring'));
-    this.rim.anchor.set(0.5);
-    this.rim.eventMode = 'none';
-    this.rim.visible = false;
     this.land = new Sprite(paint('burst_ring'));
     this.land.anchor.set(0.5);
     this.land.eventMode = 'none';
     this.land.visible = false;
-    if (look.rim) this.rim.tint = look.rim.color;
-    this.land.tint = look.rim ? look.rim.color : look.glow.color;
-    this.root.addChild(this.rim, this.land);
+    this.land.tint = look.land;
+    this.root.addChild(this.land);
   }
 
   /** `every` is the layer's current motif interval: the first move of the motif waits a share of it that depends on the slot. */
-  start(x: number, y: number, radius: number, every: number): void {
+  start(x: number, y: number, radius: number, every: number, serial: number): void {
     this.gen++;
     this.active = true;
     this.left = Infinity;
@@ -501,6 +421,9 @@ class DiscArea implements Pooled {
     this.leaving = false;
     this.leaveAge = 0;
     this.radius = radius;
+    this.serial = serial;
+    this.crowd = 0;
+    this.crowdWant = 0;
     this.root.position.set(x, y);
     this.root.visible = true;
     this.root.alpha = 0;
@@ -518,21 +441,24 @@ class DiscArea implements Pooled {
     this.root.position.set(x, y);
   }
 
-  /** Hide the light (the area has gone, or the scene was cleared). */
-  hideLights(): void {
-    this.glow.s.visible = false;
+  get x(): number {
+    return this.root.position.x;
+  }
+
+  get y(): number {
+    return this.root.position.y;
   }
 
   /** `every` is how often (seconds) the motif's many small parts are moved; the layers that turn follow every frame. */
   update(dt: number, every: number): void {
     if (!this.active) return;
     this.age += dt;
+    this.crowd = damp(this.crowd, this.crowdWant, 0.15, dt);
     if (this.leaving) {
       this.leaveAge += dt;
       if (this.leaveAge >= EXIT) {
         this.active = false;
         this.root.visible = false;
-        this.hideLights();
         this.onRelease(this);
         return;
       }
@@ -554,7 +480,7 @@ class DiscArea implements Pooled {
     let scale = calm ? 1 : look.from + (1 - look.from) * Ease.backOut(clamp01(age / look.enter));
     let alpha = clamp01(age / 0.12);
     let rot = 0;
-    // The ending: the base draws in and dims and, with motion, blinks, while the rim flashes.
+    // The ending: the base draws in and dims and, with motion, blinks.
     scale *= 1 - 0.1 * warn;
     if (warn > 0) alpha *= steady ? 1 - 0.25 * warn : 1 - 0.4 * warn * (blink ? 0 : 1);
     if (this.leaving) {
@@ -567,46 +493,20 @@ class DiscArea implements Pooled {
     this.root.scale.set(unit * scale);
     this.root.rotation = rot;
     this.root.alpha = first ? 0 : alpha;
-    const rich = fxSettings.tier !== 'low';
-    if (rich !== this.rich) {
-      this.rich = rich;
-      if (this.swirlB) this.swirlB.s.visible = rich;
-    }
-    look.spin(this, age, warn, calm);
-    const lit = first ? 0 : alpha;
-    const x = this.root.position.x;
-    const y = this.root.position.y;
-    // The soft light: it breathes, and it is the first thing a weaker tier drops.
-    const g = look.glow;
-    this.glow.s.visible = rich && lit > 0.01;
-    if (this.glow.s.visible) {
-      const d = g.size * REF * unit * scale;
-      this.glow.at(x, y);
-      this.glow.size(d, d);
-      this.glow.s.alpha = g.alpha * lit * (calm ? 1 : 0.8 + 0.2 * Math.sin(age * 2.6));
-    }
-    const r = look.rim;
-    this.rim.visible = r !== null;
-    if (r) {
-      // In the area's own space, so it scales and fades with it. The last second: it flashes in step with the base.
-      this.rim.rotation = calm ? 0 : age * 0.2;
-      this.rim.scale.set((r.size * REF) / Math.max(1, this.rim.texture.width));
-      this.rim.alpha = Math.min(1, r.alpha * (warn > 0 ? (steady ? 1 : blink ? 1.4 : 0.25) : 0.85 + 0.15 * Math.sin(age * 2.1)));
-    }
-    // The landing ring: one ring spreads from the area's edge as it lands.
+    look.spin(this, age, warn, calm, this.crowd);
+    // The landing ring: one flat ring spreads from the area's edge as it lands.
     const lk = clamp01(age / LAND);
     this.land.visible = !calm && lk < 1;
     if (this.land.visible) {
-      const d = 2 * REF * (0.7 + 0.65 * Ease.cubicOut(lk));
+      const d = 2 * REF * (0.7 + 0.5 * Ease.cubicOut(lk));
       this.land.scale.set(d / Math.max(1, this.land.texture.width));
-      this.land.alpha = 0.9 * (1 - lk);
+      this.land.alpha = 0.85 * (1 - lk);
     }
-    if (motif) look.animate(this, age, warn, calm, rich ? 1 : 0.5);
+    if (motif) look.animate(this, age, warn, calm, (fxSettings.tier === 'low' ? 0.5 : 1) * (1 - 0.7 * this.crowd));
   }
 
   destroy(): void {
     this.root.destroy({ children: true });
-    this.glow.s.destroy();
   }
 }
 
@@ -859,20 +759,17 @@ class Handle implements AreaHandle {
 /** Every ground area of one scene: starts them from the pool, steps the live ones, and gives each back when it has left. */
 export class AreaLayer {
   private readonly parent = new Container();
-  /** The additive lights of every disc area, drawn over their sheets: one blend change for all of them. */
-  private readonly lights = new Container();
   private readonly live: Array<DiscArea | CellArea> = [];
   private readonly freeDisc = new Map<DiscKind, DiscArea[]>();
   private readonly freeCell = new Map<string, CellArea[]>();
   private readonly all: Array<DiscArea | CellArea> = [];
+  private serial = 0;
+  private crowdWait = 0;
 
   constructor(into: Container) {
     this.parent.label = 'areas';
     this.parent.eventMode = 'none';
-    this.lights.label = 'area-lights';
-    this.lights.eventMode = 'none';
-    this.lights.blendMode = 'add';
-    into.addChild(this.parent, this.lights);
+    into.addChild(this.parent);
   }
 
   /** Areas on screen right now. */
@@ -881,7 +778,7 @@ export class AreaLayer {
   }
 
   private make(kind: DiscKind, free: DiscArea[]): DiscArea {
-    const v = new DiscArea(kind, LOOKS[kind], this.all.length, this.lights, (d) => this.release(d, free));
+    const v = new DiscArea(kind, LOOKS[kind], this.all.length, (d) => this.release(d, free));
     this.parent.addChild(v.root);
     this.all.push(v);
     return v;
@@ -900,7 +797,8 @@ export class AreaLayer {
   disc(kind: DiscKind, x: number, y: number, radius: number): AreaHandle {
     const free = this.freeOf(kind);
     const v = free.pop() ?? this.make(kind, free);
-    v.start(x, y, radius, this.motifEvery());
+    v.start(x, y, radius, this.motifEvery(), ++this.serial);
+    this.crowdWait = 0;
     return this.begin(v);
   }
 
@@ -952,7 +850,7 @@ export class AreaLayer {
   /**
    * How often (seconds) the motifs of the areas on screen are moved. A handful of areas move every frame; a crowd of them (twenty
    * blizzards and clouds on a late wave) moves at the pace the eye still reads as smooth, slower on a weaker tier. The layers that turn
-   * and the lights follow every frame regardless.
+   * follow every frame regardless.
    */
   private motifEvery(): number {
     const tier = fxSettings.tier;
@@ -960,7 +858,31 @@ export class AreaLayer {
     return tier === 'high' ? 1 / 40 : tier === 'mid' ? 1 / 30 : 1 / 20;
   }
 
+  /** Tell each friendly area how many older ones lie over it, so the newer of a pile thins out. Twenty areas: a few hundred distance checks, five times a second. */
+  private refreshCrowd(): void {
+    const list = this.live;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (!(a instanceof DiscArea) || !FRIENDLY.has(a.kind)) continue;
+      let over = 0;
+      for (let j = 0; j < list.length; j++) {
+        const b = list[j];
+        if (j === i || !(b instanceof DiscArea) || !FRIENDLY.has(b.kind) || b.serial >= a.serial) continue;
+        const reach = (a.radius + b.radius) * OVERLAP;
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        if (dx * dx + dy * dy < reach * reach) over++;
+      }
+      a.crowdWant = Math.min(1, over / CROWD_FULL);
+    }
+  }
+
   update(dt: number): void {
+    this.crowdWait -= dt;
+    if (this.crowdWait <= 0) {
+      this.crowdWait = CROWD_EVERY;
+      this.refreshCrowd();
+    }
     const every = this.motifEvery();
     // A view releases itself from inside its own update, which swaps the last live one into its place: walk backwards.
     for (let i = this.live.length - 1; i >= 0; i--) (this.live[i] as DiscArea | CellArea).update(dt, every);
@@ -971,7 +893,6 @@ export class AreaLayer {
     for (const v of this.live.slice()) {
       v.active = false;
       v.root.visible = false;
-      if (v instanceof DiscArea) v.hideLights();
       v.handle?.settle();
       v.handle = null;
     }
@@ -992,6 +913,5 @@ export class AreaLayer {
     for (const v of this.all) v.handle?.settle();
     this.all.length = 0;
     this.parent.destroy({ children: true });
-    this.lights.destroy({ children: true });
   }
 }

@@ -3,7 +3,7 @@ import { hasTex, tex } from '@/core/assets';
 import { clamp, clamp01, damp, mixColor } from '@/core/math';
 import { Ease, type Tweener } from '@/core/tween';
 import { Color, TapeColors, motion, paintTexture } from '@/ui';
-import { Light, popIn, squash, type Fx } from '@/fx';
+import { Light, paint, popIn, squash } from '@/fx';
 import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
 import { FIELD_W } from '@/game/geometry';
@@ -11,7 +11,7 @@ import type { FieldArt, StatusSticker, ZoneMark } from './art';
 import { barSegments, depthKey, type BarSegments } from './policy';
 import { BOSS_DROP } from '@/view/timing';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
-import { ShieldDome } from './shieldDome';
+import { ShieldRing } from './shieldRing';
 
 /** Longest side of the sprite is the radius times this: a cucumber (18) reads about 56 px, a boss (38) about 115. */
 const SIZE_PER_RADIUS = 3.05;
@@ -30,6 +30,8 @@ const ZONE_TINT: Readonly<Partial<Record<ZoneMark, { color: number; amount: numb
   brew: { color: mixColor(Color.white, Light.lime, 0.8), amount: 0.45 },
 };
 const BAR_H = 6;
+/** Width of the shield badge at the left end of the bar, px. */
+const SHIELD_BADGE = 20;
 /** Seconds the area tag stays after the last touch: longer than the slowest area tick (a blizzard ticks every half second). */
 const ZONE_HOLD = 0.6;
 /** The tag is baked 40 px across; it is shown a little smaller than that so a row of enemies does not become a row of tags. */
@@ -86,8 +88,8 @@ export class EnemyView {
   private readonly barBack: NineSliceSprite;
   private readonly barHp: NineSliceSprite;
   private readonly barShield: NineSliceSprite;
-  /** The glass dome of an enemy that wears a shield (built the first time one does) and the small steel shield by its bar. */
-  private dome: ShieldDome | null = null;
+  /** The thin ring round an enemy that wears a shield (built the first time one does) and the small shield badge by its bar. */
+  private shieldRing: ShieldRing | null = null;
   private readonly shieldIcon: Sprite;
   private readonly bar = new Container();
   private readonly badge: Sprite;
@@ -143,7 +145,8 @@ export class EnemyView {
     this.targetMark.visible = false;
     this.zoneTag = this.makeSprite(art.zoneMark.frost);
     this.zoneTag.visible = false;
-    this.shieldIcon = this.makeSprite(art.shieldMark);
+    this.shieldIcon = this.makeSprite(paint('badge_shield'));
+    this.shieldIcon.scale.set(SHIELD_BADGE / Math.max(1, this.shieldIcon.texture.width));
     this.shieldIcon.visible = false;
     this.bar.addChild(this.barBack, this.barHp, this.barShield);
     this.bar.visible = false;
@@ -213,20 +216,19 @@ export class EnemyView {
     this.targetMark.position.set(0, -this.size * 0.56 - 46);
     this.targetMark.visible = false;
     this.markK = 0;
-    // An enemy with a shield wears its small icon at the left end of the bar; the area tag moves out one place.
+    // An enemy with a shield wears its small badge at the left end of the bar and a thin ring round its body; the area tag moves out one place.
     const shielded = enemy.maxShield > 0;
-    this.shieldIcon.position.set(-this.barW / 2 - 9, -this.size * 0.56 - 10);
-    this.shieldIcon.scale.set(0.62);
+    this.shieldIcon.position.set(-this.barW / 2 - 8, -this.size * 0.56 - 10);
     this.shieldIcon.visible = shielded;
-    this.zoneTag.position.set(-this.barW / 2 - (shielded ? 28 : 8), -this.size * 0.56 - 12);
+    this.zoneTag.position.set(-this.barW / 2 - (shielded ? 26 : 8), -this.size * 0.56 - 12);
     this.zoneTag.visible = false;
     if (shielded) {
-      if (!this.dome) {
-        this.dome = new ShieldDome();
-        this.root.addChildAt(this.dome.root, this.root.getChildIndex(this.lean) + 1);
+      if (!this.shieldRing) {
+        this.shieldRing = new ShieldRing(this.art.shieldRing);
+        this.lean.addChild(this.shieldRing.sprite);
       }
-      this.dome.raise(this.size);
-    } else this.dome?.drop();
+      this.shieldRing.raise(this.size);
+    } else this.shieldRing?.drop();
     this.zoneKind = null;
     this.zoneHold = 0;
     this.zoneK = 0;
@@ -322,9 +324,9 @@ export class EnemyView {
       this.updateStatus(dt, time, enemy);
       this.updateZoneTag(dt, time);
       this.updateBar(dt, enemy);
-      if (this.dome?.raised) {
-        if (enemy.shield > 0) this.dome.update(dt, time, enemy.maxShield > 0 ? enemy.shield / enemy.maxShield : 0);
-        else this.dome.drop();
+      if (this.shieldRing?.raised) {
+        if (enemy.shield > 0) this.shieldRing.update(dt, enemy.maxShield > 0 ? enemy.shield / enemy.maxShield : 0);
+        else this.shieldRing.drop();
         this.shieldIcon.visible = enemy.shield > 0;
       }
     }
@@ -340,14 +342,14 @@ export class EnemyView {
     }
   }
 
-  /** The shield took a blow from `angle` (towards the attacker): the dome flashes and a ring runs out from where it was struck. */
-  shieldHit(fx: Fx, angle: number, strong: boolean): void {
-    this.dome?.hit(fx, this.root.x, this.root.y - this.size * 0.02, angle, strong);
+  /** The shield took a blow: its ring flashes and bumps. */
+  shieldHit(strong: boolean): void {
+    this.shieldRing?.hit(strong);
   }
 
-  /** The shield is gone: the dome vanishes (the pieces are thrown by `Fx.shieldBreak`). */
+  /** The shield is gone: the ring and the badge vanish (the pieces are thrown by `Fx.shieldBreak`). */
   shieldGone(): void {
-    this.dome?.drop();
+    this.shieldRing?.drop();
     this.shieldIcon.visible = false;
   }
 

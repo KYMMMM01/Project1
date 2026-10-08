@@ -24,22 +24,6 @@ export function currencyTotals(parts: readonly BundlePart[]): Record<CurrencyKin
   return out;
 }
 
-/** Image key of a reward part, or '' when the part is drawn with a vector icon. */
-export function textureKey(part: BundlePart): string {
-  switch (part.kind) {
-    case 'gold':
-      return 'icon_gold';
-    case 'gems':
-      return 'icon_gem';
-    case 'chest':
-      return part.chest === 'wooden' ? 'icon_chest_wood' : part.chest === 'silver' ? 'icon_chest_silver' : 'icon_chest_gold';
-    case 'card':
-      return `unit_${part.unit}`;
-    default:
-      return '';
-  }
-}
-
 /** Number of icons worth flying for an amount: a few for small sums, a fistful for big ones. */
 export function flightCount(total: number): number {
   if (total <= 0) return 0;

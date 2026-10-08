@@ -7,6 +7,7 @@ export * from './headerMath';
 export { drawFrameLayers, frameOrnaments } from './frameArt';
 export { plateBadgeBox, plateGeometry, cardGeometry, ringRuns, type CardGeometry } from './cardMath';
 export * from './icons';
+export { GLYPH_PICTURE, PICTURE_IDS, PICTURES, type PictureDef, type PictureId } from './pictures';
 export * from './motion';
 export { Staged } from './staged';
 export * from './numbers';

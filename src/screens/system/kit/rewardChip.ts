@@ -4,47 +4,26 @@ import { hasTex, tex } from '@/core/assets';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import type { BundlePart } from '@/meta/bundle';
-import { Color, drawIcon, fitLabel, Rarity, uiLabel, type IconName } from '@/ui';
+import { Color, drawIcon, fitLabel, uiLabel } from '@/ui';
 import type { Box } from '@/ui/layoutMath';
-import { stickerTilt, textureKey } from './parts';
+import { partPicture } from '../../partPicture';
+import { unitKey } from '../../shop/keys';
+import { stickerTilt } from './parts';
 import { stickerDisc } from './sheets';
-
-function iconFor(part: BundlePart): IconName {
-  switch (part.kind) {
-    case 'gold':
-      return 'coin';
-    case 'gems':
-      return 'gem';
-    case 'tickets':
-      return 'ticket';
-    case 'chest':
-      return 'chest';
-    case 'wild':
-      return 'cards';
-    case 'card':
-      return 'paw';
-    case 'cosmetic':
-      return 'wardrobe';
-  }
-}
-
-function tintFor(part: BundlePart): number | undefined {
-  if (part.kind === 'wild') return Rarity[part.rarity].color;
-  if (part.kind === 'chest') return part.chest === 'gold' ? Color.mustard : part.chest === 'silver' ? Color.teal : undefined;
-  return undefined;
-}
 
 /** The picture of one reward part, centred on its origin and `size` px square. Art when it exists, a drawn icon otherwise. */
 export function partIcon(part: BundlePart, size: number): Container {
-  const key = textureKey(part);
-  if (key && hasTex(key)) {
-    const s = new Sprite(tex(key));
+  const picture = partPicture(part, size);
+  if (picture) return picture;
+  const c = new Container();
+  if (part.kind === 'card' && hasTex(unitKey(part.unit))) {
+    const s = new Sprite(tex(unitKey(part.unit)));
     s.anchor.set(0.5);
     s.scale.set(size / Math.max(s.texture.width, s.texture.height));
-    return s;
+    c.addChild(s);
+  } else {
+    c.addChild(drawIcon(part.kind === 'card' ? 'paw' : 'wardrobe', size));
   }
-  const c = new Container();
-  c.addChild(drawIcon(iconFor(part), size, tintFor(part)));
   return c;
 }
 

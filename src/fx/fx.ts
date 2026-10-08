@@ -13,7 +13,6 @@ import { EmitterGroup, type FxHandle, type FxSequence, type FxTimeline } from '.
 import { AreaLayer, type AreaHandle, type DiscKind } from './areas';
 import { ArcLayer, type ArcOpts } from './arcs';
 import { FleckLayer, type FleckOpts } from './flecks';
-import { Light } from './light';
 import { SHARD_IDS, paint } from './paint';
 import { Loop, type FxEnv, type FxRect, type ZoneHandle } from './loops';
 import { ParticleSystem, type BurstMods, type EmitDef } from './particles';
@@ -22,7 +21,7 @@ import { Rays, makeSpritePool, type RaysOpts } from './rays';
 import { FX_TIERS, REDUCED, fxSettings, motionSeconds, tierScale } from './settings';
 import { ScreenFx, Trauma, fxShake, screenFx } from './screen';
 import { CONFETTI, Hue } from './palette';
-import { ensureFxTextures, fxTexture } from './textures';
+import { ensureFxTextures } from './textures';
 import * as zones from './zones';
 import type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
 
@@ -1437,39 +1436,31 @@ export class Fx {
   }
 
   /**
-   * A shield bursting, painted: a flash and a ring of light, the six painted pieces of the dome thrown outward and falling, and
-   * sparkles. `scale` is the enemy's size against a cucumber.
+   * A shield breaking: three or four small flat shards pop off the enemy, spin, fall and fade. Nothing else: the ring is simply gone.
+   * `scale` is the enemy's size against a cucumber.
    */
   shieldBreak(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? Light.shield;
-    const hi = lighten(c, 0.75);
     const s = o.scale ?? 1;
     const calm = fxSettings.reducedMotion;
-    this.flecks.spawn(fxTexture('glow'), x, y, { life: 0.24, size: 80 * s, sizeEnd: 230 * s, color: hi, alpha: 0.9, add: true, fadeAt: 0.1 });
-    this.flecks.spawn(paint('burst_ring'), x, y, { life: 0.34, size: 60 * s, sizeEnd: 210 * s, color: hi, alpha: 0.95, add: true, fadeAt: 0.25 });
-    this.flecks.spawn(paint('burst_star'), x, y, { life: 0.16, size: 80 * s, sizeEnd: 150 * s, rot: rand(0, TAU), color: W, add: true, fadeAt: 0.2 });
-    for (let i = 0; i < SHARD_IDS.length; i++) {
-      const dir = (i / SHARD_IDS.length) * TAU + rand(-0.3, 0.3);
-      const speed = rand(160, 340) * (calm ? 0.5 : 1);
-      const size = rand(24, 38) * s;
-      this.flecks.spawn(paint(SHARD_IDS[i] as (typeof SHARD_IDS)[number]), x + Math.cos(dir) * 8 * s, y + Math.sin(dir) * 8 * s, {
-        life: rand(0.55, 0.85),
+    const count = fxSettings.tier === 'low' ? 3 : 4;
+    const first = Math.floor(rand(0, SHARD_IDS.length));
+    for (let i = 0; i < count; i++) {
+      const dir = (i / count) * TAU + rand(-0.35, 0.35);
+      const speed = rand(110, 230) * (calm ? 0.5 : 1);
+      const size = rand(15, 22) * s;
+      this.flecks.spawn(paint(SHARD_IDS[(first + i) % SHARD_IDS.length] as (typeof SHARD_IDS)[number]), x + Math.cos(dir) * 8 * s, y + Math.sin(dir) * 8 * s, {
+        life: rand(0.45, 0.65),
         vx: Math.cos(dir) * speed,
-        vy: Math.sin(dir) * speed - 90,
-        gravity: calm ? 0 : 720,
+        vy: Math.sin(dir) * speed - 70,
+        gravity: calm ? 0 : 620,
         drag: 0.9,
         spin: calm ? 0 : rand(-9, 9),
         rot: rand(0, TAU),
         size,
-        sizeEnd: size * 0.75,
-        alpha: 0.95,
-        fadeAt: 0.55,
+        sizeEnd: size * 0.8,
+        fadeAt: 0.5,
       });
     }
-    this.burst(
-      { tex: 'sparkle', prio: 1, count: 8, life: [0.4, 0.75], speed: [60, 230], drag: 2.4, size: [14, 26], sizeEnd: [3, 7], spin: [-3, 3], rot: [0, TAU], colors: [W, hi], fadeIn: 0.1, fadeOut: 0.5 },
-      x, y, { scale: s },
-    );
   }
 
   /**

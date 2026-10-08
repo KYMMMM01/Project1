@@ -178,3 +178,15 @@ The director's share of the painted battle effects (see `fx.md` and `field.md`, 
 - **Nothing else changed.** Impacts, flashes, hit-stop, numbers and the weapon marks' gating are as they were; the projectile impact of splash shots still plays `shockwave` and the puff, over the field's new marks (the snow splat, the scorch with its flare).
 
 Tests: `view.director.palette.test.ts` and the policy tests unchanged and green; the arcs are tested in `fx.arcs.test.ts`.
+
+
+## 2026-10-08 VFX restyle
+
+The director's share of the restyle (see `fx.md` and `field.md`, "2026-10-08 VFX restyle"). Nothing in `src/view/director` needed new code; what changed under it:
+
+- **Chain lightning and the storm cloud's bolt** (`combat.ts`, `boss.ts`) still call `fx.arc(...)` the same way. The bolt is now a flat yellow zig-zag with a brown outline, one sprite a hop (the second, thinner "echo" bolt is gone) and a flat yellow star where it lands; the storm cloud's hostile bolt is the same picture tinted warm (`color: ZAP`). The hop timing (50 ms apart, `scale: 1 - 0.06 * i`) is unchanged.
+- **Shield colour** (`palette.ts`): `SHIELD_COLOR` follows `Light.shield`, which is cobalt blue now (0x2f66e8, hue 222 degrees). The glance of a hit on a shield, its number and the elite caption wear the ring's colour; the "no purple" palette test still holds. `Fx.shieldBreak` is a few flat shards (no flash, no ring of light), played at the enemy with the `shield_break` sound as before.
+- **Numbers**: crit and boss-hit numbers (styles `crit` and `big`, and the player's `hurt`) are placed side by side and row by row, at most six big ones alive and none wider than 170 px (`fx.md`); the burn, poison, bleed and shield colours and their baked fonts are untouched.
+- **Impacts, flashes, hit-stop and the weapon marks' gating** are as they were; the splash shot's `shockwave` and puff play over the new flat marks.
+
+Tests: `view.director.palette.test.ts` and the policy tests are unchanged and green; the arcs are tested in `fx.arcs.test.ts`.

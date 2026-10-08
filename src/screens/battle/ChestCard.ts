@@ -1,11 +1,9 @@
-import { Sprite } from 'pixi.js';
-import { hasTex, tex } from '@/core/assets';
 import { fmt, fmtDuration } from '@/core/format';
 import { t } from '@/core/i18n';
 import { profile } from '@/meta';
 import { FREE_CHEST_MS } from '@/meta/data/economy';
 import { ads } from '@/platform';
-import { Button, HEADER, IconButton, ProgressBar, drawIcon, fitLabel, uiLabel } from '@/ui';
+import { Button, currencyIcon, HEADER, IconButton, ProgressBar, fitLabel, uiLabel } from '@/ui';
 import { services, type Shell } from '../contract';
 import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { chestPile, chestsWaiting } from './model';
@@ -23,7 +21,7 @@ const WAITING_W = 176;
 
 /** The free wooden chest: a countdown, then a claim that opens the chest at once; ad and gem shortcuts while it waits; "open all" once two or more chests wait. */
 export class ChestCard extends HomeCard {
-  private readonly art = hasTex('icon_chest_wood') ? new Sprite(tex('icon_chest_wood')) : drawIcon('chest', 120);
+  private readonly art = currencyIcon('chest_wooden', 120);
   private readonly status = uiLabel('', { size: 26, wrap: 276 });
   /** "N chests waiting" beside the small picture while a pile waits. */
   private readonly waiting = uiLabel('', { size: 26, anchorX: 0, align: 'left', wrap: WAITING_W, lineHeight: 30 });
@@ -45,7 +43,6 @@ export class ChestCard extends HomeCard {
     private readonly shell: Shell,
   ) {
     super(w, H, t('battle.chest.title'), 'chest', { tape: 'yellow' });
-    if (this.art instanceof Sprite) this.art.anchor.set(0.5);
     this.bar = new ProgressBar({ width: w - CARD_PAD * 2, height: 28, color: 'gold' });
     this.body.addChild(this.art, this.bar, this.status, this.waiting);
 
@@ -126,8 +123,8 @@ export class ChestCard extends HomeCard {
     // The neighbouring sweep card's button is centred here: the buttons of this card end on the same line.
     const baseline = H - CARD_PAD - 44;
     const box = piled ? ART_SMALL : ART_BIG;
-    if (this.art instanceof Sprite) this.art.scale.set(Math.min(box.w / this.art.texture.width, box.h / this.art.texture.height));
-    else this.art.scale.set(box.h / 120);
+    const shape = this.art.getLocalBounds();
+    this.art.scale.set(Math.min(box.w / shape.width, box.h / shape.height));
     if (!piled) {
       this.art.position.set(cx, top + 70);
       this.status.position.set(cx, top + 156);

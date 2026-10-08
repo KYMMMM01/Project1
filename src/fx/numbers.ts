@@ -14,6 +14,19 @@ const PLAIN_PER_FRAME = 3;
 /** Width and height of the room a number takes along a clamped line: the next one lands beside it, not on it. */
 const SLOT_W = 62;
 const SLOT_Y = 34;
+/**
+ * The same for the big numbers (a crit, a boss hit): a crit is a sticker, so the next one lands beside the one already there (as far
+ * from it as the two are wide) and, when the row is full, a row higher, and does not pile on it.
+ */
+const BIG_H = 52;
+const BIG_ROWS = 3;
+/** The widest a number's digits are drawn, px: a plain one and a big one. */
+const MAX_WIDTH = 120;
+const MAX_BIG_WIDTH = 170;
+/** Big numbers alive at once: past this the oldest goes at once (a seventh sticker is only a bigger pile, and the oldest is nearly gone). */
+const BIG_MAX = 6;
+/** Numbers of this priority and above are the big ones. */
+const BIG_PRIO = 2;
 /** How far a face colour is lightened toward cream: on artwork the digits are light with a brown stroke (kit rule), the hue still says the kind. */
 const FACE_LIGHT = 0.3;
 /** Width of the brown stroke at the baked size (the fill covers its inner half). */
@@ -97,7 +110,7 @@ const STYLES: Record<NumStyle, StyleDef> = {
     tilt: 0, prio: 0, prefix: '', suffix: '', scatter: 24,
   },
   crit: {
-    face: Color.mustard, burst: Color.coral, size: [40, 56], life: 0.9, rise: 58, pop: [0.6, 1.5, 1.2], popSeconds: 0.18,
+    face: Color.mustard, burst: Color.coral, size: [36, 50], life: 0.9, rise: 58, pop: [0.6, 1.5, 1.2], popSeconds: 0.18,
     tilt: 0.052, prio: 2, prefix: '', suffix: '!', scatter: 22,
   },
   dot: {
@@ -149,6 +162,11 @@ class Num {
   /** Half the width of the digits at scale 1. */
   half = 0;
   key: string | number | undefined;
+
+  /** Half the width of what is drawn (the digits, or the starburst behind them), in layer px. */
+  get reach(): number {
+    return Math.max(this.half, this.burst.visible ? BAKED * 1.05 : 0) * this.scale;
+  }
   constructor(readonly font: string) {
     this.burst = new Sprite(fxTexture('starburst'));
     this.burst.anchor.set(0.5);
@@ -189,6 +207,8 @@ export class FloatingNumbers {
   /** Plain numbers started since the last `update`. */
   private plainThisFrame = 0;
   private fontsReady = false;
+  /** The place `freeSpot` found (one object, so a number finding its place allocates nothing). */
+  private readonly spot = { x: 0, y: 0 };
 
   /** Maximum simultaneous numbers; lowering it lets the extras finish. */
   cap: number;
@@ -254,10 +274,21 @@ export class FloatingNumbers {
     n.root.visible = true;
     n.tiltAmp = def.tilt * (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.4);
     const sx = x + (o.noScatter ? 0 : (Math.random() * 2 - 1) * def.scatter);
-    // A hit near the top of the screen is held at `minY`: several of them would end on one line and read as one long number.
-    n.x = Number.isFinite(this.minY) && y - def.rise <= this.minY + 8 ? this.freeX(sx, Math.max(this.minY, y - def.rise)) : sx;
     n.y = y;
+    n.x = sx;
     this.setText(n, value, def, o);
+    // Two crits that land on the same spot a moment apart would be one pile of stickers: the later one takes the nearest free place.
+    if (def.prio >= BIG_PRIO) {
+      this.dropOldestBig();
+      this.freeSpot(sx, y, n.reach * 0.9, BIG_H, BIG_PRIO, BIG_ROWS);
+      n.x = this.spot.x;
+      n.y = this.spot.y;
+    }
+    // A hit near the top of the screen is held at `minY`: several of them would end on one line and read as one long number.
+    if (Number.isFinite(this.minY) && n.y - def.rise <= this.minY + 8) {
+      this.freeSpot(n.x, Math.max(this.minY, n.y - def.rise), SLOT_W / 2, SLOT_Y, 0, 1);
+      n.x = this.spot.x;
+    }
     this.layer.addChild(n.root);
     this.active.push(n);
     this.apply(n);
@@ -294,23 +325,53 @@ export class FloatingNumbers {
     return { alive: this.active.length, created: this.created, skipped: this.skipped };
   }
 
-  /** Free one slot for a number of priority `prio`; false when everything alive outranks it. */
-  /** The nearest spot along a line (right first, then left, up to two numbers' width each way) that no live number is already on. */
-  private freeX(x: number, line: number): number {
-    for (let k = 0; k < 5; k++) {
-      const cand = x + (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * SLOT_W;
-      let free = true;
-      for (const a of this.active) {
-        if (Math.abs(a.root.x - cand) < SLOT_W && Math.abs(a.root.y - line) < SLOT_Y) {
-          free = false;
-          break;
+  /**
+   * Find the nearest place for a number `half` wide at height `line` (right first, then left, up to two numbers' width each way) that no
+   * live number of priority `minPrio` or more is already on, and when a whole row is taken, the same a row of `h` higher (up to `rows`
+   * rows). The place lands in `this.spot`; when everything is taken the number stays where it was.
+   */
+  private freeSpot(x: number, line: number, half: number, h: number, minPrio: number, rows: number): void {
+    const step = Math.max(8, half * 2);
+    for (let row = 0; row < rows; row++) {
+      const y = line - row * h;
+      for (let k = 0; k < 5; k++) {
+        const cand = x + (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * step;
+        let free = true;
+        for (const a of this.active) {
+          if (a.def.prio < minPrio) continue;
+          if (Math.abs(a.root.x - cand) < half + a.reach * 0.9 && Math.abs(a.root.y - y) < h) {
+            free = false;
+            break;
+          }
+        }
+        if (free) {
+          this.spot.x = cand;
+          this.spot.y = y;
+          return;
         }
       }
-      if (free) return cand;
     }
-    return x;
+    this.spot.x = x;
+    this.spot.y = line;
   }
 
+  /** Make room for one more big number: when `BIG_MAX` of them are alive the oldest goes. */
+  private dropOldestBig(): void {
+    const list = this.active;
+    let count = 0;
+    let oldest = -1;
+    for (let i = 0; i < list.length; i++) {
+      if ((list[i] as Num).def.prio < BIG_PRIO) continue;
+      count++;
+      if (oldest < 0) oldest = i;
+    }
+    if (count < BIG_MAX || oldest < 0) return;
+    this.recycle(list[oldest] as Num);
+    for (let i = oldest + 1; i < list.length; i++) list[i - 1] = list[i] as Num;
+    list.length--;
+  }
+
+  /** Free one slot for a number of priority `prio`; false when everything alive outranks it. */
   private evictFor(prio: number): boolean {
     const list = this.active;
     let victim = -1;
@@ -339,6 +400,10 @@ export class FloatingNumbers {
     const k = clamp(Math.log10(mag) / 3, 0, 1);
     const px = def.size[0] + (def.size[1] - def.size[0]) * k;
     n.scale = (px / BAKED) * (o.scale ?? 1) * 1.28;
+    // A long figure is drawn smaller rather than wider than a number may be: "864,408!" must not span the board.
+    const wide = n.half * 2 * n.scale;
+    const limit = def.prio >= BIG_PRIO ? MAX_BIG_WIDTH : MAX_WIDTH;
+    if (wide > limit) n.scale *= limit / wide;
   }
 
   private apply(n: Num): void {

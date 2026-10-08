@@ -24,9 +24,8 @@ function countAll(c: Container): number {
   return n;
 }
 
-/** The container the areas' own views live in, the one their additive lights live in, and the view of the n-th area started. */
+/** The container the areas' own views live in, and the view of the n-th area started. */
 const viewsOf = (layer: AreaLayer): Container => (layer as unknown as { parent: Container }).parent;
-const lightsOf = (layer: AreaLayer): Container => (layer as unknown as { lights: Container }).lights;
 const rootOf = (layer: AreaLayer, n = 0): Container => viewsOf(layer).children[n] as Container;
 /** What a disc is made of, in the order it is built: the base and its turning layers first, then the particles. */
 const partsOf = (root: Container): Sprite[] => (root.children[0] as Container).children as Sprite[];
@@ -42,8 +41,8 @@ function motifMoves(count: number, seconds: number): number {
   const layer = new AreaLayer(new Container());
   for (let i = 0; i < count; i++) layer.disc('brew', 100 * i, 0, 100);
   advance(layer, 1);
-  // The base, three wisps of steam, then the bubbles.
-  const bubble = partsOf(rootOf(layer))[4] as Sprite;
+  // The base, then the bubbles.
+  const bubble = partsOf(rootOf(layer))[1] as Sprite;
   let last = bubble.position.y;
   let moves = 0;
   for (let t = 0; t < seconds - 1e-9; t += DT) {
@@ -73,9 +72,9 @@ describe('ground area motif rate', () => {
   it('areas started together do not all move on the same frame', () => {
     const layer = new AreaLayer(new Container());
     for (let i = 0; i < 12; i++) layer.disc('brew', 100 * i, 0, 100);
-    const first = viewsOf(layer).children.map((root) => partsOf(root as Container)[4]?.position.y);
+    const first = viewsOf(layer).children.map((root) => partsOf(root as Container)[1]?.position.y);
     layer.update(DT);
-    const moved = viewsOf(layer).children.filter((root, i) => partsOf(root as Container)[4]?.position.y !== first[i]).length;
+    const moved = viewsOf(layer).children.filter((root, i) => partsOf(root as Container)[1]?.position.y !== first[i]).length;
     expect(moved).toBeLessThan(12);
     expect(moved).toBeGreaterThan(0);
     layer.destroy();
@@ -132,8 +131,8 @@ describe('ground areas', () => {
   it('a ring spreads from the edge as it lands, and is gone after half a second', () => {
     const layer = new AreaLayer(new Container());
     layer.disc('frost', 0, 0, 100);
-    // The area's own space holds its layers, then the rim and the landing ring.
-    const [, , land] = rootOf(layer).children as Sprite[];
+    // The area's own space holds its layers, then the landing ring.
+    const [, land] = rootOf(layer).children as Sprite[];
     layer.update(DT);
     advance(layer, 0.1);
     expect(land?.visible).toBe(true);
@@ -182,27 +181,26 @@ describe('ground areas', () => {
     layer.destroy();
   });
 
-  it('warns in the last second: the base draws in, dims and flashes its rim; none of that before', () => {
+  it('warns in the last second: the base draws in and blinks; none of that before', () => {
     const layer = new AreaLayer(new Container());
     const h = layer.disc('frost', 0, 0, 100);
     const root = rootOf(layer);
-    const [, rim] = root.children as Sprite[];
     advance(layer, 0.6);
     h.setLeft(AREA_WARN + 1, 4);
     layer.update(DT);
     const calmScale = root.scale.x;
     expect(calmScale).toBeCloseTo(1, 1);
-    expect(rim?.alpha).toBeLessThan(0.8);
+    expect(root.alpha).toBeCloseTo(1, 2);
     h.setLeft(0.05, 4);
     layer.update(DT);
     expect(root.scale.x).toBeLessThan(calmScale * 0.92);
-    // The rim is the brightest thing on the edge in the warning, and only while it is on.
-    let peak = 0;
+    // It blinks: some frames of the warning are clearly fainter than the calm picture.
+    let low = 1;
     for (let i = 0; i < 40; i++) {
       layer.update(DT);
-      peak = Math.max(peak, rim?.alpha ?? 0);
+      low = Math.min(low, root.alpha);
     }
-    expect(peak).toBeGreaterThan(0.9);
+    expect(low).toBeLessThan(0.75);
     layer.destroy();
   });
 
@@ -294,8 +292,6 @@ describe('ground areas', () => {
       expect(h.alive).toBe(false);
       await expect(h.done).resolves.toBeUndefined();
     }
-    // The lights went with them.
-    expect(lightsOf(layer).children.every((c) => !c.visible)).toBe(true);
     // The views are reusable: the same kind starts again without building another.
     const again = layer.disc('frost', 5, 5, 90);
     expect(again.alive).toBe(true);
@@ -304,19 +300,14 @@ describe('ground areas', () => {
 });
 
 describe('how each area is built', () => {
-  it('the blizzard turns two layers of snow at different speeds, the other way round, and lets flakes fall', () => {
+  it('the blizzard turns one swirl of flat snow over the ice and lets flakes fall, and the ice is not quite opaque', () => {
     const layer = new AreaLayer(new Container());
     layer.disc('frost', 0, 0, 100);
     advance(layer, 1);
-    const [base, a, b] = partsOf(rootOf(layer));
-    const ra = a?.rotation ?? 0;
-    const rb = b?.rotation ?? 0;
+    const [base, swirl] = partsOf(rootOf(layer));
+    const r = swirl?.rotation ?? 0;
     advance(layer, 0.5);
-    const da = (a?.rotation ?? 0) - ra;
-    const db = (b?.rotation ?? 0) - rb;
-    expect(da).toBeGreaterThan(0);
-    expect(db).toBeLessThan(0);
-    expect(Math.abs(db)).toBeGreaterThan(da * 1.4);
+    expect((swirl?.rotation ?? 0) - r).toBeGreaterThan(0);
     // The ice is not quite opaque, so the lane reads through it.
     expect(base?.alpha).toBeLessThan(1);
     layer.destroy();
@@ -327,13 +318,13 @@ describe('how each area is built', () => {
     layer.disc('void', 0, 0, 100);
     advance(layer, 0.8);
     const parts = partsOf(rootOf(layer));
-    // The shade, the arms, the hole, then twelve scraps and five stars.
-    const [, arms, hole] = parts;
+    // The hole, the arms, then eight scraps and four stars.
+    const [hole, arms] = parts;
     const r0 = [arms?.rotation ?? 0, hole?.rotation ?? 0];
     advance(layer, 0.4);
     expect((arms?.rotation ?? 0) - r0[0]!).toBeGreaterThan(0);
     expect((hole?.rotation ?? 0) - r0[1]!).toBeLessThan(0);
-    const scraps = parts.slice(3, 15);
+    const scraps = parts.slice(2, 10);
     const near = scraps.map((s) => Math.hypot(s.x, s.y));
     expect(Math.min(...near)).toBeLessThan(40);
     expect(Math.max(...near)).toBeGreaterThan(70);
@@ -353,26 +344,76 @@ describe('how each area is built', () => {
     layer.destroy();
   });
 
-  it('the lights of a low tier are dropped first: no glow, no second swirl, half the particles', () => {
+  it('a low tier keeps half the particles of an area, a high one all of them', () => {
     setFxSettings({ tier: 'low' });
     const layer = new AreaLayer(new Container());
     layer.disc('frost', 0, 0, 100);
     advance(layer, 1);
-    const [glow] = lightsOf(layer).children as Sprite[];
-    const parts = partsOf(rootOf(layer));
-    expect(glow?.visible).toBe(false);
-    expect(parts[2]?.visible).toBe(false);
-    // The eight flakes: the first half show, the rest rest.
-    const flakes = parts.slice(3, 11);
-    expect(flakes.filter((f) => f.visible).length).toBe(4);
+    // The base, the swirl, then the six flakes: the first half show, the rest rest.
+    const flakes = partsOf(rootOf(layer)).slice(2, 8);
+    expect(flakes.filter((f) => f.visible).length).toBe(3);
     setFxSettings({ tier: 'high' });
     const rich = new AreaLayer(new Container());
     rich.disc('frost', 0, 0, 100);
     advance(rich, 1);
-    expect((lightsOf(rich).children[0] as Sprite).visible).toBe(true);
-    expect(partsOf(rootOf(rich)).slice(3, 11).every((f) => f.visible)).toBe(true);
+    expect(partsOf(rootOf(rich)).slice(2, 8).every((f) => f.visible)).toBe(true);
     layer.destroy();
     rich.destroy();
+  });
+
+  it('draws nothing with added light: no glow, no additive container, in any kind of area', () => {
+    const layer = new AreaLayer(new Container());
+    for (const kind of DISCS) layer.disc(kind, 0, 0, 100);
+    layer.cell('wet', { x: 0, y: 0, w: 100, h: 104 });
+    layer.cell('zap', { x: 0, y: 200, w: 100, h: 104 });
+    advance(layer, 1);
+    const stack = [viewsOf(layer) as Container];
+    while (stack.length > 0) {
+      const c = stack.pop() as Container;
+      expect(c.blendMode).not.toBe('add');
+      stack.push(...(c.children as Container[]));
+    }
+    layer.destroy();
+  });
+
+  it('piled-up friendly areas thin out: the newer of two that overlap is fainter and keeps fewer particles, the oldest is untouched', () => {
+    const layer = new AreaLayer(new Container());
+    for (let i = 0; i < 4; i++) layer.disc('frost', 10 * i, 0, 100);
+    advance(layer, 1.5);
+    const bases = [0, 1, 2, 3].map((n) => (partsOf(rootOf(layer, n))[0] as Sprite).alpha);
+    expect(bases[0]).toBeCloseTo(0.92, 2);
+    expect(bases[1]).toBeLessThan(bases[0] as number);
+    expect(bases[3]).toBeLessThan(bases[1] as number);
+    const flakes = (n: number): number => partsOf(rootOf(layer, n)).slice(2, 8).filter((f) => f.visible).length;
+    expect(flakes(0)).toBe(6);
+    expect(flakes(3)).toBeLessThan(6);
+    layer.destroy();
+  });
+
+  it('areas that lie far apart do not thin each other, and the hostile rings never thin', () => {
+    const layer = new AreaLayer(new Container());
+    layer.disc('frost', 0, 0, 100);
+    layer.disc('frost', 400, 0, 100);
+    layer.disc('haste', 0, 0, 120);
+    layer.disc('haste', 0, 0, 120);
+    advance(layer, 1.5);
+    expect((partsOf(rootOf(layer, 1))[0] as Sprite).alpha).toBeCloseTo(0.92, 2);
+    expect((partsOf(rootOf(layer, 3))[0] as Sprite).alpha).toBeCloseTo(0.78, 2);
+    layer.destroy();
+  });
+
+  it('the hole thins out too, and the newest of a pile comes back to full when the older ones leave', () => {
+    const layer = new AreaLayer(new Container());
+    const old = [layer.disc('void', 0, 0, 100), layer.disc('void', 5, 0, 100), layer.disc('void', 10, 0, 100)];
+    layer.disc('void', 15, 0, 100);
+    advance(layer, 1.5);
+    const faint = (partsOf(rootOf(layer, 3))[0] as Sprite).alpha;
+    expect(faint).toBeLessThan(0.7);
+    for (const h of old) h.stop();
+    advance(layer, 1.5);
+    // The newest is now alone.
+    expect((partsOf(rootOf(layer, 3))[0] as Sprite).alpha).toBeGreaterThan(faint + 0.2);
+    layer.destroy();
   });
 
   it('the hostile rings turn and beat: chevrons run clockwise, the heal ring turns back and pulses', () => {
@@ -380,9 +421,8 @@ describe('how each area is built', () => {
     layer.disc('haste', 0, 0, 120);
     layer.disc('heal', 0, 0, 120);
     advance(layer, 0.6);
-    // The shade under the ring, then the ring itself.
-    const haste = partsOf(rootOf(layer, 0))[1] as Sprite;
-    const heal = partsOf(rootOf(layer, 1))[1] as Sprite;
+    const haste = partsOf(rootOf(layer, 0))[0] as Sprite;
+    const heal = partsOf(rootOf(layer, 1))[0] as Sprite;
     const a = haste.rotation;
     const b = heal.rotation;
     const sizes = new Set<string>();
@@ -401,13 +441,13 @@ describe('how each area is built', () => {
     expect(layer.ready('heal')).toBe(true);
     expect(layer.ready('heal')).toBe(false);
     // The ready view is the one the first area uses: starting one builds nothing more.
-    const before = countAll(viewsOf(layer)) + countAll(lightsOf(layer));
+    const before = countAll(viewsOf(layer));
     layer.disc('heal', 10, 10, 100);
-    expect(countAll(viewsOf(layer)) + countAll(lightsOf(layer))).toBe(before);
+    expect(countAll(viewsOf(layer))).toBe(before);
     expect(layer.count).toBe(1);
   });
 
-  it('names the painted pictures of every kind, and each one is a picture the build makes', () => {
+  it('names the drawn pictures of every kind, and each one is a picture the build makes', () => {
     expect([...DISC_KINDS].sort()).toEqual(['brew', 'frost', 'haste', 'heal', 'void']);
     for (const kind of DISC_KINDS) {
       expect(AREA_PICTURES[kind].length).toBeGreaterThan(1);
@@ -446,7 +486,7 @@ describe('hazard cells', () => {
     });
   }
 
-  it('a live cell flickers between the painted bolts', () => {
+  it('a live cell flickers between the drawn bolts', () => {
     const layer = new AreaLayer(new Container());
     layer.cell('zap', rect);
     const root = rootOf(layer);

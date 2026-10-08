@@ -74,8 +74,8 @@ export class Button extends Container implements Pressable {
 
   private labelT: Text | null = null;
   private subT: Text | null = null;
-  private iconG: Graphics | null = null;
-  private subIconG: Graphics | null = null;
+  private iconG: Container | null = null;
+  private subIconG: Container | null = null;
   private badgeView: Badge | null = null;
   private lockBadge: Container | null = null;
   private spinner: LoadingSpinner | null = null;

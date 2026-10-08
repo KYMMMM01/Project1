@@ -42,9 +42,9 @@ const LABEL_SIDE = 30;
 
 /** Icons are built once per name and moved between lanes: no Graphics churn per banner. */
 class IconCache {
-  private readonly cache = new Map<string, Graphics>();
+  private readonly cache = new Map<string, Container>();
 
-  get(name: IconName, size: number): Graphics {
+  get(name: IconName, size: number): Container {
     const key = name + size;
     let g = this.cache.get(key);
     if (!g) {
@@ -72,7 +72,7 @@ class PillLane implements Lane {
   private readonly text: Text;
   private readonly tape: Graphics | null;
   private readonly seed = paperSeed();
-  private icon: Graphics | null = null;
+  private icon: Container | null = null;
   private plateW = 0;
   private baseY = 0;
   /** Scale that fits the band (`bannerSlots`); the pop animation multiplies it. */
@@ -169,7 +169,7 @@ class BandLane implements Lane {
   private readonly bg = new Graphics();
   private readonly title: Text;
   private readonly sub: Text;
-  private readonly icon: Graphics;
+  private readonly icon: Container;
   private readonly seed = paperSeed();
   private width = 720;
   private baseY = 0;

@@ -39,10 +39,10 @@ import {
 } from '@/fx';
 import { UNIT_IDS, type BattleEvents, type EnemyState, type ProjectileState, type UnitId } from '@/game/api';
 import { unitSpec } from '@/game';
-import { fieldArt } from '@/view/field/art';
 import type { FieldEnv } from '@/view/field/env';
+import { fieldArt } from '@/view/field/art';
 import { Projectiles } from '@/view/field/projectiles';
-import { ShieldDome } from '@/view/field/shieldDome';
+import { ShieldRing } from '@/view/field/shieldRing';
 import { WeaponMarks } from '@/view/field/weaponMarks';
 
 const COLS = 3;
@@ -154,12 +154,11 @@ class BattleRig {
   }
 }
 
-/** A cone in a glass dome in a gallery cell: an enemy's shield, with the hits, the cracks and the break that play on it. */
-class DomeRig {
+/** A cone in its shield ring in a gallery cell: an enemy's shield, with the hits, the nearly-gone dashes and the break that play on it. */
+class RingRig {
   readonly root = new Container();
   private readonly cone = new Sprite(tex('enemy_cone'));
-  private readonly dome = new ShieldDome();
-  private time = 0;
+  private readonly ring = new ShieldRing(fieldArt().shieldRing);
   private share = 1;
 
   constructor(
@@ -169,32 +168,31 @@ class DomeRig {
     this.cone.anchor.set(0.5);
     this.cone.scale.set(64 / Math.max(1, this.cone.texture.width));
     this.root.position.set(x, y);
-    this.root.addChild(this.cone, this.dome.root);
+    this.root.addChild(this.cone, this.ring.sprite);
   }
 
   raise(): void {
     this.share = 1;
     this.cone.visible = true;
-    this.dome.raise(64);
+    this.ring.raise(64);
   }
 
-  hit(fx: Fx, angle: number, share: number): void {
+  hit(share: number): void {
     this.share = share;
-    this.dome.hit(fx, this.x, this.y, angle, share < 0.4);
+    this.ring.hit(share < 0.4);
   }
 
   breakIt(fx: Fx): void {
-    this.dome.drop();
+    this.ring.drop();
     fx.shieldBreak(this.x, this.y);
   }
 
   update(dt: number): void {
-    this.time += dt;
-    this.dome.update(dt, this.time, this.share);
+    this.ring.update(dt, this.share);
   }
 
   destroy(): void {
-    this.dome.destroy();
+    this.ring.destroy();
     this.root.destroy({ children: true });
   }
 }
@@ -225,7 +223,7 @@ export default class FxDemo extends Scene {
   private readonly hud = new Container();
   private readonly fx: Fx;
   private readonly rig: BattleRig;
-  private readonly domes = new Map<CellView, DomeRig>();
+  private readonly rings = new Map<CellView, RingRig>();
   private readonly spinTw = new Tweener();
   private readonly hitStop: ReturnType<typeof createHitStop>;
   private readonly cells: CellView[] = [];
@@ -298,7 +296,7 @@ export default class FxDemo extends Scene {
   private stepAll(dt: number): void {
     this.fx.update(dt);
     this.rig.update(dt);
-    for (const d of this.domes.values()) d.update(dt);
+    for (const d of this.rings.values()) d.update(dt);
     this.spinTw.update(dt);
     this.spinner.rotation += 3 * dt * this.spinTw.timeScale;
   }
@@ -325,8 +323,8 @@ export default class FxDemo extends Scene {
 
   override exit(): void {
     this.hitStop.dispose();
-    for (const d of this.domes.values()) d.destroy();
-    this.domes.clear();
+    for (const d of this.rings.values()) d.destroy();
+    this.rings.clear();
     this.rig.destroy();
     this.fx.destroy();
     screenFx.clear();
@@ -437,7 +435,7 @@ export default class FxDemo extends Scene {
       const y = TOP + row * (CELL_H + GAP);
       const view = new Container();
       view.position.set(x, y);
-      // A dark warm well keeps the additive effects readable; the name hangs on a paper label.
+      // A dark warm well keeps the flat effects readable on every cell; the name hangs on a paper label.
       const panel = new Graphics().roundRect(0, 0, cellW, CELL_H, 22).fill({ color: Color.inkDeep, alpha: 0.55 }).stroke({ width: 3, color: Color.kraftDark, alpha: 0.8 });
       const name = new PaperLabel({ text: entry.name, size: 24, paper: Color.paperLight, maxWidth: cellW - 16, seed: i + 1 });
       name.position.set(cellW / 2, CELL_H - 26);
@@ -776,35 +774,35 @@ export default class FxDemo extends Scene {
           tw.run({ duration: 3.4, onUpdate: (k) => h.setLeft(3.4 * (1 - k), 3.4), onComplete: () => h.stop() });
         }),
       ),
-      e('shield idle', (c) => this.domeOf(c).raise()),
+      e('shield idle', (c) => this.ringOf(c).raise()),
       e('shield hit', (c) => {
-        const d = this.domeOf(c);
+        const d = this.ringOf(c);
         d.raise();
-        for (let i = 0; i < 3; i++) tw.call(0.5 + i * 0.5, () => d.hit(fx, i * 2.1 - 1, 1));
+        for (let i = 0; i < 3; i++) tw.call(0.5 + i * 0.5, () => d.hit(1));
       }),
-      e('shield cracked', (c) => {
-        const d = this.domeOf(c);
+      e('shield nearly gone', (c) => {
+        const d = this.ringOf(c);
         d.raise();
-        tw.call(0.5, () => d.hit(fx, -0.8, 0.5));
-        tw.call(1.4, () => d.hit(fx, 0.4, 0.2));
+        tw.call(0.5, () => d.hit(0.5));
+        tw.call(1.4, () => d.hit(0.2));
       }),
       e('shield break', (c) => {
-        const d = this.domeOf(c);
+        const d = this.ringOf(c);
         d.raise();
-        tw.call(0.5, () => d.hit(fx, -0.8, 0.55));
-        tw.call(1.1, () => d.hit(fx, 0.4, 0.25));
+        tw.call(0.5, () => d.hit(0.55));
+        tw.call(1.1, () => d.hit(0.25));
         tw.call(1.7, () => d.breakIt(fx));
       }),
     ];
   }
 
-  /** The cone in its dome of this cell, made the first time. */
-  private domeOf(c: CellView): DomeRig {
-    let d = this.domes.get(c);
+  /** The cone in its shield ring of this cell, made the first time. */
+  private ringOf(c: CellView): RingRig {
+    let d = this.rings.get(c);
     if (!d) {
-      d = new DomeRig(c.cx, c.cy + 6);
+      d = new RingRig(c.cx, c.cy + 6);
       this.rig.layer.addChild(d.root);
-      this.domes.set(c, d);
+      this.rings.set(c, d);
     }
     return d;
   }

@@ -1,157 +1,150 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Texture, type Sprite } from 'pixi.js';
-
-vi.mock('@/core/assets', () => ({ tex: () => Texture.WHITE, hasTex: () => true, putTex: () => undefined, imageKeys: () => [] }));
-vi.mock('@/fx/textures', () => ({
-  ensureFxTextures: () => undefined,
-  fxTex: () => ({ texture: Texture.WHITE, w: 64, h: 64, ax: 0.5, ay: 0.5 }),
-  fxTexture: () => Texture.WHITE,
-  fxVignette: () => Texture.WHITE,
-}));
+import { beforeEach, describe, expect, it } from 'vitest';
+import { Texture } from 'pixi.js';
 
 import { setFxSettings } from '@/fx/settings';
-import type { Fx } from '@/fx';
-import { CRACK_ONE, CRACK_TWO, ShieldDome, crackStage } from '@/view/field/shieldDome';
+import type { FieldArt } from '@/view/field/art';
+import { NEARLY_GONE, RING_LOOKS, RING_SIZES, ShieldRing, nearlyGone, ringBucket, ringWidth } from '@/view/field/shieldRing';
 
 const DT = 1 / 60;
 
-function fakeFx(): { fx: Fx; fleck: ReturnType<typeof vi.fn> } {
-  const fleck = vi.fn(() => true);
-  return { fx: { fleck } as unknown as Fx, fleck };
+function art(): FieldArt['shieldRing'] {
+  const make = (): Texture[] => RING_SIZES.map(() => new Texture());
+  return { whole: make(), dashed: make(), lit: make() };
 }
 
-/** The glass and the two stages of cracks of a dome. */
-const parts = (d: ShieldDome): { glass: Sprite; one: Sprite; two: Sprite } => {
-  const [glass, one, two] = d.root.children as Sprite[];
-  return { glass: glass as Sprite, one: one as Sprite, two: two as Sprite };
-};
-
-function run(d: ShieldDome, seconds: number, share = 1): void {
-  for (let t = 0, time = 0; t < seconds - 1e-9; t += DT, time += DT) d.update(DT, time, share);
+function run(r: ShieldRing, seconds: number, share = 1): void {
+  for (let t = 0; t < seconds - 1e-9; t += DT) r.update(DT, share);
 }
 
 beforeEach(() => setFxSettings({ reducedMotion: false, tier: 'mid' }));
 
-describe('the stages of a shield', () => {
-  it('shows no cracks while it is strong, light ones below two thirds, heavy ones below a third', () => {
-    expect(crackStage(1)).toBe(0);
-    expect(crackStage(CRACK_ONE + 0.01)).toBe(0);
-    expect(crackStage(CRACK_ONE - 0.01)).toBe(1);
-    expect(crackStage(CRACK_TWO + 0.01)).toBe(1);
-    expect(crackStage(CRACK_TWO - 0.01)).toBe(2);
-    expect(crackStage(0.01)).toBe(2);
+describe('the ring of a shield', () => {
+  it('is baked in a few sizes, in the three looks, and a body takes the nearest size', () => {
+    expect(RING_LOOKS).toEqual(['whole', 'dashed', 'lit']);
+    expect(ringBucket(20)).toBe(0);
+    expect(ringBucket(60)).toBe(RING_SIZES.indexOf(56));
+    expect(ringBucket(82)).toBe(RING_SIZES.indexOf(84));
+    expect(ringBucket(900)).toBe(RING_SIZES.length - 1);
+  });
+
+  it('turns dashed when a quarter of the shield is left, not before', () => {
+    expect(NEARLY_GONE).toBe(0.25);
+    expect(nearlyGone(1)).toBe(false);
+    expect(nearlyGone(NEARLY_GONE + 0.01)).toBe(false);
+    expect(nearlyGone(NEARLY_GONE - 0.01)).toBe(true);
+    expect(nearlyGone(0)).toBe(true);
   });
 });
 
-describe('the dome round an enemy', () => {
-  it('opens like a bubble when it is raised, as wide as the body and a third more, and breathes', () => {
-    const d = new ShieldDome();
-    d.raise(60);
-    expect(d.raised).toBe(true);
-    expect(d.root.visible).toBe(true);
-    run(d, 1);
-    const { glass } = parts(d);
-    const wide = glass.scale.x * glass.texture.width;
-    expect(wide).toBeGreaterThan(60 * 1.25);
-    expect(wide).toBeLessThan(60 * 1.5);
+describe('the ring round an enemy', () => {
+  it('opens when it is raised and then hugs the body: its size and a few pixels, no more', () => {
+    const textures = art();
+    const r = new ShieldRing(textures);
+    r.raise(60);
+    expect(r.raised).toBe(true);
+    expect(r.sprite.visible).toBe(true);
+    expect(r.sprite.alpha).toBe(0);
+    run(r, 1);
+    const bucket = ringBucket(60);
+    expect(r.sprite.texture).toBe(textures.whole[bucket]);
+    // The sprite is a scaled copy of a ring baked at `RING_SIZES[bucket]`: it ends up as wide as the body and a few pixels, no more.
+    const wide = r.sprite.scale.x * (RING_SIZES[bucket] as number);
+    expect(wide).toBeCloseTo(ringWidth(60), 1);
+    expect(wide).toBeGreaterThan(60 * 0.85);
+    expect(wide).toBeLessThan(60 + 8);
+    expect(r.sprite.alpha).toBe(1);
+    r.destroy();
+  });
+
+  it('does not breathe or pulse: a strong shield with nothing happening stays exactly the same size and look', () => {
+    const r = new ShieldRing(art());
+    r.raise(60);
+    run(r, 2);
     const seen = new Set<string>();
     for (let t = 0; t < 2; t += DT) {
-      d.update(DT, 1 + t, 1);
-      seen.add(glass.scale.x.toFixed(4));
-    }
-    expect(seen.size).toBeGreaterThan(5);
-    d.destroy();
-  });
-
-  it('shows its cracks as the shield weakens, and only one stage at a time', () => {
-    const d = new ShieldDome();
-    d.raise(60);
-    const { one, two } = parts(d);
-    run(d, 0.5, 1);
-    expect([one.visible, two.visible]).toEqual([false, false]);
-    run(d, 0.1, 0.5);
-    expect([one.visible, two.visible]).toEqual([true, false]);
-    run(d, 0.1, 0.2);
-    expect([one.visible, two.visible]).toEqual([false, true]);
-    d.destroy();
-  });
-
-  it('is fainter as it weakens, and a blow lights it up for a moment', () => {
-    const d = new ShieldDome();
-    d.raise(60);
-    const { glass } = parts(d);
-    run(d, 1, 1);
-    const strong = glass.alpha;
-    run(d, 1, 0.2);
-    const weak = glass.alpha;
-    expect(weak).toBeLessThan(strong);
-    const { fx } = fakeFx();
-    d.hit(fx, 100, 100, 0, false);
-    d.update(DT, 3, 0.2);
-    expect(glass.alpha).toBeGreaterThan(weak);
-    run(d, 0.5, 0.2);
-    // Back to the weak shield's own level (it breathes a little, so not to the digit).
-    expect(Math.abs(glass.alpha - weak)).toBeLessThan(0.1);
-    d.destroy();
-  });
-
-  it('sparks and ripples on the dome where it was struck, on the side the blow came from; bigger for a hard blow', () => {
-    const d = new ShieldDome();
-    d.raise(60);
-    const { fx, fleck } = fakeFx();
-    d.hit(fx, 100, 100, 0, false);
-    expect(fleck).toHaveBeenCalledTimes(3);
-    for (const call of fleck.mock.calls as unknown as Array<[Texture, number, number, { size: number }]>) {
-      // At the right-hand edge of the dome, half way up.
-      expect(call[1]).toBeGreaterThan(100 + 15);
-      expect(call[1]).toBeLessThan(100 + 60 * 0.67);
-      expect(Math.abs(call[2] - 100)).toBeLessThan(1);
-    }
-    fleck.mockClear();
-    d.hit(fx, 100, 100, 0, true);
-    const hard = (fleck.mock.calls as unknown as Array<[Texture, number, number, { size: number }]>)[0]?.[3].size ?? 0;
-    fleck.mockClear();
-    d.hit(fx, 100, 100, 0, false);
-    expect(hard).toBeGreaterThan((fleck.mock.calls as unknown as Array<[Texture, number, number, { size: number }]>)[0]?.[3].size ?? 0);
-    d.destroy();
-  });
-
-  it('under reduced motion the glass still lights up for a blow, without the ripple and the sparks, and does not breathe', () => {
-    setFxSettings({ reducedMotion: true });
-    const d = new ShieldDome();
-    d.raise(60);
-    const { glass } = parts(d);
-    run(d, 0.5, 1);
-    const seen = new Set<string>();
-    for (let t = 0; t < 1; t += DT) {
-      d.update(DT, 5 + t, 1);
-      seen.add(glass.scale.x.toFixed(4));
+      r.update(DT, 1);
+      seen.add(`${r.sprite.scale.x.toFixed(4)}:${r.sprite.alpha}:${r.showing}`);
     }
     expect(seen.size).toBe(1);
-    const { fx, fleck } = fakeFx();
-    d.hit(fx, 0, 0, 0, true);
-    expect(fleck).not.toHaveBeenCalled();
-    const before = glass.alpha;
-    d.update(DT, 6, 1);
-    expect(glass.alpha).toBeGreaterThan(before);
-    d.destroy();
+    r.destroy();
   });
 
-  it('is gone the moment it is dropped, and a dropped dome ignores blows and updates; raising it again starts clean', () => {
-    const d = new ShieldDome();
-    d.raise(60);
-    d.update(DT, 0, 0.2);
-    d.drop();
-    expect(d.raised).toBe(false);
-    expect(d.root.visible).toBe(false);
-    const { fx, fleck } = fakeFx();
-    d.hit(fx, 0, 0, 0, false);
-    expect(fleck).not.toHaveBeenCalled();
-    d.raise(40);
-    const { one, two, glass } = parts(d);
-    expect(d.root.visible).toBe(true);
-    expect([one.visible, two.visible]).toEqual([false, false]);
-    expect(glass.alpha).toBe(0);
-    d.destroy();
+  it('turns dashed as the shield runs low and whole again when it is mended', () => {
+    const textures = art();
+    const r = new ShieldRing(textures);
+    r.raise(60);
+    run(r, 0.5, 1);
+    expect(r.showing).toBe('whole');
+    run(r, 0.1, 0.2);
+    expect(r.showing).toBe('dashed');
+    expect(r.sprite.texture).toBe(textures.dashed[ringBucket(60)]);
+    run(r, 0.1, 0.8);
+    expect(r.showing).toBe('whole');
+    r.destroy();
+  });
+
+  it('flashes pale and bumps when it is hit, then settles; a hard blow bumps more', () => {
+    const textures = art();
+    const r = new ShieldRing(textures);
+    r.raise(60);
+    run(r, 1);
+    const rest = r.sprite.scale.x;
+    r.hit(false);
+    r.update(DT, 1);
+    expect(r.showing).toBe('lit');
+    expect(r.sprite.texture).toBe(textures.lit[ringBucket(60)]);
+    const plain = r.sprite.scale.x;
+    expect(plain).toBeGreaterThan(rest * 1.04);
+    run(r, 0.5);
+    expect(r.showing).toBe('whole');
+    expect(r.sprite.scale.x).toBeCloseTo(rest, 4);
+    r.hit(true);
+    r.update(DT, 1);
+    expect(r.sprite.scale.x).toBeGreaterThan(plain);
+    r.destroy();
+  });
+
+  it('is not a strobe: a second blow within a tenth of a second does not restart the flash', () => {
+    const r = new ShieldRing(art());
+    r.raise(60);
+    run(r, 1);
+    r.hit(false);
+    run(r, 0.05);
+    r.hit(true);
+    r.update(DT, 1);
+    // Still the first, plain blow's bump (about 8 %), not a fresh hard one (14 %).
+    const rest = ringWidth(60) / (RING_SIZES[ringBucket(60)] as number);
+    expect(r.sprite.scale.x / rest).toBeLessThan(1.1);
+    r.destroy();
+  });
+
+  it('under reduced motion it is simply there, does not bump, and a blow only lights it', () => {
+    setFxSettings({ reducedMotion: true });
+    const r = new ShieldRing(art());
+    r.raise(60);
+    expect(r.sprite.alpha).toBe(1);
+    const rest = r.sprite.scale.x;
+    r.hit(true);
+    r.update(DT, 1);
+    expect(r.showing).toBe('lit');
+    expect(r.sprite.scale.x).toBe(rest);
+    r.destroy();
+  });
+
+  it('is gone the moment it is dropped, and a dropped ring ignores blows and updates; raising it again starts clean', () => {
+    const r = new ShieldRing(art());
+    r.raise(60);
+    run(r, 0.5, 0.2);
+    r.drop();
+    expect(r.raised).toBe(false);
+    expect(r.sprite.visible).toBe(false);
+    r.hit(true);
+    r.update(DT, 0.1);
+    expect(r.sprite.visible).toBe(false);
+    r.raise(40);
+    expect(r.sprite.visible).toBe(true);
+    expect(r.showing).toBe('whole');
+    expect(r.sprite.alpha).toBe(0);
+    r.destroy();
   });
 });

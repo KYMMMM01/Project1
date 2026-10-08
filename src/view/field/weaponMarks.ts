@@ -1,8 +1,8 @@
 /**
- * The marks of a weapon on the playfield, painted and pooled: what a swing leaves in the air (an arc, a thin line, a wide sweep),
- * what a blow leaves where it lands (a star burst for a blunt hit, a stuck arrow, a splat, a scorch with the flare of the fire, a spark,
- * a ring of light, notes, a coin) and the puff of a cork gun. The bright ones are drawn with additive light, so a blow lights up the
- * enemy it lands on for a moment. Which cat makes which mark is the table in `view/weapons.ts`; this class only draws them.
+ * The marks of a weapon on the playfield, drawn and pooled: what a swing leaves in the air (an arc, a thin line, a wide sweep),
+ * what a blow leaves where it lands (a star burst for a blunt hit, a stuck arrow, a splat, a scorch, a spark, a ring, notes, a coin) and the
+ * puff of a cork gun. All of them are flat cartoon shapes with the game's brown outline, in the colour of the weapon. Which cat makes
+ * which mark is the table in `view/weapons.ts`; this class only draws them.
  *
  * Every mark is a small pooled group of sprites that animates analytically for a fraction of a second: nothing is allocated
  * while a fight runs, and a crowded moment cannot pile marks up (a fixed number at once, and the light ones give way first).
@@ -23,13 +23,15 @@ import { weaponStyle, type ImpactMark } from '../weapons';
 import type { FieldEnv } from './env';
 
 export type MarkKind =
-  | 'star' | 'slash' | 'line' | 'arrow' | 'splat' | 'scorch' | 'flare' | 'spark' | 'ring' | 'notes' | 'coin' | 'puff';
+  | 'star' | 'slash' | 'line' | 'arrow' | 'splat' | 'scorch' | 'spark' | 'ring' | 'notes' | 'coin' | 'puff';
 
 /** Marks alive at once, and how many a single frame may start. */
 const MAX_MARKS = 22;
 const PER_FRAME = 8;
 /** Above this many live marks only the weighty ones are started (a crowded moment keeps its biggest blows readable). */
 const BUSY = 14;
+/** The same for the rings of a bell or a frost tick, which are the widest marks: six at once is a pond, so past that only a kill or a crit gets one. */
+const RING_BUSY = 6;
 
 const CREAM = Hue.cream;
 const PARTS = 5;
@@ -126,12 +128,7 @@ class Mark {
 
 /** Seconds each kind lasts. */
 const LIFE: Readonly<Record<MarkKind, number>> = {
-  star: 0.26, slash: 0.22, line: 0.22, arrow: 0.8, splat: 0.7, scorch: 1.1, flare: 0.24, spark: 0.2, ring: 0.4, notes: 0.85, coin: 0.6, puff: 0.5,
-};
-
-/** The marks that are light (drawn additively): the rest are painted things lying on the floor or flying. */
-const ADDS: Readonly<Record<MarkKind, boolean>> = {
-  star: true, slash: true, line: true, arrow: false, splat: false, scorch: false, flare: true, spark: true, ring: true, notes: false, coin: false, puff: false,
+  star: 0.26, slash: 0.22, line: 0.22, arrow: 0.8, splat: 0.7, scorch: 1.1, spark: 0.2, ring: 0.4, notes: 0.85, coin: 0.6, puff: 0.5,
 };
 
 export class WeaponMarks {
@@ -199,7 +196,8 @@ export class WeaponMarks {
     const def = enemyDef(e.enemy.id);
     const big = def.traits.includes('boss') || def.traits.includes('elite');
     const weight = style.weight * (e.crit ? 1.35 : 1) * (big ? 1.2 : 1);
-    if (this.live.length >= BUSY && weight < 1 && !e.killed) return;
+    const crowded = kind === 'ring' ? this.live.length >= RING_BUSY : this.live.length >= BUSY && weight < 1;
+    if (crowded && !e.killed && !e.crit) return;
     const i = (this.index[e.unitId] as number) * 2;
     const ang = Math.atan2(e.enemy.y - (this.from[i + 1] as number), e.enemy.x - (this.from[i] as number));
     const small = style.impact === 'slash' || style.impact === 'line';
@@ -220,7 +218,7 @@ export class WeaponMarks {
     if (style.impact === 'splat') this.spawn({ kind: 'splat', x: e.x, y: e.y + 8, angle: e.projectile.angle, size: style.weight, tint: style.tint });
     else if (style.impact === 'scorch') {
       this.spawn({ kind: 'scorch', x: e.x, y: e.y + 8, angle: 0, size: style.weight, tint: style.tint });
-      this.spawn({ kind: 'flare', x: e.x, y: e.y, angle: 0, size: style.weight, tint: Light.warm });
+      this.spawn({ kind: 'star', x: e.x, y: e.y, angle: 0, size: style.weight, tint: Light.warm });
     }
   }
 
@@ -247,7 +245,6 @@ export class WeaponMarks {
     m.seed = (this.seq++ * 0.6180339) % 1;
     m.hideAll();
     m.root.visible = true;
-    m.root.blendMode = ADDS[s.kind] ? 'add' : 'normal';
     m.root.position.set(s.x, s.y);
     m.root.rotation = 0;
     m.root.alpha = 1;
@@ -308,7 +305,7 @@ function dress(m: Mark): void {
       m.paint(1, 'burst_glint', 70, CREAM);
       break;
     case 'slash':
-      m.paint(0, 'burst_slash', 160, mixColor(tint, Light.shieldHit, 0.25));
+      m.paint(0, 'burst_slash', 160, mixColor(tint, Color.white, 0.25));
       m.paint(1, 'burst_slash', 140, CREAM);
       break;
     case 'line':
@@ -320,18 +317,14 @@ function dress(m: Mark): void {
       m.paint(0, 'shot_arrow', 68);
       break;
     case 'splat':
-      m.paint(0, 'mark_snow', 100, Light.shieldHit);
+      m.paint(0, 'mark_snow', 100);
       m.paint(1, 'burst_puff', 52, Light.iceWhite);
       for (let i = 2; i < 5; i++) m.atlas(i, 'droplet', 10, 14, i === 3 ? CREAM : Light.iceWhite);
       break;
     case 'scorch':
-      m.paint(0, 'mark_scorch', 104, Light.shieldHit);
+      m.paint(0, 'mark_scorch', 86);
       m.atlas(1, 'dot', 8, 8, Hue.ember);
       m.atlas(2, 'dot', 6, 6, Hue.spark);
-      break;
-    case 'flare':
-      m.paint(0, 'burst_star', 100, tint);
-      m.paint(1, 'burst_glint', 80, CREAM);
       break;
     case 'spark':
       m.paint(0, 'burst_glint', 64, CREAM);
@@ -339,8 +332,7 @@ function dress(m: Mark): void {
       m.atlas(2, 'spark', 36, 8, tint);
       break;
     case 'ring':
-      m.paint(0, 'burst_ring', 36, tint);
-      m.paint(1, 'burst_ring', 26, CREAM);
+      m.paint(0, 'burst_ring', 30, mixColor(tint, Color.white, 0.55));
       break;
     case 'notes':
       for (let i = 0; i < 3; i++) m.paint(i, 'shot_note', 30 + 5 * i);
@@ -439,15 +431,6 @@ function animate(m: Mark, env: FieldEnv): void {
       b.alpha = c.alpha = 1 - clamp01((age - 0.3) / 0.5);
       break;
     }
-    case 'flare': {
-      // The flash of a fireball landing: a burst of light that opens and is gone in a few frames.
-      const open = calm ? 1 : Ease.cubicOut(clamp01(age / 0.1));
-      m.size1(0, 100 * k * (0.5 + 0.7 * open));
-      m.size1(1, 80 * k * (0.4 + 0.6 * open));
-      a.rotation = m.seed * 3;
-      m.root.alpha = 1 - clamp01((age - 0.06) / (m.life - 0.06));
-      break;
-    }
     case 'spark': {
       const pop = calm ? 1 : 0.4 + 0.7 * Ease.backOut(clamp01(age / 0.06));
       m.size1(0, 64 * k * pop);
@@ -462,11 +445,8 @@ function animate(m: Mark, env: FieldEnv): void {
     }
     case 'ring': {
       const e1 = calm ? 1 : Ease.cubicOut(p);
-      m.size1(0, (36 + 130 * e1) * k);
-      a.alpha = 0.95 * (1 - p);
-      const e2 = calm ? 0 : Ease.cubicOut(clamp01((age - 0.05) / (m.life - 0.05)));
-      m.size1(1, (26 + 90 * e2) * k);
-      b.alpha = calm ? 0 : 0.8 * (1 - clamp01((age - 0.05) / (m.life - 0.05)));
+      m.size1(0, (30 + 76 * e1) * k);
+      a.alpha = 0.9 * (1 - p);
       break;
     }
     case 'notes': {

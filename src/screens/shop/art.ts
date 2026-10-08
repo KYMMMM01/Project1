@@ -10,14 +10,9 @@ import { unitClass } from '@/game/data/roster';
 import type { BundlePart } from '@/meta/bundle';
 import type { ChestKind } from '@/meta/types';
 import { RARITY_OF } from '@/meta/units';
-import { cacheStatic, Color, drawIcon, drawPaper, Rarity, type RarityId } from '@/ui';
-import { chestKey, classIcon, unitKey } from './keys';
-
-const CHEST_FALLBACK: Record<ChestKind, number> = {
-  wooden: Color.woodDark,
-  silver: Rarity.common.color,
-  gold: Color.mustard,
-};
+import { cacheStatic, Color, currencyIcon, drawIcon, drawPaper, Rarity, type RarityId } from '@/ui';
+import { partPicture } from '../partPicture';
+import { classIcon, unitKey } from './keys';
 
 /**
  * Fit a texture into a square of `size` around the origin. The sprite sits in a container so the fit stays its own
@@ -46,45 +41,17 @@ export function unitPortrait(id: UnitId, rarity: RarityId, size: number): Contai
 }
 
 export function chestArt(kind: ChestKind, size: number): Container {
-  const key = chestKey(kind);
-  if (hasTex(key)) return fitted(tex(key), size);
-  return drawIcon('chest', size, CHEST_FALLBACK[kind]);
+  return currencyIcon(`chest_${kind}`, size);
 }
 
-/** Currency picture: the shared icon art when it exists, else the kit's drawn icon. */
-export function currencyArt(kind: 'gold' | 'gems' | 'tickets', size: number): Container {
-  const key = kind === 'gold' ? 'icon_gold' : kind === 'gems' ? 'icon_gem' : '';
-  if (key && hasTex(key)) return fitted(tex(key), size);
-  return drawIcon(kind === 'gold' ? 'coin' : kind === 'gems' ? 'gem' : 'ticket', size);
-}
-
-/** The "wild card" emblem: a cream star on a paper medallion in the rarity colour (a wild card has no cat of its own). */
+/** The "wild card" emblem (a wild card has no cat of its own): the card picture, the stand-in tinted by rarity. */
 export function wildArt(rarity: RarityId, size: number): Container {
-  const r = Rarity[rarity];
-  const g = new Graphics();
-  drawPaper(g, -size * 0.38, -size * 0.38, { w: size * 0.76, h: size * 0.76, kind: 'circle', fill: r.color, edge: r.dark, shadow: 4, grain: false });
-  cacheStatic(g);
-  const c = new Container();
-  c.addChild(g, drawIcon('star', size * 0.46, Color.paperLight));
-  return c;
+  return currencyIcon('wild', size, Rarity[rarity].color);
 }
 
 /** Picture for one part of a reward bundle. */
 export function partArt(p: BundlePart, size: number): Container {
-  switch (p.kind) {
-    case 'gold':
-    case 'gems':
-    case 'tickets':
-      return currencyArt(p.kind, size);
-    case 'chest':
-      return chestArt(p.chest, size);
-    case 'wild':
-      return wildArt(p.rarity, size);
-    case 'card':
-      return unitPortrait(p.unit, RARITY_OF[p.unit], size);
-    case 'cosmetic':
-      return drawIcon('wardrobe', size);
-  }
+  return partPicture(p, size) ?? (p.kind === 'card' ? unitPortrait(p.unit, RARITY_OF[p.unit], size) : drawIcon('wardrobe', size));
 }
 
 /**

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Texture } from 'pixi.js';
 
-const KEYS = ['enemy_cucumber', 'enemy_clock', 'enemy_pill', 'boss_vacuum', 'unit_w_paw', 'relic_lucky_coin', 'icon_chest_wood', 'icon_hand', 'icon_fish', 'bg_kitchen', 'fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_burst_ring', 'fx_shot_arrow', 'fx_shield_dome'];
+const KEYS = ['enemy_cucumber', 'enemy_clock', 'enemy_pill', 'boss_vacuum', 'unit_w_paw', 'relic_lucky_coin', 'icon_chest_wood', 'icon_hand', 'icon_fish', 'bg_kitchen', 'fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_burst_ring', 'fx_shot_arrow', 'fx_badge_shield'];
 
 vi.mock('@/core/assets', () => ({
   imageKeys: () => KEYS,
@@ -110,10 +110,10 @@ describe('the battle warm-up', () => {
     expect(warm.has('img:icon_fish')).toBe(false);
   });
 
-  it('puts the painted pictures of every ground area, and the other battle effects, on the card ahead of the first fight', () => {
+  it('puts the drawn pictures of every ground area, and the other battle effects, on the card ahead of the first fight', () => {
     const { b } = fake({});
     new BattleWarmup(b as unknown as BattleApi);
-    for (const key of ['fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_shot_arrow', 'fx_shield_dome']) {
+    for (const key of ['fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_shot_arrow', 'fx_badge_shield']) {
       expect(warm.has(`img:${key}`)).toBe(true);
     }
     drain();

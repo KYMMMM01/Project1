@@ -48,9 +48,9 @@ class Tab extends Container {
   readonly plateOn = new Container();
   /** The cream paper tab that slides up behind the selected tab (redrawn for the cell width and the bar's height). */
   readonly paper = new Container();
-  readonly icon: Graphics;
+  readonly icon: Container;
   readonly text: Text;
-  readonly lockIcon: Graphics;
+  readonly lockIcon: Container;
   readonly badge = new Badge({ size: 24 });
   readonly featured: boolean;
   /** 0..1 selection amount; may overshoot while bouncing. */

@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const font = vi.hoisted(() => ({ charWidth: 0 }));
 
 // BitmapFont needs a canvas; the number logic does not. Text objects become plain containers.
 vi.mock('pixi.js', async (importOriginal) => {
@@ -6,6 +8,10 @@ vi.mock('pixi.js', async (importOriginal) => {
   class FakeBitmapText extends m.Container {
     text = '';
     anchor = { set: () => undefined };
+    /** What the stroked digits measure at the baked size: nothing unless a test sets `font.charWidth` (36 px a character is about right). */
+    override get width(): number {
+      return this.text.length * font.charWidth;
+    }
   }
   class FakeGradient {}
   // The installed font is asked for its glyph sheets (the warm-up uploads them): a font with one sheet stands in.
@@ -250,5 +256,88 @@ describe('the glyph sheets the warm-up uploads', () => {
     counts.push(numberFontTextures().length);
     const first = counts[0] as number;
     expect(counts).toEqual([first, first + 1, first + 1, first + 2]);
+  });
+});
+
+describe('FloatingNumbers width', () => {
+  beforeEach(() => {
+    font.charWidth = 36;
+  });
+  afterEach(() => {
+    font.charWidth = 0;
+  });
+
+  const wideOf = (c: unknown): number => {
+    const root = c as Container;
+    return (root.children[1] as unknown as { width: number }).width * root.scale.x;
+  };
+
+  it('draws a long figure smaller instead of wider: a number is never wider than its limit, a big one a little more', () => {
+    const n = make(10);
+    n.show(0, 0, 864408, 'crit', { noScatter: true });
+    n.show(0, 0, 864408, 'damage', { noScatter: true });
+    n.show(0, 0, 7, 'damage', { noScatter: true });
+    const [crit, plain, short] = n.layer.children;
+    expect(wideOf(crit)).toBeLessThanOrEqual(171);
+    expect(wideOf(plain)).toBeLessThanOrEqual(121);
+    expect(wideOf(crit)).toBeGreaterThan(wideOf(plain));
+    // A short one is not touched.
+    expect(wideOf(short)).toBeLessThan(120);
+  });
+});
+
+describe('FloatingNumbers staggering of big numbers', () => {
+  const xs = (n: FloatingNumbers): number[] => n.layer.children.filter((c) => c.visible).map((c) => c.x);
+
+  it('two crits on one spot a moment apart do not pile up: the later one lands beside the first', () => {
+    const n = make(10);
+    n.show(300, 400, 625, 'crit', { noScatter: true });
+    for (let t = 0; t < 0.1; t += DT) n.update(DT);
+    n.show(300, 400, 640, 'crit', { noScatter: true });
+    for (let t = 0; t < 0.1; t += DT) n.update(DT);
+    n.show(300, 400, 650, 'crit', { noScatter: true });
+    const at = xs(n);
+    expect(at.length).toBe(3);
+    for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) expect(Math.abs((at[i] as number) - (at[j] as number))).toBeGreaterThanOrEqual(80);
+  });
+
+  it('a crowd of crits in one frame fills a row and then starts a higher one, so none of them lies on another', () => {
+    const n = make(20);
+    for (let i = 0; i < 6; i++) n.show(300, 400, 600 + i, 'crit', { noScatter: true });
+    const spots = n.layer.children.map((c) => [c.x, c.y] as const);
+    expect(spots.length).toBe(6);
+    expect(new Set(spots.map(([, y]) => Math.round(y))).size).toBeGreaterThan(1);
+    for (let i = 0; i < spots.length; i++) {
+      for (let j = i + 1; j < spots.length; j++) {
+        const [xa, ya] = spots[i] as readonly [number, number];
+        const [xb, yb] = spots[j] as readonly [number, number];
+        // Not both on the same row and the same column band.
+        expect(Math.abs(xa - xb) >= 80 || Math.abs(ya - yb) >= 50).toBe(true);
+      }
+    }
+  });
+
+  it('keeps no more than six big numbers alive: a seventh sends the oldest away', () => {
+    const n = make(20);
+    for (let i = 0; i < 9; i++) n.show(300, 400, 600 + i, 'crit', { noScatter: true });
+    expect(n.count).toBe(6);
+    n.show(300, 400, 20, 'damage', { noScatter: true });
+    expect(n.count).toBe(7);
+  });
+
+  it('a crit that comes after the first has risen away takes the spot again', () => {
+    const n = make(10);
+    n.show(300, 400, 625, 'crit', { noScatter: true });
+    for (let t = 0; t < 0.8; t += DT) n.update(DT);
+    n.show(300, 400, 640, 'crit', { noScatter: true });
+    expect(xs(n).filter((x) => Math.abs(x - 300) < 1).length).toBe(2);
+  });
+
+  it('plain numbers are not moved by crits, nor crits by plain numbers', () => {
+    const n = make(10);
+    n.show(300, 400, 20, 'damage', { noScatter: true });
+    n.show(300, 400, 625, 'crit', { noScatter: true });
+    n.show(300, 400, 25, 'damage', { noScatter: true });
+    expect(xs(n)).toEqual([300, 300, 300]);
   });
 });

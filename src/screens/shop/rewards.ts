@@ -9,10 +9,10 @@ import { flyIconCount, flyTo } from '@/fx';
 import type { BundlePart } from '@/meta/bundle';
 import { RARITY_OF } from '@/meta/units';
 import {
-  Button, Color, countUpDuration, countUpValue, fitLabel, formatCount, motion, numberText, Panel, paperSeed, paperShape, Popup,
+  Button, Color, countUpDuration, currencyIcon, countUpValue, fitLabel, formatCount, motion, numberText, Panel, paperSeed, paperShape, Popup,
   popIn, popups, Rarity, TweenBag, uiLabel,
 } from '@/ui';
-import { currencyArt, partArt } from './art';
+import { partArt } from './art';
 import { getShell } from './context';
 import { paperSun } from './paperBits';
 import { partAmount, partLabel } from './shopLogic';
@@ -106,7 +106,7 @@ class RewardSheet extends Popup<void> {
     } else {
       view.addChild(paperShape({ w: TILE, h: TILE, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, shadow: 5, grain: false, seed }));
     }
-    const art = part.kind === 'gold' || part.kind === 'gems' || part.kind === 'tickets' ? currencyArt(part.kind, ART) : partArt(part, photo ? TILE - 30 : ART);
+    const art = partArt(part, photo ? TILE - 30 : ART);
     art.y = -4;
     view.addChild(art);
 
@@ -193,7 +193,7 @@ export async function showRewardsPopup(parts: readonly BundlePart[], title?: str
           from: { x: from.x, y: from.y },
           to: shell.currencyAnchor(kind),
           count: flyIconCount(p.n, 8),
-          make: (): Container => currencyArt(kind, 48),
+          make: (): Container => currencyIcon(kind, 48),
           onArrive: () => shell.landed(kind),
           onDone: landed,
         });

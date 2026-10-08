@@ -2,7 +2,7 @@ import { Container, Graphics, type Text } from 'pixi.js';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { CHEST_RARITIES, type ChestRarity } from '@/meta/types';
-import { cacheStatic, Color, drawIcon, fitLabel, paperShape, Rarity, rarityName, uiLabel } from '@/ui';
+import { cacheStatic, Color, currencyIcon, fitLabel, paperShape, Rarity, rarityName, uiLabel } from '@/ui';
 
 const H = 104;
 const LEFT = 150;
@@ -20,12 +20,12 @@ export class WildStrip extends Container {
     super();
     const sheet = paperShape({ w, h: H, fill: Color.paper, radius: 24, grain: false });
     sheet.position.set(w / 2, H / 2);
-    const star = drawIcon('star', 40, Color.mustard);
-    star.position.set(76, 34);
+    const card = currencyIcon('wild', 48);
+    card.position.set(76, 34);
     const title = uiLabel(t('cats.wild.title'), { size: 24 });
     fitLabel(title, 130, 24);
     title.position.set(76, 76);
-    this.addChild(sheet, star, title);
+    this.addChild(sheet, card, title);
 
     this.cellW = (w - LEFT - 14) / CHEST_RARITIES.length;
     CHEST_RARITIES.forEach((rarity, i) => {

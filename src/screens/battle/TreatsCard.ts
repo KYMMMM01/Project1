@@ -2,8 +2,9 @@ import { Container, Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { bundleParts, describeBundle, profile, type Bundle, type BundlePart } from '@/meta';
 import { ads } from '@/platform';
-import { Button, Color, drawIcon, drawPaper, paperSeed, uiLabel, type IconName } from '@/ui';
+import { Button, Color, drawIcon, drawPaper, paperSeed, uiLabel } from '@/ui';
 import { services, type Shell } from '../contract';
+import { partPicture } from '../partPicture';
 import { CARD_PAD, HEAD_GROW, HomeCard } from './HomeCard';
 import { playClaim } from './claim';
 import './strings';
@@ -11,20 +12,10 @@ import './strings';
 const H = 356 + HEAD_GROW;
 const GAP = 14;
 
-function iconOf(reward: Bundle): IconName {
+/** The picture of what a treat gives: its first part's, or the cards icon for cats and wild cards. */
+function iconOf(reward: Bundle, size: number): Container {
   const first: BundlePart | undefined = bundleParts(reward)[0];
-  switch (first?.kind) {
-    case 'gold':
-      return 'coin';
-    case 'gems':
-      return 'gem';
-    case 'tickets':
-      return 'ticket';
-    case 'chest':
-      return 'chest';
-    default:
-      return 'cards';
-  }
+  return (first && partPicture(first, size)) ?? drawIcon('cards', size);
 }
 
 interface Slot {
@@ -52,7 +43,7 @@ export class TreatsCard extends HomeCard {
       root.position.set(CARD_PAD + i * (slotW + GAP), top);
       const bg = new Graphics();
       drawPaper(bg, 0, 0, { w: slotW, h: slotH, radius: 26, fill: Color.paperDim, seed, shadow: 3, grain: false });
-      const icon = drawIcon(iconOf(row.reward), 70);
+      const icon = iconOf(row.reward, 70);
       icon.position.set(slotW / 2, 52);
       const text = uiLabel(describeBundle(row.reward).join(' '), { size: 24, wrap: slotW - 20, anchorY: 0 });
       text.position.set(slotW / 2, 100);

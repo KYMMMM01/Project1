@@ -151,3 +151,30 @@ Colour: steel blue and white on purpose. The blizzard is cyan ice and spiked and
 **Tests.** `view.field.shots.test.ts` (16: every shooter has its own picture at a readable size, who points and who spins, who is lobbed, the three throws and their timing, rank, orientation, the stretch, the arc, the streak, shedding and its limit, pooling, the held-back area), `view.field.shield.test.ts` (7: crack stages, the dome opening, the cracks, fainter as it weakens, the ripple, reduced motion, drop and raise again), `view.field.weapons.test.ts` (a zone start leaves no mark).
 
 **Not verified.** A real phone. The dome over a boss (no boss wears a shield; only the cone does). The shield of an enemy that comes back from a revive.
+
+
+## 2026-10-08 VFX restyle
+
+The field's share of the restyle (pictures, colours, areas and numbers are in `fx.md`, "2026-10-08 VFX restyle"). What the field draws is the game's own cartoon style again: flat colours, a thick dark-brown outline, nothing lit.
+
+**Shots** (`projectileLooks.ts`, `projectiles.ts`): the three shared containers are shadows, flat streaks, pictures (the additive "lights" container is gone, so `layer.children[2]` is still the bodies). `ProjectileLook` lost `glow` and `tint`; `shed` is `{ kind, color }`; `rankLight` is `rankTrail` (streak opacity, 0.8 to 1.1 by rank). The streak is the flat `tail` shape anchored just ahead of the picture's middle. Table of the cats unchanged (picture, size, spin, arc, trail colour, what it sheds); the moon arrow is no longer tinted deeper, its brown outline carries it on cream.
+
+**Marks** (`weaponMarks.ts`): every mark is normal blend; `flare` and `ADDS` are gone (a fireball's landing spawns a `star` in `Light.warm` beside the scorch). Ring marks are one lighter ring (30 to 106 px), at most six alive (`RING_BUSY`) unless the blow kills or crits; the scorch decal is 86 px.
+
+**The shield is a ring** (`shieldRing.ts`, which replaces `shieldDome.ts`; `art.ts` bakes the rings, `enemyView.ts` wears them). An enemy that wears a shield (the cone) has:
+- a thin round outline hugging the body: `ringWidth(size)` = 0.92 x the picture's size + 4 px (a creature does not fill its picture). It is a dark-brown line (5.4 px) with a cobalt line (2.6 px) inside it and a very faint cobalt tint (7 %), drawn in the cartoon style, in the one colour no friendly effect wears (`Light.shield`, see `fx.md`). It is a sprite in the enemy's `lean` container, so it walks with the body and does not bump with its squash;
+- baked once at seven diameters (`RING_SIZES` 44 to 170 px) in three looks (`whole`, `dashed`, `lit`), 21 small textures (`FieldArt.shieldRing`); a ring is the nearest size scaled by a few per cent, so the line is the same thickness on a cone and on a boss, and forty rings are one batch;
+- a hit (`hit(strong)`): the ring turns to its pale `lit` look for the first 0.09 s of 0.16 s and bumps (8 %, 14 % for a crit or a blow of 20 % of the shield); a second hit inside 0.1 s changes nothing more, so a crowd of hits is not a strobe. Nothing else: no spark, no ripple, no ring running out;
+- nearly gone: below 25 % of the shield (`NEARLY_GONE`) the ring is `dashed` (twelve dashes), and whole again if the shield mends;
+- a break: the ring and the badge are gone in a frame, the body flinches in the ring's pale colour and `Fx.shieldBreak` pops three or four flat shards (`fx.md`);
+- the badge: `badge_shield` (the cobalt shield picture, 20 px) at the left end of the health bar, as the small steel icon was (the area tag moves out one place); the shield segment of the bar is the same cobalt;
+- it opens with a small overshoot when the enemy arrives (0.2 s) and then **does not move**: no breathing, no pulse, no glow. Reduced motion: it is simply there, a hit only lights it, no bump.
+`EnemyViews` no longer follows where each cat attacked from (the direction of a blow does not matter to a ring), `EnemyView.shieldHit(strong)` takes no `Fx`.
+
+Checked on eighteen shielded cones side by side on the lane (full, half and nearly gone shields, a volley of hits on every second one): each ring reads as its own enemy, the dashed ones stand out, and nothing is bigger than the bodies (`s15/shield15`).
+
+**Warm-up**: `PAINT_IDS` lists the 42 pictures, all on the `later` queue; `AREA_PICTURES` as before.
+
+**Tests**: `view.field.shield.test.ts` (rewritten, 9: the baked sizes and the nearest one, the dashed threshold, the ring as wide as the body and a few pixels, no breathing, dashed and whole again, flash and bump and a hard blow bumps more, not a strobe, reduced motion, drop and raise again), `view.field.shots.test.ts` (three containers, nothing tinted, `rankTrail`), `view.warmup.test.ts` (`fx_badge_shield`).
+
+**Not verified.** A real phone. A ring round an enemy bigger than a cone (no other enemy wears a shield yet: the sizes up to 170 px are baked for a boss).

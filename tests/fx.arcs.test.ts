@@ -1,7 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container, Texture, type Sprite } from 'pixi.js';
 
-vi.mock('@/core/assets', () => ({ tex: () => Texture.WHITE, hasTex: () => true, putTex: () => undefined, imageKeys: () => [] }));
+// Every key its own picture, so a flicker (a new bolt each beat) can be seen.
+const pictures = new Map<string, Texture>();
+vi.mock('@/core/assets', () => ({
+  tex: (key: string) => {
+    let t = pictures.get(key);
+    if (!t) {
+      t = new Texture();
+      pictures.set(key, t);
+    }
+    return t;
+  },
+  hasTex: () => true,
+  putTex: () => undefined,
+  imageKeys: () => [],
+}));
 
 import { ArcLayer } from '@/fx/arcs';
 import { FleckLayer } from '@/fx/flecks';
@@ -37,7 +51,7 @@ describe('lightning arcs', () => {
     expect(main.rotation).toBeCloseTo(Math.PI / 2, 5);
     // A little longer than the line, so the pointed ends reach both targets.
     expect(main.scale.x * main.texture.width).toBeGreaterThan(200);
-    expect(flecks.count).toBeGreaterThanOrEqual(2);
+    expect(flecks.count).toBeGreaterThanOrEqual(1);
     arcs.destroy();
   });
 
@@ -52,38 +66,43 @@ describe('lightning arcs', () => {
     arcs.destroy();
   });
 
-  it('flickers: the second bolt beside the first leans one way and then the other, and the strike is gone in a fifth of a second', () => {
+  it('flickers through the drawn bolts, and the strike is gone in a fifth of a second', () => {
     const { arcs, flecks, root } = make();
     arcs.strike(0, 0, 150, 0);
     const main = root.children[0] as Sprite;
-    let last = Number.NaN;
-    let swaps = 0;
+    const seen = new Set<Texture>();
     for (let i = 0; i < 12; i++) {
       arcs.update(DT);
       flecks.update(DT);
-      const skew = (root.children[1] as Sprite).rotation;
-      if (skew !== last) swaps++;
-      last = skew;
+      seen.add(main.texture);
     }
     expect(main.visible).toBe(true);
-    expect(swaps).toBeGreaterThan(1);
+    expect(seen.size).toBeGreaterThan(1);
     run(arcs, flecks, 0.2);
     expect(arcs.count).toBe(0);
     expect(main.visible).toBe(false);
     arcs.destroy();
   });
 
-  it('stays still under reduced motion: no flicker, no skew', () => {
+  it('is one flat bolt, not a bolt and a ghost of it: a strike is one sprite', () => {
+    const { arcs, root } = make();
+    arcs.strike(0, 0, 150, 0);
+    expect(root.children.length).toBe(10);
+    expect(root.children.every((c) => c.blendMode !== 'add')).toBe(true);
+    arcs.destroy();
+  });
+
+  it('stays still under reduced motion: one picture, no flicker', () => {
     setFxSettings({ reducedMotion: true });
     const { arcs, flecks, root } = make();
     arcs.strike(0, 0, 150, 0);
-    const skews = new Set<number>();
+    const seen = new Set<Texture>();
     for (let i = 0; i < 10; i++) {
       arcs.update(DT);
       flecks.update(DT);
-      skews.add((root.children[1] as Sprite).rotation);
+      seen.add((root.children[0] as Sprite).texture);
     }
-    expect(skews.size).toBe(1);
+    expect(seen.size).toBe(1);
     arcs.destroy();
   });
 
@@ -91,17 +110,17 @@ describe('lightning arcs', () => {
     const { arcs, root } = make();
     for (let i = 0; i < 14; i++) arcs.strike(0, 0, 100, i);
     expect(arcs.count).toBe(10);
-    expect(root.children.length).toBe(20);
+    expect(root.children.length).toBe(10);
     arcs.destroy();
   });
 
-  it('tints a bolt when asked (the hostile storm cloud), and leaves the painted blue when not', () => {
+  it('tints a bolt when asked (the hostile storm cloud), and leaves the drawn yellow when not', () => {
     const { arcs, root } = make();
     arcs.strike(0, 0, 100, 0, { color: 0xffd45a });
     arcs.strike(0, 0, 100, 40);
     arcs.update(DT);
     expect((root.children[0] as Sprite).tint).toBe(0xffd45a);
-    expect((root.children[2] as Sprite).tint).toBe(0xffffff);
+    expect((root.children[1] as Sprite).tint).toBe(0xffffff);
     arcs.destroy();
   });
 });

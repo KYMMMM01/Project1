@@ -6,8 +6,9 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
-import { cacheStatic, Color, drawDashedInset, drawIcon, paperSeed, paperShape, Rarity, type IconName } from '@/ui';
-import type { UnitId } from '@/game';
+import { cacheStatic, Color, currencyIcon, drawDashedInset, drawIcon, paperSeed, paperShape, Rarity, type IconName } from '@/ui';
+import { relicDef, type UnitId } from '@/game';
+import { relicIcon } from '@/view/hud/kit';
 import type { Art } from './topics';
 
 /** A texture scaled to fit `box` and centred on the origin, or null when the art is not loaded. */
@@ -153,19 +154,15 @@ export function illustration(art: Art, size: number): Container {
       root.addChild(s ?? disc(inner, Color.berry, 'skull'));
       break;
     }
-    case 'toy': {
-      const s = sticker(`relic_${art.id}`, inner * 0.74);
-      root.addChild(s ?? disc(inner, Color.mustard, 'star'));
+    case 'toy':
+      root.addChild(relicIcon(art.id, inner * 0.74, relicDef(art.id).rarity));
       break;
-    }
     case 'cell':
       root.addChild(cellArt(art, inner));
       break;
-    case 'chest': {
-      const s = sticker(`icon_chest_${art.chest}`, inner * 0.78);
-      root.addChild(s ?? disc(inner, Color.mustard, 'chest'));
+    case 'chest':
+      root.addChild(currencyIcon(`chest_${art.chest}`, inner * 0.78));
       break;
-    }
   }
   return root;
 }

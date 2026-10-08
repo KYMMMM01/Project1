@@ -1,16 +1,15 @@
 /** What a claim looks like: icons burst out of the tapped control and fly into the top bar, or the reward popup for anything else. */
 import type { Container } from 'pixi.js';
 import { audio } from '@/audio';
-import { hasTex, tex } from '@/core/assets';
 import { haptic } from '@/core/haptics';
 import { uiTweens } from '@/core/tween';
 import { flyTo } from '@/fx';
+import { flightArt } from '../../partPicture';
 import { flightTuning, originX } from '../../shell/flight';
 import type { BundlePart } from '@/meta/bundle';
 import { services, type Shell } from '../../contract';
 import { stampPending } from './marks';
-import { currencyOnly, currencyTotals, flightCount, textureKey, type CurrencyKind } from './parts';
-import { partIcon } from './rewardChip';
+import { currencyOnly, currencyTotals, flightCount, type CurrencyKind } from './parts';
 
 const KINDS: readonly CurrencyKind[] = ['gold', 'gems', 'tickets'];
 /** The most a reward sheet keeps the top bar's numbers back: it stays open as long as the player likes. */
@@ -49,7 +48,6 @@ export function payout(shell: Shell, parts: readonly BundlePart[], from: Contain
     for (const kind of KINDS) {
       const total = totals[kind];
       if (total <= 0) continue;
-      const key = textureKey({ kind, n: total });
       let arrived = 0;
       const to = shell.currencyAnchor(kind);
       const handle = flyTo({
@@ -58,7 +56,7 @@ export function payout(shell: Shell, parts: readonly BundlePart[], from: Contain
         ...flightTuning(originX(from), to.x),
         count: flightCount(total),
         size: 52,
-        ...(key && hasTex(key) ? { texture: tex(key) } : { make: () => partIcon({ kind, n: total }, 52) }),
+        ...flightArt(kind, 52),
         onArrive: () => {
           arrived++;
           shell.landed(kind);

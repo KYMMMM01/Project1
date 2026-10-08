@@ -1,11 +1,9 @@
 /** Feedback every claim on the home tab gives: icons fly to the top bar, a sound, a haptic. */
-import { Container } from 'pixi.js';
 import { audio } from '@/audio';
-import { hasTex, tex } from '@/core/assets';
 import { haptic } from '@/core/haptics';
 import { flyIconCount, flyTo, type FlyEnd } from '@/fx';
 import type { BundlePart } from '@/meta';
-import { drawIcon } from '@/ui';
+import { flightArt } from '../partPicture';
 import { flightTuning, originX } from '../shell/flight';
 import type { CurrencyKind, Shell } from '../contract';
 
@@ -20,13 +18,6 @@ function isCurrency(p: BundlePart): p is Extract<BundlePart, { kind: CurrencyKin
 /** How many icons a reward of `n` is worth: a handful for small amounts, more for big ones. */
 export function iconCountFor(n: number): number {
   return flyIconCount(Math.round(Math.log10(Math.max(1, n) + 1) * 3.5));
-}
-
-function flightArt(kind: CurrencyKind): { texture: ReturnType<typeof tex> } | { make: () => Container } {
-  if (kind === 'gold' && hasTex('icon_gold')) return { texture: tex('icon_gold') };
-  if (kind === 'gems' && hasTex('icon_gem')) return { texture: tex('icon_gem') };
-  const name = kind === 'gold' ? 'coin' : kind === 'gems' ? 'gem' : 'ticket';
-  return { make: () => drawIcon(name, FLY_SIZE) };
 }
 
 /**
@@ -52,7 +43,7 @@ export function playClaim(origin: FlyEnd, parts: readonly BundlePart[], shell: S
       ...flightTuning(originX(origin), to.x),
       count: iconCountFor(part.n),
       size: FLY_SIZE,
-      ...flightArt(kind),
+      ...flightArt(kind, FLY_SIZE),
       onArrive: (i) => {
         audio.playStep(kind === 'gold' ? 'coin' : 'gem', Math.min(i, 6), { volume: 0.5 });
         shell.landed(kind);

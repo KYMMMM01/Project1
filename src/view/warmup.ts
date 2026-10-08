@@ -27,7 +27,7 @@ const AHEAD: readonly [number, number] = [1, 2];
 /** What one baking step of a sound costs the frame that runs it (ms): building the offline graph, 2 to 14 for the ones the fight plays. */
 const SOUND_COST_MS = 4;
 
-/** Ask for the painted pictures of a ground area to be put on the card (one a frame, see areas.ts). */
+/** Ask for the drawn pictures of a ground area to be put on the card (one a frame, see areas.ts). */
 export function warmArea(kind: DiscKind, prio: number): void {
   for (const id of AREA_PICTURES[kind]) warmImage(paintKey(id), prio);
 }
@@ -70,7 +70,7 @@ export class BattleWarmup {
     // The glyph sheets of every face of the floating numbers (drawn when the scene was built): each is a 10 ms upload that the first hit would pay.
     numberFontTextures().forEach((texture, i) => warm.request(`fx:numbers:${i}`, WARM_PRIO.pipe, 10, () => uploadTexture(texture)));
     for (const kind of DISC_KINDS) warmArea(kind, WARM_PRIO.later);
-    // Every other painted battle picture: the shots, bursts, bolts, shards and the shield, before the first fight needs them.
+    // Every other drawn battle picture: the shots, bursts, bolts, shards and the shield badge, before the first fight needs them.
     for (const id of PAINT_IDS) warmImage(paintKey(id), WARM_PRIO.later);
     for (const key of imageKeys()) {
       if (LATER_PREFIXES.some((p) => key.startsWith(p))) warmImage(key, WARM_PRIO.later);

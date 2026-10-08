@@ -17,7 +17,7 @@ export type Art =
   | { k: 'foe'; id: EnemyId }
   | { k: 'toy'; id: RelicId }
   | { k: 'cell'; cell: 'sun' | 'wet' | 'zap'; cat?: UnitId }
-  | { k: 'chest'; chest: 'wood' | 'silver' | 'gold' };
+  | { k: 'chest'; chest: 'wooden' | 'silver' | 'gold' };
 
 /** A control of the battle screen "try it" can point at. */
 export type TryControl = 'summon' | 'grade' | 'laser' | 'call' | 'speed' | 'chips' | 'odds' | 'gauge' | 'purr' | 'toys' | 'preview';
@@ -117,7 +117,7 @@ export const TOPIC_LIST = [
   T('cards', 'home', cats('w_sword', 'r_archer', 'm_fire'), { tab: 'cats', point: 'cats.cards' }),
   T('wild_cards', 'home', ico('cards'), { tab: 'cats', point: 'cats.wild' }),
   T('chests', 'home', { k: 'chest', chest: 'silver' }, { tab: 'shop', point: 'shop.chests' }),
-  T('free_chest', 'home', { k: 'chest', chest: 'wood' }, { tab: 'shop', point: 'shop.free' }),
+  T('free_chest', 'home', { k: 'chest', chest: 'wooden' }, { tab: 'shop', point: 'shop.free' }),
   T('missions', 'home', ico('mission'), { tab: 'missions', point: 'missions.list' }),
   T('daily_chest', 'home', { k: 'chest', chest: 'gold' }, { tab: 'missions', point: 'missions.chest' }),
   T('calendar', 'home', ico('calendar'), { tab: 'battle', point: 'battle.calendar' }),

@@ -1,8 +1,7 @@
 /**
- * Lightning that jumps between targets: a painted bolt stretched from one point to the next, a second, thinner one beside it, and a
- * flash at the end that was hit. The bolts are drawn normally, not with additive light: light added to the cream of the board is white on
- * white, and a bolt must read from the cat's paper to the lane. It flickers between the six painted bolts for a fifth of a second and is gone; nothing flies. Pooled:
- * a chain of five targets is five arcs, ten sprites, and a crowd of storm cats never allocates in the frame.
+ * Lightning that jumps between targets: a flat yellow zig-zag with a brown outline stretched from one point to the next, and a flat
+ * star where it lands. It flickers between the six drawn bolts for a fifth of a second and is gone; nothing flies. Pooled: a chain of
+ * five targets is five arcs, and a crowd of storm cats never allocates in the frame.
  */
 import { Container, Sprite } from 'pixi.js';
 import { clamp01 } from '@/core/math';
@@ -16,7 +15,7 @@ export interface ArcOpts {
   scale?: number;
   /** Seconds before it shows (the next hop of a chain). */
   delay?: number;
-  /** Tint of the bolt, default none (the painted electric blue-white). */
+  /** Tint of the bolt, default none (the drawn yellow). */
   color?: number;
 }
 
@@ -27,7 +26,6 @@ const POOL = 10;
 
 class Arc {
   readonly main = new Sprite();
-  readonly echo = new Sprite();
   active = false;
   /** The flash where it lands has been made. */
   flashed = false;
@@ -42,11 +40,9 @@ class Arc {
   seed = 0;
 
   constructor() {
-    for (const s of [this.main, this.echo]) {
-      s.anchor.set(0, 0.5);
-      s.eventMode = 'none';
-      s.visible = false;
-    }
+    this.main.anchor.set(0, 0.5);
+    this.main.eventMode = 'none';
+    this.main.visible = false;
   }
 }
 
@@ -63,7 +59,7 @@ export class ArcLayer {
     this.root.eventMode = 'none';
     for (let i = 0; i < POOL; i++) {
       const a = new Arc();
-      this.root.addChild(a.main, a.echo);
+      this.root.addChild(a.main);
       this.arcs.push(a);
     }
     parent.addChild(this.root);
@@ -90,7 +86,6 @@ export class ArcLayer {
     a.color = o.color ?? 0xffffff;
     a.seed = this.seq++;
     a.main.visible = false;
-    a.echo.visible = false;
   }
 
   update(dt: number): void {
@@ -102,7 +97,6 @@ export class ArcLayer {
       if (a.age >= LIFE) {
         a.active = false;
         a.main.visible = false;
-        a.echo.visible = false;
         continue;
       }
       if (!a.flashed) {
@@ -117,14 +111,12 @@ export class ArcLayer {
       const t = clamp01(a.age / LIFE);
       const fade = 1 - clamp01((t - 0.45) / 0.55);
       const h = Math.min(64, Math.max(26, len * 0.32)) * a.scale;
-      this.dress(a.main, a, len * 1.05, h, angle, BOLT_IDS[(a.seed + step) % BOLT_IDS.length] as PaintId, fade);
-      // The second bolt runs a little off the first, thinner, in another of the six: the strike reads as a fork of light, not one stroke.
-      const skew = calm ? 0 : step % 2 === 0 ? 0.05 : -0.05;
-      this.dress(a.echo, a, len * 1.05, h * 0.72, angle + skew, BOLT_IDS[(a.seed + step + 3) % BOLT_IDS.length] as PaintId, fade * 0.65);
+      this.dress(a, len * 1.05, h, angle, BOLT_IDS[(a.seed + step) % BOLT_IDS.length] as PaintId, fade);
     }
   }
 
-  private dress(s: Sprite, a: Arc, w: number, h: number, angle: number, id: PaintId, alpha: number): void {
+  private dress(a: Arc, w: number, h: number, angle: number, id: PaintId, alpha: number): void {
+    const s = a.main;
     const texture = paint(id);
     s.texture = texture;
     s.position.set(a.x0, a.y0);
@@ -135,18 +127,17 @@ export class ArcLayer {
     s.visible = true;
   }
 
-  /** The bright flash where the bolt lands, once, as the arc appears. */
+  /** The flat star where the bolt lands, once, as the arc appears. */
   private flash(a: Arc): void {
     const k = a.scale;
-    this.flecks.spawn(paint('burst_glint'), a.x1, a.y1, { life: 0.2, size: 84 * k, sizeEnd: 40 * k, rot: (a.seed * 1.3) % 3, color: a.color === 0xffffff ? Light.boltFlash : a.color, add: true, fadeAt: 0.3 });
-    this.flecks.spawn(paint('burst_star'), a.x1, a.y1, { life: 0.14, size: 50 * k, sizeEnd: 90 * k, rot: a.seed, color: a.color === 0xffffff ? Light.boltStar : a.color, alpha: 0.9, add: true, fadeAt: 0.2 });
+    const color = a.color === 0xffffff ? Light.zapFlash : a.color;
+    this.flecks.spawn(paint('burst_star'), a.x1, a.y1, { life: 0.2, size: 40 * k, sizeEnd: 72 * k, rot: a.seed, color, fadeAt: 0.4 });
   }
 
   clear(): void {
     for (const a of this.arcs) {
       a.active = false;
       a.main.visible = false;
-      a.echo.visible = false;
     }
   }
 

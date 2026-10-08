@@ -1,8 +1,8 @@
 /**
- * Painted flecks: short-lived pooled sprites of any texture (a shard of the shield, a glint, a puff of the burst sheet, a soft light) that
- * move under their own little physics. The paper particles of `particles.ts` all come from one atlas, so a painted picture cannot ride in
- * that layer; this one is a handful of sprites in two containers, one drawn normally and one with additive light, so the glows of a whole
- * crowd share one blend change. A fleck that does not fit under the tier's cap is simply not made: flecks are decoration.
+ * Flecks: short-lived pooled sprites of any texture (a shard of the shield, a glint, a puff of the burst sheet) that move under
+ * their own little physics. The flat particles of `particles.ts` all come from one atlas, so a drawn picture cannot ride in that
+ * layer; this one is a handful of plain sprites in one container. A fleck that does not fit under the tier's cap is simply not made:
+ * flecks are decoration.
  */
 import { Container, Sprite, type Texture } from 'pixi.js';
 import { clamp01 } from '@/core/math';
@@ -31,8 +31,6 @@ export interface FleckOpts {
   fadeIn?: number;
   /** Share of the life after which it fades out, default 0.5. */
   fadeAt?: number;
-  /** Drawn with additive light. */
-  add?: boolean;
 }
 
 /** Most flecks alive at once, by tier. */
@@ -64,16 +62,12 @@ class Fleck {
 
 export class FleckLayer {
   readonly root = new Container();
-  private readonly normal = new Container();
-  private readonly lights = new Container();
   private readonly live: Fleck[] = [];
   private readonly free: Fleck[] = [];
 
   constructor(parent: Container) {
     this.root.label = 'flecks';
     this.root.eventMode = 'none';
-    this.lights.blendMode = 'add';
-    this.root.addChild(this.normal, this.lights);
     parent.addChild(this.root);
   }
 
@@ -100,8 +94,7 @@ export class FleckLayer {
     f.peak = o.alpha ?? 1;
     f.fadeIn = o.fadeIn ?? 0;
     f.fadeAt = o.fadeAt ?? 0.5;
-    const home = o.add ? this.lights : this.normal;
-    if (s.parent !== home) home.addChild(s);
+    if (s.parent !== this.root) this.root.addChild(s);
     s.tint = o.color ?? 0xffffff;
     s.position.set(x, y);
     s.rotation = o.rot ?? 0;

@@ -12,6 +12,7 @@ import { Color, RARITY_ORDER, Rarity, TapeColors, drawDashedRect, drawIcon, draw
 import type { ClassId } from '@/game/api';
 import { CELL_H, CELL_W } from '@/game/geometry';
 import { Light, drawPaw, drawSunMark, drawTargetMark } from '@/fx';
+import { RING_LOOKS, RING_SIZES, type RingLook } from './shieldRing';
 
 const CLASS_ICON: Record<ClassId, IconName> = {
   warrior: 'class_warrior',
@@ -109,8 +110,8 @@ export interface FieldArt {
   sunMark: Texture;
   /** The coral crosshair on an enemy the laser has marked. */
   targetMark: Texture;
-  /** The small steel shield by the health bar of an enemy that wears one. */
-  shieldMark: Texture;
+  /** The rings of an enemy's shield, baked at each of `RING_SIZES` in each look: indexed by size. */
+  shieldRing: Readonly<Record<RingLook, readonly Texture[]>>;
   /** The sticker a summon tosses from the button to its cell, in the rarity's colour (the colour comes first). */
   toss: Record<RarityId, Texture>;
 }
@@ -176,7 +177,7 @@ export function fieldArt(): FieldArt {
     barTrack: bake(gfx((g) => g.roundRect(-20, -6, 40, 12, 6).fill(Color.track).stroke({ width: 1.8, color: Color.kraftDark })), 44, 16),
     sunMark: bake(gfx((g) => drawSunMark(g, 19)), 48, 48),
     targetMark: bake(gfx((g) => drawTargetMark(g, 19)), 48, 48),
-    shieldMark: bakeShieldMark(),
+    shieldRing: bakeShieldRings(),
     toss: bakeTosses(),
   };
   return cached;
@@ -336,9 +337,37 @@ function bakeZoneMarks(): Record<ZoneMark, Texture> {
   };
 }
 
-function bakeShieldMark(): Texture {
-  const c = new Container();
-  c.addChild(gfx((g) => disc(g, 11, Light.shield)));
-  c.addChild(drawIcon('shield', 15, Light.shieldHit, { cache: false }));
-  return bake(c, 36, 36);
+/**
+ * The rings of a shield (`shieldRing.ts`): a dark-brown line with a cobalt line inside it and a very faint cobalt tint; dashed when the
+ * shield is nearly gone; lit (a pale line) for the instant after a hit.
+ */
+function bakeShieldRings(): Record<RingLook, Texture[]> {
+  const out: Record<RingLook, Texture[]> = { whole: [], dashed: [], lit: [] };
+  for (const look of RING_LOOKS) {
+    for (const size of RING_SIZES) {
+      const r = size / 2 - 3;
+      out[look].push(
+        bake(
+          gfx((g) => {
+            if (look !== 'dashed') g.circle(0, 0, r).fill({ color: Light.shield, alpha: 0.07 });
+            const line = (width: number, color: number): void => {
+              if (look === 'dashed') {
+                const count = 12;
+                for (let i = 0; i < count; i++) {
+                  const a0 = (i / count) * TAU;
+                  g.moveTo(Math.cos(a0) * r, Math.sin(a0) * r).arc(0, 0, r, a0, a0 + (0.5 / count) * TAU);
+                }
+              } else g.circle(0, 0, r);
+              g.stroke({ width, color, cap: 'round', join: 'round' });
+            };
+            line(5.4, INK);
+            line(2.6, look === 'lit' ? Light.shieldRim : Light.shield);
+          }),
+          size + 8,
+          size + 8,
+        ),
+      );
+    }
+  }
+  return out;
 }

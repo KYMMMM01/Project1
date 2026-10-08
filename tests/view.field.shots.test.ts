@@ -14,7 +14,7 @@ import { PAINT_IDS } from '@/fx/paint';
 import { setFxSettings } from '@/fx/settings';
 import { UNIT_IDS, type BattleEvents, type ProjectileState, type UnitId } from '@/game/api';
 import { unitSpec } from '@/game';
-import { castLook, castSeconds, projectileLook, rankLight, rankOf, rankSize } from '@/view/field/projectileLooks';
+import { castLook, castSeconds, projectileLook, rankOf, rankSize, rankTrail } from '@/view/field/projectileLooks';
 import { Projectiles } from '@/view/field/projectiles';
 import type { FieldEnv } from '@/view/field/env';
 
@@ -47,7 +47,7 @@ function shot(uid: number, unitId: UnitId, x: number, y: number, angle: number):
   return { uid, unitId, x, y, angle, targetUid: 1 };
 }
 
-/** The sprites of a shot's body, shadow, streak and light, which live in four shared containers of the layer. */
+/** The sprites of a shot's body, shadow and streak, which live in three shared containers of the layer. */
 const body = (layer: Container, n = 0): Sprite => ((layer.children[2] as Container).children[n] as Sprite);
 const shadow = (layer: Container, n = 0): Sprite => ((layer.children[0] as Container).children[n] as Sprite);
 const streak = (layer: Container, n = 0): Sprite => ((layer.children[1] as Container).children[n] as Sprite);
@@ -108,13 +108,13 @@ describe('what each cat throws', () => {
     expect(castSeconds('w_paw', 300)).toBe(0);
   });
 
-  it('a higher rank throws a bigger shot with a brighter light, up to a quarter bigger', () => {
+  it('a higher rank throws a bigger shot with a bolder streak, up to a quarter bigger', () => {
     expect(rankOf('w_paw')).toBe(0);
     expect(rankOf('w_tiger')).toBe(4);
     expect(rankOf('r_sling')).toBeLessThan(rankOf('r_star'));
     expect(rankSize('r_sling')).toBe(1);
     expect(rankSize('r_star')).toBeCloseTo(1.24, 5);
-    expect(rankLight('r_star')).toBeGreaterThan(rankLight('r_sling'));
+    expect(rankTrail('r_star')).toBeGreaterThan(rankTrail('r_sling'));
   });
 });
 
@@ -185,14 +185,15 @@ describe('shots in flight', () => {
     shots.destroy();
   });
 
-  it('a streak trails the shot, and the picture of a pale moon arrow is deepened', () => {
+  it('a flat streak trails the shot, and the picture keeps its own colours (nothing is tinted or lit)', () => {
     const rig = makeRig();
     const shots = new Projectiles(rig.env, rig.layer);
     rig.shots.push(shot(1, 'r_star', 100, 100, 0));
     frames(rig, shots, 8);
     expect(streak(rig.layer).visible).toBe(true);
     expect(streak(rig.layer).alpha).toBeGreaterThan(0.3);
-    expect(body(rig.layer).tint).not.toBe(0xffffff);
+    expect(body(rig.layer).tint).toBe(0xffffff);
+    expect(rig.layer.children.length).toBe(3);
     shots.destroy();
   });
 

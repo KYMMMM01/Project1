@@ -8,7 +8,8 @@ import {
   focusTier, passBadgeCount, passClaimable, PASS_ROW_GAP, PASS_ROW_H, retroactiveCount, scrollTargetFor, seasonEndWarning, seasonNameKey, xpFill,
 } from '@/screens/pass/model';
 import { calendarCellState, calendarPage, isBigDay } from '@/screens/system/calendarModel';
-import { currencyOnly, currencyTotals, flightCount, partsOf, stickerTilt, textureKey } from '@/screens/system/kit/parts';
+import { pictureOfPart } from '@/screens/partPicture';
+import { currencyOnly, currencyTotals, flightCount, partsOf, stickerTilt } from '@/screens/system/kit/parts';
 import { countdownText, daysUntil, msUntilNextMidnight, msUntilNextMonday } from '@/screens/system/kit/time';
 import { qualityPatch, savedAtText } from '@/screens/system/settingsModel';
 
@@ -65,12 +66,13 @@ describe('reward parts', () => {
     expect(currencyTotals(partsOf({ gold: 150, gems: 20, chests: { wooden: 1 } }))).toEqual({ gold: 150, gems: 20, tickets: 0 });
   });
 
-  it('maps chests and currencies to art keys and leaves the rest to drawn icons', () => {
-    expect(textureKey({ kind: 'gold', n: 1 })).toBe('icon_gold');
-    expect(textureKey({ kind: 'chest', chest: 'wooden', n: 1 })).toBe('icon_chest_wood');
-    expect(textureKey({ kind: 'chest', chest: 'gold', n: 1 })).toBe('icon_chest_gold');
-    expect(textureKey({ kind: 'tickets', n: 2 })).toBe('');
-    expect(textureKey({ kind: 'wild', rarity: 'epic', n: 2 })).toBe('');
+  it('maps every currency and chest part to a kit picture and leaves cats and cosmetics to their own drawings', () => {
+    expect(pictureOfPart({ kind: 'gold', n: 1 })).toBe('gold');
+    expect(pictureOfPart({ kind: 'tickets', n: 2 })).toBe('tickets');
+    expect(pictureOfPart({ kind: 'chest', chest: 'wooden', n: 1 })).toBe('chest_wooden');
+    expect(pictureOfPart({ kind: 'chest', chest: 'gold', n: 1 })).toBe('chest_gold');
+    expect(pictureOfPart({ kind: 'wild', rarity: 'epic', n: 2 })).toBe('wild');
+    expect(pictureOfPart({ kind: 'cosmetic', id: 'x', n: 1 })).toBeNull();
   });
 
   it('flies a few icons for small sums and never more than a dozen', () => {

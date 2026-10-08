@@ -7,8 +7,8 @@ import { describeBundle } from '@/meta/bundle';
 import { GEM_PASS_DAILY, GEM_PASS_INSTANT, IAP_SPECS, type IapSpec } from '@/meta/data/catalog';
 import { PIGGY_CAP } from '@/meta/data/economy';
 import { iap } from '@/platform';
-import { Color, drawIcon, fitLabel, ProgressBar, uiLabel } from '@/ui';
-import { chestArt, currencyArt, piggyArt } from './art';
+import { Color, currencyIcon, drawIcon, fitLabel, ProgressBar, uiLabel } from '@/ui';
+import { chestArt, piggyArt } from './art';
 import { actionButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
 import { bookmark, drawCoupon, stampMark } from './paperBits';
 import { gemBonusPercent, listBundleProducts } from './shopLogic';
@@ -27,7 +27,7 @@ function gemArt(spec: IapSpec, size: number): Container {
   const c = new Container();
   const k = n >= 4000 ? 3 : n >= 1000 ? 2 : n >= 600 ? 1 : 0;
   for (let i = 0; i <= k; i++) {
-    const g = currencyArt('gems', size * (0.66 + 0.05 * k));
+    const g = currencyIcon('gems', size * (0.66 + 0.05 * k));
     g.position.set((i - k / 2) * size * 0.15, (i % 2) * -size * 0.07);
     c.addChild(g);
   }
@@ -146,7 +146,7 @@ function gemPassCoupon(inner: Container, y: number, w: number, env: BlockEnv): n
   const h = 256;
   const x0 = COUPON_STUB + 24;
   const c = horizontalCoupon(inner, y, w, h, Color.gem);
-  const art = currencyArt('gems', 130);
+  const art = currencyIcon('gems', 130);
   art.position.set(95, h / 2);
   const title = uiLabel(t('shop.gempass.title'), { size: 36, anchorX: 0 });
   fitLabel(title, w - x0 - 24, 36);

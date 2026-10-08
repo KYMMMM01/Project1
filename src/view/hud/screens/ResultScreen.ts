@@ -20,6 +20,7 @@ import {
   Color,
   countUpDuration,
   countUpValue,
+  currencyIcon,
   drawDashedInset,
   drawDashedLine,
   drawIcon,
@@ -39,13 +40,14 @@ import {
   TweenBag,
   uiLabel,
   type IconName,
+  type PictureId,
 } from '@/ui';
 import type { NextRun } from '../../context';
 import { BAR_H_NEXT, BAR_H_PLAIN, nextText, resultBar } from '../../nextOffer';
 import { Coupon } from '../Coupon';
 import { claimAtHome } from '../homeClaim';
 import type { HudEnv } from '../env';
-import { CLASS_TAPE, fitSprite, unitPhoto, unitPortrait } from '../kit';
+import { CLASS_TAPE, unitPhoto, unitPortrait } from '../kit';
 import { bestCat } from '../planMath';
 import { luckLine, offerRoute, paidBy, rewardTiles, soCloseWaves, unspentFish, type Paid, type RewardTile } from '../policy';
 import { currentSettings } from '../settings';
@@ -70,19 +72,9 @@ const MUSIC_DELAY = 1.4;
 /** The home track sits at this share of the player's music volume under the result page, and comes up to full when it is left. */
 const MUSIC_QUIET = 0.45;
 
-const TILE_ICON: Record<RewardTile['kind'], IconName> = {
-  gold: 'coin',
-  xp: 'star',
-  gems: 'gem',
-  tickets: 'ticket',
-  chest: 'chest',
-  card: 'cards',
-  wild: 'cards',
-  cosmetic: 'wardrobe',
-};
-
-const TILE_ART: Partial<Record<RewardTile['kind'], string>> = { gold: 'icon_gold', xp: 'icon_xp', gems: 'icon_gem', wild: 'icon_card' };
-const CHEST_ART: Record<string, string> = { wooden: 'icon_chest_wood', silver: 'icon_chest_silver', gold: 'icon_chest_gold' };
+/** The kit picture of each reward that has one (a chest's by its kind; a cat is its portrait, a cosmetic a glyph). */
+const TILE_PICTURE: Record<Exclude<RewardTile['kind'], 'chest' | 'card' | 'cosmetic'>, PictureId> = { gold: 'gold', xp: 'xp', gems: 'gems', tickets: 'tickets', wild: 'wild' };
+const CHEST_PICTURE: Record<string, PictureId> = { wooden: 'chest_wooden', silver: 'chest_silver', gold: 'chest_gold' };
 
 /** Handle to tear the screen down (the scaffold lives on the global popup layer, not in the battle scene). */
 export interface ResultHandle {
@@ -337,13 +329,13 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   };
 
   /** A teal paper strip with the currency's sticker over its left end and the count in ink. */
-  const counter = (art: string, fallback: IconName, cx: number, cy: number): { box: Container; text: BitmapText } => {
+  const counter = (picture: PictureId, cx: number, cy: number): { box: Container; text: BitmapText } => {
     const box = new Container();
     box.position.set(cx, cy);
     const w = 308;
     const g = new Graphics();
     drawPaper(g, -w / 2, -38, { w, h: 76, radius: 14, fill: Color.teal, edge: Color.tealDark, torn: 'right', seed: paperSeed(), grain: false });
-    const icon = fitSprite(art, 78) ?? drawIcon(fallback, 66);
+    const icon = currencyIcon(picture, 78);
     icon.position.set(-w / 2 + 16, -2);
     const text = numberText(52, Color.inkDeep, '+0');
     text.position.set(26, 1);
@@ -359,11 +351,11 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const g = new Graphics();
     drawPaper(g, -TILE / 2, -TILE / 2, { w: TILE, h: TILE, radius: 28, fill: Color.paperLight, edge: Color.kraftDark, seed: paperSeed(), grain: false });
     box.addChild(g);
-    let art: Container | null = null;
+    let art: Container;
     if (tile.kind === 'card') art = unitPortrait(tile.id as UnitId, 84);
-    else if (tile.kind === 'chest') art = fitSprite(CHEST_ART[tile.id] ?? 'icon_chest_wood', 92);
-    else if (TILE_ART[tile.kind]) art = fitSprite(TILE_ART[tile.kind] as string, 84);
-    art ??= drawIcon(TILE_ICON[tile.kind], 76);
+    else if (tile.kind === 'chest') art = currencyIcon(CHEST_PICTURE[tile.id] ?? 'chest_wooden', 92);
+    else if (tile.kind === 'cosmetic') art = drawIcon('wardrobe', 76);
+    else art = currencyIcon(TILE_PICTURE[tile.kind], 84);
     art.position.set(0, -26);
     const count = uiLabel(`×${fmt(tile.count)}`, { size: 32 });
     count.position.set(0, 32);
@@ -384,8 +376,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     rewardLayer.addChild(head);
     ry += 76;
 
-    const gold = counter('icon_gold', 'coin', W * 0.25, ry + 40);
-    const xp = counter('icon_xp', 'star', W * 0.75, ry + 40);
+    const gold = counter('gold', W * 0.25, ry + 40);
+    const xp = counter('xp', W * 0.75, ry + 40);
     goldT = gold.text;
     xpT = xp.text;
     goldTile = gold.box;

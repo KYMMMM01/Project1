@@ -8,8 +8,7 @@ import type { CosmeticRow } from '@/meta/economy';
 import { buildRug, RUG_H, RUG_W } from '@/view/field/rug';
 import { rugSkin } from '@/view/field/rugSkins';
 import { themeOf } from '@/view/director/palette';
-import { cacheStatic, Color, drawIcon, fitLabel, paperSeed, paperShape, PaperLabel, tapeStrip, uiLabel } from '@/ui';
-import { currencyArt } from './art';
+import { cacheStatic, Color, currencyIcon, drawIcon, fitLabel, paperSeed, paperShape, PaperLabel, tapeStrip, uiLabel } from '@/ui';
 import { actionButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
 import { drawCoupon, PriceTag } from './paperBits';
 import { cosmeticStatus } from './shopLogic';
@@ -193,7 +192,7 @@ export const ticketsBlock: Block = {
     c.addChild(g);
     c.position.set(PAD, y);
     inner.addChild(c);
-    const art = currencyArt('tickets', 130);
+    const art = currencyIcon('tickets', 130);
     art.position.set(95, h / 2);
     const x0 = 214;
     const have = uiLabel(t('shop.tickets.have', { n: v.count, stock: v.stock }), { size: 40, anchorX: 0 });

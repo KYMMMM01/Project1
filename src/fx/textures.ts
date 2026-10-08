@@ -4,8 +4,8 @@ import { putTex } from '@/core/assets';
 /**
  * One procedural atlas for every particle shape, so the particle layer is a single draw call.
  * Shapes are evaluated per pixel from signed-distance functions: perfectly anti-aliased and flat (cut
- * paper has hard edges and no glow), white on transparent so a particle's colour comes purely from its tint. The two exceptions
- * are `glow` (a soft round light for the battle effects, which are not paper) and `bubble` (a thin ring, a faint film and a highlight). The atlas
+ * paper has hard edges and no glow), white on transparent so a particle's colour comes purely from its tint. The one exception
+ * is `bubble` (a thin ring, a faint film and a highlight). The atlas
  * is painted at 2x and registered with resolution 2, so a cell's size in the table below is already
  * in design px.
  */
@@ -39,7 +39,7 @@ export const FX_TEX_IDS = [
   'streak',
   'patch',
   'sun',
-  'glow',
+  'tail',
   'bubble',
 ] as const;
 
@@ -443,14 +443,15 @@ const CELLS: Cell[] = [
   { id: 'patch', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdBox(x, y, 56, 56) - 8) },
   { id: 'sun', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, SUN)) },
   {
-    id: 'glow',
-    w: 128,
-    h: 128,
-    ax: 0.5,
+    id: 'tail',
+    w: 256,
+    h: 24,
+    ax: 1,
     ay: 0.5,
     paint: (x, y) => {
-      const d = len(x, y) / 62;
-      return d >= 1 ? 0 : Math.pow(1 - d * d, 2);
+      const u = clamp01((x + 128) / 256);
+      // A flat tapered streak: the full width at the head (the right end, the origin) running out to a point behind it.
+      return aa(Math.abs(y) - 10.5 * Math.pow(u, 0.8)) * smooth(0, 0.03, u);
     },
   },
   {
