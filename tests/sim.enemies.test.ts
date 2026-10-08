@@ -223,11 +223,12 @@ describe('boss abilities', () => {
     expect(u.weakened).toBeLessThanOrEqual(3);
     const before = boss.hp;
     damageEnemy(sim, boss, 100, 'magic', null, false, null);
-    expect(before - boss.hp).toBeCloseTo(50, 6);
+    // Half damage while inhaling, then the vacuum's own ward (10 %) on a magic hit.
+    expect(before - boss.hp).toBeCloseTo(100 * 0.5 * (1 - 0.1), 6);
     advance(sim, 3.2);
     const later = boss.hp;
     damageEnemy(sim, boss, 100, 'magic', null, false, null);
-    expect(later - boss.hp).toBeCloseTo(100, 6);
+    expect(later - boss.hp).toBeCloseTo(100 * (1 - 0.1), 6);
     advance(sim, 12.5);
     expect(abilities.length).toBeGreaterThanOrEqual(2);
   });

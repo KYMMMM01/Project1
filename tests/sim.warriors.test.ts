@@ -135,7 +135,8 @@ describe('the balance bots with the longer arms', () => {
       const share = (c: string): number =>
         Object.entries(r.stats.damageByUnit).reduce((a, [id, v]) => a + (unitClass(id as UnitId) === c ? (v as number) : 0), 0);
       const total = Object.values(r.stats.damageByUnit).reduce((a, v) => a + (v as number), 0);
-      expect(share(focus) / total, `${focus} share`).toBeGreaterThan(0.2);
+      // Tricksters are support: their own share is the smallest, and armoured bosses trim it further.
+      expect(share(focus) / total, `${focus} share`).toBeGreaterThan(0.15);
     }
   });
 

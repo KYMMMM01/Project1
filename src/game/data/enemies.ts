@@ -48,22 +48,22 @@ export const ENEMY_SPECS: Readonly<Record<EnemyId, EnemySpec>> = {
     deathBurst: { radius: 150, haste: 0.5, duration: 2 },
   }),
   boss_cucumber: enemy('boss_cucumber', {
-    traits: ['elite'], hpMult: BOSS_NOTE, speed: 46, armor: 0, ward: 0, radius: 32, bounty: 25, ability: 'enrage',
+    traits: ['elite'], hpMult: BOSS_NOTE, speed: 46, armor: 0.15, ward: 0, radius: 32, bounty: 25, ability: 'enrage',
   }),
   boss_vacuum: enemy('boss_vacuum', {
-    traits: ['boss'], hpMult: BOSS_NOTE, speed: 40, armor: 0, ward: 0, radius: 38, bounty: 60, ability: 'inhale',
+    traits: ['boss'], hpMult: BOSS_NOTE, speed: 40, armor: 0.35, ward: 0.1, radius: 38, bounty: 60, ability: 'inhale',
   }),
   boss_blender: enemy('boss_blender', {
-    traits: ['boss'], hpMult: BOSS_NOTE, speed: 42, armor: 0, ward: 0, radius: 36, bounty: 60, ability: 'whirl',
+    traits: ['boss'], hpMult: BOSS_NOTE, speed: 42, armor: 0.3, ward: 0.1, radius: 36, bounty: 60, ability: 'whirl',
   }),
   boss_bath: enemy('boss_bath', {
-    traits: ['boss'], hpMult: BOSS_NOTE, speed: 38, armor: 0, ward: 0, radius: 40, bounty: 60, ability: 'splash',
+    traits: ['boss'], hpMult: BOSS_NOTE, speed: 38, armor: 0.3, ward: 0.15, radius: 40, bounty: 60, ability: 'splash',
   }),
   boss_cloud: enemy('boss_cloud', {
-    traits: ['boss'], hpMult: BOSS_NOTE, speed: 40, armor: 0, ward: 0, radius: 38, bounty: 60, ability: 'lightning',
+    traits: ['boss'], hpMult: BOSS_NOTE, speed: 40, armor: 0.1, ward: 0.35, radius: 38, bounty: 60, ability: 'lightning',
   }),
   boss_needle: enemy('boss_needle', {
-    traits: ['boss'], hpMult: BOSS_NOTE, speed: 40, armor: 0, ward: 0, radius: 34, bounty: 60, ability: 'vaccinate',
+    traits: ['boss'], hpMult: BOSS_NOTE, speed: 40, armor: 0.2, ward: 0.25, radius: 34, bounty: 60, ability: 'vaccinate',
   }),
 };
 
