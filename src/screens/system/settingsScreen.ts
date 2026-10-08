@@ -208,7 +208,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
       toggleRow(t('rt.sys.flashes'), s.flashes, (v) => updateSettings({ flashes: v })),
       // Applied at once (the kit's motion flag and the effect switch): the rest of the screen already moves less on the next frame.
       toggleRow(t('rt.sys.reduceMotion'), s.reduceMotion, (v) => updateSettings({ reduceMotion: v })),
-      segmentRow(t('rt.sys.numbers'), modes.map((m) => ({ id: m, label: t(`rt.sys.numbers.${m}`) })), s.numbers, (id) => updateSettings({ numbers: id as NumbersMode })),
+      segmentRow(t('rt.sys.numbers'), modes.map((m) => ({ id: m, label: t(`rt.sys.numbers.${m}`) })), s.numbers, (id) => updateSettings({ numbers: id as NumbersMode }), t('rt.sys.numbers.hint')),
       segmentRow(t('rt.sys.quality'), QUALITIES.map((q) => ({ id: q, label: t(`rt.sys.quality.${q}`) })), routinePrefs().quality, (id) => setQuality(id as Quality), t('rt.sys.quality.hint')),
     ]);
 

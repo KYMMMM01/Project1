@@ -1,21 +1,16 @@
 import { Container, NineSliceSprite, Sprite, type Texture } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
-import { clamp, clamp01, damp, mixColor } from '@/core/math';
+import { clamp01, damp, mixColor } from '@/core/math';
 import { Ease, type Tweener } from '@/core/tween';
 import { Color, TapeColors, motion, paintTexture } from '@/ui';
 import { Light, paint, popIn, squash } from '@/fx';
 import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
-import { FIELD_W } from '@/game/geometry';
 import type { FieldArt, StatusSticker, ZoneMark } from './art';
-import { barSegments, depthKey, type BarSegments } from './policy';
+import { barOffset, barSegments, barWidth, bodySize, bodyX, depthKey, type BarSegments } from './policy';
 import { BOSS_DROP } from '@/view/timing';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
 import { ShieldRing } from './shieldRing';
-
-/** Longest side of the sprite is the radius times this: a cucumber (18) reads about 56 px, a boss (38) about 115. */
-const SIZE_PER_RADIUS = 3.05;
-const BOSS_SIZE_PER_RADIUS = 3.0;
 
 /** Flat tints multiplied into the sprite while a status lasts; each also has its own sticker above the bar. */
 const ICY = mixColor(Color.white, TapeColors.sky.base, 0.85);
@@ -36,8 +31,6 @@ const SHIELD_BADGE = 20;
 const ZONE_HOLD = 0.6;
 /** The tag is baked 40 px across; it is shown a little smaller than that so a row of enemies does not become a row of tags. */
 const ZONE_TAG_SCALE = 0.72;
-/** Gap kept between a drawn sprite and the screen edge: a boss on the outer lane would otherwise be cut by it. */
-const EDGE_GAP = 6;
 
 /** Texture key of an enemy: bosses use their own id, the small balloon borrows the big one's art. */
 export function enemyTextureKey(id: EnemyId): string {
@@ -182,7 +175,7 @@ export class EnemyView {
     this.flashSprite.texture = texture;
     this.flashAge = 1;
     this.flashSprite.alpha = 0;
-    this.size = def.radius * (this.isBoss ? BOSS_SIZE_PER_RADIUS : SIZE_PER_RADIUS);
+    this.size = bodySize(def.radius, this.isBoss);
     this.spriteScale = this.size / Math.max(texture.width, texture.height, 1);
     this.rate = stepRate(def.speed);
     this.facing = Math.cos(enemy.angle) < 0 ? -1 : 1;
@@ -205,12 +198,12 @@ export class EnemyView {
     this.stun.width = this.stun.height = Math.max(20, this.size * 0.36);
     this.stun.position.y = -this.size * 0.62;
     this.stun.visible = false;
-    this.barW = clamp(this.size * 0.8, 40, 70);
+    this.barW = barWidth(this.size);
     this.barBack.position.set(-this.barW / 2 - 3, -3);
     this.barBack.width = this.barW + 6;
     this.barHp.position.set(-this.barW / 2, 0);
     this.barShield.position.set(-this.barW / 2, 0);
-    this.bar.position.set(0, -this.size * 0.56 - 10);
+    this.bar.position.set(0, -barOffset(this.size));
     this.sticker.position.set(this.barW / 2 + 8, -this.size * 0.56 - 12);
     this.sticker.visible = false;
     this.targetMark.position.set(0, -this.size * 0.56 - 46);
@@ -265,8 +258,7 @@ export class EnemyView {
 
   /** The sprite's x: the simulation's, pulled in just far enough that a big body stays on the screen. */
   private drawX(): number {
-    const half = this.size / 2 + EDGE_GAP;
-    return clamp(this.x, half, FIELD_W - half);
+    return bodyX(this.x, this.size);
   }
 
   /** Bodies pop in on the battle clock; a boss drops onto the lane on the real-time one, like the landing effect that meets it. */

@@ -2,8 +2,39 @@
  * Global effect switches. Every preset reads these at call time, so a settings screen only has to
  * flip a field. Pure data: no Pixi import, so it is usable from unit tests.
  */
-/** Damage-number density (guide 3.8): everything, only crits / big values / damage taken, or none. */
+/** Damage-number level: `brief` (the calm default), `full`, or `off`. What each one shows is `NUMBER_LEVELS`. */
 export type NumbersMode = 'off' | 'brief' | 'full';
+
+/**
+ * What a damage-number level shows. Every level obeys the placement rules (a number never sits on an enemy, a cat or the HUD) and
+ * the crowd rule (a budget per screen region and per frame, the larger numbers first); the levels only change how much they allow.
+ * Shares are of the target's full health, summed over one merge window (about 0.3 s) of hits on it.
+ */
+export interface NumberLevel {
+  /** The smallest merged hit worth a number on an ordinary enemy, and on an elite or a boss. */
+  hitShare: number;
+  heavyShare: number;
+  /** The smallest damage-over-time tick worth a number (burn, poison, bleed); Infinity = never. */
+  tickShare: number;
+  /** Whether what a shield soaked gets a number. */
+  soak: boolean;
+  /** Whether heals and gold get one. */
+  extras: boolean;
+  /** Ordinary numbers alive in one screen region and on the whole screen, and new ones accepted per frame. */
+  plainRegion: number;
+  plainAll: number;
+  plainFrame: number;
+  /** The same for the big numbers (a crit, a killing blow, a boss's heavy hit, damage taken). */
+  bigRegion: number;
+  bigAll: number;
+  bigFrame: number;
+}
+
+export const NUMBER_LEVELS: Readonly<Record<NumbersMode, NumberLevel>> = {
+  off: { hitShare: Infinity, heavyShare: Infinity, tickShare: Infinity, soak: false, extras: false, plainRegion: 0, plainAll: 0, plainFrame: 0, bigRegion: 0, bigAll: 0, bigFrame: 0 },
+  brief: { hitShare: 0.06, heavyShare: 0.01, tickShare: Infinity, soak: false, extras: false, plainRegion: 1, plainAll: 4, plainFrame: 1, bigRegion: 1, bigAll: 3, bigFrame: 2 },
+  full: { hitShare: 0, heavyShare: 0, tickShare: 0.02, soak: true, extras: true, plainRegion: 2, plainAll: 8, plainFrame: 2, bigRegion: 2, bigAll: 5, bigFrame: 3 },
+};
 
 /** Device quality tier (guide 6.2). The governor moves between them; a settings screen may pin one. */
 export type FxTier = 'high' | 'mid' | 'low';
@@ -19,7 +50,7 @@ export interface FxSettings {
   flashes: boolean;
   /** Shortens long motion, softens shake and flashes, stops looping pulses. Defaults to the OS flag. */
   reducedMotion: boolean;
-  /** Which floating numbers are shown. 'brief' keeps only the important ones (priority 2+). */
+  /** Which floating numbers are shown (`NUMBER_LEVELS`). */
   numbers: NumbersMode;
 }
 
@@ -59,7 +90,7 @@ export const fxSettings: FxSettings = {
   quality: 1,
   flashes: true,
   reducedMotion: false,
-  numbers: 'full',
+  numbers: 'brief',
 };
 
 const tierListeners = new Set<(tier: FxTier) => void>();

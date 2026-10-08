@@ -21,3 +21,20 @@ describe('the reduce-motion setting', () => {
     expect(fxSettings.reducedMotion).toBe(false);
   });
 });
+
+describe('the damage number level', () => {
+  afterEach(() => updateSettings({ numbers: 'brief' }));
+
+  it('is the calm one for a new player, on the screen and in the effects', () => {
+    expect(currentSettings().numbers).toBe('brief');
+    expect(fxSettings.numbers).toBe('brief');
+  });
+
+  it('reaches the effects at once, each of the three levels', () => {
+    for (const level of ['full', 'off', 'brief'] as const) {
+      updateSettings({ numbers: level });
+      expect(currentSettings().numbers).toBe(level);
+      expect(fxSettings.numbers).toBe(level);
+    }
+  });
+});

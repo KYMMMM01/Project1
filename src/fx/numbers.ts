@@ -1,47 +1,62 @@
-import { BitmapFont, BitmapFontManager, BitmapText, Container, Sprite, TextStyle, type Texture } from 'pixi.js';
+import { BitmapFont, BitmapFontManager, BitmapText, Container, TextStyle, type Texture } from 'pixi.js';
+import { fmt } from '@/core/format';
+import { clamp, mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
-import { clamp, formatNumber, mixColor } from '@/core/math';
 import { Color, FONT_FAMILY } from '@/ui/theme';
 import { popCurve, springWobble } from './curves';
-import { fxSettings } from './settings';
-import { fxTexture } from './textures';
+import { Bodies, Boxes, crossed, findSpot, outranks, Pending, regionOf, type Area, type PlaceIn, type Spot } from './numberPlan';
+import { fxSettings, NUMBER_LEVELS, type NumberLevel } from './settings';
 
-export type NumStyle = 'damage' | 'crit' | 'dot' | 'heal' | 'gold' | 'hurt' | 'big';
+export type NumStyle = 'damage' | 'crit' | 'kill' | 'dot' | 'soak' | 'heal' | 'gold' | 'hurt' | 'big';
 
 const BAKED = 64;
-/** New plain numbers (priority 0 and 1) accepted per frame: a zone ticking on forty enemies would lay down a hundred a frame, all but the newest evicted before one was drawn. */
-const PLAIN_PER_FRAME = 3;
-/** Width and height of the room a number takes along a clamped line: the next one lands beside it, not on it. */
-const SLOT_W = 62;
-const SLOT_Y = 34;
-/**
- * The same for the big numbers (a crit, a boss hit): a crit is a sticker, so the next one lands beside the one already there (as far
- * from it as the two are wide) and, when the row is full, a row higher, and does not pile on it.
- */
-const BIG_H = 52;
-const BIG_ROWS = 3;
-/** The widest a number's digits are drawn, px: a plain one and a big one. */
-const MAX_WIDTH = 120;
-const MAX_BIG_WIDTH = 170;
-/** Big numbers alive at once: past this the oldest goes at once (a seventh sticker is only a bigger pile, and the oldest is nearly gone). */
-const BIG_MAX = 6;
-/** Numbers of this priority and above are the big ones. */
-const BIG_PRIO = 2;
+/** Height of a digit in the baked face, and the stroke's two widths: the digits of an ordinary number carry a thin outline, a big one a thick one. */
+const CAP_HEIGHT = 47;
+const STROKE_THIN = 7;
+const STROKE_THICK = 12;
+/** The digits' ink sits this far below the middle of the line the text object measures (baked px). */
+const INK_DROP = 4.7;
+/** How far a number's pop may exceed its resting size: places are kept clear for that much. */
+const PEAK = 1.1;
+/** How far a number's own bump (a merged hit) swells it. */
+const BUMP = 0.2;
+const BUMP_SECONDS = 0.12;
+/** What a character measures at the baked size: a figure's width is worked out from its characters, never read from the text object (that lays it out on the spot, for every merged hit). */
+const GLYPH = 36.5;
+const GLYPH_WIDE = 64;
 /** How far a face colour is lightened toward cream: on artwork the digits are light with a brown stroke (kit rule), the hue still says the kind. */
 const FACE_LIGHT = 0.3;
-/** Width of the brown stroke at the baked size (the fill covers its inner half). */
-const STROKE = 12;
-const CHARS = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×'];
+const CHARS = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×만억조'];
+/** Hits on one enemy in this many seconds are one number. */
+const MERGE_WINDOW = 0.3;
+/** A merged hit lets its number live this much longer from the pop: the new figure is read for about a third of a second at least. */
+const MERGE_AGE = 0.12;
+/** Places searched for per frame (a search is the dearest thing a hit can ask for in a crowd): past this the hits of the frame are not shown. */
+const TRIES_PER_FRAME = 3;
+/** After a number found no place its enemy is not looked for again for this long: the lane has not changed much, and the hits go on adding up. */
+const RETRY_SECONDS = 0.12;
+/** Seconds an enemy (its own too: a number that follows it under the HUD is pushed onto it) may stand in a number before it is gone. */
+const YIELD_SECONDS = 0.08;
+/** A place must stay free for this share of the number's life: the others keep walking while it is up. */
+const HORIZON = 0.7;
+/** Numbers of this priority and above are the big ones (a crit, a killing blow, a heavy hit on a boss, damage taken). */
+const BIG_PRIO = 2;
+/** A number's own ring of places: how many rows above the bar and how many places along a row are tried. */
+const PLAIN_ROWS = 2;
+const PLAIN_COLS = 3;
+const BIG_ROWS = 3;
+const BIG_COLS = 5;
 
-const faces = new Map<number, string>();
+const faces = new Map<string, string>();
 const fonts = new Map<string, ReturnType<typeof BitmapFontManager.getFont>>();
 
-/** The bitmap font of one face colour: the paper tone lightened toward cream, inside one flat brown stroke. Baked once per colour. */
-function faceFont(color: number): string {
-  let name = faces.get(color);
+/** The bitmap font of one face colour and outline: the paper tone lightened toward cream inside one flat brown stroke. Baked once per pair. */
+function faceFont(color: number, thin: boolean): string {
+  const key = color.toString(16) + (thin ? 't' : 'h');
+  let name = faces.get(key);
   if (name) return name;
-  name = 'FxNum' + color.toString(16);
-  faces.set(color, name);
+  name = 'FxNum' + key;
+  faces.set(key, name);
   BitmapFont.install({
     name,
     chars: CHARS,
@@ -51,7 +66,7 @@ function faceFont(color: number): string {
       fontFamily: FONT_FAMILY,
       fontSize: BAKED,
       fill: mixColor(color, Color.paperLight, FACE_LIGHT),
-      stroke: { color: Color.ink, width: STROKE, join: 'round' },
+      stroke: { color: Color.ink, width: thin ? STROKE_THIN : STROKE_THICK, join: 'round' },
     },
   });
   fonts.set(name, BitmapFontManager.getFont('0', new TextStyle({ fontFamily: name, fontSize: BAKED })));
@@ -66,135 +81,186 @@ export function numberFontTextures(): Texture[] {
 }
 
 /**
- * Draw the face font of `color` now: for a colour that is not one of the stock styles' (a damage-over-time tick, a shield), whose font would
- * otherwise be drawn on the frame of its first number, 20 ms in the middle of a fight.
+ * Draw the quiet face font of `color` now: for a colour that is not one of the stock styles' (a damage-over-time tick, a shield), whose font
+ * would otherwise be drawn on the frame of its first number, 20 ms in the middle of a fight.
  */
 export function bakeNumberFace(color: number): void {
-  faceFont(color);
-}
-
-/**
- * Bake the face fonts of the stock styles once: 140 ms of drawing glyphs, so a battle does it while its scene is built (BattleScene) and
- * not on the frame of the first hit; show() calls it lazily too. A number floats over artwork, so it is light digits
- * (tinted by kind) inside one brown stroke, with no shadow and no second outline.
- */
-export function ensureNumberFonts(): void {
-  for (const def of Object.values(STYLES)) faceFont(def.face);
+  faceFont(color, true);
 }
 
 interface StyleDef {
-  /** Flat face colour of the sticker. */
+  /** Flat face colour of the digits, and whether their outline is the thin one. */
   face: number;
-  /** A paper starburst behind the number, in this colour (crits and boss hits). */
-  burst: number | null;
-  /** Rendered glyph height in design px at magnitude 1 and at magnitude 1000 (it grows with log10). */
-  size: readonly [number, number];
+  thin: boolean;
+  /** Height of the digits with their outline on screen, design px, at magnitude 1 and at magnitude 1000 (it grows with log10). */
+  ink: readonly [number, number];
+  /** The widest the digits are drawn: a longer figure is drawn smaller. */
+  width: number;
   life: number;
+  /** How far it drifts up and outward over its life. */
   rise: number;
+  out: number;
+  /** Opacity while it is held (it fades over the last 40% of its life). */
+  alpha: number;
   /** Starts, peaks and settles at these multiples of the target scale. */
   pop: readonly [number, number, number];
   popSeconds: number;
   /** Radians of random tilt amplitude (crit wobble). */
   tilt: number;
-  /** 0 low .. 3 never dropped. */
+  /** 0 quiet .. 3 never dropped: who is sent away first when the crowd rule needs room. */
   prio: number;
+  /** What a level must allow for this number to be shown (`NumberLevel`). */
+  gate: 'always' | 'hit' | 'tick' | 'soak' | 'extras';
+  /** A damage-over-time tick or a soaked hit: its own slot per enemy, beside the ordinary number's. */
+  quiet: boolean;
   prefix: string;
   suffix: string;
-  /** Horizontal scatter in design px. */
-  scatter: number;
 }
 
 const STYLES: Record<NumStyle, StyleDef> = {
   damage: {
-    face: Color.coral, burst: null, size: [30, 48], life: 0.6, rise: 40, pop: [0.6, 1.15, 1], popSeconds: 0.14,
-    tilt: 0, prio: 0, prefix: '', suffix: '', scatter: 24,
+    face: Color.coral, thin: true, ink: [20, 22], width: 72, life: 0.5, rise: 14, out: 10, alpha: 0.78,
+    pop: [0.7, 1.1, 1], popSeconds: 0.08, tilt: 0, prio: 1, gate: 'hit', quiet: false, prefix: '', suffix: '',
   },
   crit: {
-    face: Color.mustard, burst: Color.coral, size: [36, 50], life: 0.9, rise: 58, pop: [0.6, 1.5, 1.2], popSeconds: 0.18,
-    tilt: 0.052, prio: 2, prefix: '', suffix: '!', scatter: 22,
+    face: Color.mustard, thin: false, ink: [30, 34], width: 74, life: 0.8, rise: 22, out: 14, alpha: 1,
+    pop: [0.55, 1.2, 1], popSeconds: 0.14, tilt: 0.05, prio: 2, gate: 'always', quiet: false, prefix: '', suffix: '!',
   },
-  dot: {
-    face: Color.teal, burst: null, size: [22, 30], life: 0.55, rise: 36, pop: [0.6, 1.1, 1], popSeconds: 0.12,
-    tilt: 0, prio: 0, prefix: '', suffix: '', scatter: 26,
-  },
-  heal: {
-    face: Color.leaf, burst: null, size: [32, 42], life: 0.85, rise: 52, pop: [0.5, 1.2, 1], popSeconds: 0.15,
-    tilt: 0, prio: 1, prefix: '+', suffix: '', scatter: 14,
-  },
-  gold: {
-    face: Color.mustard, burst: null, size: [32, 44], life: 0.85, rise: 52, pop: [0.5, 1.2, 1], popSeconds: 0.15,
-    tilt: 0, prio: 1, prefix: '+', suffix: '', scatter: 14,
-  },
-  hurt: {
-    face: Color.berry, burst: null, size: [34, 50], life: 0.9, rise: 48, pop: [0.5, 1.2, 1], popSeconds: 0.15,
-    tilt: 0, prio: 2, prefix: '-', suffix: '', scatter: 16,
+  kill: {
+    face: Color.coral, thin: false, ink: [30, 34], width: 74, life: 0.8, rise: 22, out: 14, alpha: 1,
+    pop: [0.55, 1.2, 1], popSeconds: 0.14, tilt: 0, prio: 2, gate: 'always', quiet: false, prefix: '', suffix: '',
   },
   big: {
-    face: Color.mustard, burst: Color.berry, size: [56, 80], life: 1.15, rise: 64, pop: [0.4, 1.4, 1.15], popSeconds: 0.22,
-    tilt: 0.06, prio: 3, prefix: '', suffix: '!', scatter: 10,
+    face: Color.mustard, thin: false, ink: [32, 36], width: 76, life: 0.9, rise: 24, out: 14, alpha: 1,
+    pop: [0.5, 1.25, 1], popSeconds: 0.16, tilt: 0.05, prio: 3, gate: 'always', quiet: false, prefix: '', suffix: '!',
+  },
+  dot: {
+    face: Color.teal, thin: true, ink: [15, 17], width: 44, life: 0.5, rise: 10, out: 8, alpha: 0.62,
+    pop: [0.8, 1.05, 1], popSeconds: 0.08, tilt: 0, prio: 0, gate: 'tick', quiet: true, prefix: '', suffix: '',
+  },
+  soak: {
+    face: Color.teal, thin: true, ink: [15, 17], width: 44, life: 0.5, rise: 10, out: 8, alpha: 0.62,
+    pop: [0.8, 1.05, 1], popSeconds: 0.08, tilt: 0, prio: 0, gate: 'soak', quiet: true, prefix: '', suffix: '',
+  },
+  heal: {
+    face: Color.leaf, thin: true, ink: [22, 24], width: 72, life: 0.7, rise: 18, out: 0, alpha: 0.9,
+    pop: [0.6, 1.15, 1], popSeconds: 0.12, tilt: 0, prio: 1, gate: 'extras', quiet: false, prefix: '+', suffix: '',
+  },
+  gold: {
+    face: Color.mustard, thin: true, ink: [22, 24], width: 72, life: 0.7, rise: 18, out: 0, alpha: 0.9,
+    pop: [0.6, 1.15, 1], popSeconds: 0.12, tilt: 0, prio: 1, gate: 'extras', quiet: false, prefix: '+', suffix: '',
+  },
+  hurt: {
+    face: Color.berry, thin: false, ink: [26, 30], width: 80, life: 0.8, rise: 20, out: 0, alpha: 1,
+    pop: [0.5, 1.2, 1], popSeconds: 0.14, tilt: 0, prio: 2, gate: 'always', quiet: false, prefix: '-', suffix: '',
   },
 };
+
+/** The styles whose faces a battle bakes while its scene is built; the rest are baked when first asked for. */
+const STOCK: readonly NumStyle[] = ['damage', 'crit', 'kill', 'big', 'dot'];
+
+/**
+ * Bake the face fonts of the stock styles once: about 140 ms of drawing glyphs, so a battle does it while its scene is built
+ * (BattleScene) and not on the frame of the first hit; show() calls it lazily too.
+ */
+export function ensureNumberFonts(): void {
+  for (const style of STOCK) faceFont(STYLES[style].face, STYLES[style].thin);
+}
+
+/**
+ * The body a number belongs to: an enemy, as a box (its picture and the health bar above it) with the direction it walks. The director
+ * keeps one of these and refills it for each hit, so a hit allocates nothing.
+ */
+export interface NumberTarget {
+  /** One number per target and kind: hits on the same uid are merged. */
+  uid: number;
+  /** Centre of the body. */
+  x: number;
+  y: number;
+  /** Half the width of the box, its reach above the centre (to the top of the health bar) and below it. */
+  hw: number;
+  top: number;
+  bottom: number;
+  /** Direction of travel, radians: the number drifts away from the lane's centre line, which is to the left of it. */
+  angle: number;
+  /** The target's full health: the levels ask for a share of it. */
+  maxHp: number;
+  /** A boss or an elite: the levels ask less of its hits. */
+  heavy: boolean;
+  /** A boss: its numbers are shown even when the lane around it is full (clear only of its own body, the HUD and the board). */
+  boss: boolean;
+}
 
 export interface NumberOpts {
   /** Override the style's face colour. */
   color?: number;
   /** Extra size multiplier. */
   scale?: number;
-  /** Numbers with the same key fired within 100 ms are summed into one (multi-hit on a target). */
-  key?: string | number;
-  /** Disable the random horizontal scatter (tests, fixed layouts). */
-  noScatter?: boolean;
+  /** The body it belongs to; without one the number stands above the point it is shown at. */
+  target?: NumberTarget;
 }
 
-/** One number: an optional paper starburst behind the stroked digits, drawn as one object. */
+/** One number: the stroked digits as one text object. */
 class Num {
   readonly root = new Container();
   readonly face: BitmapText;
-  private readonly burst: Sprite;
   style: NumStyle = 'damage';
   def: StyleDef = STYLES.damage;
   age = 0;
-  x = 0;
-  y = 0;
+  /** Seconds since the first hit it holds: hits are merged into it while this is under `MERGE_WINDOW`. */
+  span = 0;
+  /** 1 right after a merged hit, falling to 0: the number swells by that much. */
+  bump = 0;
+  /** Seconds an enemy has stood in it: a number gives way (fades out) when one walks into it. A boss's number does not. */
+  crossing = 0;
+  holds = false;
+  /** Chosen to make room for a newer number (see `reserve`). */
+  doomed = false;
+  value = 0;
+  /** Its slot (`uid * 2 + quiet`; -1 for a number that belongs to no body) and the region of the screen it counts against. */
+  slot = -1;
+  uid = -1;
+  region = 0;
+  /** The body's centre as last seen and how fast it moves (px per second): a number whose body has died goes on with it. */
+  ex = 0;
+  ey = 0;
+  vx = 0;
+  vy = 0;
+  /** Where the number starts from the body's centre, and how far it drifts. */
+  ox = 0;
+  oy = 0;
+  dx = 0;
+  dy = 0;
   scale = 1;
   tiltAmp = 0;
-  value = 0;
   /** Half the width of the digits at scale 1. */
   half = 0;
-  key: string | number | undefined;
+  /** Centre and half sizes of what is drawn now, for the next number to keep clear of. */
+  cx = 0;
+  cy = 0;
+  bw = 0;
+  bh = 0;
 
-  /** Half the width of what is drawn (the digits, or the starburst behind them), in layer px. */
-  get reach(): number {
-    return Math.max(this.half, this.burst.visible ? BAKED * 1.05 : 0) * this.scale;
-  }
   constructor(readonly font: string) {
-    this.burst = new Sprite(fxTexture('starburst'));
-    this.burst.anchor.set(0.5);
-    this.burst.width = this.burst.height = BAKED * 2.1;
-    this.burst.visible = false;
     this.face = new BitmapText({ text: '', style: { fontFamily: font, fontSize: BAKED } });
     this.face.anchor.set(0.5);
-    this.root.addChild(this.burst, this.face);
+    this.root.addChild(this.face);
     this.root.visible = false;
     this.root.eventMode = 'none';
   }
 
+  /** Set the text; its width is the estimate the places are found with (asking the text object for it would lay it out on the spot, for every merged hit). */
   setText(text: string): void {
     this.face.text = text;
-    this.half = this.face.width / 2;
-  }
-
-  setBurst(color: number | null): void {
-    this.burst.visible = color !== null;
-    if (color !== null) this.burst.tint = color;
+    this.half = measure(text) / 2;
   }
 }
 
 /**
- * Pooled floating combat text. At most `cap` are alive at once: when full, a new number evicts the
- * oldest one of the lowest priority that is not more important than itself (the guide drops the
- * oldest), so crits and boss hits are never lost to a flurry of plain hits, while a plain hit finding
- * only important numbers on screen is the one skipped. Motion is analytic in update(dt): no tweens,
+ * Pooled floating combat text. A number belongs to an enemy: it starts above the enemy's health bar, follows it, drifts up and outward
+ * and fades, and it is never drawn on an enemy, the board or the HUD (`findSpot`). Hits on one enemy within `MERGE_WINDOW` are one
+ * number that bumps; when the lane is crowded the numbers that find no free place are not shown, and a budget per screen region and per
+ * frame keeps the crits and killing blows and then the largest figures (`NUMBER_LEVELS`). Motion is analytic in update(dt): no tweens,
  * no per-frame allocation.
  */
 export class FloatingNumbers {
@@ -204,19 +270,25 @@ export class FloatingNumbers {
   /** Total BitmapText objects ever created, per stats(). */
   created = 0;
   skipped = 0;
-  /** Plain numbers started since the last `update`. */
+  /** New numbers started since the last `update`, by class, and the times a place was looked for: a crowded lane would otherwise try for every hit. */
   private plainThisFrame = 0;
+  private bigThisFrame = 0;
+  private triesThisFrame = 0;
   private fontsReady = false;
-  /** The place `freeSpot` found (one object, so a number finding its place allocates nothing). */
-  private readonly spot = { x: 0, y: 0 };
+  private time = 0;
+  private readonly pending = new Pending();
+  private readonly boxes = new Boxes(64);
+  private readonly spot: Spot = { ox: 0, oy: 0, dx: 0, dy: 0 };
+  private readonly place: PlaceIn = { x: 0, y: 0, hw: 0, top: 0, bottom: 0, nx: 0, w: 0, h: 0, rise: 0, out: 0, vx: 0, vy: 0, horizon: 0, rows: 0, cols: 0, uid: -1 };
+
+  /** The boxes of the bodies on the field, refilled every frame by `sense` (the director lists the enemies). */
+  readonly bodies = new Bodies();
+  sense: ((into: Bodies) => void) | null = null;
 
   /** Maximum simultaneous numbers; lowering it lets the extras finish. */
   cap: number;
-  /** A number never rises above this y (layer space): the scene sets it to the edge of the HUD so no hit is drawn under a pill. */
-  minY = -Infinity;
-  /** Its digits never cross these x (layer space): the screen edges, so a hit on the outer lane is not cut in half. */
-  minX = -Infinity;
-  maxX = Infinity;
+  /** Where a number may stand (field space): the scene sets the HUD's lower edge, the screen's sides and bottom panel, and the board. */
+  readonly area: Area = { minX: -Infinity, maxX: Infinity, minY: -Infinity, maxY: Infinity, keepX0: 0, keepY0: 0, keepX1: 0, keepY1: 0 };
 
   constructor(parent: Container, cap = 40) {
     this.cap = cap;
@@ -230,35 +302,70 @@ export class FloatingNumbers {
   }
 
   show(x: number, y: number, value: number | string, style: NumStyle = 'damage', o: NumberOpts = {}): void {
-    const def = STYLES[style];
     const mode = fxSettings.numbers;
-    if (mode === 'off' || (mode === 'brief' && def.prio < 2)) return;
+    if (mode === 'off') return;
+    const level = NUMBER_LEVELS[mode];
+    const def = STYLES[style];
     if (!this.fontsReady) {
       ensureNumberFonts();
       this.fontsReady = true;
     }
-
-    if (o.key !== undefined && typeof value === 'number') {
-      for (const a of this.active) {
-        if (a.key === o.key && a.style === style && a.age < 0.1) {
-          a.value += value;
-          a.age = Math.min(a.age, 0.04);
-          this.setText(a, a.value, def, o);
+    const t = o.target ?? null;
+    let total = typeof value === 'number' ? value : 0;
+    let slot = -1;
+    if (t && typeof value === 'number') {
+      slot = t.uid * 2 + (def.quiet ? 1 : 0);
+      const live = this.live(slot);
+      if (live) {
+        if (live.span < MERGE_WINDOW && def.prio <= live.def.prio) {
+          live.value += value;
+          live.bump = 1;
+          live.age = Math.min(live.age, MERGE_AGE);
+          const wide = live.half * live.scale;
+          this.setText(live, live.value, o);
+          // A figure that grows widens away from the body it was placed beside, not onto it.
+          live.ox += Math.sign(live.ox) * (live.half * live.scale - wide) * PEAK;
+          this.apply(live);
+          return;
+        }
+        // A stronger kind of number (a crit over an ordinary hit) takes the merged damage over; an old one simply gives way.
+        if (live.span < MERGE_WINDOW) total += live.value;
+        this.discard(live);
+      } else {
+        total = this.pending.add(slot, value, this.time, MERGE_WINDOW);
+        // The last look found no place for it: the lane has not changed much since.
+        if (this.pending.held(slot, this.time)) {
+          this.skipped++;
           return;
         }
       }
     }
-
-    if (def.prio < 2 && this.plainThisFrame >= PLAIN_PER_FRAME) {
+    if (!this.allowed(def, level, total, t)) {
       this.skipped++;
       return;
     }
-    if (this.active.length >= this.cap && !this.evictFor(def.prio)) {
+    const big = def.prio >= BIG_PRIO;
+    if ((big ? this.bigThisFrame >= level.bigFrame : this.plainThisFrame >= level.plainFrame) || this.triesThisFrame >= TRIES_PER_FRAME) {
       this.skipped++;
       return;
     }
-    if (def.prio < 2) this.plainThisFrame++;
-    const font = faceFont(o.color ?? def.face);
+    this.triesThisFrame++;
+    const text = figure(def, typeof value === 'number' ? total : value);
+    const wide = measure(text);
+    const scale = scaleOf(def, total, wide, o);
+    // The crowd rule first (it is cheap and refuses most): a number that may not be shown need not look for a place.
+    if (!this.reserve(def, level, total, t ? t.x : x, t ? t.y : y)) {
+      this.skipped++;
+      return;
+    }
+    if (!this.stand(def, scale, wide / 2, x, y, t, big)) {
+      this.release();
+      if (slot >= 0) this.pending.hold(slot, this.time + RETRY_SECONDS);
+      this.skipped++;
+      return;
+    }
+    this.release(true);
+    const font = faceFont(o.color ?? def.face, def.thin);
     let n = this.pools.get(font)?.pop();
     if (!n) {
       n = new Num(font);
@@ -268,52 +375,83 @@ export class FloatingNumbers {
     n.style = style;
     n.def = def;
     n.age = 0;
-    n.key = o.key;
-    n.value = typeof value === 'number' ? value : 0;
-    n.setBurst(def.burst);
-    n.root.visible = true;
+    n.span = 0;
+    n.bump = 0;
+    n.crossing = 0;
+    n.holds = t !== null && t.boss;
+    n.value = total;
+    n.setText(text);
+    n.scale = scaleOf(def, total, n.half * 2, o);
+    n.ox = this.spot.ox;
+    n.oy = this.spot.oy;
+    n.dx = this.spot.dx;
+    n.dy = this.spot.dy;
+    if (slot >= 0) this.pending.drop(slot);
+    n.slot = slot;
+    n.uid = t ? t.uid : -1;
+    n.ex = t ? t.x : x;
+    n.ey = t ? t.y : y;
+    n.vx = this.place.vx;
+    n.vy = this.place.vy;
+    n.region = regionOf(n.ex, n.ey);
     n.tiltAmp = def.tilt * (Math.random() < 0.5 ? -1 : 1) * (0.6 + Math.random() * 0.4);
-    const sx = x + (o.noScatter ? 0 : (Math.random() * 2 - 1) * def.scatter);
-    n.y = y;
-    n.x = sx;
-    this.setText(n, value, def, o);
-    // Two crits that land on the same spot a moment apart would be one pile of stickers: the later one takes the nearest free place.
-    if (def.prio >= BIG_PRIO) {
-      this.dropOldestBig();
-      this.freeSpot(sx, y, n.reach * 0.9, BIG_H, BIG_PRIO, BIG_ROWS);
-      n.x = this.spot.x;
-      n.y = this.spot.y;
-    }
-    // A hit near the top of the screen is held at `minY`: several of them would end on one line and read as one long number.
-    if (Number.isFinite(this.minY) && n.y - def.rise <= this.minY + 8) {
-      this.freeSpot(n.x, Math.max(this.minY, n.y - def.rise), SLOT_W / 2, SLOT_Y, 0, 1);
-      n.x = this.spot.x;
-    }
+    n.root.visible = true;
+    if (big) this.bigThisFrame++;
+    else this.plainThisFrame++;
     this.layer.addChild(n.root);
     this.active.push(n);
     this.apply(n);
   }
 
   update(dt: number): void {
+    this.time += dt;
     this.plainThisFrame = 0;
+    this.bigThisFrame = 0;
+    this.triesThisFrame = 0;
+    if (this.sense) {
+      this.bodies.reset();
+      this.sense(this.bodies);
+      this.bodies.settle(dt);
+    }
     const list = this.active;
     let w = 0;
     for (let i = 0; i < list.length; i++) {
       const n = list[i] as Num;
       n.age += dt;
+      n.span += dt;
+      n.bump = Math.max(0, n.bump - dt / BUMP_SECONDS);
       if (n.age >= n.def.life) {
-        this.recycle(n);
+        this.give(n);
         continue;
       }
+      if (n.uid >= 0) {
+        const b = this.bodies.find(n.uid);
+        if (b >= 0) {
+          n.ex = this.bodies.x[b] as number;
+          n.ey = this.bodies.y[b] as number;
+          n.vx = this.bodies.vx[b] as number;
+          n.vy = this.bodies.vy[b] as number;
+        } else {
+          n.ex += n.vx * dt;
+          n.ey += n.vy * dt;
+        }
+      }
       this.apply(n);
+      if (!n.holds && crossed(this.bodies, -1, n.cx, n.cy, n.bw, n.bh)) n.crossing += dt;
+      else n.crossing = Math.max(0, n.crossing - dt);
+      if (n.crossing >= YIELD_SECONDS) {
+        this.give(n);
+        continue;
+      }
       list[w++] = n;
     }
     list.length = w;
   }
 
   clear(): void {
-    for (const n of this.active) this.recycle(n);
+    for (const n of this.active) this.give(n);
     this.active.length = 0;
+    this.pending.clear();
   }
 
   destroy(): void {
@@ -325,103 +463,155 @@ export class FloatingNumbers {
     return { alive: this.active.length, created: this.created, skipped: this.skipped };
   }
 
+  /** The number alive in `slot`, if any. */
+  private live(slot: number): Num | null {
+    for (const n of this.active) if (n.slot === slot) return n;
+    return null;
+  }
+
+  /** Whether a level shows a number of this style for `total` damage on `t`. */
+  private allowed(def: StyleDef, level: NumberLevel, total: number, t: NumberTarget | null): boolean {
+    const share = t && t.maxHp > 0 && total > 0 ? total / t.maxHp : 1;
+    switch (def.gate) {
+      case 'hit':
+        return share >= (t && t.heavy ? level.heavyShare : level.hitShare);
+      case 'tick':
+        return share >= level.tickShare;
+      case 'soak':
+        return level.soak;
+      case 'extras':
+        return level.extras;
+      default:
+        return true;
+    }
+  }
+
+  /** Find a free place for a number of this style, `scale` and half width `half` (see `findSpot`); a boss's number settles for one that is only clear of its own body. The place lands in `this.spot`. */
+  private stand(def: StyleDef, scale: number, half: number, x: number, y: number, t: NumberTarget | null, big: boolean): boolean {
+    this.syncBoxes();
+    const p = this.place;
+    p.x = t ? t.x : x;
+    p.y = t ? t.y : y;
+    p.hw = t ? t.hw : 0;
+    p.top = t ? t.top : 0;
+    p.bottom = t ? t.bottom : 0;
+    p.nx = t ? Math.sin(t.angle) : 0;
+    p.w = half * scale * PEAK;
+    p.h = (inkPx(def, scale) / 2) * PEAK;
+    p.rise = def.rise;
+    p.out = def.out;
+    const b = t ? this.bodies.find(t.uid) : -1;
+    p.vx = b >= 0 ? (this.bodies.vx[b] as number) : 0;
+    p.vy = b >= 0 ? (this.bodies.vy[b] as number) : 0;
+    p.horizon = def.life * HORIZON;
+    p.rows = big ? BIG_ROWS : PLAIN_ROWS;
+    p.cols = big ? BIG_COLS : PLAIN_COLS;
+    p.uid = t ? t.uid : -1;
+    const s = this.spot;
+    return findSpot(p, this.area, this.bodies, this.boxes, false, s) || !!(t && t.boss && findSpot(p, this.area, this.bodies, this.boxes, true, s));
+  }
+
+  /** Fill `boxes` from the numbers alive, in their order. */
+  private syncBoxes(): void {
+    const list = this.active;
+    const boxes = this.boxes;
+    const m = Math.min(list.length, boxes.cap);
+    for (let i = 0; i < m; i++) {
+      const n = list[i] as Num;
+      boxes.set(i, n.cx, n.cy, n.bw, n.bh, n.vx, n.vy);
+    }
+    boxes.count = m;
+  }
+
   /**
-   * Find the nearest place for a number `half` wide at height `line` (right first, then left, up to two numbers' width each way) that no
-   * live number of priority `minPrio` or more is already on, and when a whole row is taken, the same a row of `h` higher (up to `rows`
-   * rows). The place lands in `this.spot`; when everything is taken the number stays where it was.
+   * The crowd rule: whether a number of this style and `value` may be started now. Each class (ordinary, big) has a limit per screen
+   * region and on the whole screen, and the tier's `cap` is shared by both; when a limit is reached the lowest ranking number (priority,
+   * then the larger figure) that ranks below the newcomer is marked to go for it, and when there is none the newcomer is not shown.
+   * `release` then sends the marked ones away (the newcomer found its place) or lets them stay (it did not).
    */
-  private freeSpot(x: number, line: number, half: number, h: number, minPrio: number, rows: number): void {
-    const step = Math.max(8, half * 2);
-    for (let row = 0; row < rows; row++) {
-      const y = line - row * h;
-      for (let k = 0; k < 5; k++) {
-        const cand = x + (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * step;
-        let free = true;
-        for (const a of this.active) {
-          if (a.def.prio < minPrio) continue;
-          if (Math.abs(a.root.x - cand) < half + a.reach * 0.9 && Math.abs(a.root.y - y) < h) {
-            free = false;
-            break;
-          }
-        }
-        if (free) {
-          this.spot.x = cand;
-          this.spot.y = y;
-          return;
-        }
-      }
-    }
-    this.spot.x = x;
-    this.spot.y = line;
+  private reserve(def: StyleDef, level: NumberLevel, value: number, x: number, y: number): boolean {
+    const cls = def.prio >= BIG_PRIO ? 1 : 0;
+    const region = regionOf(x, y);
+    const ok =
+      this.fit(cls, region, cls ? level.bigRegion : level.plainRegion, def.prio, value) &&
+      this.fit(cls, -1, cls ? level.bigAll : level.plainAll, def.prio, value) &&
+      this.fit(-1, -1, this.cap, def.prio, value);
+    if (!ok) this.release();
+    return ok;
   }
 
-  /** Make room for one more big number: when `BIG_MAX` of them are alive the oldest goes. */
-  private dropOldestBig(): void {
+  /** Send the numbers marked to go away (`go`), or take the marks off. */
+  private release(go = false): void {
     const list = this.active;
+    let w = 0;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i] as Num;
+      if (a.doomed) {
+        a.doomed = false;
+        if (go) {
+          this.give(a);
+          continue;
+        }
+      }
+      list[w++] = a;
+    }
+    list.length = w;
+  }
+
+  /** Whether fewer than `limit` numbers of a class (0 ordinary, 1 big, -1 any) and region (-1 any) stand, or one of them ranks below the newcomer: that one is marked to go. */
+  private fit(cls: number, region: number, limit: number, prio: number, value: number): boolean {
     let count = 0;
-    let oldest = -1;
-    for (let i = 0; i < list.length; i++) {
-      if ((list[i] as Num).def.prio < BIG_PRIO) continue;
+    let victim: Num | null = null;
+    for (const a of this.active) {
+      if (a.doomed || (cls >= 0 && (a.def.prio >= BIG_PRIO ? 1 : 0) !== cls) || (region >= 0 && a.region !== region)) continue;
       count++;
-      if (oldest < 0) oldest = i;
+      if (!victim || outranks(victim.def.prio, victim.value, a.def.prio, a.value)) victim = a;
     }
-    if (count < BIG_MAX || oldest < 0) return;
-    this.recycle(list[oldest] as Num);
-    for (let i = oldest + 1; i < list.length; i++) list[i - 1] = list[i] as Num;
-    list.length--;
-  }
-
-  /** Free one slot for a number of priority `prio`; false when everything alive outranks it. */
-  private evictFor(prio: number): boolean {
-    const list = this.active;
-    let victim = -1;
-    let lowest = prio + 1;
-    for (let i = 0; i < list.length; i++) {
-      const p = (list[i] as Num).def.prio;
-      // Strictly lower wins, so among equals the earliest (oldest) is kept as the victim.
-      if (p < lowest) {
-        lowest = p;
-        victim = i;
-      }
-    }
-    if (victim < 0) return false;
-    this.recycle(list[victim] as Num);
-    for (let i = victim + 1; i < list.length; i++) list[i - 1] = list[i] as Num;
-    list.length--;
+    if (count < limit) return true;
+    if (!victim || !outranks(prio, value, victim.def.prio, victim.value)) return false;
+    victim.doomed = true;
     return true;
   }
 
-  private setText(n: Num, value: number | string, def: StyleDef, o: NumberOpts): void {
-    const mag = typeof value === 'number' ? Math.max(1, Math.abs(value)) : 1;
-    const str = typeof value === 'number' ? formatNumber(value) : value;
-    n.setText(def.prefix + str.replace(/^-/, '') + def.suffix);
-    // Size grows with log10 of the magnitude (guide: 30 + 6 log10 px), so a 4-digit hit reads bigger
-    // than a 2-digit one.
-    const k = clamp(Math.log10(mag) / 3, 0, 1);
-    const px = def.size[0] + (def.size[1] - def.size[0]) * k;
-    n.scale = (px / BAKED) * (o.scale ?? 1) * 1.28;
-    // A long figure is drawn smaller rather than wider than a number may be: "864,408!" must not span the board.
-    const wide = n.half * 2 * n.scale;
-    const limit = def.prio >= BIG_PRIO ? MAX_BIG_WIDTH : MAX_WIDTH;
-    if (wide > limit) n.scale *= limit / wide;
+  /** Take a number off the screen at once. */
+  private discard(n: Num): void {
+    const i = this.active.indexOf(n);
+    if (i >= 0) this.active.splice(i, 1);
+    this.give(n);
+  }
+
+  /** Show `value` on a number that is alive: its text is laid out and its size follows the real width. */
+  private setText(n: Num, value: number | string, o: NumberOpts): void {
+    n.setText(figure(n.def, value));
+    n.scale = scaleOf(n.def, typeof value === 'number' ? value : 0, n.half * 2, o);
   }
 
   private apply(n: Num): void {
     const d = n.def;
     const t = n.age / d.life;
-    const pop = popCurve(Math.min(1, n.age / d.popSeconds), d.pop[0], d.pop[1], d.pop[2]);
+    const pop = popCurve(Math.min(1, n.age / d.popSeconds), d.pop[0], d.pop[1], d.pop[2]) * (1 + BUMP * n.bump);
     const s = n.scale * pop;
     const root = n.root;
     root.scale.set(s);
-    const reach = n.half * s;
-    root.position.set(clamp(n.x, this.minX + reach, this.maxX - reach), Math.max(this.minY, n.y - d.rise * Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9)))));
+    const bw = n.half * n.scale * PEAK;
+    const bh = (inkPx(d, n.scale) / 2) * PEAK;
+    const a = this.area;
+    const ease = Ease.cubicOut(Math.min(1, n.age / (d.life * 0.9)));
+    n.cx = clamp(n.ex + n.ox + n.dx * ease, a.minX + bw, a.maxX - bw);
+    n.cy = clamp(n.ey + n.oy + n.dy * ease, a.minY + bh, a.maxY - bh);
+    n.bw = bw;
+    n.bh = bh;
+    root.position.set(n.cx, n.cy - INK_DROP * s);
     root.rotation = n.tiltAmp === 0 ? 0 : springWobble(n.age, n.tiltAmp, 3.2, 3.5);
-    // Hold fully opaque for the first 70% of life, then fade out.
-    root.alpha = t < 0.7 ? 1 : 1 - Ease.quadIn((t - 0.7) / 0.3);
+    // Held at its style's opacity for the first 60% of life, then faded out.
+    root.alpha = d.alpha * (t < 0.6 ? 1 : 1 - Ease.quadIn((t - 0.6) / 0.4)) * (1 - n.crossing / YIELD_SECONDS);
   }
 
-  private recycle(n: Num): void {
+  /** Put a number back in its pool. */
+  private give(n: Num): void {
     n.root.visible = false;
+    n.slot = -1;
+    n.uid = -1;
     let pool = this.pools.get(n.font);
     if (!pool) {
       pool = [];
@@ -429,4 +619,42 @@ export class FloatingNumbers {
     }
     pool.push(n);
   }
+}
+
+/** Height of the ink of a number of this style at this scale (px). */
+function inkPx(def: StyleDef, scale: number): number {
+  return scale * (CAP_HEIGHT + (def.thin ? STROKE_THIN : STROKE_THICK));
+}
+
+/** Width of a figure at the baked size, from its characters (the Korean units are wide). */
+function measure(text: string): number {
+  let w = 0;
+  for (let i = 0; i < text.length; i++) w += text.charCodeAt(i) > 0x7f ? GLYPH_WIDE : GLYPH;
+  return w;
+}
+
+/** The scale a figure of `magnitude` and `width` (baked px) is drawn at: its style's size, smaller when it would be wider than the style allows. */
+function scaleOf(def: StyleDef, magnitude: number, width: number, o: NumberOpts): number {
+  // Size grows with log10 of the magnitude (a 4-digit hit reads a little bigger than a 2-digit one).
+  const k = clamp(Math.log10(Math.max(1, Math.abs(magnitude))) / 3, 0, 1);
+  const px = def.ink[0] + (def.ink[1] - def.ink[0]) * k;
+  const scale = (px / (CAP_HEIGHT + (def.thin ? STROKE_THIN : STROKE_THICK))) * (o.scale ?? 1);
+  // A long figure is drawn smaller rather than wider than a number may be: "864,408!" must not span the lane.
+  const wide = width * scale;
+  return wide > def.width ? (scale * def.width) / wide : scale;
+}
+
+/**
+ * The short number format of a figure (`fmt`, a minus sign never shown). Below 10,000 `fmt` groups the thousands with `toLocaleString`, which
+ * builds a number formatter on every call (about 50 us, on every hit that asks for a place); the same text is made by hand here.
+ */
+function shortFigure(value: number): string {
+  const v = Math.floor(Math.abs(value));
+  if (v >= 10_000) return fmt(v);
+  return v < 1000 ? String(v) : Math.floor(v / 1000) + ',' + String(v % 1000).padStart(3, '0');
+}
+
+/** The text of a figure: its style's prefix and suffix round the short number format. */
+function figure(def: StyleDef, value: number | string): string {
+  return def.prefix + (typeof value === 'number' ? shortFigure(value) : value.replace(/^-/, '')) + def.suffix;
 }

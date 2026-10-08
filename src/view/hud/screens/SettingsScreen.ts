@@ -4,12 +4,14 @@ import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { i18nEvents, t, getLang, type Lang } from '@/core/i18n';
 import type { NumbersMode } from '@/fx';
-import { Color, drawPaper, paperSeed, ScreenScaffold, SegmentTabs, Slider, Toggle, uiLabel } from '@/ui';
+import { Color, drawPaper, fitLabel, paperSeed, ScreenScaffold, SegmentTabs, Slider, Toggle, uiLabel } from '@/ui';
 import { currentSettings, updateSettings } from '../settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '../settingsMath';
 
 const ROW_H = 104;
 const TALL_H = 176;
+/** A tall row with a line of explanation under its label. */
+const HINT_H = 204;
 
 /** Open the settings screen above everything; `onClose` runs after it has gone. */
 export function openSettings(onClose: () => void): ScreenScaffold {
@@ -75,7 +77,11 @@ export function openSettings(onClose: () => void): ScreenScaffold {
     toggle(t('hud.set.reduceMotion'), s.reduceMotion, (v) => updateSettings({ reduceMotion: v }));
     toggle(t('hud.set.haptics'), s.haptics, (v) => updateSettings({ haptics: v }));
 
-    const numRow = plate(TALL_H, t('hud.set.numbers'));
+    const numRow = plate(HINT_H, t('hud.set.numbers'));
+    const hint = uiLabel(t('hud.set.numbers.hint'), { size: 24, color: Color.inkSoft, anchorX: 0 });
+    fitLabel(hint, w - 56, 24);
+    hint.position.set(28, 78);
+    numRow.addChild(hint);
     const modes: NumbersMode[] = ['full', 'brief', 'off'];
     const nums = new SegmentTabs({
       width: w - 56,
@@ -83,7 +89,7 @@ export function openSettings(onClose: () => void): ScreenScaffold {
       selected: s.numbers,
       tabs: modes.map((m) => ({ id: m, label: t(`hud.set.numbers.${m}`) })),
     });
-    nums.position.set(w / 2, TALL_H - 56);
+    nums.position.set(w / 2, HINT_H - 56);
     nums.onSelect((id) => updateSettings({ numbers: id as NumbersMode }));
     numRow.addChild(nums);
 

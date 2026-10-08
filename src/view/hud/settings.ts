@@ -34,7 +34,7 @@ const store = new SaveStore<SettingsData>({
     shake: 'full',
     flashes: true,
     haptics: true,
-    numbers: 'full',
+    numbers: 'brief',
     reduceMotion: false,
     lang: '',
   }),

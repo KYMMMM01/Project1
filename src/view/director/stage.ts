@@ -9,6 +9,7 @@ import { fxShake, fxSettings, type Fx } from '@/fx';
 import { enemyDef } from '@/game';
 import type { BattleEvents, EnemyId } from '@/game';
 import type { BattleContext } from '../context';
+import { bodyBox, bodySize } from '../field/policy';
 import { GapGate, HitStopGate, PitchLadder, SoundRule, WindowLimiter } from './policy';
 import { ENEMY_TINT } from './palette';
 
@@ -59,6 +60,11 @@ export const Gate = {
 
 export interface EnemyInfo {
   radius: number;
+  /** Drawn size of the body (px) and the box its numbers keep clear of: half the width, the reach above the centre (to the top of the health bar) and below it. */
+  size: number;
+  hw: number;
+  top: number;
+  bottom: number;
   boss: boolean;
   elite: boolean;
   /** Boss or elite: bigger staging, shake allowed. */
@@ -74,7 +80,8 @@ export function enemyInfo(id: EnemyId): EnemyInfo {
     const def = enemyDef(id);
     const boss = def.traits.includes('boss');
     const elite = def.traits.includes('elite');
-    info = { radius: def.radius, boss, elite, big: boss || elite, tint: ENEMY_TINT[id] };
+    const size = bodySize(def.radius, boss);
+    info = { radius: def.radius, size, ...bodyBox(size), boss, elite, big: boss || elite, tint: ENEMY_TINT[id] };
     infoCache.set(id, info);
   }
   return info;

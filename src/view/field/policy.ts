@@ -152,3 +152,54 @@ export function depthKey(y: number, size: number): number {
 export function depthFrame(frame: number): boolean {
   return frame % DEPTH_EVERY === 0;
 }
+
+/** Longest side of an enemy's picture is its radius times this: a cucumber (18) reads about 56 px, a boss (38) about 115. */
+const SIZE_PER_RADIUS = 3.05;
+const BOSS_SIZE_PER_RADIUS = 3.0;
+/** Gap kept between a drawn sprite and the screen edge: a boss on the outer lane would otherwise be cut by it. */
+const EDGE_GAP = 6;
+
+/** Drawn size of an enemy body (px). */
+export function bodySize(radius: number, boss: boolean): number {
+  return radius * (boss ? BOSS_SIZE_PER_RADIUS : SIZE_PER_RADIUS);
+}
+
+/** The x an enemy of drawn size `size` is drawn at: the simulation's, pulled in just far enough that a big body stays on the screen. */
+export function bodyX(x: number, size: number): number {
+  const half = size / 2 + EDGE_GAP;
+  return Math.max(half, Math.min(FIELD_W - half, x));
+}
+
+/** Height of the health bar's back strip. The bar sits `barRise(size)` above the body's centre; its back reaches this much further up. */
+const BAR_REACH = 13;
+
+/** Distance from an enemy's centre up to the top of its health bar. */
+export function barRise(size: number): number {
+  return size * 0.56 + BAR_REACH;
+}
+
+/** Position of the health bar's centre line above the body's centre, and the width of its fill. */
+export function barOffset(size: number): number {
+  return size * 0.56 + 10;
+}
+
+/** Width of the health bar's fill (its back is 6 px wider). */
+export function barWidth(size: number): number {
+  return Math.max(40, Math.min(70, size * 0.8));
+}
+
+/** A struck body squashes a little past its picture: the box that numbers keep clear of is this much of its size bigger on every side. */
+const SWELL = 0.05;
+
+export interface BodyBox {
+  /** Half the width, the reach above the centre (to the top of the health bar) and the reach below it. */
+  hw: number;
+  top: number;
+  bottom: number;
+}
+
+/** The box of an enemy body of drawn size `size` with its health bar: where the damage numbers may not stand. */
+export function bodyBox(size: number): BodyBox {
+  const swell = size * SWELL;
+  return { hw: Math.max(size / 2, barWidth(size) / 2 + 3) + swell, top: barRise(size) + swell, bottom: size / 2 + swell };
+}

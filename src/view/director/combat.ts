@@ -9,17 +9,9 @@ import type { BattleEvents, EnemyState, StatusKind, UnitId, UnitState } from '@/
 import { UNIT_IDS, unitSpec } from '@/game';
 import { weaponStyle } from '../weapons';
 import { cellAt, cellCenterX, cellCenterY } from '@/game/geometry';
-import { Trauma } from '@/fx';
-import {
-  AGGREGATION_WINDOW,
-  FrameBudget,
-  GapGate,
-  KeyedGate,
-  NumberAggregator,
-  numberDensity,
-  shouldShowNumber,
-  type NumberKind,
-} from './policy';
+import { bodyX } from '../field/policy';
+import { Trauma, type NumberOpts, type NumStyle, type NumberTarget } from '@/fx';
+import { FrameBudget, GapGate, KeyedGate } from './policy';
 import {
   CAST_RING,
   CRACKS,
@@ -43,7 +35,7 @@ import {
   VULN_PULSE,
 } from './defs';
 import { DOT_NUMBER_COLOR, SHIELD_COLOR, SHOOT_CUE, STATUS_COLOR, STATUS_SFX, UNIT_COLOR } from './palette';
-import { Gate, enemyInfo, type Bus, type Stage } from './stage';
+import { Gate, enemyInfo, type Bus, type EnemyInfo, type Stage } from './stage';
 import { Hue } from '@/fx/palette';
 import { Color } from '@/ui/theme';
 
@@ -95,11 +87,41 @@ export function mountCombat(stage: Stage, on: Bus): void {
   const ps = fx.ps;
   const shootByUnit = new GapGate(UNIT_IDS.length);
   const perEnemy = new KeyedGate(256);
-  const agg = new NumberAggregator();
   const sparks = new FrameBudget(14);
   const muzzles = new FrameBudget(10);
   /** The unit behind the latest attack event: strikes carry only a unit type, not which cat fired. */
   let lastAttacker: UnitState | null = null;
+
+  // The numbers stand above the enemies and keep clear of all of them (`fx.md`): the field tells them where the bodies are every frame.
+  fx.numbers.sense = (into) => {
+    for (const en of stage.ctx.battle.enemies) {
+      const info = enemyInfo(en.id);
+      into.add(en.uid, bodyX(en.x, info.size), en.y, info.hw, info.top, info.bottom);
+    }
+  };
+  /** The body the number of the hit being staged belongs to, and the options that carry it: refilled for each hit, so a hit allocates nothing. */
+  const target: NumberTarget = { uid: 0, x: 0, y: 0, hw: 0, top: 0, bottom: 0, angle: 0, maxHp: 1, heavy: false, boss: false };
+  const plain: NumberOpts = { target };
+  const tinted: NumberOpts = { target, color: 0 };
+
+  /** Show a number above `en`: merged with what is already showing for it, and placed, shed or kept by the numbers' own rules. */
+  function say(en: EnemyState, info: EnemyInfo, value: number, style: NumStyle, color?: number): void {
+    target.uid = en.uid;
+    target.x = bodyX(en.x, info.size);
+    target.y = en.y;
+    target.hw = info.hw;
+    target.top = info.top;
+    target.bottom = info.bottom;
+    target.angle = en.angle;
+    target.maxHp = en.maxHp;
+    target.heavy = info.big;
+    target.boss = info.boss;
+    if (color === undefined) fx.number(target.x, target.y, value, style, plain);
+    else {
+      tinted.color = color;
+      fx.number(target.x, target.y, value, style, tinted);
+    }
+  }
 
   on('attack', (e) => {
     const u = e.unit;
@@ -131,23 +153,16 @@ export function mountCombat(stage: Stage, on: Bus): void {
     const x = en.x;
     const y = en.y - info.radius * 0.4;
     const ramp = e.unitId ? RAMP[e.unitId] : NEUTRAL_RAMP;
-    const density = numberDensity(fx.numbers.count, fx.numbers.cap);
-    // Enemies bunched on the loop would stack their numbers exactly: lift each by a small amount of its own.
-    const lift = (en.uid & 3) * 9;
-
     if (e.dot) {
       if (perEnemy.ready(en.uid, SUB_DOT, stage.now, 0.5)) dotCue(en, e.dot, info.radius);
-      const kind: NumberKind = 'dot';
-      if (dealt > 0 && shouldShowNumber(density, kind, dealt, en.maxHp, info.big)) {
-        fx.number(x, y - info.radius - 4 - lift, dealt, 'dot', { key: en.uid, color: DOT_NUMBER_COLOR[e.dot], scale: 0.9 });
-      }
+      if (dealt > 0) say(en, info, dealt, 'dot', DOT_NUMBER_COLOR[e.dot]);
       return;
     }
 
     if (e.crit) {
       const strong = info.big && stage.gates.ready(Gate.critShake, stage.now, 0.4);
       fx.critBurst(x, y, { strong, scale: info.big ? 1.2 : 1 });
-      fx.number(x, y - info.radius - 8 - lift, dealt, 'crit');
+      if (dealt > 0) say(en, info, dealt, 'crit');
       // A crit is the weapon's own impact with a bright crack on top (never a different weapon), and the enemy answers as usual.
       const hitCue = impactSfx(e.unitId);
       if (stage.play(stage.rules.hit, hitCue.id, hitCue.volume, hitCue.pitch, 0.03)) answerHit(en, e.killed);
@@ -158,19 +173,8 @@ export function mountCombat(stage: Stage, on: Bus): void {
       stage.stop(info.big ? 36 : 26);
     } else {
       // A cat's weapon leaves its own mark on the field (`WeaponMarks`); the generic spark is for a hit with no cat behind it.
-      if (!e.unitId && (density < 2 || info.big)) lightSpark(x, y, ramp, info.big ? 1.3 : 1);
-      const merged = agg.add(en.uid, dealt, stage.now, AGGREGATION_WINDOW);
-      const wasVisible = agg.visible;
-      let show = wasVisible;
-      if (!merged) show = shouldShowNumber(density, 'normal', dealt, en.maxHp, info.big);
-      else if (!wasVisible) show = shouldShowNumber(density, 'normal', agg.total, en.maxHp, info.big);
-      if (show) {
-        // A window that was held back shows its running total once it is worth a slot.
-        const value = merged && !wasVisible ? agg.total : dealt;
-        if (merged && !wasVisible) agg.reveal();
-        const big = info.big && dealt >= en.maxHp * 0.2;
-        fx.number(x, y - info.radius - 6 - lift, value, big ? 'big' : 'damage', { key: en.uid });
-      } else if (!merged) agg.suppress();
+      if (!e.unitId) lightSpark(x, y, ramp, info.big ? 1.3 : 1);
+      if (dealt > 0) say(en, info, dealt, e.killed ? 'kill' : info.big && dealt >= en.maxHp * 0.2 ? 'big' : 'damage');
 
       // The weapon's impact is always the base. A heavy blow, a hit on a boss or a killing blow lands one step harder and gets
       // weight under it; the enemy answers in the voice of what it is made of (a killing blow is answered by its death instead).
@@ -184,10 +188,12 @@ export function mountCombat(stage: Stage, on: Bus): void {
       weigh(e, info.boss, dealt);
     }
 
-    if (e.absorbed > 0 && perEnemy.ready(en.uid, SUB_SHIELD, stage.now, 0.1)) {
-      ps.burst(SHIELD_GLANCE, x, y, { colors: [W, SHIELD_COLOR], scale: info.radius / 20 });
-      if (stage.detail > 0) ps.burst(SHIELD_SPARK, x, y, { colors: [W, SHIELD_COLOR] });
-      if (density === 0) fx.number(x + 22, y - info.radius - 18, e.absorbed, 'damage', { color: SHIELD_COLOR, scale: 0.7 });
+    if (e.absorbed > 0) {
+      if (perEnemy.ready(en.uid, SUB_SHIELD, stage.now, 0.1)) {
+        ps.burst(SHIELD_GLANCE, x, y, { colors: [W, SHIELD_COLOR], scale: info.radius / 20 });
+        if (stage.detail > 0) ps.burst(SHIELD_SPARK, x, y, { colors: [W, SHIELD_COLOR] });
+      }
+      say(en, info, e.absorbed, 'soak', SHIELD_COLOR);
     }
   });
 

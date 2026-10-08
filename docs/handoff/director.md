@@ -17,7 +17,7 @@ Entry point `createDirector(ctx): DirectorPart` (`src/view/director/index.ts`), 
 
 | File | Role |
 |---|---|
-| `policy.ts` | Pure staging rules, unit tested: `GapGate`, `WindowLimiter`, `FrameBudget`, `KeyedGate` (per-enemy cue spacing), `PitchLadder` (kill streak / merge chain / coin ticks), `HitStopGate` (one global hit-stop per 400 ms, 200 ms cap, 50 ms when reduced), `NumberAggregator` + `numberDensity` + `shouldShowNumber`, `FlightLedger` + `iconsFor` + `shareOf`, `BannerQueue`, `SummonRate` + `summonPlan`, `IntensityMeter` + `intensityTarget`, `dangerStrength`, `heartbeatInterval`, `overflowSeconds`, `SoundRule` (gap + concurrency window + shared pool) |
+| `policy.ts` | Pure staging rules, unit tested: `GapGate`, `WindowLimiter`, `FrameBudget`, `KeyedGate` (per-enemy cue spacing), `PitchLadder` (kill streak / merge chain / coin ticks), `HitStopGate` (one global hit-stop per 400 ms, 200 ms cap, 50 ms when reduced), `FlightLedger` + `iconsFor` + `shareOf`, `BannerQueue`, `SummonRate` + `summonPlan`, `IntensityMeter` + `intensityTarget`, `dangerStrength`, `heartbeatInterval`, `overflowSeconds`, `SoundRule` (gap + concurrency window + shared pool) |
 | `palette.ts` | Data: enemy tints, cat colours, class colours (`CLASS_HUE`), shoot cue per cat (sfx, pitch, gain, swing / shot / cast), status colours and sounds, cosmetic summon themes (`themeOf('fx_gem1..3')`); all colours are paper tokens |
 | `defs.ts` | Module-level particle recipes (hit spark, muzzle, impact, status cues, wind, whirl, splash, ...), so no hit builds an object |
 | `stage.ts` | `Stage`: director clock, sound rules (one chatter pool of 9 starts per 0.3 s keeps the 24 audio voices free for big moments), rationed shake / hit-stop / slow-mo / haptics, tracked timers, frame hooks, `Bus` |
@@ -190,3 +190,9 @@ The director's share of the restyle (see `fx.md` and `field.md`, "2026-10-08 VFX
 - **Impacts, flashes, hit-stop and the weapon marks' gating** are as they were; the splash shot's `shockwave` and puff play over the new flat marks.
 
 Tests: `view.director.palette.test.ts` and the policy tests are unchanged and green; the arcs are tested in `fx.arcs.test.ts`.
+
+## 2026-10-08 damage numbers
+
+The director's share of `fx.md`, "damage numbers" (the owner: the numbers hide the enemies). `combat.ts` asks the floating numbers for one number per hit through `say(en, info, value, style, color?)`: a `NumberTarget` that is refilled for every hit (uid, the drawn x, y, the body box from `EnemyInfo`: `hw`, `top`, `bottom`; the way the enemy walks, its full health, elite or boss, boss) and a reused options object, so a hit allocates nothing. The styles: an ordinary hit `damage`; a crit `crit`; a killing blow `kill`; a boss or elite hit of 20 % of its health or more `big`; a tick `dot` in the colour of its kind (`DOT_NUMBER_COLOR`); what a shield soaked `soak` in `SHIELD_COLOR`. A crit that kills stays a crit, and a hit that did no damage asks for no number. `fx.numbers.sense` lists every enemy's box once a frame.
+
+Everything that used to decide here (the density of the number layer, the 100 ms aggregator, `shouldShowNumber`) is gone from `policy.ts`: placement, merging and the crowd rule belong to the numbers (`fx.md`), and the level (Off / Brief / All) is the player's setting. `EnemyInfo` has `size`, `hw`, `top` and `bottom` from `bodyBox` (`view/field/policy.ts`, the function `EnemyView` takes the picture's size from as well). The sparks of a hit with no cat behind it are no longer thinned by the number layer's load (they have their own budget). Tests: `view.director.numbers.test.ts` (5); the policy tests lost the three number tests.

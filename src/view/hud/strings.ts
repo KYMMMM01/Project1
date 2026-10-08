@@ -111,6 +111,7 @@ addStrings('ko', {
   'hud.set.numbers.full': '전체',
   'hud.set.numbers.brief': '간략',
   'hud.set.numbers.off': '끔',
+  'hud.set.numbers.hint': '간략은 치명타·처치·큰 피해만, 전체는 일반 피해까지 보여요.',
   'hud.set.lang': '언어',
 
   // continue
@@ -320,6 +321,7 @@ addStrings('en', {
   'hud.set.numbers.full': 'All',
   'hud.set.numbers.brief': 'Brief',
   'hud.set.numbers.off': 'Off',
+  'hud.set.numbers.hint': 'Brief shows crits, kills and big hits; All adds ordinary hits.',
   'hud.set.lang': 'Language',
 
   'hud.cont.title': 'Continue?',

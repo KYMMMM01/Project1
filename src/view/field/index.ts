@@ -1,6 +1,6 @@
 import { Container } from 'pixi.js';
 import { Fx } from '@/fx';
-import { CELL_COUNT } from '@/game/geometry';
+import { BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT } from '@/game/geometry';
 import type { BattleContext, BattleLayout, FieldPart } from '../context';
 import '../strings';
 import { fieldArt } from './art';
@@ -63,15 +63,19 @@ export function createField(ctx: BattleContext): FieldPart {
   input.onEmptyTap = (cell) => {
     if (sunNote.lit(cell)) sunNote.show(cell);
   };
-  /** Hits near the entrance rise toward the top HUD: they stop at its lower edge (a sticker's own half height clear) instead of vanishing under the pills. */
-  const NUMBER_CLEAR = 52;
-  /** And off the screen's side edges, an 8 px margin in. */
+  /** Numbers stand between the HUD's lower edge and the bottom panel, an 8 px margin in from the screen's sides, and off the board (a cat's name tags are the cells' lower edge). */
   const NUMBER_SIDE = 8;
+  const BOARD_INSET = 6;
   const clampNumbers = (layout: BattleLayout): void => {
-    const numbers = ctx.fx.numbers;
-    numbers.minY = layout.safeTop + layout.topH + NUMBER_CLEAR - layout.fieldY;
-    numbers.minX = NUMBER_SIDE - layout.fieldX;
-    numbers.maxX = layout.w - NUMBER_SIDE - layout.fieldX;
+    const area = ctx.fx.numbers.area;
+    area.minY = layout.safeTop + layout.topH - layout.fieldY;
+    area.maxY = layout.h - layout.safeBottom - layout.bottomH - layout.fieldY;
+    area.minX = NUMBER_SIDE - layout.fieldX;
+    area.maxX = layout.w - NUMBER_SIDE - layout.fieldX;
+    area.keepX0 = BOARD_X + BOARD_INSET;
+    area.keepY0 = BOARD_Y + BOARD_INSET;
+    area.keepX1 = BOARD_X + BOARD_W - BOARD_INSET;
+    area.keepY1 = BOARD_Y + BOARD_H - BOARD_INSET;
   };
   clampNumbers(ctx.layout);
   const offRefused = ctx.events.on('refused', (e) => {

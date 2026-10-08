@@ -178,3 +178,7 @@ Checked on eighteen shielded cones side by side on the lane (full, half and near
 **Tests**: `view.field.shield.test.ts` (rewritten, 9: the baked sizes and the nearest one, the dashed threshold, the ring as wide as the body and a few pixels, no breathing, dashed and whole again, flash and bump and a hard blow bumps more, not a strobe, reduced motion, drop and raise again), `view.field.shots.test.ts` (three containers, nothing tinted, `rankTrail`), `view.warmup.test.ts` (`fx_badge_shield`).
 
 **Not verified.** A real phone. A ring round an enemy bigger than a cone (no other enemy wears a shield yet: the sizes up to 170 px are baked for a boss).
+
+## 2026-10-08 damage numbers
+
+See `fx.md`, "damage numbers". What the field gave to it: `policy.ts` has the enemy body's geometry in one place (`bodySize`, `bodyX`, `barRise`, `barOffset`, `barWidth`, `bodyBox`) and `EnemyView` reads its picture's size, its x at the screen's edge and the bar's place from it, so the numbers and the picture cannot disagree about where an enemy is. `index.ts` `clampNumbers` sets `fx.numbers.area` from the layout on every `layout` event: the HUD's lower edge (`safeTop + topH - fieldY`), the bottom panel's upper edge, an 8 px margin at the sides and the board inset by 6 px as the place where no number may stand. Nothing about how the field looks changed.

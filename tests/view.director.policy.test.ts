@@ -7,20 +7,16 @@ import {
   HitStopGate,
   IntensityMeter,
   KeyedGate,
-  NumberAggregator,
   PitchLadder,
   SoundRule,
   SummonRate,
   WindowLimiter,
-  AGGREGATION_WINDOW,
   dangerStrength,
   heartbeatInterval,
   iconsFor,
   intensityTarget,
-  numberDensity,
   overflowSeconds,
   shareOf,
-  shouldShowNumber,
   summonPlan,
   type BannerItem,
 } from '@/view/director/policy';
@@ -100,59 +96,6 @@ describe('PitchLadder', () => {
   it('never exceeds the cap', () => {
     const l = new PitchLadder(1, 4);
     for (let i = 0; i < 100; i++) expect(l.next(i * 0.01)).toBeLessThanOrEqual(4);
-  });
-});
-
-describe('floating numbers', () => {
-  it('density follows the load of the number layer', () => {
-    expect(numberDensity(5, 24)).toBe(0);
-    expect(numberDensity(16, 24)).toBe(1);
-    expect(numberDensity(23, 24)).toBe(2);
-    expect(numberDensity(1, 0)).toBe(2);
-  });
-
-  it('crits always show; chip damage thins out as the layer fills', () => {
-    expect(shouldShowNumber(2, 'crit', 1, 1000, false)).toBe(true);
-    expect(shouldShowNumber(0, 'dot', 1, 1000, false)).toBe(true);
-    expect(shouldShowNumber(1, 'normal', 5, 1000, false)).toBe(false);
-    expect(shouldShowNumber(1, 'normal', 50, 1000, false)).toBe(true);
-    expect(shouldShowNumber(1, 'dot', 50, 1000, false)).toBe(false);
-    expect(shouldShowNumber(1, 'dot', 5, 1000, true)).toBe(true);
-    expect(shouldShowNumber(1, 'absorb', 50, 100, false)).toBe(false);
-    expect(shouldShowNumber(2, 'normal', 30, 1000, false)).toBe(false);
-    expect(shouldShowNumber(2, 'normal', 60, 1000, false)).toBe(true);
-    expect(shouldShowNumber(2, 'dot', 600, 1000, true)).toBe(false);
-  });
-
-  it('aggregates hits on one enemy inside the window into a running total', () => {
-    const a = new NumberAggregator();
-    expect(a.add(4, 10, 0, 0.1)).toBe(false);
-    expect(a.total).toBe(10);
-    expect(a.add(4, 15, 0.05, 0.1)).toBe(true);
-    expect(a.total).toBe(25);
-    expect(a.add(9, 7, 0.06, 0.1)).toBe(false);
-    expect(a.total).toBe(7);
-    // The window is measured from the hit that opened it.
-    expect(a.add(4, 5, 0.11, 0.1)).toBe(false);
-    expect(a.total).toBe(5);
-    expect(a.add(4, 5, 0.2, 0.1)).toBe(true);
-    expect(a.total).toBe(10);
-  });
-
-  it('remembers whether a window got a number on screen', () => {
-    const a = new NumberAggregator();
-    a.add(3, 1, 0, AGGREGATION_WINDOW);
-    expect(a.visible).toBe(true);
-    a.suppress();
-    expect(a.add(3, 1, 0.05, AGGREGATION_WINDOW)).toBe(true);
-    expect(a.visible).toBe(false);
-    expect(a.total).toBe(2);
-    a.reveal();
-    expect(a.add(3, 1, 0.08, AGGREGATION_WINDOW)).toBe(true);
-    expect(a.visible).toBe(true);
-    expect(a.add(3, 1, 0.5, AGGREGATION_WINDOW)).toBe(false);
-    expect(a.visible).toBe(true);
-    expect(AGGREGATION_WINDOW).toBeCloseTo(0.1);
   });
 });
 

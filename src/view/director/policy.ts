@@ -1,5 +1,5 @@
 /**
- * Pure staging policy: rate gates, pitch ladders, number aggregation, banner scheduling, flight
+ * Pure staging policy: rate gates, pitch ladders, banner scheduling, flight
  * accounting and the music intensity maths. No Pixi, no audio, no clocks of its own: every method
  * takes `now` in seconds, so each rule can be unit-tested and none of them allocates in a fight.
  */
@@ -165,90 +165,6 @@ export class HitStopGate {
     this.last = -1e9;
   }
 }
-
-// ───────────────────────────── floating numbers ─────────────────────────────
-
-/** How crowded the number layer is: 0 show everything, 1 thin out chip damage, 2 only what matters. */
-export type NumberDensity = 0 | 1 | 2;
-
-export function numberDensity(alive: number, cap: number): NumberDensity {
-  if (cap <= 0) return 2;
-  const load = alive / cap;
-  return load < 0.55 ? 0 : load < 0.85 ? 1 : 2;
-}
-
-export type NumberKind = 'normal' | 'dot' | 'crit' | 'absorb';
-
-/** Whether a number of `amount` against an enemy with `maxHp` is worth a slot at this density. */
-export function shouldShowNumber(density: NumberDensity, kind: NumberKind, amount: number, maxHp: number, big: boolean): boolean {
-  if (kind === 'crit') return true;
-  if (density === 0) return true;
-  const share = maxHp > 0 ? amount / maxHp : 1;
-  if (density === 1) {
-    if (kind === 'absorb') return false;
-    if (kind === 'dot') return big;
-    return big || share >= 0.01;
-  }
-  if (kind === 'normal') return share >= 0.04;
-  return false;
-}
-
-const AGG_SLOTS = 128;
-
-/**
- * Sums normal hits on one enemy that land inside a short window into one running total, so a cleave
- * or a volley reads as a single number. The first hit of a window shows at once; later ones merge.
- */
-export class NumberAggregator {
-  private readonly uid = new Int32Array(AGG_SLOTS).fill(-1);
-  private readonly start = new Float64Array(AGG_SLOTS);
-  private readonly sum = new Float64Array(AGG_SLOTS);
-  private readonly shown = new Uint8Array(AGG_SLOTS);
-  private slot = 0;
-
-  /** Running total of the window the last add() joined or opened. */
-  total = 0;
-  /** Whether a number for that window is on screen (merging into it is free). */
-  visible = true;
-
-  /** @returns true when the hit merged into a number that is already showing. */
-  add(uid: number, amount: number, now: number, window: number): boolean {
-    const slot = (Math.imul(uid, 0x9e3779b1) >>> 0) % AGG_SLOTS;
-    this.slot = slot;
-    if (this.uid[slot] === uid && now - (this.start[slot] as number) < window) {
-      this.sum[slot] = (this.sum[slot] as number) + amount;
-      this.total = this.sum[slot] as number;
-      this.visible = this.shown[slot] === 1;
-      return true;
-    }
-    this.uid[slot] = uid;
-    this.start[slot] = now;
-    this.sum[slot] = amount;
-    this.shown[slot] = 1;
-    this.total = amount;
-    this.visible = true;
-    return false;
-  }
-
-  /** The window the last add() opened got no number (too small to be worth a slot). */
-  suppress(): void {
-    this.shown[this.slot] = 0;
-    this.visible = false;
-  }
-
-  /** The window the last add() joined now has a number on screen. */
-  reveal(): void {
-    this.shown[this.slot] = 1;
-    this.visible = true;
-  }
-
-  reset(): void {
-    this.uid.fill(-1);
-  }
-}
-
-/** Hits on one enemy inside this many seconds read as one number (guide C-04). */
-export const AGGREGATION_WINDOW = 0.1;
 
 // ───────────────────────────── currency flights ─────────────────────────────
 

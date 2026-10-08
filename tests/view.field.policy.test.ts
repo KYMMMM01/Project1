@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { FIELD_H, PATH_LENGTH, cellCenterX, cellCenterY, pathPoint } from '@/game/geometry';
+import { FIELD_H, FIELD_W, PATH_LENGTH, cellCenterX, cellCenterY, pathPoint } from '@/game/geometry';
 import {
   DRAG_THRESHOLD,
+  barOffset,
+  barRise,
   barSegments,
+  barWidth,
+  bodyBox,
+  bodySize,
+  bodyX,
   classifyPoint,
   decideRelease,
   decideTap,
@@ -158,5 +164,39 @@ describe('enemy depth order', () => {
     for (let f = 1; f <= 60; f++) if (depthFrame(f)) n++;
     expect(n).toBe(15);
     expect(depthFrame(1)).toBe(false);
+  });
+});
+
+describe('the body of an enemy', () => {
+  it('a cucumber reads about 56 px and a boss about 115, from the radius', () => {
+    expect(bodySize(18, false)).toBeCloseTo(54.9, 1);
+    expect(bodySize(38, true)).toBeCloseTo(114, 0);
+  });
+
+  it('is pulled in from the screen edge just far enough to stay on it', () => {
+    expect(bodyX(300, 56)).toBe(300);
+    expect(bodyX(2, 56)).toBe(34);
+    expect(bodyX(FIELD_W + 20, 56)).toBe(FIELD_W - 34);
+    expect(bodyX(2, 115)).toBeCloseTo(63.5, 1);
+  });
+
+  it('keeps its health bar a few px above the head: the numbers stand above its top', () => {
+    for (const size of [37, 55, 73, 115]) {
+      // The bar's strip is 12 px high and starts 3 px above the bar's own line.
+      expect(barRise(size)).toBeCloseTo(barOffset(size) + 3, 5);
+      expect(barRise(size)).toBeGreaterThan(size / 2);
+    }
+    expect(barWidth(30)).toBe(40);
+    expect(barWidth(115)).toBe(70);
+    expect(barWidth(60)).toBeCloseTo(48, 5);
+  });
+
+  it('the box numbers keep clear of is the picture and the bar, a little bigger for a squashed body', () => {
+    const box = bodyBox(55);
+    expect(box.hw).toBeGreaterThan(55 / 2);
+    expect(box.top).toBeGreaterThan(barRise(55));
+    expect(box.bottom).toBeGreaterThan(55 / 2);
+    // A big body is not much bigger than its picture and bar: the numbers' room is the lane, not a halo.
+    expect(bodyBox(115).bottom).toBeLessThan(115 * 0.6);
   });
 });
