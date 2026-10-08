@@ -11,8 +11,7 @@ import { TAU, mixColor } from '@/core/math';
 import { Color, RARITY_ORDER, Rarity, TapeColors, drawDashedRect, drawIcon, drawPaperFace, type IconName, type RarityId } from '@/ui';
 import type { ClassId } from '@/game/api';
 import { CELL_H, CELL_W } from '@/game/geometry';
-import { drawPaw, drawSunMark, drawTargetMark } from '@/fx';
-import type { ProjectileShape } from './projectileLooks';
+import { Light, drawPaw, drawSunMark, drawTargetMark } from '@/fx';
 
 const CLASS_ICON: Record<ClassId, IconName> = {
   warrior: 'class_warrior',
@@ -49,13 +48,6 @@ function disc(g: Graphics, r: number, fill: number): void {
 function piece(g: Graphics, build: (g: Graphics) => Graphics, fill: number): void {
   build(g).stroke({ width: 7, color: CREAM, join: 'round', cap: 'round' });
   build(g).fill(fill).stroke({ width: 1.8, color: INK, join: 'round', cap: 'round' });
-}
-
-/** A straight bar with the same sticker border. */
-function bar(g: Graphics, x0: number, y0: number, x1: number, y1: number, width: number, color: number): void {
-  g.moveTo(x0, y0).lineTo(x1, y1).stroke({ width: width + 6.5, color: CREAM, cap: 'round' });
-  g.moveTo(x0, y0).lineTo(x1, y1).stroke({ width: width + 2.6, color: INK, cap: 'round' });
-  g.moveTo(x0, y0).lineTo(x1, y1).stroke({ width, color, cap: 'round' });
 }
 
 /** Dashes round an ellipse (the dash covers `frac` of each period). */
@@ -113,11 +105,12 @@ export interface FieldArt {
   star: Texture;
   /** Kraft strip an enemy's health bar is painted into (9-slice). */
   barTrack: Texture;
-  projectile: Record<ProjectileShape, Texture>;
   /** The sun sticker of a sunbeam cell's corner and of a cat standing in the light. */
   sunMark: Texture;
   /** The coral crosshair on an enemy the laser has marked. */
   targetMark: Texture;
+  /** The small steel shield by the health bar of an enemy that wears one. */
+  shieldMark: Texture;
   /** The sticker a summon tosses from the button to its cell, in the rarity's colour (the colour comes first). */
   toss: Record<RarityId, Texture>;
 }
@@ -181,9 +174,9 @@ export function fieldArt(): FieldArt {
       44,
     ),
     barTrack: bake(gfx((g) => g.roundRect(-20, -6, 40, 12, 6).fill(Color.track).stroke({ width: 1.8, color: Color.kraftDark })), 44, 16),
-    projectile: bakeProjectiles(),
     sunMark: bake(gfx((g) => drawSunMark(g, 19)), 48, 48),
     targetMark: bake(gfx((g) => drawTargetMark(g, 19)), 48, 48),
+    shieldMark: bakeShieldMark(),
     toss: bakeTosses(),
   };
   return cached;
@@ -343,99 +336,9 @@ function bakeZoneMarks(): Record<ZoneMark, Texture> {
   };
 }
 
-function bakeProjectiles(): Record<ProjectileShape, Texture> {
-  const metal = mixColor(Color.paperDim, Color.ink, 0.25);
-  return {
-    pebble: bake(gfx((g) => piece(g, (p) => p.circle(0, 0, 6.5), mixColor(Color.kraftDark, Color.ink, 0.3))), 26, 26),
-    arrow: bake(
-      gfx((g) => {
-        bar(g, -16, 0, 10, 0, 2.6, Color.kraft);
-        piece(g, (p) => p.poly([9, -5, 19, 0, 9, 5]), metal);
-        piece(g, (p) => p.poly([-18, -5, -11, -1, -11, 1, -18, 5, -15, 0]), Color.coral);
-      }),
-      52,
-      26,
-    ),
-    shuriken: bake(
-      gfx((g) => {
-        piece(g, (p) => p.poly(starPoints(12, 4, 4, Math.PI / 4)), metal);
-        g.circle(0, 0, 2.6).fill(INK);
-      }),
-      36,
-      36,
-    ),
-    // A cork: a short tan slug with a darker ring round it.
-    cork: bake(
-      gfx((g) => {
-        piece(g, (p) => p.roundRect(-9, -5, 18, 10, 3), Color.kraft);
-        g.moveTo(-1, -4.2).lineTo(-1, 4.2).stroke({ width: 2, color: Color.kraftDark, cap: 'round' });
-        g.moveTo(5, -3.6).lineTo(5, 3.6).stroke({ width: 1.6, color: Color.kraftDark, cap: 'round' });
-      }),
-      36,
-      26,
-    ),
-    starArrow: bake(
-      gfx((g) => {
-        piece(g, (p) => p.poly(starPoints(12, 5.2, 5, -Math.PI / 2)), Color.mustard);
-        g.circle(0, 0, 3).fill(CREAM);
-      }),
-      38,
-      38,
-    ),
-    snowball: bake(gfx((g) => piece(g, (p) => p.circle(0, 0, 9), TapeColors.sky.base)), 32, 32),
-    // A flame: a round head with a pointed tail behind it (the shot turns to fly head first).
-    fireball: bake(
-      gfx((g) => {
-        piece(g, (p) => p.moveTo(-16, 0).quadraticCurveTo(-6, -8, 4, -8).arc(4, 0, 8, -Math.PI / 2, Math.PI / 2).quadraticCurveTo(-6, 8, -16, 0).closePath(), Color.coral);
-        g.circle(3, 0, 4.4).fill(Color.mustard);
-      }),
-      44,
-      28,
-    ),
-    bell: bake(
-      gfx((g) => {
-        piece(g, (p) => p.moveTo(-8, 6).quadraticCurveTo(-8, -9, 0, -9).quadraticCurveTo(8, -9, 8, 6).closePath(), Color.mustard);
-        g.circle(0, 9, 2.8).fill(Color.mustardDark);
-      }),
-      34,
-      34,
-    ),
-    // A ladle: a long handle ending in a round bowl.
-    ladle: bake(
-      gfx((g) => {
-        bar(g, -20, 0, 6, 0, 3.4, Color.kraftDark);
-        piece(g, (p) => p.circle(11, 0, 7.5), Color.paperDim);
-        g.circle(11, 0, 4.2).fill(Color.kraft);
-      }),
-      56,
-      28,
-    ),
-    note: bake(
-      gfx((g) => {
-        bar(g, 1.8, 7, 1.8, -9, 2.4, Color.berry);
-        bar(g, 1.8, -9, 8, -2, 2.4, Color.berry);
-        piece(g, (p) => p.ellipse(-3, 8, 5.4, 4), Color.berry);
-      }),
-      34,
-      38,
-    ),
-    flask: bake(
-      gfx((g) => {
-        piece(g, (p) => p.roundRect(-3.2, -9, 6.4, 8, 1.5), Color.paperLight);
-        piece(g, (p) => p.circle(0, 3, 8), Color.leaf);
-        piece(g, (p) => p.roundRect(-4, -11, 8, 3.5, 1.5), Color.kraftDark);
-      }),
-      32,
-      36,
-    ),
-    coin: bake(
-      gfx((g) => {
-        piece(g, (p) => p.circle(0, 0, 9.5), Color.mustard);
-        g.circle(0, 0, 5.6).stroke({ width: 1.6, color: Color.mustardDark });
-      }),
-      32,
-      32,
-    ),
-    orb: bake(gfx((g) => piece(g, (p) => p.circle(0, 0, 7), CREAM)), 28, 28),
-  };
+function bakeShieldMark(): Texture {
+  const c = new Container();
+  c.addChild(gfx((g) => disc(g, 11, Light.shield)));
+  c.addChild(drawIcon('shield', 15, Light.shieldHit, { cache: false }));
+  return bake(c, 36, 36);
 }

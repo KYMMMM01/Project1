@@ -6,6 +6,7 @@ import type { BattleEvents, EnemyId, EnemyState, UnitId, ZoneState } from '@/gam
 import type { ZoneMark } from './art';
 import type { EnemyViews } from './enemies';
 import type { FieldEnv } from './env';
+import type { Projectiles } from './projectiles';
 
 /** The patch of light is mustard paper: warm, flat, and quieter than a cat. */
 const SUN_COLOR = Color.mustard;
@@ -102,6 +103,8 @@ export class FieldEffects {
   constructor(
     private readonly env: FieldEnv,
     private readonly enemies: EnemyViews,
+    /** Where a zone's shard, orb or flask is still in the air: its area opens when it lands. */
+    private readonly shots: Pick<Projectiles, 'castWait'>,
   ) {
     for (let c = 0; c < CELL_COUNT; c++) {
       this.rects.push({ x: cellCenterX(c) - CELL_W / 2 + 4, y: cellCenterY(c) - CELL_H / 2 + 4, w: CELL_W - 8, h: CELL_H - 8 });
@@ -191,6 +194,8 @@ export class FieldEffects {
       const z = zones[i] as ZoneState;
       let h = this.zones.get(z.uid);
       if (!h) {
+        // The cat's throw is still in the air: the area opens where it lands.
+        if (this.shots.castWait(z.uid) > 0) continue;
         h = this.startZone(z);
         this.zones.add(z.uid, h);
       }

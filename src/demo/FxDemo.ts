@@ -1,4 +1,6 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { tex } from '@/core/assets';
+import { Emitter } from '@/core/events';
 import { Scene } from '@/core/scene';
 import { game } from '@/core/game';
 import { Ease, Tweener } from '@/core/tween';
@@ -28,12 +30,20 @@ import {
   shakeObject,
   squash,
   wobbleRotation,
+  type AreaHandle,
   type FxHandle,
   type FxRect,
   type LoopHandle,
   type NumbersMode,
   type NumStyle,
 } from '@/fx';
+import { UNIT_IDS, type BattleEvents, type EnemyState, type ProjectileState, type UnitId } from '@/game/api';
+import { unitSpec } from '@/game';
+import { fieldArt } from '@/view/field/art';
+import type { FieldEnv } from '@/view/field/env';
+import { Projectiles } from '@/view/field/projectiles';
+import { ShieldDome } from '@/view/field/shieldDome';
+import { WeaponMarks } from '@/view/field/weaponMarks';
 
 const COLS = 3;
 const GAP = 12;
@@ -64,6 +74,131 @@ interface CellView {
   counter: number;
 }
 
+/** A gallery shot flies at this share of the real speed, so the eye can follow it across a cell. */
+const SHOT_PACE = 0.4;
+
+/**
+ * What a gallery cell needs to play a battle effect alone: a stand-in for the simulation that holds the shots and the events, and the
+ * field's own shot and weapon-mark layers drawing them, exactly as in a fight.
+ */
+class BattleRig {
+  readonly layer = new Container();
+  private readonly events = new Emitter<BattleEvents>();
+  private readonly list: ProjectileState[] = [];
+  private readonly flying: Array<{ state: ProjectileState; x0: number; y0: number; x1: number; y1: number; seconds: number; age: number }> = [];
+  private readonly env: FieldEnv;
+  private readonly shots: Projectiles;
+  private readonly marks: WeaponMarks;
+  private readonly target = new Sprite(tex('enemy_cucumber'));
+  private targetUntil = 0;
+  private time = 0;
+  private uid = 1;
+
+  constructor(fx: Fx) {
+    this.env = {
+      battle: { events: this.events, projectiles: this.list },
+      art: fieldArt(),
+      ctx: { enemyView: () => null, speed: 1, fx },
+      time: 0,
+    } as unknown as FieldEnv;
+    this.shots = new Projectiles(this.env, this.layer);
+    this.marks = new WeaponMarks(this.env, this.layer);
+    this.target.anchor.set(0.5);
+    this.target.visible = false;
+    this.layer.addChild(this.target);
+  }
+
+  /** Throw `unitId`'s shot from one point to another: it flies as the simulation moves it and lands with its mark and a hit. */
+  throwShot(unitId: UnitId, x0: number, y0: number, x1: number, y1: number): void {
+    const state: ProjectileState = { uid: this.uid++, unitId, x: x0, y: y0, angle: Math.atan2(y1 - y0, x1 - x0), targetUid: 1 };
+    const speed = unitSpec(unitId).projectileSpeed * SHOT_PACE;
+    this.flying.push({ state, x0, y0, x1, y1, seconds: Math.hypot(x1 - x0, y1 - y0) / speed, age: 0 });
+    this.list.push(state);
+    const seconds = Math.hypot(x1 - x0, y1 - y0) / speed;
+    this.target.position.set(x1, y1 + 4);
+    this.target.scale.set(56 / Math.max(1, this.target.texture.width));
+    this.target.visible = true;
+    this.targetUntil = this.time + seconds + 1.2;
+  }
+
+  /** Throw what a zone-making cat throws (a shard, a dark star, a flask); returns the seconds it flies, when its area should open. */
+  cast(unitId: UnitId, x0: number, y0: number, x1: number, y1: number): number {
+    return this.shots.cast(unitId, -this.uid++, x0, y0, x1, y1);
+  }
+
+  update(dt: number): void {
+    this.time += dt;
+    this.env.time = this.time;
+    for (let i = this.flying.length - 1; i >= 0; i--) {
+      const f = this.flying[i] as (typeof this.flying)[number];
+      f.age += dt;
+      const k = Math.min(1, f.age / f.seconds);
+      f.state.x = f.x0 + (f.x1 - f.x0) * k;
+      f.state.y = f.y0 + (f.y1 - f.y0) * k;
+      if (k < 1) continue;
+      this.flying.splice(i, 1);
+      this.list.splice(this.list.indexOf(f.state), 1);
+      const enemy = { uid: 1, id: 'cucumber', x: f.x1, y: f.y1, angle: 0, hp: 50, maxHp: 100, shield: 0, maxShield: 0 } as unknown as EnemyState;
+      this.events.emit('projectileEnd', { projectile: f.state, x: f.x1, y: f.y1, hit: true });
+      this.events.emit('hit', { enemy, amount: 10, crit: false, type: 'physical', unitId: f.state.unitId, dot: null, absorbed: 0, killed: false });
+    }
+    this.shots.update();
+    this.marks.update(dt);
+    if (this.target.visible && this.time > this.targetUntil) this.target.visible = false;
+  }
+
+  destroy(): void {
+    this.shots.destroy();
+    this.marks.destroy();
+    this.layer.destroy({ children: true });
+  }
+}
+
+/** A cone in a glass dome in a gallery cell: an enemy's shield, with the hits, the cracks and the break that play on it. */
+class DomeRig {
+  readonly root = new Container();
+  private readonly cone = new Sprite(tex('enemy_cone'));
+  private readonly dome = new ShieldDome();
+  private time = 0;
+  private share = 1;
+
+  constructor(
+    readonly x: number,
+    readonly y: number,
+  ) {
+    this.cone.anchor.set(0.5);
+    this.cone.scale.set(64 / Math.max(1, this.cone.texture.width));
+    this.root.position.set(x, y);
+    this.root.addChild(this.cone, this.dome.root);
+  }
+
+  raise(): void {
+    this.share = 1;
+    this.cone.visible = true;
+    this.dome.raise(64);
+  }
+
+  hit(fx: Fx, angle: number, share: number): void {
+    this.share = share;
+    this.dome.hit(fx, this.x, this.y, angle, share < 0.4);
+  }
+
+  breakIt(fx: Fx): void {
+    this.dome.drop();
+    fx.shieldBreak(this.x, this.y);
+  }
+
+  update(dt: number): void {
+    this.time += dt;
+    this.dome.update(dt, this.time, this.share);
+  }
+
+  destroy(): void {
+    this.dome.destroy();
+    this.root.destroy({ children: true });
+  }
+}
+
 /** A tiny procedural cat face used as a stand-in unit for the juice and aura cells. */
 function avatarTexture(): Texture {
   const g = new Graphics();
@@ -89,6 +224,8 @@ export default class FxDemo extends Scene {
   private readonly pagesLayer = new Container();
   private readonly hud = new Container();
   private readonly fx: Fx;
+  private readonly rig: BattleRig;
+  private readonly domes = new Map<CellView, DomeRig>();
   private readonly spinTw = new Tweener();
   private readonly hitStop: ReturnType<typeof createHitStop>;
   private readonly cells: CellView[] = [];
@@ -116,12 +253,13 @@ export default class FxDemo extends Scene {
     // The gallery shows full-strength effects on a fixed tier; the Gov button hands the tier to the governor.
     setFxSettings({ reducedMotion: false, autoTier: false, tier: 'high', quality: 1 });
     this.fx = new Fx(this, this.tweens);
+    this.rig = new BattleRig(this.fx);
     // Default options on purpose: the gallery shows the real caps and cooldown.
     this.hitStop = createHitStop([this.spinTw]);
     this.entries = this.makeEntries();
     this.addChild(this.bg, this.pagesLayer, this.hud);
-    // Effects render above the gallery chrome.
-    this.addChild(this.fx.root);
+    // The battle's own shots and marks, and the effects, render above the gallery chrome.
+    this.addChild(this.rig.layer, this.fx.root);
     this.buildHud();
     this.layoutAll();
     debugExpose('fx', {
@@ -159,6 +297,8 @@ export default class FxDemo extends Scene {
 
   private stepAll(dt: number): void {
     this.fx.update(dt);
+    this.rig.update(dt);
+    for (const d of this.domes.values()) d.update(dt);
     this.spinTw.update(dt);
     this.spinner.rotation += 3 * dt * this.spinTw.timeScale;
   }
@@ -185,6 +325,9 @@ export default class FxDemo extends Scene {
 
   override exit(): void {
     this.hitStop.dispose();
+    for (const d of this.domes.values()) d.destroy();
+    this.domes.clear();
+    this.rig.destroy();
     this.fx.destroy();
     screenFx.clear();
   }
@@ -588,11 +731,84 @@ export default class FxDemo extends Scene {
         else f.freezeThenSlow(0.12, 0.4, 0.3);
       }),
       e('screenShake', () => fxShake(0.6)),
+      ...this.battleEntries(),
     ];
     return list;
   }
 
   /** The cell's central 150 x 150 area as a board-cell rectangle. */
+  /** Every battle effect alone: each cat's shot flying and landing, the three throws and the areas they open, the lightning chain, the foes' rings and cells, the shield. */
+  private battleEntries(): Entry[] {
+    const fx = this.fx;
+    const tw = this.tweens;
+    const e = (name: string, run: (c: CellView) => void): Entry => ({ name, run });
+    const shooters = UNIT_IDS.filter((id) => unitSpec(id).projectileSpeed > 0);
+    const areaOf = (id: UnitId, c: CellView): AreaHandle => {
+      const x = c.cx + 40;
+      return id === 'm_frost' ? fx.blizzardZone(x, c.cy, 70) : id === 'm_cosmo' ? fx.blackHole(x, c.cy, 70) : fx.potionCloud(x, c.cy, 70);
+    };
+    return [
+      ...shooters.map((id) => e(`shot ${id}`, (c) => this.rig.throwShot(id, c.cx - 90, c.cy + 40, c.cx + 80, c.cy - 20))),
+      ...(['m_frost', 'm_cosmo', 't_alch'] as const).map((id) =>
+        e(`cast ${id}`, (c) => {
+          const flight = this.rig.cast(id, c.cx - 90, c.cy + 40, c.cx + 40, c.cy);
+          const life = id === 'm_cosmo' ? 3 : 3.6;
+          tw.call(flight, () => {
+            const h = areaOf(id, c);
+            tw.run({ duration: life, onUpdate: (k) => h.setLeft(life * (1 - k), life), onComplete: () => h.stop() });
+          });
+        }),
+      ),
+      e('chain m_storm', (c) => {
+        const pts: ReadonlyArray<readonly [number, number]> = [[c.cx - 90, c.cy - 50], [c.cx - 25, c.cy + 20], [c.cx + 35, c.cy - 40], [c.cx + 90, c.cy + 30]];
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1] as readonly [number, number];
+          const b = pts[i] as readonly [number, number];
+          fx.arc(a[0], a[1], b[0], b[1], { delay: (i - 1) * 0.05 });
+        }
+      }),
+      e('foe ring haste', (c) => this.toggle(c, () => fx.enemyRing('haste', c.cx, c.cy, 80))),
+      e('foe ring heal', (c) => this.toggle(c, () => fx.enemyRing('heal', c.cx, c.cy, 80))),
+      ...(['wet', 'zap'] as const).map((kind) =>
+        e(`foe cell ${kind}`, (c) => {
+          const rect = { x: c.cx - 55, y: c.cy - 62, w: 110, h: 124 };
+          const h = kind === 'wet' ? fx.wetPuddle(rect) : fx.zapCell(rect);
+          tw.run({ duration: 3.4, onUpdate: (k) => h.setLeft(3.4 * (1 - k), 3.4), onComplete: () => h.stop() });
+        }),
+      ),
+      e('shield idle', (c) => this.domeOf(c).raise()),
+      e('shield hit', (c) => {
+        const d = this.domeOf(c);
+        d.raise();
+        for (let i = 0; i < 3; i++) tw.call(0.5 + i * 0.5, () => d.hit(fx, i * 2.1 - 1, 1));
+      }),
+      e('shield cracked', (c) => {
+        const d = this.domeOf(c);
+        d.raise();
+        tw.call(0.5, () => d.hit(fx, -0.8, 0.5));
+        tw.call(1.4, () => d.hit(fx, 0.4, 0.2));
+      }),
+      e('shield break', (c) => {
+        const d = this.domeOf(c);
+        d.raise();
+        tw.call(0.5, () => d.hit(fx, -0.8, 0.55));
+        tw.call(1.1, () => d.hit(fx, 0.4, 0.25));
+        tw.call(1.7, () => d.breakIt(fx));
+      }),
+    ];
+  }
+
+  /** The cone in its dome of this cell, made the first time. */
+  private domeOf(c: CellView): DomeRig {
+    let d = this.domes.get(c);
+    if (!d) {
+      d = new DomeRig(c.cx, c.cy + 6);
+      this.rig.layer.addChild(d.root);
+      this.domes.set(c, d);
+    }
+    return d;
+  }
+
   private cellRect(c: CellView): FxRect {
     return { x: c.cx - 75, y: c.cy - 75, w: 150, h: 150 };
   }

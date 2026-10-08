@@ -2,6 +2,7 @@
 import type { SfxId } from '@/audio/api';
 import type { BossAbilityId, ClassId, EnemyId, StatusKind, UnitId } from '@/game/api';
 import { mixColor } from '@/core/math';
+import { Light } from '@/fx/light';
 import { CLASS_HUE, Hue } from '@/fx/palette';
 import type { FxTexId } from '@/fx/textures';
 import { Color, TapeColors } from '@/ui/theme';
@@ -73,7 +74,8 @@ export const DOT_NUMBER_COLOR: Readonly<Partial<Record<StatusKind, number>>> = {
   bleed: Color.berry,
 };
 
-export const SHIELD_COLOR: number = TapeColors.sky.base;
+/** A shield is steel glass: the colour of its dome, its bar segment, the sparks of a hit on it and the number of what it soaked. */
+export const SHIELD_COLOR: number = Light.shield;
 
 /** Every face colour the director asks the floating numbers for beyond the stock styles': their fonts are drawn with the scene, not on a first tick. */
 export const NUMBER_FACES: readonly number[] = [...new Set<number>([...Object.values(DOT_NUMBER_COLOR), SHIELD_COLOR])];

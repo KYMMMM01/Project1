@@ -108,3 +108,46 @@ Performance of a crowded wave: see `fx.md` ("the crowded wave got slower, and wh
 ## 2026-10-07 leftovers
 
 Warm-up of the field (see `fx.md` for the queue and the numbers): `field/warmPlan.ts` (pure: `enemyArtKey` = the rule of `enemyTextureKey` with the lookup passed in, `auraAreaOf`, `waveNeeds(previewEntries, has)` = pictures, aura areas and head count of a wave, `spareFor(count)` = 4 to 12 bodies), `field/warmup.ts` (`FieldWarmup`: when the wave or phase changes it reads `previewWave(wave + 1)`, then one frame at a time and never on a slow frame it makes one enemy body for the pool, `EnemyViews.spare(n)`, and one pooled ground-area view, `Fx.readyArea(kind)` for the ground effects' `Fx`, only for a kind that has been baked). A body is a dozen sprites; the first enemy of a battle used to build its bodies and its aura ring on the frame it walked in (first clock 14 ms, first pill 22 ms). `__dbg.battle.warmLeft()` says what the queue has left. Tests: `view.field.warm.test.ts` (7, over the real wave scripts of all five chapters).
+
+
+## 2026-10-08 VFX polish
+
+What the field draws for the battle effects changed (the painted sprites, the colours and the layer code are in `fx.md`, "2026-10-08 VFX polish"). Battle effects are no longer paper; cats, enemies, the HUD and the board still are.
+
+**Shots** (`projectileLooks.ts`, `projectiles.ts`; the baked paper shapes of `art.ts` are gone). A shot is its painted picture with, in four shared containers (shadows, painted streaks, pictures, additive lights): an orientation, a path, a streak, a light, and what it sheds. `ProjectileLook`: `paint`, `size`, `spin`, `oriented`, `flip`, `lob`, `tint`, `streak`, `glow`, `shed`.
+
+| Cat | Picture and flight | Streak and light | Sheds |
+|---|---|---|---|
+| r_sling | pebble, 36 px, tumbling, straight | dusty streak | dust |
+| r_archer | green-fletched arrow, 88 px, points along its path, straight | pale green streak | none |
+| r_ninja | steel shuriken, 48 px, spins fast, straight | cold streak and light | glints |
+| r_gunner | cork, 50 px, points along its path, fast | warm streak | gunsmoke |
+| r_star | moon arrow, 96 px (tinted deeper so it reads on cream), straight | long silver-blue streak, moon light | sparkles |
+| m_snow | snowball, 46 px, thrown on an arc (34 px), spins | cold light | snow dust |
+| m_fire | fireball, 80 px, thrown on an arc (30 px), the flame tail trails because the picture turns along the arc | orange streak, warm light | embers |
+| t_bell | the bell's sound ring, 60 px, faces its flight | gold light | sparkles |
+| t_chef | ladle, 72 px, tumbles on a low arc | none | steam |
+| t_bard | pink note, upright, a little sway | pink light | pink sparkles |
+| t_lucky | gold coin, flips edge-on, arc | gold light | glints |
+
+Size and light grow with the cat's rank (`rankSize` 1 to 1.24, `rankLight` 0.8 to 1.1). A small stretch at launch (long and thin for what points along its path, a pop for what spins; none under reduced motion). The picture follows the tangent of the arc it really draws (the simulation's path is straight; the arc is drawn on top, as before). Shed particles stop being made once the flecks are 55 % full, so a hit always has room for its own.
+
+**The throw of an area.** The ice queen, the cosmic cat and the alchemist have no shot in the simulation: their area simply appears with the attack. Now each throws something first (`castLook`): a shard of ice (fast), a dark star (it gathers speed), a flask (a high arc), over 0.14 to 0.4 s (shorter at 2x and 3x speed), and the area opens where it lands (`Projectiles.cast`, `castWait(zoneUid)`; `FieldEffects.syncZones` waits for it, the enemies inside are tagged only once it is open). Where it lands it bursts: crystals, a violet ring, a green splash with drops. Reduced motion: no throw, the area is there at once.
+
+**Marks** (`weaponMarks.ts`): the same pooled marks (22 at most, 8 started a frame) with painted pictures: `burst_star` for a blunt blow, `burst_slash` for blades, `burst_glint` and sparks, `burst_ring` for bells and the two ring weapons, the stuck `shot_arrow`, `mark_snow` and `mark_scorch` decals (the scorch with its own `flare` of light, ember dots rising), notes, the coin. The bright ones are additive (`ADDS`), so a blow lights the enemy it lands on; a mark has one blend mode, so the scorch is two marks. The potion's `shatter` mark is gone (the flask lands in the shot layer).
+
+**The shield** (`shieldDome.ts`, `enemyView.ts`, `enemies.ts`). An enemy that wears one (the cone) is drawn inside a glass dome (`ShieldDome`, built the first time a view wears one and then pooled with it): a steel-blue sphere with hexagon panes and a white rim, a third wider than the body, drawn in front of it and moving with it, opening like a bubble when the enemy arrives, breathing (1.8 % of its size, slowly). A small steel shield icon sits at the left end of the health bar (the area tag moves out one place), and the shield segment of the bar is the same steel (`Light.shield`, also the shield's number and sparks in the director). A hit on the shield: the glass lights up and punches 7 %, a ring runs out from where it was struck, on the side the attacker is (the cat's last attack position), with a spark and a glint (`hit`; bigger for a crit or a blow of 20 % of the shield); the stuck arrow stays in the glass. Cracks as it weakens: none above two thirds, light cracks below, heavy below a third (`crackStage`), and the glass fainter. When it breaks (`shieldBreak`) the dome is gone in a frame, the icon too, the body flinches (a punch and a flash in the rim colour) and `Fx.shieldBreak` throws the six shards. Reduced motion: no ripple or sparks, no breathing; the glass still lights up and the cracks still show.
+
+Colour: steel blue and white on purpose. The blizzard is cyan ice and spiked and flat on the floor; the dome is a round glass bubble standing up, with a hexagon pattern; side by side (`shots/fxv2/shield3/shield_vs_blizzard`) nothing else is mistaken for it. Frost, a bubble, a spiral never wear this blue-grey.
+
+**Enemies inside a friendly area** wear a tint while no status of their own colours them: frost, a violet pull (the hole), a green wash (the potion) (`ZONE_TINT`), besides the tag by the bar. The hostile rings and cells are in `fx.md`.
+
+**Gallery** (`?demo=fx`, `src/demo/FxDemo.ts`): 94 entries now. `shot <cat>` (11: the field's own `Projectiles` and `WeaponMarks` drawing a stand-in simulation at 40 % speed onto a cucumber), `cast m_frost / m_cosmo / t_alch` (the throw, then the area, counting down its warning), `chain m_storm`, `foe ring haste / heal`, `foe cell wet / zap` (3.4 s with the warning), `shield idle / hit / cracked / break` (a cone in the real `ShieldDome`). `__dbg.fx.play('shot r_star')`, `.where(name)`, `.page(n)`.
+
+**Warm-up.** Every painted picture is on the `later` queue of `BattleWarmup`; the pictures of an aura's ring come with the wave that brings it (`waveNeeds().areas`, `AREA_PICTURES`); `FieldWarmup` builds one pooled view of each kind as before (no baking first).
+
+**Proof** (strips in `scratchpad/shots/fxv2/`, Aside, `PAGE_ERRORS []`; stepped at 1/30 s): every ranged cat's shot and hit with one enemy: `proof_a/shot_r_{sling,archer,ninja,gunner}`, `proof_b/shot_{r_star,m_snow,m_fire,t_bell}`, `proof_c/shot_{t_chef,t_bard,t_lucky,m_storm}`; each area from the throw to its end on a busy lane: `zone_a/zone_{m_frost,m_cosmo,t_alch}`; the same under reduced motion (`zone_calm/calm_*`) and on the low tier (`zone_low/low_*`); the shield idle, hit, cracked, broken: `shield2/shield_break`, and next to a blizzard: `shield3/shield_vs_blizzard`; the hostile rings and cells: `aura1`; two crowded late waves on other chapters: `crowd_2/crowd_ch2` (kitchen floor), `crowd_4/crowd_ch4` (garden); the gallery: `demo1/demo_shots_*`.
+
+**Tests.** `view.field.shots.test.ts` (16: every shooter has its own picture at a readable size, who points and who spins, who is lobbed, the three throws and their timing, rank, orientation, the stretch, the arc, the streak, shedding and its limit, pooling, the held-back area), `view.field.shield.test.ts` (7: crack stages, the dome opening, the cracks, fainter as it weakens, the ripple, reduced motion, drop and raise again), `view.field.weapons.test.ts` (a zone start leaves no mark).
+
+**Not verified.** A real phone. The dome over a boss (no boss wears a shield; only the cone does). The shield of an enemy that comes back from a revive.

@@ -2,10 +2,12 @@ import type { Container } from 'pixi.js';
 import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
 import { mixColor } from '@/core/math';
-import { Color, TapeColors } from '@/ui';
+import { Color } from '@/ui';
 import { kickObject, punchScale, rattleObject, squash, wobbleRotation } from '@/fx';
 import { Hue } from '@/fx/palette';
-import type { BattleEvents, EnemyState } from '@/game/api';
+import { Light } from '@/fx/light';
+import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
+import type { BattleEvents, EnemyState, UnitId } from '@/game/api';
 import type { ZoneMark } from './art';
 import type { FieldEnv } from './env';
 import { EnemyView } from './enemyView';
@@ -20,6 +22,10 @@ const DEATH_SECONDS = 0.17;
 const REACT_GAP = 0.07;
 /** A hit with no cat behind it (a toy) tints the body like this. */
 const PLAIN_TINT = mixColor(Color.coral, Hue.cream, 0.3);
+/** Where each cell's cat stands, looked up once. */
+const CELL_AT = Array.from({ length: CELL_COUNT }, (_, c) => ({ x: cellCenterX(c), y: cellCenterY(c) }));
+/** A blow on a shield with no cat behind it (a toy, a tick) lands on the top of the dome. */
+const FROM_ABOVE = -Math.PI / 2;
 /** How long a dead boss stays standing for the director's death sequence before the field clears it. */
 const BOSS_HOLD = 2.6;
 
@@ -33,6 +39,8 @@ export class EnemyViews {
   private readonly live: EnemyView[] = [];
   private readonly pool: Pool<EnemyView>;
   private readonly offs: Array<() => void> = [];
+  /** Where each cat type last attacked from: the direction a blow on a shield came from. */
+  private readonly from = new Map<UnitId, { x: number; y: number }>();
   private frame = 0;
 
   constructor(
@@ -45,7 +53,11 @@ export class EnemyViews {
     this.offs.push(
       ev.on('hit', (e) => this.onHit(e)),
       ev.on('enemyDie', (e) => this.onDie(e)),
-      ev.on('shieldBreak', (e) => this.flash(e.enemy.uid, TapeColors.sky.base, 90)),
+      ev.on('attack', (e) => {
+        const at = CELL_AT[e.unit.cell];
+        if (at) this.from.set(e.unit.id, at);
+      }),
+      ev.on('shieldBreak', (e) => this.onShieldBreak(e)),
       ev.on('enrage', (e) => this.onEnrage(e)),
     );
   }
@@ -142,8 +154,22 @@ export class EnemyViews {
     if (v && !v.dying) v.flash(color, ms, 0.8);
   }
 
+  /** The shield is gone: the dome vanishes, the body flinches in the shield's colour, and the pieces fly (the director's `Fx.shieldBreak`). */
+  private onShieldBreak(e: BattleEvents['shieldBreak']): void {
+    const v = this.byUid.get(e.enemy.uid);
+    if (!v || v.dying) return;
+    v.shieldGone();
+    v.flash(Light.shieldRim, 110, 0.8);
+    punchScale(this.env.ctx.tweens, v.body, 0.2, 220);
+  }
+
   private onHit(e: BattleEvents['hit']): void {
     const v = this.byUid.get(e.enemy.uid);
+    if (v && !v.dying && e.absorbed > 0) {
+      const from = e.unitId ? this.from.get(e.unitId) : undefined;
+      const angle = from ? Math.atan2(from.y - e.enemy.y, from.x - e.enemy.x) : FROM_ABOVE;
+      v.shieldHit(this.env.ctx.fx, angle, e.crit || e.absorbed >= e.enemy.maxShield * 0.2);
+    }
     if (!v || v.dying || e.killed) return;
     // Damage-over-time ticks tint nothing: only a real strike flashes, knocks and squashes.
     if (e.dot) return;

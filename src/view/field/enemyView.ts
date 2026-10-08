@@ -3,7 +3,7 @@ import { hasTex, tex } from '@/core/assets';
 import { clamp, clamp01, damp, mixColor } from '@/core/math';
 import { Ease, type Tweener } from '@/core/tween';
 import { Color, TapeColors, motion, paintTexture } from '@/ui';
-import { popIn, squash } from '@/fx';
+import { Light, popIn, squash, type Fx } from '@/fx';
 import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
 import { FIELD_W } from '@/game/geometry';
@@ -11,6 +11,7 @@ import type { FieldArt, StatusSticker, ZoneMark } from './art';
 import { barSegments, depthKey, type BarSegments } from './policy';
 import { BOSS_DROP } from '@/view/timing';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
+import { ShieldDome } from './shieldDome';
 
 /** Longest side of the sprite is the radius times this: a cucumber (18) reads about 56 px, a boss (38) about 115. */
 const SIZE_PER_RADIUS = 3.05;
@@ -22,6 +23,12 @@ const COOL = mixColor(Color.white, Color.teal, 0.55);
 const SCORCH = mixColor(Color.white, Color.coral, 0.5);
 const TOXIC = mixColor(Color.white, Color.leaf, 0.6);
 const RAGE = mixColor(Color.white, Color.berry, 0.6);
+/** What an enemy standing in a friendly area is tinted while no status of its own colours it: frost on it, a violet pull, a green wash. */
+const ZONE_TINT: Readonly<Partial<Record<ZoneMark, { color: number; amount: number }>>> = {
+  frost: { color: mixColor(Color.white, Light.ice, 0.9), amount: 0.45 },
+  void: { color: mixColor(Color.white, Light.voidRim, 0.8), amount: 0.5 },
+  brew: { color: mixColor(Color.white, Light.lime, 0.8), amount: 0.45 },
+};
 const BAR_H = 6;
 /** Seconds the area tag stays after the last touch: longer than the slowest area tick (a blizzard ticks every half second). */
 const ZONE_HOLD = 0.6;
@@ -79,6 +86,9 @@ export class EnemyView {
   private readonly barBack: NineSliceSprite;
   private readonly barHp: NineSliceSprite;
   private readonly barShield: NineSliceSprite;
+  /** The glass dome of an enemy that wears a shield (built the first time one does) and the small steel shield by its bar. */
+  private dome: ShieldDome | null = null;
+  private readonly shieldIcon: Sprite;
   private readonly bar = new Container();
   private readonly badge: Sprite;
   private readonly sticker: Sprite;
@@ -121,7 +131,7 @@ export class EnemyView {
     this.barBack = slice(art.barTrack, 7);
     this.barHp = slice(fillTex, BAR_H / 2);
     this.barShield = slice(fillTex, BAR_H / 2);
-    this.barShield.tint = TapeColors.sky.base;
+    this.barShield.tint = Light.shield;
     this.barBack.height = BAR_H + 6;
     this.barHp.height = BAR_H;
     this.barShield.height = BAR_H;
@@ -133,6 +143,8 @@ export class EnemyView {
     this.targetMark.visible = false;
     this.zoneTag = this.makeSprite(art.zoneMark.frost);
     this.zoneTag.visible = false;
+    this.shieldIcon = this.makeSprite(art.shieldMark);
+    this.shieldIcon.visible = false;
     this.bar.addChild(this.barBack, this.barHp, this.barShield);
     this.bar.visible = false;
     this.flashSprite.anchor.set(0.5);
@@ -140,7 +152,7 @@ export class EnemyView {
     this.flashSprite.alpha = 0;
     this.body.addChild(this.sprite, this.flashSprite);
     this.lean.addChild(this.body);
-    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker, this.targetMark, this.zoneTag);
+    this.root.addChild(this.shadow, this.aura, this.lean, this.ring, this.stun, this.badge, this.bar, this.sticker, this.targetMark, this.zoneTag, this.shieldIcon);
     this.root.eventMode = 'none';
   }
 
@@ -201,8 +213,20 @@ export class EnemyView {
     this.targetMark.position.set(0, -this.size * 0.56 - 46);
     this.targetMark.visible = false;
     this.markK = 0;
-    this.zoneTag.position.set(-this.barW / 2 - 8, -this.size * 0.56 - 12);
+    // An enemy with a shield wears its small icon at the left end of the bar; the area tag moves out one place.
+    const shielded = enemy.maxShield > 0;
+    this.shieldIcon.position.set(-this.barW / 2 - 9, -this.size * 0.56 - 10);
+    this.shieldIcon.scale.set(0.62);
+    this.shieldIcon.visible = shielded;
+    this.zoneTag.position.set(-this.barW / 2 - (shielded ? 28 : 8), -this.size * 0.56 - 12);
     this.zoneTag.visible = false;
+    if (shielded) {
+      if (!this.dome) {
+        this.dome = new ShieldDome();
+        this.root.addChildAt(this.dome.root, this.root.getChildIndex(this.lean) + 1);
+      }
+      this.dome.raise(this.size);
+    } else this.dome?.drop();
     this.zoneKind = null;
     this.zoneHold = 0;
     this.zoneK = 0;
@@ -298,6 +322,11 @@ export class EnemyView {
       this.updateStatus(dt, time, enemy);
       this.updateZoneTag(dt, time);
       this.updateBar(dt, enemy);
+      if (this.dome?.raised) {
+        if (enemy.shield > 0) this.dome.update(dt, time, enemy.maxShield > 0 ? enemy.shield / enemy.maxShield : 0);
+        else this.dome.drop();
+        this.shieldIcon.visible = enemy.shield > 0;
+      }
     }
     this.root.position.set(this.drawX(), this.y);
     if (reorder) this.sort();
@@ -309,6 +338,17 @@ export class EnemyView {
       this.root.scale.set(Math.max(0, s));
       this.root.alpha = this.isBoss ? 1 : 1 - this.deathK * this.deathK;
     }
+  }
+
+  /** The shield took a blow from `angle` (towards the attacker): the dome flashes and a ring runs out from where it was struck. */
+  shieldHit(fx: Fx, angle: number, strong: boolean): void {
+    this.dome?.hit(fx, this.root.x, this.root.y - this.size * 0.02, angle, strong);
+  }
+
+  /** The shield is gone: the dome vanishes (the pieces are thrown by `Fx.shieldBreak`). */
+  shieldGone(): void {
+    this.dome?.drop();
+    this.shieldIcon.visible = false;
   }
 
   /** An area is acting on this enemy right now: its tag pops on beside the bar and stays while the touches keep coming. */
@@ -352,6 +392,13 @@ export class EnemyView {
       color = TOXIC;
       amt = 0.55;
       sick = 'poison';
+    }
+    if (amt === 0 && this.zoneKind !== null && this.zoneHold > 0) {
+      const zone = ZONE_TINT[this.zoneKind];
+      if (zone) {
+        color = zone.color;
+        amt = zone.amount;
+      }
     }
     if (e.enraged) {
       color = RAGE;
@@ -418,6 +465,7 @@ export class EnemyView {
     this.zoneTag.visible = false;
     this.zoneKind = null;
     this.sickness = null;
+    this.shieldGone();
   }
 
   retire(): void {
@@ -426,6 +474,7 @@ export class EnemyView {
     this.token++;
     this.dying = false;
     this.holdUntil = 0;
+    this.shieldGone();
     this.root.visible = false;
   }
 

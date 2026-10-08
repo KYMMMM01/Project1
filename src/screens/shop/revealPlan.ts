@@ -17,7 +17,7 @@ export function rarityRank(r: ChestRarity): number {
   return CHEST_RARITIES.indexOf(r);
 }
 
-/** The best card of a chest whose best rank is at least this one first shows as a dark silhouette. */
+/** Every stack of the best rank of an opening whose best rank is at least this one first shows as a dark silhouette. */
 export const SILHOUETTE_FROM = 2;
 
 /** The tenth-gold-chest bonus: which unit and how many cards (none when `cards` is 0). */

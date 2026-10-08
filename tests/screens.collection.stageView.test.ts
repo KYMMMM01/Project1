@@ -1,4 +1,4 @@
-import type { Container } from 'pixi.js';
+import { Rectangle, Sprite, Texture, type Container } from 'pixi.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** What the reveal asks of the game, the audio, the effects and the kit, faked just far enough to play it through: nothing here draws. */
@@ -116,6 +116,7 @@ vi.mock('@/ui', async (original) => {
   return { ...real, uiLabel: (text: string) => new FakeText(String(text)), numberText: () => new FakeText(''), Button, PaperLabel, Tag, drawFloor: () => undefined };
 });
 
+import { putTex } from '@/core/assets';
 import { uiTweens } from '@/core/tween';
 import { motion } from '@/ui';
 import '@/meta/strings';
@@ -168,6 +169,30 @@ function seenTexts(): string[] {
 function isSeen(node: Container): boolean {
   for (let c: Container | null = node; c; c = c.parent) if (!c.visible || c.alpha <= 0) return false;
   return true;
+}
+
+/** Every card of the reveal, in the order the stacks were laid out. */
+function revealCards(): RevealCard[] {
+  const found: RevealCard[] = [];
+  const walk = (c: Container): void => {
+    if (c instanceof RevealCard) found.push(c);
+    for (const k of c.children) walk(k as Container);
+  };
+  walk(reveal());
+  return found;
+}
+
+/** The words a card shows right now: none while it is a silhouette (or face down), its name and count once it is itself. */
+function cardWords(card: RevealCard): string[] {
+  const out: string[] = [];
+  const walk = (c: Container, seen: boolean): void => {
+    const on = seen && c.visible;
+    const t = (c as unknown as { text?: unknown }).text;
+    if (on && typeof t === 'string' && t !== '') out.push(t);
+    for (const k of c.children) walk(k as Container, on);
+  };
+  walk(card.face, card.face.visible);
+  return out;
 }
 
 /** The sunburst's long-ray colour right now. */
@@ -550,28 +575,9 @@ describe('the climb as the player sees it', () => {
 
   it('shows the best card of a good chest as a dark silhouette with no name and no count, then peels it away to the card', () => {
     void playChestReveal([staged('legendary', 'steady')]);
-    const cards = (): RevealCard[] => {
-      const found: RevealCard[] = [];
-      const walk = (c: Container): void => {
-        if (c instanceof RevealCard) found.push(c);
-        for (const k of c.children) walk(k as Container);
-      };
-      walk(reveal());
-      return found;
-    };
-    const best = cards().find((c) => c.stack.rarity === 'legendary') as RevealCard;
+    const best = revealCards().find((c) => c.stack.rarity === 'legendary') as RevealCard;
     expect(best).toBeDefined();
-    const words = (): string[] => {
-      const out: string[] = [];
-      const walk = (c: Container, seen: boolean): void => {
-        const on = seen && c.visible;
-        const t = (c as unknown as { text?: unknown }).text;
-        if (on && typeof t === 'string' && t !== '') out.push(t);
-        for (const k of c.children) walk(k as Container, on);
-      };
-      walk(best.face, best.face.visible);
-      return out;
-    };
+    const words = (): string[] => cardWords(best);
     let veiledFrames = 0;
     let named = false;
     for (let i = 0; i < 1200; i++) {
@@ -587,6 +593,127 @@ describe('the climb as the player sees it', () => {
     expect(named).toBe(true);
     expect(words().some((w) => w.startsWith('x'))).toBe(true);
     finish();
+  });
+
+  /** A pile whose best rank has three stacks (and an epic and a rare below them, which must stay plain). */
+  const TRIO: ChestResult['cards'] = [
+    { rarity: 'common', unit: 'w_paw' }, { rarity: 'rare', unit: 'r_archer' }, { rarity: 'epic', unit: 'm_storm' },
+    { rarity: 'legendary', unit: 'w_samurai' }, { rarity: 'legendary', unit: 'r_gunner' }, { rarity: 'legendary', unit: 'm_frost' },
+  ];
+  const TRIO_ORDER = ['w_samurai', 'r_gunner', 'm_frost'];
+
+  interface Veils {
+    /** Frames each card was a silhouette (face up with nothing that names it). */
+    frames: Map<string, number>;
+    /** The cards in the order their silhouettes first showed. */
+    order: string[];
+  }
+
+  /** Play the opening a frame at a time until `stop` says so (or the summary's OK button is up) and note how long each card was a silhouette. */
+  function watchVeils(stop: (v: Veils) => boolean = () => false): Veils {
+    const v: Veils = { frames: new Map(), order: [] };
+    const cards = revealCards();
+    for (let i = 0; i < 3600 && !stop(v) && !kit.buttons.find((b) => b.label === '확인')?.visible; i++) {
+      run(1 / 60);
+      for (const c of cards) {
+        if (!c.face.visible || c.back.visible || cardWords(c).length > 0) continue;
+        if (!v.frames.has(c.stack.key)) v.order.push(c.stack.key);
+        v.frames.set(c.stack.key, (v.frames.get(c.stack.key) ?? 0) + 1);
+      }
+    }
+    return v;
+  }
+
+  it('shows every card of the best rank as a silhouette in turn, the first for long and the rest for less, and no card below it', async () => {
+    const w = watch(playChestReveal([staged('legendary', 'steady', { id: 120, cards: TRIO })]));
+    const seen = watchVeils();
+    expect(seen.order).toEqual(TRIO_ORDER);
+    const first = seen.frames.get('w_samurai') as number;
+    // The silhouette's own hold, the turn to it and the turn back: the first holds 0.9 s, the others 0.4 s.
+    expect(first).toBeGreaterThan(55);
+    for (const key of TRIO_ORDER.slice(1)) {
+      expect(seen.frames.get(key)).toBeGreaterThan(20);
+      expect(seen.frames.get(key)).toBeLessThan(first - 12);
+    }
+    for (const key of ['m_storm', 'r_archer', 'w_paw']) expect(seen.frames.has(key)).toBe(false);
+    // Every card ends up itself in the summary, named and counted.
+    for (const c of revealCards()) expect(cardWords(c).length).toBeGreaterThan(0);
+    expect(kit.sounds.filter((x) => x === 'stinger:jackpot')).toHaveLength(1);
+    press('확인');
+    run(1);
+    await Promise.resolve();
+    expect(w.settled()).toBe(1);
+  });
+
+  it('gives the same silhouettes to every stack of a best rank of epic', () => {
+    void playChestReveal([staged('epic', 'steady', { id: 121, cards: [{ rarity: 'common', unit: 'w_paw' }, { rarity: 'epic', unit: 'm_storm' }, { rarity: 'epic', unit: 'w_viking' }] })]);
+    const seen = watchVeils();
+    expect(seen.order).toEqual(['w_viking', 'm_storm']);
+    expect(seen.frames.has('w_paw')).toBe(false);
+    press('확인');
+    run(1);
+  });
+
+  it('is skipped in the middle of the silhouettes: none is left dark, every card is itself, the summary is there once', async () => {
+    const w = watch(playChestReveal([staged('legendary', 'steady', { id: 122, cards: TRIO })]));
+    const seen = watchVeils((v) => v.order.length === 2 && (v.frames.get('r_gunner') as number) > 6);
+    expect(seen.order).toEqual(TRIO_ORDER.slice(0, 2));
+    press('건너뛰기');
+    run(1.5);
+    for (const c of revealCards()) {
+      expect(cardWords(c).length).toBeGreaterThan(0);
+      expect(c.face.visible).toBe(true);
+      expect(c.back.visible).toBe(false);
+    }
+    expect(kit.acked).toEqual([122]);
+    expect(kit.buttons.find((b) => b.label === '확인')?.visible).toBe(true);
+    press('확인');
+    run(1);
+    await Promise.resolve();
+    expect(w.settled()).toBe(1);
+  });
+
+  it('shows each silhouette still for a moment without motion, one after another', async () => {
+    motion.reduced = true;
+    const w = watch(playChestReveal([staged('legendary', 'steady', { id: 123, cards: TRIO })]));
+    const seen = watchVeils();
+    expect(seen.order).toEqual(TRIO_ORDER);
+    for (const key of TRIO_ORDER) {
+      expect(seen.frames.get(key)).toBeGreaterThan(20);
+      expect(seen.frames.get(key)).toBeLessThan(32);
+    }
+    press('확인');
+    run(1);
+    await Promise.resolve();
+    expect(w.settled()).toBe(1);
+  });
+
+  it('draws the silhouette as one flat black shape: the cat\'s own picture tinted to nothing, the real portrait hidden, then back', () => {
+    // A unit no other test of this file plays: the registry has no way to take a picture back out.
+    const picture = new Texture({ frame: new Rectangle(0, 0, 64, 64), label: 'unit_t_alch' });
+    putTex('unit_t_alch', picture);
+    const card = new RevealCard({ key: 't_alch', unit: 't_alch', rarity: 'legendary', count: 1, bonus: false });
+    const ofPicture = (): Sprite[] => {
+      const found: Sprite[] = [];
+      const walk = (c: Container): void => {
+        if (c instanceof Sprite && c.texture === picture) found.push(c);
+        for (const k of c.children) walk(k as Container);
+      };
+      walk(card.face);
+      return found;
+    };
+    card.showFace(true);
+    const dark = ofPicture().filter(isSeen);
+    // One picture is on view and its tint is 0: every pixel of it is the same black, only its edge (the picture's own alpha) is left.
+    expect(dark).toHaveLength(1);
+    expect((dark[0] as Sprite).tint).toBe(0x000000);
+    expect(ofPicture()).toHaveLength(2);
+    card.unveil();
+    const real = ofPicture();
+    expect(real).toHaveLength(1);
+    expect(isSeen(real[0] as Sprite)).toBe(true);
+    expect((real[0] as Sprite).tint).toBe(0xffffff);
+    card.destroy({ children: true });
   });
 
   it('is skipped from inside the climb and in the middle of the top rank\'s show with the dark gone and the summary there', async () => {

@@ -9,7 +9,7 @@
  */
 import { audio, type PrimeTarget, type SfxId, type StingerId } from '@/audio';
 import { hasTex, imageKeys } from '@/core/assets';
-import { AREA_BAKE_STEPS, DISC_KINDS, bakeAreaStep, fxVignette, numberFontTextures, uploadTexture, warm, warmImage, warmParticles, WARM_PRIO, type DiscKind } from '@/fx';
+import { AREA_PICTURES, DISC_KINDS, PAINT_IDS, fxVignette, paintKey, numberFontTextures, uploadTexture, warm, warmImage, warmParticles, WARM_PRIO, type DiscKind } from '@/fx';
 import { mergeResultOf, type BattleApi, type UnitId } from '@/game';
 import { waveNeeds, type WaveNeeds } from './field/warmPlan';
 import { warmGlyphs } from './glyphs';
@@ -27,9 +27,9 @@ const AHEAD: readonly [number, number] = [1, 2];
 /** What one baking step of a sound costs the frame that runs it (ms): building the offline graph, 2 to 14 for the ones the fight plays. */
 const SOUND_COST_MS = 4;
 
-/** Ask for the baking of every piece of a ground area (one piece a frame, see areas.ts). */
+/** Ask for the painted pictures of a ground area to be put on the card (one a frame, see areas.ts). */
 export function warmArea(kind: DiscKind, prio: number): void {
-  for (let step = 0; step < AREA_BAKE_STEPS; step++) warm.request(`area:${kind}:${step}`, prio, 3, () => bakeAreaStep(kind, step));
+  for (const id of AREA_PICTURES[kind]) warmImage(paintKey(id), prio);
 }
 
 /** Ask for a sound to be baked, one variant a piece (nothing is asked for a sound that is baked or on its way). */
@@ -70,6 +70,8 @@ export class BattleWarmup {
     // The glyph sheets of every face of the floating numbers (drawn when the scene was built): each is a 10 ms upload that the first hit would pay.
     numberFontTextures().forEach((texture, i) => warm.request(`fx:numbers:${i}`, WARM_PRIO.pipe, 10, () => uploadTexture(texture)));
     for (const kind of DISC_KINDS) warmArea(kind, WARM_PRIO.later);
+    // Every other painted battle picture: the shots, bursts, bolts, shards and the shield, before the first fight needs them.
+    for (const id of PAINT_IDS) warmImage(paintKey(id), WARM_PRIO.later);
     for (const key of imageKeys()) {
       if (LATER_PREFIXES.some((p) => key.startsWith(p))) warmImage(key, WARM_PRIO.later);
     }

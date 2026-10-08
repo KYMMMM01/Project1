@@ -9,9 +9,10 @@
  * final colour. The top rank also starts the crown: the stage changes, the chest lifts and the held breath is long. A tap starts the
  * next beat at once (cutting the running one, the stall or the rest), after the last beat the chest holds its breath, then pops.
  * Cards: the stacks are grouped into beats (commons travel together, higher ranks alone); each beat rises out of the opening, wobbles
- * face down, flips, shows itself and flies to its place in the summary; the best card of an epic or legendary chest first shows as a
- * dark silhouette (`shade`) that peels away to the real card. The next beat rises as soon as the one before it flies, so the flights
- * overlap and a pile never drags.
+ * face down, flips, shows itself and flies to its place in the summary; every stack of the best rank of an epic or legendary opening
+ * comes last, one beat each, and first shows as a dark silhouette (`shade`) that peels away to the real card: the first is held the
+ * full time, the ones after it are shorter. The next beat rises as soon as the one before it flies, so the flights overlap and a pile
+ * never drags.
  */
 import type { ChestRarity } from '@/meta/types';
 import { climbSteps, pickClimb, TOP_RANK, type ClimbPattern } from './climb';
@@ -24,10 +25,12 @@ export type BeatPhase = 'queued' | 'rise' | 'wobble' | 'flip' | 'shade' | 'peel'
 export interface BeatPlan {
   stacks: number[];
   rarity: ChestRarity;
-  /** The last beat, the one with the best stack: that stack alone, unless the best card is a common. */
+  /** The last beat, the final stack of the best rank (alone, unless the best card is a common): it carries the biggest flourish. */
   last: boolean;
-  /** The card is first shown as a dark silhouette: the best card of a chest whose best rank is epic or higher. */
+  /** The card is first shown as a dark silhouette: every stack of the best rank of an opening whose best rank is epic or higher. */
   veiled: boolean;
+  /** The first silhouette of the opening is held the full time; the ones after it are held shorter. */
+  firstVeil: boolean;
 }
 
 export type FlowEvent =
@@ -68,8 +71,9 @@ export const TIMES = {
   wobble: { common: 0.08, rare: 0.36, epic: 0.62, legendary: 0.9 } as Record<ChestRarity, number>,
   ticks: { common: 0, rare: 2, epic: 3, legendary: 5 } as Record<ChestRarity, number>,
   flip: 0.24,
-  /** The silhouette is held this long (by the rank of the card), then peels away in `peel`. */
+  /** The first silhouette is held this long (by the rank of the card), then peels away in `peel`; each one after it is held `shadeNext`. */
   shade: { common: 0, rare: 0, epic: 0.6, legendary: 0.9 } as Record<ChestRarity, number>,
+  shadeNext: { common: 0, rare: 0, epic: 0.3, legendary: 0.4 } as Record<ChestRarity, number>,
   peel: 0.3,
   stillShade: 0.4,
   /** The face is held on stage this long before it flies down. */
@@ -109,16 +113,19 @@ const GROUPING: Record<ChestRarity, { solo: number; group: number }> = {
 };
 
 /**
- * Group the stacks (lowest rank first, best last) into beats. The best stack is a beat of its own at the end (unless it is a common).
- * Commons always travel together, up to four to a beat; a rank with only a few stacks shows them one by one; a long run is split in groups of
- * nearly equal size, so a pile with many stacks does not drag.
+ * Group the stacks (lowest rank first, best last) into beats. The best stack is a beat of its own at the end (unless it is a common), and when
+ * the best rank is epic or higher so is every other stack of that rank, each one a silhouette. Commons always travel together, up to
+ * four to a beat; a rank with only a few stacks shows them one by one; a long run is split in groups of nearly equal size, so a pile with many
+ * stacks does not drag.
  */
 export function beatsOf(stacks: readonly RevealStack[]): BeatPlan[] {
   const out: BeatPlan[] = [];
   const n = stacks.length;
   const best = stacks[n - 1];
+  const veiled = best !== undefined && rarityRank(best.rarity) >= SILHOUETTE_FROM;
   // Only a best card above common is worth a beat of its own: a chest of commons is all one run.
-  const upto = best && best.rarity !== 'common' ? n - 1 : n;
+  let upto = best && best.rarity !== 'common' ? n - 1 : n;
+  while (best && veiled && upto > 0 && (stacks[upto - 1] as RevealStack).rarity === best.rarity) upto--;
   let i = 0;
   while (i < upto) {
     const rarity = (stacks[i] as RevealStack).rarity;
@@ -130,17 +137,14 @@ export function beatsOf(stacks: readonly RevealStack[]): BeatPlan[] {
     let at = i;
     for (let g = 0; g < groups; g++) {
       const size = Math.floor(run / groups) + (g < run % groups ? 1 : 0);
-      out.push({ stacks: Array.from({ length: size }, (_, k) => at + k), rarity, last: false, veiled: false });
+      out.push({ stacks: Array.from({ length: size }, (_, k) => at + k), rarity, last: false, veiled: false, firstVeil: false });
       at += size;
     }
     i = j;
   }
-  if (best && upto < n) out.push({ stacks: [n - 1], rarity: best.rarity, last: false, veiled: false });
+  for (let k = upto; best && k < n; k++) out.push({ stacks: [k], rarity: best.rarity, last: false, veiled, firstVeil: veiled && k === upto });
   const lastBeat = out[out.length - 1];
-  if (lastBeat) {
-    lastBeat.last = true;
-    lastBeat.veiled = rarityRank(lastBeat.rarity) >= SILHOUETTE_FROM;
-  }
+  if (lastBeat) lastBeat.last = true;
   return out;
 }
 
@@ -459,7 +463,7 @@ export class RevealFlow {
       case 'flip':
         return TIMES.flip;
       case 'shade':
-        return TIMES.shade[r];
+        return (b.plan.firstVeil ? TIMES.shade : TIMES.shadeNext)[r];
       case 'peel':
         return TIMES.peel;
       case 'show':

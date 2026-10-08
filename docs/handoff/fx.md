@@ -273,3 +273,62 @@ REQUESTS
 ## 2026-10-07 final leftovers
 
 REQUEST 2 above (the boss wave's first frame) is done on the director's side: the ribbon, the red edge and the boss strip are drawn through `renderOnce` in the wave before (`hud.md`, `director.md`): 22.3 to 17.5 ms and 17.1 to 16.2 ms. `src/fx/warm.ts` itself is unchanged.
+
+
+## 2026-10-08 VFX polish: painted battle effects
+
+Owner feedback: the zones (black hole, blizzard), the shots and the enemy shield looked cheap, and the shield read like one of our ground zones. "Battle effects may be out of tone" lifted the paper rule **for battle effects only**: cats, enemies and the interface stay paper. Battle effects are now painted sprites (made with the image generator), soft glow and additive light, driven by code.
+
+**The sprites** (`art/fx_v2`; 45 painted pictures in `src/assets/img/fx_*.webp`, 1.4 MB; `src/fx/paint.ts` lists them: `PAINT_IDS`, `paint(id)`, `paintKey(id)`). Generated with `tools/gen_image.py --batch art/fx_v2/jobs.json` (the cut-off engineer's 14) and `jobs2.json` (3 more): 17 images in all, 16 kept, 1 rejected; two of the kept ones (the cracks) are redrawn in code from the lines they contain. `python art/fx_v2/build_fx.py` cuts the sheets into single sprites (`art/raw/fx_*.png`; then `python tools/process_art.py`) and rebuilds the contact sheet `art/fx_v2/_sheet.png` (45 sprites on mid-grey and on wood; sent to the owner). What each sheet gave:
+
+| Sheet | Sprites | Notes |
+|---|---|---|
+| `sheet_shots_a` | `shot_pebble arrow shuriken cork moon coin` | kept |
+| `sheet_shots_b` | `shot_snow fire ice void note flask ladle bell` | kept; the snowball and the fireball touch, so this sheet is cut by explicit windows (`WINDOWS` in the script) |
+| `sheet_bursts` | `burst_star ring glint slash sparks puff` | near-white, tinted in code |
+| `sheet_marks` | `mark_scorch`, `mark_snow` | ground decals |
+| `sheet_bolts` (new) | `bolt_0..5` | six jagged horizontal lightning bolts |
+| `shield_shards` | `shard_0..5` | the six pieces of a broken dome |
+| `zone_frost`, `zone_snow` | blizzard ice sheet, snow swirl layer | |
+| `zone_hole`, `zone_holearms` | black hole with its accretion ring, and its spiral arms | |
+| `zone_ooze` | potion pool | was `zone_potion`: renamed because the dev server had cached an empty file under the old name |
+| `zone_puddle` | wet cell | |
+| `sheet_foe_rings` (new) | `foe_haste` (orange chevrons), `foe_heal` (crimson crosses) | the hostile rings |
+| `shield_dome` (**regenerated**) | steel glass sphere with hexagon panes | the first one (`art/fx_v2/_rejected/`) had noisy blotches inside where the keying failed. The new one is asked for as filled frosted glass; `glass()` in the script then makes the body a see-through film (16 % at the middle, 66 % at the edge), bakes the steel blue into the body and leaves the seams, nodes and rim white |
+| `shield_crack1/2` | two stages of cracks | the generator drew fat blue bands round the cracks: only the white hairlines are kept (`hairlines()`), with a soft glow |
+
+Every piece goes through `decontaminate()` (half-transparent pixels take the colour of the nearest solid pixel: the keying left cyan and magenta speckles). `tools/process_art.py`: `fx_zone_` and `fx_foe_` fit 384 px, `fx_shield_` 320 px, and these keep the picture's centre at the middle of the file (`KEEP_CENTRE`) because particles fall into a black hole's core and enemies stand inside the rings.
+
+**New in `src/fx`**
+- `light.ts`: `Light`, the named colours of the painted effects (the only hex literals outside `textures.ts`).
+- `flecks.ts`: `FleckLayer` (`fx.flecks`, `fx.fleck(texture, x, y, opts)`): pooled painted sprites with speed, gravity, drag, spin, size and fade, in a normal and an additive container, capped by tier (`FLECK_CAP` 96 / 64 / 32). Shards, glints, rings of light, flashes and what a shot sheds are flecks.
+- `arcs.ts`: `ArcLayer` (`fx.arc(x0, y0, x1, y1, { scale, delay, color })`): a painted bolt stretched along the line, a thinner one beside it, flickering between the six bolts for 0.22 s, with a glint and a star where it lands; ten pooled arcs; normal blend (additive light on the cream of the board is white on white).
+- `textures.ts`: two atlas shapes, `glow` (a soft round light) and `bubble` (a thin film, a ring, a highlight).
+- `areas.ts` rewritten (below); `areaArt.ts` (the baked paper sheets and dashed rings) and `bakeAreaStep / areaBaked / AREA_BAKE_STEPS` are gone: nothing is baked any more. `AREA_PICTURES[kind]` names the painted pictures of a kind for the warm-up.
+- `Fx.shieldBreak(x, y, { scale })`: a flash and a ring of light, the six painted shards thrown out with spin and gravity, sparkles. Reduced motion: half the speed, no gravity, no spin.
+
+**Ground areas** (`areas.ts`; the facade names and `AreaHandle.setLeft` are unchanged). Each is layers: a base on the floor with a soft edge at the real reach, painted layers turning at different speeds, particles that belong to it, an additive glow (one shared light container: a whole crowd of areas is one blend change) and a ring round the edge. All of them land (the base grows with an overshoot and a ring spreads), warn in the last second (the base draws in by 10 % and blinks at 2 Hz at most, the rim flashes; with `flashes` off or reduced motion, a steady dimming) and lift away.
+
+| Area | Layers and particles | Entrance / exit | Who |
+|---|---|---|---|
+| blizzard | `zone_frost` base (84 % opaque: the lane reads through), `zone_snow` twice (slow one way, faster the other, fading in), eight crystals falling in a slow swirl and melting, four glints, mid-blue rim, pale glow | grows from 35 % with a ring; draws in a little | friend, m_frost |
+| potion cloud | `zone_ooze` pool breathing and turning a little, nine bubbles rising, swelling and popping (`bubble`), three wisps of green steam, six drops thrown out as it lands, lime glow | grows from 30 % and splashes; dries up | friend, t_alch |
+| black hole | a dark `glow` under it, `zone_holearms` turning fast, `zone_hole` the other way slowly, twelve scraps and sparks (ember, magenta, violet, cream) spiralling into the core and shrinking, five stars orbiting, violet rim, ember glow at the core; spins up and the core swells in the warning | opens from a point (12 %) over 0.5 s; collapses to its core (88 %) when it leaves | friend, m_cosmo |
+| haste ring | `foe_haste` (orange chevrons, 82 %) running clockwise, six comets, a hot shade | 70 % to full | foe, clock |
+| heal ring | `foe_heal` (crimson crosses) turning back with a two-beat heartbeat, six crosses rising, a red shade | same | foe, pill |
+| wet cell | hazard tape, the berry sticker, `zone_puddle` at the cat's feet that dries in the warning, ripples and drops | as before | foe |
+| live cell | hazard tape, two painted bolts that flicker and mirror every 70 ms, the glyph and sparks | as before | foe |
+
+Friends against foes: friendly areas are round, soft, cool or magical (ice, lime, violet and ember); hostile ones are hot and hard (orange chevrons, crimson crosses) or wear hazard tape in a square; and they move differently (friends drift and swirl, foes turn like a gauge). The light-floor lesson: additive light on the pale kitchen floor is white, so rims, landing rings, streaks and lightning are painted (normal blend) in mid tones and only soft glows, glints and flashes are additive.
+
+**Quality tiers.** Low drops, in this order: the additive glow, the second snow swirl, half the particles of every area, what a shot sheds (`SHED_EVERY` 0.032 / 0.05 / 0.09 s), the light round a shot; flecks are capped at 32. Reduced motion: areas are the same picture, still (no throw, no landing ring), a steady dimming for the warning, arcs do not flicker, shots shed nothing. Flashes setting: the warning and the tape do not blink.
+
+**Measured.** The standard crowded scenario (chapter 3, wave 21, speed 3, 20 cats of which 12 make areas, about 38 enemies, 22 areas alive on average; `lg/perf0.js` of the scratchpad, 150 frames of tick + render + `gl.finish` after 120 of warm-up): before (the paper areas) mean 13.4 ms, p50 11.6, p95 25.8; after, three runs: mean 13.3 / 13.0 / 12.8, p50 11.4 / 11.2 / 11.4, p95 27.8 / 26.1 / 27.6. The same scenario with three shielded cones spawned every 15 frames (58 enemies): mean 12.7 and 13.1, 74 draw calls a frame. This machine is noisy by about 1.5 ms between runs: read it as no change.
+
+**Tests.** `fx.areas.test.ts` (33, rewritten: landing, rims and rings, how each area is built, tiers, reduced motion, flashes, pooling, cells), `fx.flecks.test.ts` (6), `fx.arcs.test.ts` (6; it found a real bug: a chain hop with no delay never flashed), `fx.specials.test.ts` and `view.warmup.test.ts` adapted (nothing is baked; the warm-up uploads the painted pictures: `warmArea` asks for `AREA_PICTURES`, every other painted picture at the `later` priority).
+
+**Not verified.** A real phone (touch, 60 fps, the memory of 45 more textures: about 13 MB of video memory at their sizes); the sound of any of it.
+
+REQUESTS
+1. Core (`src/core/assets.ts`): every image in `src/assets/img` is loaded at boot; the 45 `fx_*` pictures (1.4 MB) are only needed in a battle: load them with the battle scene, or after the title, to keep the first load as small as before.
+2. Audio (`src/audio`): a shield has no sound of its own; a hit on it plays the weapon's impact and the steel sparks. A short steel ping (`shield_hit`) would finish it; `shield_break` is still the paper tear.

@@ -53,7 +53,7 @@ export function createField(ctx: BattleContext): FieldPart {
   const enemies = new EnemyViews(env, layers.enemies);
   const spares = new FieldWarmup(battle, enemies, ground);
   const shots = new Projectiles(env, layers.projectiles);
-  const effects = new FieldEffects(env, enemies);
+  const effects = new FieldEffects(env, enemies, shots);
   // What the weapons leave on the field (swing arcs, stuck arrows, splats ...): over the cats and enemies, under the numbers.
   const marks = new WeaponMarks(env, layers.fxFront);
   const input = new FieldInput(env, layers.floor, layers.zones, layers.projectiles, units, cells);

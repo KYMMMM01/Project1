@@ -165,3 +165,16 @@ REQUESTS
 ## 2026-10-07 final leftovers
 
 `BannerService.dressBand(spec)` (new): dresses the alert lane's ribbon for `spec` and returns its root unshown, or null while a ribbon is up or waiting (or once destroyed). `mountBoss` uses it: in the `waveStart` of the wave before an elite or a boss it asks the warm queue (`src/fx/warm.ts`) for the ribbon (`renderOnce`) and for the red edge sprite, keyed per battle. The ribbon's words come from one helper (`warning(wave, boss)`) shared with the real warning, so what is drawn ahead is what is shown. Numbers and the strip: `hud.md`, "2026-10-07 final leftovers".
+
+
+## 2026-10-08 VFX polish
+
+The director's share of the painted battle effects (see `fx.md` and `field.md`, "2026-10-08 VFX polish").
+
+- **Chain lightning is jumping now** (`combat.ts`, `m_storm`): each hop of the chain is `fx.arc(x0, y0, x1, y1, { delay: i * 0.05, scale: 1 - 0.06 * i })`, a painted bolt flickering for a fifth of a second with a flash where it lands, hop after hop 50 ms apart (the old particle bolts and `stage.later` are gone). The sound is still one `strikeSound('m_storm')`.
+- **The storm cloud's bolt** (`boss.ts`, hazard `zap`): a painted arc from above the screen onto the cell (`color: ZAP`, scale 1.4): the hostile bolt is tinted warm mustard, the friendly one is the painted electric blue-white.
+- **Shield colour** (`palette.ts`): `SHIELD_COLOR` is `Light.shield` (steel blue) instead of the sky tape colour: the glance and sparks of a hit on a shield, the number of what it soaked and the elite caption wear the dome's colour. The "no purple" palette test still holds (the hue is 215 degrees).
+- **The shield's own picture is the field's** (the dome with its ripple, cracks and flinch, `field.md`); `shieldBreak` still plays `Fx.shieldBreak` at the enemy and the `shield_break` sound, now with the six painted shards. There is no sound of its own for a hit on a shield (REQUEST in `fx.md`).
+- **Nothing else changed.** Impacts, flashes, hit-stop, numbers and the weapon marks' gating are as they were; the projectile impact of splash shots still plays `shockwave` and the puff, over the field's new marks (the snow splat, the scorch with its flare).
+
+Tests: `view.director.palette.test.ts` and the policy tests unchanged and green; the arcs are tested in `fx.arcs.test.ts`.

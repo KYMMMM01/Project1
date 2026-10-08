@@ -11,6 +11,10 @@ import { startFxGovernor } from './governor';
 import { FloatingNumbers, type NumStyle, type NumberOpts } from './numbers';
 import { EmitterGroup, type FxHandle, type FxSequence, type FxTimeline } from './handles';
 import { AreaLayer, type AreaHandle, type DiscKind } from './areas';
+import { ArcLayer, type ArcOpts } from './arcs';
+import { FleckLayer, type FleckOpts } from './flecks';
+import { Light } from './light';
+import { SHARD_IDS, paint } from './paint';
 import { Loop, type FxEnv, type FxRect, type ZoneHandle } from './loops';
 import { ParticleSystem, type BurstMods, type EmitDef } from './particles';
 import { hitFlash } from './juice';
@@ -18,7 +22,7 @@ import { Rays, makeSpritePool, type RaysOpts } from './rays';
 import { FX_TIERS, REDUCED, fxSettings, motionSeconds, tierScale } from './settings';
 import { ScreenFx, Trauma, fxShake, screenFx } from './screen';
 import { CONFETTI, Hue } from './palette';
-import { ensureFxTextures } from './textures';
+import { ensureFxTextures, fxTexture } from './textures';
 import * as zones from './zones';
 import type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
 
@@ -160,6 +164,9 @@ export class Fx {
   private readonly loops: Loop[] = [];
   /** Pooled ground areas (blizzard, potion cloud, black hole, wet and live cells, enemy rings). */
   private readonly areas: AreaLayer;
+  /** Painted flecks (shards, glints, lights) and the lightning arcs: the battle effects that are not paper. */
+  readonly flecks: FleckLayer;
+  private readonly arcs: ArcLayer;
   private readonly timers: Tween[] = [];
   private readonly screen: ScreenFx;
   private readonly freeze: TimeFreeze | undefined;
@@ -181,6 +188,8 @@ export class Fx {
     this.root.addChild(this.ground);
     this.areas = new AreaLayer(this.ground);
     this.ps = new ParticleSystem(this.root, FX_TIERS[fxSettings.tier].particles);
+    this.flecks = new FleckLayer(this.root);
+    this.arcs = new ArcLayer(this.root, this.flecks);
     this.numbers = new FloatingNumbers(this.root, FX_TIERS[fxSettings.tier].numbers);
     this.screen = o.screen ?? screenFx;
     this.freeze = o.freeze;
@@ -204,6 +213,8 @@ export class Fx {
     if (this.tierApplied !== fxSettings.tier) this.syncTier();
     this.ps.update(dt);
     this.numbers.update(dt);
+    this.flecks.update(dt);
+    this.arcs.update(dt);
     for (let i = this.rayList.length - 1; i >= 0; i--) {
       const r = this.rayList[i] as Rays;
       r.update(dt);
@@ -226,6 +237,8 @@ export class Fx {
     for (const l of this.loops.slice()) l.dispose();
     this.loops.length = 0;
     this.areas.clear();
+    this.flecks.clear();
+    this.arcs.clear();
     for (const t of this.timers) t.kill();
     this.timers.length = 0;
   }
@@ -235,6 +248,8 @@ export class Fx {
     this.numbers.destroy();
     this.ps.destroy();
     this.areas.destroy();
+    this.arcs.destroy();
+    this.flecks.destroy();
     this.spritePool.drain((s) => s.destroy());
     this.root.destroy({ children: true });
   }
@@ -244,7 +259,7 @@ export class Fx {
       ...this.ps.stats(),
       numbers: this.numbers.count,
       rays: this.rayList.length,
-      loops: this.loops.length + this.areas.count,
+      loops: this.loops.length + this.areas.count + this.arcs.count,
       timers: this.timers.length,
       tier: fxSettings.tier,
     };
@@ -1149,6 +1164,19 @@ export class Fx {
     );
   }
 
+  /**
+   * One jump of a chain of lightning, painted: a bolt from (x0, y0) to (x1, y1) that flickers for a fifth of a second with a flash where it lands.
+   * Chain several for a storm cat, with `delay` growing hop by hop.
+   */
+  arc(x0: number, y0: number, x1: number, y1: number, o: ArcOpts = {}): void {
+    this.arcs.strike(x0, y0, x1, y1, o);
+  }
+
+  /** A painted fleck (see `FleckLayer`); false when the tier has no room for it. */
+  fleck(texture: Texture, x: number, y: number, o: FleckOpts): boolean {
+    return this.flecks.spawn(texture, x, y, o);
+  }
+
   healPlus(x: number, y: number, o: FxOpts = {}): void {
     const c = o.color ?? Hue.heal;
     const hi = lighten(c, 0.65);
@@ -1408,38 +1436,39 @@ export class Fx {
     );
   }
 
-  /** A shield (barrier) bursting: pale shards and crystals, a ring and sparkles. */
+  /**
+   * A shield bursting, painted: a flash and a ring of light, the six painted pieces of the dome thrown outward and falling, and
+   * sparkles. `scale` is the enemy's size against a cucumber.
+   */
   shieldBreak(x: number, y: number, o: FxOpts = {}): void {
-    const c = o.color ?? Hue.ice;
+    const c = o.color ?? Light.shield;
     const hi = lighten(c, 0.75);
     const s = o.scale ?? 1;
-    const m: BurstMods = { scale: s };
-    this.burst(
-      { tex: 'disc', prio: 1, count: 1, life: 0.2, size: 44, sizeEnd: 160, colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.8, sizeEase: Ease.cubicOut },
-      x, y, m,
-    );
-    this.burst(
-      { tex: 'starburst', prio: 1, count: 1, life: 0.14, size: 60, sizeEnd: 130, rot: [0, TAU], colors: [W, hi], fadeIn: 0, fadeOut: 0.7, sizeEase: Ease.cubicOut },
-      x, y, m,
-    );
-    this.shockwave(x, y, { color: c, radius: 95, scale: s });
-    this.burst(
-      {
-        tex: 'shard', prio: 1, count: 12, life: [0.5, 0.9], speed: [200, 520], gravity: 760, drag: 0.7, size: [16, 30], sizeEnd: [8, 14], spin: [-10, 10], rot: [0, TAU],
-        colors: [W, hi, c], alpha: 0.95, fadeIn: 0, fadeOut: 0.4,
-      },
-      x, y, m,
-    );
-    this.burst(
-      {
-        tex: 'crystal', prio: 1, count: 3, life: [0.6, 0.95], speed: [120, 300], gravity: 520, drag: 1, size: [22, 34], sizeEnd: [12, 18], spin: [-5, 5], rot: [0, TAU],
-        colors: [W, hi, c], alpha: 0.9, fadeIn: 0, fadeOut: 0.4,
-      },
-      x, y, m,
-    );
+    const calm = fxSettings.reducedMotion;
+    this.flecks.spawn(fxTexture('glow'), x, y, { life: 0.24, size: 80 * s, sizeEnd: 230 * s, color: hi, alpha: 0.9, add: true, fadeAt: 0.1 });
+    this.flecks.spawn(paint('burst_ring'), x, y, { life: 0.34, size: 60 * s, sizeEnd: 210 * s, color: hi, alpha: 0.95, add: true, fadeAt: 0.25 });
+    this.flecks.spawn(paint('burst_star'), x, y, { life: 0.16, size: 80 * s, sizeEnd: 150 * s, rot: rand(0, TAU), color: W, add: true, fadeAt: 0.2 });
+    for (let i = 0; i < SHARD_IDS.length; i++) {
+      const dir = (i / SHARD_IDS.length) * TAU + rand(-0.3, 0.3);
+      const speed = rand(160, 340) * (calm ? 0.5 : 1);
+      const size = rand(24, 38) * s;
+      this.flecks.spawn(paint(SHARD_IDS[i] as (typeof SHARD_IDS)[number]), x + Math.cos(dir) * 8 * s, y + Math.sin(dir) * 8 * s, {
+        life: rand(0.55, 0.85),
+        vx: Math.cos(dir) * speed,
+        vy: Math.sin(dir) * speed - 90,
+        gravity: calm ? 0 : 720,
+        drag: 0.9,
+        spin: calm ? 0 : rand(-9, 9),
+        rot: rand(0, TAU),
+        size,
+        sizeEnd: size * 0.75,
+        alpha: 0.95,
+        fadeAt: 0.55,
+      });
+    }
     this.burst(
       { tex: 'sparkle', prio: 1, count: 8, life: [0.4, 0.75], speed: [60, 230], drag: 2.4, size: [14, 26], sizeEnd: [3, 7], spin: [-3, 3], rot: [0, TAU], colors: [W, hi], fadeIn: 0.1, fadeOut: 0.5 },
-      x, y, m,
+      x, y, { scale: s },
     );
   }
 

@@ -6,16 +6,18 @@
 //   STILLS (seconds of extra full-size stills named <TAG>_s<n>), END (seconds after the last shot for one final still <TAG>_end),
 //   TALL (720 x 1600 with an inset), REDUCED (the reduced-motion form), MANY (a long list of stacks), SKIPTEXT (the Skip label, 건너뛰기 by default),
 //   PATTERN (the id of the climb pattern to stage, from CLIMBS in src/screens/shop/climb.ts: steady, late, leap, early, tease, quiet, quick; the
-//   stored result gets a seed that picks it, the way a replay would).
+//   stored result gets a seed that picks it, the way a replay would), TOPS (how many different cats of the best rank an epic or legendary
+//   opening holds, 1 to 4: each of them is a silhouette; the default is 1).
 // Keep a run under about 20 shots: the runner stops after 120 s. While other engineers save files the dev server reloads the page, so run it on a frozen copy
 // (a second Vite on another port, GAME_PORT=<port>).
 const card = (rarity, unit) => ({ rarity, unit });
-function build(kind, best, n, many, seed) {
+const TOP_UNITS = { epic: ['m_storm', 'w_viking', 'r_ninja', 't_bard'], legendary: ['w_samurai', 'r_gunner', 'm_frost', 't_alch'] };
+function build(kind, best, n, many, seed, tops) {
   const cards = [card('common', 'w_paw'), card('common', 'r_sling'), card('common', null), card('common', 'm_snow')];
   if (many) cards.push(card('common', 't_bell'), card('common', 'w_sword'), card('common', 'r_archer'), card('rare', 'm_fire'), card('rare', 'r_ninja'), card('rare', 'w_viking'), card('rare', null), card('epic', 'm_frost'), card('epic', 'w_viking'));
   if (best !== 'common') cards.push(card('rare', 'w_sword'));
-  if (best === 'epic' || best === 'legendary') cards.push(card('epic', 'm_storm'));
-  if (best === 'legendary') cards.push(card('legendary', 'w_samurai'));
+  if (best === 'legendary') cards.push(card('epic', 'm_storm'));
+  if (best === 'epic' || best === 'legendary') for (const u of TOP_UNITS[best].slice(0, tops)) cards.push(card(best, u));
   const out = [];
   for (let i = 0; i < n; i++) out.push({ id: 9000 + i, kind, seed, oddsVersion: 1, upgraded: 0, overflowGold: 0, batch: n > 1 ? 9000 : undefined, pity: { unit: null, cards: 0 }, cards });
   return n > 1 ? out : out[0];
@@ -37,7 +39,7 @@ if (typeof PATTERN !== 'undefined') {
   }, [IMP, BEST, COUNT, PATTERN]);
   console.log('PATTERN ' + PATTERN + ' seed ' + seed);
 }
-await ev((r) => { window.__dbg.meta.profile.data.stats.runs = 5; window.__rev = window.__dbg.collection.revealChest(r); }, build(KIND, BEST, COUNT, typeof MANY !== 'undefined' && MANY, seed));
+await ev((r) => { window.__dbg.meta.profile.data.stats.runs = 5; window.__rev = window.__dbg.collection.revealChest(r); }, build(KIND, BEST, COUNT, typeof MANY !== 'undefined' && MANY, seed, typeof TOPS !== 'undefined' ? TOPS : 1));
 const taps = (typeof TAPS !== 'undefined') ? TAPS : [];
 const skipAt = (typeof SKIPAT !== 'undefined') ? SKIPAT : -1;
 let now = 0;

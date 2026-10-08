@@ -134,8 +134,8 @@ interface Slot {
  * is promoted rank by rank on those beats, a ring snapping out and a chime a step higher each time, up to the best rank inside. The top
  * rank changes the whole stage (the floor dims, a second ring of gold rays, the chest lifts off the floor). Then the held breath and
  * the pop: a jump, a flat sunburst, a confetti cannon, four-point stars and a warm flash. Then one stack of cards at a time (commons
- * together) shoots up to centre stage face down, wobbles, flips, shows itself with a flourish that grows with its rank (the best card of
- * a good chest as a dark silhouette first) and flies down into its place in the summary grid, which builds up at the bottom. The skip
+ * together) shoots up to centre stage face down, wobbles, flips, shows itself with a flourish that grows with its rank (every card of the
+ * best rank of a good chest as a dark silhouette first, one after another, the last of them with the biggest flourish) and flies down into its place in the summary grid, which builds up at the bottom. The skip
  * button in the top corner is the only control until the summary; the summary is the final layout of the same cards.
  */
 class ChestReveal {
@@ -599,7 +599,7 @@ class ChestReveal {
         this.flipStart();
         break;
       case 'shade':
-        this.shade();
+        this.shade(e.beat);
         break;
       case 'peel':
         this.peel();
@@ -830,12 +830,13 @@ class ChestReveal {
     });
   }
 
-  /** The silhouette is up: a low thud and the rays behind it flare. */
-  private shade(): void {
-    audio.play('reel_stop', { volume: 0.7, pitch: 0.65 });
+  /** A silhouette is up: a low thud and the rays behind it flare; the ones after the first come quicker and land softer. */
+  private shade(bi: number): void {
+    const first = (this.flow.beats[bi] as BeatState).plan.firstVeil;
+    audio.play('reel_stop', { volume: first ? 0.7 : 0.55, pitch: 0.65 });
     haptic('medium');
     this.burst.punch();
-    this.kick(0.15);
+    this.kick(first ? 0.15 : 0.1);
   }
 
   /** The silhouette peels away: the card turns once more, its sound a step higher than the flip before. */

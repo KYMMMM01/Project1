@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Texture } from 'pixi.js';
 
-const KEYS = ['enemy_cucumber', 'enemy_clock', 'enemy_pill', 'boss_vacuum', 'unit_w_paw', 'relic_lucky_coin', 'icon_chest_wood', 'icon_hand', 'icon_fish', 'bg_kitchen'];
+const KEYS = ['enemy_cucumber', 'enemy_clock', 'enemy_pill', 'boss_vacuum', 'unit_w_paw', 'relic_lucky_coin', 'icon_chest_wood', 'icon_hand', 'icon_fish', 'bg_kitchen', 'fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_burst_ring', 'fx_shot_arrow', 'fx_shield_dome'];
 
 vi.mock('@/core/assets', () => ({
   imageKeys: () => KEYS,
@@ -16,11 +16,10 @@ vi.mock('@/fx/textures', () => ({
   fxVignette: () => Texture.WHITE,
 }));
 vi.mock('@/view/glyphs', () => ({ warmGlyphs: () => undefined }));
-vi.mock('@/fx/areaArt', () => ({ bakeArea: () => new Texture() }));
 const warmParticles = vi.fn();
 vi.mock('@/fx/particles', async (orig) => ({ ...(await orig<typeof import('@/fx/particles')>()), warmParticles: () => warmParticles() }));
 
-import { areaBaked, warm } from '@/fx';
+import { warm } from '@/fx';
 import type { BattleApi, UnitId, WavePreviewEntry } from '@/game';
 import { BattleWarmup } from '@/view/warmup';
 
@@ -111,12 +110,14 @@ describe('the battle warm-up', () => {
     expect(warm.has('img:icon_fish')).toBe(false);
   });
 
-  it('bakes every ground area, a piece a frame', () => {
+  it('puts the painted pictures of every ground area, and the other battle effects, on the card ahead of the first fight', () => {
     const { b } = fake({});
     new BattleWarmup(b as unknown as BattleApi);
-    const frames = drain();
-    for (const kind of ['frost', 'brew', 'void', 'haste', 'heal'] as const) expect(areaBaked(kind)).toBe(true);
-    expect(frames).toBeGreaterThan(5);
+    for (const key of ['fx_zone_frost', 'fx_zone_ooze', 'fx_zone_hole', 'fx_zone_holearms', 'fx_foe_haste', 'fx_foe_heal', 'fx_shot_arrow', 'fx_shield_dome']) {
+      expect(warm.has(`img:${key}`)).toBe(true);
+    }
+    drain();
+    expect(warm.pending).toBe(0);
   });
 
   it('does the shader first, then the coming wave, then the one after it, then what may be needed some time', () => {
@@ -138,9 +139,9 @@ describe('the battle warm-up', () => {
     const at = (key: string): number => order.indexOf(key);
     expect(at('pipe:particles')).toBe(0);
     expect(at('img:enemy_clock')).toBeLessThan(at('img:enemy_pill'));
-    expect(at('area:haste:0')).toBeLessThan(at('area:heal:0'));
+    expect(at('img:fx_foe_haste')).toBeLessThan(at('img:fx_foe_heal'));
     expect(at('img:enemy_pill')).toBeLessThan(at('img:unit_w_paw'));
-    expect(at('area:heal:3')).toBeLessThan(at('area:frost:0'));
+    expect(at('img:fx_foe_heal')).toBeLessThan(at('img:fx_zone_frost'));
   });
 
   it('looks at the preview again only when the wave or the phase has moved', () => {

@@ -3,14 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 // The card motion reads the kit's easing; nothing here needs a canvas.
 vi.mock('@/ui', () => ({ backOut: (s: number) => (t: number) => 1 + (s + 1) * Math.pow(t - 1, 3) + s * Math.pow(t - 1, 2) }));
 
-import type { ChestRarity } from '@/meta/types';
+import type { ChestRarity, ChestResult } from '@/meta/types';
 import { flipPose, flyPose, newCardPose, risePose, shadePose, showPose, stageScale, stageX, STAGE_GAP, wobblePose } from '../src/screens/shop/cardMotion';
 import { crownLift, newPose, popPose, shakeOffset, windupPose } from '../src/screens/shop/chestPose';
 import { CLIMBS, TOP_RANK, type ClimbPattern } from '../src/screens/shop/climb';
 import {
   beatDuration, beatHops, beatPower, beatsOf, FLIP_TURN, RevealFlow, TIMES, type FlowEvent, type FlowOpts,
 } from '../src/screens/shop/revealFlow';
-import { PLATE, rarityRank, stacksOf, type RevealStack } from '../src/screens/shop/revealPlan';
+import { mergePile, PLATE, rarityRank, stacksOf, type RevealStack } from '../src/screens/shop/revealPlan';
 
 const RARITIES: ChestRarity[] = ['common', 'rare', 'epic', 'legendary'];
 const stack = (key: string, rarity: ChestRarity, count = 1): RevealStack => ({ key, unit: null, rarity, count, bonus: false });
@@ -384,13 +384,24 @@ describe('the silhouette of the best card', () => {
     return log.filter((l) => 'beat' in l.e && l.e.beat === last && l.e.type !== 'tick').map((l) => l.e.type);
   };
 
-  it('is shown from the epic rank up, on the best card alone and nowhere else', () => {
+  it('is shown from the epic rank up, on every stack of the best rank (one beat each, at the end) and nowhere else', () => {
     expect(beatsOf(stacks({ common: 2, rare: 1 })).some((b) => b.veiled)).toBe(false);
-    for (const spec of [{ common: 1 }, { rare: 2 }, { common: 2, rare: 1 }]) expect(beatsOf(stacks(spec)).every((b) => !b.veiled)).toBe(true);
-    for (const spec of [{ epic: 1 }, { common: 3, epic: 2 }, { common: 3, rare: 2, epic: 1, legendary: 1 }]) {
-      const beats = beatsOf(stacks(spec));
-      expect(beats.filter((b) => b.veiled)).toHaveLength(1);
-      expect(beats[beats.length - 1]?.veiled).toBe(true);
+    for (const spec of [{ common: 1 }, { rare: 2 }, { common: 2, rare: 1 }, { rare: 3 }]) expect(beatsOf(stacks(spec)).every((b) => !b.veiled)).toBe(true);
+    const cases: Array<[Partial<Record<ChestRarity, number>>, number]> = [
+      [{ epic: 1 }, 1], [{ common: 3, epic: 2 }, 2], [{ common: 3, rare: 2, epic: 1, legendary: 1 }, 1], [{ epic: 2, legendary: 3 }, 3],
+      [{ common: 2, rare: 3, epic: 3 }, 3], [{ legendary: 4 }, 4], [{ common: 6, rare: 4, epic: 5, legendary: 6 }, 6],
+    ];
+    for (const [spec, count] of cases) {
+      const list = stacks(spec);
+      const beats = beatsOf(list);
+      const best = (list[list.length - 1] as RevealStack).rarity;
+      // The best rank's stacks are the last beats, one each and in order; every beat before them is a plain flip.
+      expect(beats.map((b) => b.veiled)).toEqual(beats.map((_, i) => i >= beats.length - count));
+      expect(beats.slice(beats.length - count).map((b) => b.stacks)).toEqual(Array.from({ length: count }, (_, i) => [list.length - count + i]));
+      for (const b of beats.slice(beats.length - count)) expect(b.rarity).toBe(best);
+      // The first of them is the one that holds the full time; the final one carries the finish.
+      expect(beats.map((b) => b.firstVeil)).toEqual(beats.map((_, i) => i === beats.length - count));
+      expect(beats.map((b) => b.last)).toEqual(beats.map((_, i) => i === beats.length - 1));
     }
   });
 
@@ -424,6 +435,112 @@ describe('the silhouette of the best card', () => {
     expect(flow.beats[0]?.phase).toBe('show');
     flow.tap();
     expect(flow.beats[0]?.phase).toBe('fly');
+  });
+
+  /** Seconds each silhouette of a flow is held (shade to peel), by beat. */
+  const holds = (log: Logged[]): Array<{ beat: number; held: number }> =>
+    log.filter((l) => l.e.type === 'shade').map((l) => {
+      const beat = (l.e as { beat: number }).beat;
+      const peel = log.find((p) => p.e.type === 'peel' && (p.e as { beat: number }).beat === beat) as Logged;
+      return { beat, held: peel.at - l.at };
+    });
+  const atBeat = (log: Logged[], b: number, type: string): number =>
+    times(log.filter((l) => 'beat' in l.e && l.e.beat === b), type)[0] as number;
+
+  it('shows every stack of the best rank as a silhouette, one after another: the first held the full time, the rest shorter, and the summary comes once', () => {
+    for (const best of ['epic', 'legendary'] as const) {
+      for (const count of [2, 3, 4]) {
+        const { flow, log, clock } = make(stacks({ common: 1, rare: 1, [best]: count }), { seed: 3 });
+        play(flow, 40, clock);
+        const first = flow.beats.length - count;
+        const shown = holds(log);
+        expect(shown.map((h) => h.beat)).toEqual(Array.from({ length: count }, (_, i) => first + i));
+        shown.forEach((h, i) => expect(Math.abs(h.held - (i === 0 ? TIMES.shade[best] : TIMES.shadeNext[best]))).toBeLessThan(1 / 30));
+        expect(TIMES.shadeNext[best]).toBeGreaterThanOrEqual(0.3);
+        expect(TIMES.shadeNext[best]).toBeLessThanOrEqual(0.4);
+        expect(TIMES.shadeNext[best]).toBeLessThan(TIMES.shade[best]);
+        // The next beat rises only when the one before has flown, so two silhouettes are never up at once.
+        for (let b = first + 1; b < flow.beats.length; b++) expect(atBeat(log, b, 'shade')).toBeGreaterThan(atBeat(log, b - 1, 'peel'));
+        // Only the last beat is the best card's finish.
+        expect(flow.beats.filter((b) => b.plan.last)).toHaveLength(1);
+        expect(flow.beats[flow.beats.length - 1]?.plan.veiled).toBe(true);
+        expect(types(log).filter((x) => x === 'summary')).toHaveLength(1);
+        for (const b of flow.beats) expect(b.phase).toBe('placed');
+      }
+    }
+  });
+
+  it('leaves the cards below the best rank as plain flips even when several share their rank', () => {
+    const { flow, log, clock } = make(stacks({ epic: 2, legendary: 2 }), { seed: 3 });
+    play(flow, 40, clock);
+    expect(holds(log).map((h) => h.beat)).toEqual([2, 3]);
+    const plain = log.filter((l) => 'beat' in l.e && l.e.beat < 2 && l.e.type !== 'tick').map((l) => l.e.type);
+    expect(plain).not.toContain('shade');
+    expect(plain).not.toContain('peel');
+  });
+
+  it('is hurried by taps one step each, silhouette after silhouette, and still ends in one summary', () => {
+    const { flow, log, clock } = make(stacks({ common: 1, legendary: 3 }), { seed: 3 });
+    let guard = 0;
+    while (!flow.summarised && guard++ < 2000) {
+      flow.tap();
+      play(flow, 1 / 30, clock);
+    }
+    expect(flow.summarised).toBe(true);
+    const shown = holds(log);
+    expect(shown).toHaveLength(3);
+    // Each tap moves a beat one step, so no silhouette waits for its time.
+    for (const h of shown) expect(h.held).toBeLessThan(0.2);
+    expect(types(log).filter((x) => x === 'summary')).toHaveLength(1);
+    // Each tap, one step: a silhouette gives way to its peel on the very next tap, and the flight lets the next beat rise.
+    const again = make(stacks({ legendary: 2 }), { seed: 3 });
+    guard = 0;
+    while (!again.log.some((l) => l.e.type === 'shade') && guard++ < 600) {
+      again.flow.tap();
+      play(again.flow, 1 / 30, again.clock);
+    }
+    expect(again.flow.beats[0]?.phase).toBe('shade');
+    expect(again.flow.beats[1]?.phase).toBe('queued');
+    again.flow.tap();
+    expect(again.flow.beats[0]?.phase).toBe('peel');
+    again.flow.tap();
+    expect(again.flow.beats[0]?.phase).toBe('show');
+    again.flow.tap();
+    expect(again.flow.beats[0]?.phase).toBe('fly');
+    expect(again.flow.beats[1]?.phase).toBe('rise');
+  });
+
+  it('gives a silhouette to every stack of the best rank of a whole pile of chests, not of each chest', () => {
+    const chest = (id: number, cards: ChestResult['cards']): ChestResult =>
+      ({ id, kind: 'gold', seed: id, oddsVersion: 1, upgraded: 0, overflowGold: 0, batch: 1, cards, pity: { unit: null, cards: 0 } }) as ChestResult;
+    const list = stacksOf(mergePile([
+      chest(1, [{ rarity: 'common', unit: 'w_paw' }, { rarity: 'epic', unit: 'm_storm' }, { rarity: 'legendary', unit: 'w_samurai' }]),
+      chest(2, [{ rarity: 'rare', unit: 'w_sword' }, { rarity: 'epic', unit: 'w_viking' }]),
+      chest(3, [{ rarity: 'legendary', unit: 'r_gunner' }, { rarity: 'legendary', unit: 'w_samurai' }]),
+    ]));
+    const beats = beatsOf(list);
+    // Two legendary cats in the whole pile (w_samurai opened twice is one stack); the epics of the first two chests stay plain flips.
+    const veiled = beats.filter((b) => b.veiled).flatMap((b) => b.stacks.map((i) => (list[i] as RevealStack).key));
+    expect(veiled).toHaveLength(2);
+    expect(new Set(veiled)).toEqual(new Set(['w_samurai', 'r_gunner']));
+    expect(beats.filter((b) => b.veiled).every((b) => b.rarity === 'legendary')).toBe(true);
+    expect(beats.slice(0, beats.length - 2).some((b) => b.veiled)).toBe(false);
+    const { flow, log, clock } = make(list, { seed: 3 });
+    play(flow, 40, clock);
+    expect(holds(log)).toHaveLength(2);
+    expect(types(log).filter((x) => x === 'summary')).toHaveLength(1);
+  });
+
+  it('can be skipped in the middle of the silhouettes: everything is placed at once and the summary comes once', () => {
+    const { flow, log, clock } = make(stacks({ common: 1, legendary: 3 }), { seed: 3 });
+    let guard = 0;
+    while (log.filter((l) => l.e.type === 'shade').length < 2 && guard++ < 3000) play(flow, 1 / 60, clock);
+    expect(flow.beats[flow.beats.length - 2]?.phase).toBe('shade');
+    flow.skip();
+    play(flow, 8, clock);
+    for (const b of flow.beats) expect(b.phase).toBe('placed');
+    expect(types(log).filter((x) => x === 'summary')).toHaveLength(1);
+    expect(log.filter((l) => l.e.type === 'shade')).toHaveLength(2);
   });
 });
 
@@ -627,6 +744,21 @@ describe('reduced motion', () => {
     const held = (times(log, 'peel')[0] as number) - (times(log, 'shade')[0] as number);
     expect(held).toBeGreaterThan(0.3);
     expect(held).toBeLessThan(0.5);
+  });
+
+  it('shows every silhouette of the best rank still for a moment, one after another, with no turn', () => {
+    const { flow, log, clock } = make(stacks({ common: 1, legendary: 3 }), { still: true, climb: CLIMBS.legendary[0] as ClimbPattern });
+    play(flow, 20, clock);
+    const shade = log.filter((l) => l.e.type === 'shade');
+    expect(shade).toHaveLength(3);
+    for (const l of shade) {
+      const beat = (l.e as { beat: number }).beat;
+      const peel = log.find((p) => p.e.type === 'peel' && (p.e as { beat: number }).beat === beat) as Logged;
+      expect(peel.at - l.at).toBeGreaterThan(0.3);
+      expect(peel.at - l.at).toBeLessThan(0.5);
+    }
+    for (const b of flow.beats) expect(b.phase).toBe('placed');
+    expect(types(log).filter((x) => x === 'summary')).toHaveLength(1);
   });
 
   it('counts a tap as the next colour of the climb, and as the opening in the held breath', () => {

@@ -226,7 +226,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
       stage.later(n * 0.06, () => {
         if (zap) {
           // Down from above the top edge of the screen onto the tile.
-          fx.lightning(x + rand(-30, 30), -ctx.layout.fieldY, x, y, { color: ZAP, branches: 2, thickness: 6 });
+          fx.arc(x + rand(-30, 30), -ctx.layout.fieldY, x, y, { color: ZAP, scale: 1.4 });
         } else {
           ps.burst(SPLASH_DROPS, x, y, { colors: [W, WET], scale: 0.9, count: 0.7 });
         }

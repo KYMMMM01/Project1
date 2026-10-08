@@ -153,13 +153,12 @@ describe('weapon marks', () => {
     marks.destroy();
   });
 
-  it('shatters a potion with its zone', () => {
+  it('leaves no mark of its own when a zone opens: the thrown flask, shard or orb lands in the shot layer', () => {
     const { env, layer, ev } = makeEnv();
     const marks = new WeaponMarks(env, layer);
     ev.emit('zoneStart', { zone: { uid: 1, unitId: 't_alch', x: 300, y: 100, radius: 80, timeLeft: 4, duration: 4 } });
-    expect(marks.count).toBe(1);
     ev.emit('zoneStart', { zone: { uid: 2, unitId: 'm_frost', x: 300, y: 100, radius: 90, timeLeft: 3, duration: 3 } });
-    expect(marks.count).toBe(1);
+    expect(marks.count).toBe(0);
     marks.destroy();
   });
 

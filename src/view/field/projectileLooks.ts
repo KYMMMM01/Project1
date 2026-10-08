@@ -1,54 +1,109 @@
-/** Which shape each unit fires and how it flies. Pure data, so it can be checked without a renderer. */
-import { mixColor } from '@/core/math';
-import { Color, TapeColors } from '@/ui';
+/**
+ * Which painted picture each unit fires and how it flies. Pure data, so it can be checked without a renderer.
+ *
+ * A shot is its painted picture, turned to point along its path (arrows, shards, the fireball's tail) or spinning (a shuriken, a
+ * ladle, a pebble), a soft additive streak behind it, a light round it, and a little of what it is made of shed along the way
+ * (dust, snow, embers, glints, steam, bubbles). Snowballs, fireballs, ladles, coins and flasks are thrown on an arc; the rest fly
+ * straight and fast. The cats that make an area (the ice queen, the cosmic cat, the alchemist) throw something too, a shard of ice,
+ * a dark star, a flask, and the area opens where it lands.
+ */
+import { RARITY_ORDER } from '@/ui';
+import { unitSpec } from '@/game';
 import type { UnitId } from '@/game/api';
+import { Light } from '@/fx/light';
+import type { PaintId } from '@/fx/paint';
 
 export type ProjectileShape =
-  | 'pebble' | 'arrow' | 'shuriken' | 'cork' | 'starArrow' | 'snowball' | 'fireball'
-  | 'bell' | 'ladle' | 'note' | 'flask' | 'coin' | 'orb';
+  | 'pebble' | 'arrow' | 'shuriken' | 'cork' | 'starArrow' | 'snowball' | 'fireball' | 'bell' | 'ladle' | 'note' | 'flask' | 'coin'
+  | 'shard' | 'voidOrb' | 'orb';
+
+/** What a shot sheds as it flies. */
+export type ShedKind = 'dust' | 'snow' | 'ember' | 'glint' | 'sparkle' | 'steam' | 'puff' | 'bubble';
 
 export interface ProjectileLook {
   shape: ProjectileShape;
-  /** Display length of the shape along its travel direction, px. */
+  /** The painted picture, drawn pointing along +x (the way it flies when it is `oriented`). */
+  paint: PaintId;
+  /** Display width of the picture at the lowest rank, px. */
   size: number;
-  /** Radians per second of spin (0 = points along its path). */
+  /** Radians per second of spin (0 = it does not spin). */
   spin: number;
-  /** Colour of the flat streak trailing behind, or 0 for none. */
-  trail: number;
-  /** Trail length in px. */
-  trailLength: number;
+  /** Turn the picture to point along its flight (arrows, shards, the fireball); the others spin or stay upright. */
+  oriented: boolean;
   /** Flip the coin edge-on and back (the coin only). */
   flip: boolean;
-  /** Turn the shape to point along its flight; upright shapes (bell, note, coin) stay level. */
-  oriented: boolean;
-  /** Drawn this many times its baked size: a shot has to read at the size of a cat on a phone. */
-  scale: number;
   /** Height of the arc the shot is lobbed in, px (0 = it flies straight). The simulation's path is straight; the arc is drawn on top. */
   lob: number;
+  /** The body's tint (the pale moon arrow is deepened so it reads on the cream board), default none. */
+  tint?: number;
+  /** A soft painted streak behind it: colour, length, thickness (px) and opacity; null for none. */
+  streak: { color: number; length: number; width: number; alpha: number } | null;
+  /** A soft additive light round it: colour, width as a multiple of `size`, opacity; null for none. */
+  glow: { color: number; size: number; alpha: number } | null;
+  shed: ShedKind | null;
 }
 
-/** Trails are the shot's own paper colour, pale, so they read as a swipe of paint on the floor. */
-const PALE = (c: number): number => mixColor(c, Color.paperLight, 0.45);
-
 const LOOKS: Partial<Record<UnitId, ProjectileLook>> = {
-  // A pebble tumbles; an arrow flies point first with a long thin swipe; a shuriken spins fast; a cork is a fat quick slug; a star arrow leaves a wide trail.
-  r_sling: { shape: 'pebble', size: 22, spin: 9, trail: Color.paperDim, trailLength: 26, flip: false, oriented: false, scale: 1.5, lob: 0 },
-  r_archer: { shape: 'arrow', size: 52, spin: 0, trail: Color.paperLight, trailLength: 34, flip: false, oriented: true, scale: 1.25, lob: 0 },
-  r_ninja: { shape: 'shuriken', size: 34, spin: 30, trail: Color.paperDim, trailLength: 26, flip: false, oriented: false, scale: 1.3, lob: 0 },
-  r_gunner: { shape: 'cork', size: 34, spin: 0, trail: PALE(Color.mustard), trailLength: 70, flip: false, oriented: true, scale: 1.4, lob: 0 },
-  r_star: { shape: 'starArrow', size: 38, spin: 0, trail: PALE(Color.mustard), trailLength: 96, flip: false, oriented: false, scale: 1.3, lob: 0 },
+  // A pebble tumbles in a puff of dust; an arrow flies point first with a thin pale streak; a shuriken spins fast with a cold glint;
+  // a cork is a fat quick slug with a trail of smoke; the moon arrow leaves a long silver streak and sparkles.
+  r_sling: { shape: 'pebble', paint: 'shot_pebble', size: 36, spin: 14, oriented: false, flip: false, lob: 0, streak: { color: Light.trailDust, length: 34, width: 12, alpha: 0.4 }, glow: null, shed: 'dust' },
+  r_archer: { shape: 'arrow', paint: 'shot_arrow', size: 88, spin: 0, oriented: true, flip: false, lob: 0, streak: { color: Light.trailGrass, length: 76, width: 6, alpha: 0.55 }, glow: null, shed: null },
+  r_ninja: { shape: 'shuriken', paint: 'shot_shuriken', size: 48, spin: 26, oriented: false, flip: false, lob: 0, streak: { color: Light.trailCold, length: 38, width: 10, alpha: 0.5 }, glow: { color: Light.cold, size: 1.5, alpha: 0.3 }, shed: 'glint' },
+  r_gunner: { shape: 'cork', paint: 'shot_cork', size: 50, spin: 0, oriented: true, flip: false, lob: 0, streak: { color: Light.trailCork, length: 96, width: 16, alpha: 0.45 }, glow: null, shed: 'puff' },
+  r_star: { shape: 'starArrow', paint: 'shot_moon', size: 96, spin: 0, tint: Light.moonBody, oriented: true, flip: false, lob: 0, streak: { color: Light.trailMoon, length: 130, width: 12, alpha: 0.6 }, glow: { color: Light.moon, size: 1.15, alpha: 0.45 }, shed: 'sparkle' },
   // Snowballs, fireballs, ladles and coins are thrown: they rise and fall on the way.
-  m_snow: { shape: 'snowball', size: 30, spin: 6, trail: TapeColors.sky.mark, trailLength: 26, flip: false, oriented: false, scale: 1.4, lob: 34 },
-  m_fire: { shape: 'fireball', size: 34, spin: 0, trail: PALE(Color.coral), trailLength: 60, flip: false, oriented: true, scale: 1.4, lob: 30 },
-  t_bell: { shape: 'bell', size: 32, spin: 0, trail: PALE(Color.mustard), trailLength: 20, flip: false, oriented: false, scale: 1.3, lob: 0 },
-  t_chef: { shape: 'ladle', size: 46, spin: 14, trail: Color.paperLight, trailLength: 20, flip: false, oriented: false, scale: 1.2, lob: 14 },
-  t_bard: { shape: 'note', size: 36, spin: 0, trail: PALE(Color.berry), trailLength: 26, flip: false, oriented: false, scale: 1.3, lob: 0 },
-  t_alch: { shape: 'flask', size: 34, spin: 8, trail: PALE(Color.leaf), trailLength: 24, flip: false, oriented: false, scale: 1.3, lob: 0 },
-  t_lucky: { shape: 'coin', size: 30, spin: 0, trail: PALE(Color.mustard), trailLength: 32, flip: true, oriented: false, scale: 1.3, lob: 20 },
+  m_snow: { shape: 'snowball', paint: 'shot_snow', size: 46, spin: 6, oriented: false, flip: false, lob: 34, streak: null, glow: { color: Light.cold, size: 1.5, alpha: 0.3 }, shed: 'snow' },
+  m_fire: { shape: 'fireball', paint: 'shot_fire', size: 80, spin: 0, oriented: true, flip: false, lob: 30, streak: { color: Light.trailFire, length: 70, width: 22, alpha: 0.5 }, glow: { color: Light.warm, size: 1.5, alpha: 0.5 }, shed: 'ember' },
+  t_bell: { shape: 'bell', paint: 'shot_bell', size: 60, spin: 0, oriented: true, flip: false, lob: 0, streak: null, glow: { color: Light.gold, size: 1.5, alpha: 0.4 }, shed: 'sparkle' },
+  t_chef: { shape: 'ladle', paint: 'shot_ladle', size: 72, spin: 12, oriented: false, flip: false, lob: 14, streak: null, glow: null, shed: 'steam' },
+  t_bard: { shape: 'note', paint: 'shot_note', size: 52, spin: 0, oriented: false, flip: false, lob: 0, streak: null, glow: { color: Light.note, size: 1.5, alpha: 0.4 }, shed: 'sparkle' },
+  t_lucky: { shape: 'coin', paint: 'shot_coin', size: 44, spin: 0, oriented: false, flip: true, lob: 20, streak: null, glow: { color: Light.gold, size: 1.5, alpha: 0.4 }, shed: 'glint' },
 };
 
-const FALLBACK: ProjectileLook = { shape: 'orb', size: 20, spin: 0, trail: Color.paperLight, trailLength: 28, flip: false, oriented: false, scale: 1.2, lob: 0 };
+/** What the area-making cats throw before their area opens: how it looks, and how fast it flies (px/s). */
+export interface CastLook {
+  look: ProjectileLook;
+  speed: number;
+}
+
+const CASTS: Partial<Record<UnitId, CastLook>> = {
+  m_frost: { look: { shape: 'shard', paint: 'shot_ice', size: 80, spin: 0, oriented: true, flip: false, lob: 0, streak: { color: Light.trailCold, length: 90, width: 14, alpha: 0.55 }, glow: { color: Light.cold, size: 1.4, alpha: 0.4 }, shed: 'snow' }, speed: 1100 },
+  m_cosmo: { look: { shape: 'voidOrb', paint: 'shot_void', size: 58, spin: 0, oriented: false, flip: false, lob: 0, streak: { color: Light.trailVoid, length: 60, width: 22, alpha: 0.45 }, glow: { color: Light.voidOrb, size: 1.9, alpha: 0.55 }, shed: 'sparkle' }, speed: 640 },
+  t_alch: { look: { shape: 'flask', paint: 'shot_flask', size: 54, spin: 9, oriented: false, flip: false, lob: 54, streak: null, glow: { color: Light.brew, size: 1.4, alpha: 0.3 }, shed: 'bubble' }, speed: 620 },
+};
+
+const FALLBACK: ProjectileLook = { shape: 'orb', paint: 'burst_glint', size: 30, spin: 0, oriented: false, flip: false, lob: 0, streak: null, glow: { color: Light.cold, size: 1.4, alpha: 0.4 }, shed: null };
 
 export function projectileLook(id: UnitId): ProjectileLook {
   return LOOKS[id] ?? FALLBACK;
+}
+
+/** The thing a zone-making cat throws, or null for a cat that throws nothing extra. */
+export function castLook(id: UnitId): CastLook | null {
+  return CASTS[id] ?? null;
+}
+
+/** Shortest and longest time a thrown cast takes, seconds: the area opens when it lands. */
+const CAST_MIN = 0.14;
+const CAST_MAX = 0.4;
+
+/** Seconds a cast of `id` flies over `distance` px (0 for a cat that casts nothing). */
+export function castSeconds(id: UnitId, distance: number): number {
+  const cast = CASTS[id];
+  if (!cast) return 0;
+  return Math.min(CAST_MAX, Math.max(CAST_MIN, distance / cast.speed));
+}
+
+/** A cat's rank in its class line, 0 (the common cat) to 4 (the legend). */
+export function rankOf(id: UnitId): number {
+  return Math.max(0, RARITY_ORDER.indexOf(unitSpec(id).rarity));
+}
+
+/** A higher rank throws a little bigger shot (up to 24 % wider) with a brighter light (up to 30 % stronger). */
+export function rankSize(id: UnitId): number {
+  return 1 + 0.06 * rankOf(id);
+}
+
+export function rankLight(id: UnitId): number {
+  return 0.8 + 0.075 * rankOf(id);
 }

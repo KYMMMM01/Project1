@@ -4,7 +4,8 @@ import { putTex } from '@/core/assets';
 /**
  * One procedural atlas for every particle shape, so the particle layer is a single draw call.
  * Shapes are evaluated per pixel from signed-distance functions: perfectly anti-aliased and flat (cut
- * paper has hard edges and no glow), white on transparent so a particle's colour comes purely from its tint. The atlas
+ * paper has hard edges and no glow), white on transparent so a particle's colour comes purely from its tint. The two exceptions
+ * are `glow` (a soft round light for the battle effects, which are not paper) and `bubble` (a thin ring, a faint film and a highlight). The atlas
  * is painted at 2x and registered with resolution 2, so a cell's size in the table below is already
  * in design px.
  */
@@ -38,6 +39,8 @@ export const FX_TEX_IDS = [
   'streak',
   'patch',
   'sun',
+  'glow',
+  'bubble',
 ] as const;
 
 export type FxTexId = (typeof FX_TEX_IDS)[number];
@@ -439,6 +442,32 @@ const CELLS: Cell[] = [
   },
   { id: 'patch', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdBox(x, y, 56, 56) - 8) },
   { id: 'sun', w: 128, h: 128, ax: 0.5, ay: 0.5, paint: (x, y) => aa(sdPoly(x, y, SUN)) },
+  {
+    id: 'glow',
+    w: 128,
+    h: 128,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const d = len(x, y) / 62;
+      return d >= 1 ? 0 : Math.pow(1 - d * d, 2);
+    },
+  },
+  {
+    id: 'bubble',
+    w: 96,
+    h: 96,
+    ax: 0.5,
+    ay: 0.5,
+    paint: (x, y) => {
+      const d = len(x, y);
+      const rim = aa(Math.abs(d - 43) - 2.4);
+      // A thin film that thickens toward the edge, and a bright slanted highlight at the upper left.
+      const film = d < 43 ? 0.1 + 0.22 * smooth(24, 43, d) : 0;
+      const hl = aa(sdEllipse(x + 17, y + 18, 11, 5.2)) * 0.95;
+      return Math.max(rim, film, hl);
+    },
+  },
 ];
 
 interface Packed {

@@ -9,7 +9,6 @@ vi.mock('@/fx/textures', () => ({
   fxTexture: () => Texture.WHITE,
   fxVignette: () => Texture.WHITE,
 }));
-vi.mock('@/fx/areaArt', () => ({ bakeArea: () => Texture.WHITE }));
 vi.mock('@/fx/particles', () => ({
   ParticleSystem: class {
     budget = { cap: 700 };
@@ -297,9 +296,8 @@ describe('Fx specials', () => {
       expect(tl.duration).toBeGreaterThan(tl.impact);
       spies.burst.mockClear();
       fx.purrHearts(0, 0);
-      fx.shieldBreak(0, 0);
       const cr = fx.coinRain();
-      expect(spies.burst.mock.calls.length).toBeGreaterThan(5);
+      expect(spies.burst.mock.calls.length).toBeGreaterThan(3);
       expect(cr.duration).toBeGreaterThan(1);
       expect(cr.duration).toBeLessThan(2.5);
     });

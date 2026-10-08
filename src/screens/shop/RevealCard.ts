@@ -13,18 +13,24 @@ import { NAME_GAP, NAME_LINE, NAME_SIZE, PLATE, rarityRank, type RevealStack } f
 /** The mat is this tall; the cream strip under it carries the count pill. */
 const MAT_H = 112;
 
-/** A cat as one flat paper shape in `ink`: its own picture cut out, or a plain disc when it has no picture (a wild card, a missing file). */
-function silhouette(unit: RevealStack['unit'], size: number, ink: number): Container {
+/**
+ * The silhouette's ink is black: a tint multiplies the picture's own colours, so any other dark keeps the light parts apart from the dark
+ * ones (the headband and the face read through it); only a tint of 0 turns every pixel into the same one and leaves the picture's edge as it is.
+ */
+const SILHOUETTE_INK = 0x000000;
+
+/** A cat as one flat black shape: its own picture cut out, or a plain disc when it has no picture (a wild card, a missing file). */
+function silhouette(unit: RevealStack['unit'], size: number): Container {
   const c = new Container();
   if (unit && hasTex(unitKey(unit))) {
     const t = tex(unitKey(unit));
     const s = new Sprite(t);
     s.anchor.set(0.5);
     s.scale.set(Math.min(size / Math.max(1, t.width), size / Math.max(1, t.height)));
-    s.tint = ink;
+    s.tint = SILHOUETTE_INK;
     c.addChild(s);
   } else {
-    c.addChild(new Graphics().circle(0, 0, size * 0.4).fill(ink));
+    c.addChild(new Graphics().circle(0, 0, size * 0.4).fill(SILHOUETTE_INK));
   }
   return c;
 }
@@ -40,7 +46,7 @@ function stageResolution(): number {
  * common, so it is told before it turns) that flips into a paper photo frame with the count on a pill at its foot and a "Wild" /
  * "Bonus" tag when it is one, and the cat's name under the frame. The frame is drawn at its natural size and scaled by the
  * layout; the name is counter-scaled so it is always `NAME_SIZE` on screen, wraps inside its cell and is never cut. The best card of a
- * good chest can first be shown veiled: the frame with the cat as one flat dark shape and nothing that says who it is, until it is
+ * good chest can first be shown veiled: the frame with the cat as one flat black shape and nothing that says who it is, until it is
  * unveiled. Origin = centre of the frame.
  */
 export class RevealCard extends Container {
@@ -142,8 +148,7 @@ export class RevealCard extends Container {
 
   private veil(): void {
     if (!this.shade) {
-      const ink = mixColor(Color.inkDeep, Rarity[this.stack.rarity].dark, 0.3);
-      this.shade = silhouette(this.stack.unit, this.shadeSize, ink);
+      this.shade = silhouette(this.stack.unit, this.shadeSize);
       this.shade.position.copyFrom(this.art.position);
       this.face.addChildAt(this.shade, this.face.getChildIndex(this.art) + 1);
     }

@@ -7,7 +7,8 @@ The file-name prefix selects the treatment:
     boss_*    trim, fit inside 480 px
     icon_*    trim, fit inside 192 px
     relic_*   trim, fit inside 192 px
-    fx_*      trim, fit inside 256 px
+    fx_*      trim, fit inside 256 px (fx_zone_ and fx_foe_: 384 px, fx_shield_: 320 px; these keep the picture's centre
+              at the middle of the file, because particles and enemies are placed against that point)
     ui_*      trim, fit inside 512 px
     logo_*    trim, fit inside 640 px wide
     bg_*      scale to 720 px wide keeping the full picture, opaque WebP
@@ -37,12 +38,17 @@ SPRITE_MAX = {
     "icon_chest_": 360,  # drawn large in the chest opening; listed before "icon_" because the first prefix wins
     "icon_": 192,
     "relic_": 192,
+    "fx_zone_": 384,
+    "fx_foe_": 384,
+    "fx_shield_": 320,
     "fx_": 256,
     "ui_": 512,
     "logo_": 640,
 }
 ALPHA_THRESHOLD = 12
 PAD = 4
+# Pictures with a meaningful middle (a black hole's core, a shield dome): trimmed to a square round the centre, not to the bounding box.
+KEEP_CENTRE = ("fx_zone_", "fx_foe_", "fx_shield_")
 
 
 def trim_alpha(im: Image.Image) -> Image.Image:
@@ -52,6 +58,16 @@ def trim_alpha(im: Image.Image) -> Image.Image:
         return im
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
     return im.crop((int(x0), int(y0), int(x1), int(y1)))
+
+
+def trim_centred(im: Image.Image) -> Image.Image:
+    a = np.asarray(im)[..., 3]
+    ys, xs = np.where(a > ALPHA_THRESHOLD)
+    if len(xs) == 0:
+        return im
+    cx, cy = im.width / 2, im.height / 2
+    half = int(np.ceil(max(cx - xs.min(), xs.max() + 1 - cx, cy - ys.min(), ys.max() + 1 - cy)))
+    return im.crop((int(cx - half), int(cy - half), int(cx + half), int(cy + half)))
 
 
 def clean_alpha(im: Image.Image) -> Image.Image:
@@ -70,7 +86,8 @@ def process_sprite(src: Path, dst: Path, max_side: int) -> str:
     im = Image.open(src).convert("RGBA")
     if not has_real_alpha(im):
         return "NO-ALPHA (background is opaque; regenerate with a transparent background)"
-    im = trim_alpha(clean_alpha(im))
+    im = clean_alpha(im)
+    im = trim_centred(im) if src.name.startswith(KEEP_CENTRE) else trim_alpha(im)
     w, h = im.size
     scale = min(1.0, max_side / max(w, h))
     if scale < 1.0:

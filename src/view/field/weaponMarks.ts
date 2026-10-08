@@ -1,7 +1,8 @@
 /**
- * The marks of a weapon on the playfield, cut from paper and pooled: what a swing leaves in the air (an arc, a thin line, a wide
- * sweep), what a blow leaves where it lands (a star burst for a blunt hit, a stuck arrow, a splat, a scorch, a spark, a ring, notes,
- * a coin) and the puff of a cork gun. Which cat makes which mark is the table in `view/weapons.ts`; this class only draws them.
+ * The marks of a weapon on the playfield, painted and pooled: what a swing leaves in the air (an arc, a thin line, a wide sweep),
+ * what a blow leaves where it lands (a star burst for a blunt hit, a stuck arrow, a splat, a scorch with the flare of the fire, a spark,
+ * a ring of light, notes, a coin) and the puff of a cork gun. The bright ones are drawn with additive light, so a blow lights up the
+ * enemy it lands on for a moment. Which cat makes which mark is the table in `view/weapons.ts`; this class only draws them.
  *
  * Every mark is a small pooled group of sprites that animates analytically for a fraction of a second: nothing is allocated
  * while a fight runs, and a crowded moment cannot pile marks up (a fixed number at once, and the light ones give way first).
@@ -9,6 +10,8 @@
 import { Container, Sprite, type Texture } from 'pixi.js';
 import { clamp01, mixColor } from '@/core/math';
 import { Ease } from '@/core/tween';
+import { Light } from '@/fx/light';
+import { paint, type PaintId } from '@/fx/paint';
 import { fxSettings } from '@/fx/settings';
 import { fxTex, type FxTexId } from '@/fx/textures';
 import { Hue } from '@/fx/palette';
@@ -20,7 +23,7 @@ import { weaponStyle, type ImpactMark } from '../weapons';
 import type { FieldEnv } from './env';
 
 export type MarkKind =
-  | 'star' | 'slash' | 'line' | 'arrow' | 'splat' | 'scorch' | 'spark' | 'ring' | 'notes' | 'coin' | 'shatter' | 'puff';
+  | 'star' | 'slash' | 'line' | 'arrow' | 'splat' | 'scorch' | 'flare' | 'spark' | 'ring' | 'notes' | 'coin' | 'puff';
 
 /** Marks alive at once, and how many a single frame may start. */
 const MAX_MARKS = 22;
@@ -46,7 +49,7 @@ interface Spawn {
 class Mark {
   readonly root = new Container();
   readonly parts: Sprite[] = [];
-  /** Natural size of each part's texture in design px (1 for a baked picture, which is scaled, not sized). */
+  /** Natural size of each part's texture in design px (the size of the picture, for a painted one, which is scaled, not sized). */
   readonly nw = new Float32Array(PARTS).fill(1);
   readonly nh = new Float32Array(PARTS).fill(1);
   kind: MarkKind = 'star';
@@ -91,23 +94,29 @@ class Mark {
     s.visible = true;
   }
 
-  /** Dress part `i` as a baked picture drawn at `k` times its natural size. */
-  art(i: number, texture: Texture, k: number): void {
+  /** Dress part `i` as a painted picture `w` design px wide (its height follows the picture's shape). */
+  paint(i: number, id: PaintId, w: number, tint: number = Color.white): void {
+    const texture: Texture = paint(id);
     const s = this.parts[i] as Sprite;
     s.texture = texture;
     s.anchor.set(0.5);
-    this.nw[i] = 1;
-    this.nh[i] = 1;
-    s.tint = Color.white;
+    this.nw[i] = Math.max(1, texture.width);
+    this.nh[i] = Math.max(1, texture.height);
+    s.tint = tint;
     s.alpha = 1;
     s.rotation = 0;
     s.position.set(0, 0);
-    s.scale.set(k);
+    s.scale.set(w / (this.nw[i] as number));
     s.visible = true;
   }
 
   size2(i: number, w: number, h: number): void {
     (this.parts[i] as Sprite).scale.set(w / (this.nw[i] as number), h / (this.nh[i] as number));
+  }
+
+  /** Resize part `i` to `w` wide, keeping its picture's shape. */
+  size1(i: number, w: number): void {
+    (this.parts[i] as Sprite).scale.set(w / (this.nw[i] as number));
   }
 
   hideAll(): void {
@@ -117,7 +126,12 @@ class Mark {
 
 /** Seconds each kind lasts. */
 const LIFE: Readonly<Record<MarkKind, number>> = {
-  star: 0.24, slash: 0.2, line: 0.22, arrow: 0.8, splat: 0.55, scorch: 1, spark: 0.18, ring: 0.36, notes: 0.85, coin: 0.6, shatter: 0.7, puff: 0.5,
+  star: 0.26, slash: 0.22, line: 0.22, arrow: 0.8, splat: 0.7, scorch: 1.1, flare: 0.24, spark: 0.2, ring: 0.4, notes: 0.85, coin: 0.6, puff: 0.5,
+};
+
+/** The marks that are light (drawn additively): the rest are painted things lying on the floor or flying. */
+const ADDS: Readonly<Record<MarkKind, boolean>> = {
+  star: true, slash: true, line: true, arrow: false, splat: false, scorch: false, flare: true, spark: true, ring: true, notes: false, coin: false, puff: false,
 };
 
 export class WeaponMarks {
@@ -143,7 +157,6 @@ export class WeaponMarks {
       ev.on('strike', (e) => this.onStrike(e)),
       ev.on('hit', (e) => this.onHit(e)),
       ev.on('projectileEnd', (e) => this.onProjectileEnd(e)),
-      ev.on('zoneStart', (e) => this.onZoneStart(e)),
     );
   }
 
@@ -181,7 +194,7 @@ export class WeaponMarks {
     if (e.dot || !e.unitId) return;
     const style = weaponStyle(e.unitId);
     const kind = KIND_OF[style.impact];
-    // Splashes land with their shot and a shatter with its zone: those are drawn once, not once per enemy.
+    // Splashes land with their shot and a flask with its area: those are drawn once, not once per enemy.
     if (!kind) return;
     const def = enemyDef(e.enemy.id);
     const big = def.traits.includes('boss') || def.traits.includes('elite');
@@ -205,13 +218,10 @@ export class WeaponMarks {
     if (!e.hit) return;
     const style = weaponStyle(e.projectile.unitId);
     if (style.impact === 'splat') this.spawn({ kind: 'splat', x: e.x, y: e.y + 8, angle: e.projectile.angle, size: style.weight, tint: style.tint });
-    else if (style.impact === 'scorch') this.spawn({ kind: 'scorch', x: e.x, y: e.y + 8, angle: 0, size: style.weight, tint: style.tint });
-  }
-
-  private onZoneStart(e: BattleEvents['zoneStart']): void {
-    const z = e.zone;
-    const style = weaponStyle(z.unitId);
-    if (style.impact === 'shatter') this.spawn({ kind: 'shatter', x: z.x, y: z.y, angle: 0, size: Math.max(1, z.radius / 80), tint: style.tint });
+    else if (style.impact === 'scorch') {
+      this.spawn({ kind: 'scorch', x: e.x, y: e.y + 8, angle: 0, size: style.weight, tint: style.tint });
+      this.spawn({ kind: 'flare', x: e.x, y: e.y, angle: 0, size: style.weight, tint: Light.warm });
+    }
   }
 
   // ── pool ──
@@ -237,10 +247,11 @@ export class WeaponMarks {
     m.seed = (this.seq++ * 0.6180339) % 1;
     m.hideAll();
     m.root.visible = true;
+    m.root.blendMode = ADDS[s.kind] ? 'add' : 'normal';
     m.root.position.set(s.x, s.y);
     m.root.rotation = 0;
     m.root.alpha = 1;
-    dress(m, this.env);
+    dress(m);
     this.live.push(m);
     animate(m, this.env);
   }
@@ -272,7 +283,7 @@ export class WeaponMarks {
   }
 }
 
-/** Which mark an impact draws on the enemy (null = drawn elsewhere: with the shot's landing, or with the zone). */
+/** Which mark an impact draws on the enemy (null = drawn elsewhere: with the shot's landing, or where the thrown flask lands). */
 const KIND_OF: Readonly<Record<ImpactMark, MarkKind | null>> = {
   star: 'star', slash: 'slash', line: 'line', arrow: 'arrow', splat: null, scorch: null, spark: 'spark', ring: 'ring', notes: 'notes', coin: 'coin', shatter: null,
 };
@@ -289,62 +300,57 @@ const CELL_Y = Array.from({ length: CELL_COUNT }, (_, c) => cellCenterY(c));
 
 // ───────────────────────────── dressing and animation of each kind ─────────────────────────────
 
-const INK = Color.inkSoft;
-
-function dress(m: Mark, env: FieldEnv): void {
+function dress(m: Mark): void {
   const tint = m.tint;
   switch (m.kind) {
     case 'star':
-      m.atlas(0, 'starburst', 60, 60, tint);
-      m.atlas(1, 'starburst', 34, 34, CREAM);
+      m.paint(0, 'burst_star', 84, tint);
+      m.paint(1, 'burst_glint', 70, CREAM);
       break;
     case 'slash':
-      m.atlas(0, 'slash', 150, 150, mixColor(tint, Color.inkSoft, 0.35));
-      m.atlas(1, 'slash', 140, 140, CREAM);
+      m.paint(0, 'burst_slash', 160, mixColor(tint, Light.shieldHit, 0.25));
+      m.paint(1, 'burst_slash', 140, CREAM);
       break;
     case 'line':
       m.atlas(0, 'streak', 200, 10, CREAM);
       m.atlas(1, 'streak', 200, 4, tint);
+      m.paint(2, 'burst_glint', 54, CREAM);
       break;
     case 'arrow':
-      m.art(0, env.art.projectile.arrow, 1.1);
+      m.paint(0, 'shot_arrow', 68);
       break;
     case 'splat':
-      m.atlas(0, 'puddle', 80, 40, mixColor(tint, CREAM, 0.15));
-      m.atlas(1, 'puddle', 46, 24, CREAM);
-      for (let i = 2; i < 5; i++) m.atlas(i, 'droplet', 10, 14, i === 3 ? CREAM : tint);
+      m.paint(0, 'mark_snow', 100, Light.shieldHit);
+      m.paint(1, 'burst_puff', 52, Light.iceWhite);
+      for (let i = 2; i < 5; i++) m.atlas(i, 'droplet', 10, 14, i === 3 ? CREAM : Light.iceWhite);
       break;
     case 'scorch':
-      m.atlas(0, 'puddle', 84, 42, INK);
-      m.atlas(1, 'starburst', 60, 60, tint);
-      m.atlas(2, 'dot', 8, 8, Hue.ember);
-      m.atlas(3, 'dot', 6, 6, Hue.spark);
+      m.paint(0, 'mark_scorch', 104, Light.shieldHit);
+      m.atlas(1, 'dot', 8, 8, Hue.ember);
+      m.atlas(2, 'dot', 6, 6, Hue.spark);
+      break;
+    case 'flare':
+      m.paint(0, 'burst_star', 100, tint);
+      m.paint(1, 'burst_glint', 80, CREAM);
       break;
     case 'spark':
-      m.atlas(0, 'sparkle', 46, 46, CREAM);
+      m.paint(0, 'burst_glint', 64, CREAM);
       m.atlas(1, 'spark', 42, 9, tint);
       m.atlas(2, 'spark', 36, 8, tint);
       break;
     case 'ring':
-      m.atlas(0, 'ring', 30, 30, tint);
-      m.atlas(1, 'ring', 22, 22, CREAM);
+      m.paint(0, 'burst_ring', 36, tint);
+      m.paint(1, 'burst_ring', 26, CREAM);
       break;
     case 'notes':
-      for (let i = 0; i < 3; i++) m.art(i, env.art.projectile.note, 0.9 + 0.12 * i);
+      for (let i = 0; i < 3; i++) m.paint(i, 'shot_note', 30 + 5 * i);
       break;
     case 'coin':
-      m.art(0, env.art.projectile.coin, 1.2);
+      m.paint(0, 'shot_coin', 42);
       m.atlas(1, 'sparkle', 34, 34, Hue.sun);
       break;
-    case 'shatter':
-      m.art(0, env.art.projectile.flask, 1.3);
-      m.atlas(1, 'puddle', 90, 45, tint);
-      for (let i = 2; i < 5; i++) m.atlas(i, 'shard', 18, 18, i === 3 ? CREAM : mixColor(tint, CREAM, 0.4));
-      (m.parts[1] as Sprite).visible = false;
-      for (let i = 2; i < 5; i++) (m.parts[i] as Sprite).visible = false;
-      break;
     case 'puff':
-      for (let i = 0; i < 3; i++) m.atlas(i, 'smoke', 20, 20, i === 1 ? Hue.dust : CREAM);
+      for (let i = 0; i < 3; i++) m.paint(i, 'burst_puff', 20, i === 1 ? Light.dust : Light.smoke);
       break;
   }
 }
@@ -355,12 +361,12 @@ function animate(m: Mark, env: FieldEnv): void {
   const p = clamp01(age / m.life);
   const k = m.size;
   const fade = 1 - clamp01((p - 0.55) / 0.45);
-  const [a, b, c, d] = m.parts as [Sprite, Sprite, Sprite, Sprite, Sprite];
+  const [a, b, c] = m.parts as [Sprite, Sprite, Sprite, Sprite, Sprite];
   switch (m.kind) {
     case 'star': {
       const pop = calm ? 1 : 0.35 + 0.85 * Ease.backOut(clamp01(age / 0.07));
-      m.size2(0, 60 * k * pop, 60 * k * pop);
-      m.size2(1, 34 * k * pop, 34 * k * pop);
+      m.size1(0, 84 * k * pop);
+      m.size1(1, 60 * k * pop);
       a.rotation = 0.2 + m.seed * 1.5;
       b.rotation = -0.3 + m.seed;
       m.root.alpha = 1 - clamp01((age - 0.1) / (m.life - 0.1));
@@ -369,13 +375,13 @@ function animate(m: Mark, env: FieldEnv): void {
     case 'slash': {
       const sweep = calm ? 1 : Ease.cubicOut(clamp01(age / 0.1));
       m.root.rotation = m.angle + (calm ? 0 : -0.45 + 0.9 * sweep);
-      m.size2(0, 150 * k * (0.5 + 0.55 * sweep), 150 * k * (0.7 + 0.3 * sweep));
-      m.size2(1, 140 * k * (0.5 + 0.55 * sweep), 140 * k * (0.7 + 0.3 * sweep));
+      m.size1(0, 170 * k * (0.5 + 0.55 * sweep));
+      m.size1(1, 150 * k * (0.5 + 0.55 * sweep));
       m.root.alpha = p < 0.45 ? 1 : 1 - (p - 0.45) / 0.55;
       break;
     }
     case 'line': {
-      // One thin fast line: it is drawn across in a few frames, holds, then thins away.
+      // One thin fast line: it is drawn across in a few frames, holds, then thins away; a glint rides its tip.
       const draw = calm ? 1 : Ease.cubicOut(clamp01(age / 0.05));
       const thin = p < 0.3 ? 1 : 1 - (p - 0.3) / 0.7;
       const len = 200 * k * draw;
@@ -385,6 +391,8 @@ function animate(m: Mark, env: FieldEnv): void {
         s.x = -len / 2;
         m.size2(i, len, (i === 0 ? 10 : 4) * thin);
       }
+      c.x = len / 2;
+      m.size1(2, 54 * k * thin);
       break;
     }
     case 'arrow': {
@@ -399,11 +407,15 @@ function animate(m: Mark, env: FieldEnv): void {
       break;
     }
     case 'splat': {
+      // A snow splat lies flat on the floor; a puff of snow leaps off it and the drops fly.
       const grow = calm ? 1 : Ease.backOut(clamp01(age / 0.1));
-      m.size2(0, 80 * k * (0.4 + 0.6 * grow), 40 * k * (0.4 + 0.6 * grow));
-      m.size2(1, 46 * k * (0.4 + 0.6 * grow), 24 * k * (0.4 + 0.6 * grow));
-      a.alpha = p < 0.5 ? 0.9 : 0.9 * (1 - (p - 0.5) / 0.5);
-      b.alpha = a.alpha * 0.7;
+      const w = 100 * k * (0.4 + 0.6 * grow);
+      a.scale.set(w / (m.nw[0] as number), (w * 0.52) / (m.nh[0] as number));
+      a.alpha = p < 0.55 ? 0.95 : 0.95 * (1 - (p - 0.55) / 0.45);
+      const puff = calm ? 0.3 : Ease.cubicOut(clamp01(age / 0.3));
+      m.size1(1, (30 + 38 * puff) * k);
+      b.y = -10 - 16 * puff;
+      b.alpha = 0.8 * (1 - puff);
       const fly = calm ? 0 : 1;
       for (let i = 2; i < 5; i++) {
         const s = m.parts[i] as Sprite;
@@ -417,34 +429,43 @@ function animate(m: Mark, env: FieldEnv): void {
       break;
     }
     case 'scorch': {
-      const flash = calm ? 0.6 : 1 - clamp01(age / 0.14);
-      m.size2(1, 70 * k * (0.5 + 0.7 * flash), 70 * k * (0.5 + 0.7 * flash));
-      b.alpha = flash;
-      a.alpha = 0.42 * (p < 0.55 ? 1 : 1 - (p - 0.55) / 0.45);
+      // The char stays on the floor and cools; embers rise from it.
+      const w = 104 * k * (calm ? 1 : 0.6 + 0.4 * Ease.backOut(clamp01(age / 0.12)));
+      a.scale.set(w / (m.nw[0] as number), (w * 0.55) / (m.nh[0] as number));
+      a.alpha = p < 0.5 ? 0.95 : 0.95 * (1 - (p - 0.5) / 0.5);
       const rise = calm ? 0 : 1;
-      c.position.set(-6 * k, -age * 38 * rise);
-      d.position.set(8 * k, -age * 30 * rise - 4);
-      c.alpha = d.alpha = 1 - clamp01((age - 0.3) / 0.35);
+      b.position.set(-8 * k, -age * 40 * rise);
+      c.position.set(10 * k, -age * 32 * rise - 4);
+      b.alpha = c.alpha = 1 - clamp01((age - 0.3) / 0.5);
+      break;
+    }
+    case 'flare': {
+      // The flash of a fireball landing: a burst of light that opens and is gone in a few frames.
+      const open = calm ? 1 : Ease.cubicOut(clamp01(age / 0.1));
+      m.size1(0, 100 * k * (0.5 + 0.7 * open));
+      m.size1(1, 80 * k * (0.4 + 0.6 * open));
+      a.rotation = m.seed * 3;
+      m.root.alpha = 1 - clamp01((age - 0.06) / (m.life - 0.06));
       break;
     }
     case 'spark': {
       const pop = calm ? 1 : 0.4 + 0.7 * Ease.backOut(clamp01(age / 0.06));
-      m.size2(0, 46 * k * pop, 46 * k * pop);
+      m.size1(0, 64 * k * pop);
       a.rotation = m.seed * 2;
       const out = calm ? 0.5 : clamp01(age / 0.12);
       b.rotation = m.angle + 2.4;
       c.rotation = m.angle - 2.4;
-      b.position.set(Math.cos(m.angle + 2.4) * 22 * out, Math.sin(m.angle + 2.4) * 22 * out);
-      c.position.set(Math.cos(m.angle - 2.4) * 18 * out, Math.sin(m.angle - 2.4) * 18 * out);
+      b.position.set(Math.cos(m.angle + 2.4) * 24 * out, Math.sin(m.angle + 2.4) * 24 * out);
+      c.position.set(Math.cos(m.angle - 2.4) * 20 * out, Math.sin(m.angle - 2.4) * 20 * out);
       m.root.alpha = 1 - clamp01((age - 0.06) / (m.life - 0.06));
       break;
     }
     case 'ring': {
       const e1 = calm ? 1 : Ease.cubicOut(p);
-      m.size2(0, (30 + 100 * e1) * k, (30 + 100 * e1) * k);
-      a.alpha = 0.9 * (1 - p);
+      m.size1(0, (36 + 130 * e1) * k);
+      a.alpha = 0.95 * (1 - p);
       const e2 = calm ? 0 : Ease.cubicOut(clamp01((age - 0.05) / (m.life - 0.05)));
-      m.size2(1, (22 + 70 * e2) * k, (22 + 70 * e2) * k);
+      m.size1(1, (26 + 90 * e2) * k);
       b.alpha = calm ? 0 : 0.8 * (1 - clamp01((age - 0.05) / (m.life - 0.05)));
       break;
     }
@@ -464,35 +485,11 @@ function animate(m: Mark, env: FieldEnv): void {
     case 'coin': {
       const hop = calm ? 0.4 : Math.sin(Math.PI * clamp01(age / 0.48));
       a.y = -36 * k * hop;
-      a.scale.set((calm ? 1 : Math.cos(age * 22)) * 1.2, 1.2);
+      const w = 42 / (m.nw[0] as number);
+      a.scale.set((calm ? 1 : Math.cos(age * 22)) * w, w);
       m.size2(1, 34 * k * (1 - p), 34 * k * (1 - p));
       b.alpha = 1 - p * 2;
       m.root.alpha = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
-      break;
-    }
-    case 'shatter': {
-      const drop = clamp01(age / 0.09);
-      a.visible = age < 0.09;
-      a.y = -46 * k * (1 - Ease.quadIn(drop));
-      a.rotation = drop * 1.2;
-      const burst = age >= 0.09;
-      b.visible = burst;
-      if (burst) {
-        const t = age - 0.09;
-        const g = calm ? 1 : Ease.backOut(clamp01(t / 0.1));
-        m.size2(1, 90 * k * (0.4 + 0.6 * g), 45 * k * (0.4 + 0.6 * g));
-        b.alpha = 0.85 * (1 - clamp01((t - 0.3) / 0.3));
-        for (let i = 2; i < 5; i++) {
-          const s = m.parts[i] as Sprite;
-          s.visible = true;
-          const dir = (i - 3) * 1.1 - Math.PI / 2 + (m.seed - 0.5) * 0.5;
-          const fly = calm ? 0.3 : 1;
-          s.x = Math.cos(dir) * 110 * k * t * fly;
-          s.y = Math.sin(dir) * 110 * k * t * fly + 0.5 * 520 * t * t * fly;
-          s.rotation = t * 14 * (i - 3.2);
-          s.alpha = 1 - clamp01((t - 0.2) / 0.25);
-        }
-      }
       break;
     }
     case 'puff': {
@@ -503,8 +500,7 @@ function animate(m: Mark, env: FieldEnv): void {
         const dir = m.angle + (i - 1) * 0.7;
         s.x = Math.cos(dir) * 26 * t * drift;
         s.y = Math.sin(dir) * 26 * t * drift - 30 * t * drift;
-        const d = (16 + 22 * t + 4 * i) * k;
-        m.size2(i, d, d);
+        m.size1(i, (22 + 34 * t + 5 * i) * k);
         s.alpha = 0.55 * (1 - t) * fade;
       }
       break;

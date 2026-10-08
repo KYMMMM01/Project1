@@ -360,8 +360,8 @@ export function mountCombat(stage: Stage, on: Bus): void {
           if (!p) break;
           const x0 = ax;
           const y0 = ay;
-          if (i === 0) fx.lightning(x0, y0, p.x, p.y, { color, branches: 1 });
-          else stage.later(i * 0.035, () => fx.lightning(x0, y0, p.x, p.y, { color, branches: 1, scale: 0.9 }));
+          // Each hop is a painted bolt with a flash where it lands, a few frames after the last: the chain visibly jumps.
+          fx.arc(x0, y0, p.x, p.y, { delay: i * 0.05, scale: 1 - 0.06 * i });
           ax = p.x;
           ay = p.y;
         }
