@@ -716,6 +716,8 @@ class Hud implements HudPart {
     if (this.twinsFrames > 0) this.pointAtTwins();
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.
     if (this.pick && !this.pick.picking && this.env.battle.pending?.kind !== 'summon') this.pick.close();
+    // The same for a toy choice that is folded away: it would leave a shield over the board and a button that leads nowhere.
+    if (this.relic?.peeking && this.env.battle.pending?.kind !== 'relic') this.relic.render();
     // A bubble never shows over a popup, a staged moment or a drag; while a cat is selected only the selection bar's own hints may.
     // A card that is up holds the battle and counts as a modal itself; it must not make its own stage look busy.
     const cardUp = this.hints.holding;

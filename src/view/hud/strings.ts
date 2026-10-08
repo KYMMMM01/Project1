@@ -79,6 +79,9 @@ addStrings('ko', {
   'hud.pick.title': '하나를 골라요',
   'hud.pick.sub': '이번 소환은 세 마리 중에서 골라요.',
   'hud.pick.tip': '꾹 누르면 능력이 보여요',
+  // peek at the board from a forced choice
+  'hud.peek.look': '필드 보기',
+  'hud.peek.back': '돌아가기',
 
   // toy choice
   'hud.relic.title': '장난감 고르기',
@@ -291,6 +294,8 @@ addStrings('en', {
   'hud.pick.title': 'Pick one',
   'hud.pick.sub': 'This summon: choose one of three cats.',
   'hud.pick.tip': 'Hold a card to see its skill',
+  'hud.peek.look': 'Peek',
+  'hud.peek.back': 'Go back',
 
   'hud.relic.title': 'Pick a toy',
   'hud.relic.cleared': 'Act {act} cleared!',

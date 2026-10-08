@@ -77,6 +77,23 @@ describe('unit table', () => {
     }
   });
 
+  it('states in every skill sentence only numbers that unit data holds, so a retune cannot leave a stale text', () => {
+    const numbers = (v: unknown, out: Set<number>): Set<number> => {
+      if (typeof v === 'number') {
+        out.add(v);
+        out.add(Math.round(v * 100));
+      } else if (v && typeof v === 'object') for (const x of Object.values(v)) numbers(x, out);
+      return out;
+    };
+    for (const d of allUnitDefs()) {
+      const spec = unitSpec(d.id);
+      const known = numbers([spec.attack, spec.aura, spec.base.critMult, spec.base.crit], new Set<number>());
+      for (const [key, value] of Object.entries(spec.skillArgs)) {
+        expect(known.has(value), `${d.id} skill {${key}} = ${value}`).toBe(true);
+      }
+    }
+  });
+
   it('puts the data values into the skill text', () => {
     setLang('en');
     const s = unitSpec('w_sword');

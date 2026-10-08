@@ -13,7 +13,7 @@ const kit = vi.hoisted(() => ({
 vi.mock('@/core/game', async () => {
   const { Container } = await import('pixi.js');
   kit.layer = new Container();
-  return { game: { popupLayer: kit.layer, events: { on: () => () => undefined } } };
+  return { game: { popupLayer: kit.layer, events: { on: () => () => undefined }, w: 720, h: 1280, safeTop: 0, safeBottom: 0 } };
 });
 vi.mock('@/audio', () => ({ audio: { play: () => undefined } }));
 vi.mock('@/core/i18n', () => ({ t: (k: string, v?: Record<string, number>) => (v ? `${k}${JSON.stringify(v)}` : k) }));
@@ -46,11 +46,18 @@ vi.mock('@/ui', async () => {
       super();
       this.addChild(this.content, this.actionBar);
     }
+    addTitleAction(item: Container): void {
+      this.addChild(item);
+    }
     show(): Promise<void> {
       this.visible = true;
       return Promise.resolve();
     }
-    hide(): Promise<void> {
+    hide(animate = true): Promise<void> {
+      if (!animate) {
+        this.visible = false;
+        return Promise.resolve();
+      }
       return new Promise((resolve) =>
         kit.hides.push(() => {
           this.visible = false;
@@ -71,11 +78,14 @@ vi.mock('@/ui', async () => {
     setMaxWidth(): void {}
   }
   class Button extends Container {
+    readonly boxW = 180;
     constructor(readonly opts: { label: string }) {
       super();
     }
     onTap(): void {}
     setBusy(): void {}
+    setLift(): void {}
+    shine(): void {}
   }
   class Tag extends Container {}
   class TweenBag {
@@ -338,5 +348,171 @@ describe('the toy screen', () => {
       advance(0.2);
       expect(bar.children[0]).not.toBe(button);
     });
+  });
+});
+
+interface Dock {
+  state: { peeking: boolean; allowed: boolean; shown: boolean };
+  fold(): void;
+  unfold(): void;
+  layer: Container;
+}
+
+const dockOf = (s: RelicScreen): Dock => (s as unknown as { dock: Dock }).dock;
+const pickOf = (s: RelicScreen): ((i: number) => void) => (s as unknown as { pick: (i: number) => void }).pick.bind(s);
+const rerollOf = (s: RelicScreen): ((paid: boolean) => void) => (s as unknown as { reroll: (p: boolean) => void }).reroll.bind(s);
+const toggleOf = (s: RelicScreen): Container => scaffoldOf(s).content.parent?.children.find((c) => c.constructor.name === 'Button') as Container;
+
+/** An offer on screen, with the battle's answers to a pick and a reroll recorded. */
+function openOffer(): { e: FakeEnv; s: RelicScreen; picks: number[]; rerolls: boolean[] } {
+  const e = env();
+  const picks: number[] = [];
+  const rerolls: boolean[] = [];
+  Object.assign(e.battle, {
+    pickRelic: (i: number) => {
+      picks.push(i);
+      return null;
+    },
+    rerollRelics: (paid: boolean) => {
+      rerolls.push(paid);
+      return null;
+    },
+  });
+  e.battle.pending = offer(['common:a', 'rare:b', 'epic:c']);
+  const s = new RelicScreen(e as never, undefined, true);
+  s.open();
+  advance(0.2);
+  return { e, s, picks, rerolls };
+}
+
+describe('the toy screen, folded away to read the board', () => {
+  beforeEach(() => {
+    kit.bags.length = 0;
+    kit.drawn.length = 0;
+    kit.hides.length = 0;
+    kit.reduced = true;
+    kit.layer.removeChildren();
+  });
+
+  it('has the toggle in its header and the shield and way back above it in the popup layer', () => {
+    const { s } = openOffer();
+    expect(toggleOf(s)?.visible).toBe(true);
+    expect(kit.layer.children).toHaveLength(2);
+    expect(kit.layer.children[1]).toBe(dockOf(s).layer);
+    expect(dockOf(s).layer.visible).toBe(false);
+  });
+
+  it('folded, the screen is a tenth of its size, invisible and out of the hit tests, and the offer is still pending and still holding the game', () => {
+    const { e, s } = openOffer();
+    const sc = scaffoldOf(s) as unknown as Container;
+    dockOf(s).fold();
+    expect(sc.visible).toBe(false);
+    expect(sc.scale.x).toBeCloseTo(0.1, 5);
+    expect(sc.interactiveChildren).toBe(false);
+    expect(dockOf(s).layer.visible).toBe(true);
+    expect(s.isOpen).toBe(true);
+    expect(s.peeking).toBe(true);
+    expect((e.battle.pending as { kind: string }).kind).toBe('relic');
+    expect(e.holds - e.released).toBe(1);
+  });
+
+  it('a pick or a reroll that reaches it while folded is refused: the offer is not touched', () => {
+    const { s, picks, rerolls } = openOffer();
+    dockOf(s).fold();
+    pickOf(s)(0);
+    rerollOf(s)(false);
+    expect(picks).toEqual([]);
+    expect(rerolls).toEqual([]);
+  });
+
+  it('back from the fold it is the screen it was: same size, same place, the offer can be answered', () => {
+    const { s, picks, e } = openOffer();
+    const sc = scaffoldOf(s) as unknown as Container;
+    const cards = cardsOf(s);
+    dockOf(s).fold();
+    dockOf(s).unfold();
+    expect(sc.visible).toBe(true);
+    expect(sc.scale.x).toBe(1);
+    expect(sc.alpha).toBe(1);
+    expect(sc.position.x).toBe(0);
+    expect(sc.position.y).toBe(0);
+    expect(sc.pivot.x).toBe(0);
+    expect(sc.interactiveChildren).toBe(true);
+    expect(cardsOf(s)).toEqual(cards);
+    expect(dockOf(s).layer.visible).toBe(false);
+    pickOf(s)(1);
+    expect(picks).toEqual([1]);
+    expect((e.battle.pending as { kind: string }).kind).toBe('relic');
+  });
+
+  it('a pick that has just been made cannot be folded away from under the toy flying out of its card', () => {
+    const { s, picks } = openOffer();
+    pickOf(s)(0);
+    expect(picks).toEqual([0]);
+    dockOf(s).fold();
+    expect(s.peeking).toBe(false);
+    advance(0.25);
+    dockOf(s).fold();
+    expect(s.peeking).toBe(true);
+  });
+
+  it('a resize while folded keeps it folded and does not rebuild the offer on top of the board', () => {
+    const { s } = openOffer();
+    dockOf(s).fold();
+    const sc = scaffoldOf(s) as unknown as Container;
+    s.render();
+    expect(sc.visible).toBe(false);
+    expect(s.peeking).toBe(true);
+    expect(cardsOf(s)).toHaveLength(3);
+  });
+
+  it('an offer answered from outside while it is folded puts the screen at rest and lets it sleep: no shield, no way back', () => {
+    const { e, s } = openOffer();
+    const sc = scaffoldOf(s) as unknown as Container;
+    dockOf(s).fold();
+    e.battle.pending = null;
+    s.render();
+    expect(s.isOpen).toBe(false);
+    expect(s.peeking).toBe(false);
+    expect(dockOf(s).layer.visible).toBe(false);
+    expect(sc.scale.x).toBe(1);
+    expect(sc.alpha).toBe(1);
+    expect(sc.visible).toBe(false);
+    expect(e.released).toBe(1);
+  });
+
+  it('the tutorial\'s toy lesson hides the toggle and cannot fold the screen', () => {
+    const e = env();
+    e.lessonOn = () => true;
+    e.battle.pending = offer(['common:a', 'rare:b', 'epic:c']);
+    const s = new RelicScreen(e as never, undefined, true);
+    s.open();
+    expect(toggleOf(s).visible).toBe(false);
+    dockOf(s).fold();
+    expect(s.peeking).toBe(false);
+    expect((scaffoldOf(s) as unknown as Container).scale.x).toBe(1);
+  });
+
+  it('a lesson that begins while it is folded brings it back', () => {
+    const { e, s } = openOffer();
+    dockOf(s).fold();
+    e.lessonOn = () => true;
+    s.render();
+    expect(s.peeking).toBe(false);
+    expect((scaffoldOf(s) as unknown as Container).visible).toBe(true);
+    expect(toggleOf(s).visible).toBe(false);
+  });
+
+  it('wakes for the next act unfolded, with the toggle in place', () => {
+    const { e, s } = openOffer();
+    dockOf(s).fold();
+    e.battle.pending = null;
+    s.render();
+    e.battle.pending = offer(['rare:x', 'epic:y', 'legendary:z']);
+    s.open();
+    expect(s.peeking).toBe(false);
+    expect(toggleOf(s).visible).toBe(true);
+    expect(dockOf(s).layer.visible).toBe(false);
+    expect((scaffoldOf(s) as unknown as Container).scale.x).toBe(1);
   });
 });

@@ -22,7 +22,7 @@ addStrings('ko', {
 
   // classes
   'class.warrior.name': '전사',
-  'class.warrior.role': '가까이서 여럿을 베고 방어를 깎아요. 바깥 줄에 세우세요.',
+  'class.warrior.role': '여럿을 한꺼번에 베고 방어를 깎아요. 등급이 높을수록 멀리 닿아요. 바깥 줄이 가장 좋아요.',
   'class.ranger.name': '사수',
   'class.ranger.role': '멀리서 한 마리씩 정확하게. 치명타가 특기예요.',
   'class.mage.name': '마법',
@@ -212,7 +212,7 @@ addStrings('en', {
   'rarity.mythic': 'Guardian',
 
   'class.warrior.name': 'Warrior',
-  'class.warrior.role': 'Cleaves groups up close and breaks armour. Place on the outer ring.',
+  'class.warrior.role': 'Cleaves groups and breaks armour. Higher ranks reach farther. The outer ring is still the best spot.',
   'class.ranger.name': 'Ranger',
   'class.ranger.role': 'Picks off single targets from afar. Crits are their thing.',
   'class.mage.name': 'Mage',

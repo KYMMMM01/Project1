@@ -1,19 +1,35 @@
 /**
  * Balance report (`npm run sim`). Plays bot runs and prints compact tables; it never fails on a
  * balance number. Environment: SIM_RUNS (runs per cell, default 500), SIM_FULL=1 (every chapter x stake
- * x level), SIM_ONLY=ch1|stakes|chapters|damage|calibrate to run one section.
+ * x level), SIM_ONLY=ch1|stakes|chapters|damage|units|focus|reach|control|calibrate to run one section, SIM_CHAPTERS=1,2
+ * and SIM_STAKES=1,2 to limit the chapters and the chapter-1 stakes of `units` and `focus`; SIM_CHAPTER_STAKE=3 plays
+ * the `focus` chapters at that stake instead of 0.
  */
 import { describe, it } from 'vitest';
+import { CLASS_IDS, UNIT_IDS } from '@/game/api';
 import { RECOMMENDED_LEVEL, hpIndex } from '@/game/data/balance';
 import type { BotPolicy } from '@/game/sim/bots';
 import { createBattle } from '@/game/sim/create';
 import type { Sim } from '@/game/sim/sim';
-import { batch, loadoutInit, median, pct, printTable, type BatchSummary } from './simReportKit';
+import { CELL_COUNT, cellCenterX, cellCenterY, isEdgeCell, PATH_LENGTH, pathPoint } from '@/game/geometry';
+import { unitSpec } from '@/game/data/units';
+import { enemySpec } from '@/game/data/enemies';
+import { batch, controlRow, loadoutInit, median, pct, printTable, unitRows, type BatchSummary, type UnitRow } from './simReportKit';
 
 const RUNS = Number(process.env.SIM_RUNS ?? 500);
 const ONLY = process.env.SIM_ONLY ?? '';
 const FULL = process.env.SIM_FULL === '1';
 const POLICIES: BotPolicy[] = ['random', 'merge', 'synergy'];
+const list = (name: string, fallback: string): number[] => (process.env[name] ?? fallback).split(',').filter(Boolean).map(Number);
+const CHAPTERS = list('SIM_CHAPTERS', '1,2,3,4,5');
+const STAKES = list('SIM_STAKES', '1,2,3,4,5');
+const CHAPTER_STAKE = Number(process.env.SIM_CHAPTER_STAKE ?? 0);
+
+function unitLine(r: UnitRow): (string | number)[] {
+  return [r.label, pct(r.share), r.boardMin.toFixed(1), r.kills.toFixed(0), pct(r.uptime), r.hitsPerAttack.toFixed(1), (r.perCe / 1000).toFixed(2)];
+}
+
+const UNIT_HEAD = ['unit', 'damage', 'board min', 'kills', 'uptime', 'hits/atk', 'kdmg/CE-min'];
 
 function row(label: string, s: BatchSummary): (string | number)[] {
   return [
@@ -62,6 +78,67 @@ describe('balance report', () => {
       const rows = Object.entries(total).sort((a, c) => c[1] - a[1]).map(([id, v]) => [id, pct(v / sum)]);
       printTable(`Damage share, ${p}`, ['unit', 'share'], rows);
     }
+  });
+
+  it('per class and unit, synergy bot', () => {
+    if (!wanted('units')) return;
+    for (const chapter of CHAPTERS) {
+      const level = RECOMMENDED_LEVEL[chapter - 1] as number;
+      const b = batch(RUNS, 'synergy', (seed) => loadoutInit(seed, chapter, 0, level), { tally: true });
+      const all = unitRows(b.results);
+      const won = unitRows(b.results.filter((r) => r.victory));
+      const rows = all.classes.map((c, i) => [...unitLine(c), pct((won.classes[i] as UnitRow).share)]);
+      printTable(`Classes, chapter ${chapter} level ${level}, synergy bot, ${RUNS} runs (win ${pct(b.winRate)}); last column: damage share in winning runs`, [...UNIT_HEAD, 'share won'], rows);
+      const units = all.units.filter((u) => u.boardMin > 0).map((u) => [...unitLine(u), pct((won.units.find((x) => x.label === u.label) as UnitRow).share)]);
+      printTable(`Units, chapter ${chapter}`, [...UNIT_HEAD, 'share won'], units);
+    }
+  });
+
+  it('lane coverage by cell', () => {
+    if (!wanted('reach')) return;
+    const radius = enemySpec('cucumber').radius;
+    const lane: { x: number; y: number }[] = [];
+    for (let d = 0; d < PATH_LENGTH; d += 5) lane.push({ x: pathPoint(d).x, y: pathPoint(d).y });
+    const coverage = (cell: number, range: number): number => {
+      const cx = cellCenterX(cell);
+      const cy = cellCenterY(cell);
+      const reach = (range + radius) ** 2;
+      return lane.filter((p) => (p.x - cx) ** 2 + (p.y - cy) ** 2 <= reach).length / lane.length;
+    };
+    const rows = UNIT_IDS.map((id) => {
+      const range = unitSpec(id).base.range;
+      const cells = Array.from({ length: CELL_COUNT }, (_, c) => c);
+      const mean = (list: number[]): number => list.reduce((a, c) => a + coverage(c, range), 0) / (list.length || 1);
+      return [id, range, pct(Math.max(...cells.map((c) => coverage(c, range)))), pct(mean(cells.filter(isEdgeCell))), pct(mean(cells.filter((c) => !isEdgeCell(c))))];
+    });
+    printTable('Share of the walkway one cat reaches (best cell / mean of the 14 edge cells / mean of the 6 inner cells)', ['unit', 'range', 'best', 'edge', 'inner'], rows);
+  });
+
+  it('control effects and swing size, one pinned class at a time', () => {
+    if (!wanted('control')) return;
+    const rows: (string | number)[][] = [];
+    for (const focus of CLASS_IDS) {
+      const b = batch(RUNS, 'synergy', (seed) => loadoutInit(seed, 1, 0, 1), { focus, tally: true });
+      const c = controlRow(b.results);
+      rows.push([focus, pct(b.winRate), pct(c.slowed), pct(c.frozen), pct(c.stunned), pct(c.armorBroken), c.pulledPerMin.toFixed(0)]);
+    }
+    printTable(`Enemy field time under each effect, synergy bot pinned to a class, chapter 1 (${RUNS} runs)`, ['pinned', 'win', 'slowed', 'frozen', 'stunned', 'armour broken', 'px pulled/min'], rows);
+  });
+
+  it('class-focus bots', () => {
+    if (!wanted('focus')) return;
+    const cells: { label: string; chapter: number; stake: number }[] = [];
+    for (const chapter of CHAPTERS) cells.push({ label: `ch${chapter} s${CHAPTER_STAKE}`, chapter, stake: CHAPTER_STAKE });
+    for (const stake of STAKES) cells.push({ label: `ch1 s${stake}`, chapter: 1, stake });
+    const rows = cells.map((cell) => {
+      const level = RECOMMENDED_LEVEL[cell.chapter - 1] as number;
+      const make = (seed: number) => loadoutInit(seed, cell.chapter, cell.stake, level);
+      return [
+        cell.label, pct(batch(RUNS, 'synergy', make).winRate),
+        ...CLASS_IDS.map((focus) => pct(batch(RUNS, 'synergy', make, { focus }).winRate)),
+      ];
+    });
+    printTable(`Win rate of the synergy bot free / pinned to one class line (${RUNS} runs per cell)`, ['case', 'free', ...CLASS_IDS], rows);
   });
 
   it('full matrix', () => {

@@ -60,7 +60,7 @@ describe('unit stats', () => {
       expect(s.crit).toBeCloseTo(b.crit, 6);
     }
     const lv3 = unitStatsAt('w_viking', 3);
-    expect(lv3.damage).toBeCloseTo(130 * 1.2, 6);
+    expect(lv3.damage).toBeCloseTo(unitSpec('w_viking').base.damage * 1.2, 6);
   });
 
   it('applies perks at levels 4, 7 and 10 and never leaves the 1..10 range', () => {

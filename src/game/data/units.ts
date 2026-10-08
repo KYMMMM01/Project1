@@ -35,33 +35,33 @@ function pct(v: number): number {
 
 const DEFS: Record<UnitId, Def> = {
   w_paw: {
-    type: 'physical', row: [6.5, 0.55, 165, 0.05, 2], proj: 0,
+    type: 'physical', row: [7.5, 0.55, 200, 0.05, 2], proj: 0,
     attack: { shape: 'single' },
     perks: [perk(4, 'speed', 0.1), perk(7, 'crit', 0.05), perk(10, 'damage', 0.15)],
   },
   w_sword: {
-    type: 'physical', row: [14, 0.9, 175, 0.05, 2], proj: 0,
-    attack: { shape: 'cleave', radius: 70, targets: 3 },
+    type: 'physical', row: [16, 0.9, 215, 0.05, 2], proj: 0,
+    attack: { shape: 'cleave', radius: 85, targets: 4 },
     perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'radius', 0.2)],
-    args: { a: 70, b: 3 },
+    args: { a: 85, b: 4 },
   },
   w_viking: {
-    type: 'physical', row: [130, 1.5, 180, 0.1, 2], proj: 0,
-    attack: { shape: 'single', effect: { kind: 'armor_break', amount: 0.3, duration: 3 } },
-    perks: [perk(4, 'range', 0.1), perk(7, 'effect', 0.1), perk(10, 'duration', 2)],
-    args: { a: pct(0.3), b: 3 },
+    type: 'physical', row: [135, 1.5, 235, 0.1, 2], proj: 0,
+    attack: { shape: 'cleave', radius: 75, targets: 2, effect: { kind: 'armor_break', amount: 0.5, duration: 4 } },
+    perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'duration', 2)],
+    args: { a: pct(0.5), b: 4, c: 75, d: 2 },
   },
   w_samurai: {
-    type: 'physical', row: [120, 1.4, 190, 0.15, 2], proj: 0,
-    attack: { shape: 'line', reach: 110, effect: { kind: 'bleed', amount: 0.25, duration: 3 } },
+    type: 'physical', row: [140, 1.4, 255, 0.15, 2], proj: 0,
+    attack: { shape: 'line', reach: 130, effect: { kind: 'bleed', amount: 0.25, duration: 3 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'reach', 30), perk(10, 'effect', 0.15)],
-    args: { a: 110, b: 3, c: pct(0.25) },
+    args: { a: 130, b: 3, c: pct(0.25) },
   },
   w_tiger: {
-    type: 'physical', row: [200, 1.1, 220, 0.2, 2], proj: 0,
-    attack: { shape: 'blast', radius: 110, stomp: { every: 4, stun: 1, breakAmount: 0.5, breakDuration: 4 } },
+    type: 'physical', row: [220, 1.1, 285, 0.2, 2], proj: 0,
+    attack: { shape: 'blast', radius: 120, stomp: { every: 4, stun: 1, breakAmount: 0.5, breakDuration: 4 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'radius', 0.2), perk(10, 'duration', 0.5)],
-    args: { a: 110, b: 4, c: 1, d: pct(0.5) },
+    args: { a: 120, b: 4, c: 1, d: pct(0.5) },
   },
   r_sling: {
     type: 'physical', row: [12, 1.1, 420, 0.05, 2], proj: 900,

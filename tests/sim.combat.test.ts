@@ -3,6 +3,7 @@ import type { EnemyId } from '@/game/api';
 import { cellCenterX, cellCenterY } from '@/game/geometry';
 import { TICK } from '@/game/data/balance';
 import { enemySpec } from '@/game/data/enemies';
+import { unitSpec } from '@/game/data/units';
 import { applyStatus, damageEnemy } from '@/game/sim/enemies';
 import { gainRelic } from '@/game/sim/flow';
 import { pickHazardCells, scheduleHazard, weakenUnit } from '@/game/sim/hazards';
@@ -301,16 +302,18 @@ describe('who a cat attacks', () => {
 });
 
 describe('attack shapes', () => {
-  it('swings the sword at the target and its two nearest neighbours only', () => {
+  it('swings the sword at the target and its nearest neighbours only, as many as its data says', () => {
     const sim = field();
     put(sim, 0, 'w_sword');
+    const attack = unitSpec('w_sword').attack;
+    if (attack.shape !== 'cleave') throw new Error('the sword cleaves');
     const x = cellCenterX(0);
     const y = cellCenterY(0);
     const target = at(sim, 'cucumber', x + 100, y, 1e9, 900);
-    for (let i = 1; i <= 4; i++) at(sim, 'cucumber', x + 100 + i * 25, y, 1e9, 100 + i);
+    for (let i = 1; i <= attack.targets + 2; i++) at(sim, 'cucumber', x + 100 + i * 12, y, 1e9, 100 + i);
     const hits = record(sim, 'hit');
     advance(sim, 0.6);
-    expect(hits).toHaveLength(3);
+    expect(hits).toHaveLength(attack.targets);
     expect(hits.map((h) => h.enemy.uid)).toContain(target.uid);
   });
 

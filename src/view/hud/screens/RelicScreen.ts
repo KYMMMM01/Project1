@@ -43,8 +43,12 @@ import {
   type TapeName,
 } from '@/ui';
 import { photoCorners } from '@/ui/cardMath';
+import { computeBattleLayout } from '../../layout';
 import type { HudEnv } from '../env';
 import { PressCard, relicIcon } from '../kit';
+import type { Point } from '../layoutMath';
+import { foldPose } from '../peekMath';
+import { PeekDock } from '../PeekDock';
 import { offerRoute } from '../policy';
 
 import { TOY_BURST, TOY_FLY, TOY_HANG } from '@/view/timing';
@@ -83,6 +87,8 @@ const TAPE: Record<ToyRarity, { name: TapeName; pattern: 'dots' | 'gingham' | 's
 
 export class RelicScreen {
   private readonly scaffold: ScreenScaffold;
+  /** Folds the screen into a button so the board can be read before a toy is chosen. */
+  private readonly dock: PeekDock;
   private readonly bag = new TweenBag();
   private readonly seed = paperSeed();
   private release: (() => void) | null = null;
@@ -114,14 +120,28 @@ export class RelicScreen {
   ) {
     this.scaffold = new ScreenScaffold({ title: t('hud.relic.title'), scroll: false, actionBarHeight: 150, padding: 24 });
     this.scaffold.visible = false;
-    game.popupLayer.addChild(this.scaffold);
-    this.offResize = game.events.on('resize', () => this.render());
+    this.dock = new PeekDock({
+      layout: () => computeBattleLayout(game.w, game.h, game.safeTop, game.safeBottom),
+      fold: (k, to) => this.fold(k, to),
+      live: (on) => (this.scaffold.interactiveChildren = on),
+    });
+    this.scaffold.addTitleAction(this.dock.toggle());
+    game.popupLayer.addChild(this.scaffold, this.dock.layer);
+    this.offResize = game.events.on('resize', () => {
+      this.dock.layout();
+      this.render();
+    });
     if (!idle) this.open();
   }
 
   /** True from the moment an offer is shown until it is answered. */
   get isOpen(): boolean {
     return this.shown;
+  }
+
+  /** The screen is folded away so the board can be read. */
+  get peeking(): boolean {
+    return this.dock.peeking;
   }
 
   /** Show the screen for the pending offer (a second offer while it is up, a reroll or a second pick, only re-reads it). */
@@ -133,7 +153,8 @@ export class RelicScreen {
     }
     this.shown = true;
     // On top of whatever was added to the popup layer while the screen slept.
-    game.popupLayer.addChild(this.scaffold);
+    game.popupLayer.addChild(this.scaffold, this.dock.layer);
+    this.dock.layout();
     this.release = this.env.holdPause();
     void this.scaffold.show(true);
     this.render();
@@ -212,6 +233,7 @@ export class RelicScreen {
       this.close();
       return;
     }
+    this.dock.setLock('lesson', this.env.lessonOn('toys'));
     const key = p.options.join(',');
     const fresh = key !== this.optionKey;
     this.optionKey = key;
@@ -389,10 +411,25 @@ export class RelicScreen {
     });
   }
 
+  // ───────────────────────── peeking ─────────────────────────
+
+  /** The screen `k` of the way into the way-back button: it shrinks into it about its own centre, and what is under it shows. */
+  private fold(k: number, to: Point): void {
+    const centre = { x: game.w / 2, y: game.h / 2 };
+    const pose = foldPose(k, centre, to);
+    const sc = this.scaffold;
+    sc.pivot.set(k > 0 ? centre.x : 0, k > 0 ? centre.y : 0);
+    sc.position.set(k > 0 ? pose.x : 0, k > 0 ? pose.y : 0);
+    sc.scale.set(pose.scale);
+    sc.alpha = pose.alpha;
+    // The screen's baked parts (header paper, buttons) keep drawing at their last pose once alpha reaches 0: switch it off instead.
+    sc.visible = k < 1;
+  }
+
   // ───────────────────────── picking ─────────────────────────
 
   private pick(index: number): void {
-    if (this.busy || !this.shown) return;
+    if (this.busy || !this.shown || !this.dock.state.answerable) return;
     const { ctx, battle } = this.env;
     const p = this.pending();
     const id = p?.options[index];
@@ -412,7 +449,12 @@ export class RelicScreen {
     this.cards.forEach((c, i) => {
       if (i !== index) this.bag.runKeyed(c, { duration: 0.18, ease: Ease.cubicIn, onUpdate: (k) => (c.alpha = 1 - k) });
     });
-    this.bag.call(0.2, () => this.render());
+    // The toy flies from its card for the next 0.2 s: the screen is not to be folded away from under it.
+    this.dock.setLock('deciding', true);
+    this.bag.call(0.2, () => {
+      this.dock.setLock('deciding', false);
+      this.render();
+    });
   }
 
   // ───────────────────────── reroll ─────────────────────────
@@ -459,7 +501,7 @@ export class RelicScreen {
   }
 
   private reroll(paid: boolean): void {
-    if (this.busy) return;
+    if (this.busy || !this.dock.state.answerable) return;
     const { ctx, battle } = this.env;
     const fail = ctx.command('rerollRelics', () => battle.rerollRelics(paid));
     // The new offer reaches the HUD as an event, which rebuilds this screen: a second render here would redo the cards undealt.
@@ -470,8 +512,11 @@ export class RelicScreen {
     if (this.busy) return;
     this.busy = true;
     btn.setBusy(true);
+    // The offer is not to be folded away while a payment is on its way: the reroll it buys lands on the screen the player is looking at.
+    this.dock.setLock('deciding', true);
     const r = await profile.pay('relic_reroll', via);
     this.busy = false;
+    this.dock.setLock('deciding', false);
     if (!this.shown) return;
     btn.setBusy(false);
     if (!r.ok) {
@@ -490,7 +535,10 @@ export class RelicScreen {
     this.release = null;
     this.bag.killAll();
     this.onClose?.();
-    void this.scaffold.hide(true).then(() => {
+    // A screen that is folded away has nothing to fade out: it comes back to rest and goes in the same breath.
+    const folded = this.dock.peeking;
+    this.dock.reset();
+    void this.scaffold.hide(!folded).then(() => {
       if (this.shown || this.dead) return;
       for (const c of this.cards) this.dropCard(c);
       this.cards = [];
@@ -505,6 +553,7 @@ export class RelicScreen {
     this.release?.();
     this.release = null;
     this.bag.killAll();
+    this.dock.destroy();
     // Frames on the shelf are not in the tree and would not be destroyed with the screen.
     for (const frame of this.pooled) if (!frame.parent && !frame.destroyed) frame.destroy({ children: true });
     this.pooled.clear();

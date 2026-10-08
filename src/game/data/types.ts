@@ -25,8 +25,8 @@ export interface StompSpec {
 export type AttackSpec =
   /** One target; `priority: 'max_hp'` picks the sturdiest enemy instead of the oldest. */
   | { shape: 'single'; priority?: 'max_hp'; effect?: HitEffect }
-  /** The target plus up to `targets - 1` of its nearest neighbours within `radius`. */
-  | { shape: 'cleave'; radius: number; targets: number }
+  /** The target plus up to `targets - 1` of its nearest neighbours within `radius`; `effect` lands on everything hit. */
+  | { shape: 'cleave'; radius: number; targets: number; effect?: HitEffect }
   /** Everything within `reach` px of path distance in front of and behind the target. */
   | { shape: 'line'; reach: number; effect: HitEffect }
   /** Everything within `radius` of the target; every Nth attack stomps everything in range. */

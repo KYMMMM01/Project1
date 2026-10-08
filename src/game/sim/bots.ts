@@ -2,18 +2,20 @@
  * Balance bots (rules §15). They play through the public BattleApi only, exactly like a UI would, and
  * decide every quarter of a simulated second.
  *   random  - summons whenever it can, never merges; buys summon grades, replaces its weakest common cat
- *             when the board is full, otherwise upgrades a random class; stands warriors on the outer
- *             ring; picks toys and three-pick cats at random
+ *             when the board is full, otherwise upgrades a random class; stands warriors where their swing
+ *             reaches the walkway; picks toys and three-pick cats at random
  *   merge   - merges any pair as soon as it can, awakens a guardian when the rules allow, upgrades its
- *             biggest class once the board is crowded, stands warriors on the outer ring, picks toys by score
- *   synergy - everything merge does plus: builds one class line on purpose (a merge never changes class):
+ *             biggest class once the board is crowded, stands warriors where their swing reaches the walkway,
+ *             picks toys by score
+ *   synergy - everything merge does plus: builds one class line on purpose (a merge never changes class; `focus`
+ *             pins the line from the first cat instead of letting the heaviest class decide):
  *             keeps one cat of each rarity of its focus class for the distinct-type synergy, merges the
  *             surplus pairs and every other class, molts off-class cats into the rungs it lacks while
  *             keeping the purr of one awakening, stands strong cats on sunbeams, aims the laser at the boss
  *             or the oldest enemy, and takes the early-call bonus when the field is empty
  */
 import { CLASS_IDS, type BattleApi, type ClassId, type RelicId, type UnitId, type UnitState } from '../api';
-import { CELL_COUNT, isEdgeCell } from '../geometry';
+import { CELL_COUNT, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP, cellCenterX, cellCenterY } from '../geometry';
 import { Rng } from '@/core/rng';
 import { unitClass, unitRarityIndex } from '../data/roster';
 
@@ -108,7 +110,7 @@ function randomBot(seed: number): Bot {
   return {
     policy: 'random',
     act(b) {
-      warriorsToTheEdge(b);
+      warriorsToTheWalkway(b);
       const gradeCost = b.summonGradeCost();
       if (gradeCost > 0 && emptyCount(b) <= 10 && b.fish >= gradeCost + b.summonCost()) b.upgradeSummon();
       for (let guard = 0; guard < 3; guard++) {
@@ -162,7 +164,7 @@ function mergeBot(seed: number): Bot {
         }
       }
       for (let i = 0; i < 4 && mergeAny(b, () => true); i++);
-      warriorsToTheEdge(b);
+      warriorsToTheWalkway(b);
       const crowded = emptyCount(b) <= 6;
       if (crowded) {
         const c = topClass(b);
@@ -281,9 +283,9 @@ function moltIntoLadder(b: BattleApi, c: Census, focus: ClassId): void {
   }
 }
 
-function synergyBot(seed: number): Bot {
+function synergyBot(seed: number, forced?: ClassId): Bot {
   const rng = new Rng(seed);
-  let focusIndex = 0;
+  let focusIndex = forced ? CLASS_IDS.indexOf(forced) : 0;
   return {
     policy: 'synergy',
     act(b) {
@@ -294,14 +296,14 @@ function synergyBot(seed: number): Bot {
           break;
         }
       }
-      focusIndex = pickFocus(census(b), focusIndex);
+      if (!forced) focusIndex = pickFocus(census(b), focusIndex);
       const focus = CLASS_IDS[focusIndex] as ClassId;
       for (let i = 0; i < 4; i++) if (!mergeAny(b, (id, n) => ladderAllows(b, focus, id, n))) break;
 
       if (b.moltsLeft() > 0) moltIntoLadder(b, census(b), focus);
 
-      warriorsToTheEdge(b);
-      // Stand the strongest cats on sunbeams (warriors keep to the edge, where they can reach).
+      warriorsToTheWalkway(b);
+      // Stand the strongest cats on sunbeams (warriors keep to cells where their swing reaches the walkway).
       swapIntoSun(b);
 
       // Money: upgrades once the board is established, summons otherwise.
@@ -377,13 +379,23 @@ function oldest(b: BattleApi): { x: number; y: number } | null {
   return best;
 }
 
-/** Short-range warriors only reach the walkway from the outer ring: swap them out of the middle. */
-function warriorsToTheEdge(b: BattleApi): void {
+/** Range a warrior needs beyond its cell's distance to the walkway before the cell is worth standing in. */
+const SWING_ROOM = 40;
+
+/** Whether a cat with this range works a good stretch of the walkway from `cell` (the edge ring is 100 px away, the inner block 210). */
+export function worksWalkway(range: number, cell: number): boolean {
+  const x = cellCenterX(cell);
+  const y = cellCenterY(cell);
+  return range >= Math.min(x - PATH_LEFT, PATH_RIGHT - x, y - PATH_TOP, PATH_BOTTOM - y) + SWING_ROOM;
+}
+
+/** Warriors stand where their swing reaches the walkway: swap them out of cells too far from it. */
+function warriorsToTheWalkway(b: BattleApi): void {
   for (let i = 0; i < CELL_COUNT; i++) {
     const u = b.units[i];
-    if (!u || unitClass(u.id) !== 'warrior' || isEdgeCell(i)) continue;
+    if (!u || unitClass(u.id) !== 'warrior' || worksWalkway(u.stats.range, i)) continue;
     for (let j = 0; j < CELL_COUNT; j++) {
-      if (!isEdgeCell(j)) continue;
+      if (!worksWalkway(u.stats.range, j)) continue;
       const other = b.units[j];
       if (other && unitClass(other.id) === 'warrior') continue;
       if (b.dropAction(i, j) !== 'merge' && b.drop(i, j) === null) break;
@@ -408,7 +420,7 @@ function swapIntoSun(b: BattleApi): void {
   for (let i = 0; i < CELL_COUNT; i++) {
     const u = b.units[i];
     if (!u || b.sunbeams.includes(i)) continue;
-    if (unitClass(u.id) === 'warrior' && !isEdgeCell(worstSun)) continue;
+    if (unitClass(u.id) === 'warrior' && !worksWalkway(u.stats.range, worstSun)) continue;
     const v = nominalDps(u);
     if (v > bestValue && b.dropAction(i, worstSun) !== 'merge') {
       bestValue = v;
@@ -418,11 +430,12 @@ function swapIntoSun(b: BattleApi): void {
   if (bestCell >= 0) b.drop(bestCell, worstSun);
 }
 
-export function createBot(policy: BotPolicy, seed: number): Bot {
+/** `focus` pins the synergy bot to one class line (the balance report's class-focus variants); the other bots ignore it. */
+export function createBot(policy: BotPolicy, seed: number, focus?: ClassId): Bot {
   switch (policy) {
     case 'random': return randomBot(seed);
     case 'merge': return mergeBot(seed);
-    case 'synergy': return synergyBot(seed);
+    case 'synergy': return synergyBot(seed, focus);
   }
 }
 

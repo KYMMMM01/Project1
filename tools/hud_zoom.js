@@ -12,6 +12,9 @@
 //   await hzTap(x, y)                                   a real press and release at design coordinates
 //   await hzToyChoice()                                 play the run on with the field emptied until the toy choice opens (wave 4's end)
 //   await hzAudit(scope = 'stage' | 'popup')            texts that leave their paper by more than 3 px, are cut by the screen or overlap another
+//   await hzPick(lang = 'ko', query = '')               a sandbox battle with five cats and the pick of three open (six summons)
+//   await hzButton(caption)                             every shown or hidden kit Button with that caption: { vis, x, y, w, h } at its centre, design px
+//   await hzBattle()                                    what the battle holds: pending choice, cats, fish, pause reasons, popup layer size, page errors
 //
 // How: the renderer is given resolution = zoom / scale, the canvas is cut down to the rectangle's size and the root container is
 // moved so the rectangle sits at the canvas origin; one render, one read of the canvas, everything put back before the page
@@ -230,4 +233,41 @@ async function hzAudit(scope = 'stage') {
     }
     return out;
   }, scope);
+}
+
+async function hzPick(lang = 'ko', query = '') {
+  await hzOpen('?scene=battle&chapter=1&seed=7&sandbox=1&runs=5&debug=1&lang=' + lang + query);
+  await ev(() => {
+    const d = window.__dbg.battle;
+    d.give(900, 50);
+    for (let i = 0; i < 6; i++) d.ctx.command('summon', () => d.battle.summon());
+  });
+  await mcWarp(2);
+}
+
+async function hzButton(caption) {
+  return await ev((cap) => {
+    const g = window.__dbg.game;
+    const k = g.scale;
+    const out = [];
+    const walk = (n) => {
+      if (n.caption === cap) {
+        let vis = true;
+        for (let p = n; p; p = p.parent) if (p.visible === false) vis = false;
+        const b = n.getBounds();
+        out.push({ vis, x: Math.round((b.x + b.width / 2) / k), y: Math.round((b.y + b.height / 2) / k), w: Math.round(b.width / k), h: Math.round(b.height / k) });
+      }
+      for (const c of n.children || []) walk(c);
+    };
+    walk(g.app.stage);
+    return out;
+  }, caption);
+}
+
+async function hzBattle() {
+  return await ev(() => {
+    const d = window.__dbg.battle;
+    const b = d.battle;
+    return { pending: b.pending ? b.pending.kind : null, cats: b.units.filter(Boolean).length, cells: b.units.map((u, i) => (u ? i : -1)).filter((i) => i >= 0), fish: b.fish, reasons: d.scene.pauseReasons(), popups: window.__dbg.game.popupLayer.children.length, errors: (window.__errors || []).length };
+  });
 }

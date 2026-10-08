@@ -9,7 +9,7 @@ addStrings('ko', {
   // unit skill lines
   'unit.w_paw.skill': '가장 오래 달린 적부터 쉬지 않고 쳐요.',
   'unit.w_sword.skill': '대상 주변 {a} 안의 적 최대 {b}마리를 한꺼번에 베어요.',
-  'unit.w_viking.skill': '맞은 적의 방어를 {a}% 무너뜨려요({b}초).',
+  'unit.w_viking.skill': '대상 주변 {c} 안의 적 최대 {d}마리를 내리치고 방어를 {a}% 무너뜨려요({b}초).',
   'unit.w_samurai.skill': '대상 앞뒤 {a} 안의 적을 모두 베고 {b}초간 출혈을 입혀요(초당 피해의 {c}%).',
   'unit.w_tiger.skill': '대상 주변 {a} 안의 적을 모두 쳐요. {b}번째 공격마다 사거리 안의 적이 {c}초 기절하고 방어가 {d}% 무너져요.',
   'unit.r_sling.skill': '아주 먼 곳의 적도 한 마리씩 맞혀요.',
@@ -108,7 +108,7 @@ addStrings('ko', {
 addStrings('en', {
   'unit.w_paw.skill': 'Jabs the longest-running enemy without ever stopping.',
   'unit.w_sword.skill': 'Cuts up to {b} enemies within {a} of the target at once.',
-  'unit.w_viking.skill': 'Breaks {a}% of the target\'s armour for {b} s.',
+  'unit.w_viking.skill': 'Chops up to {d} enemies within {c} of the target and breaks {a}% of their armour for {b} s.',
   'unit.w_samurai.skill': 'Cuts everything within {a} ahead of and behind the target and makes it bleed for {b} s ({c}% of damage per second).',
   'unit.w_tiger.skill': 'Hits everything within {a} of the target. Every {b}th attack stuns everything in range for {c} s and breaks {d}% of armour.',
   'unit.r_sling.skill': 'Plinks single enemies from very far away.',

@@ -202,7 +202,10 @@ function fireCleave(s: Sim, u: SimUnit, target: SimEnemy, attack: Extract<Attack
   emitAttack(s, u, target, null);
   strike(s, u, target.x, target.y, radius, chosen);
   const crit = rollCrit(s, u);
-  for (const e of chosen) if (!e.dead) hit(s, u, e, u.stats.damage, crit, 1);
+  for (const e of chosen) {
+    if (e.dead) continue;
+    if (!hit(s, u, e, u.stats.damage, crit, 1) && attack.effect) applyEffect(s, u, e, attack.effect);
+  }
 }
 
 function fireLine(s: Sim, u: SimUnit, target: SimEnemy, attack: Extract<AttackSpec, { shape: 'line' }>): void {

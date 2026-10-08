@@ -3,6 +3,7 @@
  * their rarity frame at once; a hold shows the skill; the simulation is paused while this is open.
  */
 import { Container, type DestroyOptions } from 'pixi.js';
+import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { classDef, unitClass, unitDef, unitRarity, type UnitId } from '@/game';
@@ -22,10 +23,13 @@ import {
 } from '@/ui';
 import { audio } from '@/audio';
 import { haptic } from '@/core/haptics';
+import { computeBattleLayout } from '../../layout';
 import type { HudEnv } from '../env';
 import { CLASS_ICON, PressCard, unitPortrait } from '../kit';
 import { planOf } from '../planMath';
-import { PICK, pickCardX, pickHand, pickSheet } from '../layoutMath';
+import { PICK, pickCardX, pickHand, pickSheet, type Point } from '../layoutMath';
+import { foldPose } from '../peekMath';
+import { PeekDock } from '../PeekDock';
 import { recommendPick } from '../policy';
 import { Hand } from '../Hand';
 
@@ -37,12 +41,18 @@ const CARD_H = 292;
 const LABEL = 27;
 /** Seconds the chosen card takes to spring up (and the others to slip away) before the sheet leaves. */
 const FAREWELL = 0.18;
+/** Seconds the sheet's own entrance takes (the kit's popup pop): it cannot be folded until it has settled. */
+const ENTRANCE = 0.2;
+/** Where the peek toggle sits on the sheet: its centre, from the sheet's top edge (the ribbon's centre is 6 above it). */
+const PEEK_Y = 8;
 
 export class SummonPickPopup extends Popup<void> {
   private readonly bag = new TweenBag();
   private readonly cards: PressCard[] = [];
   private readonly offs: Array<() => void> = [];
   private picked = false;
+  /** Folds the sheet away so the board can be read (not in the lesson's pick, which is taught with the sheet up). */
+  private readonly dock: PeekDock;
   /** Centre line of the cards: the lesson's sheet keeps a band over them for the pointing hand, a plain pick does not. */
   private readonly cardY: number;
   /** Index of the highlighted card, used by the tutorial pointer. */
@@ -55,6 +65,13 @@ export class SummonPickPopup extends Popup<void> {
     guide: boolean,
   ) {
     super({ dismissResult: undefined, backdropClose: false, backClose: false, priority: 2 });
+    this.dock = new PeekDock({
+      layout: () => computeBattleLayout(this.screenW, this.screenH, game.safeTop, game.safeBottom),
+      fold: (k, to) => this.fold(k, to),
+      live: (on) => (this.shell.interactiveChildren = on),
+    });
+    this.dock.setLock('lesson', guide);
+    this.dock.setLock('opening', true);
     const board = env.battle.units.filter((u): u is NonNullable<typeof u> => u !== null).map((u) => u.id);
     this.recommended = recommendPick(
       options.map((id) => ({ id, classId: unitClass(id), rarity: unitRarity(id) })),
@@ -70,6 +87,7 @@ export class SummonPickPopup extends Popup<void> {
     const sub = uiLabel(guide ? `${topicTeach('pick3')} ${t('guide.tut.pickRec')}` : t('hud.pick.sub'), { size: 26, color: guide ? Color.ink : Color.inkSoft, wrap: W - 80, lineHeight: 34 });
     sub.position.set(W / 2, PICK.subY);
     c.addChild(sub);
+    if (!guide) c.addChild(this.peekToggle());
 
     options.forEach((id, i) => {
       const def = unitDef(id);
@@ -117,6 +135,7 @@ export class SummonPickPopup extends Popup<void> {
     tip.position.set(W / 2, h - 46);
     c.addChild(tip);
     this.body.addChild(panel);
+    this.addChild(this.dock.layer);
 
     if (guide) {
       this.hand = new Hand();
@@ -134,6 +153,7 @@ export class SummonPickPopup extends Popup<void> {
   }
 
   override onOpened(): void {
+    this.bag.call(motion.reduced ? 0 : ENTRANCE, () => this.dock.setLock('opening', false));
     // The hand arrives after the cards have been dealt, so it never points at an empty spot.
     const hand = this.hand;
     if (hand) {
@@ -165,6 +185,28 @@ export class SummonPickPopup extends Popup<void> {
     });
   }
 
+  /** The "see the board" button on the sheet's top-right corner, level with the title ribbon. */
+  private peekToggle(): Container {
+    const btn = this.dock.toggle();
+    btn.position.set(W - 8 - btn.boxW / 2, PEEK_Y);
+    return btn;
+  }
+
+  /** The sheet `k` of the way into the way-back button: it shrinks into it, and the dim over the board lifts. */
+  private fold(k: number, to: Point): void {
+    const pose = foldPose(k, { x: this.screenW / 2, y: this.screenH / 2 }, to);
+    this.shell.position.set(pose.x, pose.y);
+    this.shell.scale.set(pose.scale);
+    this.shell.alpha = pose.alpha;
+    this.shell.visible = k < 1;
+    this.backdrop.alpha = pose.dim;
+  }
+
+  override layout(w: number, h: number): void {
+    super.layout(w, h);
+    this.dock.layout();
+  }
+
   /** True from the press until the sheet is gone: the HUD must not close it from under its own farewell. */
   get picking(): boolean {
     return this.picked;
@@ -175,8 +217,9 @@ export class SummonPickPopup extends Popup<void> {
    * fade, and only then the simulation is told and the sheet leaves, so the new cat's reveal plays on a clear board.
    */
   private choose(index: number): void {
-    if (this.picked) return;
+    if (this.picked || !this.dock.state.answerable) return;
     this.picked = true;
+    this.dock.setLock('deciding', true);
     audio.play('relic_pick', { volume: 0.7 });
     haptic('medium');
     this.hand?.destroy();
@@ -213,6 +256,7 @@ export class SummonPickPopup extends Popup<void> {
       }
       // The pick was refused after all: the cards come back and the player chooses again.
       this.picked = false;
+      this.dock.setLock('deciding', false);
       for (const card of this.cards) {
         card.setEnabled(true);
         card.alpha = 1;
@@ -225,6 +269,7 @@ export class SummonPickPopup extends Popup<void> {
   override destroy(options?: DestroyOptions): void {
     for (const off of this.offs.splice(0)) off();
     this.bag.killAll();
+    this.dock.destroy();
     super.destroy(options);
   }
 }

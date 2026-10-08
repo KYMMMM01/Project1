@@ -2,9 +2,10 @@
  * Plays whole runs with a bot, headlessly, and measures what the balance report needs. Used by the
  * `npm run sim` report and by the tests; the game itself never imports it.
  */
-import type { BattleApi, BattleInit, RunStats, UnitState } from '../api';
-import { CELL_COUNT } from '../geometry';
+import type { BattleApi, BattleInit, ClassId, RunStats, UnitId, UnitState } from '../api';
+import { CELL_COUNT, cellCenterX, cellCenterY } from '../geometry';
 import { TICK } from '../data/balance';
+import { enemySpec } from '../data/enemies';
 import { unitSpec } from '../data/units';
 import type { AttackSpec } from '../data/types';
 import { unitRarityIndex } from '../data/roster';
@@ -19,6 +20,31 @@ export interface WaveSample {
   /** Health of the wave divided by its length: the firepower needed to just keep up. */
   need: number;
   maxEnemies: number;
+}
+
+/** What one unit type did during a run (see `RunOptions.tally`). */
+export interface UnitTally {
+  /** Seconds the cat stood on the board during a wave, and the same weighted by common-equivalents (1, 2, 4, 8, 16 by rarity). */
+  boardSec: number;
+  ceSec: number;
+  /** Of the board seconds in which the field held an enemy (`fieldSec`), those with an enemy inside the cat's reach. */
+  fieldSec: number;
+  reachSec: number;
+  kills: number;
+  /** Attacks fired and damage hits landed (zone ticks included, damage over time not): hits per attack is how many enemies a swing hurts. */
+  attacks: number;
+  hits: number;
+}
+
+/** How much of the enemies' time on the field the board's control effects covered (see `RunOptions.tally`). */
+export interface ControlTally {
+  enemySec: number;
+  slowed: number;
+  frozen: number;
+  stunned: number;
+  armorBroken: number;
+  /** Path distance enemies were dragged back by black holes, px. */
+  pulled: number;
 }
 
 export interface RunResult {
@@ -39,6 +65,9 @@ export interface RunResult {
   lossReason: 'overrun' | 'boss_timeout' | null;
   /** Milliseconds spent inside `step()` only. */
   simMs: number;
+  /** Per unit type; empty unless `RunOptions.tally` was set. */
+  units: Partial<Record<UnitId, UnitTally>>;
+  control: ControlTally;
 }
 
 export interface RunOptions {
@@ -47,6 +76,10 @@ export interface RunOptions {
   decision?: number;
   /** Stop after this many simulated seconds (safety net). */
   maxSeconds?: number;
+  /** Synergy bot only: build this class line from the first cat instead of the heaviest one. */
+  focus?: ClassId;
+  /** Measure board time, uptime and kills per unit type (subscribes to `enemyDie`, a little slower). */
+  tally?: boolean;
 }
 
 /** How many enemies an attack typically hurts at once, to turn single-target damage into firepower. */
@@ -81,16 +114,69 @@ function simOf(b: BattleApi): Sim {
   return b;
 }
 
+function tallyOf(result: RunResult, id: UnitId): UnitTally {
+  return (result.units[id] ??= { boardSec: 0, ceSec: 0, fieldSec: 0, reachSec: 0, kills: 0, attacks: 0, hits: 0 });
+}
+
+/** Adds `dt` seconds of every cat on the board to the tallies. */
+function sampleUnits(b: BattleApi, result: RunResult, dt: number): void {
+  const field = b.enemies.length > 0;
+  const control = result.control;
+  for (const e of b.enemies) {
+    control.enemySec += dt;
+    if (e.slow > 0) control.slowed += dt;
+    if (e.frozen) control.frozen += dt;
+    if (e.stunned) control.stunned += dt;
+    if (e.armorBroken) control.armorBroken += dt;
+  }
+  for (let c = 0; c < CELL_COUNT; c++) {
+    const u = b.units[c];
+    if (!u) continue;
+    const t = tallyOf(result, u.id);
+    t.boardSec += dt;
+    t.ceSec += dt * (1 << unitRarityIndex(u.id));
+    if (!field) continue;
+    t.fieldSec += dt;
+    const cx = cellCenterX(c);
+    const cy = cellCenterY(c);
+    for (const e of b.enemies) {
+      const dx = e.x - cx;
+      const dy = e.y - cy;
+      const reach = u.stats.range + enemySpec(e.id).radius;
+      if (dx * dx + dy * dy <= reach * reach) {
+        t.reachSec += dt;
+        break;
+      }
+    }
+  }
+}
+
 export function playRun(init: BattleInit, policy: BotPolicy, options: RunOptions = {}): RunResult {
   const b = createBattle(init);
   const sim = simOf(b);
-  const bot = createBot(policy, options.botSeed ?? init.seed + 7);
+  const bot = createBot(policy, options.botSeed ?? init.seed + 7, options.focus);
   const every = Math.max(1, Math.round((options.decision ?? 0.25) / TICK));
   const maxTicks = Math.round((options.maxSeconds ?? 1500) / TICK);
   const result: RunResult = {
     victory: false, wave: 0, time: 0, stats: b.getStats(), firstLegendary: 0, firstMythic: 0, caution: false,
-    samples: [], bossRatios: [], lossReason: null, simMs: 0,
+    samples: [], bossRatios: [], lossReason: null, simMs: 0, units: {},
+    control: { enemySec: 0, slowed: 0, frozen: 0, stunned: 0, armorBroken: 0, pulled: 0 },
   };
+  const dt = every * TICK;
+  if (options.tally) {
+    b.events.on('enemyDie', (e) => {
+      if (e.killer) tallyOf(result, e.killer.id).kills++;
+    });
+    b.events.on('attack', (e) => {
+      tallyOf(result, e.unit.id).attacks++;
+    });
+    b.events.on('hit', (e) => {
+      if (e.unitId && !e.dot) tallyOf(result, e.unitId).hits++;
+    });
+    b.events.on('pull', (e) => {
+      result.control.pulled += e.distance;
+    });
+  }
   let lastWave = 0;
   let maxEnemies = 0;
   let bossSeen = false;
@@ -132,6 +218,7 @@ export function playRun(init: BattleInit, policy: BotPolicy, options: RunOptions
         if (r >= 3 && result.firstLegendary === 0) result.firstLegendary = b.wave;
         if (r >= 4 && result.firstMythic === 0) result.firstMythic = b.wave;
       }
+      if (options.tally && b.phase === 'wave') sampleUnits(b, result, dt);
     }
     const t0 = performance.now();
     b.step(TICK);
