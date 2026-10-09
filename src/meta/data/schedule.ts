@@ -81,7 +81,6 @@ export const PASS_XP_PER_TIER = 100;
 export const SEASON_DAYS = 30;
 /** Season 0 starts on this local date; later seasons follow back to back. */
 export const SEASON_EPOCH = '2026-10-01';
-export const PASS_FEATURE_LEVEL = 4;
 
 /** Free row: 150 gems in total (every 5th tier), gold and wooden chests between. */
 export function passFreeReward(tier: number): Bundle {
@@ -177,7 +176,7 @@ export const FEATURE_RULES: Readonly<Record<FeatureId, FeatureRule>> = {
   treat: { runs: 3 },
   piggy: { runs: 3 },
   cosmetics: { runs: 3 },
-  pass: { accountLevel: PASS_FEATURE_LEVEL },
+  pass: { runs: 1 },
   daily: { chapter: 1 },
   sweep: { chapter: 1 },
   cup: { chapter: 1 },

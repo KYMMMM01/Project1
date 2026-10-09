@@ -155,7 +155,7 @@ describe('runs', () => {
     expect(d.day.missions.progress).toEqual([1, 20, 4, 5, 1]);
     expect(d.pending).toBeNull();
     expect(d.lastRun).toMatchObject({ gold: 470, xp: 58, firstClear: true, doubled: false });
-    expect(unlocks).toEqual(['speed2x', 'cats', 'patrol', 'daily', 'sweep', 'cup', 'dungeon']);
+    expect(unlocks).toEqual(['speed2x', 'cats', 'patrol', 'pass', 'daily', 'sweep', 'cup', 'dungeon']);
     expect(ads.runs).toEqual(['begin', 'victory']);
     expect(rig.analytics.map((a) => a.event).filter((e) => e === 'run_start' || e === 'run_end')).toEqual(['run_start', 'run_end']);
 

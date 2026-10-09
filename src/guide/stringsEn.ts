@@ -316,7 +316,7 @@ export const EN: Record<string, string> = {
   'guide.pass.title': 'Season pass',
   'guide.pass.teach': 'Earn XP to climb the tiers and collect rewards.',
   'guide.pass.full':
-    'A season lasts {days} days and has {tiers} tiers. Every {xp} XP is one tier. Each run you finish adds XP.\nThe free row is for everyone, the premium row gives more gems and chests. It unlocks at account level {level}.',
+    'A season lasts {days} days and has {tiers} tiers. Every {xp} XP is one tier. Each run you finish adds XP.\nThe free row is for everyone, the premium row gives more gems and chests. It opens after your first run.',
 
   'guide.patrol.title': 'Patrol',
   'guide.patrol.teach': 'Your cats patrol and bring back gold.',
