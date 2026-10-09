@@ -4,14 +4,15 @@
  * sprites batch into few draws. Everything is flat paper: cream sticker borders, a thin ink edge, a
  * flat warm shadow, no gloss and no light. They live for the whole session.
  */
-import { Container, Graphics, Rectangle, Texture } from 'pixi.js';
+import { Container, Graphics, Rectangle, Sprite, Texture } from 'pixi.js';
+import { tex } from '@/core/assets';
 import { game } from '@/core/game';
-import { CLASS_HUE } from '@/fx/palette';
+import { CLASS_HUE, Hue } from '@/fx/palette';
 import { TAU, mixColor } from '@/core/math';
 import { Color, RARITY_ORDER, Rarity, TapeColors, drawDashedRect, drawIcon, drawPaperFace, type IconName, type RarityId } from '@/ui';
-import type { ClassId } from '@/game/api';
+import { SPECIAL_CELL_IDS, type ClassId, type SpecialCellId } from '@/game/api';
 import { CELL_H, CELL_W } from '@/game/geometry';
-import { Light, drawBuffMark, drawPaw, drawSunMark, drawTargetMark } from '@/fx';
+import { CELL_LOOKS, Light, drawBuffMark, drawPaw, drawTargetMark } from '@/fx';
 import { BADGE_KINDS, type BadgeKind } from './buffMath';
 import { RING_LOOKS, RING_SIZES, type RingLook } from './shieldRing';
 
@@ -107,8 +108,8 @@ export interface FieldArt {
   star: Texture;
   /** Kraft strip an enemy's health bar is painted into (9-slice). */
   barTrack: Texture;
-  /** The sun sticker of a sunbeam cell's corner and of a cat standing in the light. */
-  sunMark: Texture;
+  /** The sticker of a cat standing on a special cell: the cell kind's own badge picture, baked small. */
+  cellMark: Record<SpecialCellId, Texture>;
   /** The coral crosshair on an enemy the laser has marked. */
   targetMark: Texture;
   /** The rings of an enemy's shield, baked at each of `RING_SIZES` in each look: indexed by size. */
@@ -122,6 +123,8 @@ export interface FieldArt {
   reachFrame: Texture;
   /** A thin ellipse round a buffed cat's shadow (mustard; its opacity breathes slowly). */
   buffRing: Texture;
+  /** The four corner brackets of the laser's lock on an enemy: the laser's red with a cream edge, drawn for a 108 px ring. */
+  lockBrackets: Texture;
 }
 
 /** The buff badge's half width (rim included), design px. */
@@ -189,7 +192,7 @@ export function fieldArt(): FieldArt {
       44,
     ),
     barTrack: bake(gfx((g) => g.roundRect(-20, -6, 40, 12, 6).fill(Color.track).stroke({ width: 1.8, color: Color.kraftDark })), 44, 16),
-    sunMark: bake(gfx((g) => drawSunMark(g, 19)), 48, 48),
+    cellMark: bakeCellMarks(),
     targetMark: bake(gfx((g) => drawTargetMark(g, 19)), 48, 48),
     shieldRing: bakeShieldRings(),
     toss: bakeTosses(),
@@ -203,6 +206,7 @@ export function fieldArt(): FieldArt {
       CELL_H,
     ),
     buffRing: bake(gfx((g) => g.ellipse(0, 0, 46, 13.5).stroke({ width: 2.6, color: Color.mustardDark })), 100, 34),
+    lockBrackets: bake(gfx(drawLockBrackets), 128, 128),
   };
   return cached;
 }
@@ -246,6 +250,33 @@ function bakeBadges(): Record<ClassId, Texture> {
     c.addChild(gfx((g) => disc(g, 14, CLASS_HUE[id])));
     c.addChild(drawIcon(CLASS_ICON[id], 16, CREAM, { cache: false }));
     out[id] = bake(c, 40, 40);
+  }
+  return out;
+}
+
+/** Four corner brackets round the origin (a 108 px square): a cream line under the laser's red, round caps. */
+function drawLockBrackets(g: Graphics): void {
+  const r = 54;
+  const arm = 24;
+  const corners: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  for (const [width, color] of [[11, CREAM], [6, Hue.alarm]] as const) {
+    for (const [sx, sy] of corners) g.moveTo(sx * r, sy * (r - arm)).lineTo(sx * r, sy * r).lineTo(sx * (r - arm), sy * r);
+    g.stroke({ width, color, cap: 'round', join: 'round' });
+  }
+}
+
+/** The badge pictures of the special cells fitted into a 44 x 36 box (a square one is 36 px, the vet's wide biscuit 44 px) inside a 48 px frame. */
+function bakeCellMarks(): Record<SpecialCellId, Texture> {
+  const out = {} as Record<SpecialCellId, Texture>;
+  for (const id of SPECIAL_CELL_IDS) {
+    const picture = new Sprite(tex(CELL_LOOKS[id].badge));
+    picture.anchor.set(0.5);
+    const k = Math.min(44 / Math.max(1, picture.texture.width), 36 / Math.max(1, picture.texture.height));
+    picture.scale.set(k);
+    // The target's own transform is not applied by generateTexture, only its children's: the scaled picture goes in a holder.
+    const holder = new Container();
+    holder.addChild(picture);
+    out[id] = bake(holder, 48, 48);
   }
   return out;
 }

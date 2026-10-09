@@ -4,6 +4,8 @@
  * multiplication so every platform produces the same numbers.
  */
 
+import { SPECIAL_CELLS } from './cells';
+
 // ── time ──
 export const TICK = 1 / 60;
 export const MAX_TICKS_PER_STEP = 10;
@@ -39,6 +41,11 @@ export const DANGER_ALARM = 5 / 6;
 
 // ── economy ──
 export const START_FISH = 100;
+/**
+ * Fish that flow in by themselves every second while a wave runs (v1.5), on top of the kills and the wave rewards, which stay the main
+ * income. It does not run in the 3-second opening preparation. The treat cells (the vet's special cell) add to it.
+ */
+export const BASE_FISH_PER_SECOND = 0.5;
 export const WAVE_FISH_BASE = 6;
 export const WAVE_FISH_PER_WAVE = 1.5;
 export const CALL_FISH_PER_SECOND = 1.5;
@@ -88,9 +95,16 @@ export const RELIC_RARITY_WEIGHTS: readonly (readonly number[])[] = [
 // ── board ──
 export const SELL_FISH: readonly number[] = [20, 40, 80, 160, 320];
 export const SELL_PURR: readonly number[] = [0, 0, 1, 1, 3];
-export const MOLT_COST = 1;
+/**
+ * Purr a molt costs by the rank of the cat that changes class (common, rare, epic, legendary; a guardian cannot molt). Higher ranks
+ * cost more (v1.5; it was 1 for every rank).
+ */
+export const MOLT_COSTS: readonly number[] = [1, 1, 2, 3];
+/** The cheapest molt (the first rank's), for the texts that give one number. */
+export const MOLT_COST = MOLT_COSTS[0] as number;
 export const MOLT_LIMIT = 6;
-export const AWAKEN_COST = 12;
+/** Purr an awakening costs (v1.5: 12 -> 10, so the guardian comes a few waves earlier). */
+export const AWAKEN_COST = 10;
 /** Synergy step a class needs before one of its legendaries may awaken (v1.4: step 1, two kinds; it was step 2). */
 export const AWAKEN_MIN_TIER = 1;
 export const MERGE_START_CHARGE = 0.5;
@@ -101,10 +115,14 @@ export const HAZARD_RECOVER = 0.3;
 export const HAZARD_WARNING = 0.8;
 /** A lightning strike (the cloud boss) covers a square of this many cells on each side. */
 export const HAZARD_BLOCK_SIDE = 2;
-/** A fifth of the board, as it was on the 5 x 4 board. */
+/**
+ * How many special cells the board has (a fifth of it), whatever the chapter's kind. The names of the first kind, the sunbeam, stay on
+ * the constants and fields that count and place them (`SUN_*`, `sunbeams`).
+ */
 export const SUN_CELLS = 5;
-export const SUN_SPEED = 0.2;
-/** The first sunbeams: a plus in the middle of the board (centre, and the four cells touching it). */
+/** The sunbeam's bonus: +20% attack speed. The other chapters' kinds have their own value in `SPECIAL_CELLS`. */
+export const SUN_SPEED = SPECIAL_CELLS.sun.value;
+/** The first special cells: a plus in the middle of the board (centre, and the four cells touching it). */
 export const FIRST_SUN_CELLS: readonly number[] = [7, 11, 12, 13, 17];
 /**
  * Different kinds of a class a synergy step asks for (steps 1, 2 and 3). Since v1.4 only ranks 2 to 5 count
@@ -133,10 +151,10 @@ export const HASTE_CAP = 0.6;
 export const CC_IMMUNE_AFTER = 4;
 export const ELITE_CC_FACTOR = 0.5;
 /**
- * Black hole (v1.4): once a hole has caught an enemy, no hole drags it again until this many seconds after that hole
- * ended; elites and bosses are dragged by this fraction of the pull.
+ * Black hole (v1.4, immunity 4 -> 2 s in v1.5.1): once a hole has caught an enemy, no hole drags it again until this many seconds after that
+ * hole ended; elites and bosses are dragged by this fraction of the pull.
  */
-export const PULL_IMMUNE_AFTER = 4;
+export const PULL_IMMUNE_AFTER = 2;
 export const PULL_ELITE_FACTOR = 0.35;
 export const PULL_BOSS_FACTOR = 0.2;
 /** Strongest dodge chance a cat can get from bell kittens (their chance grows with the bell's level). */

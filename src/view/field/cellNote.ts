@@ -1,13 +1,12 @@
 import { Container, Graphics } from 'pixi.js';
-import { t } from '@/core/i18n';
 import { CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
 import { Color } from '@/ui';
 import { info } from '../info';
+import { cellNoteContent } from './cellMath';
 import type { FieldEnv } from './env';
-import { sunBonusPercent } from './sunMath';
 
-/** The paper note that says what a lit cell does, with the real number, when the player taps an empty one. */
-export class SunNote {
+/** The paper note that says what a special cell does, with the real number, when the player taps an empty one. */
+export class CellNote {
   private readonly anchor = new Graphics();
 
   constructor(
@@ -20,15 +19,15 @@ export class SunNote {
     layer.addChild(this.anchor);
   }
 
-  /** True when `cell` is lit, so a tap on it should be answered with the note. */
+  /** True when `cell` is one of this act's special cells, so a tap on it should be answered with the note. */
   lit(cell: number): boolean {
     return this.env.battle.sunbeams.includes(cell);
   }
 
-  /** A tap on a lit cell: its note opens, the same cell again closes it, another cell's replaces it (src/view/info.ts). */
+  /** A tap on a special cell: its note opens, the same cell again closes it, another cell's replaces it (src/view/info.ts). */
   show(cell: number): void {
     this.anchor.position.set(cellCenterX(cell), cellCenterY(cell));
-    info.tap(`sun:${cell}`, this.anchor, { text: t('view.sun.tap', { n: sunBonusPercent(this.env.battle.relics) }) });
+    info.tap(`cell:${cell}`, this.anchor, cellNoteContent(this.env.battle.specialCell, this.env.battle.relics));
   }
 
   destroy(): void {

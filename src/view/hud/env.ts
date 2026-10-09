@@ -13,6 +13,7 @@ import type { BattleContext, BattleLayout } from '../context';
 import type { Hints } from './hints';
 import type { LaserTeach } from './laserTeach';
 import type { Rect } from './layoutMath';
+import { costArgs } from './moltMath';
 import { failKeys, type Reveal, type RevealKey } from './policy';
 import type { CountKey } from './tutorialScript';
 
@@ -160,7 +161,7 @@ export class EnvImpl implements HudEnv {
 
   explain(command: string, fail: Fail): void {
     const key = failKeys(command, fail).find((k) => hasString(k));
-    const text = key ? t(key, { tier: AWAKEN_MIN_TIER }) : t('hud.fail.not_available');
+    const text = key ? t(key, { tier: AWAKEN_MIN_TIER, ...costArgs(this.battle, this.ctx.selected) }) : t('hud.fail.not_available');
     const target = this.explainAt?.(command) ?? null;
     if (!target || !this.hints.explain(target, text)) toast(text, 'warning');
   }

@@ -1,5 +1,5 @@
 /**
- * The battle's information bubbles (an enemy card, a toy, a lit sunbeam cell, a cat's skill line, a refused command, the laser button's
+ * The battle's information bubbles (an enemy card, a toy, a special cell, a cat's skill line, a refused command, the laser button's
  * state) under ONE rule: tapping the same source again closes the bubble; tapping anywhere else closes it and the tap still does what it
  * would have done (only a tap on the bubble itself is its own); opening another replaces it; it closes by itself after a few seconds; and it
  * closes when a popup, a lesson or a banner needs the space. `InfoRule` is that rule with nothing drawn (unit tested); `info` is the one

@@ -1,12 +1,12 @@
 /**
  * Summon, merge and growth: the rarity-escalating reveal, merge bursts with a rising chain pitch,
- * moulting, the guardian awakening cut-in, synergy and upgrade sparkles, sunbeam sparkle, and the
+ * moulting, the guardian awakening cut-in, synergy and upgrade sparkles, the special cells' arrival, and the
  * flourish of a new toy flying to the HUD.
  */
 import { tex } from '@/core/assets';
 import { t } from '@/core/i18n';
 import { audio } from '@/audio';
-import { awakeningCutIn, type EmitDef } from '@/fx';
+import { CELL_ARRIVE_GAP, CELL_LOOKS, CELL_TOUCHDOWN, awakeningCutIn, type EmitDef } from '@/fx';
 import type { ClassId, SummonSource } from '@/game';
 import { classDef, relicDef, unitClass, unitRarityIndex } from '@/game';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
@@ -15,7 +15,7 @@ import { Color, RARITY_ORDER, Rarity } from '@/ui/theme';
 import type { SfxId } from '@/audio/api';
 import type { BannerService } from './banners';
 import type { CurrencyService } from './currency';
-import { SPARKLE_UP, STAR_POP, THEME_SPRAY } from './defs';
+import { SOFT_RING, SPARKLE_UP, STAR_POP, THEME_SPRAY } from './defs';
 import type { MusicService } from './music';
 import { CLASS_COLOR, themeOf } from './palette';
 import { DUCK_BY_TIER, SummonRate, specialRing, summonPlan } from './policy';
@@ -48,7 +48,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   const themeDef: EmitDef = { ...THEME_SPRAY, tex: theme.tex, gravity: theme.gravity };
   let lastBig = -99;
   let awakenCount = 0;
-  let sunlit: readonly number[] = [];
+  let litCells: readonly number[] = [];
 
   /** Cosmetic summon-effect theme: extra pieces on top of the rarity colours, never instead of them. */
   const themeBurst = (x: number, y: number, tier: number): void => {
@@ -206,32 +206,39 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     }
   });
 
-  /** The new sunbeam cells light up with sparkles and a chime, but only on the cells that were not already lit. */
-  const lightSun = (cells: readonly number[]): void => {
+  /**
+   * The act's special cells arrive: each new one drops in after the one before it (the field draws that, `FieldEffects`), and as it touches
+   * down it throws sparkles and a ring in its own colour; one chime for the lot. Cells that were already there stay quiet.
+   */
+  const lightCells = (cells: readonly number[]): void => {
+    const glow = CELL_LOOKS[ctx.battle.specialCell].glow;
     let fresh = 0;
     for (const c of cells) {
-      if (sunlit.includes(c)) continue;
+      if (litCells.includes(c)) continue;
       const x = cellCenterX(c);
       const y = cellCenterY(c);
-      stage.later(fresh * 0.05, () => ps.burst(SPARKLE_UP, x, y, { colors: [W, Hue.sun, GOLD], count: 1.6, scale: 1.3 }));
+      stage.later(fresh * CELL_ARRIVE_GAP + CELL_TOUCHDOWN, () => {
+        ps.burst(SOFT_RING, x, y, { colors: [W, glow], scale: 0.9 });
+        ps.burst(SPARKLE_UP, x, y, { colors: [W, glow, GOLD], count: 1.4, scale: 1.2 });
+      });
       fresh++;
     }
-    sunlit = cells.slice();
-    if (fresh > 0) stage.direct('sunbeam', 0.5);
+    litCells = cells.slice();
+    if (fresh > 0) stage.later(CELL_TOUCHDOWN, () => stage.direct('sunbeam', 0.5));
   };
-  /** The beams move when an act ends, under the boss-defeated banner and the toy screen: they show when the next wave starts. */
-  let sunLater: readonly number[] | null = null;
+  /** The cells move when an act ends, under the boss-defeated banner and the toy screen: they show when the next wave starts. */
+  let cellsLater: readonly number[] | null = null;
 
   on('sunbeams', (e) => {
-    if (stage.bossSeqActive) sunLater = e.cells.slice();
-    else lightSun(e.cells);
+    if (stage.bossSeqActive) cellsLater = e.cells.slice();
+    else lightCells(e.cells);
   });
 
   on('waveStart', () => {
-    if (!sunLater) return;
-    const cells = sunLater;
-    sunLater = null;
-    lightSun(cells);
+    if (!cellsLater) return;
+    const cells = cellsLater;
+    cellsLater = null;
+    lightCells(cells);
   });
 
   // The toy's icon flies from the choice card (the HUD owns that flight), so only the caption and the sound live here.

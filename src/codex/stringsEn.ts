@@ -31,7 +31,9 @@ export const EN: Record<string, string> = {
   'codex.group.normal': 'Common foes',
   'codex.group.elite': 'Elites',
   'codex.group.boss': 'Bosses',
-  'codex.row.normal': 'HP x{hp} · Speed {speed} · Armour {armor}% · Ward {ward}%',
+  'codex.row.normal': 'HP {lo} to {hi} · Speed {speed} · Armour {armor}% · Ward {ward}%',
+  'codex.row.normal.one': 'HP {hp} · Speed {speed} · Armour {armor}% · Ward {ward}%',
+  'codex.row.normal.none': 'Not in this chapter · Speed {speed} · Armour {armor}% · Ward {ward}%',
   'codex.row.special': 'HP {lo} to {hi} · Limit {limit}s · Armour {armor}% · Ward {ward}%',
   'codex.row.special.one': 'HP {lo} · Limit {limit}s · Armour {armor}% · Ward {ward}%',
 
@@ -44,7 +46,7 @@ export const EN: Record<string, string> = {
   'codex.page.rule': 'Damage allowance',
   'codex.page.ability': 'Abilities',
   'codex.page.tips': 'How to beat it',
-  'codex.stat.hpMult': 'Health multiple',
+  'codex.stat.hpMult': 'Compared with a cucumber',
   'codex.stat.hpMult.v': '{n} times a cucumber',
   'codex.stat.hp': 'Health',
   'codex.stat.hp.range': '{lo} to {hi}',
@@ -112,8 +114,8 @@ export const EN: Record<string, string> = {
   'codex.ability.death_burst.text': 'When it falls, enemies within {radius} move {pct}% faster for {dur}s.',
 
   // ── tips (every number comes from the enemy's own data) ──
-  'codex.tip.armor': 'Armour {armor}% cuts physical damage by {armor}%. Armour breakers ({breakers}) and magic classes ({magic}) do best.',
-  'codex.tip.ward': 'Ward {ward}% cuts magic damage by {ward}%. Physical classes ({physical}) do best.',
+  'codex.tip.armor': 'Armour {armor}% cuts physical damage by {armor}%. Magic classes ({magic}) and armour breakers ({breakers}) do best. Armour break and armour ignore cut the ward too.',
+  'codex.tip.ward': 'Ward {ward}% cuts magic damage by {ward}%. Physical classes ({physical}) do best. Armour breakers ({breakers}) and armour ignore (warrior synergy) cut the ward too.',
   'codex.tip.open': 'Armour {armor}% and ward {ward}% are low. Any attack gets through.',
   'codex.tip.stun_none': 'Stun and freeze do not work, and slows stop at {slow}%. Win with firepower.',
   'codex.tip.stun_half': 'Stun and freeze last only {stun}% as long, and slows stop at {slow}%.',
@@ -133,14 +135,14 @@ export const EN: Record<string, string> = {
 
   // ── board cells ──
   'codex.cellgroup.basic': 'Basics',
+  'codex.cellgroup.special': 'A different special tile in each chapter',
   'codex.cellgroup.danger': 'Dangerous cells',
   'codex.cellgroup.toy': 'Toy spots',
   'codex.cellgroup.aura': 'Helper cats',
   'codex.cellgroup.lane': 'Where enemies walk',
   'codex.cell.plain.name': 'Plain cell',
   'codex.cell.plain.text': 'A cell with no effect. The board is {cols} cells wide and {rows} deep, {cells} cells in all, and one cat stands on each. Drag cats around; two of the same cat merge.',
-  'codex.cell.sun.name': 'Sunny cell',
-  'codex.cell.sun.text': 'A cell the sun falls on. A cat standing there attacks {speed}% faster. The board has {cells} of them, a plus in the middle at first, and they move to new places when an act ends. The {toy} adds {toyCells} sunny cells and {toySpeed}% more speed.',
+  'codex.cell.special.text': 'The special tile of the {chapter}. {effect} The board has {cells} of them, a plus in the middle at first, and they move to new places when an act ends. With the {toy} toy there are {toyCells} more tiles, and the bonus becomes: {boosted}',
   'codex.cell.wet.name': 'Wet cell',
   'codex.cell.wet.text': 'A cell that got splashed. A cat there cannot attack until it dries. The cell flashes {warn}s before. The {spray} soaks {sprayCells} of the cells your cats stand on every {sprayEvery}s for {sprayDur}s, and the {bath} soaks {soakCells} every {soakEvery}s for {soakDur}s. A cat that is moved attacks again after {recover}s. The {bell} and the cats around it dodge it {dodge}% of the time.',
   'codex.cell.zap.name': 'Zap cell',

@@ -11,7 +11,7 @@ export interface FieldEnv {
   readonly art: FieldArt;
   /** Who helps whom on the board, worked out again at the start of every frame. */
   readonly buffs: BuffBoard;
-  /** Effects that live on the ground, under the characters (sunbeams, hazards, zones). */
+  /** Effects that live on the ground, under the characters (special cells, hazards, zones). */
   readonly ground: Fx;
   /** Animation clock in seconds: real time, standing still while the battle is paused. */
   time: number;

@@ -6,6 +6,7 @@ import type { MissionRow } from '@/meta/routines';
 import { msUntilNextMidnight } from '../system/kit/time';
 import { CHEST_STRIP_H, ChestStrip } from './ChestStrip';
 import { MissionRowView } from './MissionRowView';
+import { waitingMissions } from './model';
 import { Notebook } from './Notebook';
 import type { MissionActions, Section } from './sections';
 import './strings';
@@ -20,6 +21,7 @@ export class DailySection implements Section {
   /** The day's chest card, and the first line of the mission page: what the guidebook points at. */
   readonly strip: ChestStrip;
   private readonly rows: MissionRowView[] = [];
+  private readonly book: Notebook;
 
   constructor(w: number, act: MissionActions) {
     const chest = profile.dailyChestView();
@@ -35,7 +37,8 @@ export class DailySection implements Section {
     this.strip.position.set(0, TOP);
 
     const missions = profile.missionsView('daily');
-    const book = new Notebook(w, missions.length, t('rt.mis.daily.list'));
+    const book = new Notebook(w, missions.length, t('rt.mis.daily.list'), 'yellow', (from) => act.claimAllMissions('daily', from));
+    this.book = book;
     book.position.set(0, TOP + CHEST_STRIP_H + GAP);
     missions.forEach((row, i) => {
       const rv = new MissionRowView(w, row, true, {
@@ -56,7 +59,9 @@ export class DailySection implements Section {
   }
 
   sync(animate: boolean): void {
-    profile.missionsView('daily').forEach((row: MissionRow, i) => this.rows[i]?.sync(row, animate));
+    const missions = profile.missionsView('daily');
+    missions.forEach((row: MissionRow, i) => this.rows[i]?.sync(row, animate));
+    this.book.bar?.sync(waitingMissions(missions));
     const c = profile.dailyChestView();
     this.strip.sync({ value: c.need > 0 ? Math.min(1, c.points / c.need) : 0, label: t('meta.mission.points', { points: c.points, need: c.need }), ready: c.ready, claimed: c.claimed }, animate);
   }

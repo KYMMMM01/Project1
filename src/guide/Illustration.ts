@@ -7,9 +7,11 @@ import { Container, Graphics, Sprite } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
 import { cacheStatic, Color, currencyIcon, drawDashedInset, drawIcon, paperSeed, paperShape, Rarity, type IconName } from '@/ui';
-import { relicDef, type UnitId } from '@/game';
+import { SPECIAL_CELL_IDS, relicDef, type SpecialCellId, type UnitId } from '@/game';
 import { enemyPortrait, relicIcon } from '@/view/hud/kit';
 import type { Art } from './topics';
+
+const isSpecialCell = (id: string): id is SpecialCellId => (SPECIAL_CELL_IDS as readonly string[]).includes(id);
 
 /** A texture scaled to fit `box` and centred on the origin, or null when the art is not loaded. */
 function sticker(key: string, box: number): Sprite | null {
@@ -48,20 +50,6 @@ const ICON_PAPER: Partial<Record<IconName, number>> = {
   play: Color.leaf,
 };
 
-/** A flat paper sun for a sunny cell: rays and a disc (no glow). */
-export function sunArt(box: number): Graphics {
-  const g = new Graphics();
-  const r0 = box * 0.2;
-  const r1 = box * 0.4;
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const half = 0.17;
-    g.poly([Math.cos(a - half) * r0, Math.sin(a - half) * r0, Math.cos(a) * r1, Math.sin(a) * r1, Math.cos(a + half) * r0, Math.sin(a + half) * r0]).fill(Color.mustard);
-  }
-  g.circle(0, 0, r0).fill(mixColor(Color.mustard, Color.paperLight, 0.35));
-  return g;
-}
-
 /** A paper lightning bolt for a zapped cell. */
 export function boltArt(box: number): Graphics {
   const g = new Graphics();
@@ -80,16 +68,19 @@ export function puddleArt(box: number): Graphics {
   return g;
 }
 
-/** A board cell (a wooden tile) with the sun on it, a puddle or a lightning strike, and optionally the cat standing there. */
+/** A board cell: a chapter's special cell is its own tile picture (the one the battle draws); a wet or zapped cell is a wooden tile with a puddle or a bolt. A cat may stand on it. */
 function cellArt(art: Extract<Art, { k: 'cell' }>, box: number): Container {
   const c = new Container();
-  const side = box * 0.78;
-  const tile = new Graphics();
-  tile.roundRect(-side / 2, -side / 2, side, side, side * 0.14).fill(Color.woodLight);
-  tile.roundRect(-side / 2, -side / 2, side, side, side * 0.14).stroke({ color: Color.woodDark, width: 3 });
-  const fx = art.cell === 'sun' ? sunArt(box) : art.cell === 'zap' ? boltArt(box) : puddleArt(box);
-  cacheStatic(tile);
-  c.addChild(tile, fx);
+  const special = isSpecialCell(art.cell) ? sticker(`cell_${art.cell}`, box * 0.9) : null;
+  if (special) c.addChild(special);
+  else {
+    const side = box * 0.78;
+    const tile = new Graphics();
+    tile.roundRect(-side / 2, -side / 2, side, side, side * 0.14).fill(Color.woodLight);
+    tile.roundRect(-side / 2, -side / 2, side, side, side * 0.14).stroke({ color: Color.woodDark, width: 3 });
+    cacheStatic(tile);
+    c.addChild(tile, art.cell === 'zap' ? boltArt(box) : puddleArt(box));
+  }
   if (art.cat) {
     const cat = sticker(`unit_${art.cat}`, box * 0.52);
     if (cat) {

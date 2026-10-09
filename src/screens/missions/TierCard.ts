@@ -7,7 +7,8 @@ import { featureHint } from '@/meta/features';
 import type { TierRow } from '@/meta/routines';
 import { Button, Color, drawDashedRect, drawIcon, fitLabel, PaperLabel, paperSeed, ProgressBar, refreshCache, uiLabel, type IconName } from '@/ui';
 import { lockedNote, paperSheet, stickerDisc } from '../system/kit/sheets';
-import { tierFill, tierMarks, type WeekDay } from './model';
+import { CLAIM_BAR_H, ClaimAllBar } from './ClaimAllBar';
+import { tierFill, tierMarks, waitingTiers, type WeekDay } from './model';
 import { TIER_CELL_H, TierCell } from './TierCell';
 import './strings';
 
@@ -32,6 +33,8 @@ export interface TierCardSpec {
   head(need: number): string;
   read(): TierReading;
   claim(tier: number, from: Container): void;
+  /** Every reached tier in one go. */
+  claimAll(from: Container): void;
   goLabelKey: string;
   go(): void;
 }
@@ -48,6 +51,7 @@ export class TierCard extends Container {
   private readonly headline: PaperLabel | null = null;
   private readonly detail: Text | null = null;
   private readonly marks: Container | null = null;
+  private readonly claimBar: ClaimAllBar | null = null;
   private readonly dayHost: Container | null = null;
   private readonly seed = paperSeed();
   private markSig = '';
@@ -111,13 +115,18 @@ export class TierCard extends Container {
       this.addChild(cell);
     });
 
+    // One line under the cells: how many rewards wait and the button that takes them all, right-aligned with the cells.
+    const claimY = cellsY + TIER_CELL_H + 8;
+    this.claimBar = new ClaimAllBar({ width: w - PAD * 2, textX: 6, edge: 0, onClaim: (b) => spec.claimAll(b) });
+    this.claimBar.position.set(PAD, claimY);
+
     const go = new Button({ label: t(spec.goLabelKey), style: 'info', width: 420, height: 88, fontSize: 32 });
-    const goY = cellsY + TIER_CELL_H + 26 + 44;
+    const goY = claimY + CLAIM_BAR_H + 8 + 44;
     go.position.set(w / 2, goY);
     go.onTap(() => spec.go());
     this.cardH = goY + 44 + 10 + PAD;
     this.addChildAt(paperSheet(w, this.cardH, { radius: 30, seed: this.seed, dash: 12 }), 0);
-    this.addChild(disc, icon, title, this.headline, sub, this.bar, this.marks, go);
+    this.addChild(disc, icon, title, this.headline, sub, this.bar, this.marks, this.claimBar, go);
     if (this.dayHost) this.addChild(this.dayHost);
     if (this.detail) this.addChild(this.detail);
     this.drawMarks(reading);
@@ -185,6 +194,7 @@ export class TierCard extends Container {
     this.bar.setLabel('');
     this.bar.setValue(tierFill(reading.cur, Math.max(...this.needs)), animate);
     reading.tiers.forEach((row, i) => this.cells[i]?.sync(row, reading.cur, animate));
+    this.claimBar?.sync(waitingTiers(reading.tiers));
     this.drawMarks(reading);
     this.drawDays(reading);
   }

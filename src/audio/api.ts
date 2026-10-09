@@ -150,7 +150,12 @@ export const SFX_IDS = [
 
 export type SfxId = (typeof SFX_IDS)[number];
 
-export type MusicId = 'none' | 'home' | 'battle' | 'boss';
+/**
+ * Background tracks. `battle` is the living room (chapter 1); `kitchen`, `bath`, `garden` and `clinic` are chapters 2 to 5 (`battleMusic` picks one).
+ * `home` and `home2` are the menu pair (asking for `home` rotates through both), `elite` the tension variation of an elite wave, `boss` the boss fight
+ * (it opens with a one-bar sting), `gold` the gold dungeon, `win` and `lose` loop under the result screen.
+ */
+export type MusicId = 'none' | 'home' | 'home2' | 'battle' | 'kitchen' | 'bath' | 'garden' | 'clinic' | 'elite' | 'boss' | 'gold' | 'win' | 'lose';
 
 export type StingerId = 'victory' | 'defeat' | 'boss_intro' | 'mythic' | 'level_up' | 'jackpot';
 

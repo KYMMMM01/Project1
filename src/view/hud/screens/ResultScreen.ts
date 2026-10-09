@@ -575,14 +575,14 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   void scaffold.show(true);
   if (victory) haptic('success');
   // The stinger is the director's (it rang when the run ended, a second one here would repeat it). The page only brings
-  // the home track in quietly once that has died away, and hands it back at full volume when it is left.
+  // the result track (a warm one for a win, a soft one for a loss) in quietly once that has died away, and hands the volume back when it is left.
   const musicBase = currentSettings().music;
   let musicOn = false;
   bag.call(MUSIC_DELAY, () => {
     if (!alive) return;
     musicOn = true;
     audio.setMusicVolume(musicBase * MUSIC_QUIET);
-    audio.music('home', 3);
+    audio.music(victory ? 'win' : 'lose', 3);
   });
 
   // ── settle the run with the meta layer ──

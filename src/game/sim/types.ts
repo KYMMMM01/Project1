@@ -34,9 +34,8 @@ export interface SimUnit extends UnitState {
   armorIgnore: number;
   /** Multiplier on the status durations the unit inflicts (mage synergy, every cat). */
   statusMult: number;
-  /** Rolls made for the rangers' sure crit, and the interval in force (0 while their third synergy step is off). */
-  shots: number;
-  sureCritEvery: number;
+  /** Share of a hit that bounces to a second enemy (the rangers' third synergy step; 0 while it is off). */
+  ricochet: number;
   /** True once merged away, sold, molted or awakened. */
   removed: boolean;
 }

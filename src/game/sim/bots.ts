@@ -258,16 +258,15 @@ function ladderAllows(b: BattleApi, focus: ClassId, id: UnitId, count: number): 
 }
 
 /**
- * Molts one off-class cat into the focus line's highest missing rung. A legendary rung is worth a purr whatever
+ * Molts one off-class cat into the focus line's highest missing rung. A legendary rung is worth its purr whatever
  * the awakening needs (the line cannot rebuild one for a long time, and the awakening needs one); the lower rungs
- * refill from summons and merges, so they only get the purr the awakening does not need. Low rarities also
- * need a surplus copy as the donor.
+ * refill from summons and merges, so they only get the purr the awakening does not need (a molt costs more the
+ * higher the rank, v1.5). Low rarities also need a surplus copy as the donor.
  */
 function moltIntoLadder(b: BattleApi, c: Census, focus: ClassId): void {
   const f = CLASS_IDS.indexOf(focus);
   // The kitten rank (0) is never molted into: it does not count toward a synergy.
   for (let r = 3; r >= SYNERGY_MIN_RANK; r--) {
-    if (r < 3 && b.purr <= b.awakenCost()) break;
     if ((c.has[f] as boolean[])[r]) continue;
     let donor = -1;
     let donorCount = 0;
@@ -281,7 +280,8 @@ function moltIntoLadder(b: BattleApi, c: Census, focus: ClassId): void {
         donorCount = n;
       }
     }
-    if (donor >= 0 && b.molt(donor, focus) === null) return;
+    if (donor < 0 || (r < 3 && b.purr - b.moltCostOf(donor) < b.awakenCost())) continue;
+    if (b.molt(donor, focus) === null) return;
   }
 }
 

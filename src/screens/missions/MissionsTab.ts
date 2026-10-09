@@ -3,6 +3,7 @@ import { Container } from 'pixi.js';
 import { i18nEvents, t } from '@/core/i18n';
 import { errorKey, profile } from '@/meta';
 import { featureHint } from '@/meta/features';
+import type { ClaimedAll } from '@/meta/routines';
 import type { Bundle, Result } from '@/meta/types';
 import { Badge } from '@/ui/Badge';
 import { refusalCue } from '@/ui/press';
@@ -30,6 +31,11 @@ const SEG_H = 76;
 const HEAD_H = 112;
 const REFRESH_EVERY = 20;
 
+/** A claim-all's outcome as the one reward the screen shows: everything the claims paid, merged. */
+function rewardOf(r: Result<ClaimedAll>): Result<Bundle> {
+  return r.ok ? { ok: true, value: r.value.reward } : r;
+}
+
 export class MissionsTab implements TabScreen {
   readonly view = new Container();
   private area: ContentArea;
@@ -52,6 +58,9 @@ export class MissionsTab implements TabScreen {
     claimWeeklyChest: (from) => this.settle(() => profile.claimWeeklyChest(), from),
     claimCup: (tier, from) => this.settle(() => profile.claimCup(tier), from),
     claimEndless: (tier, from) => this.settle(() => profile.claimEndless(tier), from),
+    claimAllMissions: (scope, from) => this.settle(() => rewardOf(profile.claimAllMissions(scope)), from),
+    claimAllCup: (from) => this.settle(() => rewardOf(profile.claimAllCup()), from),
+    claimAllEndless: (from) => this.settle(() => rewardOf(profile.claimAllEndless()), from),
     openOdds: (kind) => services.openOdds(kind),
     goBattle: () => this.shell.goTab('battle'),
     goDaily: () => this.select('daily'),

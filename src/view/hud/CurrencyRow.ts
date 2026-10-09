@@ -5,12 +5,14 @@
 import { Container, Graphics, Point, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { t } from '@/core/i18n';
-import { Button, Color, CurrencyPill, drawPaper, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
-import { landings } from '@/view/landings';
+import { Button, Color, CurrencyPill, drawPaper, fitLabel, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
+import { info } from '@/view/info';
+import { flies, landings } from '@/view/landings';
 import type { HudEnv } from './env';
 import type { RevealKey } from './policy';
 import { tapArea } from './kit';
 import { pityVisible } from './policy';
+import { CURRENCY_ROW, FISH_X, PURR_X, incomeShown } from './incomeMath';
 
 /** A flight that never lands (cancelled by a pause menu, a cap) must not leave the number short for ever. */
 const FALLBACK = 3;
@@ -86,9 +88,10 @@ class OddsButton extends Button {
 
 /** Right edge of the pity chip: 8 px clear of the odds button. */
 const PITY_RIGHT = 592;
-/** Where the fish counter stands beside the purr counter, and where it stands while it is alone. */
-const FISH_X = 152;
+/** Where the fish counter stands while it is alone (beside the purr counter it stands at `FISH_X`). */
 const FISH_ALONE_X = 360;
+const TAG_H = 48;
+const TAG_TIP = 'income';
 
 export class CurrencyRow {
   readonly root = new Container();
@@ -103,6 +106,10 @@ export class CurrencyRow {
   private readonly pityBg = new Graphics();
   private readonly pitySeed = paperSeed();
   readonly odds: Button;
+  /** The fish a second that come in by themselves, as a small paper tag beside the fish pill ("+0.5/s"); a tap says what it is. */
+  private readonly income = new Container();
+  private readonly incomeText: Text;
+  private incomeKey = '';
   private pityShown = false;
   private readonly tmp = new Point();
 
@@ -112,12 +119,12 @@ export class CurrencyRow {
   ) {
     const b = env.battle;
     const r = env.reveal;
-    this.fish = new CurrencyPill({ icon: 'fish', amount: b.fish, width: 224, tickSfx: false });
-    this.purr = new CurrencyPill({ icon: 'purr', amount: b.purr, width: 156, tickSfx: false });
+    this.fish = new CurrencyPill({ icon: 'fish', amount: b.fish, width: CURRENCY_ROW.fishW, tickSfx: false });
+    this.purr = new CurrencyPill({ icon: 'purr', amount: b.purr, width: CURRENCY_ROW.purrW, tickSfx: false });
     this.fishCounter = new Counter(this.fish, this.bag, b.fish);
     this.purrCounter = new Counter(this.purr, this.bag, b.purr);
     this.fish.position.set(r.purr ? FISH_X : FISH_ALONE_X, 0);
-    this.purr.position.set(380, 0);
+    this.purr.position.set(PURR_X, 0);
     this.purr.visible = r.purr;
 
     // Two lines on the mustard paper: what it counts, then how far along it is.
@@ -135,9 +142,14 @@ export class CurrencyRow {
     this.odds.onTap(openOdds);
     this.odds.visible = r.odds;
 
-    this.root.addChild(this.fish, this.purr, this.pity, this.odds);
+    this.incomeText = uiLabel('', { size: 24, color: Color.inkDeep });
+    this.income.addChild(this.incomeText);
+    this.income.on('pointerup', () => this.explainIncome());
+    this.income.visible = false;
 
-    env.on(b.events, 'fish', ({ total, delta, reason }) => this.fishCounter.apply(total, delta, reason !== 'start'));
+    this.root.addChild(this.fish, this.income, this.purr, this.pity, this.odds);
+
+    env.on(b.events, 'fish', ({ total, delta, reason }) => this.fishCounter.apply(total, delta, flies(reason)));
     env.on(b.events, 'purr', ({ total, delta, reason }) => {
       this.purrCounter.apply(total, delta, reason !== 'start');
       if (delta > 0 && r.purr) env.hints.request('purr', this.purr);
@@ -151,6 +163,36 @@ export class CurrencyRow {
       else if (fail === 'not_enough_purr' && r.purr) this.purr.shakeInsufficient();
     });
     this.refreshPity();
+  }
+
+  /** Called every frame: the tag follows the fish pill and says the income right now (it changes when a cat steps on or off a treat cell, or a hazard stops one). */
+  update(): void {
+    const rate = this.env.battle.incomePerSecond();
+    const text = rate > 0 ? t('hud.income', { n: incomeShown(rate) }) : '';
+    if (text !== this.incomeKey) {
+      this.incomeKey = text;
+      this.drawIncome(text);
+    }
+    this.income.position.set(this.fish.x + CURRENCY_ROW.fishW / 2 + CURRENCY_ROW.gap, 0);
+  }
+
+  private drawIncome(text: string): void {
+    this.income.visible = text !== '';
+    if (!this.income.visible) return;
+    const w = CURRENCY_ROW.tagW;
+    this.incomeText.text = text;
+    fitLabel(this.incomeText, w - 20, 24);
+    this.incomeText.position.set(w / 2, 0);
+    this.income.children.filter((c) => c !== this.incomeText).forEach((c) => c.destroy());
+    const back = new Graphics();
+    drawPaper(back, 0, -TAG_H / 2, { w, h: TAG_H, kind: 'pill', fill: Color.paperLight, edge: Color.leafDark, edgeWidth: 3, edgeAlpha: 1, shadow: 3, grain: false, seed: this.pitySeed });
+    this.income.addChildAt(back, 0);
+    // The touch target is the full row height even though the tag is 48 px tall.
+    tapArea(this.income, -4, -44, w + 8, 88);
+  }
+
+  private explainIncome(): void {
+    info.tap(TAG_TIP, this.income, { text: t('hud.income.tip', { n: incomeShown(this.env.battle.incomePerSecond()) }) });
   }
 
   /** The purr counter arrives beside the fish (which slides over to make room); the odds button pops in. */

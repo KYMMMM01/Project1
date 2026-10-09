@@ -34,7 +34,9 @@ export const KO: Record<string, string> = {
   'codex.group.normal': '일반 적',
   'codex.group.elite': '정예',
   'codex.group.boss': '보스',
-  'codex.row.normal': '체력 ×{hp} · 속도 {speed} · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.normal': '체력 {lo} ~ {hi} · 속도 {speed} · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.normal.one': '체력 {hp} · 속도 {speed} · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.normal.none': '이 챕터에는 안 나와요 · 속도 {speed} · 방어 {armor}% · 저항 {ward}%',
   'codex.row.special': '체력 {lo} ~ {hi} · 제한 {limit}초 · 방어 {armor}% · 저항 {ward}%',
   'codex.row.special.one': '체력 {lo} · 제한 {limit}초 · 방어 {armor}% · 저항 {ward}%',
 
@@ -47,7 +49,7 @@ export const KO: Record<string, string> = {
   'codex.page.rule': '피해 상한',
   'codex.page.ability': '능력',
   'codex.page.tips': '이렇게 잡아요',
-  'codex.stat.hpMult': '체력 배수',
+  'codex.stat.hpMult': '오이와 비교',
   'codex.stat.hpMult.v': '오이의 ×{n}배',
   'codex.stat.hp': '체력',
   'codex.stat.hp.range': '{lo} → {hi}',
@@ -115,8 +117,8 @@ export const KO: Record<string, string> = {
   'codex.ability.death_burst.text': '쓰러지면 반경 {radius} 안의 적이 {dur}초 동안 {pct}% 빨라져요.',
 
   // ── tips (every number comes from the enemy's own data) ──
-  'codex.tip.armor': '방어력 {armor}%라서 물리 피해가 {armor}% 줄어요. 방어를 깎는 고양이({breakers})와 마법 피해 직업({magic})의 공격이 잘 통해요.',
-  'codex.tip.ward': '마법 저항 {ward}%라서 마법 피해가 {ward}% 줄어요. 물리 피해 직업({physical})의 공격이 잘 통해요.',
+  'codex.tip.armor': '방어력 {armor}%라서 물리 피해가 {armor}% 줄어요. 마법 피해 직업({magic})의 공격과, 방어를 깎는 고양이({breakers})가 잘 통해요. 방어 깎기와 방어 무시는 마법 저항도 같이 줄여요.',
+  'codex.tip.ward': '마법 저항 {ward}%라서 마법 피해가 {ward}% 줄어요. 물리 피해 직업({physical})의 공격이 잘 통해요. 방어를 깎는 고양이({breakers})와 방어 무시(전사 시너지)는 마법 저항도 줄여요.',
   'codex.tip.open': '방어력 {armor}%, 마법 저항 {ward}%로 낮아요. 어떤 공격이든 잘 들어가요.',
   'codex.tip.stun_none': '기절과 얼림은 안 통하고, 둔화는 {slow}%까지만 들어가요. 화력으로 승부해요.',
   'codex.tip.stun_half': '기절과 얼림은 시간이 {stun}%로 줄고, 둔화는 {slow}%까지만 들어가요.',
@@ -136,14 +138,14 @@ export const KO: Record<string, string> = {
 
   // ── board cells ──
   'codex.cellgroup.basic': '기본',
+  'codex.cellgroup.special': '챕터마다 다른 특수 칸',
   'codex.cellgroup.danger': '위험한 칸',
   'codex.cellgroup.toy': '장난감 자리',
   'codex.cellgroup.aura': '도와주는 고양이',
   'codex.cellgroup.lane': '적이 걷는 길',
   'codex.cell.plain.name': '보통 칸',
   'codex.cell.plain.text': '아무 효과도 없는 칸이에요. 판은 가로 {cols}칸, 세로 {rows}칸이라 모두 {cells}칸이고, 한 칸에 고양이 한 마리가 서요. 끌어서 옮기고, 같은 고양이끼리 만나면 합쳐져요.',
-  'codex.cell.sun.name': '햇살 칸',
-  'codex.cell.sun.text': '해가 비치는 칸이에요. 서 있는 고양이는 공격이 {speed}% 빨라져요. 판에 {cells}칸이 있고, 처음에는 가운데 십자 모양이에요. 막이 끝날 때마다 새 자리로 옮겨요. {toy}은(는) 햇살 칸을 {toyCells}칸 늘리고 효과를 {toySpeed}% 더해요.',
+  'codex.cell.special.text': '{chapter}의 특수 칸이에요. {effect} 판에 {cells}칸이 있고, 처음에는 가운데 십자 모양이에요. 막이 끝날 때마다 새 자리로 옮겨요. {toy}이(가) 있으면 칸이 {toyCells}칸 늘고 효과가 이렇게 커져요. {boosted}',
   'codex.cell.wet.name': '젖은 칸',
   'codex.cell.wet.text': '물이 튄 칸이에요. 그 칸의 고양이는 물이 마를 때까지 공격하지 못해요. 칸은 닿기 {warn}초 전에 반짝여요. {spray}은(는) {sprayEvery}초마다 {sprayCells}칸을 {sprayDur}초 동안, {bath}은(는) {soakEvery}초마다 {soakCells}칸을 {soakDur}초 동안 적셔요. 고양이를 옮기면 {recover}초 뒤에 다시 공격해요. {bell}과 둘레의 고양이는 {dodge}% 확률로 피해요.',
   'codex.cell.zap.name': '낙뢰 칸',

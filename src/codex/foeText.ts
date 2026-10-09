@@ -79,7 +79,12 @@ export function foeItem(id: EnemyId, level: Level): FoeItem {
   const rows = targetRows(id, level);
   let line: string;
   if (rows.length === 0) {
-    line = t('codex.row.normal', { hp: plain(stats.hpMult), speed: stats.speed, armor: stats.armorPct, ward: stats.wardPct });
+    // An ordinary enemy's health is the real number at the chosen chapter and butler level (its first wave to its last), not a multiple.
+    const health = healthSpan(id, level);
+    const vars = { speed: stats.speed, armor: stats.armorPct, ward: stats.wardPct };
+    if (!health) line = t('codex.row.normal.none', vars);
+    else if (health.first.hp === health.last.hp) line = t('codex.row.normal.one', { ...vars, hp: exact(health.first.hp) });
+    else line = t('codex.row.normal', { ...vars, lo: exact(health.first.hp), hi: exact(health.last.hp) });
   } else {
     const hps = rows.map((r) => r.hp);
     const limits = rows.map((r) => r.limit);
@@ -155,6 +160,7 @@ function tipText(tip: Tip): string {
     vars.magic = classesDealing('magic').map(className).join('·');
   } else if (tip.kind === 'ward') {
     vars.physical = classesDealing('physical').map(className).join('·');
+    vars.breakers = armourBreakers().map(unitName).join('·');
   }
   return t(`codex.tip.${tip.kind}`, vars);
 }
@@ -204,7 +210,6 @@ export function foePage(id: EnemyId, level: Level): FoePage {
   const stats = foeStats(id);
   const rows: Row[] = [];
   if (rank === 'normal') {
-    rows.push({ label: t('codex.stat.hpMult'), value: t('codex.stat.hpMult.v', { n: plain(stats.hpMult) }) });
     const health = healthSpan(id, level);
     if (!health) rows.push({ label: t('codex.stat.hp'), value: t('codex.stat.hp.none') });
     else {
@@ -215,6 +220,8 @@ export function foePage(id: EnemyId, level: Level): FoePage {
         ...(same ? {} : { note: t('codex.stat.hp.note', { a: health.first.wave, b: health.last.wave }) }),
       });
     }
+    // The multiple only says how this enemy compares with a cucumber: a side fact under the real health.
+    rows.push({ label: t('codex.stat.hpMult'), value: t('codex.stat.hpMult.v', { n: plain(stats.hpMult) }) });
   }
   rows.push(
     { label: t('codex.stat.speed'), value: stats.speed === stats.baseSpeed ? String(stats.speed) : t('codex.stat.speed.v', { n: stats.speed, base: stats.baseSpeed }) },

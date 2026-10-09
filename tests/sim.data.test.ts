@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CLASS_IDS, ENEMY_IDS, RELIC_IDS, UNIT_IDS } from '@/game/api';
 import {
   ACT_LENGTH, BOSS_HP, CC_IMMUNE_AFTER, CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, ELITE_HP, ENDLESS_GROWTH, HP_INDEX, PULL_IMMUNE_AFTER,
-  SUMMON_ODDS, WAVE_BUDGET, hpIndex, specialHp, specialLimit,
+  SUMMON_ODDS, SUN_SPEED, WAVE_BUDGET, hpIndex, specialHp, specialLimit,
 } from '@/game/data/balance';
 import { allClassDefs, classDef, synergyTier, tierForDistinct } from '@/game/data/classes';
 import { allEnemyDefs, bossSpec, budgetMult, enemyDef } from '@/game/data/enemies';
@@ -12,6 +12,8 @@ import { RARITIES, RELIC_RARITY, UNIT_GRID, unitClass, unitRarityIndex } from '@
 import { STAKE_STEPS, stakeRules, stakeText } from '@/game/data/stakes';
 import { TRAINING, TRAINING_IDS, trainingBonus } from '@/game/data/training';
 import { allUnitDefs, auraScale, unitDef, unitSpec } from '@/game/data/units';
+import { SPECIAL_CELLS, allSpecialCells, cellShown, specialCellName, specialCellOf, specialCellText } from '@/game/data/cells';
+import { tilesOf, tilesText } from '@/game/data/lengthText';
 import { actFeatures, chapterWaves, entriesBudget, scriptFor, waveEntries, waveKindOf } from '@/game/data/waves';
 import { getLang, setLang, t } from '@/core/i18n';
 import '@/game/index';
@@ -100,13 +102,114 @@ describe('unit table', () => {
     }
   });
 
-  it('puts the data values into the skill text', () => {
+  it('puts the data values into the skill text, the distances in tiles', () => {
     setLang('en');
     const s = unitSpec('w_sword');
-    expect(unitDef('w_sword').skillText()).toContain(String(s.skillArgs.a));
+    expect(unitDef('w_sword').skillText()).toContain(tilesText(s.skillArgs.a as number));
     expect(unitDef('w_sword').skillText()).toContain(String(s.skillArgs.b));
     const tiger = unitSpec('w_tiger');
     expect(unitDef('w_tiger').skillText()).toContain(String(tiger.skillArgs.b));
+    setLang('ko');
+    expect(unitDef('w_samurai').skillText()).toContain('앞뒤 1칸');
+  });
+
+  it('gives every distance in a skill sentence in tiles (a tile counts 100 px), never as pixels', () => {
+    expect(tilesOf(100)).toBe(1);
+    expect(tilesOf(130)).toBe(1.3);
+    expect(tilesOf(55)).toBe(0.6);
+    setLang('ko');
+    expect(tilesText(130)).toBe('1.3칸');
+    expect(tilesText(100)).toBe('1칸');
+    setLang('en');
+    expect(tilesText(130)).toBe('1.3 tiles');
+    expect(tilesText(100)).toBe('1 tile');
+    for (const lang of LANGS) {
+      setLang(lang);
+      for (const id of UNIT_IDS) {
+        const spec = unitSpec(id);
+        const text = unitDef(id).skillText();
+        for (const key of Object.keys(spec.skillArgs)) {
+          const px = spec.skillArgs[key] as number;
+          // A pixel distance is one of the attack's own lengths (radius, reach): its value must not stand in the sentence bare.
+          const lengths = [spec.attack].flatMap((a) => ('radius' in a ? [a.radius] : 'reach' in a ? [a.reach] : 'blastRadius' in a ? [a.blastRadius] : []));
+          if (!lengths.includes(px) || px < 50) continue;
+          expect(text, `${id} ${lang} {${key}}`).not.toMatch(new RegExp(`(?<![\\d.])${px}(?![\\d.%])`));
+          expect(text, `${id} ${lang} {${key}}`).toContain(tilesText(px));
+        }
+      }
+    }
+  });
+
+  it('uses no internal terms in any unit, perk, toy, class or daily-rule sentence a player reads', () => {
+    const banned = { ko: /대상|광역|연쇄|반경/, en: /radius|chain distance|area size|\bpx\b/i } as const;
+    for (const lang of LANGS) {
+      setLang(lang);
+      const texts: string[] = [];
+      for (const d of allUnitDefs()) texts.push(d.skillText(), ...d.perks.map((p) => p.text()));
+      for (const id of RELIC_IDS) texts.push(relicDef(id).descText());
+      for (const c of allClassDefs()) texts.push(c.tierText(1), c.tierText(2), c.tierText(3), c.specialText(), t(c.roleKey));
+      for (const id of MODIFIER_IDS) texts.push(modifierText(id));
+      for (const text of texts) expect(text, lang).not.toMatch(banned[lang]);
+    }
+  });
+
+  it('says in the sentences of the viking and the tiger that they aim at bosses and elites first, and only there', () => {
+    for (const id of UNIT_IDS) expect(unitDef(id).targetsElitesFirst, id).toBe(id === 'w_viking' || id === 'w_tiger');
+    for (const lang of LANGS) {
+      setLang(lang);
+      for (const id of ['w_viking', 'w_tiger'] as const) expect(unitDef(id).skillText(), `${id} ${lang}`).toMatch(lang === 'ko' ? /보스·정예/ : /boss or elite/);
+    }
+  });
+
+  it('says in every sentence of an armour break or an armour ignore that it reaches the ward too', () => {
+    for (const lang of LANGS) {
+      setLang(lang);
+      const need = lang === 'ko' ? /결계/ : /ward/;
+      expect(unitDef('w_viking').skillText()).toMatch(need);
+      expect(unitDef('w_tiger').skillText()).toMatch(need);
+      expect(classDef('warrior').tierText(2)).toMatch(need);
+      expect(classDef('warrior').tierText(3)).toMatch(need);
+      expect(classDef('warrior').specialText()).toMatch(need);
+    }
+  });
+});
+
+describe('special cells', () => {
+  it('has one kind per chapter, each with one stat: 0.2 of it, and 0.15 fish a second a cat for the treat cell (measured as the same worth)', () => {
+    expect(allSpecialCells().map((c) => c.id)).toEqual(['sun', 'bowl', 'bubble', 'stump', 'treat']);
+    expect([1, 2, 3, 4, 5].map((ch) => specialCellOf(ch).id)).toEqual(['sun', 'bowl', 'bubble', 'stump', 'treat']);
+    expect(allSpecialCells().map((c) => c.stat)).toEqual(['speed', 'damage', 'crit', 'range', 'fish']);
+    expect(allSpecialCells().map((c) => c.value)).toEqual([0.2, 0.2, 0.2, 0.2, 0.15]);
+    expect(SUN_SPEED).toBe(SPECIAL_CELLS.sun.value);
+    expect(specialCellOf(0).id).toBe('sun');
+    expect(specialCellOf(9).id).toBe('treat');
+  });
+
+  it('names every kind and describes its one bonus with its real number, in both languages', () => {
+    for (const lang of LANGS) {
+      setLang(lang);
+      for (const c of allSpecialCells()) {
+        expect(specialCellName(c.id), `${c.id} ${lang}`).not.toBe(c.nameKey);
+        const text = specialCellText(c.id);
+        expect(text, `${c.id} ${lang}`).not.toMatch(/[{}]|undefined|NaN/);
+        expect(text).toContain(String(cellShown(c)));
+        expect(specialCellText(c.id, 0.1)).toContain(String(cellShown(c, c.value + 0.1)));
+      }
+    }
+    expect(cellShown(SPECIAL_CELLS.treat)).toBe(0.15);
+    expect(cellShown(SPECIAL_CELLS.treat, 0.25)).toBe(0.25);
+    expect(cellShown(SPECIAL_CELLS.sun)).toBe(20);
+  });
+
+  it('calls the toy and the daily rule by "special cell", not by the sun', () => {
+    for (const lang of LANGS) {
+      setLang(lang);
+      const toy = relicDef('sunny_spot');
+      const words = lang === 'ko' ? /특수 칸/ : /special tiles?/i;
+      expect(toy.descText()).toMatch(words);
+      expect(modifierText('sunny_day')).toMatch(words);
+      expect(`${t(toy.nameKey)} ${t('modifier.sunny_day.name')}`).not.toMatch(/햇살|sun/i);
+    }
   });
 });
 
@@ -191,6 +294,8 @@ describe('classes and synergy', () => {
     expect(synergyTier('warrior', 3).damage).toBe(0.65);
     expect(synergyTier('warrior', 3).armorIgnore).toBe(0.3);
     expect(synergyTier('ranger', 2).critMult).toBe(0.05);
+    expect([1, 2, 3].map((n) => synergyTier('ranger', n).damage)).toEqual([0.08, 0.2, 0.45]);
+    expect(synergyTier('mage', 1).crit).toBe(0);
     expect(synergyTier('mage', 2).statusMult).toBe(0.2);
     expect(synergyTier('trickster', 3).rewardMult).toBe(0.3);
     expect(synergyTier('trickster', 0).speed).toBe(0);

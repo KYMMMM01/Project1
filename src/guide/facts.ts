@@ -3,20 +3,21 @@
  * into a string): changing a balance constant changes every bubble, card and page that mentions it.
  */
 import { t } from '@/core/i18n';
-import type { ClassId, EnemyId, RarityId, UnitId } from '@/game';
+import type { ClassId, EnemyId, RarityId, SpecialCellId, UnitId } from '@/game';
 import {
-  ACT_LENGTH, ACT_PURR, AWAKEN_COST, AWAKEN_MIN_TIER, BOSS_FISH, BOSS_LIMITS, BOSS_PURR, CALL_FISH_MAX, CALL_FISH_PER_SECOND, CHAPTER_ACTS,
+  ACT_LENGTH, ACT_PURR, AWAKEN_COST, AWAKEN_MIN_TIER, BASE_FISH_PER_SECOND, BOSS_FISH, BOSS_LIMITS, BOSS_PURR, CALL_FISH_MAX, CALL_FISH_PER_SECOND, CHAPTER_ACTS,
   CHAPTER_WAVES, CLASS_UPGRADE_BONUS, CLASS_UPGRADE_COSTS, DAILY_UNIT_LEVEL, DAILY_WAVES, DANGER_ALARM, DANGER_CAUTION,
   ELITE_FISH, ELITE_LIMITS, ELITE_PURR, ENDLESS_GROWTH, ENEMY_CAP, FREE_REROLLS, HAZARD_WARNING, LASER_COOLDOWN, LASER_DURATION,
-  LASER_VULNERABLE, LEVEL_DAMAGE_STEP, MOLT_COST, MOLT_LIMIT, OFFER_EVERY, OFFER_OPTIONS, OVERFLOW_GRACE, PITY_LIMIT, PITY_MAX, PITY_STEP,
+  LASER_VULNERABLE, LEVEL_DAMAGE_STEP, MOLT_COSTS, MOLT_LIMIT, OFFER_EVERY, OFFER_OPTIONS, OVERFLOW_GRACE, PITY_LIMIT, PITY_MAX, PITY_STEP,
   RELIC_RARITY_WEIGHTS, REVIVE_BOSS_HP_CUT, REVIVE_BOSS_TIME, REVIVE_CAP_FRACTION, SELL_FISH, SELL_PURR, START_FISH, SUMMON_BASE,
-  SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_ODDS, SUMMON_STEP, SUN_CELLS, SUN_SPEED, SYNERGY_TIER_AT,
+  SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_ODDS, SUMMON_STEP, SUN_CELLS, SYNERGY_TIER_AT,
 } from '@/game/data/balance';
+import { specialCellName, specialCellText } from '@/game/data/cells';
 import { classDef } from '@/game/data/classes';
 import { BOSS_SPECS, ENEMY_SPECS } from '@/game/data/enemies';
 import { MODIFIER_IDS } from '@/game/data/modifiers';
 import { waveKindOf } from '@/game/data/waves';
-import { RARITIES, UNIT_GRID } from '@/game/data/roster';
+import { CHAPTERS, RARITIES, UNIT_GRID } from '@/game/data/roster';
 import { MAX_STAKE } from '@/game/data/roster';
 import { stakeText } from '@/game/data/stakes';
 import {
@@ -65,13 +66,23 @@ function waveRhythm(kind: 'elite' | 'boss'): { first: number; gap: number } {
 }
 const secs = (v: number): number => Math.round(v * 10) / 10;
 
+/** The special cell of the battle being played, which the lesson cards name; the guidebook outside a battle names the first kind. */
+let focus: SpecialCellId = 'sun';
+export function setGuideCell(id: SpecialCellId): void {
+  focus = id;
+}
+/** Every chapter's special cell, one line each: where it is, what it is called and what it does with the real number. */
+const cellLines = (): string => CHAPTERS.map((c) => `${t(`chapter.${c.id}.name`)} · ${specialCellName(c.cell)}: ${specialCellText(c.cell)}`).join('\n');
+/** What each rank pays to molt, with the rank's name: "Kitten 1 · Street 1 · Alley Boss 2 · King 3" (a guardian cannot molt). */
+const moltPrices = (): string => MOLT_COSTS.map((cost, i) => `${rarityName(RARITIES[i] as RarityId)} ${cost}`).join(' · ');
+
 type Spec<K extends keyof typeof BOSS_SPECS> = (typeof BOSS_SPECS)[K];
 const boss = <K extends keyof typeof BOSS_SPECS>(k: K): Spec<K> => BOSS_SPECS[k];
 const foe = (id: EnemyId) => ENEMY_SPECS[id];
 
 /** One builder per topic that quotes numbers; the rest quote none. */
 const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
-  summon: () => ({ start: START_FISH, first: SUMMON_BASE, step: SUMMON_STEP, cap: SUMMON_CAP }),
+  summon: () => ({ start: START_FISH, first: SUMMON_BASE, step: SUMMON_STEP, cap: SUMMON_CAP, rate: BASE_FISH_PER_SECOND }),
   summon_grade: () => ({
     costs: list(SUMMON_GRADE_COSTS),
     top: SUMMON_ODDS.length,
@@ -102,14 +113,14 @@ const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
   class_sheet: () => ({ a: SYNERGY_TIER_AT[0] as number, c: SYNERGY_TIER_AT[2] as number, kitten: rarityName(RARITIES[0] as RarityId) }),
   class_upgrade: () => ({ bonus: pct(CLASS_UPGRADE_BONUS), costs: list(CLASS_UPGRADE_COSTS), max: CLASS_UPGRADE_COSTS.length }),
   pick3: () => ({ every: OFFER_EVERY, options: OFFER_OPTIONS }),
-  purr: () => ({ elite: ELITE_PURR, boss: BOSS_PURR, act: ACT_PURR, cost: MOLT_COST, awaken: AWAKEN_COST }),
-  molt: () => ({ cost: MOLT_COST, limit: MOLT_LIMIT }),
+  purr: () => ({ elite: ELITE_PURR, boss: BOSS_PURR, act: ACT_PURR, molt: moltPrices(), awaken: AWAKEN_COST }),
+  molt: () => ({ prices: moltPrices(), limit: MOLT_LIMIT }),
   awaken: () => ({ tier: AWAKEN_MIN_TIER, kinds: SYNERGY_TIER_AT[AWAKEN_MIN_TIER - 1] as number, cost: AWAKEN_COST }),
   sell: () => ({
     f1: SELL_FISH[0] as number, f2: SELL_FISH[1] as number, f3: SELL_FISH[2] as number, f4: SELL_FISH[3] as number, f5: SELL_FISH[4] as number,
     purr: list(SELL_PURR.slice(2)),
   }),
-  sun: () => ({ cells: SUN_CELLS, speed: pct(SUN_SPEED) }),
+  sun: () => ({ cells: SUN_CELLS, cell: specialCellName(focus), kinds: cellLines() }),
   hazards: () => ({
     warn: secs(HAZARD_WARNING), wet: foe('spray').hazardPulse?.duration ?? 0, zap: boss('lightning').duration,
   }),

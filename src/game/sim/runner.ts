@@ -2,7 +2,7 @@
  * Plays whole runs with a bot, headlessly, and measures what the balance report needs. Used by the
  * `npm run sim` report and by the tests; the game itself never imports it.
  */
-import type { BattleApi, BattleInit, ClassId, RunStats, UnitId, UnitState } from '../api';
+import type { BattleApi, BattleInit, ClassId, CurrencyReason, RunStats, UnitId, UnitState } from '../api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '../geometry';
 import { TICK } from '../data/balance';
 import { enemySpec } from '../data/enemies';
@@ -68,6 +68,8 @@ export interface RunResult {
   /** Per unit type; empty unless `RunOptions.tally` was set. */
   units: Partial<Record<UnitId, UnitTally>>;
   control: ControlTally;
+  /** Fish that came in by reason (kills, wave rewards, the steady income, sales...); empty unless `RunOptions.tally` was set. */
+  income: Partial<Record<CurrencyReason, number>>;
 }
 
 export interface RunOptions {
@@ -160,7 +162,7 @@ export function playRun(init: BattleInit, policy: BotPolicy, options: RunOptions
   const result: RunResult = {
     victory: false, wave: 0, time: 0, stats: b.getStats(), firstLegendary: 0, firstMythic: 0, caution: false,
     samples: [], bossRatios: [], lossReason: null, simMs: 0, units: {},
-    control: { enemySec: 0, slowed: 0, frozen: 0, stunned: 0, armorBroken: 0, pulled: 0 },
+    control: { enemySec: 0, slowed: 0, frozen: 0, stunned: 0, armorBroken: 0, pulled: 0 }, income: {},
   };
   const dt = every * TICK;
   if (options.tally) {
@@ -175,6 +177,9 @@ export function playRun(init: BattleInit, policy: BotPolicy, options: RunOptions
     });
     b.events.on('pull', (e) => {
       result.control.pulled += e.distance;
+    });
+    b.events.on('fish', (e) => {
+      if (e.delta > 0) result.income[e.reason] = (result.income[e.reason] ?? 0) + e.delta;
     });
   }
   let lastWave = 0;

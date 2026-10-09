@@ -3,7 +3,7 @@
  * No balance numbers live here — this file is the stable index that the simulation, the meta game
  * and the UI all share. Stats belong in units.ts / enemies.ts / relics.ts.
  */
-import type { ClassId, EnemyId, RarityId, RelicId, UnitId } from '../api';
+import type { ClassId, EnemyId, RarityId, RelicId, SpecialCellId, UnitId } from '../api';
 
 export const RARITIES: readonly RarityId[] = ['common', 'rare', 'epic', 'legendary', 'mythic'];
 
@@ -104,14 +104,16 @@ export interface ChapterInfo {
   rug: string;
   /** Boss of waves 10/20/30. */
   boss: EnemyId;
+  /** The kind of special board cell the chapter plays with (every mode that plays this chapter: daily, endless and the gold dungeon too). */
+  cell: SpecialCellId;
 }
 
 export const CHAPTERS: readonly ChapterInfo[] = [
-  { id: 1, key: 'livingroom', nameKey: 'chapter.1.name', background: 'bg_livingroom', rug: 'ui_rug_livingroom', boss: 'boss_vacuum' },
-  { id: 2, key: 'kitchen', nameKey: 'chapter.2.name', background: 'bg_kitchen', rug: 'ui_rug_kitchen', boss: 'boss_blender' },
-  { id: 3, key: 'bathroom', nameKey: 'chapter.3.name', background: 'bg_bathroom', rug: 'ui_rug_bathroom', boss: 'boss_bath' },
-  { id: 4, key: 'garden', nameKey: 'chapter.4.name', background: 'bg_garden', rug: 'ui_rug_garden', boss: 'boss_cloud' },
-  { id: 5, key: 'vet', nameKey: 'chapter.5.name', background: 'bg_vet', rug: 'ui_rug_vet', boss: 'boss_needle' },
+  { id: 1, key: 'livingroom', nameKey: 'chapter.1.name', background: 'bg_livingroom', rug: 'ui_rug_livingroom', boss: 'boss_vacuum', cell: 'sun' },
+  { id: 2, key: 'kitchen', nameKey: 'chapter.2.name', background: 'bg_kitchen', rug: 'ui_rug_kitchen', boss: 'boss_blender', cell: 'bowl' },
+  { id: 3, key: 'bathroom', nameKey: 'chapter.3.name', background: 'bg_bathroom', rug: 'ui_rug_bathroom', boss: 'boss_bath', cell: 'bubble' },
+  { id: 4, key: 'garden', nameKey: 'chapter.4.name', background: 'bg_garden', rug: 'ui_rug_garden', boss: 'boss_cloud', cell: 'stump' },
+  { id: 5, key: 'vet', nameKey: 'chapter.5.name', background: 'bg_vet', rug: 'ui_rug_vet', boss: 'boss_needle', cell: 'treat' },
 ];
 
 /** Highest difficulty stake per chapter (0 = base rules, each step adds one rule; see the battle spec). */

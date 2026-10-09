@@ -472,3 +472,12 @@ REQUESTS
 Two small things on the fx side of the 5 x 5 board (the rest is in `field.md`): `numberPlan.ts` cuts the 720 x 660 field into 4 x 4 regions (`REGION_H` 165, was 156), and `fx/marks.ts` has `drawBuffMark` / `BuffMarkKind` (the badge of a cat a trickster helps, baked by the field's art and drawn on the selection sheet's chips). The frame time of the standard crowded wave before and after the board change is in `field.md` (mean 11.4 to 12.7 ms before, 10.5 to 12.3 after, 20 or 25 cats); its script is `tools/crowded_wave.js`.
 
 REQUESTS: none.
+
+
+## 2026-10-10 batch 2: special cells (`src/fx/cells.ts`)
+
+`Fx.specialCell(rect, id, { delay? })` replaces `sunbeamCell` (and `drawSunMark`, `ZoneOpts` is unchanged): the picture, halo, glint, ring, emblem and one sparkle emitter of a chapter's special cell, as one `Loop` (`ZoneHandle`: `stop()` fades it out in 0.5 s). `CELL_LOOKS[id]` = `{ tile, badge, glow, spark, rises }` (image keys `cell_<id>` / `icon_cell_<id>`, the halo colour as a kit token, what the emitter sends), exported with `EMBLEM` (46), `CELL_ARRIVE_GAP` (0.09), `CELL_TOUCHDOWN` (0.2). `delay` omitted: simply there; given: hidden until then, then the drop-in with flash, ring and emblem pop (`field.md` has the numbers); `fxSettings.reducedMotion` is read each frame (the arrival is skipped for a loop that was created calm; a loop that was created with motion and then switched to reduced settles at once to the still picture). Nothing is allocated per frame: the tile and emblem are plain `Sprite`s of the loaded images (owned by the loop, destroyed with it), the halo / ring / glint are three `Graphics` drawn once. `FxDemo` lists the five kinds in place of the sunbeam.
+
+Tests: `tests/fx.cells.test.ts` (8: the parts and the clean end of every kind, where it sits, the halo breathes and never goes dark, the emitter by kind, the arrival and the settle, no arrival without a delay, reduced motion, no new object while it loops). `tests/fx.zones.test.ts` and `fx.specials.test.ts` no longer name the sunbeam.
+
+REQUESTS: none.

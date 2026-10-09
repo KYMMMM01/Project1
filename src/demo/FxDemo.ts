@@ -37,7 +37,7 @@ import {
   type NumbersMode,
   type NumStyle,
 } from '@/fx';
-import { UNIT_IDS, type BattleEvents, type EnemyState, type ProjectileState, type UnitId } from '@/game/api';
+import { SPECIAL_CELL_IDS, UNIT_IDS, type BattleEvents, type EnemyState, type ProjectileState, type UnitId } from '@/game/api';
 import { unitSpec } from '@/game';
 import type { FieldEnv } from '@/view/field/env';
 import { fieldArt } from '@/view/field/art';
@@ -633,7 +633,7 @@ export default class FxDemo extends Scene {
       e('ambientTwinkle', (c) =>
         this.toggle(c, () => fx.ambientTwinkle(c.cx, c.cy, c.w - 30, c.h - 70, { rate: 9 })),
       ),
-      e('sunbeamCell', (c) => this.toggle(c, () => fx.sunbeamCell(this.cellRect(c)))),
+      ...SPECIAL_CELL_IDS.map((id) => e(`specialCell ${id}`, (c) => this.toggle(c, () => fx.specialCell(this.cellRect(c), id, { delay: 0 })))),
       e('laserDot', (c) => this.laserDemo(c)),
       e('hazardWarn wet', (c) => fx.hazardWarn(this.cellRect(c), 'wet')),
       e('hazardWarn zap', (c) => fx.hazardWarn(this.cellRect(c), 'zap')),

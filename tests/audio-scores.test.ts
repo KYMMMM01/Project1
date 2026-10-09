@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { voiceLength } from '@/audio/instruments';
+import { SCORES } from '@/audio/library';
 import {
   BATTLE,
   BATTLE_LEAD,
@@ -9,54 +9,13 @@ import {
   HOME_LEAD,
   INST_PRIORITY,
   Inst,
-  SCORES,
   STEPS,
   rhythm,
   type MusicTrackId,
-  type NoteSink,
   type Score,
 } from '@/audio/scores';
-import { LayerMixer, StepClock, stepSeconds } from '@/audio/sequencer';
 import { noteToMidi } from '@/audio/theory';
-import { VoiceBudget } from '@/audio/voices';
-
-interface Note {
-  bar: number;
-  step: number;
-  inst: number;
-  midi: number;
-  vel: number;
-  dur: number;
-  layer: number;
-  at: number;
-}
-
-/** Records every note a score emits over `loops` passes of its form. */
-class Recorder implements NoteSink {
-  readonly notes: Note[] = [];
-  bar = 0;
-  step = 0;
-
-  note(inst: number, midi: number, vel: number, dur: number, layer: number, at = 0): void {
-    this.notes.push({ bar: this.bar, step: this.step, inst, midi, vel, dur, layer, at });
-  }
-
-  chord(inst: number, midis: readonly number[], vel: number, dur: number, layer: number, at = 0): void {
-    for (const m of midis) this.note(inst, m, vel, dur, layer, at);
-  }
-}
-
-function record(score: Score): Recorder {
-  const r = new Recorder();
-  for (let bar = 0; bar < score.bars; bar++) {
-    for (let step = 0; step < STEPS; step++) {
-      r.bar = bar;
-      r.step = step;
-      score.fill(bar, step, r);
-    }
-  }
-  return r;
-}
+import { record, simulate, type Note } from './audio-music-lib';
 
 const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
 const MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10];
@@ -205,38 +164,6 @@ describe('score structure', () => {
     }
   });
 });
-
-/** Replay a score through the same budget the engine uses and report how often notes were shed. */
-function simulate(score: Score, loops: number, layers: number): { total: number; dropped: number; peak: number } {
-  const clock = new StepClock(score.bpm, score.bars * STEPS);
-  clock.start(0);
-  const budget = new VoiceBudget(11, 12);
-  const mixer = new LayerMixer(score.layers, score.layerEdges);
-  mixer.setIntensity(layers >= 4 ? 1 : (layers - 1) * 0.3);
-  mixer.snap();
-  let total = 0;
-  const stepDur = stepSeconds(score.bpm);
-  const sink: NoteSink = {
-    note(inst, _midi, _vel, durSteps, layer, at = 0) {
-      if (!mixer.audible(layer)) return;
-      let start = clock.nextTime + at * stepDur;
-      const stepInBar = clock.loopStep % STEPS;
-      if (score.swing > 0 && stepInBar & 1) start += score.swing * stepDur;
-      total++;
-      budget.tryAdd(start, start + voiceLength(score.id, inst, durSteps * stepDur), INST_PRIORITY[inst] as number);
-    },
-    chord(inst, _midis, vel, durSteps, layer, at = 0) {
-      this.note(inst, 0, vel, durSteps, layer, at);
-    },
-  };
-  for (let i = 0; i < loops * score.bars * STEPS; i++) {
-    const loop = clock.loopStep;
-    const bar = Math.floor(loop / STEPS);
-    score.fill(bar, loop - bar * STEPS, sink);
-    clock.advance();
-  }
-  return { total, dropped: budget.dropped, peak: budget.peak };
-}
 
 describe('music polyphony budget', () => {
   const cases: Array<[MusicTrackId, number, number]> = [

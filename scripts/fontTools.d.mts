@@ -1,0 +1,11 @@
+export function sourceFiles(root: string): string[];
+export const RUNTIME_CHARS: string;
+export const EXTRA_LATIN: string;
+export function collectChars(root: string): Set<string>;
+export function isHangul(ch: string): boolean;
+export function woff2Codepoints(file: Uint8Array): Set<number>;
+export function hashedName(stem: string, bytes: Uint8Array): string;
+export function fontFileRe(stem: string): RegExp;
+export function fontUrlRe(stem: string): RegExp;
+export function withFontNames(html: string, names: Record<string, string>): string;
+export function fontNamesIn(html: string, stems: readonly string[]): Record<string, string>;

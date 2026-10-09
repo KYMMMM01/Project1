@@ -233,16 +233,12 @@ export function damageEnemy(
   s: Sim, e: SimEnemy, raw: number, type: DamageType, src: SimUnit | null, crit: boolean, dot: StatusKind | null,
 ): boolean {
   if (e.dead) return false;
-  const cut = 1 - (s.fx.defenceCut ?? 0);
-  let amount = raw;
-  if (type === 'physical') {
-    let defence = e.spec.armor * cut;
-    if (e.armorBroken) defence *= 1 - e.breakAmount;
-    if (src) defence *= 1 - src.armorIgnore;
-    amount *= 1 - defence;
-  } else {
-    amount *= 1 - e.spec.ward * cut;
-  }
+  // Armour (against physical damage) and ward (against magic) are cut the same way: by the toy, by an armour break on the enemy and by
+  // the armour ignore of the cat that hits (v1.5: they used to work on armour only).
+  let defence = (type === 'physical' ? e.spec.armor : e.spec.ward) * (1 - (s.fx.defenceCut ?? 0));
+  if (e.armorBroken) defence *= 1 - e.breakAmount;
+  if (src) defence *= 1 - src.armorIgnore;
+  let amount = raw * (1 - defence);
   let mult = 1 + (e.vulnerable ? e.vulnAmount : 0);
   if (e.focused) mult *= 1 + LASER_VULNERABLE;
   if (e.slow > 0 && s.fx.slowedDamage) mult *= 1 + s.fx.slowedDamage;

@@ -86,3 +86,21 @@ Session scratchpad `shots/`, Korean and English, 720 x 1280 and 720 x 1600 (`tal
 2. Guidebook: a short home-section topic for the codex (with a "try it" at the home button) would make the first visit easier; not added, because `tests/guide.topics.test.ts` ties every home topic to a tab point and a "try it" for the top bar does not exist yet.
 3. `src/game/sim/boss.ts`: `FIRST_USE` (a boss's first ability comes 0.6 of a cooldown after it appears) is a private constant; exporting it into `balance.ts` would let the ability text say when the first one lands.
 4. Decide whether 대왕 오이 should be called a boss in the data (its id says so, its trait and its waves make it an elite); the codex follows the data.
+
+
+## 2026-10-10 batch 2: special cells, real health, armour and ward (directives 13, 18, 4)
+
+`tsc` clean, `npx vitest run` 151 files / 3,309 tests green (codex: 47 tests in 4 files, 6 new or rewritten).
+
+- **Cells section** (`cells.ts`, `cellText.ts`, `boards.ts`, `BoardView.ts`, `CellViews.ts`): the "sunbeam" card is five cards, one per chapter kind, in a new group "챕터마다 다른 특수 칸" / "A different special tile in each chapter" (between "기본" and "위험한 칸"). The page name is the cell's own (`specialCellName`), the text is one sentence for all five (`codex.cell.special.text`, key chosen by `cellTextKey`) filled with `{chapter}` (the chapter whose kind it is, from `CHAPTERS[].cell`), `{effect}` (`specialCellText(kind)`, the real number), `{cells}` (`SUN_CELLS`), the prime-spot toy's name and tile count and `{boosted}` (`specialCellText(kind, +0.1)`, e.g. "+30%" or "0.25 fish a second"). The diagram marks the first five cells with the kind's tile picture (`diagram.cell`, tone `cell`; `sunArt` is gone, the picture is the one the battle draws). `CELL_KINDS` is `plain, sun, bowl, bubble, stump, treat, wet, zap, tower, perch, cushion, bard, bell, lane`; `CELL_GROUPS` has the new group.
+- **Monsters, health** (directive 18; `foeText.ts`, strings): the list line of an ordinary enemy is "체력 83 ~ 1,631 · 속도 70 · 방어 0% · 저항 0%" (the first and last wave it walks in at the chosen chapter and butler level; one number when they are equal; "이 챕터에는 안 나와요 · …" when it does not come), no `×` multiple. The page lists the real health first and the comparison with a cucumber after it, as a side fact ("오이와 비교" / "Compared with a cucumber", was "체력 배수"). The selector's basis line still says "적 체력 ×1.4" (the chapter's multiplier, which is what the numbers were multiplied by).
+- **Armour and ward** (`codex.tip.armor`, `codex.tip.ward`): both tips now say that armour break and armour ignore cut the ward too, and the ward tip names the breakers (`{breakers}`). The trait chips take their sentences from the data (`trait.armored.desc`, `trait.warded.desc`, already reworded by the rules engineer).
+- Not touched: the toys section (texts come from `relicDef(id).descText()`), the lane page, the awakening cost (the codex has no page that states it; the guide and the sheet do).
+
+Tests: `codex.text.test.ts` (every cell page quotes exactly its facts, the special cells' diagram marks `SUN_CELLS` cells with the kind's picture, the list line quotes the first and last health at every chapter and butler level and has no `x`, the cucumber line at chapter 2 / 3 differs from chapter 5, the tips carry the ward sentence, the health row stands before the multiple).
+
+Played: `shots/codex/foes_page` (the list at chapter 3, butler 2; the cucumber page "70 → 2,202, wave 1 → 23"; the vacuum page's armour trait sentence), `shots/cx/cx_all` (English, the cells section scrolled: the five cards with their tile pictures and numbers).
+
+Not verified: the cells section in Korean scrolled to the garden and vet cards, 1600 high, a language switch while the codex is open.
+
+REQUESTS: none.

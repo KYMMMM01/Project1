@@ -1,44 +1,33 @@
 // Builds two subset webfonts into public/fonts:
-//   game-latin.woff2  Lilita One  — digits, Latin, punctuation (chunky display face)
-//   game-kr.woff2     Jua         — only the Hangul actually used by the game's strings
+//   game-latin.<hash>.woff2  Lilita One  — digits, Latin, punctuation (chunky display face)
+//   game-kr.<hash>.woff2     Jua         — only the Hangul actually used by the game's strings
 // A full Korean font is several MB; subsetting to the glyphs in use keeps it around 100 KB, which
 // matters for web-portal initial-download budgets. Re-run after adding strings: `npm run font`
-// (it also runs automatically before `dev` and `build`).
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+// (it also runs automatically before `dev` and `build`; tests/core.font.test.ts fails when a string has a glyph the subset lacks).
+//
+// The file names carry a digest of their bytes and index.html's @font-face rules are rewritten to match, so a browser or a
+// CDN that kept an older subset under the old name can never be handed to a newer page: before this, a fixed name
+// `game-kr.woff2` let an old subset live on, and every character added since then fell back to the thin system font.
+import { mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import subsetFont from 'subset-font';
+import {
+  EXTRA_LATIN, collectChars, fontFileRe, hashedName, isHangul, withFontNames, woff2Codepoints,
+} from './fontTools.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'public', 'fonts');
 mkdirSync(outDir, { recursive: true });
 
-function walk(dir, out = []) {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    const st = statSync(p);
-    if (st.isDirectory()) walk(p, out);
-    else if (/\.(ts|html|json)$/.test(name)) out.push(p);
-  }
-  return out;
-}
-
-// Collect every non-ASCII character that appears anywhere in the source. Scanning all of src (not
-// just the i18n tables) means a Korean string that someone hard-codes still gets its glyphs.
-const sources = [...walk(join(root, 'src')), join(root, 'index.html')];
-const used = new Set();
-for (const file of sources) {
-  const text = readFileSync(file, 'utf8');
-  for (const ch of text) {
-    const cp = ch.codePointAt(0);
-    if (cp > 0x7f) used.add(ch);
-  }
-}
+const used = collectChars(root);
 
 const ascii = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i)).join('');
-const extraLatin = '×÷±·•…‘’“”–—→←↑↓★☆♥♪∞°%‰₩€¥£©®™';
-const latinText = ascii + extraLatin;
-const krText = [...used].join('') + extraLatin + '가나다라마바사아자차카타파하'; // never ship an empty subset
+const all = [...used].join('');
+// Both subsets get every used character: the subsetter keeps what its face carries and drops the rest, and the page's font stack
+// (display face first, Korean face second) then draws each character from the first face that has it.
+const latinText = ascii + EXTRA_LATIN + all;
+const krText = all + EXTRA_LATIN + '가나다라마바사아자차카타파하' + ascii; // never ship an empty subset
 
 const jua = readFileSync(join(root, 'node_modules/@expo-google-fonts/jua/400Regular/Jua_400Regular.ttf'));
 const lilita = readFileSync(
@@ -46,16 +35,35 @@ const lilita = readFileSync(
 );
 
 const latin = await subsetFont(lilita, latinText, { targetFormat: 'woff2' });
-const kr = await subsetFont(jua, krText + ascii, { targetFormat: 'woff2' });
+const kr = await subsetFont(jua, krText, { targetFormat: 'woff2' });
 
-writeFileSync(join(outDir, 'game-latin.woff2'), latin);
-writeFileSync(join(outDir, 'game-kr.woff2'), kr);
+const files = { 'game-latin': hashedName('game-latin', latin), 'game-kr': hashedName('game-kr', kr) };
+writeFileSync(join(outDir, files['game-latin']), latin);
+writeFileSync(join(outDir, files['game-kr']), kr);
+// Older subsets (the plain names, and earlier hashes) go away so dist/ never ships two copies.
+for (const name of readdirSync(outDir)) {
+  const stale = Object.entries(files).some(([stem, file]) => name !== file && fontFileRe(stem).test(name));
+  if (stale) unlinkSync(join(outDir, name));
+}
 
-const hangul = [...used].filter((c) => {
-  const cp = c.codePointAt(0);
-  return cp >= 0xac00 && cp <= 0xd7a3;
-}).length;
+const pagePath = join(root, 'index.html');
+const page = readFileSync(pagePath, 'utf8');
+const next = withFontNames(page, files);
+if (next !== page) writeFileSync(pagePath, next);
+
+// What the two faces really carry, read back from the files just written (not from what was asked of the subsetter).
+const inLatin = woff2Codepoints(latin);
+const inKr = woff2Codepoints(kr);
+const missing = [...used].filter((ch) => !inLatin.has(ch.codePointAt(0)) && !inKr.has(ch.codePointAt(0)));
+const hangulMissing = missing.filter(isHangul);
+const hangul = [...used].filter(isHangul).length;
 console.log(
-  `[font] game-latin.woff2 ${(latin.length / 1024).toFixed(1)} KB, ` +
-    `game-kr.woff2 ${(kr.length / 1024).toFixed(1)} KB (${hangul} Hangul syllables, ${used.size} non-ASCII chars)`,
+  `[font] ${files['game-latin']} ${(latin.length / 1024).toFixed(1)} KB, ` +
+    `${files['game-kr']} ${(kr.length / 1024).toFixed(1)} KB (${hangul} Hangul syllables, ${used.size} non-ASCII chars)`,
 );
+if (hangulMissing.length > 0) {
+  console.warn(`[font] WARNING: ${hangulMissing.length} Hangul syllables the game uses are not in Jua and will be drawn in a system font: ${hangulMissing.join('')}`);
+}
+if (missing.length > hangulMissing.length) {
+  console.log(`[font] symbols neither face carries (drawn from the system font): ${missing.filter((ch) => !isHangul(ch)).join('')}`);
+}

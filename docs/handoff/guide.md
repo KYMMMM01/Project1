@@ -109,3 +109,19 @@ Tests: `guide.text`, `guide.topics`, `guide.progress` unchanged and green (they 
 - **New topic `gold_dungeon`** (section home, coin picture, "try it" = the battle tab's dungeon card): the meta engineer's REQUEST 2, with the text it proposed. Facts `waves` (`GOLD_DUNGEON_WAVES`), `free`, `gems`, `win` from `src/meta/data/dungeon.ts` and `src/game/data/goldDungeon.ts`; the first-clear bonus has no number in it (it depends on the tier). `HomePoint` has `'battle.dungeon'` (the tab already answered it). `tests/guide.text.test.ts` checks the facts.
 - **`guide.synergy.teach`** (the tutorial's synergy note and the first-encounter card) now ends with "the kitten rank does not count" (`{kitten}` fact): Korean 37 characters, English 68, both inside the two-line limits; a test requires the rank name in both.
 - Read every rules text of the batch against the data (synergy, class sheet, awaken, hazards, laser, classes, molt, boss, elite, sun, class upgrade, pick3, merge, toys, trait pages) in both languages: all numbers agree with `balance.ts`, `classes.ts` and `units.ts`. The boss pages say nothing yet of the bosses' armour and ward (that is the codex job).
+
+
+## 2026-10-10 batch 2: the texts follow the rules (directives 1, 4, 8, 9, 13, 15)
+
+All numbers still come from `facts.ts` (the guide test refuses typed digits and unused facts); `guide.*` tests green (20), 151 files / 3,309 tests in all.
+
+- **Special cells** (topic `sun`, id kept for saves and the tutorial; title "특수 칸" / "Special tiles"): the page lists the five (`{kinds}`: "거실 · 햇살 칸: 이 칸의 고양이는 공격 속도 +20%." ... built from `CHAPTERS`, `specialCellName`, `specialCellText`), says the cells move every act and that tapping an empty one explains it. The teaching line names the chapter's own cell ("{cell}에 고양이를 끌어 놓아요. 효과를 받아요!" / "Drag a cat onto the {cell} to get its bonus!"): `setGuideCell(kind)` (`facts.ts`, called by the HUD's constructor with `battle.specialCell`, reset to `sun` when the HUD goes) tells the lesson cards which one; outside a battle it is the sunbeam. The topic's picture is the tile of the cell (`Illustration` `cell` art takes a `SpecialCellId`: the loaded `cell_<id>` image, a cat on it when the topic has one; `sunArt` is gone). `acts.full` says "특수 칸".
+- **Fish a second** (`summon.full`: "싸우는 동안에는 가만히 있어도 초당 {rate}마리씩 들어와요", `rate` = `BASE_FISH_PER_SECOND`).
+- **Molt** (`molt.full`, `purr.full`): the price by rank, "꼬마 1 · 동네 1 · 골목대장 2 · 대왕 3" (`{prices}` / `{molt}` from `MOLT_COSTS` with the rank names), "수호신은 털갈이를 할 수 없어요". **Awakening** (`awaken.full`, `purr.full`): `{cost}` / `{awaken}` read `AWAKEN_COST` (10).
+- **Armour and ward traits**: "방어 깎기와 방어 무시는 마법 저항도 함께 줄여요" (`trait_armored`, `trait_warded`).
+- **Laser** (`guide.laser.*`): the dot snaps onto an elite or a boss near it and follows it, the red ring, letting go by moving it; the teaching line says it sticks to bosses.
+- Not changed: the synergy, class sheet, class lines and awaken pages already read the rules data (the ranger's "튕기는 화살" and its steps come through `tierText` / `specialText`; the class sheet was looked at in play, `shots/sheet/class_ranger_ko`).
+
+Tests (`guide.text.test.ts`): the molt prices and the awakening price and the fish a second in the pages, the teaching line names each chapter's cell, the page lists all five with chapter, name and sentence, the ward sentence, the laser's "follows it".
+
+REQUESTS: none.

@@ -13,14 +13,15 @@ export const DUNGEON_AD_PLACEMENT = 'dungeon_entry';
 
 /**
  * Gold of a run = (WAVE_BASE + WAVE_STEP x w, summed over the waves cleared, + KILL x kills) x chapter multiplier
- * of the tier x (victory ? VICTORY : 1). Each wave pays more than the one before it.
+ * of the tier x (victory ? VICTORY : 1). Each wave pays more than the one before it. 2026-10-10: raised by about
+ * 1.7 (8 / 2 / 0.35 / 100 before): a full clear is now about 120% of a chapter win for two minutes (docs/명세_메타.md section 13).
  */
-export const DUNGEON_WAVE_BASE = 8;
-export const DUNGEON_WAVE_STEP = 2;
-export const DUNGEON_KILL_GOLD = 0.35;
+export const DUNGEON_WAVE_BASE = 14;
+export const DUNGEON_WAVE_STEP = 3;
+export const DUNGEON_KILL_GOLD = 0.6;
 export const DUNGEON_VICTORY_MULT = 1.25;
 /** The first victory of the day adds this much gold per point of the tier's multiplier. */
-export const DUNGEON_FIRST_CLEAR_GOLD = 100;
+export const DUNGEON_FIRST_CLEAR_GOLD = 200;
 
 /** Tiers are the five chapters: tier n opens with chapter n cleared at butler level 0. */
 export const DUNGEON_TIERS = 5;

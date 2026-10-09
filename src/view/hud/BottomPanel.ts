@@ -123,6 +123,7 @@ export class BottomPanel {
 
   update(dt: number): void {
     this.classes.update();
+    this.currency.update();
     this.actions.update(dt);
     this.sheet.update();
   }

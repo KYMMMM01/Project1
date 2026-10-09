@@ -428,3 +428,30 @@ Played as a whole after the board, meta and rules engineers (stills in the sessi
 **Notes for whoever plays it next.** The Aside tab runs this game at about 1.5 frames a second, so nothing advances by itself: stop the ticker and step `game.tick(dt)` (`tools/battle_motion.js` `mcInit` / `mcWarp`). One `aside repl` call lives about 120 s (then "fetch failed: other side closed", which also says "Aside isn't running"): a tutorial needs two calls (play waves 1 to 4, then reopen with `?scene=battle&mode=tutorial&seed=7&debug=1` after `lessons.progress.markTaught` of the first lessons on a `?fresh=1` page). The runner passes the whole script as one command line argument (Windows limit about 32 KB): `battle_motion.js` + `hud_zoom.js` + a body fit, a longer driver does not. A first-encounter card ("알겠어요" / "Got it") holds the pause in a sandbox battle and swallows drags: press it before dragging.
 
 REQUESTS: none for the HUD. See `director.md`, `guide.md`, `platform.md`, `meta.md` and `field.md` of the same date for the rest.
+
+## 2026-10-10 batch 2: result music
+
+`ResultScreen.ts`: the existing `audio.music('home', 3)` after the stinger is now `audio.music(victory ? 'win' : 'lose', 3)` (a warm loop for a win, a soft one for a loss, still at 45 % volume and handed back on leaving). Nothing else on the page changed; see `audio.md` section 11.
+
+
+## 2026-10-10 batch 2: the fish income, the molt price by rank, the laser's words, ranges in tiles (directives 1, 9, 8, 15)
+
+`tsc` clean, 151 files / 3,309 tests green. New tests: `view.hud.molt.test.ts` (the molt state machine, the numbers a refusal quotes, the income tag's text and the row's geometry, the flying-icon rule), `view.field.lock.test.ts`.
+
+**"+n/초" beside the fish pill** (`CurrencyRow.update`, `incomeMath.ts`, `BottomPanel.update` calls it every frame): a small cream pill with a leaf-green edge, 108 x 48 (a tap area 116 x 88), text 24 px "+0.5/초" / "+0.5/s" from `battle.incomePerSecond()` (so a treat cell's trickle shows at once: "+0.95/s" with three cats on treat cells). Tapping it opens a bubble with the real number (`hud.income.tip`). To make room, the row's numbers moved: fish pill 224 -> 180 wide (left edge 40 as before), the tag after it, the purr pill 156 -> 116 wide at x 426 (its heart sticks out 22 px to the left of its pill: accounted for), the pity chip (104 px at least, right edge 592) keeps 6 px from the purr pill, the odds button as before. `tests/view.hud.molt.test.ts` states these distances. With the purr counter not yet revealed the fish pill stands alone at 360 and the tag follows it. Reduced motion changes nothing here.
+
+**Molt by rank** (`moltMath.ts`, `SelectionSheet`, `MoltPicker`, `env.explain`): the molt button says the selected cat's price (`moltCostOf(cell)`: "1 · 6번" for a kitten and a street cat, "2" for an alley boss, "3" for a king) and "불가" / "Locked" with no purr icon for a guardian. Tapping it when the purse is short (or the run's molts are used, or the cat is a guardian) no longer opens the picker: the refusal says why with this cat's price and the purr in hand, as a toast ("골골이 모자라요. 이 털갈이는 골골 2개예요. (지금 1개)"; `hud.fail.molt.not_enough_purr`, new `hud.fail.molt.not_available` "수호신은 털갈이를 할 수 없어요."). `env.explain` fills `{cost}`, `{awaken}`, `{have}`, `{left}` (`costArgs`), so the awakening refusal says "골골 10개예요 (지금 9개)" too. The picker's line names the rank and the price ("이 고양이(골목대장)는 골골 2개로 같은 등급의 다른 직업이 돼요"); its dimmed-cards branch is gone (the picker opens only when the molt can be paid, and the game is paused while it is open). The molt lesson's hint and the tutorial's `moltCost` use the cheapest price or the cat's own as they should.
+
+**Awakening for 10** (directive 15; the number is the rules engineer's): the sheet's well says "골골 9/10", the button "골골 10 필요" / "10 purr" (English "Needs 10 purr" was cut to "Needs 10…" on the 214 px button: the English reasons are now "{n} purr" and "Tier {tier}+").
+
+**Ranges in tiles**: the selection sheet's third stat is `tilesText(range)` ("2.3칸" / "2.3 tiles"), like the skill sentences (the unit screen's `statText` / `deltaText` for range follow: `screens/cats/unitStats.ts`, "2.9칸", "+0.3").
+
+**Laser texts**: card row 4 and the aim hint say it sticks to an elite or a boss and follows it (`hud.laserCard.row4`, `hud.laser.hint`).
+
+**Played** (real taps, `PAGE_ERRORS []`): a battle in each chapter (Korean 1280; English 1600 in chapter 5, `hzAudit('stage')` empty); molt on a kitten, street cat, alley boss, king and guardian (the prices above, the refusal toast, the picker with "골골 2개"); awakening for 10 in Korean 1280 and English 1600 (9 refused, 10 makes the General Tiger, purr 10 -> 0); the missions "모두 받기" (4 rewards, gold 1,410 -> 2,010, coins fly, the rows read "받았어요"); the music call log (`music:battle` / `kitchen` / `bath` on opening chapters 1 to 3, `music:boss`, `stinger:victory`, `music:win` on the result); the codex and the class sheet (ranger: "사수 피해 +8% / +20% / +45%" and the ricochet).
+
+**The tutorial from a fresh profile** (Korean 1280, one `aside` call is about 120 s, so in two parts): summon x3, the merge drag, the gauge note, the classes lesson begin and point at the right thing; a second page with the first lessons marked taught played the scripted pick, then the sun lesson began by itself with the five cells ("햇살 칸에 고양이를 끌어 놓아요. 효과를 받아요!", the paw on the cat, the cells lit), a real drag put a cat on a cell (`sunlit` true), and the laser lesson began. **Not played**: acts, the second half (elite, purr, toys, molt, grade, class upgrade, call, speed, sell, boss) by hand in this batch; the sim side is `sim.tutorial.test.ts` (scripted run to the boss).
+
+**Not verified**: the gold dungeon run's payout through the real flow (the debug route has no meta settle; `meta.md`'s unit tests and its still of the card stand), a real phone, the English molt picker at 1600 (at 1280 it is two lines and `hzAudit('popup')` is empty).
+
+REQUESTS: `src/audio`: a sound for the laser's lock (see `field.md`).

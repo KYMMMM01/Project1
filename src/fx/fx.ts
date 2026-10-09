@@ -3,6 +3,7 @@ import { game } from '@/core/game';
 import { haptic, type HapticId } from '@/core/haptics';
 import { Ease, type Tween, type TweenOpts, type Tweener } from '@/core/tween';
 import { TAU, darken, lighten, rand } from '@/core/math';
+import type { SpecialCellId } from '@/game/api';
 import { Color, RARITY_ORDER, Rarity } from '@/ui/theme';
 import { buildBolt, boltPointCount, strokeBolt } from './bolt';
 import { awakeningCutIn, type AwakeningOpts } from './cutin';
@@ -22,6 +23,7 @@ import { FX_TIERS, REDUCED, fxSettings, motionSeconds, tierScale } from './setti
 import { ScreenFx, Trauma, fxShake, screenFx } from './screen';
 import { CONFETTI, Hue } from './palette';
 import { ensureFxTextures } from './textures';
+import { specialCell, type CellOpts } from './cells';
 import * as zones from './zones';
 import type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
 
@@ -1341,9 +1343,9 @@ export class Fx {
 
   /* ---- looping cell hazards and zones (zones.ts) -------------------------------------------- */
 
-  /** Warm diagonal light shaft with slow dust motes over a board cell; loops until stopped. */
-  sunbeamCell(rect: FxRect, o?: ZoneOpts): ZoneHandle {
-    return zones.sunbeamCell(this.env, rect, o);
+  /** One of the chapters' special board cells: its picture, a breathing halo, a glint, the emblem and sparkles; loops until stopped. `delay` makes it arrive (drop in with a flash) after that many seconds. */
+  specialCell(rect: FxRect, id: SpecialCellId, o?: CellOpts): ZoneHandle {
+    return specialCell(this.env, rect, id, o);
   }
 
   /** Pulsing red laser-pointer dot with a thin ring; call moveTo() on the handle to make it follow. */

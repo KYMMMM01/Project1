@@ -36,7 +36,7 @@ import {
 } from '@/view/field/buffMath';
 import { BuffMarks, RECENT_FOR } from '@/view/field/buffMarks';
 import { BUFF_R } from '@/view/field/art';
-import { CLASS_AT, FEET_DY, RANK_AT, SUN_AT, UnitView } from '@/view/field/unitView';
+import { CELL_MARK_AT, CLASS_AT, FEET_DY, RANK_AT, UnitView } from '@/view/field/unitView';
 import type { FieldArt } from '@/view/field/art';
 import type { FieldEnv } from '@/view/field/env';
 import { newSim, put } from './simHelpers';
@@ -350,7 +350,7 @@ const art = {
   badge: { warrior: white(), ranger: white(), mage: white(), trickster: white() },
   shield: white(),
   noAct: white(),
-  sunMark: white(),
+  cellMark: { sun: white(), bowl: white(), bubble: white(), stump: white(), treat: white() },
 } as unknown as FieldArt;
 
 interface FakeUnit {
@@ -549,8 +549,8 @@ describe('the badge column on a cat leaves the other stickers alone', () => {
     y0: BUFF_SLOT.y + BUFF_SLOT.step * i - HALF,
     y1: BUFF_SLOT.y + BUFF_SLOT.step * i + HALF,
   });
-  /** The sun sticker's circle (position and size as in `UnitView`: a 19 px sticker at 0.8). */
-  const SUN = { x: SUN_AT.x, y: SUN_AT.y, r: 19 * 0.8 };
+  /** The cell mark's circle (position and size as in `UnitView`: a 36 px badge picture baked into a 48 px frame, at 0.8). */
+  const SUN = { x: CELL_MARK_AT.x, y: CELL_MARK_AT.y, r: 22 * 0.8 };
   const nearest = (b: { x0: number; x1: number; y0: number; y1: number }, x: number, y: number): number =>
     Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.y0 - y, 0, y - b.y1));
   /** The rank tag is a stadium: its middle segment at `RANK_AT` and a radius of 13, as long as `24 + 13 * pips` (`bakeRanks`). */
@@ -565,7 +565,7 @@ describe('the badge column on a cat leaves the other stickers alone', () => {
     expect(badgeBox(0).x0).toBeGreaterThan(0);
   });
 
-  it('keeps clear of the sun sticker above it', () => {
+  it('keeps clear of the special-cell mark above it', () => {
     expect(nearest(badgeBox(0), SUN.x, SUN.y)).toBeGreaterThan(SUN.r);
   });
 
@@ -599,7 +599,7 @@ describe('the badges on a cat', () => {
   const DAMAGE = bitOf('damage');
 
   function makeView(): { view: UnitView; ring: () => Sprite } {
-    const view = new UnitView(art);
+    const view = new UnitView(art, 'sun');
     view.assign(state(), art);
     // The ring round the shadow is the second child of the deco (shadow, ring, rank).
     return { view, ring: () => (view.root.children[0] as Container).children[1] as Sprite };

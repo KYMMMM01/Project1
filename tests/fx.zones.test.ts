@@ -12,7 +12,7 @@ vi.mock('@/fx/textures', () => ({
 import { Loop, hash01, type FxEnv } from '@/fx/loops';
 import { makeSpritePool } from '@/fx/rays';
 import { setFxSettings } from '@/fx/settings';
-import { hazardWarn, laserDot, sunbeamCell, weakenSwirl } from '@/fx/zones';
+import { hazardWarn, laserDot, weakenSwirl } from '@/fx/zones';
 import type { EmitDef, EmitterHandle } from '@/fx/particles';
 
 interface FakeEmitter {
@@ -180,9 +180,7 @@ describe('Loop lifecycle', () => {
 });
 
 describe('zone presets', () => {
-  const rect = { x: 100, y: 200, w: 140, h: 150 };
-  const makers: ReadonlyArray<readonly [string, (env: FxEnv) => ReturnType<typeof sunbeamCell>]> = [
-    ['sunbeamCell', (e) => sunbeamCell(e, rect)],
+  const makers: ReadonlyArray<readonly [string, (env: FxEnv) => ReturnType<typeof laserDot>]> = [
     ['laserDot', (e) => laserDot(e, 300, 300)],
     ['laserDot with its marked area', (e) => laserDot(e, 300, 300, { radius: 130 })],
     ['weakenSwirl', (e) => weakenSwirl(e, 300, 300)],
@@ -203,8 +201,7 @@ describe('zone presets', () => {
       for (let i = 0; i < 60; i++) (h as Loop).update(DT);
       expect(h.alive).toBe(false);
       expect(ground.children.length).toBe(0);
-      // The sunbeam is cut from paper shapes of its own (destroyed with the loop); every other preset borrows pooled sprites.
-      if (name !== 'sunbeamCell') expect(pool.idle).toBeGreaterThan(0);
+      expect(pool.idle).toBeGreaterThan(0);
       await expect(h.done).resolves.toBeUndefined();
     });
 

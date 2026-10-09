@@ -305,3 +305,84 @@ A real phone. The dodge sticker's look was only checked on the dev server with a
 ## 2026-10-09 batch: release test (sim part)
 
 Nothing in the rules changed. The English warrior role string was shortened (see `hud.md`). Checked in play with a four-kind board of each class: the roar, the sure shot (every 5th shot), the burst and the dodge fire as `sim.md` above says; the black hole, freeze and storm numbers are covered by `tests/sim.skills.test.ts` and were not retuned. Open REQUEST from the rules phase that I left: `src/audio` still orders the trickster line bell, chef (`UNIT_IDS`, the recipes' `rank` trims and `tests/audio-combat.test.ts` `LINES` agree with each other, so the chef's pan is about 3.5 dB louder than the second-rank bell): moving it needs `UNIT_IDS` and the sound tables reordered together and cannot be heard from here.
+
+
+## 2026-10-10 batch 2: rules v1.5 (spec section 20, decision D-44)
+
+The owner's second batch (`docs/qa/directive_2026-10-09_batch2.md`), rules half: directives 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 and 15. `SIM_VERSION` stays **3**: a save holds the board, the currencies, the counters, the random streams and the special cells' places, the kind of cell follows from `init.chapter`, so no save changes its meaning (it plays on under the new numbers; `snapshot.ts` says so). Nothing was retuned beyond the items; the bot numbers are before and after only.
+
+### What changed (old -> new)
+
+| # | Directive | What I did |
+|---|---|---|
+| 1 | Fish per second | `BASE_FISH_PER_SECOND` = **0.5**, paid in `economy.updateIncome` once a tick in the wave phase (so the between-waves second and the act-clear wait pay too; the 3-second opening preparation and open choices do not). It goes through `earnFish`, so `rich` doubles it and fractions carry in `fishFrac`; one whole fish at a time is a `fish` event with reason **`income`** and no x / y. **Share** (synergy bot, winning runs, stake 0, 500 runs): kills 51%, wave rewards 26%, act rewards 10%, **steady income 9%** in chapters 1 to 4 (225 of 2,400 fish); in chapter 5 20% because the treat cells add 337 more. Kills stay the largest source everywhere (45 to 54%). |
+| 4 | Ignore and break on ward | One line in `damageEnemy`: `defence = (physical ? armor : ward) * (1 - scratcher)`, then `* (1 - breakAmount)` while broken, then `* (1 - src.armorIgnore)`. DoT ticks use their source cat's ignore, toy and star damage have none. Texts: "방어와 결계" / "armour and ward" in the viking, the tiger, the warrior synergy and its roar; trait lines for armoured and warded; spec section 9. The status keeps the id `armor_break`. |
+| 5 | Ranger damage | `SYNERGY.ranger` damage **8 / 20 / 45%** at steps 1 / 2 / 3 (was 0 / 0 / 30%); the all-cats crit numbers (5 / 10 / 20 points, 0 / 5 / 10% crit damage) are untouched. Lower than the warriors' and mages' 12 / 30 / 65 on purpose: the crit package is worth about +5 / +11 / +21% to the whole board. |
+| 6 | Ranger ability | "Sure shot" is gone (`sureCritEvery`, `shots`, the dice shortcut in `rollCrit`). **Ricochet** (`SYNERGY_SPECIAL.ranger = { kind: 'ricochet', pct: 0.35, reach: 150 }`): when a ranger's arrow hits (`impact`, so the ninja's stars one by one, and once per volley of the star archer, from its main target) the nearest OTHER enemy within 150 px (+ its radius) of the one hit takes 35% of the damage with the same crit, no new dice, never a second bounce. Event **`ricochet { unit, x, y, tx, ty, targetUid }`** (new, not a `special` kind: the view's `specialRing` takes only `cry | shatter`). Mage burst 12 -> **10%**. |
+| 7 | Armour breakers aim at elites and bosses | `UnitDef.targetsElitesFirst` (derived: a `blast` or an attack whose effect is `armor_break`) is true for **w_viking and w_tiger** only. `pickTarget`: laser focus first, then the oldest elite or boss in reach (same `travelled` order, ties by uid), then the oldest enemy. |
+| 8 | Laser lock | `cmdSetLaser`: an elite or boss within **130** (`laser.radius`) of the placed point locks the dot (`laser.lockUid`, `Sim.laserLock`); `updateLaser` moves the dot to it every tick. Released (event **`laserLock { state, enemy: null }`**) when the dot is placed more than 130 away, the enemy dies (the dot stays where it fell) or the laser ends (silently). The locked enemy sits at the dot's centre, so every cat that reaches it already chooses it first (the v1.4 priority); the cats that do not keep their own targets. Locking happens on placement only. |
+| 9 | Molt price by rank | `MOLT_COSTS` = **1 / 1 / 2 / 3** (kitten, street, alley boss, king; a guardian cannot molt); `BattleApi.moltCostOf(cell)` (-1 for an empty cell or a guardian), `moltCost()` is the cheapest (1), `MOLT_COST` kept for the guide's single number. The 6-per-run limit is untouched. The synergy bot keeps the purr of one awakening before it molts a rung below the legendary (`purr - cost >= awakenCost`), a legendary rung it always molts into. |
+| 15 | Awakening | `AWAKEN_COST` 12 -> **10**. |
+| 11 | Warrior ranges | **200 / 210 / 220 / 230 / 240** (was 200 / 215 / 235 / 255 / 285). Rule: the second ring (189 and 207 px from the walkway) is reached by all, the middle cell (285) by none, not even a boss (radius 40); 90 to 140 under the mage of the same rank. Damage and targets untouched. |
+| 10, 12 | Texts | Distances are tiles (`data/lengthText.ts`, 100 px = 1 tile, one decimal; `unit.<id>.skill` takes them through `UnitSpec.tiles`, `skillArgs` stays in px). New sentences for the samurai, the sword, the viking, the tiger, the star archer, snow, fire, storm, frost, cosmo and the alchemist; the perks "targets" and "reach" (now two keys: `perk.reach.line`, `perk.reach.chain`); the mage synergy ("둔화·화상·독이 1.2배 오래가요"); the glass marble. A test refuses 대상 / 광역 / 연쇄 / 반경 / radius / chain distance / area size / px in any unit, perk, toy, class or daily sentence, and a bare px value in a skill sentence. |
+| 13 | Special cell per chapter | `data/cells.ts` (`SPECIAL_CELLS`, `specialCellOf(chapter)`, `specialCellText`), ids in `api.ts` (`SPECIAL_CELL_IDS`, `SpecialCellId`), the pairing in `CHAPTERS[].cell`. **sun** (living room, attack speed +20%), **bowl** (kitchen, damage +20%), **bubble** (bathroom, crit chance +20 points), **stump** (garden, range +20%), **treat** (vet, 0.15 fish a second for each cat on it that a hazard has not stopped; goes into `incomeRate`). Five cells, the plus in the middle first, a new draw from the `sun` stream every act: unchanged. Daily, endless and gold use the chapter's kind (`init.chapter`). The toy `sunny_spot` ("명당 자리" / Prime Spot) adds two cells and 0.1 to the bonus of any kind (`fx.sunSpeed`), the rule `sunny_day` ("명당 가득한 날") 10 cells: ids unchanged, names and sentences "special cell". |
+
+### Additive API (everything the view engineer needs, exactly)
+
+* `CurrencyReason` + `'income'`: the `fish` events of the steady income. **`src/view/director/currency.ts` `onFish` launches a flying icon (and its sound) for every reason except `start` and `sell`: it must skip `income`** (one whole fish every 2 seconds would otherwise fly from the field's middle to the pill).
+* `BattleApi.incomePerSecond()`: fish per second right now (0.5 plus the treat cells, times the `rich` multiplier), for a "+0.5/s" next to the fish pill; `BASE_FISH_PER_SECOND` in the barrel.
+* `BattleApi.moltCostOf(cell)`, `MOLT_COSTS`; `moltCost()` is now "the cheapest". Callers to move: `SelectionSheet.ts` (the molt button and `hints`), `popups/MoltPicker.ts`, `hud/tutorialScript.ts` / `Tutorial.ts` (`moltCost` of the world, fine as the cheapest), `guide/facts.ts` (`cost: MOLT_COST` is the cheapest only; the guide text says "털갈이는 {cost}개", give it the 1 / 1 / 2 / 3).
+* `BattleApi.awakenCost()` is 10 through the same constant; `guide/facts.ts` reads `AWAKEN_COST`.
+* `LaserState.lockUid` (0 = none); event `laserLock { state, enemy | null }`; `laser.x` and `laser.y` are the locked enemy's position every tick, so a view that draws the dot from the state follows by itself. A lock marker and a sound are the view's.
+* `UnitDef.targetsElitesFirst` (true: w_viking, w_tiger). Their sentences already end with "보스·정예가 사거리 안에 있으면 먼저 노려요" / "Aims at a boss or elite in range first".
+* `BattleApi.specialCell` (the kind of this battle), `SPECIAL_CELL_IDS`, `SPECIAL_CELLS[id]` = `{ id, nameKey, descKey, stat: 'speed' | 'damage' | 'crit' | 'range' | 'fish', value }`, `specialCellOf(chapter)`, `specialCellName(id)`, `specialCellText(id, extra)` (`extra` = the toy's +0.1), `cellShown`, `CHAPTERS[n].cell`. The cells keep their old names in the sim and the API: `BattleApi.sunbeams` (the cells), `UnitState.sunlit`, the `sunbeams` event, `SUN_CELLS`, `SUN_SPEED` (= the sunbeam's value), `FIRST_SUN_CELLS`, `RelicFx.sunCells` / `sunSpeed`. Rename them when the screens move (nothing in the sim depends on the names).
+* Event `ricochet { unit, x, y, tx, ty, targetUid }`: draw a second arrow from (x, y) to (tx, ty); the damage is an ordinary `hit` of the same unit.
+* Distances in texts: `tilesOf(px)`, `tilesText(px)` (language-aware), `TILE_PX`. A screen that prints a range in px (the unit screen, the codex) should print tiles the same way.
+* Sentence changes the view should know about (lengths, not widths): the class sheet's tier and ability lines (`synergy.<class>.<1|2|3>`, `.special`) are about the same length except the ranger's (they now start with "사수 피해 +N%") and the mage's step 2 and 3 ("모든 고양이가 거는 둔화·화상·독이 N배 오래가요"); the viking, tiger and samurai skill sentences are longer by one clause; the toy "명당 자리" replaced "햇살 명당".
+
+### What still says the old things (not mine)
+
+`src/codex/cells.ts` and `codex/boards.ts` and their strings (the "발판" page: it should list the five kinds, `allSpecialCells()`, and the toy), `src/guide/stringsKo.ts` and `stringsEn.ts` (the sunbeam topic, "필살 사격", the molt cost, "방어를 깎아요"), `src/screens/pass/strings.ts`, `src/view/field/sunMath.ts` / `sunNote.ts` / `effects.ts` / `toyCells.ts` / `toyMarks.ts` (the cell art and the "+20%" note come from `SUN_SPEED`: they should come from `specialCellOf(chapter).value`), `view/hud/Tutorial.ts` and `encounterWatch.ts` (chapter 1 only: still right), `view/director/growth.ts` (sunbeam sparkle).
+
+### Measured (500 runs, same seeds; "before" = this tree at `cf8326c`, run in a clean copy; full tables in spec section 20)
+
+| | before | after |
+|---|---|---|
+| Stake 0, chapters 1 to 5, merge bot | 44 / 47 / 42 / 53 / 53 | 65 / 63 / 60 / 71 / 71 |
+| Stake 0, chapters 1 to 5, synergy bot | 75 / 82 / 78 / 82 / 83 | 89 / 91 / 88 / 92 / 93 |
+| Chapter 1, stakes 0 to 5, synergy bot | 75 / 64 / 44 / 34 / 17 / 8 | 89 / 77 / 67 / 54 / 36 / 24 |
+| First guardian (wave, share of runs), chapter 1 stakes 0 / 3 | 16, 82% / 20, 35% | 12, 93% / 16, 60% |
+| Stake 3, class focus: free / warrior / ranger / mage / trickster, chapter 1 | 34 / 28 / 50 / 29 / 5 | 54 / 50 / 76 / 49 / 20 |
+| chapter 2 | 24 / 24 / 29 / 17 / 2 | 40 / 31 / 48 / 31 / 13 |
+| chapter 3 | 43 / 38 / 49 / 41 / 12 | 52 / 46 / 69 / 52 / 21 |
+| chapter 4 | 41 / 41 / 45 / 41 / 13 | 60 / 55 / 61 / 59 / 23 |
+| chapter 5 | 44 / 39 / 61 / 34 / 10 | 63 / 54 / 75 / 56 / 27 |
+
+Lane coverage (outer ring / second ring / middle cell), before -> after: paw 22 / 11 / 0 unchanged; sword 24 / 16 / 0 -> 24 / 14 / 0; viking 26 / 20 / 0 -> 25 / 17 / 0; samurai 28 / 24 / 0 -> 26 / 19 / 0; tiger 33 / 32 / **18** -> 27 / 21 / **0**. The mages are 34 to 48 / 33 to 62 / 20 to 89.
+
+**What moved the bots** (one rule reverted at a time in a copy, chapter 1, synergy bot, stake 3; 500 runs): steady income +10 points (+13 at stake 0, +17 for the merge bot), awakening for 10 purr +7, rank-based molt price **-6** (the king's 3 is almost all of it: 1 / 1 / 2 / 2 costs -1, 1 / 1 / 1 / 2 -1), the ranger changes +2, the shorter warrior ranges -3, armour-breakers aiming at elites +3, the laser lock 0 (the bots re-aim every 0.25 s anyway), ward ignore 0. Everything reverted at once reproduces the "before" row exactly (75 / 64 / 44 / 34 / 17 / 8, merge 44), so nothing is unaccounted for. **The single biggest lever is the steady income:** 9% of the fish earned is +10 to 13 points of win rate, so if the owner finds the new numbers too easy, `BASE_FISH_PER_SECOND` (one line) is where to start.
+
+**Warriors**: the range cut costs the warrior-pinned bot 6 / 5 / 0 / 9 / 4 points in chapters 1 to 5 at stake 3 (same seeds, old ranges in a copy), and they stay level with the mages (+1 / 0 / -6 / -4 / -2) and 18 to 32 points above the tricksters; the rangers are far ahead (+26 / +17 / +23 / +6 / +21). **I gave nothing back** in targets or damage.
+
+**Special cells** (chapter 1, stake 3, synergy bot, 600 runs, kind swapped inside the chapter): none 36%, sunbeam 53, bowl 50, bubble 48, stump 53, treat at 0.2 fish 61 -> lowered to **0.15 = 54** (0.12: 51, 0.10: 46). Chapter 4: none 45, sun 60, bowl 57, bubble 58, stump 60, treat at 0.2 64. The range cell is worth nothing to a ranger line (chapter 4, ranger pinned: -14 against the sunbeam).
+
+### Tests (`npx vitest run`: 147 files, 3,269 tests green at the end; `npx tsc --noEmit` prints nothing)
+
+New: `tests/sim.cells.test.ts` (the five kinds per chapter and mode, each bonus alone, the toy, the treat trickle, saves). Changed or extended: `sim.data` (tiles, no internal terms, special cells, elite-first flag), `sim.synergy` (ranger damage at every step, the ricochet: nearest, 35%, once, shared crit, event, off below step 3), `sim.combat` (ward through break, ignore and the toy), `sim.skills` (laser lock: lock, follow, release, death, end, cats that reach it; armour breakers' priority and the laser over it), `sim.flow` (the income: not in preparation, 0.5 a second, `rich`, the share of a bot run), `sim.rules` (molt prices, one purr short, awakening for 10), `sim.warriors` (the ranges, the ring rule with every cell and the biggest body, the tiger's reach), `sim.bots` (the bot keeps the purr of one awakening; most runs hold a guardian by wave 18). `tests/simreport.sim.ts`: the `reach` section now prints outer ring / second ring / middle cell, new `income` section (fish by source), `SIM_FOCUS` and a `SIM_CHAPTERS` filter for `chapters`; `runner.ts` tallies fish by reason with `tally: true`.
+
+### Not verified
+
+A real phone, and the look of anything: nothing here draws (no cell art, no lock marker, no ricochet arrow, no "+0.5/s", no tiles in the unit screen) and the `income` events would fly icons until the view skips them. In the browser (dev server on 5199, Aside, no page errors) the chapter 5 battle reads `specialCell` 'treat'; with two cats on treat cells and the sim stepped 15 s from the page, `incomePerSecond()` was 0.8 and nine `income` events (one fish each) came in during the 12 s of wave time. The battle clock itself does not advance in the Aside tab while the first-encounter card is open, and the chapter 5 board still draws the cells as sunbeams (the view has not followed). The special cells' worth is the free synergy bot's; for the class lines it differs (the range cell for rangers).
+
+### REQUESTS
+
+1. `src/view/director/currency.ts`: no flight, no sound for reason `income`; `SelectionSheet` / `MoltPicker`: price from `moltCostOf(cell)`; `hints.request('molt')` and the tutorial's `moltCost` as the cheapest.
+2. HUD: "+N/s" from `incomePerSecond()` beside the fish pill; the laser's lock marker from `lockUid` / `laserLock`; the ricochet arrow from `ricochet`; the five cell arts (one id each: `sun`, `bowl`, `bubble`, `stump`, `treat`; glow in the chapter's colour), the codex "발판" page and the guide for all of them; the toy's and the daily rule's names in codex, guide and the pass strings.
+3. `src/guide`, `src/codex`: "방어를 깎아요" -> "방어와 결계", the ranger ability, `MOLT_COST` -> the three prices, awakening 10.
+4. Unit screen and codex: print ranges in tiles (`tilesText`); the class chip rule text for rangers (every tier now has ranger damage).
+5. `docs/진행상황.md`: spec v1.5, GDD v1.4, D-44.
+
+
+## 2026-10-10 batch 2: black hole back to 90 px/s, immunity 2 s (directives 16 and 17, done in the view phase)
+
+The owner's own numbers, so the only change under `src/game` in the view phase: `m_cosmo` `pull` 55 -> **90** (`data/units.ts`), `PULL_IMMUNE_AFTER` 4 -> **2** (`data/balance.ts`; elites x0.35 and bosses x0.2 untouched). The skill sentence reads the 2 from the constant (`{c}`), no text quotes 55. `tests/sim.skills.test.ts` (90 a second, the window of 2 s, the total over a 13 s fight), the spec's section 9 line and the section 20 table row say so (`명세_전투규칙.md`, v1.5.1). Bots were not rerun for this (the owner is tuning by hand); codex page numbers for the hole come from the same data.

@@ -10,7 +10,7 @@ import { FlightLedger, PitchLadder, iconsFor, shareOf } from './policy';
 import type { Stage } from './stage';
 import { Hue } from '@/fx/palette';
 import { Color } from '@/ui/theme';
-import { landings } from '@/view/landings';
+import { flies, landings } from '@/view/landings';
 
 /** A kill worth at least this much fish (elites, bosses) waits one tick for its death staging to claim it. */
 const BIG_KILL = 15;
@@ -51,7 +51,7 @@ export class CurrencyService {
   }
 
   onFish(e: BattleEvents['fish']): void {
-    if (e.delta <= 0 || e.reason === 'start') return;
+    if (e.delta <= 0 || !flies(e.reason)) return;
     const ctx = this.stage.ctx;
     const x = e.x !== undefined ? ctx.toSceneX(e.x) : ctx.layout.w / 2;
     const y = e.y !== undefined ? ctx.toSceneY(e.y) : ctx.layout.fieldY + 300;

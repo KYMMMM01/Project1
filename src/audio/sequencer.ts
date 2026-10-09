@@ -25,6 +25,8 @@ export class StepClock {
     bpm: number,
     private readonly loopSteps: number,
     stepsPerBeat = 4,
+    /** Steps played once before the loop; a multiple of a bar so bar lines stay on multiples of 16. */
+    readonly introSteps = 0,
   ) {
     this.stepDur = stepSeconds(bpm, stepsPerBeat);
   }
@@ -34,9 +36,19 @@ export class StepClock {
     this.nextTime = time;
   }
 
-  /** Position inside the looping form. */
+  /** The one-off intro is still playing. */
+  get inIntro(): boolean {
+    return this.stepIndex < this.introSteps;
+  }
+
+  /** Passes of the loop completed so far (0 during the intro and the first pass). */
+  get loops(): number {
+    return this.inIntro ? 0 : Math.floor((this.stepIndex - this.introSteps) / this.loopSteps);
+  }
+
+  /** Position inside the intro while it plays, inside the looping form afterwards. */
   get loopStep(): number {
-    return this.stepIndex % this.loopSteps;
+    return this.inIntro ? this.stepIndex : (this.stepIndex - this.introSteps) % this.loopSteps;
   }
 
   /** True while the next step begins before `horizon`; the caller schedules it then calls advance(). */

@@ -1,17 +1,17 @@
 /**
  * Balance report (`npm run sim`). Plays bot runs and prints compact tables; it never fails on a
  * balance number. Environment: SIM_RUNS (runs per cell, default 500), SIM_FULL=1 (every chapter x stake
- * x level), SIM_ONLY=ch1|stakes|chapters|damage|units|focus|reach|control|calibrate to run one section, SIM_CHAPTERS=1,2
- * and SIM_STAKES=1,2 to limit the chapters and the chapter-1 stakes of `units` and `focus`; SIM_CHAPTER_STAKE=3 plays
- * the `focus` chapters at that stake instead of 0.
+ * x level), SIM_ONLY=ch1|stakes|chapters|damage|units|focus|reach|control|income|calibrate to run one section, SIM_CHAPTERS=1,2
+ * and SIM_STAKES=1,2 to limit the chapters (of `chapters`, `units`, `focus` and `income`) and the chapter-1 stakes of `units` and
+ * `focus`; SIM_CHAPTER_STAKE=3 plays the `focus` chapters at that stake instead of 0; SIM_FOCUS=warrior,mage limits the pinned classes of `focus`.
  */
 import { describe, it } from 'vitest';
-import { CLASS_IDS, UNIT_IDS } from '@/game/api';
+import { CLASS_IDS, UNIT_IDS, type CurrencyReason } from '@/game/api';
 import { RECOMMENDED_LEVEL, hpIndex } from '@/game/data/balance';
 import type { BotPolicy } from '@/game/sim/bots';
 import { createBattle } from '@/game/sim/create';
 import type { Sim } from '@/game/sim/sim';
-import { CELL_COUNT, cellCenterX, cellCenterY, isEdgeCell, PATH_LENGTH, pathPoint } from '@/game/geometry';
+import { CELL_COUNT, COLS, ROWS, cellCenterX, cellCenterY, cellCol, cellRow, PATH_LENGTH, pathPoint } from '@/game/geometry';
 import { unitSpec } from '@/game/data/units';
 import { enemySpec } from '@/game/data/enemies';
 import { batch, controlRow, loadoutInit, median, pct, printTable, unitRows, type BatchSummary, type UnitRow } from './simReportKit';
@@ -24,6 +24,8 @@ const list = (name: string, fallback: string): number[] => (process.env[name] ??
 const CHAPTERS = list('SIM_CHAPTERS', '1,2,3,4,5');
 const STAKES = list('SIM_STAKES', '1,2,3,4,5');
 const CHAPTER_STAKE = Number(process.env.SIM_CHAPTER_STAKE ?? 0);
+const FOCUS_ONLY = (process.env.SIM_FOCUS ?? '').split(',').filter(Boolean);
+const PINNED = FOCUS_ONLY.length > 0 ? CLASS_IDS.filter((c) => FOCUS_ONLY.includes(c)) : CLASS_IDS;
 
 function unitLine(r: UnitRow): (string | number)[] {
   return [r.label, pct(r.share), r.boardMin.toFixed(1), r.kills.toFixed(0), pct(r.uptime), r.hitsPerAttack.toFixed(1), (r.perCe / 1000).toFixed(2)];
@@ -61,7 +63,7 @@ describe('balance report', () => {
   it('chapters at their recommended level', () => {
     if (!wanted('chapters')) return;
     const rows: (string | number)[][] = [];
-    for (let chapter = 2; chapter <= 5; chapter++) {
+    for (const chapter of CHAPTERS.filter((c) => c >= 2)) {
       const level = RECOMMENDED_LEVEL[chapter - 1] as number;
       for (const p of POLICIES) rows.push(row(`ch${chapter} L${level} ${p}`, batch(RUNS, p, (seed) => loadoutInit(seed, chapter, 0, level))));
     }
@@ -105,13 +107,16 @@ describe('balance report', () => {
       const reach = (range + radius) ** 2;
       return lane.filter((p) => (p.x - cx) ** 2 + (p.y - cy) ** 2 <= reach).length / lane.length;
     };
+    const cells = Array.from({ length: CELL_COUNT }, (_, c) => c);
+    // Rings of the 5 x 5 board: 0 = the 16 outer cells, 1 = the 8 around the middle, 2 = the middle cell.
+    const ring = (c: number): number => Math.min(cellCol(c), cellRow(c), COLS - 1 - cellCol(c), ROWS - 1 - cellRow(c));
     const rows = UNIT_IDS.map((id) => {
       const range = unitSpec(id).base.range;
-      const cells = Array.from({ length: CELL_COUNT }, (_, c) => c);
       const mean = (list: number[]): number => list.reduce((a, c) => a + coverage(c, range), 0) / (list.length || 1);
-      return [id, range, pct(Math.max(...cells.map((c) => coverage(c, range)))), pct(mean(cells.filter(isEdgeCell))), pct(mean(cells.filter((c) => !isEdgeCell(c))))];
+      const of = (r: number): string => pct(mean(cells.filter((c) => ring(c) === r)));
+      return [id, range, pct(Math.max(...cells.map((c) => coverage(c, range)))), of(0), of(1), of(2)];
     });
-    printTable('Share of the walkway one cat reaches (best cell / mean of the 14 edge cells / mean of the 6 inner cells)', ['unit', 'range', 'best', 'edge', 'inner'], rows);
+    printTable('Share of the walkway one cat reaches (best cell / mean of the 16 outer cells / of the 8 second-ring cells / the middle cell)', ['unit', 'range', 'best', 'outer', 'second', 'middle'], rows);
   });
 
   it('control effects and swing size, one pinned class at a time', () => {
@@ -125,6 +130,24 @@ describe('balance report', () => {
     printTable(`Enemy field time under each effect, synergy bot pinned to a class, chapter 1 (${RUNS} runs)`, ['pinned', 'win', 'slowed', 'frozen', 'stunned', 'armour broken', 'px pulled/min'], rows);
   });
 
+  it('fish income by source, synergy bot', () => {
+    if (!wanted('income')) return;
+    const SOURCES: CurrencyReason[] = ['kill', 'wave', 'boss', 'act', 'call', 'unit', 'relic', 'income', 'sell'];
+    const rows: (string | number)[][] = [];
+    for (const chapter of CHAPTERS) {
+      const level = RECOMMENDED_LEVEL[chapter - 1] as number;
+      const b = batch(RUNS, 'synergy', (seed) => loadoutInit(seed, chapter, 0, level), { tally: true });
+      const mean = (r: CurrencyReason): number => b.results.reduce((a, x) => a + (x.victory ? (x.income[r] ?? 0) : 0), 0) / Math.max(1, b.results.filter((x) => x.victory).length);
+      const total = SOURCES.reduce((a, r) => a + mean(r), 0);
+      const earned = total - mean('sell');
+      rows.push([`ch${chapter} L${level}`, ...SOURCES.map((r) => mean(r).toFixed(0)), total.toFixed(0), pct(mean('income') / total), pct(mean('income') / earned), pct(b.winRate)]);
+    }
+    printTable(
+      'Fish that came in per winning run, by source (synergy bot, stake 0); the share of the steady income in all inflows and without the sales',
+      ['case', ...SOURCES, 'total', 'income of all', 'income of earned', 'win'], rows,
+    );
+  });
+
   it('class-focus bots', () => {
     if (!wanted('focus')) return;
     const cells: { label: string; chapter: number; stake: number }[] = [];
@@ -135,12 +158,12 @@ describe('balance report', () => {
     for (const cell of cells) {
       const level = RECOMMENDED_LEVEL[cell.chapter - 1] as number;
       const make = (seed: number) => loadoutInit(seed, cell.chapter, cell.stake, level);
-      const batches = [batch(RUNS, 'synergy', make), ...CLASS_IDS.map((focus) => batch(RUNS, 'synergy', make, { focus }))];
+      const batches = [batch(RUNS, 'synergy', make), ...PINNED.map((focus) => batch(RUNS, 'synergy', make, { focus }))];
       wins.push([cell.label, ...batches.map((b) => pct(b.winRate))]);
       bosses.push([cell.label, ...batches.map((b) => pct(b.bossRatio))]);
     }
-    printTable(`Win rate of the synergy bot free / pinned to one class line (${RUNS} runs per cell)`, ['case', 'free', ...CLASS_IDS], wins);
-    printTable(`Elite and boss kill time as a share of the time limit (median over the kills in those runs; lower is faster)`, ['case', 'free', ...CLASS_IDS], bosses);
+    printTable(`Win rate of the synergy bot free / pinned to one class line (${RUNS} runs per cell)`, ['case', 'free', ...PINNED], wins);
+    printTable(`Elite and boss kill time as a share of the time limit (median over the kills in those runs; lower is faster)`, ['case', 'free', ...PINNED], bosses);
   });
 
   it('full matrix', () => {

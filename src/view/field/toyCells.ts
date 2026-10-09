@@ -2,8 +2,8 @@
  * Which cells of the board a toy boosts, as pure maths (no Pixi): the top row's tower, the outer ring's window perch and the pairs of
  * the kneading cushion. The field marks exactly these cells (`toyMarks.ts`) so the player can see where a toy works, not only read it.
  * A toy is positional when its effect is keyed to where a cat stands: that is read off the toy's own data (`fx.topRow*`, `fx.edgeSpeed`,
- * `fx.sameClassNeighbourDamage`), so a toy added to the data with one of those effects is marked without a line here. The sunny spot
- * has its own mark (the sunbeam cells) and is not one of these.
+ * `fx.sameClassNeighbourDamage`), so a toy added to the data with one of those effects is marked without a line here. The prime spot
+ * has its own mark (the special cells) and is not one of these.
  */
 import { relicSpec } from '@/game';
 import type { RelicId } from '@/game/api';

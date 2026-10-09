@@ -41,23 +41,23 @@ async function play(rig: TestRig, tier: number, over: Partial<RunStats> = {}) {
 }
 
 describe('what a dungeon run pays', () => {
-  it('pays each wave more than the one before it: 10, 12, 14 ... summed over the waves cleared', () => {
+  it('pays each wave more than the one before it: 17, 20, 23 ... summed over the waves cleared', () => {
     expect(dungeonWaveGold(0)).toBe(0);
-    expect(dungeonWaveGold(1)).toBe(10);
-    expect(dungeonWaveGold(2)).toBe(22);
-    expect(dungeonWaveGold(8)).toBe(136);
+    expect(dungeonWaveGold(1)).toBe(17);
+    expect(dungeonWaveGold(2)).toBe(37);
+    expect(dungeonWaveGold(8)).toBe(220);
     for (let w = 1; w < GOLD_DUNGEON_WAVES; w++) expect(dungeonWaveGold(w + 1) - dungeonWaveGold(w)).toBeGreaterThan(dungeonWaveGold(w) - dungeonWaveGold(w - 1));
     // Waves that were never in the run pay nothing: the count is held to the run's length.
     expect(dungeonWaveGold(30)).toBe(dungeonWaveGold(GOLD_DUNGEON_WAVES));
     expect(dungeonWaveGold(-3)).toBe(0);
   });
 
-  it('is (waves + 0.35 per kill) x the tier multiplier x 1.25 for a win', () => {
-    expect(DUNGEON_KILL_GOLD).toBe(0.35);
+  it('is (waves + 0.6 per kill) x the tier multiplier x 1.25 for a win', () => {
+    expect(DUNGEON_KILL_GOLD).toBe(0.6);
     expect(DUNGEON_VICTORY_MULT).toBe(1.25);
-    expect(dungeonGold({ tier: 1, wavesCleared: 8, kills: 300, victory: true })).toBe(Math.round((136 + 105) * 1.25));
-    expect(dungeonGold({ tier: 1, wavesCleared: 8, kills: 300, victory: false })).toBe(241);
-    expect(dungeonGold({ tier: 3, wavesCleared: 5, kills: 200, victory: false })).toBe(Math.round((70 + 70) * 1.6));
+    expect(dungeonGold({ tier: 1, wavesCleared: 8, kills: 300, victory: true })).toBe(Math.round((220 + 180) * 1.25));
+    expect(dungeonGold({ tier: 1, wavesCleared: 8, kills: 300, victory: false })).toBe(400);
+    expect(dungeonGold({ tier: 3, wavesCleared: 5, kills: 200, victory: false })).toBe(Math.round((115 + 120) * 1.6));
     expect(dungeonGold({ tier: 2, wavesCleared: 0, kills: 0, victory: false })).toBe(0);
   });
 
@@ -73,24 +73,36 @@ describe('what a dungeon run pays', () => {
     const run = { wavesCleared: 8, kills: 300, victory: true };
     for (let tier = 1; tier <= DUNGEON_TIERS; tier++) {
       expect(chapterMult(tier)).toBe(CHAPTER_MULT[tier - 1]);
-      expect(dungeonGold({ tier, ...run })).toBe(Math.round(241 * chapterMult(tier) * 1.25));
+      expect(dungeonGold({ tier, ...run })).toBe(Math.round(400 * chapterMult(tier) * 1.25));
     }
   });
 
-  it('caps a full clear per tier at 345 / 448 / 551 / 689 / 861 gold, and the first win of the day adds 100 x the multiplier', () => {
-    expect([1, 2, 3, 4, 5].map(dungeonMaxGold)).toEqual([345, 448, 551, 689, 861]);
-    expect(DUNGEON_FIRST_CLEAR_GOLD).toBe(100);
-    expect([1, 2, 3, 4, 5].map(dungeonFirstClearGold)).toEqual([100, 130, 160, 200, 250]);
+  it('caps a full clear per tier at 574 / 747 / 919 / 1,149 / 1,436 gold, and the first win of the day adds 200 x the multiplier', () => {
+    expect([1, 2, 3, 4, 5].map(dungeonMaxGold)).toEqual([574, 747, 919, 1149, 1436]);
+    expect(DUNGEON_FIRST_CLEAR_GOLD).toBe(200);
+    expect([1, 2, 3, 4, 5].map(dungeonFirstClearGold)).toEqual([200, 260, 320, 400, 500]);
     // The most a run can have is every enemy the script spawns.
     expect(goldDungeonSpawns()).toBe(399);
   });
 
-  it('is a meaningful but not dominant source: a clean tier-3 win pays about a patrol and about 0.7 of a chapter win', () => {
-    const win = dungeonMaxGold(3);
-    expect(win).toBeLessThan(runGold(24, 3, 0, true));
-    expect(win).toBeGreaterThan(runGold(24, 3, 0, true) * 0.6);
-    // The two free entries and the bonus of a day at tier 3: about 1,250 gold.
-    expect(win * DUNGEON_FREE_ENTRIES + dungeonFirstClearGold(3)).toBeLessThan(1300);
+  it('is worth the entries: a clean win pays 1.2 to 1.3 of a chapter win of the same tier, and was 1.5 to 2 times smaller before 2026-10-10', () => {
+    for (const tier of [1, 2, 3, 4, 5]) {
+      const share = dungeonMaxGold(tier) / runGold(24, tier, 0, true);
+      expect(share).toBeGreaterThan(1.2);
+      expect(share).toBeLessThan(1.3);
+    }
+    // The old table (8 + 2w, 0.35 a kill, bonus 100): each tier's full clear and day at least 1.5 times and at most 2 times smaller than now.
+    const OLD_MAX = [345, 448, 551, 689, 861];
+    const OLD_DAY = [790, 1026, 1262, 1578, 1972];
+    for (let tier = 1; tier <= DUNGEON_TIERS; tier++) {
+      const day = dungeonMaxGold(tier) * DUNGEON_FREE_ENTRIES + dungeonFirstClearGold(tier);
+      for (const ratio of [dungeonMaxGold(tier) / (OLD_MAX[tier - 1] as number), day / (OLD_DAY[tier - 1] as number)]) {
+        expect(ratio).toBeGreaterThanOrEqual(1.5);
+        expect(ratio).toBeLessThanOrEqual(2);
+      }
+    }
+    // A day at tier 3 (two free entries and the bonus): 2,158, the price of a level-6 upgrade of a common or uncommon cat (2,500) in about 1.2 days.
+    expect(dungeonMaxGold(3) * DUNGEON_FREE_ENTRIES + dungeonFirstClearGold(3)).toBe(2158);
   });
 });
 
@@ -132,11 +144,11 @@ describe('the payout of a run', () => {
 
   it('adds the first-victory bonus once a day, and only for a victory', () => {
     const win = computeRunPayout(stats({ chapter: 3 }), ctx);
-    expect(win.dungeonBonus).toBe(160);
-    expect(win.gold).toBe(dungeonGold({ tier: 3, wavesCleared: 8, kills: 300, victory: true }) + 160);
+    expect(win.dungeonBonus).toBe(320);
+    expect(win.gold).toBe(dungeonGold({ tier: 3, wavesCleared: 8, kills: 300, victory: true }) + 320);
     const again = computeRunPayout(stats({ chapter: 3 }), { ...ctx, dungeonFirstDone: true });
     expect(again.dungeonBonus).toBe(0);
-    expect(again.gold).toBe(win.gold - 160);
+    expect(again.gold).toBe(win.gold - 320);
     const lost = computeRunPayout(stats({ chapter: 3, victory: false }), ctx);
     expect(lost.dungeonBonus).toBe(0);
   });
@@ -223,10 +235,10 @@ describe('paying the run out', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const base = dungeonGold({ tier: 3, wavesCleared: 8, kills: 300, victory: true });
-    expect(r.value).toMatchObject({ mode: 'gold', chapter: 3, victory: true, wavesCleared: 8, gold: base + 160, bonus: 160, kills: 300, xp: 26, newBest: true });
+    expect(r.value).toMatchObject({ mode: 'gold', chapter: 3, victory: true, wavesCleared: 8, gold: base + 320, bonus: 320, kills: 300, xp: 26, newBest: true });
     expect(r.value.bundle).toEqual({});
-    expect(rig.profile.data.gold).toBe(goldBefore + base + 160);
-    expect(events).toEqual([{ delta: base + 160, reason: 'dungeon' }]);
+    expect(rig.profile.data.gold).toBe(goldBefore + base + 320);
+    expect(events).toEqual([{ delta: base + 320, reason: 'dungeon' }]);
     expect(rig.analytics.find((a) => a.event === 'run_end')?.params).toMatchObject({ mode: 'gold', chapter: 3, result: 'victory', waves: 8 });
     expect(rig.profile.data.lastRun?.id).toBe(r.value.id);
     expect(rig.ads.runs).toEqual(['begin', 'victory']);
@@ -235,12 +247,12 @@ describe('paying the run out', () => {
   it('pays a lost run by what it got through, with no victory multiplier and no bonus', async () => {
     const rig = await opened(1);
     const r = await play(rig, 1, { victory: false, wavesCleared: 5, kills: 160 });
-    expect(r.ok && r.value.gold).toBe(Math.round(70 + 56));
+    expect(r.ok && r.value.gold).toBe(Math.round(115 + 96));
     expect(r.ok && r.value.bonus).toBe(0);
     // A defeat leaves the day's bonus for the first win.
     expect(rig.profile.dungeonView().firstClearOpen).toBe(true);
     const win = await play(rig, 1);
-    expect(win.ok && win.value.bonus).toBe(100);
+    expect(win.ok && win.value.bonus).toBe(200);
     expect(rig.profile.dungeonView().firstClearOpen).toBe(false);
   });
 
@@ -248,14 +260,14 @@ describe('paying the run out', () => {
     const rig = await opened(2);
     const a = await play(rig, 2);
     const b = await play(rig, 2);
-    expect(a.ok && a.value.bonus).toBe(130);
+    expect(a.ok && a.value.bonus).toBe(260);
     expect(b.ok && b.value.bonus).toBe(0);
-    expect(a.ok && b.ok && a.value.gold - 130).toBe(b.ok ? b.value.gold : -1);
+    expect(a.ok && b.ok && a.value.gold - 260).toBe(b.ok ? b.value.gold : -1);
     rig.clock.advance(24 * HOUR);
     rig.profile.refresh();
     expect(rig.profile.dungeonView()).toMatchObject({ used: 0, entriesLeft: 2, firstClearOpen: true });
     const c = await play(rig, 2);
-    expect(c.ok && c.value.bonus).toBe(130);
+    expect(c.ok && c.value.bonus).toBe(260);
   });
 
   it('keeps the best run of each tier by its own gold (the bonus is not part of it)', async () => {
@@ -338,12 +350,12 @@ describe('no double pay', () => {
     const restarted = await createTestProfile({ keepStorage: true, start: at(2026, 10, 6, 10) });
     expect(restarted.profile.pendingRun?.snapshot?.wave).toBe(5);
     const settled = await restarted.profile.settlePendingRun();
-    // Four waves cleared, no kills known: 10 + 12 + 14 + 16.
-    expect(settled.ok && settled.value.gold).toBe(52);
-    expect(restarted.profile.data.gold).toBe(52);
+    // Four waves cleared, no kills known: 17 + 20 + 23 + 26.
+    expect(settled.ok && settled.value.gold).toBe(86);
+    expect(restarted.profile.data.gold).toBe(86);
     expect((await restarted.profile.settlePendingRun()).ok).toBe(false);
     const again = await createTestProfile({ keepStorage: true, start: at(2026, 10, 6, 11) });
-    expect(again.profile.data.gold).toBe(52);
+    expect(again.profile.data.gold).toBe(86);
     expect(again.profile.dungeonView().used).toBe(1);
   });
 });
@@ -462,7 +474,7 @@ describe('the day', () => {
     await rig.profile.prepareRun({ mode: 'gold', chapter: 1 });
     rig.clock.advance(10 * 60_000);
     const r = await rig.profile.finishRun(stats());
-    expect(r.ok && r.value.bonus).toBe(100);
+    expect(r.ok && r.value.bonus).toBe(200);
     expect(rig.profile.dungeonView()).toMatchObject({ used: 0, firstClearOpen: false });
   });
 });

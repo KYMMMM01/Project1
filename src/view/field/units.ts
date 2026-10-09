@@ -50,7 +50,7 @@ export class UnitViews {
     private readonly lift: Container,
   ) {
     this.layer.sortableChildren = true;
-    this.pool = new Pool<UnitView>(() => new UnitView(env.art));
+    this.pool = new Pool<UnitView>(() => new UnitView(env.art, env.battle.specialCell));
     this.arrivals = new Arrivals(env, env.ctx.layers.overlay, env.ctx.layers.fxFront);
     const ev = env.battle.events;
     this.offs.push(

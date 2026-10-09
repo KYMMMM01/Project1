@@ -1,11 +1,11 @@
 /**
- * A small picture of the board: the 5 x 5 cells on a kraft mat, the cells a diagram marks in their colour (a sun, a puddle or a bolt
- * on the three that have one) and the example cats standing on it. Origin = the middle of the mat; static art is baked once.
+ * A small picture of the board: the 5 x 5 cells on a kraft mat, the cells a diagram marks in their colour (a chapter's special cell with
+ * its own tile picture, a puddle or a bolt on the ones that have one) and the example cats standing on it. Origin = the middle of the mat; static art is baked once.
  */
 import { Container, Graphics } from 'pixi.js';
 import { mixColor } from '@/core/math';
 import { unitClass } from '@/game/data/roster';
-import { boltArt, puddleArt, sunArt } from '@/guide/Illustration';
+import { boltArt, puddleArt } from '@/guide/Illustration';
 import { cacheStatic, Color, paperSeed, paperShape } from '@/ui';
 import { CLASS_ACCENT, fitSprite } from '@/view/hud/kit';
 import type { BoardDiagram, Tone } from './boards';
@@ -14,9 +14,9 @@ import { CELL_COUNT } from '@/game/geometry';
 
 const wash = (colour: number, k = 0.5): number => mixColor(colour, Color.paperLight, k);
 
-/** The fill and the edge of each tone; colours follow the battle's own marks (coral row, violet ring, green pairs, mustard sun). */
+/** The fill and the edge of each tone; colours follow the battle's own marks (coral row, violet ring, green pairs, mustard special cells). */
 const TONE_COLOR: Readonly<Record<Tone, { fill: number; edge: number }>> = {
-  sun: { fill: wash(Color.mustard, 0.4), edge: Color.mustardDark },
+  cell: { fill: wash(Color.mustard, 0.4), edge: Color.mustardDark },
   wet: { fill: wash(Color.teal, 0.4), edge: Color.tealDark },
   zap: { fill: wash(Color.mustard, 0.4), edge: Color.mustardDark },
   row: { fill: wash(Color.coral, 0.45), edge: Color.coralDark },
@@ -51,18 +51,21 @@ export class BoardView extends Container {
     for (let c = 0; c < CELL_COUNT; c++) {
       const b = cellBox(c, cell, gap);
       const tone = diagram.tones[c] ?? null;
-      const colour = tone ? TONE_COLOR[tone] : null;
+      // A special cell is covered by its tile picture, so its square stays plain paper.
+      const colour = tone && !(tone === 'cell' && diagram.cell) ? TONE_COLOR[tone] : null;
       g.roundRect(b.x, b.y, b.w, b.h, radius).fill(colour?.fill ?? Color.paperLight);
       g.roundRect(b.x, b.y, b.w, b.h, radius).stroke({ color: colour?.edge ?? Color.kraftDark, width: colour ? 2.5 : 1.5, alpha: colour ? 1 : 0.6 });
     }
     cacheStatic(g);
     floor.addChild(g);
     for (let c = 0; c < CELL_COUNT; c++) {
-      const glyph = diagram.tones[c] === 'sun' ? sunArt(cell) : diagram.tones[c] === 'wet' ? puddleArt(cell) : diagram.tones[c] === 'zap' ? boltArt(cell) : null;
-      if (!glyph) continue;
       const b = cellBox(c, cell, gap);
+      // A special cell is its tile picture (the one the battle draws); a puddle and a bolt are flat paper glyphs.
+      const tile = diagram.tones[c] === 'cell' && diagram.cell ? fitSprite(`cell_${diagram.cell}`, cell * 0.98) : null;
+      const glyph = tile ?? (diagram.tones[c] === 'wet' ? puddleArt(cell) : diagram.tones[c] === 'zap' ? boltArt(cell) : null);
+      if (!glyph) continue;
       glyph.position.set(b.x + cell / 2, b.y + cell / 2);
-      cacheStatic(glyph);
+      if (!tile) cacheStatic(glyph);
       floor.addChild(glyph);
     }
     for (const cat of diagram.cats) {

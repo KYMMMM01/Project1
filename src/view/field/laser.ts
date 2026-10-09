@@ -6,11 +6,14 @@ import { LASER_VULNERABLE } from '@/game';
 import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RADIUS, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
 import { aimingFor } from '../aim';
 import type { FieldEnv } from './env';
+import { LockMarker } from './lockMarker';
 
 const HALF = LANE_WIDTH / 2;
 /** How long the long caption stays on the dot before it shrinks to the compact "bonus and seconds" tag. */
 const CAPTION_SECONDS = 2.6;
 const TAG_GAP = 78;
+/** Seconds the long caption stays up after the dot locks onto an enemy. */
+const LOCKED_SECONDS = 1.8;
 
 /** The lane lit as the valid area: a pale paper band along the enemy loop with a dashed teal edge on each side. */
 function buildLane(): Container {
@@ -29,7 +32,8 @@ function buildLane(): Container {
 /**
  * What the player sees of the laser besides the dot: while the dot is about to be placed (the button was pressed) or is on, the
  * lane lights up as the area it may go on; while it is on, a paper tag follows the dot saying what it does with the real
- * number ("cats hit enemies near here first, damage +15%") and then, in short, the bonus and the seconds left.
+ * number ("cats hit enemies near here first, damage +15%") and then, in short, the bonus and the seconds left. On an elite or a boss the
+ * dot locks (`LockMarker`: a ring and brackets close in on it) and the caption says so.
  */
 export class LaserView {
   private readonly lane = buildLane();
@@ -42,7 +46,10 @@ export class LaserView {
   private since = 0;
   private shownSecs = -1;
   private shownFull = true;
+  private shownLocked = false;
   private tagK = 0;
+  private readonly lock: LockMarker;
+  private locked = false;
   private x = 0;
   private y = 0;
 
@@ -60,6 +67,7 @@ export class LaserView {
     this.tag.eventMode = 'none';
     laneLayer.addChild(this.lane);
     tagLayer.addChild(this.tag);
+    this.lock = new LockMarker(env, tagLayer);
   }
 
   update(dt: number, time: number): void {
@@ -80,6 +88,11 @@ export class LaserView {
       this.shownSecs = -1;
       this.tagK = 0;
     } else if (!l.active) this.active = false;
+    this.lock.update(dt, time);
+    // A new lock brings the long caption back for a moment: "locked on" is the news.
+    const locked = l.active && l.lockUid !== 0;
+    if (locked && !this.locked) this.since = Math.max(0, CAPTION_SECONDS - LOCKED_SECONDS);
+    this.locked = locked;
     this.tagK = damp(this.tagK, l.active ? 1 : 0, 0.05, dt);
     this.tag.visible = this.tagK > 0.02;
     if (!this.tag.visible) return;
@@ -87,7 +100,7 @@ export class LaserView {
       this.since += dt;
       this.x = l.x;
       this.y = l.y;
-      this.fill(Math.ceil(l.timeLeft), this.since < CAPTION_SECONDS);
+      this.fill(Math.ceil(l.timeLeft), this.since < CAPTION_SECONDS, locked);
     }
     const full = this.shownFull;
     const w = this.plate.width;
@@ -100,15 +113,16 @@ export class LaserView {
   }
 
   /** Re-set the tag's words when the seconds or the long / short form change (once a second at most). */
-  private fill(secs: number, full: boolean): void {
-    if (secs === this.shownSecs && full === this.shownFull) return;
+  private fill(secs: number, full: boolean, locked: boolean): void {
+    if (secs === this.shownSecs && full === this.shownFull && locked === this.shownLocked) return;
     this.shownSecs = secs;
     this.shownFull = full;
+    this.shownLocked = locked;
     const pct = Math.round(LASER_VULNERABLE * 100);
     const s = String(Math.max(0, secs));
     this.body.text = t(full ? 'view.laser.bonus' : 'view.laser.compact', { n: pct, s });
     this.head.visible = full;
-    if (full) this.head.text = t('view.laser.mark');
+    if (full) this.head.text = t(locked ? 'view.laser.locked' : 'view.laser.mark');
     const w = Math.max(this.body.width, full ? this.head.width : 0) + 40;
     const h = full ? 92 : 52;
     this.plate.clear();
@@ -118,6 +132,7 @@ export class LaserView {
   }
 
   destroy(): void {
+    this.lock.destroy();
     this.lane.destroy({ children: true });
     this.tag.destroy({ children: true });
   }

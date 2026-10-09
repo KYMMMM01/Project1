@@ -1,9 +1,9 @@
 /**
- * The small board diagrams of the codex, as pure data: which cells of the 5 x 5 board a toy, a sunbeam, a hazard or a cat's aura marks,
+ * The small board diagrams of the codex, as pure data: which cells of the 5 x 5 board a toy, a chapter's special cell, a hazard or a cat's aura marks,
  * read from the same functions the simulation and the battle's own markers use (`toyCells`, `auraCells`, `isEdgeCell` ...), so a diagram
  * cannot disagree with the game. The lane diagram samples the real loop (`pathPoint`).
  */
-import { CLASS_IDS, type RelicId, type UnitId } from '@/game/api';
+import { CLASS_IDS, SPECIAL_CELL_IDS, type RelicId, type SpecialCellId, type UnitId } from '@/game/api';
 import { FIRST_SUN_CELLS, HAZARD_BLOCK_SIDE } from '@/game/data/balance';
 import { BOSS_SPECS } from '@/game/data/enemies';
 import { unitClass } from '@/game/data/roster';
@@ -14,7 +14,7 @@ import {
 import { toyCells, toyShape } from '@/view/field/toyCells';
 
 /** What a marked cell is: each tone has its own colour and, where it helps, its own glyph. */
-export type Tone = 'sun' | 'wet' | 'zap' | 'row' | 'ring' | 'pair' | 'aura' | 'self';
+export type Tone = 'cell' | 'wet' | 'zap' | 'row' | 'ring' | 'pair' | 'aura' | 'self';
 
 export interface CatMark {
   cell: number;
@@ -24,6 +24,8 @@ export interface CatMark {
 export interface BoardDiagram {
   /** One entry per cell in board order: the tone of the mark on it, or null. */
   tones: ReadonlyArray<Tone | null>;
+  /** Which chapter's special cell the `cell` tone is (its tile picture is drawn there). */
+  cell?: SpecialCellId;
   /** The cats standing on the example board. */
   cats: ReadonlyArray<CatMark>;
 }
@@ -62,7 +64,7 @@ export function toyBoard(id: RelicId): BoardDiagram | null {
 }
 
 /** The kinds of board cell the codex explains. */
-export const CELL_KINDS = ['plain', 'sun', 'wet', 'zap', 'tower', 'perch', 'cushion', 'bard', 'bell', 'lane'] as const;
+export const CELL_KINDS = ['plain', ...SPECIAL_CELL_IDS, 'wet', 'zap', 'tower', 'perch', 'cushion', 'bard', 'bell', 'lane'] as const;
 export type CellKind = (typeof CELL_KINDS)[number];
 
 /** The toy whose cells a toy-boosted kind shows. */
@@ -89,7 +91,11 @@ export function cellBoard(kind: Exclude<CellKind, 'lane'>): BoardDiagram {
     case 'plain':
       return { tones: tonesOf([]), cats: [{ cell: MIDDLE_CELL, unit: 'w_sword' }] };
     case 'sun':
-      return { tones: tonesOf([[FIRST_SUN_CELLS, 'sun']]), cats: [{ cell: MIDDLE_CELL, unit: 'r_archer' }] };
+    case 'bowl':
+    case 'bubble':
+    case 'stump':
+    case 'treat':
+      return { tones: tonesOf([[FIRST_SUN_CELLS, 'cell']]), cell: kind, cats: [{ cell: MIDDLE_CELL, unit: 'r_archer' }] };
     case 'wet': {
       const n = BOSS_SPECS.splash.soakCells;
       const cells = Array.from({ length: n }, (_, i) => cellIndex(1 + i, ROWS - 2));

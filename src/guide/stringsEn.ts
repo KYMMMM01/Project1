@@ -57,7 +57,7 @@ export const EN: Record<string, string> = {
   'guide.summon.title': 'Fish and summoning',
   'guide.summon.teach': 'Spend fish to call a cat. Tap it!',
   'guide.summon.full':
-    'Tap Summon to pay fish and get a random cat. A run starts with {start} fish.\nThe first summon costs {first} fish, every summon after it costs {step} more, up to {cap}. Hold the button to keep summoning.\nFish come from defeating enemies and clearing waves. When the board is full you cannot summon, so merge or sell.',
+    'Tap Summon to pay fish and get a random cat. A run starts with {start} fish.\nThe first summon costs {first} fish, every summon after it costs {step} more, up to {cap}. Hold the button to keep summoning.\nFish come from defeating enemies and clearing waves, and while a wave runs {rate} more arrive every second by themselves. When the board is full you cannot summon, so merge or sell.',
 
   'guide.summon_grade.title': 'Summon grade and odds',
   'guide.summon_grade.teach': 'Tap to raise the grade: better cats show up more.',
@@ -82,7 +82,7 @@ export const EN: Record<string, string> = {
   'guide.acts.title': 'Acts and waves',
   'guide.acts.teach': '{actLen} waves make an act. Each act ends with rewards.',
   'guide.acts.full':
-    'Enemies arrive wave by wave. {actLen} waves make an act, and a chapter is {acts} acts, {waves} waves.\nWhen an act ends you get fish and purr and choose a toy. The sunny cells move to new places.\nThe small cards at the top show the next wave. Tap one to learn about that enemy.',
+    'Enemies arrive wave by wave. {actLen} waves make an act, and a chapter is {acts} acts, {waves} waves.\nWhen an act ends you get fish and purr and choose a toy. The special tiles move to new places.\nThe small cards at the top show the next wave. Tap one to learn about that enemy.',
 
   'guide.lose_gauge.title': 'Losing: too many enemies',
   'guide.lose_gauge.teach': 'If this bar stays full you lose. Thin them out!',
@@ -128,12 +128,12 @@ export const EN: Record<string, string> = {
   'guide.purr.title': 'Purr',
   'guide.purr.teach': 'Purr is the rare material for molting and awakening.',
   'guide.purr.full':
-    'Purr is the happy sound of your cats, collected. You spend it on molting and awakening.\nAn elite pays {elite}, a boss {boss}, and each cleared act {act}. Selling an Alley Boss or better returns some too.\nMolting costs {cost}, awakening {awaken}.',
+    'Purr is the happy sound of your cats, collected. You spend it on molting and awakening.\nAn elite pays {elite}, a boss {boss}, and each cleared act {act}. Selling an Alley Boss or better returns some too.\nMolting costs a different amount for each rank ({molt}); awakening costs {awaken}.',
 
   'guide.molt.title': 'Molting',
   'guide.molt.teach': 'Tap a cat, then molt it into another class.',
   'guide.molt.full':
-    'Tap a cat, press Molt and choose a class. The rank stays, the class changes.\nIt costs {cost} purr and works {limit} times per run. Use it when a pair is one cat short, or a synergy is one kind short.',
+    'Tap a cat, press Molt and choose a class. The rank stays, the class changes.\nPurr cost grows with the rank of the cat ({prices}). It works {limit} times per run, and a guardian cannot molt. Use it when a pair is one cat short, or a synergy is one kind short.',
 
   'guide.awaken.title': 'Awakening and Guardians',
   'guide.awaken.teach': 'A King that gathers purr becomes a Guardian.',
@@ -151,10 +151,10 @@ export const EN: Record<string, string> = {
     'Drag a cat onto an empty cell to move it. Drop it on a different cat to swap places, or on an identical one to merge.\nYou can also tap a cat to pick it and then tap the cell. Moving your best cats to sunny cells and the outer ring pays off.',
 
   // ── Battlefield ──
-  'guide.sun.title': 'Sunny cells',
-  'guide.sun.teach': 'Drag a cat onto a sunny cell. It attacks faster there!',
+  'guide.sun.title': 'Special tiles',
+  'guide.sun.teach': 'Drag a cat onto the {cell} to get its bonus!',
   'guide.sun.full':
-    'Sunlight falls on {cells} cells of the board. A cat standing there attacks {speed}% faster.\nThe sunny cells move to new places whenever an act ends, so move your strong cats in. Tap a cat with a sun mark for an explanation.',
+    'Every chapter has its own special tile, {cells} of them on the board. A cat standing on one gets its bonus.\n{kinds}\nThe special tiles move to new places whenever an act ends, so move your strong cats in. Tap an empty special tile to see what it does; a cat standing on one wears the tile\'s badge.',
 
   'guide.hazards.title': 'Cell hazards',
   'guide.hazards.teach': 'Cats on a soaked or zapped cell cannot attack.',
@@ -162,9 +162,9 @@ export const EN: Record<string, string> = {
     'Some enemies and bosses soak cells with water or strike them with lightning. A cat there cannot attack until it ends.\nWater lasts {wet} seconds, lightning {zap}. The cell flashes {warn} seconds before, so move your cat to another cell in time.\nA bell cat and the cats right around it sometimes dodge them.',
 
   'guide.laser.title': 'Laser pointer',
-  'guide.laser.teach': 'Drop a dot on the path: cats hit the enemies near it first.',
+  'guide.laser.teach': 'Drop a dot: cats hit nearby enemies first. It sticks to bosses.',
   'guide.laser.full':
-    'Press the laser button, then tap the path to drop a red dot. For {dur} seconds your cats attack the enemy closest to it first, and an elite or a boss inside the dot comes before any other.\nMarked enemies near the dot take {vuln}% more damage. It is ready again {cd} seconds after use.\nUse it on bosses and dangerous enemies. The i mark beside the button reopens the full explanation.',
+    'Press the laser button, then tap the path to drop a red dot. For {dur} seconds your cats attack the enemy closest to it first, and an elite or a boss inside the dot comes before any other.\nDrop the dot near an elite or a boss and it snaps onto that enemy and follows it as it walks: a red ring closes round it and every cat that can reach it attacks it first. Move the dot elsewhere to let go.\nMarked enemies near the dot take {vuln}% more damage. It is ready again {cd} seconds after use.\nUse it on bosses and dangerous enemies. The i mark beside the button reopens the full explanation.',
 
   'guide.call_wave.title': 'Calling the next wave',
   'guide.call_wave.teach': 'Call the next wave early for bonus fish. Tap it!',
@@ -235,12 +235,12 @@ export const EN: Record<string, string> = {
   'guide.trait_armored.title': '{name} enemies',
   'guide.trait_armored.teach': 'They take less physical damage. Magic works well.',
   'guide.trait_armored.full':
-    'A hard shell cuts physical damage by {armor}%. They are slow and sturdy.\nMage cats and attacks that break armour (warrior synergy) work best.',
+    'A hard shell cuts physical damage by {armor}%. They are slow and sturdy.\nMage cats work best. Armour break and armour ignore (warrior synergy) work too.',
 
   'guide.trait_warded.title': '{name} enemies',
   'guide.trait_warded.teach': 'They take less magic damage. Use warriors and rangers.',
   'guide.trait_warded.full':
-    'A ward cuts magic damage by {ward}%.\nPhysical hits from warriors and rangers go through just fine.',
+    'A ward cuts magic damage by {ward}%.\nPhysical hits from warriors and rangers go through just fine. Armour break and armour ignore cut the ward as well.',
 
   'guide.trait_fast.title': '{name} enemies',
   'guide.trait_fast.teach': 'They run much faster than the rest.',

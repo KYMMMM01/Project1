@@ -1,6 +1,6 @@
 /**
- * The abilities of the third synergy step (rules v1.4): the warriors' roar and the mages' burst live here. The rangers' sure crit is
- * decided where a crit is rolled (`combat.ts`) and the tricksters' play time where the speed of a cat is worked out (`board.ts`).
+ * The abilities of the third synergy step (rules v1.4): the warriors' roar and the mages' burst live here. The rangers' ricochet
+ * happens where an arrow lands (`combat.ts`) and the tricksters' play time where the speed of a cat is worked out (`board.ts`).
  */
 import type { StrikePoint } from '../api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '../geometry';

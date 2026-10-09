@@ -22,11 +22,11 @@ export class MoltPicker extends Popup<void> {
     const h = 508;
     const panel = new Panel({ width: W, height: h, title: t('hud.molt'), onClose: () => this.close() });
     const c = panel.content;
-    const cost = b.moltCost();
+    const cost = b.moltCostOf(cell);
     const left = b.moltsLeft();
     const seed = paperSeed();
 
-    const info = uiLabel(t('hud.molt.info', { cost, left }), { size: 26, wrap: W - 100, lineHeight: 34 });
+    const info = uiLabel(t('hud.molt.info', { rank: unit ? t(`rarity.${unitRarity(unit.id)}`) : '', cost, left }), { size: 26, wrap: W - 100, lineHeight: 34 });
     balanceWrap(info, W - 100);
     info.position.set(W / 2, 112);
     c.addChild(info);
@@ -62,8 +62,6 @@ export class MoltPicker extends Popup<void> {
         becomesName.position.set(0, 94);
         card.addChild(photo, becomesName);
       }
-      // A short purse stays tappable: the refusal toast explains why, and the dimmed card says it ahead of time.
-      card.alpha = left > 0 && b.purr >= cost ? 1 : 0.6;
       panel.content.addChild(card);
     });
 

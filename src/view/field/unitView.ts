@@ -5,7 +5,7 @@ import { clamp, clamp01, damp, lerp, TAU } from '@/core/math';
 import { popIn, type ZoneHandle } from '@/fx';
 import { CELL_H, cellCenterX, cellCenterY, cellCol } from '@/game/geometry';
 import { unitClass, unitRarity } from '@/game';
-import type { UnitId, UnitState } from '@/game/api';
+import type { SpecialCellId, UnitId, UnitState } from '@/game/api';
 import { t } from '@/core/i18n';
 import { Color, Tag, backOut, motion, type RarityId } from '@/ui';
 import type { FieldArt } from './art';
@@ -20,12 +20,12 @@ const fit = (px: number): number => Math.round((px * CELL_H) / 112);
 /** Where a unit's feet stand relative to its cell centre: the sprite reaches up from here. */
 export const FEET_DY = fit(33);
 /**
- * Where the stickers on a cat stand, measured from its feet (the badge column of `buffMath` is tested against them): the sun a little higher
+ * Where the stickers on a cat stand, measured from its feet (the badge column of `buffMath` is tested against them): the cell mark (the badge of the special cell it stands on) a little higher
  * than the cat's height would put it, so the column of buff badges under it is clear of it; the class sticker just above the rank tag's
  * left end, so the longest tag (five pips) never runs under it; the rank tag tucked a little under the feet, because the cell is 96 px tall
  * and the tag ends at its lower edge, short of the sheet's dashed line.
  */
-export const SUN_AT = { x: fit(41), y: -fit(92) - 2 } as const;
+export const CELL_MARK_AT = { x: fit(41), y: -fit(92) - 2 } as const;
 export const CLASS_AT = { x: -38, y: -19 } as const;
 export const RANK_AT = 7;
 const LUNGE_PX = 8;
@@ -89,8 +89,8 @@ export class UnitView {
   private readonly rig = new Container();
   private readonly dome: Sprite;
   private readonly noAct: Sprite;
-  /** The sun sticker on a cat that stands in a sunbeam: the bonus is being applied. */
-  private readonly sunMark: Sprite;
+  /** The badge of the special cell on a cat that stands on one: the bonus is being applied. */
+  private readonly cellMark: Sprite;
   /** What a trickster's team effects give this cat: one badge per kind (a tidy column down its right flank), and a thin ring round its shadow that breathes. */
   private readonly buffMarks: Sprite[] = [];
   private readonly buffRing: Sprite;
@@ -126,7 +126,7 @@ export class UnitView {
   private lean = 0;
   private lastTint: number = Color.white;
 
-  constructor(art: FieldArt) {
+  constructor(art: FieldArt, cellKind: SpecialCellId) {
     this.root.label = 'unit';
     this.body.label = 'body';
     this.sprite.label = 'sprite';
@@ -141,9 +141,9 @@ export class UnitView {
     this.dome.position.y = -fit(46);
     this.dome.scale.set(CELL_H / 112);
     this.noAct = this.makeSprite(art.noAct);
-    this.sunMark = this.makeSprite(art.sunMark);
-    this.sunMark.position.set(SUN_AT.x, SUN_AT.y);
-    this.sunMark.alpha = 0;
+    this.cellMark = this.makeSprite(art.cellMark[cellKind]);
+    this.cellMark.position.set(CELL_MARK_AT.x, CELL_MARK_AT.y);
+    this.cellMark.alpha = 0;
     this.buffRing = this.makeSprite(art.buffRing);
     this.buffRing.alpha = 0;
     for (const kind of BADGE_KINDS) {
@@ -155,7 +155,7 @@ export class UnitView {
     this.deco.addChild(this.shadow, this.buffRing, this.rank);
     this.body.addChild(this.sprite);
     this.rig.addChild(this.body);
-    this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.sunMark, ...this.buffMarks, this.overhead);
+    this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.cellMark, ...this.buffMarks, this.overhead);
     this.root.eventMode = 'none';
     this.attackOpts = {
       duration: releaseSeconds(this.spec),
@@ -214,7 +214,7 @@ export class UnitView {
     this.sprite.alpha = 1;
     this.dome.alpha = 0;
     this.noAct.alpha = 0;
-    this.sunMark.alpha = 0;
+    this.cellMark.alpha = 0;
     this.buffRing.alpha = 0;
     BADGE_KINDS.forEach((_, i) => {
       this.buffAmt[i] = 0;
@@ -413,13 +413,13 @@ export class UnitView {
     this.buffRing.position.y = this.shadow.position.y;
   }
 
-  /** The two small stickers on a cat: the sun it stands in and the "NEW" tag of a fresh arrival. */
+  /** The two small stickers on a cat: the special cell it stands on and the "NEW" tag of a fresh arrival. */
   private stickers(time: number): void {
     const sun = this.sun;
-    this.sunMark.alpha = sun > 0.02 ? 1 : 0;
+    this.cellMark.alpha = sun > 0.02 ? 1 : 0;
     // Pops on with a small overshoot when the light reaches the cat, then rocks a little like a sticker in a breeze.
-    this.sunMark.scale.set(0.8 * Math.min(1.25, sun * (1 + 0.5 * (1 - sun))));
-    this.sunMark.rotation = motion.reduced ? 0 : Math.sin(time * 2 + this.phase) * 0.14;
+    this.cellMark.scale.set(0.8 * Math.min(1.25, sun * (1 + 0.5 * (1 - sun))));
+    this.cellMark.rotation = motion.reduced ? 0 : Math.sin(time * 2 + this.phase) * 0.14;
     const tag = this.newTag;
     if (!tag || this.newUntil === 0) return;
     const left = this.newUntil - time;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CLASS_IDS, type BattleApi } from '@/game/api';
-import { TICK } from '@/game/data/balance';
-import { unitClass } from '@/game/data/roster';
+import { AWAKEN_COST, TICK } from '@/game/data/balance';
+import { unitClass, unitRarityIndex } from '@/game/data/roster';
 import { createBot, type BotPolicy } from '@/game/sim/bots';
 import { createBattle } from '@/game/sim/create';
 import { initOf } from './simHelpers';
@@ -70,6 +70,31 @@ describe('balance bots under the fixed class lines', () => {
     expect(reached(synergy)).toBeGreaterThanOrEqual(Math.ceil(SEEDS.length * 0.6));
     expect(reached(synergy)).toBeGreaterThan(reached(merge));
     expect(Math.max(...synergy)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps the purr of one awakening (10) when it molts a cat below the legendary rung, whatever the rank-based price', () => {
+    let molted = 0;
+    let awakened = 0;
+    for (const seed of SEEDS) {
+      const battle = createBattle(initOf({ seed }));
+      const bot = createBot('synergy', seed + 7);
+      battle.events.on('molt', (e) => {
+        molted++;
+        // The event comes after the purr was paid: below the legendary rung the awakening's purr must still be there.
+        if (unitRarityIndex(e.result.id) < 3) expect(battle.purr, `seed ${seed}`).toBeGreaterThanOrEqual(AWAKEN_COST);
+      });
+      battle.events.on('awaken', () => {
+        awakened++;
+      });
+      for (let tick = 0; tick < 60 * 400 && battle.wave <= 18 && battle.phase !== 'won' && battle.phase !== 'lost'; tick++) {
+        if (battle.phase === 'choice') bot.choose(battle);
+        else if (tick % 15 === 0) bot.act(battle);
+        battle.step(TICK);
+      }
+    }
+    expect(molted).toBeGreaterThan(0);
+    // The cheaper awakening is reached: most of the runs hold a guardian by wave 18.
+    expect(awakened).toBeGreaterThanOrEqual(Math.ceil(SEEDS.length * 0.5));
   });
 
   it('lets the synergy bot molt only into the one line it builds, and never below zero purr', () => {

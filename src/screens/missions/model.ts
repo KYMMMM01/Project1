@@ -1,5 +1,6 @@
 /** Pure counting and mapping for the missions tab: what is claimable, bar fills and the days of the cup week. */
 import type { Profile } from '@/meta/profile';
+import type { MissionRow, TierRow } from '@/meta/routines';
 import { addDays } from '@/meta/time';
 
 export interface MissionBadges {
@@ -18,6 +19,30 @@ export function missionBadges(p: Profile): MissionBadges {
   if (p.featureUnlocked('cup')) weekly += p.cupView().tiers.filter((t) => t.reached && !t.claimed).length;
   if (p.featureUnlocked('endless')) weekly += p.endlessView().tiers.filter((t) => t.reached && !t.claimed).length;
   return { daily, weekly, total: daily + weekly };
+}
+
+/** "Claim all" opens when this many rewards of one list wait: one is what the row's own button is for. */
+export const CLAIM_ALL_MIN = 2;
+
+/** Finished missions of a list whose reward is still on the page. */
+export function waitingMissions(rows: readonly MissionRow[]): number {
+  return rows.filter((m) => m.complete && !m.claimed).length;
+}
+
+/** Reached tiers of the cup or the endless mode whose reward is still unclaimed. */
+export function waitingTiers(rows: readonly TierRow[]): number {
+  return rows.filter((r) => r.reached && !r.claimed).length;
+}
+
+export interface ClaimAllReading {
+  enabled: boolean;
+  /** The note beside the button: the count when something waits, a calm line when nothing does. */
+  noteKey: 'rt.mis.all.count' | 'rt.mis.all.none';
+}
+
+/** What a claim-all control shows for `waiting` rewards. */
+export function claimAllReading(waiting: number): ClaimAllReading {
+  return { enabled: waiting >= CLAIM_ALL_MIN, noteKey: waiting > 0 ? 'rt.mis.all.count' : 'rt.mis.all.none' };
 }
 
 /** Share of a tier's goal reached, 0..1. */

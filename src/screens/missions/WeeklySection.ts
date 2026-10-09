@@ -7,7 +7,7 @@ import { dateKey } from '@/meta/time';
 import { msUntilNextMonday } from '../system/kit/time';
 import { TimerTag } from '../system/kit/tags';
 import { CHEST_STRIP_H, ChestStrip } from './ChestStrip';
-import { weekDays } from './model';
+import { waitingMissions, weekDays } from './model';
 import { MissionRowView } from './MissionRowView';
 import { Notebook } from './Notebook';
 import type { MissionActions, Section } from './sections';
@@ -22,6 +22,7 @@ export class WeeklySection implements Section {
   readonly view = new Container();
   readonly height: number;
   private readonly rows: MissionRowView[] = [];
+  private readonly book: Notebook;
   private readonly timer = new TimerTag(310);
   private readonly strip: ChestStrip;
   private readonly cup: TierCard;
@@ -29,7 +30,8 @@ export class WeeklySection implements Section {
 
   constructor(w: number, act: MissionActions) {
     const missions = profile.missionsView('weekly');
-    const book = new Notebook(w, missions.length, t('rt.mis.weekly.title'));
+    const book = new Notebook(w, missions.length, t('rt.mis.weekly.title'), 'yellow', (from) => act.claimAllMissions('weekly', from));
+    this.book = book;
     book.position.set(0, TOP);
     missions.forEach((row, i) => {
       const rv = new MissionRowView(w, row, false, {
@@ -72,6 +74,7 @@ export class WeeklySection implements Section {
         };
       },
       claim: (i, from) => act.claimCup(i, from),
+      claimAll: (from) => act.claimAllCup(from),
       goLabelKey: 'rt.mis.cup.play',
       go: () => act.goBattle(),
     });
@@ -94,6 +97,7 @@ export class WeeklySection implements Section {
         };
       },
       claim: (i, from) => act.claimEndless(i, from),
+      claimAll: (from) => act.claimAllEndless(from),
       goLabelKey: 'rt.mis.endless.play',
       go: () => act.goBattle(),
     });
@@ -107,6 +111,7 @@ export class WeeklySection implements Section {
   sync(animate: boolean): void {
     const rows = profile.missionsView('weekly');
     rows.forEach((row, i) => this.rows[i]?.sync(row, animate));
+    this.book.bar?.sync(waitingMissions(rows));
     const done = rows.filter((r) => r.claimed).length;
     this.strip.sync(
       {

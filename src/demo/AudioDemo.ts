@@ -9,7 +9,7 @@ import { fitWidth, label } from '@/ui/text';
 import { Color } from '@/ui/theme';
 
 /**
- * ?demo=audio: tap targets for every SFX, the music tracks, intensity, stingers, the step ladder and volume. The grid has two pages:
+ * ?demo=audio: tap targets for every SFX, every music track (12 of them: the chapter tracks, boss, elite, gold dungeon, result and menu tracks), intensity, stingers, the step ladder and volume. The grid has two pages:
  * "all ids" (every SFX in catalogue order) and "fight" (each cat's release and impact, each enemy's hit and death, boss deaths).
  */
 
@@ -17,7 +17,8 @@ const PAD = 16;
 const GAP = 8;
 const COLS = 4;
 const CELL_H = 54;
-const MUSIC: readonly MusicId[] = ['none', 'home', 'battle', 'boss'];
+const MUSIC: readonly MusicId[] = ['none', 'home', 'home2', 'battle', 'kitchen', 'bath', 'garden', 'clinic', 'elite', 'boss', 'gold', 'win', 'lose'];
+const MUSIC_COLS = 7;
 const STINGERS: readonly StingerId[] = ['victory', 'defeat', 'boss_intro', 'mythic', 'level_up', 'jackpot'];
 const STEPS = 11;
 
@@ -167,14 +168,14 @@ export default class AudioDemo extends Scene {
 
     let y = 118;
     y = this.section('MUSIC', y);
-    const mw = (game.w - PAD * 2 - GAP * 3) / 4;
+    const mw = (game.w - PAD * 2 - GAP * (MUSIC_COLS - 1)) / MUSIC_COLS;
     MUSIC.forEach((id, i) => {
-      const b = new DemoButton(mw, 56, id, Color.neutralDark, this.tweens, () => this.setTrack(id), 24);
-      b.position.set(PAD + i * (mw + GAP), y);
+      const b = new DemoButton(mw, 50, id, Color.neutralDark, this.tweens, () => this.setTrack(id), 18);
+      b.position.set(PAD + (i % MUSIC_COLS) * (mw + GAP), y + Math.floor(i / MUSIC_COLS) * 58);
       this.musicButtons.push(b);
       this.addChild(b);
     });
-    y += 64;
+    y += 58 * Math.ceil(MUSIC.length / MUSIC_COLS) + 6;
 
     // Intensity: [-]  bar  [+]
     const minus = new DemoButton(64, 52, '-', Color.infoDark, this.tweens, () => this.stepIntensity(-0.25), 34);
@@ -584,9 +585,11 @@ export default class AudioDemo extends Scene {
     // While locked or hidden the requested track differs from the playing one: show both.
     const wanted = m && s.wantedTrack !== m.track ? ` (wants ${s.wantedTrack})` : '';
     const paused = m && m.track !== 'none' && !m.running ? ' paused' : '';
+    // The menu pair rotates and a track can hand over to its successor: show the score that sounds when it is not the one asked for.
+    const playing = m && m.playing !== m.track && m.playing !== 'none' ? ` [${m.playing}]` : '';
     this.hud.text =
       `${s.state}${s.muted ? ' (muted)' : ''} | baked ${s.baked}/${s.total} ${(s.bakedKB / 1024).toFixed(1)} MB | sfx live ${s.sfxActive} (peak ${s.sfxActivePeak})` +
-      (m ? ` | music ${m.track}${wanted}${paused} voices ${m.liveVoices}/${m.liveVoicesMax} overlap ${m.peakOverlap}` : '') +
+      (m ? ` | music ${m.track}${playing}${wanted}${paused} voices ${m.liveVoices}/${m.liveVoicesMax} overlap ${m.peakOverlap}` : '') +
       ` | fight ${s.combatActive} (peak ${s.combatActivePeak}) cut ${s.sfxDropped.stolen} thinned ${s.sfxDropped.bucket + s.sfxDropped.cap}` +
       ` | nodes pool ${n.pooledVoices} src ${n.sfxSources} music ${n.musicLive}/${n.musicPeak}` +
       (s.musicLpfHz < 19000 ? ` | lpf ${s.musicLpfHz} Hz` : '');

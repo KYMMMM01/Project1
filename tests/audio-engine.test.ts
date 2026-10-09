@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from '@/audio/engine';
 import { MusicPlayer } from '@/audio/music';
+import { Inst } from '@/audio/scores';
 import { game } from '@/core/game';
 
 /**
@@ -571,7 +572,7 @@ describe('MusicPlayer scheduling', () => {
     expect(hits[0]?.args[2]).toBeGreaterThanOrEqual(0.4);
   });
 
-  it('enters a new track on a beat of the outgoing one, but stops without waiting', () => {
+  it('enters a new track on a bar line of the outgoing one, but stops without waiting', () => {
     const { ctx, player } = makePlayer();
     player.play('home', 0.5);
     run(ctx, player, 1.0);
@@ -581,12 +582,13 @@ describe('MusicPlayer scheduling', () => {
     player.play('battle', 0.8);
     const fadeIn = ctx.paramsOf('createGain', next, 'gain');
     const curve = fadeIn.of('setValueCurveAtTime')[0];
-    const at = curve?.args[1] as number;
-    // 96 BPM: a beat is 0.625 s and the clock started at 0.06 s.
-    const beats = (at - 0.06) / 0.625;
-    expect(beats).toBeCloseTo(Math.round(beats), 6);
+    // The ramp starts 0.2 s ahead of the bar line it enters on.
+    const at = (curve?.args[1] as number) + 0.2;
+    // 96 BPM: a bar is 2.5 s and the clock started at 0.06 s.
+    const bars = (at - 0.06) / 2.5;
+    expect(bars).toBeCloseTo(Math.round(bars), 6);
     expect(at).toBeGreaterThanOrEqual(now + 0.03 - 1e-9);
-    expect(at - now).toBeLessThanOrEqual(0.7);
+    expect(at - now).toBeLessThanOrEqual(2.6);
     // The outgoing track keeps playing until then, and fades from the same instant.
     const outgoing = ctx.paramsOf('createGain', 2, 'gain').of('setValueCurveAtTime').pop();
     expect(outgoing?.args[1]).toBeCloseTo(at, 9);
@@ -720,5 +722,157 @@ describe('AudioEngine priming', () => {
     engine.init();
     expect(engine.stats().budgetKB).toBe(13672);
     expect(engine.stats().evicted).toBe(0);
+  });
+});
+
+describe('music transitions and hand-overs', () => {
+  /** Advance the stand-in clock and the scheduler together, 25 ms at a time. */
+  const run = async (seconds: number): Promise<void> => {
+    const ctx = ctxOf();
+    for (let t = 0; t < seconds - 1e-9; t += 0.025) {
+      ctx.currentTime += 0.025;
+      await vi.advanceTimersByTimeAsync(25);
+    }
+  };
+  const unlock = async (): Promise<void> => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+  };
+  /** The cross-fade curves started so far: when each starts, how long it lasts and whether it rises (a track coming in). */
+  const curves = (): Array<{ at: number; len: number; rising: boolean }> =>
+    ctxOf()
+      .params.flatMap((p) => p.of('setValueCurveAtTime'))
+      .map((c) => {
+        const v = c.args[0] as Float32Array;
+        return { at: c.args[1] as number, len: c.args[2] as number, rising: (v[v.length - 1] as number) > (v[0] as number) };
+      });
+
+  it('brings the next track in on the next bar line of the outgoing one, and fades the old one out from there', async () => {
+    await unlock();
+    engine.music('battle', 0.5);
+    await run(3);
+    const before = curves().length;
+    engine.music('boss', 0.5);
+    const fresh = curves().slice(before);
+    // Battle runs at 128 BPM from 0.06 s: bar lines every 1.875 s, so 3.81 s is the first one after 3.03 s.
+    // The old track fades from the line; the new one starts its ramp 0.2 s ahead of it, so its downbeat is already near full.
+    expect(fresh).toHaveLength(2);
+    expect(fresh.find((c) => !c.rising)?.at).toBeCloseTo(0.06 + 1.875 * 2, 6);
+    expect(fresh.find((c) => c.rising)?.at).toBeCloseTo(0.06 + 1.875 * 2 - 0.2, 6);
+    expect(fresh.find((c) => c.rising)?.len).toBeCloseTo(0.3, 6);
+    expect(fresh.find((c) => !c.rising)?.len).toBeCloseTo(0.5, 6);
+  });
+
+  it('comes in fast over another track however long the old one fades, and fades in at full length from silence', async () => {
+    await unlock();
+    engine.music('kitchen', 1.2);
+    const first = curves();
+    expect(first).toHaveLength(1);
+    expect(first[0]?.len).toBeCloseTo(1.2, 6);
+    await run(0.5);
+    const before = curves().length;
+    engine.music('boss', 1.5);
+    const fresh = curves().slice(before);
+    expect(fresh.find((c) => !c.rising)?.len).toBeCloseTo(1.5, 6);
+    expect(fresh.find((c) => c.rising)?.len).toBeCloseTo(0.3, 6);
+  });
+
+  it('waits for the next beat instead when the bar line is further away than 2.6 s', async () => {
+    await unlock();
+    engine.music('lose', 0.5);
+    await run(0.25);
+    const before = curves().length;
+    engine.music('home', 0.5);
+    const fresh = curves().slice(before);
+    // The defeat track runs at 72 BPM from 0.06 s: a bar is 3.33 s, a beat 0.833 s; the first beat after 0.28 s is at 0.893 s.
+    expect(fresh).toHaveLength(2);
+    expect(fresh.find((c) => !c.rising)?.at).toBeCloseTo(0.06 + 60 / 72, 6);
+    expect(fresh.find((c) => c.rising)?.at).toBeCloseTo(0.06 + 60 / 72 - 0.2, 6);
+  });
+
+  it('does not wait when the music stops', async () => {
+    await unlock();
+    engine.music('battle', 0.5);
+    await run(1);
+    const before = curves().length;
+    engine.music('none', 0.2);
+    for (const c of curves().slice(before)) expect(c.at).toBeCloseTo(ctxOf().currentTime, 6);
+  });
+
+  it('plays the boss sting once on entering, then loops without it', async () => {
+    const crashes: number[] = [];
+    const real = MusicPlayer.prototype.note;
+    const spy = vi.spyOn(MusicPlayer.prototype, 'note').mockImplementation(function (this: MusicPlayer, inst, ...rest) {
+      if (inst === Inst.crash) crashes.push((this as unknown as { stepTime: number }).stepTime);
+      real.call(this, inst, ...rest);
+    });
+    await unlock();
+    engine.music('boss', 0.5);
+    // 142 BPM: a bar is 1.69 s and the form 27.1 s; 16 bars of sting + loop + loop end at 56 s, the next downbeat is at 55.9 + 1.69.
+    await run(55);
+    spy.mockRestore();
+    // The sting's crash at the start, then the loop's crashes on bars 0, 4 and 12, twice.
+    expect(crashes).toHaveLength(7);
+    const bar = (60 / 142) * 4;
+    expect(crashes[0]).toBeCloseTo(0.06, 6);
+    expect(crashes[1]).toBeCloseTo(0.06 + bar, 6);
+    expect(crashes[2]).toBeCloseTo(0.06 + bar * 5, 6);
+    expect(crashes[3]).toBeCloseTo(0.06 + bar * 13, 6);
+  });
+
+  it('hands the menu track over to the second one at the end of its loop, on the bar line, and keeps asking for home', async () => {
+    await unlock();
+    engine.music('home', 0.5);
+    expect(engine.stats().music?.playing).toBe('home');
+    await run(39);
+    expect(engine.stats().music?.playing).toBe('home');
+    const before = curves().length;
+    await run(2.5);
+    const m = engine.stats().music;
+    expect(m?.track).toBe('home');
+    expect(m?.playing).toBe('home2');
+    // 96 BPM from 0.06 s: the 16-bar form ends at 40.06 s exactly; both fades start there.
+    const fresh = curves().slice(before);
+    expect(fresh).toHaveLength(2);
+    expect(fresh.find((c) => !c.rising)?.at).toBeCloseTo(0.06 + 40, 6);
+    // The hand-over is noticed one look-ahead (0.12 s) before the line; the new track's ramp starts then and is short.
+    const rise = fresh.find((c) => c.rising);
+    expect(rise?.at).toBeGreaterThan(0.06 + 40 - 0.13);
+    expect(rise?.at).toBeLessThanOrEqual(0.06 + 40);
+    expect(rise?.len).toBeCloseTo(0.15, 6);
+    // The old run no longer schedules anything and goes away once its tail has faded.
+    await run(1.5);
+    expect(engine.stats().music?.runs).toBe(1);
+  });
+
+  it('starts the menu track with the other of the pair on every second visit', async () => {
+    await unlock();
+    engine.music('home', 0.1);
+    expect(engine.stats().music?.playing).toBe('home');
+    engine.music('battle', 0.1);
+    await run(3);
+    engine.music('home', 0.1);
+    await run(3);
+    expect(engine.stats().music?.playing).toBe('home2');
+    engine.music('battle', 0.1);
+    await run(3);
+    engine.music('home', 0.1);
+    await run(3);
+    expect(engine.stats().music?.playing).toBe('home');
+    // Asking for the second one by name always gets it.
+    engine.music('home2', 0.1);
+    await run(3);
+    expect(engine.stats().music?.playing).toBe('home2');
+  });
+
+  it('plays every track by its own id', async () => {
+    await unlock();
+    for (const id of ['battle', 'kitchen', 'bath', 'garden', 'clinic', 'elite', 'boss', 'gold', 'win', 'lose', 'home2'] as const) {
+      engine.music(id, 0.05);
+      await run(2.7);
+      expect(engine.stats().music?.playing, id).toBe(id);
+      expect(engine.stats().music?.track, id).toBe(id);
+    }
   });
 });

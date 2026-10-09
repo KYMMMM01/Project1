@@ -2,11 +2,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { hasString, setLang, t } from '@/core/i18n';
 import '@/game/data/strings';
 import {
-  ACT_LENGTH, AWAKEN_COST, CHAPTER_WAVES, LASER_COOLDOWN, LASER_DURATION, MOLT_COST, OFFER_EVERY, SELL_FISH, START_FISH, SUMMON_BASE, SUMMON_STEP, SUN_SPEED,
+  ACT_LENGTH, AWAKEN_COST, BASE_FISH_PER_SECOND, CHAPTER_WAVES, LASER_COOLDOWN, LASER_DURATION, MOLT_COSTS, OFFER_EVERY, SELL_FISH, START_FISH, SUMMON_BASE, SUMMON_STEP, SUN_CELLS,
 } from '@/game/data/balance';
+import { SPECIAL_CELL_IDS } from '@/game/api';
+import { specialCellName, specialCellText } from '@/game/data/cells';
+import { CHAPTERS } from '@/game/data/roster';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_VICTORY_MULT } from '@/meta/data/dungeon';
-import { factsOf } from '@/guide/facts';
+import { factsOf, setGuideCell } from '@/guide/facts';
 import { EN } from '@/guide/stringsEn';
 import { KO } from '@/guide/stringsKo';
 import { topicFull, topicTeach, topicTitle } from '@/guide/text';
@@ -97,15 +100,61 @@ describe('guide topics', () => {
     }
   });
 
+  it('names the molt prices by rank, the awakening price and the fish a second, with the numbers of the data (both languages)', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      const molt = topicFull('molt').join(' ');
+      for (const [i, cost] of MOLT_COSTS.entries()) expect(molt, `${lang} rank ${i}`).toContain(`${t(`rarity.${['common', 'rare', 'epic', 'legendary'][i]}`)} ${cost}`);
+      expect(topicFull('awaken').join(' ')).toContain(String(AWAKEN_COST));
+      expect(topicFull('purr').join(' ')).toContain(String(AWAKEN_COST));
+      expect(topicFull('summon').join(' ')).toContain(String(BASE_FISH_PER_SECOND));
+    }
+  });
+
+  it('teaches the special cell of the chapter being played and lists all five on the page with their real numbers', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      for (const id of SPECIAL_CELL_IDS) {
+        setGuideCell(id);
+        expect(topicTeach('sun'), `${lang} ${id}`).toContain(specialCellName(id));
+      }
+      setGuideCell('sun');
+      const page = topicFull('sun').join(' ');
+      for (const c of CHAPTERS) {
+        expect(page).toContain(specialCellName(c.cell));
+        expect(page).toContain(specialCellText(c.cell));
+        expect(page).toContain(t(`chapter.${c.id}.name`));
+      }
+      expect(page).not.toMatch(/햇살 칸에 고양이를|sunny cell/i);
+    }
+  });
+
+  it('says that armour break and armour ignore cut the ward as well, on both defence traits', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      expect(topicFull('trait_warded').join(' ')).toMatch(lang === 'ko' ? /방어 깎기와 방어 무시는 마법 저항도/ : /cut the ward as well/);
+      expect(topicFull('trait_armored').join(' ')).toMatch(lang === 'ko' ? /방어 깎기와 방어 무시/ : /armour ignore/i);
+    }
+  });
+
+  it('says in the laser topic that the dot sticks to an elite or a boss and follows it', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      const text = topicFull('laser').join(' ');
+      expect(text).toMatch(lang === 'ko' ? /따라가요/ : /follows it/);
+    }
+  });
+
   it('quotes the numbers of the game data', () => {
     setLang('ko');
     expect(factsOf('gold_dungeon')).toMatchObject({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES, gems: DUNGEON_ENTRY_GEMS, win: DUNGEON_VICTORY_MULT });
-    expect(factsOf('summon')).toMatchObject({ start: START_FISH, first: SUMMON_BASE, step: SUMMON_STEP });
+    expect(factsOf('summon')).toMatchObject({ start: START_FISH, first: SUMMON_BASE, step: SUMMON_STEP, rate: BASE_FISH_PER_SECOND });
     expect(factsOf('sell')).toMatchObject({ f1: SELL_FISH[0], f5: SELL_FISH[4] });
-    expect(factsOf('molt')).toMatchObject({ cost: MOLT_COST });
+    expect(factsOf('molt')).toMatchObject({ limit: 6 });
+    for (const cost of MOLT_COSTS) expect(String(factsOf('molt').prices)).toContain(String(cost));
     expect(factsOf('awaken')).toMatchObject({ cost: AWAKEN_COST });
     expect(factsOf('laser')).toMatchObject({ dur: LASER_DURATION, cd: LASER_COOLDOWN });
-    expect(factsOf('sun')).toMatchObject({ speed: Math.round(SUN_SPEED * 100) });
+    expect(factsOf('sun')).toMatchObject({ cells: SUN_CELLS });
     expect(factsOf('pick3')).toMatchObject({ every: OFFER_EVERY });
     expect(factsOf('acts')).toMatchObject({ actLen: ACT_LENGTH, waves: CHAPTER_WAVES });
     expect(factsOf('chests')).toMatchObject({ goldCards: ODDS.gold.cards, every: ODDS.gold.pity?.every });

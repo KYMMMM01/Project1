@@ -8,6 +8,11 @@ export interface MissionActions {
   claimWeeklyChest(from: Container): void;
   claimCup(tier: number, from: Container): void;
   claimEndless(tier: number, from: Container): void;
+  /** Every finished mission of a list in one go, with one combined reward. */
+  claimAllMissions(scope: MissionScope, from: Container): void;
+  /** Every reached tier of the weekly cup / of the endless mode in one go. */
+  claimAllCup(from: Container): void;
+  claimAllEndless(from: Container): void;
   openOdds(kind: string): void;
   /** Jump to the home tab (the daily challenge, endless mode and the run button live there). */
   goBattle(): void;

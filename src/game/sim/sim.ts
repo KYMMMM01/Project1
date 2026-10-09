@@ -7,7 +7,7 @@ import {
   CLASS_IDS, UNIT_IDS,
   type BattleApi, type BattleEvents, type BattleInit, type BattlePhase, type BattleSnapshot, type ClassId, type DropAction,
   type EnemyId, type Fail, type HazardState, type LaserState, type OddsRow, type PendingChoice, type PityInfo, type RarityId, type RelicId,
-  type RunStats, type UnitId, type WaveKind, type WavePreviewEntry,
+  type RunStats, type SpecialCellId, type UnitId, type WaveKind, type WavePreviewEntry,
 } from '../api';
 import {
   CELL_COUNT,
@@ -17,6 +17,7 @@ import {
   MOLT_COST, MOLT_LIMIT, NORMAL_WAVE_TIME, OFFER_EVERY, OVERFLOW_GRACE, PREP_TIME, START_FISH, TICK, TUTORIAL_HP_MULT,
   TUTORIAL_WAVES, TUTORIAL_WAVE_TIME, AWAKEN_COST, FIRST_SUN_CELLS, SUN_CELLS, hpIndex, specialHp,
 } from '../data/balance';
+import { specialCellOf, type SpecialCellSpec } from '../data/cells';
 import { synergyTier } from '../data/classes';
 import { budgetMult } from '../data/enemies';
 import { modifierSpec } from '../data/modifiers';
@@ -28,12 +29,13 @@ import { goldDungeonScript, GOLD_DUNGEON_WAVES } from '../data/goldDungeon';
 import { actOf, scriptFor, waveEntries, type WaveScript } from '../data/waves';
 import {
   awakenCheck, classOwned, classUpgradeCostOf, cmdAwaken, cmdDrop, cmdMolt, cmdPickSummon, cmdSell, cmdSummon,
-  cmdUpgradeClass, cmdUpgradeSummon, dropActionOf, makeUnit, oddsRows, pityOf, recomputeStats, refresh, sellValueOf,
+  cmdUpgradeClass, cmdUpgradeSummon, dropActionOf, makeUnit, moltCostOf, oddsRows, pityOf, recomputeStats, refresh, sellValueOf,
   summonCostOf, summonGradeCostOf,
 } from './board';
 import { updateBoss } from './boss';
 import { cmdSetLaser, refreshLaser, updateLaser, updateProjectiles, updateRelics, updateUnits, updateZones } from './combat';
 import { BattleEmitter } from './emitter';
+import { incomeRate, updateIncome } from './economy';
 import { updateEnemies } from './enemies';
 import {
   buildStats, callBonusOf, canReviveNow, cmdCallNext, cmdPickRelic, cmdRerollRelics, cmdRevive, initSun, markSun, rebuildFx, revealSun, startWave,
@@ -67,8 +69,10 @@ export class Sim implements BattleApi {
   readonly hazards: HazardState[] = [];
   readonly sunbeams: number[] = [];
   readonly laser: LaserState = {
-    active: false, x: 0, y: 0, timeLeft: 0, duration: 0, cooldown: 0, cooldownTotal: 0, radius: LASER_RADIUS,
+    active: false, x: 0, y: 0, timeLeft: 0, duration: 0, cooldown: 0, cooldownTotal: 0, radius: LASER_RADIUS, lockUid: 0,
   };
+  /** The elite or boss the laser's dot is locked onto (its uid is `laser.lockUid`). */
+  laserLock: SimEnemy | null = null;
   readonly relics: RelicId[] = [];
   fish = 0;
   purr = 0;
@@ -87,6 +91,9 @@ export class Sim implements BattleApi {
   get enemyCount(): number {
     return this.enemies.length;
   }
+  get specialCell(): SpecialCellId {
+    return this.cellSpec.id;
+  }
 
   // ── configuration derived from the init ──
   readonly mode: BattleInit['mode'];
@@ -95,6 +102,8 @@ export class Sim implements BattleApi {
   readonly endless: boolean;
   readonly scriptChapter: number;
   readonly rules: StakeRules;
+  /** The special cell of this battle's chapter. */
+  readonly cellSpec: SpecialCellSpec;
   readonly mods: ModifierSpec[];
   readonly levels: Partial<Record<UnitId, number>>;
   readonly relicPool: RelicId[];
@@ -212,6 +221,7 @@ export class Sim implements BattleApi {
     this.scriptChapter = init.mode === 'tutorial' ? 1 : this.chapter;
     this.totalWaves = init.mode === 'tutorial' ? TUTORIAL_WAVES : init.mode === 'daily' ? DAILY_WAVES : init.mode === 'gold' ? GOLD_DUNGEON_WAVES : this.endless ? 0 : CHAPTER_WAVES;
     this.rules = stakeRules(this.stake);
+    this.cellSpec = specialCellOf(this.chapter);
     this.rng = new Streams(init.seed);
 
     const daily = init.mode === 'daily';
@@ -409,6 +419,7 @@ export class Sim implements BattleApi {
       }
       return;
     }
+    updateIncome(this);
     updateRelics(this);
     updateLaser(this);
     updateHazards(this);
@@ -538,6 +549,14 @@ export class Sim implements BattleApi {
 
   moltCost(): number {
     return MOLT_COST;
+  }
+
+  moltCostOf(cell: number): number {
+    return moltCostOf(this, cell);
+  }
+
+  incomePerSecond(): number {
+    return incomeRate(this) * this.fishMult;
   }
 
   moltsLeft(): number {

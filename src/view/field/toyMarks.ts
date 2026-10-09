@@ -1,7 +1,7 @@
 /**
  * Where a positional toy works, drawn on the board. A toy that boosts the top row, the outer ring or the cats beside their own class
  * (`toyCells.ts`) marks exactly those cells in its own colour: a thin rounded frame round each cell (toys on one cell nest, the first picked
- * outermost), a small up-arrow badge on every cat that stands there (like the sun on a sunbeam cell), and a round chip carrying the toy's
+ * outermost), a small up-arrow badge on every cat that stands there (like the badge of a special cell), and a round chip carrying the toy's
  * picture at the start of the board, one under the other in the order they were picked. The marks are calm: thin lines, a faint tint, nothing
  * that moves while the player plays. They come in with a short flourish when the toy lands on the shelf, and tapping the toy's icon on the
  * shelf (its information bubble opens, see `info.listen`) or its chip on the board lights exactly those cells for a moment.

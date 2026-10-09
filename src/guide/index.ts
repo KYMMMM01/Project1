@@ -1,7 +1,7 @@
 /** The game's explanations: the topic list, the numbers behind them, what the player has learnt, and the guidebook screen. */
 import './strings';
 
-export { factsOf, type Facts } from './facts';
+export { factsOf, setGuideCell, type Facts } from './facts';
 export { closeGuide, openGuide, type GuideHost, type GuideOpts } from './GuideScreen';
 export { illustration } from './Illustration';
 export { CODEX_KEYS, GuideProgress, guideProgress, isCodexKey, type CodexKey } from './progress';

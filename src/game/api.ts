@@ -77,6 +77,14 @@ export type BossAbilityId =
 /** A cell hazard: units standing on the cell cannot attack until it ends or they are moved away. */
 export type HazardKind = 'wet' | 'zap';
 
+/**
+ * The special board cells, one kind per chapter (rules v1.5, section 6): the living room's sunbeam, the kitchen's food bowl, the
+ * bathroom's bubbles, the garden's stump and the vet's treat jar. Each gives the cat standing on it ONE bonus (`game/data/cells.ts`).
+ * The names `sunbeams` and `sunlit` below are the first kind's, kept for every kind.
+ */
+export const SPECIAL_CELL_IDS = ['sun', 'bowl', 'bubble', 'stump', 'treat'] as const;
+export type SpecialCellId = (typeof SPECIAL_CELL_IDS)[number];
+
 export type WaveKind = 'normal' | 'elite' | 'boss';
 
 /** `gold` is the gold dungeon: eight normal waves with their own script (game/data/goldDungeon.ts); `chapter` is its tier. */
@@ -117,6 +125,8 @@ export interface UnitDef {
   descKey: string;
   /** What makes the unit special, in the current language, with its real numbers. */
   skillText(): string;
+  /** True for the cats whose attack breaks armour: with an elite or a boss in reach they aim at it before any ordinary enemy. */
+  targetsElitesFirst: boolean;
   /** Level-1 stats before any modifier. */
   base: UnitStats;
   /** Projectile flight speed in px/s, or 0 for attacks that land instantly. */
@@ -211,7 +221,7 @@ export interface UnitState {
   blocked: boolean;
   /** Seconds of "weakened" (half attack speed) left; 0 when normal. */
   weakened: number;
-  /** True while the unit stands on a sunbeam cell. */
+  /** True while the unit stands on one of the chapter's special cells (the sunbeam in the living room, see `SpecialCellId`). */
   sunlit: boolean;
   /** Final stats after level, synergies, relics, upgrades and aura buffs. Refreshed by the sim. */
   stats: UnitStats;
@@ -298,6 +308,11 @@ export interface LaserState {
   cooldownTotal: number;
   /** Radius within which enemies count as focused. */
   radius: number;
+  /**
+   * Uid of the elite or boss the dot is locked onto (0 = none). Placed on or near one, the dot moves onto it and follows it until the
+   * laser ends, it dies or the dot is moved away: `x` and `y` are its position every tick.
+   */
+  lockUid: number;
 }
 
 export type BattlePhase = 'prep' | 'wave' | 'choice' | 'won' | 'lost';
@@ -383,7 +398,9 @@ export type SummonSource = 'button' | 'choice' | 'relic' | 'twin' | 'script';
 
 export type CurrencyReason =
   | 'start' | 'kill' | 'wave' | 'call' | 'act' | 'boss' | 'sell' | 'relic' | 'unit'
-  | 'summon' | 'upgrade' | 'awaken' | 'molt';
+  | 'summon' | 'upgrade' | 'awaken' | 'molt'
+  /** The steady trickle of fish while a wave runs (`incomePerSecond()`): one whole fish at a time, with no place on the field. */
+  | 'income';
 
 export interface StrikePoint {
   x: number;
@@ -440,10 +457,15 @@ export interface BattleEvents {
   dodge: { unit: UnitState; hazard: HazardKind };
   /**
    * The third synergy step of a class set off an area effect to draw at (`x`, `y`): the warriors' roar (one per roaring warrior,
-   * `radius` = its range) or the mages' burst (`radius` = the blast); `points` are the enemies it touches. A ranger's sure crit
-   * arrives as an ordinary `hit` with `crit: true`, the tricksters' play time as the faster attacks while the laser is on.
+   * `radius` = its range) or the mages' burst (`radius` = the blast); `points` are the enemies it touches. The rangers' ricochet
+   * has its own event (`ricochet`), the tricksters' play time shows as the faster attacks while the laser is on.
    */
   special: { classId: ClassId; kind: 'cry' | 'shatter'; x: number; y: number; radius: number; points: StrikePoint[] };
+  /**
+   * The rangers' third synergy step: an arrow that hit an enemy at (`x`, `y`) bounced off to another one at (`tx`, `ty`) (`targetUid`),
+   * which takes part of the damage as an ordinary `hit` of `unit`. Draw a second arrow between the two points.
+   */
+  ricochet: { unit: UnitState; x: number; y: number; tx: number; ty: number; targetUid: number };
   shieldBreak: { enemy: EnemyState };
   heal: { enemy: EnemyState; amount: number };
   enrage: { enemy: EnemyState };
@@ -457,10 +479,12 @@ export interface BattleEvents {
   hazardEnd: { cells: number[]; kind: HazardKind };
   /** A unit was weakened (half attack speed) for `duration` seconds. */
   weaken: { unit: UnitState; duration: number; by: EnemyState | null };
-  /** The sunbeam cells moved (act change, relic). */
+  /** The special cells moved (act change, relic). The event keeps the name of the first kind, the sunbeam. */
   sunbeams: { cells: number[] };
   laser: { state: LaserState };
   laserEnd: { state: LaserState };
+  /** The laser's dot locked onto an elite or a boss (`enemy` set) or let go of it (`enemy` null: it died or the dot was moved away). */
+  laserLock: { state: LaserState; enemy: EnemyState | null };
 
   waveStart: { wave: number; act: number; kind: WaveKind; duration: number };
   waveEnd: { wave: number; fish: number; called: boolean };
@@ -500,8 +524,10 @@ export interface BattleApi {
   readonly projectiles: ReadonlyArray<ProjectileState>;
   readonly zones: ReadonlyArray<ZoneState>;
   readonly hazards: ReadonlyArray<HazardState>;
-  /** Cells currently in a sunbeam. */
+  /** The cells of the chapter's special kind right now (named for the sunbeam, the living room's kind; `specialCell` says which kind). */
   readonly sunbeams: ReadonlyArray<number>;
+  /** Which special cell this battle plays with: its chapter's kind (`specialCellOf`), the same in every mode. */
+  readonly specialCell: SpecialCellId;
   readonly laser: Readonly<LaserState>;
   readonly relics: ReadonlyArray<RelicId>;
 
@@ -582,9 +608,17 @@ export interface BattleApi {
   summonGrade(): number;
   /** Cost of the next summon-grade upgrade, or -1 at max. */
   summonGradeCost(): number;
+  /** Purr the cheapest molt costs (the first rank's): a molt costs more the higher the cat's rank, see `moltCostOf`. */
   moltCost(): number;
+  /** Purr a molt of the cat in `cell` costs (it rises with the cat's rank), or -1 for an empty cell or a guardian, which cannot molt. */
+  moltCostOf(cell: number): number;
   moltsLeft(): number;
   awakenCost(): number;
+  /**
+   * Fish per second that flow in by themselves while a wave runs: the base income plus the treat cells' trickle, times the daily
+   * rule's fish multiplier. They arrive as whole fish with the reason `income`.
+   */
+  incomePerSecond(): number;
   /** null when the unit in `cell` can awaken now, otherwise why not. */
   canAwaken(cell: number): Fail | null;
   sellValue(cell: number): { fish: number; purr: number };

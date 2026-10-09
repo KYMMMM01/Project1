@@ -1,6 +1,6 @@
 /**
- * Small paper stickers shared by the playfield (baked into textures) and the HUD (drawn on cards): the sun that
- * marks a sunbeam cell and the cat standing in it, and the crosshair on an enemy the laser has marked.
+ * Small paper stickers shared by the playfield (baked into textures) and the HUD (drawn on cards): the crosshair on an enemy
+ * the laser has marked, the paw of a tossed summon and the badge of a buffed cat.
  * Flat paper only: a cream rim, flat ink-free shapes, a flat shadow. The origin is the sticker's centre.
  */
 import type { Graphics } from 'pixi.js';
@@ -12,22 +12,6 @@ const CREAM = Color.paperLight;
 function rim(g: Graphics, r: number): void {
   g.circle(1.5, 3, r).fill({ color: Color.shadow, alpha: 0.3 });
   g.circle(0, 0, r).fill(CREAM);
-}
-
-/** A cream round sticker with eight warm rays round a mustard sun; `r` is the sticker's outer radius. */
-export function drawSunMark(g: Graphics, r: number): void {
-  rim(g, r);
-  const rays = 8;
-  for (let i = 0; i < rays; i++) {
-    const a = (i / rays) * TAU + TAU / 16;
-    const half = 0.2;
-    g.poly([
-      Math.cos(a - half) * r * 0.5, Math.sin(a - half) * r * 0.5,
-      Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9,
-      Math.cos(a + half) * r * 0.5, Math.sin(a + half) * r * 0.5,
-    ]).fill(Color.mustardDark);
-  }
-  g.circle(0, 0, r * 0.46).fill(Color.mustard).stroke({ width: Math.max(1.2, r * 0.07), color: Color.mustardDark });
 }
 
 /** A coral round sticker with a cream crosshair: "the laser is on this one". */

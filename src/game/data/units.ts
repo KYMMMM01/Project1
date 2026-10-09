@@ -5,6 +5,7 @@
 import { UNIT_IDS, type DamageType, type UnitDef, type UnitId } from '../api';
 import { t } from '@/core/i18n';
 import { CC_IMMUNE_AFTER, PULL_IMMUNE_AFTER } from './balance';
+import { tilesText } from './lengthText';
 import { unitClass, unitRarity } from './roster';
 import type { AttackSpec, PerkKey, PerkSpec, UnitAura, UnitSpec } from './types';
 import './strings';
@@ -15,9 +16,10 @@ type Row = [damage: number, interval: number, range: number, crit: number, critM
 /** Perk values are fractions for these keys, plain numbers for the rest. */
 const PERCENT_KEYS: ReadonlySet<PerkKey> = new Set<PerkKey>(['range', 'damage', 'speed', 'crit', 'critMult', 'radius', 'effect', 'aura']);
 
-function perk(level: 4 | 7 | 10, key: PerkKey, value: number): PerkSpec {
-  const shown = PERCENT_KEYS.has(key) ? Math.round(value * 100) : value;
-  return { level, key, value, text: () => t(`perk.${key}`, { a: shown }) };
+/** A perk with its sentence. `reach` perks are distances: the sentence gives them in tiles, and each cat says what its reach is (`textKey`). */
+function perk(level: 4 | 7 | 10, key: PerkKey, value: number, textKey = `perk.${key}`): PerkSpec {
+  const shown = (): number | string => (key === 'reach' ? tilesText(value) : PERCENT_KEYS.has(key) ? Math.round(value * 100) : value);
+  return { level, key, value, text: () => t(textKey, { a: shown() }) };
 }
 
 interface Def {
@@ -28,6 +30,8 @@ interface Def {
   aura?: UnitAura;
   perks: [PerkSpec, PerkSpec, PerkSpec];
   args?: Record<string, number>;
+  /** Keys of `args` that are distances in px: the skill sentence gives them in tiles. */
+  tiles?: readonly string[];
 }
 
 function pct(v: number): number {
@@ -50,28 +54,32 @@ const DEFS: Record<UnitId, Def> = {
     perks: [perk(4, 'speed', 0.1), perk(7, 'crit', 0.05), perk(10, 'damage', 0.15)],
   },
   w_sword: {
-    type: 'physical', row: [16, 0.9, 215, 0.05, 2], proj: 0,
+    type: 'physical', row: [16, 0.9, 210, 0.05, 2], proj: 0,
     attack: { shape: 'cleave', radius: 85, targets: 4 },
     perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'radius', 0.2)],
     args: { a: 85, b: 4 },
+    tiles: ['a'],
   },
   w_viking: {
-    type: 'physical', row: [135, 1.5, 235, 0.1, 2], proj: 0,
+    type: 'physical', row: [135, 1.5, 220, 0.1, 2], proj: 0,
     attack: { shape: 'cleave', radius: 75, targets: 2, effect: { kind: 'armor_break', amount: 0.5, duration: 4 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'duration', 2)],
     args: { a: pct(0.5), b: 4, c: 75, d: 2 },
+    tiles: ['c'],
   },
   w_samurai: {
-    type: 'physical', row: [130, 1.4, 255, 0.15, 2], proj: 0,
+    type: 'physical', row: [130, 1.4, 230, 0.15, 2], proj: 0,
     attack: { shape: 'line', reach: 100, effect: { kind: 'bleed', amount: 0.18, duration: 3 } },
-    perks: [perk(4, 'range', 0.1), perk(7, 'reach', 30), perk(10, 'effect', 0.15)],
+    perks: [perk(4, 'range', 0.1), perk(7, 'reach', 30, 'perk.reach.line'), perk(10, 'effect', 0.15)],
     args: { a: 100, b: 3, c: pct(0.18) },
+    tiles: ['a'],
   },
   w_tiger: {
-    type: 'physical', row: [220, 1.1, 285, 0.2, 2], proj: 0,
+    type: 'physical', row: [220, 1.1, 240, 0.2, 2], proj: 0,
     attack: { shape: 'blast', radius: 120, stomp: { every: 4, stun: 1, breakAmount: 0.5, breakDuration: 4 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'radius', 0.2), perk(10, 'duration', 0.5)],
     args: { a: 120, b: 4, c: 1, d: pct(0.5) },
+    tiles: ['a'],
   },
   r_sling: {
     type: 'physical', row: [12, 1.1, 420, 0.05, 2], proj: 900,
@@ -101,36 +109,42 @@ const DEFS: Record<UnitId, Def> = {
     attack: { shape: 'pierce', targets: 1, width: 40, blastRadius: 90, blastPct: 0.25 },
     perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'radius', 0.25)],
     args: { a: 1, b: 90, c: pct(0.25) },
+    tiles: ['b'],
   },
   m_snow: {
     type: 'magic', row: [8, 1.2, 290, 0, 2], proj: 700,
     attack: { shape: 'splash', radius: 55, effect: { kind: 'slow', amount: 0.2, duration: 1.5 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'effect', 0.1), perk(10, 'radius', 0.2)],
     args: { a: 55, b: pct(0.2), c: 1.5 },
+    tiles: ['a'],
   },
   m_fire: {
     type: 'magic', row: [20, 1.3, 300, 0, 2], proj: 700,
     attack: { shape: 'splash', radius: 65, effect: { kind: 'burn', amount: 0.3, duration: 3 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'duration', 1), perk(10, 'radius', 0.2)],
     args: { a: 65, b: 3, c: pct(0.3) },
+    tiles: ['a'],
   },
   m_storm: {
     type: 'magic', row: [50, 1.1, 320, 0, 2], proj: 0,
     attack: { shape: 'chain', targets: 4, reach: 130, falloff: 0.8, stun: 0.4 },
-    perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'reach', 30)],
+    perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'reach', 30, 'perk.reach.chain')],
     args: { a: 4, b: pct(0.8), c: 130, d: 0.4 },
+    tiles: ['c'],
   },
   m_frost: {
     type: 'magic', row: [50, 1.6, 340, 0, 2], proj: 0,
     attack: { shape: 'frost', radius: 95, duration: 3, tick: 0.5, tickPct: 0.4, slow: 0.4, freezeChance: 0.12, freezeTime: 0.8 },
     perks: [perk(4, 'range', 0.1), perk(7, 'radius', 0.15), perk(10, 'duration', 1)],
     args: { a: 95, b: 3, c: pct(0.4), d: pct(0.12), e: CC_IMMUNE_AFTER },
+    tiles: ['a'],
   },
   m_cosmo: {
     type: 'magic', row: [200, 2.6, 380, 0, 2], proj: 0,
-    attack: { shape: 'void', radius: 120, duration: 1.2, pull: 55 },
+    attack: { shape: 'void', radius: 120, duration: 1.2, pull: 90 },
     perks: [perk(4, 'range', 0.08), perk(7, 'radius', 0.15), perk(10, 'damage', 0.2)],
     args: { a: 120, b: 1.2, c: PULL_IMMUNE_AFTER },
+    tiles: ['a'],
   },
   // v1.4: the chef is the trickster line's kitten (rank 1) and the bell kitten its second rank. The two rows were swapped with the
   // ranks, so each rank of the line keeps the numbers it had: [8, 1.0, 260] is rank 1 and [20, 1.0, 300] rank 2.
@@ -160,6 +174,7 @@ const DEFS: Record<UnitId, Def> = {
     attack: { shape: 'brew', radius: 80, duration: 4, vulnerable: 0.25, poisonPct: 0.2 },
     perks: [perk(4, 'range', 0.1), perk(7, 'radius', 0.15), perk(10, 'duration', 1)],
     args: { a: 80, b: 4, c: pct(0.25), d: pct(0.2) },
+    tiles: ['a'],
   },
   t_lucky: {
     type: 'magic', row: [200, 1.5, 400, 0, 2], proj: 900,
@@ -169,6 +184,25 @@ const DEFS: Record<UnitId, Def> = {
     args: { a: pct(0.2), b: 12 },
   },
 };
+
+/** The numbers of a skill sentence as they are shown: the distances in tiles. */
+function shown(d: Def): Record<string, number | string> {
+  const out: Record<string, number | string> = { ...d.args };
+  for (const key of d.tiles ?? []) out[key] = tilesText((d.args as Record<string, number>)[key] as number);
+  return out;
+}
+
+/** Attacks that break armour hunt the elites and bosses in reach first (the viking's axe and the tiger's stomp). */
+function breaksArmor(attack: AttackSpec): boolean {
+  switch (attack.shape) {
+    case 'blast': return true;
+    case 'single':
+    case 'cleave':
+    case 'line':
+    case 'splash': return attack.effect?.kind === 'armor_break';
+    default: return false;
+  }
+}
 
 function build(id: UnitId): UnitSpec {
   const d = DEFS[id];
@@ -180,7 +214,8 @@ function build(id: UnitId): UnitSpec {
     damageType: d.type,
     nameKey: `unit.${id}.name`,
     descKey: `unit.${id}.desc`,
-    skillText: () => t(`unit.${id}.skill`, d.args ?? {}),
+    skillText: () => t(`unit.${id}.skill`, shown(d)),
+    targetsElitesFirst: breaksArmor(d.attack),
     base: { damage, interval, range, crit, critMult },
     projectileSpeed: d.proj,
     attack: d.attack,

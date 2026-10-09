@@ -7,6 +7,7 @@ The file-name prefix selects the treatment:
     boss_*    trim, fit inside 480 px
     icon_*    trim, fit inside 192 px
     relic_*   trim, fit inside 192 px
+    cell_*    trim, fit inside 256 px (the special board cells of art/cells_v1)
     fx_*      trim, fit inside 256 px (fx_zone_ and fx_foe_: 384 px, fx_shield_: 320 px; these keep the picture's centre
               at the middle of the file, because particles and enemies are placed against that point)
     ui_*      trim, fit inside 512 px
@@ -42,6 +43,7 @@ SPRITE_MAX = {
     "fx_foe_": 384,
     "fx_shield_": 320,
     "fx_": 256,
+    "cell_": 256,  # a chapter's special board cell: a floor tile drawn about 100 x 88 px
     "ui_": 512,
     "logo_": 640,
 }

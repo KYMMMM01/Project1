@@ -1,6 +1,7 @@
 /** Fish and purr bookkeeping. Every change goes through here so each one is announced exactly once. */
 import type { CurrencyReason } from '../api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '../geometry';
+import { BASE_FISH_PER_SECOND, TICK } from '../data/balance';
 import type { Sim } from './sim';
 
 export function addFish(s: Sim, amount: number, reason: CurrencyReason, x?: number, y?: number): void {
@@ -23,6 +24,27 @@ export function addPurr(s: Sim, amount: number, reason: CurrencyReason, x?: numb
   if (amount === 0) return;
   s.purr += amount;
   if (s.ev.has('purr')) s.ev.emit('purr', { total: s.purr, delta: amount, reason, x, y });
+}
+
+/**
+ * Fish per second that come in by themselves while a wave runs, before the daily rule's multiplier: the base income, plus a trickle for
+ * every cat that works a treat cell (the vet's special cell, with what the prime spot toy adds). A cat a hazard has stopped brings none.
+ */
+export function incomeRate(s: Sim): number {
+  let rate = BASE_FISH_PER_SECOND;
+  if (s.cellSpec.stat === 'fish') {
+    const each = s.cellSpec.value + (s.fx.sunSpeed ?? 0);
+    for (const cell of s.sunbeams) {
+      const u = s.units[cell];
+      if (u && !u.blocked) rate += each;
+    }
+  }
+  return rate;
+}
+
+/** One tick of the trickle. It runs in the wave phase only: the three seconds of opening preparation pay nothing. */
+export function updateIncome(s: Sim): void {
+  earnFish(s, incomeRate(s) * TICK, 'income');
 }
 
 /** Chef cats: +1 fish per chef in range of a death, at most `cap` per wave across the whole board. */

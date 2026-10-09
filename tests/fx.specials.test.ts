@@ -203,7 +203,7 @@ describe('Fx specials', () => {
 
   describe('zone handles', () => {
     it('are tracked by the Fx, dropped when they end, and removed by clear()', () => {
-      const h = fx.sunbeamCell(rect);
+      const h = fx.specialCell(rect, 'sun');
       const z = fx.zapCell(rect);
       expect(fx.stats().loops).toBe(2);
       h.stop();
@@ -226,7 +226,7 @@ describe('Fx specials', () => {
 
     it('every looping preset returns a handle with stop and moveTo, and survives rapid repeats', () => {
       const handles = [
-        fx.sunbeamCell(rect),
+        fx.specialCell(rect, 'bowl', { delay: 0.1 }),
         fx.laserDot(10, 10),
         fx.wetPuddle(rect),
         fx.zapCell(rect),

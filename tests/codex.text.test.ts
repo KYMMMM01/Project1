@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setLang, t } from '@/core/i18n';
-import { RELIC_IDS } from '@/game/api';
+import { RELIC_IDS, SPECIAL_CELL_IDS } from '@/game/api';
 import {
-  DODGE_CAP, ENEMY_CAP, HAZARD_RECOVER, HAZARD_WARNING, OVERFLOW_GRACE, SUN_CELLS, SUN_SPEED, SLOW_CAP_BOSS,
+  DODGE_CAP, ENEMY_CAP, HAZARD_RECOVER, HAZARD_WARNING, OVERFLOW_GRACE, SUN_CELLS, SLOW_CAP_BOSS,
 } from '@/game/data/balance';
 import { BOSS_SPECS, ENEMY_SPECS } from '@/game/data/enemies';
 import { relicDef, relicSpec } from '@/game/data/relics';
@@ -12,8 +12,8 @@ import { CELL_COUNT, COLS, ROWS, PATH_LENGTH, isEdgeCell, pathPoint } from '@/ga
 import '@/game/data/strings';
 import { CELL_KINDS, auraBoard, cellBoard, laneDiagram, toyBoard } from '@/codex/boards';
 import { CELL_GROUPS, bellDodgePct, cellFacts } from '@/codex/cells';
-import { cellPage } from '@/codex/cellText';
-import { FOE_IDS, abilitiesOf, foeRank, targetRows, type Level } from '@/codex/foes';
+import { cellPage, cellTextKey } from '@/codex/cellText';
+import { FOE_IDS, abilitiesOf, foeRank, healthSpan, targetRows, type Level } from '@/codex/foes';
 import { basisText, exact, foeItem, foePage, plain, waveText } from '@/codex/foeText';
 import { EN } from '@/codex/stringsEn';
 import { KO } from '@/codex/stringsKo';
@@ -96,18 +96,60 @@ describe('codex monster pages quote the data', () => {
     }
   });
 
-  it('shows the multiple, speed, armour and ward of an ordinary enemy as the data has them', () => {
+  it('shows the health, the speed, armour and ward of an ordinary enemy as the data has them, the multiple only as a side fact', () => {
     setLang('ko');
     for (const id of FOE_IDS.filter((x) => foeRank(x) === 'normal')) {
       const spec = ENEMY_SPECS[id];
       const page = foePage(id, { chapter: 1, stake: 0 });
       const values = Object.fromEntries(page.stats.map((r) => [r.label, r.value]));
       expect(values[t('codex.stat.hpMult')], id).toContain(plain(spec.hpMult));
+      const labels = page.stats.map((r) => r.label);
+      expect(labels.indexOf(t('codex.stat.hp')), id).toBeLessThan(labels.indexOf(t('codex.stat.hpMult')));
       expect(values[t('codex.stat.speed')], id).toContain(String(spec.speed));
       expect(values[t('codex.stat.armor')], id).toBe(`${Math.round(spec.armor * 100)}%`);
       expect(values[t('codex.stat.ward')], id).toBe(`${Math.round(spec.ward * 100)}%`);
       expect(page.armorPct).toBe(Math.round(spec.armor * 100));
       expect(page.wardPct).toBe(Math.round(spec.ward * 100));
+    }
+  });
+
+  for (const lang of ['ko', 'en'] as const) {
+    it(`lists an ordinary enemy by its real health at the chosen chapter and butler level, not by a multiple (${lang})`, () => {
+      setLang(lang);
+      for (const id of FOE_IDS.filter((x) => foeRank(x) === 'normal')) {
+        for (const level of LEVELS) {
+          const line = foeItem(id, level).line;
+          const health = healthSpan(id, level);
+          if (!health) {
+            expect(line, `${id} ${level.chapter}`).toContain(t('codex.row.normal.none', { speed: ENEMY_SPECS[id].speed, armor: Math.round(ENEMY_SPECS[id].armor * 100), ward: Math.round(ENEMY_SPECS[id].ward * 100) }));
+            continue;
+          }
+          expect(line, `${id} ${level.chapter}/${level.stake}`).toContain(exact(health.first.hp));
+          if (health.first.hp !== health.last.hp) expect(line).toContain(exact(health.last.hp));
+          expect(line).not.toMatch(/[×x]\s?\d/);
+        }
+      }
+    });
+  }
+
+  it('lists the health of a cucumber as the first and last wave it walks in', () => {
+    setLang('ko');
+    const level = { chapter: 2, stake: 3 };
+    const health = healthSpan('cucumber', level);
+    expect(health).not.toBeNull();
+    const line = foeItem('cucumber', level).line;
+    expect(line).toContain(`${exact(health?.first.hp ?? 0)} ~ ${exact(health?.last.hp ?? 0)}`);
+    const other = foeItem('cucumber', { chapter: 5, stake: 3 }).line;
+    expect(other).not.toBe(line);
+  });
+
+  it('says in the armour and ward tips that armour break and armour ignore cut the ward as well, in both languages', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      const armoured = foePage('boss_vacuum', { chapter: 1, stake: 0 }).special?.tips ?? [];
+      const warded = foePage('boss_cloud', { chapter: 1, stake: 0 }).special?.tips ?? [];
+      expect(armoured.join(' ')).toMatch(lang === 'ko' ? /마법 저항도 같이 줄여요/ : /cut the ward too/);
+      expect(warded.join(' ')).toMatch(lang === 'ko' ? /마법 저항도 줄여요/ : /cut the ward too/);
     }
   });
 
@@ -195,20 +237,20 @@ describe('codex board cells', () => {
       const table = lang === 'ko' ? KO : EN;
       for (const kind of CELL_KINDS) {
         const facts = cellFacts(kind);
-        const text = table[`codex.cell.${kind}.text`] as string;
+        const text = table[cellTextKey(kind)] as string;
         const used = slots(text);
         for (const slot of used) expect(slot in facts, `${lang} ${kind} {${slot}}`).toBe(true);
         for (const key of Object.keys(facts)) expect(used, `${lang} ${kind} fact ${key}`).toContain(key);
         const page = cellPage(kind);
         expect(holes(page.name + page.text), `${lang} ${kind}`).toBe(false);
-        expect(page.name).not.toBe(`codex.cell.${kind}.name`);
+        expect(page.name).not.toMatch(/^(codex\.cell|cell)\./);
       }
     });
   }
 
   it('reads the numbers from the data', () => {
     setLang('ko');
-    expect(cellFacts('sun')).toMatchObject({ cells: SUN_CELLS, speed: Math.round(SUN_SPEED * 100), toyCells: relicSpec('sunny_spot').fx.sunCells });
+    expect(cellFacts('sun')).toMatchObject({ cells: SUN_CELLS, toyCells: relicSpec('sunny_spot').fx.sunCells });
     expect(cellFacts('plain')).toMatchObject({ cells: CELL_COUNT, cols: COLS, rows: ROWS });
     expect(cellFacts('wet')).toMatchObject({
       warn: HAZARD_WARNING, recover: HAZARD_RECOVER, sprayEvery: ENEMY_SPECS.spray.hazardPulse?.every, soakCells: BOSS_SPECS.splash.soakCells, dodge: 40,
@@ -231,7 +273,11 @@ describe('codex board cells', () => {
       expect(board.tones.filter((x) => x === 'aura')).toHaveLength(8);
       expect(board.tones.filter((x) => x === 'self')).toHaveLength(1);
     }
-    expect(cellBoard('sun').tones.filter((x) => x === 'sun')).toHaveLength(SUN_CELLS);
+    for (const kind of SPECIAL_CELL_IDS) {
+      const board = cellBoard(kind);
+      expect(board.tones.filter((x) => x === 'cell')).toHaveLength(SUN_CELLS);
+      expect(board.cell).toBe(kind);
+    }
     expect(cellBoard('wet').tones.filter((x) => x === 'wet')).toHaveLength(BOSS_SPECS.splash.soakCells);
     expect(cellBoard('zap').tones.filter((x) => x === 'zap')).toHaveLength(4);
     expect(cellBoard('tower').tones.filter((x) => x === 'row')).toHaveLength(COLS);

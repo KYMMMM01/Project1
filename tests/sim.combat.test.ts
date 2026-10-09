@@ -59,6 +59,52 @@ describe('damage formula', () => {
     expect(raw(sim, dummy(sim, 'tangerine'), 100, 'magic')).toBeCloseTo(100 * (1 - 0.35 * 0.8), 9);
   });
 
+  it('lets armour break, armour ignore and the scratcher cut the ward in the same proportion as the armour (v1.5)', () => {
+    const sim = field();
+    const warded = (): SimEnemy => dummy(sim, 'tangerine');
+    const lost = (e: SimEnemy): number => 1e5 - e.hp;
+    // An armour break on the enemy.
+    const broken = warded();
+    applyStatus(sim, broken, 'armor_break', 0.5, 5, null);
+    expect(raw(sim, broken, 100, 'magic')).toBeCloseTo(100 * (1 - 0.35 * 0.5), 9);
+    // The armour ignore of the cat that hits, for magic and physical alike.
+    const cat = put(sim, 0, 'm_snow');
+    cat.armorIgnore = 0.4;
+    const e = warded();
+    damageEnemy(sim, e, 100, 'magic', cat, false, null);
+    expect(lost(e)).toBeCloseTo(100 * (1 - 0.35 * 0.6), 9);
+    const roomba = dummy(sim, 'roomba');
+    damageEnemy(sim, roomba, 100, 'physical', cat, false, null);
+    expect(lost(roomba)).toBeCloseTo(100 * (1 - 0.35 * 0.6), 9);
+    // All three at once, and a damage-over-time tick of the same cat.
+    const both = warded();
+    applyStatus(sim, both, 'armor_break', 0.5, 5, null);
+    damageEnemy(sim, both, 100, 'magic', cat, false, null);
+    expect(lost(both)).toBeCloseTo(100 * (1 - 0.35 * 0.5 * 0.6), 9);
+    gainRelic(sim, 'scratcher');
+    cat.armorIgnore = 0.4; // a relic recomputes the stats and puts the ignore of the synergy (none) back
+    const toy = warded();
+    applyStatus(sim, toy, 'armor_break', 0.5, 5, null);
+    damageEnemy(sim, toy, 100, 'magic', cat, false, null);
+    expect(lost(toy)).toBeCloseTo(100 * (1 - 0.35 * 0.8 * 0.5 * 0.6), 9);
+    const burn = warded();
+    applyStatus(sim, burn, 'burn', 100, 3, cat);
+    applyStatus(sim, burn, 'armor_break', 0.5, 5, null);
+    advance(sim, 0.52);
+    expect(lost(burn)).toBeCloseTo(100 * 0.5 * (1 - 0.35 * 0.8 * 0.5 * 0.6), 6);
+  });
+
+  it('breaks no armour on an enemy without any (a ward of 0 stays 0 whatever the break and the ignore)', () => {
+    const sim = field();
+    const cat = put(sim, 0, 'w_paw');
+    cat.armorIgnore = 0.9;
+    const e = dummy(sim, 'cucumber');
+    applyStatus(sim, e, 'armor_break', 0.9, 5, null);
+    damageEnemy(sim, e, 100, 'magic', cat, false, null);
+    damageEnemy(sim, e, 100, 'physical', cat, false, null);
+    expect(1e5 - e.hp).toBeCloseTo(200, 9);
+  });
+
   it('multiplies vulnerability, laser focus and the heating pad, capped at 2x', () => {
     const sim = field();
     gainRelic(sim, 'heating_pad');

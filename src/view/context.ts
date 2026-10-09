@@ -1,7 +1,7 @@
 /**
  * Shared contract of the battle presentation. Three parts are built independently against it:
  *
- *   field/     what is ON the playfield and how it is touched: background, mat, cells, sunbeams,
+ *   field/     what is ON the playfield and how it is touched: background, mat, cells, special cells,
  *              hazards, units, enemies, projectiles, zones, laser dot; dragging / tapping; and each
  *              sprite's own motion (idle, attack lunge, hit recoil, spawn, death, merge travel).
  *   director/  everything layered on top in response to simulation events: particles, floating
@@ -86,7 +86,7 @@ export interface BattleLayers {
   /** Full-screen background art. */
   background: Container;
   /** Field space containers, back to front. Their origin is the field's top-left corner. */
-  floor: Container; // mat, cell tiles, sunbeams, hazards, path decoration
+  floor: Container; // mat, cell tiles, special cells, hazards, path decoration
   zones: Container; // ground effects under characters
   enemies: Container;
   units: Container;

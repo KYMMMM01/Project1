@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CLASS_IDS, UNIT_IDS, type ClassId, type Fail, type UnitId } from '@/game/api';
 import { CELL_COUNT } from '@/game/geometry';
 import {
-  AWAKEN_COST, CLASS_UPGRADE_COSTS, MOLT_LIMIT, SELL_FISH, SELL_PURR, SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, TICK,
+  AWAKEN_COST, CLASS_UPGRADE_COSTS, MOLT_COST, MOLT_COSTS, MOLT_LIMIT, SELL_FISH, SELL_PURR, SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, TICK,
 } from '@/game/data/balance';
 import { UNIT_GRID, mergeResultOf, unitClass, unitRarityIndex } from '@/game/data/roster';
 import { unitSpec } from '@/game/data/units';
@@ -465,22 +465,72 @@ describe('board commands', () => {
     expect(SELL_PURR).toEqual([0, 0, 1, 1, 3]);
   });
 
-  it('molts to another class of the same rarity for 1 purr, up to six times', () => {
+  it('molts to another class of the same rarity, up to six times', () => {
     const sim = newSim();
-    sim.purr = 10;
+    sim.purr = 30;
     put(sim, 0, 'w_viking');
     const molts = record(sim, 'molt');
     expect(sim.molt(0, 'warrior')).toBe('nothing_to_do');
     expect(sim.molt(0, 'mage')).toBeNull();
     expect(sim.units[0]!.id).toBe('m_storm');
     expect(sim.units[0]!.charge).toBe(0.5);
-    expect(sim.purr).toBe(9);
+    // A viking is an epic cat: its molt costs the epic price.
+    expect(sim.purr).toBe(30 - MOLT_COSTS[2]!);
     expect(molts).toHaveLength(1);
     expect(sim.moltsLeft()).toBe(MOLT_LIMIT - 1);
     for (let i = 0; i < MOLT_LIMIT - 1; i++) expect(sim.molt(0, i % 2 ? 'mage' : 'ranger')).toBeNull();
     expect(sim.molt(0, 'warrior')).toBe('molt_limit');
     expect(sim.moltsLeft()).toBe(0);
-    expect(sim.moltCost()).toBe(1);
+  });
+
+  it('charges more purr the higher the cat\'s rank (1 / 1 / 2 / 3), nothing for a guardian, and tells the price before the molt', () => {
+    expect([...MOLT_COSTS]).toEqual([1, 1, 2, 3]);
+    expect(MOLT_COST).toBe(1);
+    const sim = newSim();
+    sim.purr = 30;
+    const line: UnitId[] = ['w_paw', 'w_sword', 'w_viking', 'w_samurai', 'w_tiger'];
+    line.forEach((id, cell) => put(sim, cell, id));
+    expect(line.map((_, cell) => sim.moltCostOf(cell))).toEqual([1, 1, 2, 3, -1]);
+    expect(sim.moltCostOf(10)).toBe(-1);
+    expect(sim.moltCostOf(99)).toBe(-1);
+    expect(sim.moltCostOf(-1)).toBe(-1);
+    expect(sim.moltCost()).toBe(MOLT_COSTS[0]);
+    for (const cell of [0, 1, 2, 3]) {
+      const purr = sim.purr;
+      expect(sim.molt(cell, 'mage')).toBeNull();
+      expect(purr - sim.purr, `rank ${cell}`).toBe(MOLT_COSTS[cell]);
+    }
+    const events = record(sim, 'purr');
+    sim.purr = 0;
+    expect(sim.molt(4, 'mage')).toBe('not_available');
+    expect(events.filter((e) => e.reason === 'molt')).toHaveLength(0);
+  });
+
+  it('refuses a molt that is one purr short, at every rank', () => {
+    for (const [rank, id] of (['w_paw', 'w_sword', 'w_viking', 'w_samurai'] as UnitId[]).entries()) {
+      const sim = newSim();
+      put(sim, 0, id);
+      sim.purr = (MOLT_COSTS[rank] as number) - 1;
+      expect(sim.molt(0, 'mage'), id).toBe('not_enough_purr');
+      expect(sim.purr).toBe((MOLT_COSTS[rank] as number) - 1);
+      expect(sim.units[0]!.id).toBe(id);
+      sim.purr = MOLT_COSTS[rank] as number;
+      expect(sim.molt(0, 'mage'), id).toBeNull();
+      expect(sim.purr).toBe(0);
+    }
+  });
+
+  it('awakens for 10 purr (it was 12), one short is refused', () => {
+    expect(AWAKEN_COST).toBe(10);
+    const sim = newSim();
+    put(sim, 0, 'w_samurai');
+    put(sim, 1, 'w_sword');
+    expect(sim.synergyTier('warrior')).toBe(1);
+    sim.purr = 9;
+    expect(sim.awaken(0)).toBe('not_enough_purr');
+    sim.purr = 10;
+    expect(sim.awaken(0)).toBeNull();
+    expect(sim.purr).toBe(0);
   });
 
   it('refuses to molt a guardian, an empty cell, or without purr', () => {

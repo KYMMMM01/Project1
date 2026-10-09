@@ -30,6 +30,11 @@ export const Inst = {
   lead: 12,
   lead2: 13,
   stab: 14,
+  /** Track-specific percussion that is neither drum nor shaker (a pot lid, a bubble, a clock tick, a coin). */
+  perc: 15,
+  perc2: 16,
+  /** Ornament: a bird, a bubble cluster, a sparkle. Shed first when the voice budget is tight. */
+  orn: 17,
 } as const;
 
 /** Voice-budget priority: >= 2 may use the hard polyphony cap, 0-1 are shed first. */
@@ -49,6 +54,9 @@ export const INST_PRIORITY: readonly number[] = [
   2, // lead
   2, // lead2
   2, // stab
+  1, // perc
+  0, // perc2
+  0, // orn
 ];
 
 export interface NoteSink {
@@ -69,6 +77,10 @@ export interface Score {
   /** Intensity at which layers 1.. reach half level. */
   layerEdges: readonly number[];
   fill(bar: number, step: number, sink: NoteSink): void;
+  /** Bars played once, before the loop, when the track is entered (the boss's arrival sting). Multiple of one bar. */
+  intro?: { bars: number; fill(bar: number, step: number, sink: NoteSink): void };
+  /** The track that follows this one at the end of its loop, on the bar line (a menu track rotates through its variations). */
+  then?: MusicTrackId;
 }
 
 export const STEPS = STEPS_PER_BAR;
@@ -223,6 +235,7 @@ export const HOME: Score = {
   swing: 0.1,
   layers: 1,
   layerEdges: [],
+  then: 'home2',
   fill(bar, step, sink) {
     const sec = bar >> 2;
     const ch = HOME_CHORDS[bar] as HomeChord;
@@ -406,6 +419,7 @@ const BOSS_HAT = rhythm('o.x.o.x.o.x.o.x.');
 const BOSS_HAT_ROLL = rhythm('o.x.o.x.o.x.xoxo');
 const BOSS_STAB_A = [rhythm('x..x..x.........'), rhythm('x..x..x...x.....')];
 const BOSS_TOMS = [57, 53, 50, 45];
+const BOSS_INTRO_ROLL = rhythm('o.o.o.o.xxxx....');
 const BOSS_TENSION_ARP = [0, 2, 1, 2];
 
 /** Brass riff in D minor (C# only as the leading tone of the A chord); bars 4-7 then an octave-lifted return. */
@@ -427,6 +441,21 @@ export const BOSS: Score = {
   swing: 0,
   layers: 1,
   layerEdges: [],
+  // The arrival: a crash, the minor chord and a held D on the downbeat, three stabs, kicks on the beats, a snare roll that swells and a falling tom run into the loop.
+  intro: {
+    bars: 1,
+    fill(_bar, step, sink) {
+      if (step === 0) {
+        sink.note(Inst.crash, 76, 0.9, 8, 0);
+        sink.chord(Inst.pad, X_DM.pad, 0.8, 15.5, 0);
+        sink.note(Inst.bass, X_DM.bass, 0.9, 15, 0);
+      }
+      if ((step & 3) === 0 && step < 12) sink.note(Inst.kick, 36, step === 0 ? 1 : 0.8, 1, 0);
+      if (step === 0 || step === 3 || step === 6) sink.chord(Inst.stab, X_DM.stab, 0.85, 1.5, 0);
+      hit(sink, BOSS_INTRO_ROLL, step, Inst.snare, 60, 0, 0.8);
+      if (step >= 12) sink.note(Inst.tom, BOSS_TOMS[step - 12] as number, 0.85, 2, 0);
+    },
+  },
   fill(bar, step, sink) {
     const sec = bar >> 2;
     const ch = BOSS_CHORDS[bar] as BossChord;
@@ -475,4 +504,3 @@ export const BOSS: Score = {
   },
 };
 
-export const SCORES: Record<MusicTrackId, Score> = { home: HOME, battle: BATTLE, boss: BOSS };

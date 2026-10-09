@@ -98,6 +98,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
     } else {
       screenFx.vignettePulse(RED, 0.2, 500, 1);
       stage.buzz('light');
+      music.setElite(true);
     }
   });
 
@@ -256,6 +257,13 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
   on('laser', (e) => {
     ps.burst(SOFT_RING, e.state.x, e.state.y, { colors: [W, RED], scale: 0.7 });
     stage.direct('laser_on', 0.7);
+  });
+
+  // The dot snapped onto an elite or a boss: a ring leaves the enemy and the pointer clicks (the field draws the lock itself, `LockMarker`).
+  on('laserLock', (e) => {
+    if (!e.enemy) return;
+    ps.burst(SOFT_RING, e.enemy.x, e.enemy.y, { colors: [W, RED], scale: 1 });
+    stage.direct('laser_on', 0.45);
   });
 
   on('laserEnd', (e) => {

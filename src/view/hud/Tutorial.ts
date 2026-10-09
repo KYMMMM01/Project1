@@ -203,7 +203,7 @@ export class Tutorial {
     env.on(b.events, 'purr', ({ delta, reason }) => {
       if (delta > 0 && reason !== 'start') this.bump('purrGain');
     });
-    // A cat that lands on a sunny cell is what the sun lesson asks for.
+    // A cat that lands on a special cell is what the sun lesson asks for.
     const landed = (cell: number): void => {
       if (b.sunbeams.includes(cell)) this.bump('sunMove');
     };
@@ -488,7 +488,7 @@ export class Tutorial {
     return -1;
   }
 
-  /** A sunny cell for it to land on: an empty one first, otherwise any sunny cell with another cat on it (they swap). */
+  /** A special cell for it to land on: an empty one first, otherwise any special cell with another cat on it (they swap). */
   private pickSunCell(from: number): number {
     const b = this.env.battle;
     let taken = -1;

@@ -1,6 +1,6 @@
 /**
  * Which moments of a real run ask for a first-encounter card (the topics themselves are chosen in encounters.ts): the first time the enemy count climbs, the first merge, an act ending,
- * sunny cells, a cell hazard, an enemy trait in the next wave's preview, an elite or a boss arriving, a class upgrade within
+ * special cells, a cell hazard, an enemy trait in the next wave's preview, an elite or a boss arriving, a class upgrade within
  * reach, and the run's own rules (butler level, daily challenge, endless). Hints.request ignores whatever the player has already
  * been taught, so each card comes once in a lifetime. The controls that ask for their own card (summon grade, call wave, speed,
  * purr, toys, molt, sell, awaken, the laser) do it where they live.
@@ -19,7 +19,7 @@ export interface EncounterTargets {
   /** The elite / boss strip. */
   boss: Container;
   chips: Container;
-  /** The playfield's floor: sunny cells and hazards are drawn on it. */
+  /** The playfield's floor: special cells and hazards are drawn on it. */
   floor: Container;
 }
 

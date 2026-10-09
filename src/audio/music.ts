@@ -1,27 +1,68 @@
 /**
  * Look-ahead music sequencer. A 25 ms timer asks each running track which steps start within the
  * next 120 ms of ctx.currentTime and hands those notes to WebAudio with exact start times, so timing
- * never depends on the timer's jitter. Tracks cross-fade with equal-power curves, entering on the
- * next beat of the outgoing one; the battle track's four intensity layers fade smoothly on their
- * own gain nodes, starting on a bar line.
+ * never depends on the timer's jitter. Tracks cross-fade with equal-power curves; a new track enters
+ * on the next bar line of the one it replaces (the next beat when the bar is further away), and its
+ * one-off intro, if it has one, plays first. A track that names a successor (the menu pair) hands over
+ * to it at the end of its loop, on the bar line. The chapter tracks' four intensity layers fade
+ * smoothly on their own gain nodes, starting on a bar line.
  */
 import type { MusicId } from './api';
 import { equalPowerCurve } from './envelopes';
-import { INST_PRIORITY, Inst, SCORES, STEPS, type NoteSink, type Score } from './scores';
+import { SCORES } from './library';
+import { INST_PRIORITY, Inst, STEPS, type MusicTrackId, type NoteSink, type Score } from './scores';
 import { LOOKAHEAD_S, LayerMixer, StepClock, TIMER_MS, barPosition } from './sequencer';
 import { Synth } from './synth';
 import { playVoice, voiceLength } from './instruments';
 import { VoiceBudget } from './voices';
 
 /** Mix level of each track relative to the music bus. */
-const TRACK_LEVEL: Record<string, number> = { home: 1, battle: 0.9, boss: 1 };
-/** Reverb send per track: close-miked and dry, home gets the most room, battle stays tight. */
-const TRACK_VERB: Record<string, number> = { home: 0.25, battle: 0.1, boss: 0.15 };
+const TRACK_LEVEL: Readonly<Record<MusicTrackId, number>> = {
+  home: 1,
+  home2: 0.97,
+  battle: 0.9,
+  kitchen: 0.91,
+  bath: 0.77,
+  garden: 0.72,
+  clinic: 0.86,
+  elite: 0.9,
+  boss: 1,
+  gold: 0.89,
+  win: 0.78,
+  lose: 0.74,
+};
+/** Reverb send per track: close-miked and dry, the menus and the bathroom get the most room, battle stays tight. */
+const TRACK_VERB: Readonly<Record<MusicTrackId, number>> = {
+  home: 0.25,
+  home2: 0.25,
+  battle: 0.1,
+  kitchen: 0.1,
+  bath: 0.35,
+  garden: 0.3,
+  clinic: 0.12,
+  elite: 0.15,
+  boss: 0.15,
+  gold: 0.1,
+  win: 0.25,
+  lose: 0.35,
+};
 const MAX_RUNS = 3;
 const FADE_POINTS = 48;
 const STEPS_PER_BEAT = 4;
-/** A track change waits for the next beat only when that is not further away than this. */
+/** A track change waits for the next bar line when that is not further away than this... */
+const MAX_BAR_WAIT_S = 2.6;
+/** ...and otherwise for the next beat when that is not further away than this. */
 const MAX_BEAT_WAIT_S = 0.7;
+/** A track that cross-fades over another comes in this fast at most... */
+const FADE_IN_MAX_S = 0.3;
+/** ...and its fade-in starts this long before the bar line it enters on (nothing of it sounds yet), so the downbeat lands at about -1 dB instead of rising out of silence. */
+const FADE_LEAD_S = 0.2;
+/**
+ * The hand-over from a track to its successor: the old one stops on the bar line and its tail fades under the new downbeat. The hand-over is
+ * only noticed one look-ahead (0.12 s) before the line, so the new track's ramp is short enough to be nearly open when its downbeat comes.
+ */
+const CHAIN_OUT_S = 0.7;
+const CHAIN_IN_S = 0.15;
 /** Fade a run is given when too many are alive at once (rapid track switching). */
 const HURRY_FADE_S = 0.04;
 
@@ -39,10 +80,15 @@ interface Run {
   applied: number;
   /** Context time at which the run is retired (Infinity while it is the live track). */
   stopAt: number;
+  /** The run has handed over to its successor: it schedules nothing more and only lets its tail fade. */
+  chained: boolean;
 }
 
 export interface MusicStats {
+  /** The track the game asked for. */
   track: MusicId;
+  /** The score that is actually sounding (differs from `track` for the menu pair, and while a hand-over is pending). */
+  playing: MusicId;
   /** The scheduler timer is active (it stops while the tab is hidden and when nothing is playing). */
   running: boolean;
   intensity: number;
@@ -64,6 +110,7 @@ export class MusicPlayer implements NoteSink {
   private lastTick = 0;
   private intensity = 0;
   private current: MusicId = 'none';
+  private homeVisits = 0;
   private readonly budget = new VoiceBudget(11, 12);
   private live = 0;
   private liveMax = 0;
@@ -96,23 +143,45 @@ export class MusicPlayer implements NoteSink {
     return this.timer !== null;
   }
 
+  /** The run that is the live track (not one fading out). */
+  private liveRun(): Run | undefined {
+    return this.runs.find((r) => r.stopAt === Infinity);
+  }
+
+  /** The menu pair alternates which of the two a visit starts with, so a short visit never always hears the same one. */
+  private entryOf(id: MusicTrackId): MusicTrackId {
+    if (id !== 'home') return id;
+    return this.homeVisits++ % 2 === 0 ? 'home' : 'home2';
+  }
+
   /** Cross-fade to `id` over `fade` seconds ('none' fades everything out). */
   play(id: MusicId, fade: number): void {
     if (id === this.current) return;
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
+    const now = this.ctx.currentTime;
     const len = Math.max(0.05, fade);
     this.current = id;
 
-    // Entering a new track on the outgoing track's next beat keeps the pulse unbroken through the
+    // Entering a new track on the outgoing track's next bar line keeps the pulse unbroken through the
     // cross-fade. Fading to silence, or starting from silence, does not wait.
+    const outgoing = id === 'none' ? undefined : this.liveRun();
     let at = now;
-    const outgoing = id === 'none' ? undefined : this.runs.find((r) => r.stopAt === Infinity);
     if (outgoing) {
-      const beat = outgoing.clock.nextBoundary(now + 0.03, STEPS_PER_BEAT);
-      if (beat - now <= MAX_BEAT_WAIT_S) at = beat;
+      const after = now + 0.03;
+      const bar = outgoing.clock.nextBoundary(after, STEPS);
+      const beat = outgoing.clock.nextBoundary(after, STEPS_PER_BEAT);
+      if (bar - now <= MAX_BAR_WAIT_S) at = bar;
+      else if (beat - now <= MAX_BEAT_WAIT_S) at = beat;
     }
+    this.enter(id === 'none' ? 'none' : this.entryOf(id), at, len, outgoing ? Math.min(len, FADE_IN_MAX_S) : len, outgoing ? FADE_LEAD_S : 0);
+    this.start();
+    this.pump(LOOKAHEAD_S);
+  }
 
+  /** Fade the live run out from `at` over `outLen` and start `track` at `at`, fading in over `inLen` from `lead` seconds before `at`. */
+  private enter(track: MusicTrackId | 'none', at: number, outLen: number, inLen: number, lead: number): void {
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const from = Math.max(at, now);
     for (const run of this.runs) {
       if (run.stopAt !== Infinity) continue;
       const g = run.fade.gain;
@@ -121,8 +190,8 @@ export class MusicPlayer implements NoteSink {
       for (let i = 0; i < curve.length; i++) curve[i] = (curve[i] as number) * cur;
       g.cancelScheduledValues(now);
       g.setValueAtTime(cur, now);
-      g.setValueCurveAtTime(curve, at, len);
-      run.stopAt = at + len + 0.1;
+      g.setValueCurveAtTime(curve, from, outLen);
+      run.stopAt = from + outLen + 0.1;
     }
     // Rapid switching can stack fade-outs: the oldest slow one is shortened (not cut) so it never
     // clicks. Runs that were already hurried retire on their own within a few frames.
@@ -130,37 +199,34 @@ export class MusicPlayer implements NoteSink {
       const slow = this.runs.find((r) => r.stopAt > now + HURRY_FADE_S + 0.05);
       if (slow) this.hurry(slow, now);
     }
+    if (track === 'none') return;
 
-    if (id !== 'none') {
-      const score = SCORES[id];
-      const fadeGain = ctx.createGain();
-      fadeGain.gain.setValueAtTime(0, now);
-      fadeGain.gain.setValueCurveAtTime(equalPowerCurve(FADE_POINTS, true), at, len);
-      const level = ctx.createGain();
-      level.gain.value = TRACK_LEVEL[id] ?? 0.8;
-      fadeGain.connect(level);
-      level.connect(this.bus);
-      const verb = ctx.createGain();
-      verb.gain.value = TRACK_VERB[id] ?? 0.2;
-      level.connect(verb);
-      verb.connect(this.reverbIn);
+    const score = SCORES[track];
+    const fadeGain = ctx.createGain();
+    fadeGain.gain.setValueAtTime(0, now);
+    fadeGain.gain.setValueCurveAtTime(equalPowerCurve(FADE_POINTS, true), Math.max(now, from - lead), inLen);
+    const level = ctx.createGain();
+    level.gain.value = TRACK_LEVEL[track];
+    fadeGain.connect(level);
+    level.connect(this.bus);
+    const verb = ctx.createGain();
+    verb.gain.value = TRACK_VERB[track];
+    level.connect(verb);
+    verb.connect(this.reverbIn);
 
-      const mixer = new LayerMixer(score.layers, score.layerEdges);
-      mixer.setIntensity(this.intensity);
-      mixer.snap();
-      const layers: GainNode[] = [];
-      for (let l = 0; l < score.layers; l++) {
-        const lg = ctx.createGain();
-        lg.gain.value = mixer.targets[l] as number;
-        lg.connect(fadeGain);
-        layers.push(lg);
-      }
-      const clock = new StepClock(score.bpm, score.bars * STEPS);
-      clock.start(at > now ? at : now + 0.06);
-      this.runs.push({ score, clock, fade: fadeGain, level, verb, layers, mixer, applied: this.intensity, stopAt: Infinity });
+    const mixer = new LayerMixer(score.layers, score.layerEdges);
+    mixer.setIntensity(this.intensity);
+    mixer.snap();
+    const layers: GainNode[] = [];
+    for (let l = 0; l < score.layers; l++) {
+      const lg = ctx.createGain();
+      lg.gain.value = mixer.targets[l] as number;
+      lg.connect(fadeGain);
+      layers.push(lg);
     }
-    this.start();
-    this.pump(LOOKAHEAD_S);
+    const clock = new StepClock(score.bpm, score.bars * STEPS, STEPS_PER_BEAT, (score.intro?.bars ?? 0) * STEPS);
+    clock.start(at > now ? at : now + 0.06);
+    this.runs.push({ score, clock, fade: fadeGain, level, verb, layers, mixer, applied: this.intensity, stopAt: Infinity, chained: false });
   }
 
   /** Target intensity 0..1. The layer gains follow on the next bar line, so a new layer enters on a downbeat. */
@@ -188,6 +254,7 @@ export class MusicPlayer implements NoteSink {
   stats(): MusicStats {
     return {
       track: this.current,
+      playing: this.liveRun()?.score.id ?? 'none',
       running: this.running,
       intensity: this.intensity,
       runs: this.runs.length,
@@ -258,23 +325,34 @@ export class MusicPlayer implements NoteSink {
     this.lastTick = now;
     const horizon = now + ahead;
 
-    for (let i = this.runs.length - 1; i >= 0; i--) {
+    // Forward, so a run started by a hand-over below gets its first steps scheduled in this very pass.
+    for (let i = 0; i < this.runs.length; i++) {
       const run = this.runs[i] as Run;
       if (now >= run.stopAt) {
         this.retire(run);
         this.runs.splice(i, 1);
+        i--;
         continue;
       }
       run.mixer.update(dt);
       this.skipped += run.clock.skipLate(now);
+      if (run.chained) continue;
       const clock = run.clock;
       this.cur = run;
       while (clock.due(horizon)) {
+        const intro = clock.inIntro;
         barPosition(clock.loopStep, this.pos);
         this.stepInBar = this.pos.step;
         this.stepTime = clock.nextTime;
-        if (this.stepInBar === 0 && run.stopAt === Infinity && run.applied !== this.intensity) this.applyIntensity(run, this.stepTime);
-        run.score.fill(this.pos.bar, this.pos.step, this);
+        const live = run.stopAt === Infinity;
+        if (!intro && live && run.score.then && clock.loops >= 1 && this.stepInBar === 0) {
+          run.chained = true;
+          this.enter(run.score.then, this.stepTime, CHAIN_OUT_S, CHAIN_IN_S, FADE_LEAD_S);
+          break;
+        }
+        if (this.stepInBar === 0 && live && run.applied !== this.intensity) this.applyIntensity(run, this.stepTime);
+        if (intro) (run.score.intro as NonNullable<Score['intro']>).fill(this.pos.bar, this.pos.step, this);
+        else run.score.fill(this.pos.bar, this.pos.step, this);
         clock.advance();
       }
     }
@@ -298,7 +376,7 @@ export class MusicPlayer implements NoteSink {
     let start = this.stepTime + at * stepDur;
     // Swing delays the off 16ths; a hair of timing/velocity jitter keeps repeats from sounding sequenced.
     if (run.score.swing > 0 && (this.stepInBar & 1) === 1) start += run.score.swing * stepDur;
-    const pitched = inst >= Inst.bass;
+    const pitched = inst >= Inst.bass && inst <= Inst.stab;
     if (pitched) start += (Math.random() - 0.5) * 0.008;
     const v = vel * (0.94 + Math.random() * 0.12);
     const dur = durSteps * stepDur;

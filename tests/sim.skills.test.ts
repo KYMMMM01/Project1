@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { EnemyId } from '@/game/api';
+import type { EnemyId, UnitId } from '@/game/api';
 import {
-  BOSS_HP, CC_IMMUNE_AFTER, DODGE_CAP, ELITE_HP, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, PULL_IMMUNE_AFTER, TICK, specialHp,
+  BOSS_HP, CC_IMMUNE_AFTER, DODGE_CAP, ELITE_HP, LASER_DURATION, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, PULL_IMMUNE_AFTER, TICK, specialHp,
 } from '@/game/data/balance';
 import { UNIT_GRID, unitClass, unitRarity } from '@/game/data/roster';
 import { auraScale, unitSpec } from '@/game/data/units';
@@ -10,7 +10,7 @@ import { UNITS_BY_RARITY } from '@/meta/units';
 import { pullEnemy } from '@/game/sim/enemies';
 import type { Sim } from '@/game/sim/sim';
 import type { SimEnemy, SimZone } from '@/game/sim/types';
-import { advance, foe, newSim, put, quietWave, record } from './simHelpers';
+import { advance, foe, newSim, put, quietWave, record, slay } from './simHelpers';
 
 /** A frozen enemy standing at a chosen spot (it never walks, so the spot stays). */
 function at(sim: Sim, id: EnemyId, x: number, y: number, hp = 1e9, travelled = 100): SimEnemy {
@@ -105,12 +105,12 @@ describe('the blizzard\'s freeze (v1.4)', () => {
 describe('the black hole (v1.4)', () => {
   const zone = (uid: number, timeLeft: number): SimZone => ({ uid, timeLeft } as SimZone);
 
-  it('pulls 55 px a second (it was 90)', () => {
+  it('pulls 90 px a second again (v1.4 cut it to 55, the owner took it back)', () => {
     const attack = unitSpec('m_cosmo').attack;
-    expect(attack.shape === 'void' && attack.pull).toBe(55);
+    expect(attack.shape === 'void' && attack.pull).toBe(90);
   });
 
-  it('drags the enemy it caught until the hole ends, and no other hole drags it until 4 seconds after that', () => {
+  it('drags the enemy it caught until the hole ends, and no other hole drags it until 2 seconds after that', () => {
     const sim = field();
     const e = foe(sim, 'cucumber', 500);
     e.speed = 0;
@@ -158,9 +158,9 @@ describe('the black hole (v1.4)', () => {
     }
     expect(zones.length).toBeGreaterThanOrEqual(4);
     const total = sums.reduce((a, v) => a + v, 0);
-    // The cosmic cat casts every 2.6 s and a hole drags for 1.2 s at 55 px/s; with the window only about every other hole drags.
-    expect(total).toBeGreaterThan(55 * 1.0);
-    expect(total).toBeLessThan(55 * 1.2 * Math.ceil(zones.length / 2) + 10);
+    // The cosmic cat casts every 2.6 s and a hole drags for 1.2 s at 90 px/s; with the 2 s window a hole drags the enemy it caught and the next one only if it came more than 2 s after the first ended.
+    expect(total).toBeGreaterThan(90 * 1.0);
+    expect(total).toBeLessThan(90 * 1.2 * zones.length + 10);
     expect(pulls.every((p) => p.distance > 0)).toBe(true);
   });
 });
@@ -298,6 +298,196 @@ describe('the laser pointer goes for elites and bosses first (v1.4)', () => {
     advance(sim, 1.5);
     expect(attacks.length).toBeGreaterThan(0);
     expect(attacks.every((a) => a.targetUid === far.uid)).toBe(true);
+  });
+});
+
+describe('the laser locks onto an elite or a boss and follows it (v1.5)', () => {
+  /** A boss that really walks (40 px/s along the top edge), and the laser's dot put 70 px beside it. */
+  const lockedOnBoss = (): { sim: Sim; boss: SimEnemy } => {
+    const sim = field();
+    put(sim, 7, 'r_sling');
+    const boss = foe(sim, 'boss_cloud', 500, 1e9);
+    expect(sim.setLaser(boss.x + 60, boss.y + 35)).toBeNull();
+    return { sim, boss };
+  };
+
+  it('moves the dot onto the nearest elite or boss inside its area and keeps it there while the enemy walks', () => {
+    const sim = field();
+    put(sim, 7, 'r_sling');
+    const boss = foe(sim, 'boss_cloud', 500, 1e9);
+    const far = foe(sim, 'firecracker', 400, 1e9);
+    const locks = record(sim, 'laserLock');
+    expect(sim.setLaser(boss.x + 60, boss.y + 35)).toBeNull();
+    expect(sim.laser.lockUid).toBe(boss.uid);
+    expect([sim.laser.x, sim.laser.y]).toEqual([boss.x, boss.y]);
+    expect(locks).toHaveLength(1);
+    expect(locks[0]!.enemy?.uid).toBe(boss.uid);
+    const start = { x: boss.x, y: boss.y };
+    advance(sim, 3);
+    expect(Math.hypot(boss.x - start.x, boss.y - start.y)).toBeGreaterThan(100);
+    expect(Math.hypot(sim.laser.x - boss.x, sim.laser.y - boss.y)).toBeLessThan(2);
+    expect(sim.laser.lockUid).toBe(boss.uid);
+    expect(locks).toHaveLength(1);
+    expect(far.dead).toBe(false);
+  });
+
+  it('does not lock onto a plain enemy, nor onto an elite or a boss outside the dot\'s area, and then stays where it was put', () => {
+    const sim = field();
+    put(sim, 7, 'r_sling');
+    at(sim, 'cucumber', 300, 300);
+    const boss = at(sim, 'boss_cloud', 500, 300);
+    const locks = record(sim, 'laserLock');
+    expect(sim.setLaser(300, 300)).toBeNull();
+    expect(sim.laser.lockUid).toBe(0);
+    expect([sim.laser.x, sim.laser.y]).toEqual([300, 300]);
+    expect(locks).toHaveLength(0);
+    // 200 px from the boss is outside the 130 px area, 120 px is inside.
+    expect(sim.setLaser(300, 300)).toBeNull();
+    expect(sim.laser.lockUid).toBe(0);
+    expect(sim.setLaser(boss.x - 120, boss.y)).toBeNull();
+    expect(sim.laser.lockUid).toBe(boss.uid);
+  });
+
+  it('lets go when the dot is moved away, takes hold again when it is put near, and prefers the elite nearest to the dot', () => {
+    const { sim, boss } = lockedOnBoss();
+    const locks = record(sim, 'laserLock');
+    expect(sim.setLaser(boss.x, boss.y + 300)).toBeNull();
+    expect(sim.laser.lockUid).toBe(0);
+    expect([sim.laser.x, sim.laser.y]).toEqual([boss.x, boss.y + 300]);
+    expect(locks.map((l) => l.enemy?.uid ?? 0)).toEqual([0]);
+    expect(sim.setLaser(boss.x + 20, boss.y + 100)).toBeNull();
+    expect(sim.laser.lockUid).toBe(boss.uid);
+    const closer = at(sim, 'firecracker', boss.x - 30, boss.y + 40, 1e9, 50);
+    expect(sim.setLaser(closer.x, closer.y - 5)).toBeNull();
+    expect(sim.laser.lockUid).toBe(closer.uid);
+    advance(sim, 0.5);
+    expect([sim.laser.x, sim.laser.y]).toEqual([closer.x, closer.y]);
+  });
+
+  it('lets go when the locked enemy dies, leaves the dot where it fell and keeps the laser on until its time is up', () => {
+    const { sim, boss } = lockedOnBoss();
+    const locks = record(sim, 'laserLock');
+    advance(sim, 1);
+    slay(sim, boss);
+    const fell = { x: boss.x, y: boss.y };
+    advance(sim, 0.1);
+    expect(sim.laser.lockUid).toBe(0);
+    expect(locks.at(-1)!.enemy).toBeNull();
+    expect(sim.laser.active).toBe(true);
+    expect(Math.hypot(sim.laser.x - fell.x, sim.laser.y - fell.y)).toBeLessThan(1);
+    advance(sim, 1);
+    expect([sim.laser.x, sim.laser.y]).toEqual([sim.laser.x, sim.laser.y]);
+    expect(Math.hypot(sim.laser.x - fell.x, sim.laser.y - fell.y)).toBeLessThan(1);
+    advance(sim, LASER_DURATION);
+    expect(sim.laser.active).toBe(false);
+  });
+
+  it('is gone when the laser ends', () => {
+    const { sim } = lockedOnBoss();
+    const ends = record(sim, 'laserEnd');
+    advance(sim, LASER_DURATION + 0.2);
+    expect(sim.laser.active).toBe(false);
+    expect(sim.laser.lockUid).toBe(0);
+    expect(sim.laserLock).toBeNull();
+    expect(ends).toHaveLength(1);
+  });
+
+  it('sends every cat that can reach the locked boss at it first, and leaves the cats that cannot to their own targets', () => {
+    const sim = field();
+    put(sim, 7, 'r_sling');
+    put(sim, 0, 'w_paw');
+    // The boss is out of the paw's reach but not the sling's; an older plain enemy stands near both of them.
+    const boss = at(sim, 'boss_cloud', cellCenterX(7) + 200, cellCenterY(7), 1e9, 100);
+    const plain = at(sim, 'cucumber', cellCenterX(0) + 150, cellCenterY(0), 1e9, 900);
+    expect(Math.hypot(boss.x - cellCenterX(0), boss.y - cellCenterY(0))).toBeGreaterThan(unitSpec('w_paw').base.range + 38);
+    expect(sim.setLaser(boss.x + 10, boss.y + 10)).toBeNull();
+    const attacks = record(sim, 'attack');
+    advance(sim, 1.5);
+    const sling = attacks.filter((a) => a.unit.id === 'r_sling');
+    const paw = attacks.filter((a) => a.unit.id === 'w_paw');
+    expect(sling.length).toBeGreaterThan(0);
+    expect(paw.length).toBeGreaterThan(0);
+    expect(sling.every((a) => a.targetUid === boss.uid)).toBe(true);
+    expect(paw.every((a) => a.targetUid === plain.uid)).toBe(true);
+  });
+
+  it('keeps every cat in reach on the boss for the whole duration, although it has long walked out of the dot\'s first area', () => {
+    const { sim, boss } = lockedOnBoss();
+    // An older plain enemy stands in reach the whole time; without the lock the sling would shoot at it.
+    const plain = at(sim, 'cucumber', cellCenterX(7) + 100, cellCenterY(7), 1e9, 5000);
+    const attacks = record(sim, 'attack');
+    advance(sim, 5);
+    attacks.length = 0;
+    advance(sim, 1.2);
+    expect(Math.hypot(boss.x - 581, boss.y - 45)).toBeGreaterThan(130);
+    expect(attacks.length).toBeGreaterThan(0);
+    expect(attacks.every((a) => a.targetUid === boss.uid)).toBe(true);
+    expect(plain.dead).toBe(false);
+  });
+});
+
+describe('armour-breaking attacks go for elites and bosses first (v1.5)', () => {
+  /** A cat in the corner cell with an older plain roomba and a younger boss both inside its reach. */
+  const pair = (id: UnitId, special: EnemyId = 'boss_vacuum'): { attacks: ReturnType<typeof record<'attack'>>; plain: SimEnemy; boss: SimEnemy } => {
+    const sim = field();
+    put(sim, 0, id);
+    const plain = at(sim, 'roomba', cellCenterX(0) + 120, cellCenterY(0), 1e9, 900);
+    const boss = at(sim, special, cellCenterX(0), cellCenterY(0) + 130, 1e9, 100);
+    const attacks = record(sim, 'attack');
+    advance(sim, 1.6);
+    return { attacks, plain, boss };
+  };
+
+  it.each<UnitId>(['w_viking', 'w_tiger'])('has the %s aim at a boss in reach before an older plain enemy', (id) => {
+    const { attacks, boss } = pair(id);
+    expect(attacks.length).toBeGreaterThan(0);
+    expect(attacks.every((a) => a.targetUid === boss.uid)).toBe(true);
+  });
+
+  it.each<UnitId>(['w_paw', 'w_sword', 'w_samurai', 'r_archer', 'm_fire'])('leaves the %s with the oldest enemy as before', (id) => {
+    const { attacks, plain } = pair(id);
+    expect(attacks.length).toBeGreaterThan(0);
+    expect(attacks.every((a) => a.targetUid === plain.uid)).toBe(true);
+  });
+
+  it('counts an elite like a boss, and falls back to the oldest enemy when neither is in reach', () => {
+    const { attacks, boss } = pair('w_viking', 'firecracker');
+    expect(attacks.every((a) => a.targetUid === boss.uid)).toBe(true);
+    const sim = field();
+    put(sim, 0, 'w_viking');
+    const plain = at(sim, 'roomba', cellCenterX(0) + 120, cellCenterY(0), 1e9, 900);
+    at(sim, 'roomba', cellCenterX(0), cellCenterY(0) + 130, 1e9, 100);
+    at(sim, 'boss_vacuum', cellCenterX(0) + 600, cellCenterY(0), 1e9, 50);
+    const far = record(sim, 'attack');
+    advance(sim, 1.6);
+    expect(far.length).toBeGreaterThan(0);
+    expect(far.every((a) => a.targetUid === plain.uid)).toBe(true);
+  });
+
+  it('picks the oldest of several bosses and elites in reach', () => {
+    const sim = field();
+    put(sim, 0, 'w_tiger');
+    const young = at(sim, 'firecracker', cellCenterX(0) + 100, cellCenterY(0), 1e9, 100);
+    const old = at(sim, 'boss_cloud', cellCenterX(0), cellCenterY(0) + 120, 1e9, 400);
+    const attacks = record(sim, 'attack');
+    advance(sim, 1.4);
+    expect(attacks.length).toBeGreaterThan(0);
+    expect(attacks.every((a) => a.targetUid === old.uid)).toBe(true);
+    expect(young.dead).toBe(false);
+  });
+
+  it('yields to the laser: a plain enemy under the dot comes first, and an elite under the dot first of all', () => {
+    const sim = field();
+    put(sim, 0, 'w_viking');
+    const plain = at(sim, 'roomba', cellCenterX(0) + 120, cellCenterY(0), 1e9, 100);
+    at(sim, 'boss_vacuum', cellCenterX(0), cellCenterY(0) + 130, 1e9, 900);
+    // The dot is on the plain one and the boss is out of its area: the laser's choice wins.
+    expect(sim.setLaser(plain.x, plain.y - 10)).toBeNull();
+    expect(sim.laser.lockUid).toBe(0);
+    const attacks = record(sim, 'attack');
+    advance(sim, 1.4);
+    expect(attacks.length).toBeGreaterThan(0);
+    expect(attacks.every((a) => a.targetUid === plain.uid)).toBe(true);
   });
 });
 

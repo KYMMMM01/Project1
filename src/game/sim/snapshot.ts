@@ -9,6 +9,10 @@ import type { Sim } from './sim';
  * 3: rules v1.4 on the 5 x 5 board: the first rank no longer counts toward a synergy, the chef and the bell kitten swapped ranks,
  *    a wet or zap cell is dodged by chance, bosses have less health. A wave-start save of the 5 x 4 board is refused by the size
  *    check as well, and any save of version 2 or lower by this one.
+ * Rules v1.5 (steady fish income, rank-based molt cost, awakening for 10 purr, warrior ranges, ward ignore, the rangers' ricochet, the
+ * laser's lock, the chapters' special cells) kept 3: a save holds the board, the currencies, the counters, the random streams and the
+ * special cells' places at the start of a wave, the kind of special cell follows from `init.chapter`, and nothing else of the rules is
+ * stored, so a save from before still means the same thing and simply plays on under the new numbers.
  */
 export const SIM_VERSION = 3;
 

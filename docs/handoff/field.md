@@ -297,3 +297,49 @@ REQUESTS (for the rules phase): (1) change `auraCells` in `geometry.ts` for "the
 - `buffMath.reachOf` reads `unitSpec(id).aura.reach ?? 1` like the simulation does, instead of the default of `auraCells` (equal today; the rules engineer's REQUEST 1, so a cat with another reach changes the markers with the data).
 - Played the bell and bard markers on a mixed board (bell at cell 6, bard at 12, a lucky cat in the corner): every cat's speed, damage, dodge and shield numbers from the simulation equal what `auraCells` says for the two helpers (`buffAttackSpeed` 8 on the bell's 8 neighbours, `buffDamage` 15 on the bard's, `dodge` 40 on the bell and its neighbours); the dotted reach frames show for about 1.8 s after a helper is placed and while one is selected.
 - The window perch, the top row toy and the cushion mark their cells on 25 cells as before; a first pick of three and a toy choice fold to "돌아가기" and back at 1280 and 1600.
+
+
+## 2026-10-10 batch 2: the chapters' special cells, the laser's lock, the income fish (directives 13, 8, 1)
+
+Rules half: `sim.md` "2026-10-10 batch 2". Everything here is the look. `npx tsc --noEmit` prints nothing for `src` and `tests`; `npx vitest run` 151 files, 3,309 tests green.
+
+### 1. One picture per special cell (directive 13)
+
+| Chapter | Kind (`SpecialCellId`) | Tile picture (`cell_<id>`) | Badge (`icon_cell_<id>`) | Halo colour (token) |
+|---|---|---|---|---|
+| 1 living room | `sun` | pale butter patch with the window's golden cross, four panes, sparkles, short rays on the edge | round sun | mustard |
+| 2 kitchen | `bowl` | red-cream gingham mat, blue-and-white cat bowl of kibble from above, a fish biscuit | kibble bowl | coral |
+| 3 bathroom | `bubble` | fluffy aqua bath mat, scalloped edge, five soap bubbles (the generated steam wisps are cut off, steam is a rising particle) | three bubbles | violet (the floor is cyan: a teal halo vanished) |
+| 4 garden | `stump` | grass patch, tree-stump top with rings, two mushrooms, a clover | stump with a sprout | wood light (the floor is green: a leaf halo vanished) |
+| 5 vet | `treat` | pale teal quilted blanket, three fish biscuits, a heart | fish biscuit with a heart | pink tape |
+
+Made with `python tools/gen_image.py --batch art/cells_v1/jobs.json --out-dir art/cells_v1 --parallel 3` (jobs written by `art/cells_v1/make_jobs.py`, the reference is `art/units_v2/unit_w_paw.png` as a rendering reference only: thick dark-brown outline, flat matte colours, top-down, transparent). Ten pictures, one attempt each, no retries needed. `python art/cells_v1/build_cells.py` copies them to `art/raw` (tiles are cut to the rounded rectangle, anything that sticks out above or below is dropped), `python tools/process_art.py` writes `src/assets/img/cell_<id>.webp` (fit 256 px, new prefix `cell_` in `SPRITE_MAX`, 11 to 25 KB each) and `icon_cell_<id>.webp` (192 px, 10 to 16 KB). Sheet of the ten: `art/cells_v1/*.png`.
+
+**On the board** (`src/fx/cells.ts`, see `fx.md`; `FieldEffects.syncSpecial` in `src/view/field/effects.ts`): the tile fills the cell's rect (100 x 88, an 8 px gap between neighbours stays), a halo of three nested rounded rectangles in the kind's colour breathes (alpha 0.69 to 0.83, scale +2.5%, period 1.7 s) behind it, a pale glint sheet and a ring in the colour pulse over it, the emblem (46 px, the kind's badge) sits on the top-left corner and breathes, and one emitter sends a few sparkles up (bubbles and hearts rise, the others twinkle in place). **Reduced motion** (`fxSettings.reducedMotion`, read each frame): the same picture, still: halo 0.95, ring 0.6, no glint, no emitter, no arrival, emblem upright. **Arrival**: a new cell is hidden until its turn (`CELL_ARRIVE_GAP` 0.09 s after the one before it, in the simulation's order so the plus's middle comes first), then the tile drops in 32% bigger and settles in 0.5 s with a flash, a ring spreads from it and the emblem pops with a back-out; at touchdown (`CELL_TOUCHDOWN` 0.2 s) `director/growth.ts` `lightCells` throws a soft ring and sparkles in the kind's colour and plays the existing `sunbeam` chime once. Cells that stay between two acts are left alone (the sync only creates the missing ones). A restored run or the first act shows them with the same drop (the scene transition covers it).
+
+**The marker on a cat** (`UnitView`, was the sun sticker): `art.cellMark[kind]`, the badge picture fitted into 44 x 36 and baked into a 48 px frame (`bakeCellMarks`; generateTexture ignores the root's own transform, so the scaled picture sits in a holder container: that was a bug I made and fixed, the first bake showed a 5x zoomed crop). `UnitView` takes the kind as a second constructor argument (`env.battle.specialCell`); `SUN_AT` is now `CELL_MARK_AT` (the buff badge column is still clear of it, tested with the widest badge, the vet's biscuit).
+
+**Tapping an empty special cell** (`CellNote`, was `SunNote`; `cellMath.ts`): a bubble with the cell's name over its sentence with the real number, the prime-spot toy's +10 points included (20 becomes 30 for the four percent kinds, 0.15 becomes 0.25 fish a second for the treat). Pure functions `cellExtra`, `cellNoteContent`. `view.sun.tap` is gone.
+
+**Stills** (session scratchpad `shots/`): `cells1/c2_board` (the kitchen's five cells and the halo), `fin1/five_123` (chapters 1 to 3, cats on two cells and three left empty, the marker on the cats), `cells3/five_45` and `fin2/five_rm_45` (chapters 4 and 5, the second with reduced motion), `tap/note_en` (the bubble in English), `arrive/arrive` (the flourish of two new cells, a strip from 0 to 0.6 s with the chime on the 0.21 s tile), `dbg/marks` (the five baked cat markers).
+
+### 2. The laser locks on (directive 8)
+
+`LockMarker` (`lockMarker.ts`, maths in `lockMath.ts`, brackets baked in `art.lockBrackets`), owned by `LaserView`: while `laser.lockUid` is set, a dashed ring (`art.ring`, the laser's red) and four corner brackets close in on the locked enemy from 2.4x its size in 0.22 s (back-out, so they overshoot a little), turn slowly (opposite ways), breathe and **follow the enemy's own view** (`ctx.enemyView(uid)`), with a cream ping ring leaving it at the snap. The ring is `lockDiameter(bodySize)` = the body + 28 px, outside the shield ring. A lock that ends (death, dot moved away, laser over) fades in 0.18 s and does not snap again. Reduced motion: the same marker still. The tag by the dot says "붙었어요! 계속 따라가요" / "Locked on! It follows" for 1.8 s after a lock (`view.laser.locked`), then the short bonus tag again. `director/boss.ts` answers `laserLock` with a soft red ring at the enemy and the `laser_on` sound at 0.45 (there is no sound of its own for it: a REQUEST for audio). I did not draw a line from the button: the ring and brackets are the "target marker" option. Texts: the laser card's crown row, the aim hint, the guide page and its teaching line (`hud.laserCard.row4`, `hud.laser.hint`, `guide.laser.*`). Still: `lock/lock2` (a boss with the dot placed 60 px away: it snaps on, follows the vacuum as it walks, takes the cats' shots).
+
+### 3. The income fish (directive 1)
+
+`landings.flies(reason)`: `start` and `income` send no icon (and `CurrencyRow` counts them at once instead of waiting for a landing that never comes). Before, a treat-cell cat sent a fish flying to the pill every two seconds. See `hud.md` for the "+0.5/초" tag.
+
+### Tests
+
+`view.field.cells.test.ts` (note text, toy, looks), `view.field.lock.test.ts` (9: the ring's size and snap, the ping, the marker following, size by enemy, letting go, reduced motion), `view.field.effects.test.ts` (3: one cell each in the simulation's order with the arrival gaps, cells that stay are left alone, destroy), `fx.cells.test.ts` (see `fx.md`), `view.field.buff.test.ts` (cell mark radius). Existing fx tests moved off `sunbeamCell`.
+
+### Not verified
+
+A real phone (the glow's look on a bright screen, 60 fps with five loops of five sprites and an emitter each: not measured, the crowded-wave script was not rerun). The tile pictures are stretched to the cell's 100 x 88 rect (their own shapes are 1.14 to 1.4 wide: the bubble mat is the most squashed, 17%). The vet's treat emblem is wide (1.7 : 1), so it reads smaller than the others on the cat.
+
+### REQUESTS
+
+1. `src/audio`: a short "click" for the laser lock (`laser_lock`), and a chime for the arrival that is not the old `sunbeam` one if the audio engineer wants one per chapter.
+2. Unit pictures (a cat standing on a tile): none.

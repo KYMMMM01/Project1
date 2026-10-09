@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import '@/screens/missions/strings';
 import '@/screens/pass/strings';
 import { fmtDuration } from '@/core/format';
 import { at, createTestProfile, type TestRig } from '@/meta/testing';
-import { missionBadges, tierFill, tierMarks, weekDays } from '@/screens/missions/model';
+import { CLAIM_ALL_MIN, claimAllReading, missionBadges, tierFill, tierMarks, waitingMissions, waitingTiers, weekDays } from '@/screens/missions/model';
+import { tn } from '@/meta/plural';
+import { getLang, setLang, t } from '@/core/i18n';
 import {
   focusTier, passBadgeCount, passClaimable, PASS_ROW_GAP, PASS_ROW_H, retroactiveCount, scrollTargetFor, seasonEndWarning, seasonNameKey, xpFill,
 } from '@/screens/pass/model';
@@ -112,6 +114,48 @@ describe('missions model', () => {
     expect(missionBadges(profile).weekly).toBe(1);
     expect(profile.claimWeeklyChest().ok).toBe(true);
     expect(missionBadges(profile).weekly).toBe(0);
+  });
+
+  it('opens "claim all" from two waiting rewards, and counts what waits in a list or a tier card', async () => {
+    expect(CLAIM_ALL_MIN).toBe(2);
+    expect([0, 1, 2, 5].map((n) => claimAllReading(n).enabled)).toEqual([false, false, true, true]);
+    expect([0, 1, 2].map((n) => claimAllReading(n).noteKey)).toEqual(['rt.mis.all.none', 'rt.mis.all.count', 'rt.mis.all.count']);
+    const { profile } = await advanced();
+    profile.data.day.missions.progress = [3, 20, 0, 0, 1];
+    expect(waitingMissions(profile.missionsView('daily'))).toBe(3);
+    expect(profile.claimMission('daily', 0).ok).toBe(true);
+    expect(waitingMissions(profile.missionsView('daily'))).toBe(2);
+    expect(waitingMissions(profile.missionsView('weekly'))).toBe(0);
+    profile.data.cup.days = { '2026-10-07': 90 };
+    profile.data.endless.weekBest = 61;
+    expect(waitingTiers(profile.cupView().tiers)).toBe(2);
+    expect(waitingTiers(profile.endlessView().tiers)).toBe(2);
+    expect(profile.claimCup(0).ok).toBe(true);
+    expect(waitingTiers(profile.cupView().tiers)).toBe(1);
+    // The button and the badge stay in step with the tab badges: what the count says is what a claim-all would take.
+    const daily = waitingMissions(profile.missionsView('daily'));
+    const taken = profile.claimAllMissions('daily');
+    expect(taken.ok && taken.value.count).toBe(daily);
+    expect(waitingMissions(profile.missionsView('daily'))).toBe(0);
+  });
+
+  it('writes the note beside the button in both languages, with the English singular', () => {
+    const lang = getLang();
+    vi.stubGlobal('document', { documentElement: { lang: '' } });
+    try {
+      setLang('ko');
+      expect(t('rt.mis.all')).toBe('모두 받기');
+      expect(tn('rt.mis.all.count', 3)).toBe('받을 보상 3개');
+      expect(t('rt.mis.all.none')).toBe('받을 보상이 없어요');
+      setLang('en');
+      expect(t('rt.mis.all')).toBe('Claim all');
+      expect(tn('rt.mis.all.count', 1)).toBe('1 reward waiting');
+      expect(tn('rt.mis.all.count', 4)).toBe('4 rewards waiting');
+      expect(t('rt.mis.all.few', { n: CLAIM_ALL_MIN })).toBe('Claim all works once 2 or more rewards are waiting.');
+    } finally {
+      setLang(lang);
+      vi.unstubAllGlobals();
+    }
   });
 
   it('clamps the tier fill and places the tier marks along the bar', () => {

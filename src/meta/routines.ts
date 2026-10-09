@@ -33,10 +33,17 @@ import { cupScore, dailySetup, type DailySetup } from './daily';
 import { advanceMissions, allClaimed, claimMission, claimedPoints, missionComplete, type MetricDelta } from './missions';
 import { claimPassTier, claimableTiers, passReward, passTier, seasonDaysLeft, type PassTrack } from './pass';
 import { freeChestReady, freeChestWait, patrolCapMs, patrolRate, patrolStatus, type PatrolStatus } from './patrol';
+import { mergeBundles } from './bundle';
 import { chaptersCleared } from './rewards';
 import { fail, ok, type Bundle, type MissionState, type Result } from './types';
 
 export type MissionScope = 'daily' | 'weekly';
+
+/** What a claim-all took: how many rewards, and the one bundle they add up to (the screen shows it once). */
+export interface ClaimedAll {
+  count: number;
+  reward: Bundle;
+}
 
 export interface FreeChestView {
   ready: boolean;
@@ -277,6 +284,13 @@ export class RoutineProfile extends EconomyProfile {
   }
 
   claimMission(scope: MissionScope, index: number): Result<Bundle> {
+    const r = this.takeMission(scope, index);
+    if (r.ok) this.commit();
+    return r;
+  }
+
+  /** Everything `claimMission` does except the save and the change event, so a claim-all can run it many times and commit once. */
+  private takeMission(scope: MissionScope, index: number): Result<Bundle> {
     if (!this.featureUnlocked('missions')) return fail('locked');
     const defs = this.missionDefs(scope);
     const state = this.missionState(scope);
@@ -286,8 +300,31 @@ export class RoutineProfile extends EconomyProfile {
     else this.data.week.missions = r.state;
     this.applyBundle(r.reward, scope === 'daily' ? 'mission' : 'weekly_mission');
     this.deps.analytics.track('mission_claim', { scope, id: defs[index]?.id });
-    this.commit();
     return ok(r.reward);
+  }
+
+  /**
+   * Every finished, unclaimed mission of a list in one command. It is exactly claiming them one after another (the same
+   * payouts, ledger lines and analytics, in list order), with one save and one change event at the end.
+   */
+  claimAllMissions(scope: MissionScope): Result<ClaimedAll> {
+    if (!this.featureUnlocked('missions')) return fail('locked');
+    return this.takeAll(this.missionDefs(scope).map((_, i) => () => this.takeMission(scope, i)));
+  }
+
+  /** Run the claims that can be taken, merge what they paid, and commit once; `nothing_to_claim` when none could be. */
+  private takeAll(takes: readonly (() => Result<Bundle>)[]): Result<ClaimedAll> {
+    let reward: Bundle = {};
+    let count = 0;
+    for (const take of takes) {
+      const r = take();
+      if (!r.ok) continue;
+      reward = mergeBundles(reward, r.value);
+      count++;
+    }
+    if (count === 0) return fail('nothing_to_claim');
+    this.commit();
+    return ok({ count, reward });
   }
 
   dailyChestView(): DailyChestView {
@@ -441,6 +478,12 @@ export class RoutineProfile extends EconomyProfile {
   }
 
   claimCup(tier: number): Result<Bundle> {
+    const r = this.takeCup(tier);
+    if (r.ok) this.commit();
+    return r;
+  }
+
+  private takeCup(tier: number): Result<Bundle> {
     if (!this.featureUnlocked('cup')) return fail('locked');
     const row = this.cupView().tiers[tier];
     if (!row) return fail('invalid');
@@ -448,8 +491,13 @@ export class RoutineProfile extends EconomyProfile {
     if (!row.reached) return fail('not_ready');
     this.data.cup.claimed.push(tier);
     this.applyBundle(row.reward, 'cup');
-    this.commit();
     return ok(row.reward);
+  }
+
+  /** Every reached, unclaimed tier of the weekly cup in one command (see `claimAllMissions`). */
+  claimAllCup(): Result<ClaimedAll> {
+    if (!this.featureUnlocked('cup')) return fail('locked');
+    return this.takeAll(CUP_TIERS.map((_, i) => () => this.takeCup(i)));
   }
 
   endlessView(): EndlessView {
@@ -462,6 +510,12 @@ export class RoutineProfile extends EconomyProfile {
   }
 
   claimEndless(tier: number): Result<Bundle> {
+    const r = this.takeEndless(tier);
+    if (r.ok) this.commit();
+    return r;
+  }
+
+  private takeEndless(tier: number): Result<Bundle> {
     if (!this.featureUnlocked('endless')) return fail('locked');
     const row = this.endlessView().tiers[tier];
     if (!row) return fail('invalid');
@@ -469,8 +523,13 @@ export class RoutineProfile extends EconomyProfile {
     if (!row.reached) return fail('not_ready');
     this.data.endless.claimed.push(tier);
     this.applyBundle(row.reward, 'endless');
-    this.commit();
     return ok(row.reward);
+  }
+
+  /** Every reached, unclaimed tier of the endless mode in one command (see `claimAllMissions`). */
+  claimAllEndless(): Result<ClaimedAll> {
+    if (!this.featureUnlocked('endless')) return fail('locked');
+    return this.takeAll(ENDLESS_TIERS.map((_, i) => () => this.takeEndless(i)));
   }
 
   // ───────────────────────────── monthly gem pass ─────────────────────────────

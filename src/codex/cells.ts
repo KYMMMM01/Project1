@@ -1,11 +1,14 @@
 /**
- * The numbers the codex's board-cell pages quote, read from the data tables when a text is built: the sunbeam's bonus, how long a wet or
+ * The numbers the codex's board-cell pages quote, read from the data tables when a text is built: each chapter's special cell and its bonus, how long a wet or
  * zapped cell lasts, what the three position toys give, how far the bard's and the bell's help reaches, and the lane's own figures.
  */
 import { t } from '@/core/i18n';
+import { SPECIAL_CELL_IDS, type SpecialCellId } from '@/game/api';
 import {
-  DODGE_CAP, ENEMY_CAP, HAZARD_BLOCK_SIDE, HAZARD_RECOVER, HAZARD_WARNING, OVERFLOW_GRACE, SUN_CELLS, SUN_SPEED,
+  DODGE_CAP, ENEMY_CAP, HAZARD_BLOCK_SIDE, HAZARD_RECOVER, HAZARD_WARNING, OVERFLOW_GRACE, SUN_CELLS,
 } from '@/game/data/balance';
+import { specialCellText } from '@/game/data/cells';
+import { CHAPTERS } from '@/game/data/roster';
 import { BOSS_SPECS, ENEMY_SPECS } from '@/game/data/enemies';
 import { relicDef, relicSpec } from '@/game/data/relics';
 import { stakeRules } from '@/game/data/stakes';
@@ -20,8 +23,9 @@ const pct = (v: number): number => Math.round(v * 100);
 const pct1 = (v: number): number => Math.round(v * 1000) / 10;
 
 /** The kinds of the page's sections, in order. */
-export const CELL_GROUPS: ReadonlyArray<{ id: 'basic' | 'danger' | 'toy' | 'aura' | 'lane'; kinds: readonly CellKind[] }> = [
-  { id: 'basic', kinds: ['plain', 'sun'] },
+export const CELL_GROUPS: ReadonlyArray<{ id: 'basic' | 'special' | 'danger' | 'toy' | 'aura' | 'lane'; kinds: readonly CellKind[] }> = [
+  { id: 'basic', kinds: ['plain'] },
+  { id: 'special', kinds: SPECIAL_CELL_IDS },
   { id: 'danger', kinds: ['wet', 'zap'] },
   { id: 'toy', kinds: ['tower', 'perch', 'cushion'] },
   { id: 'aura', kinds: ['bard', 'bell'] },
@@ -47,15 +51,25 @@ function auraLevel(unit: 't_bell' | 't_bard'): number {
 
 const MAX_LEVEL = 10;
 
+/** The chapter whose special cell `id` is (each chapter has its own kind). */
+function chapterOf(id: SpecialCellId): number {
+  return (CHAPTERS.find((c) => c.cell === id) ?? CHAPTERS[0]).id;
+}
+
 /** The numbers of one kind's text, with the names of the things it mentions in the current language. */
 export function cellFacts(kind: CellKind): Facts {
   switch (kind) {
     case 'plain':
       return { cells: CELL_COUNT, cols: COLS, rows: ROWS };
     case 'sun':
+    case 'bowl':
+    case 'bubble':
+    case 'stump':
+    case 'treat':
       return {
-        cells: SUN_CELLS, speed: pct(SUN_SPEED), toy: t(relicDef('sunny_spot').nameKey), toyCells: relicSpec('sunny_spot').fx.sunCells ?? 0,
-        toySpeed: pct(relicSpec('sunny_spot').fx.sunSpeed ?? 0),
+        chapter: t(`chapter.${chapterOf(kind)}.name`), effect: specialCellText(kind), cells: SUN_CELLS,
+        toy: t(relicDef('sunny_spot').nameKey), toyCells: relicSpec('sunny_spot').fx.sunCells ?? 0,
+        boosted: specialCellText(kind, relicSpec('sunny_spot').fx.sunSpeed ?? 0),
       };
     case 'wet': {
       const spray = ENEMY_SPECS.spray.hazardPulse;

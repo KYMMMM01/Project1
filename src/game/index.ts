@@ -10,6 +10,11 @@ export { createBattle } from './sim/create';
 export { SIM_VERSION } from './sim/snapshot';
 
 export * from './data/roster';
+export {
+  SPECIAL_CELLS, allSpecialCells, cellShown, specialCellName, specialCellOf, specialCellSpec, specialCellText,
+  type SpecialCellSpec, type SpecialCellStat,
+} from './data/cells';
+export { TILE_PX, tilesOf, tilesText } from './data/lengthText';
 export { unitDef, unitSpec, allUnitDefs, auraScale } from './data/units';
 export { enemyDef, enemySpec, allEnemyDefs, bossSpec, BOSS_SPECS, budgetMult, isWaveTarget } from './data/enemies';
 export { relicDef, relicSpec, allRelicDefs, COUNTER_RELICS } from './data/relics';

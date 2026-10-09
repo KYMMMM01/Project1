@@ -18,7 +18,8 @@ import { createGraph } from './graph';
 import { MusicPlayer } from './music';
 import { CAT_TARGET } from './recipe';
 import { SOUNDS, sfxIndexOf, type SoundDef } from './sounds';
-import { SCORES, type MusicTrackId } from './scores';
+import { SCORES, TRACK_IDS } from './library';
+import type { MusicTrackId } from './scores';
 import { STEPS_PER_BAR, stepSeconds } from './sequencer';
 import { CUT_SECONDS, VoiceLimiter } from './voices';
 
@@ -433,6 +434,8 @@ export interface MusicRow {
   rms: number;
   centroidHz: number;
   lowFrac: number;
+  /** Share of the spectral energy above 4 kHz: how much of the track is sparkle. */
+  highFrac: number;
   clipped: boolean;
   dcOffset: number;
   /** Highest simultaneous voices the budget admitted while scheduling the clip. */
@@ -462,6 +465,7 @@ export async function renderMusic(track: MusicTrackId, intensity: number, second
     rms: round(a.rms, 4),
     centroidHz: Math.round(a.centroidHz),
     lowFrac: round(a.lowFrac, 3),
+    highFrac: round(a.highFrac, 3),
     clipped: a.clipped,
     dcOffset: round(a.dcOffset, 4),
     peakOverlap: st.peakOverlap,
@@ -492,23 +496,137 @@ function dipAround(ch: readonly Float32Array[], sampleRate: number, at: number):
   return round(gainToDb(Math.sqrt(mean)) - gainToDb(Math.sqrt(Math.min(...levels))), 1);
 }
 
-/** Render one loop of a track at full intensity plus two seconds and measure the dip at the loop point against every other bar line. */
+/** Render one loop of a track (after its intro, if it has one) at full intensity plus two seconds and measure the dip at the loop point against every other bar line. */
 export async function renderSeam(track: MusicTrackId, sampleRate: number): Promise<SeamRow> {
   const score = SCORES[track];
   const bar = STEPS_PER_BAR * stepSeconds(score.bpm);
   const loop = score.bars * bar;
-  const ctx = new OfflineAudioContext(2, Math.ceil((loop + 2) * sampleRate), sampleRate);
+  const intro = (score.intro?.bars ?? 0) * bar;
+  const ctx = new OfflineAudioContext(2, Math.ceil((intro + loop + 2) * sampleRate), sampleRate);
   const graph = createGraph(ctx);
   const player = new MusicPlayer(ctx, graph.musicBus, graph.reverbIn);
   player.setIntensity(1);
   player.play(track, 0.05);
-  player.pump(loop + 2);
+  player.pump(intro + loop + 2);
   player.pause();
   const buf = await ctx.startRendering();
   const ch = [buf.getChannelData(0), buf.getChannelData(1)];
   let barDip = 0;
-  for (let b = 2; b < score.bars - 1; b++) barDip = Math.max(barDip, dipAround(ch, sampleRate, b * bar));
-  return { track, loopSeconds: round(loop, 2), seamDipDb: dipAround(ch, sampleRate, loop), barDipDb: barDip };
+  for (let b = 2; b < score.bars - 1; b++) barDip = Math.max(barDip, dipAround(ch, sampleRate, intro + b * bar));
+  return { track, loopSeconds: round(loop, 2), seamDipDb: dipAround(ch, sampleRate, intro + loop), barDipDb: barDip };
+}
+
+export interface TrackRow {
+  track: MusicTrackId;
+  bpm: number;
+  loopSeconds: number;
+  /** Whole-loop RMS at full intensity and, for a layered track, of the bed alone (intensity 0, first 16 s). */
+  rms: number;
+  rmsBed: number;
+  peak: number;
+  centroidHz: number;
+  lowFrac: number;
+  highFrac: number;
+  clipped: boolean;
+  dcOffset: number;
+  peakOverlap: number;
+  droppedByBudget: number;
+  voices: number;
+  seamDipDb: number;
+  barDipDb: number;
+}
+
+/**
+ * The level every track is mixed to, as the RMS of its whole loop at full intensity through the real graph: the battle and boss tracks
+ * measure 0.042 and 0.043, the menu track 0.051, so the chapter tracks, the gold dungeon and the elite wave sit with the battle (0.0425),
+ * the menu pair with the menu (0.0515), the result tracks a little under (the page plays them at 45 % anyway), the defeat track softest.
+ * A track must be within MUSIC_TOLERANCE_DB of its target.
+ */
+export const MUSIC_TARGET: Readonly<Record<MusicTrackId, number>> = {
+  home: 0.0515,
+  home2: 0.0515,
+  battle: 0.0425,
+  kitchen: 0.0425,
+  bath: 0.0425,
+  garden: 0.0425,
+  clinic: 0.0425,
+  elite: 0.0425,
+  boss: 0.0425,
+  gold: 0.0425,
+  win: 0.044,
+  lose: 0.034,
+};
+export const MUSIC_TOLERANCE_DB = 1.5;
+/** The most sparkle (energy above 4 kHz) any track may have; the old tracks have 0.001 to 0.002. */
+export const MUSIC_MAX_HIGH = 0.01;
+
+export interface MusicReport {
+  rows: TrackRow[];
+  table: string;
+  failing: string[];
+}
+
+/**
+ * Render each track's whole loop at full intensity (and the first 16 s of a layered track's bed, at intensity 0) through the real graph, and check
+ * level, clipping, the loop seam and brightness. The seam is rendered at a lower rate (the dip is a level measure, not a spectral one). Every
+ * track by default; a list renders just those.
+ */
+export async function runMusicReport(sampleRate: number, tracks: readonly MusicTrackId[] = TRACK_IDS, seamRate = 24000): Promise<MusicReport> {
+  const rows: TrackRow[] = [];
+  for (const track of tracks) {
+    const score = SCORES[track];
+    const seconds = score.bars * STEPS_PER_BAR * stepSeconds(score.bpm);
+    const full = await renderMusic(track, 1, seconds, sampleRate);
+    const bed = score.layers > 1 ? await renderMusic(track, 0, Math.min(16, seconds), sampleRate) : full;
+    const seam = await renderSeam(track, seamRate);
+    rows.push({
+      track,
+      bpm: score.bpm,
+      loopSeconds: seam.loopSeconds,
+      rms: full.rms,
+      rmsBed: bed.rms,
+      peak: full.peak,
+      centroidHz: full.centroidHz,
+      lowFrac: full.lowFrac,
+      highFrac: full.highFrac,
+      clipped: full.clipped,
+      dcOffset: full.dcOffset,
+      peakOverlap: full.peakOverlap,
+      droppedByBudget: full.droppedByBudget,
+      voices: full.voices,
+      seamDipDb: seam.seamDipDb,
+      barDipDb: seam.barDipDb,
+    });
+  }
+  const failing: string[] = [];
+  for (const r of rows) {
+    const off = gainToDb(r.rms) - gainToDb(MUSIC_TARGET[r.track]);
+    if (Math.abs(off) > MUSIC_TOLERANCE_DB) failing.push(`${r.track}: loop RMS ${r.rms} is ${off.toFixed(1)} dB from its target ${MUSIC_TARGET[r.track]}`);
+    if (r.clipped || r.peak > 0.95) failing.push(`${r.track}: peak ${r.peak}`);
+    if (Math.abs(r.dcOffset) > 0.001) failing.push(`${r.track}: DC ${r.dcOffset}`);
+    if (r.highFrac > MUSIC_MAX_HIGH) failing.push(`${r.track}: ${r.highFrac} of the energy above 4 kHz`);
+    if (r.seamDipDb > r.barDipDb + 3) failing.push(`${r.track}: loop seam dips ${r.seamDipDb} dB, other bar lines ${r.barDipDb}`);
+    if (r.droppedByBudget > r.voices * 0.05) failing.push(`${r.track}: ${r.droppedByBudget} notes shed of ${r.voices}`);
+  }
+  const head = 'track      bpm  loop s   rms  bed rms   peak  centroid  <200Hz  >4kHz  seam dB (bars)  overlap  shed  notes';
+  const lines = rows.map((r) =>
+    [
+      r.track.padEnd(9),
+      String(r.bpm).padStart(4),
+      r.loopSeconds.toFixed(1).padStart(7),
+      r.rms.toFixed(4).padStart(6),
+      r.rmsBed.toFixed(4).padStart(8),
+      r.peak.toFixed(3).padStart(7),
+      String(r.centroidHz).padStart(8),
+      r.lowFrac.toFixed(2).padStart(7),
+      r.highFrac.toFixed(3).padStart(6),
+      `${r.seamDipDb.toFixed(1)} (${r.barDipDb.toFixed(1)})`.padStart(15),
+      String(r.peakOverlap).padStart(8),
+      String(r.droppedByBudget).padStart(5),
+      String(r.voices).padStart(6),
+    ].join(' '),
+  );
+  return { rows, table: [head, ...lines].join('\n'), failing };
 }
 
 export interface MixRow {

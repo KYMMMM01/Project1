@@ -2,6 +2,7 @@
 import type { Fail, StrikePoint } from '../api';
 import { CELL_COUNT, FIELD_H, FIELD_W, cellCenterX, cellCenterY, pathGap } from '../geometry';
 import { LASER_COOLDOWN, LASER_DURATION, MAX_ENEMY_SPEED, PROJECTILE_RETARGET, TICK, hpIndex } from '../data/balance';
+import { SYNERGY_SPECIAL } from '../data/classes';
 import type { AttackSpec, HitEffect } from '../data/types';
 import { addFish } from './economy';
 import { applyStatus, damageEnemy, pullEnemy } from './enemies';
@@ -26,10 +27,33 @@ function areaOf(s: Sim, u: SimUnit): number {
 }
 
 function rollCrit(s: Sim, u: SimUnit): boolean {
-  // The rangers' third synergy step: every Nth shot is a sure crit (no random draw is spent on it).
-  if (u.sureCritEvery > 0 && ++u.shots % u.sureCritEvery === 0) return true;
   const c = u.stats.crit;
   return c > 0 && s.rng.combat.next() < c;
+}
+
+const BOUNCE = SYNERGY_SPECIAL.ranger;
+
+/**
+ * The rangers' third synergy step: an arrow that hit `from` bounces to the nearest other enemy within `BOUNCE.reach` of it and hurts
+ * it for part of the hit (same crit, no new dice). A bounced arrow does not bounce again.
+ */
+function ricochet(s: Sim, u: SimUnit, from: SimEnemy, dmg: number, crit: boolean): void {
+  let to: SimEnemy | null = null;
+  let toD2 = Infinity;
+  for (const e of s.enemies) {
+    if (e === from) continue;
+    const dx = e.x - from.x;
+    const dy = e.y - from.y;
+    const reach = BOUNCE.reach + e.spec.radius;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= reach * reach && (d2 < toD2 || (d2 === toD2 && to !== null && e.uid < to.uid))) {
+      to = e;
+      toD2 = d2;
+    }
+  }
+  if (!to) return;
+  if (s.ev.has('ricochet')) s.ev.emit('ricochet', { unit: u, x: from.x, y: from.y, tx: to.x, ty: to.y, targetUid: to.uid });
+  hit(s, u, to, dmg, crit, u.ricochet);
 }
 
 function strike(s: Sim, u: SimUnit, x: number, y: number, radius: number, list: readonly SimEnemy[]): void {
@@ -95,7 +119,8 @@ function nearest(k: number): number {
 /**
  * The enemy a cat attacks (rules §8): the oldest one in range, the sturdiest for the gunslinger, and
  * while the laser is on the one closest to its dot, an elite or a boss inside the dot's area before any other
- * enemy. Records when to look again.
+ * enemy (the one the dot is locked onto is at the dot, so it comes first). A cat whose attack breaks armour takes an elite
+ * or a boss in range before any ordinary enemy, by the same order. Records when to look again.
  */
 function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
   const cx = CELL_X[u.cell] as number;
@@ -103,10 +128,13 @@ function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
   const range = u.stats.range;
   const attack = u.spec.attack;
   const byHealth = attack.shape === 'single' && attack.priority === 'max_hp';
+  const eliteFirst = u.spec.targetsElitesFirst;
   const laser = s.laser;
   const laserR2 = laser.radius * laser.radius;
   let best: SimEnemy | null = null;
   let bestKey = -1;
+  let hunted: SimEnemy | null = null;
+  let huntedKey = -1;
   let focus: SimEnemy | null = null;
   let focusD2 = Infinity;
   let focusSpecial = false;
@@ -126,6 +154,10 @@ function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
       best = e;
       bestKey = key;
     }
+    if (eliteFirst && (e.isBoss || e.isElite) && (key > huntedKey || (key === huntedKey && hunted !== null && e.uid < hunted.uid))) {
+      hunted = e;
+      huntedKey = key;
+    }
     if (laser.active) {
       const lx = e.x - laser.x;
       const ly = e.y - laser.y;
@@ -139,6 +171,7 @@ function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
     }
   }
   if (focus) return focus;
+  if (hunted) return hunted;
   if (!best) u.searchAfter = gap === Infinity ? Infinity : s.time + Math.max(TICK, gap / MAX_ENEMY_SPEED);
   return best;
 }
@@ -186,6 +219,7 @@ function impact(s: Sim, u: SimUnit, victim: SimEnemy, ix: number, iy: number, dm
   }
   hit(s, u, victim, dmg, crit, 1);
   if (attack.shape === 'single' && attack.effect) applyEffect(s, u, victim, attack.effect);
+  if (u.ricochet > 0) ricochet(s, u, victim, dmg, crit);
 }
 
 function fireProjectileShape(s: Sim, u: SimUnit, target: SimEnemy): void {
@@ -377,6 +411,7 @@ function firePierce(s: Sim, u: SimUnit, target: SimEnemy, attack: Extract<Attack
     if (e.dead) continue;
     if (hit(s, u, e, base, crit, 1)) blastAt(s, u, e.x, e.y, blastRadius, base * attack.blastPct, e);
   }
+  if (u.ricochet > 0) ricochet(s, u, target, base, crit);
 }
 
 function castZone(s: Sim, u: SimUnit, target: SimEnemy, attack: Extract<AttackSpec, { shape: 'frost' | 'void' | 'brew' }>): void {
@@ -599,6 +634,36 @@ export function refreshLaser(s: Sim): void {
   if (!s.laser.active && s.laser.cooldown > s.laser.cooldownTotal) s.laser.cooldown = s.laser.cooldownTotal;
 }
 
+/** The elite or boss nearest the point (x, y) inside the dot's area, or null. */
+function lockCandidate(s: Sim, x: number, y: number): SimEnemy | null {
+  const r2 = s.laser.radius * s.laser.radius;
+  let best: SimEnemy | null = null;
+  let bestD2 = Infinity;
+  for (const e of s.enemies) {
+    if (!e.isBoss && !e.isElite) continue;
+    const dx = e.x - x;
+    const dy = e.y - y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 <= r2 && (d2 < bestD2 || (d2 === bestD2 && best !== null && e.uid < best.uid))) {
+      best = e;
+      bestD2 = d2;
+    }
+  }
+  return best;
+}
+
+/** Locks the dot onto `e` (or lets go with null) and announces a change. */
+function setLock(s: Sim, e: SimEnemy | null): void {
+  if (s.laserLock === e) return;
+  s.laserLock = e;
+  s.laser.lockUid = e ? e.uid : 0;
+  if (s.ev.has('laserLock')) s.ev.emit('laserLock', { state: s.laser, enemy: e });
+}
+
+/**
+ * Places the dot, or moves it while it is on. A dot put on or near an elite or a boss (within the dot's area) locks onto the nearest one
+ * and follows it; a dot put anywhere else lets go of the one it held.
+ */
 export function cmdSetLaser(s: Sim, x: number, y: number): Fail | null {
   if (s.phase === 'won' || s.phase === 'lost') return 'not_in_battle';
   if (s.phase === 'choice') return 'choice_pending';
@@ -607,6 +672,11 @@ export function cmdSetLaser(s: Sim, x: number, y: number): Fail | null {
   if (!L.active && L.cooldown > 0) return 'on_cooldown';
   L.x = Math.min(Math.max(x, 0), FIELD_W);
   L.y = Math.min(Math.max(y, 0), FIELD_H);
+  const target = lockCandidate(s, L.x, L.y);
+  if (target) {
+    L.x = target.x;
+    L.y = target.y;
+  }
   if (!L.active) {
     L.active = true;
     L.duration = laserDuration(s);
@@ -615,12 +685,15 @@ export function cmdSetLaser(s: Sim, x: number, y: number): Fail | null {
     s.statsDirty = true;
     if (s.ev.has('laser')) s.ev.emit('laser', { state: L });
   }
+  setLock(s, target);
   s.wakeUnits();
   return null;
 }
 
 function endLaser(s: Sim): void {
   const L = s.laser;
+  s.laserLock = null;
+  L.lockUid = 0;
   L.active = false;
   L.timeLeft = 0;
   L.cooldown = L.cooldownTotal;
@@ -636,6 +709,15 @@ export function updateLaser(s: Sim): void {
     return;
   }
   L.timeLeft -= TICK;
+  const lock = s.laserLock;
+  if (lock) {
+    if (lock.dead) {
+      setLock(s, null);
+    } else {
+      L.x = lock.x;
+      L.y = lock.y;
+    }
+  }
   const r2 = L.radius * L.radius;
   for (const e of s.enemies) {
     const dx = e.x - L.x;

@@ -11,6 +11,7 @@ export * from './handles';
 export * from './rays';
 export * from './loops';
 export type { HazardKind, HazardWarnOpts, ZoneOpts } from './zones';
+export { CELL_ARRIVE_GAP, CELL_LOOKS, CELL_TOUCHDOWN, EMBLEM, type CellLook, type CellOpts } from './cells';
 export type { AreaHandle, CellKind, DiscKind } from './areas';
 export { AREA_PICTURES, DISC_KINDS } from './areas';
 export * from './flecks';

@@ -3,13 +3,14 @@ import type { RelicId } from '@/game/api';
 import { createBot } from '@/game/sim/bots';
 import { createBattle } from '@/game/sim/create';
 import { SIM_VERSION } from '@/game/sim/snapshot';
-import { CHAPTER_HP_MULT, FIRST_SUN_CELLS, SUN_CELLS, TICK } from '@/game/data/balance';
+import { BASE_FISH_PER_SECOND, CHAPTER_HP_MULT, FIRST_SUN_CELLS, START_FISH, SUN_CELLS, TICK } from '@/game/data/balance';
 import { COUNTER_RELICS } from '@/game/data/relics';
 import { STAKE_STEPS } from '@/game/data/stakes';
 import { RELIC_RARITY } from '@/game/data/roster';
 import { actFeatures, scriptFor, waveEntries } from '@/game/data/waves';
 import { damageEnemy } from '@/game/sim/enemies';
 import { gainRelic, startWave } from '@/game/sim/flow';
+import { playRun } from '@/game/sim/runner';
 import type { Sim } from '@/game/sim/sim';
 import { advance, foe, initOf, newSim, put, quietWave, record, rich, slay } from './simHelpers';
 
@@ -696,5 +697,54 @@ describe('modes and previews', () => {
     const c3 = newSim({ chapter: 3 });
     c1.wave = c3.wave = 5;
     expect(c3.baseHp() / c1.baseHp()).toBeCloseTo((CHAPTER_HP_MULT[2] as number) / (CHAPTER_HP_MULT[0] as number), 9);
+  });
+});
+
+describe('the steady fish income (v1.5)', () => {
+  it('pays half a fish a second while a wave runs, one whole fish at a time, and nothing during the opening preparation', () => {
+    const sim = newSim();
+    const fish = record(sim, 'fish');
+    advance(sim, 2.9);
+    expect(sim.phase).toBe('prep');
+    expect(fish).toHaveLength(0);
+    expect(sim.fish).toBe(START_FISH);
+    advance(sim, 0.2);
+    expect(sim.phase).toBe('wave');
+    sim.spawnIds.length = 0;
+    sim.spawnTimes.length = 0;
+    sim.spawnIdx = 0;
+    fish.length = 0;
+    advance(sim, 10);
+    const income = fish.filter((e) => e.reason === 'income');
+    expect(BASE_FISH_PER_SECOND).toBe(0.5);
+    expect(Math.abs(income.reduce((a, e) => a + e.delta, 0) - 5)).toBeLessThanOrEqual(1);
+    expect(income.every((e) => e.delta === 1 && e.x === undefined && e.y === undefined)).toBe(true);
+    expect(sim.incomePerSecond()).toBe(0.5);
+  });
+
+  it('is doubled by the rule that doubles every fish, and shown by incomePerSecond', () => {
+    const rich = newSim({ modifiers: ['rich'] });
+    expect(rich.incomePerSecond()).toBe(1);
+    const events = record(rich, 'fish');
+    advance(rich, 3.1);
+    rich.spawnIds.length = 0;
+    rich.spawnTimes.length = 0;
+    events.length = 0;
+    advance(rich, 10);
+    const got = events.filter((e) => e.reason === 'income').reduce((a, e) => a + e.delta, 0);
+    expect(Math.abs(got - 10)).toBeLessThanOrEqual(1);
+  });
+
+  it('stays a small share of what a run earns: the kills are still the main income (chapter 1, three seeds, synergy bot)', () => {
+    for (const seed of [11, 22, 33]) {
+      const run = playRun(initOf({ seed }), 'synergy', { tally: true });
+      const earned = Object.entries(run.income).reduce((a, [reason, v]) => a + (reason === 'sell' ? 0 : (v as number)), 0);
+      const kills = (run.income.kill ?? 0) + (run.income.boss ?? 0);
+      const trickle = run.income.income ?? 0;
+      expect(trickle, `seed ${seed}`).toBeGreaterThan(0);
+      expect(trickle / earned, `seed ${seed} share`).toBeLessThan(0.15);
+      expect(kills / earned, `seed ${seed} kills`).toBeGreaterThan(0.4);
+      expect(kills, `seed ${seed}`).toBeGreaterThan(trickle * 3);
+    }
   });
 });

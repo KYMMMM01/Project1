@@ -144,6 +144,7 @@ export interface RelicFx {
   bossPurr?: number;
   instantFish?: number;
   costCapCut?: number;
+  /** Special cells the toy adds, and what it adds to the bonus of the chapter's special cell (+0.1: ten points of its stat, or 0.1 fish a second). */
   sunCells?: number;
   sunSpeed?: number;
   rescue?: number;
@@ -184,8 +185,8 @@ export interface SynergyTier {
 export type SynergySpecial =
   /** Warriors: every `every` seconds each warrior roars; enemies in its range are stunned and lose armour. */
   | { kind: 'cry'; every: number; stun: number; breakAmount: number; breakDuration: number }
-  /** Rangers: every `every`-th shot of every ranger is a sure crit. */
-  | { kind: 'sure_crit'; every: number }
+  /** Rangers: an arrow that hits an enemy bounces to the nearest other enemy within `reach` px of it and hurts it for `pct` of the hit. */
+  | { kind: 'ricochet'; pct: number; reach: number }
   /** Mages: an enemy that falls with a magic status on it bursts; enemies within `radius` take `pct` of its maximum health (elites and bosses do not burst). */
   | { kind: 'shatter'; radius: number; pct: number }
   /** Tricksters: while the laser pointer is on, every cat attacks `speed` faster. */

@@ -7,7 +7,7 @@
  */
 import { Rng } from '@/core/rng';
 import { ENEMY_IDS, UNIT_IDS } from '@/game/api';
-import type { SfxId } from './api';
+import type { MusicId, SfxId } from './api';
 import { attackSfx, critSfx, foeDieSfx, foeHitSfx, impactSfx, type CombatCue } from './combat';
 import type { AudioEngine, AudioStats } from './engine';
 
@@ -36,7 +36,7 @@ interface Stream {
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function crowd(engine: AudioEngine, speed: number, seconds: number): Promise<CrowdRow> {
+export async function crowd(engine: AudioEngine, speed: number, seconds: number, track: MusicId = 'battle'): Promise<CrowdRow> {
   const rng = new Rng(7);
   const unit = () => UNIT_IDS[Math.floor(rng.next() * UNIT_IDS.length)] as (typeof UNIT_IDS)[number];
   const enemy = () => ENEMY_IDS[Math.floor(rng.next() * ENEMY_IDS.length)] as (typeof ENEMY_IDS)[number];
@@ -64,7 +64,7 @@ export async function crowd(engine: AudioEngine, speed: number, seconds: number)
   for (const u of UNIT_IDS) [attackSfx(u), impactSfx(u), critSfx(u)].forEach((c) => ids.add(c.id));
   for (const e of ENEMY_IDS) [foeHitSfx(e), foeDieSfx(e)].forEach((c) => ids.add(c.id));
   await engine.prime([...ids]);
-  engine.music('battle', 0.05);
+  engine.music(track, 0.05);
   engine.setIntensity(1);
   await wait(2500);
   engine.resetStats();

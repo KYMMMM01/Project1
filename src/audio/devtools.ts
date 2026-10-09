@@ -4,6 +4,7 @@
  *   combat()          the weapon and enemy sounds only (fast)       -> CombatReport (.table, .checks, .failing, .closest)
  *   music(track, i, s) offline-render a track and measure it        -> MusicRow
  *   seam(track, rate)  offline-render one loop and measure the dip at the loop point against the other bar lines -> SeamRow
+ *   tracks(ids?)      render every track's (or the listed tracks') whole loop at intensity 1, the bed at 0, and check level, clipping, brightness, the loop seam -> MusicReport (.rows, .table, .failing)
  *   mix('battle'|'big'|'fight'|'fight3') offline-render a pile-up with/without the limiter -> MixRow
  *   crowd(speed, seconds) drive the live engine with a crowded fight on a wall-clock timer -> CrowdRow (voices, nodes, drops)
  *   spec(key, variant)  spectrogram of one sound as bytes (40 frames x 48 bins up to 8 kHz) -> {ms, w, h, data}
@@ -13,10 +14,11 @@
  *   api               the engine itself, so scripts can drive play / music / duck directly
  */
 import { debugExpose } from '@/core/debug';
+import type { MusicId } from './api';
 import type { AudioEngine } from './engine';
 import { spectrogram } from './analysis';
 import { bakeVariant } from './bake';
-import { renderMix, renderMusic, renderSeam, runCombatReport, runReport } from './report';
+import { renderMix, renderMusic, renderSeam, runCombatReport, runMusicReport, runReport } from './report';
 import { crowd } from './crowd';
 import { SOUNDS } from './sounds';
 import type { MusicTrackId } from './scores';
@@ -29,9 +31,10 @@ export function installAudioDebug(engine: AudioEngine): void {
     report: () => runReport(engine.sampleRate),
     combat: () => runCombatReport(engine.sampleRate),
     music: (track: MusicTrackId, intensity = 1, seconds = 16) => renderMusic(track, intensity, seconds, engine.sampleRate),
+    tracks: (ids?: MusicTrackId[]) => runMusicReport(engine.sampleRate, ids),
     seam: (track: MusicTrackId, rate = 24000) => renderSeam(track, rate),
     mix: (scenario: 'battle' | 'big' | 'fight' | 'fight3' = 'battle') => renderMix(scenario, engine.sampleRate),
-    crowd: (speed = 3, seconds = 12) => crowd(engine, speed, seconds),
+    crowd: (speed = 3, seconds = 12, track: MusicId = 'battle') => crowd(engine, speed, seconds, track),
     spec: async (key: string, variant = 0) => {
       const def = SOUNDS.find((d) => d.key === key);
       if (!def) return null;

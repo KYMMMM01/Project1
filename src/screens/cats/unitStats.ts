@@ -1,6 +1,7 @@
 /** Pure stat maths of the unit screen: what a cat does at a collection level, and the step to the next one. */
 import { UNIT_IDS, type UnitId } from '@/game/api';
 import { LEVEL_DAMAGE_STEP } from '@/game/data/balance';
+import { tilesOf, tilesText } from '@/game/data/lengthText';
 import { levelSourceOf } from '@/game/data/roster';
 import { unitSpec } from '@/game/data/units';
 import { MAX_LEVEL } from '@/meta/data/economy';
@@ -49,7 +50,7 @@ export function isImprovement(key: StatKey, delta: number): boolean {
   return key === 'interval' ? delta < 0 : delta > 0;
 }
 
-/** The number a stat is shown as: damage keeps one decimal below 10, the interval two, range whole, crit as whole percent points. */
+/** The number a stat is shown as: damage keeps one decimal below 10, the interval two, range in tiles with one decimal, crit as whole percent points. */
 function shown(key: StatKey, value: number): number {
   switch (key) {
     case 'damage':
@@ -57,7 +58,7 @@ function shown(key: StatKey, value: number): number {
     case 'interval':
       return Math.round(value * 100) / 100;
     case 'range':
-      return Math.round(value);
+      return tilesOf(value);
     case 'crit':
       return Math.round(value * 100);
     case 'critMult':
@@ -65,10 +66,11 @@ function shown(key: StatKey, value: number): number {
   }
 }
 
-/** Number text for a stat: damage keeps one decimal below 10, the interval two, range whole, crit as a percentage. */
+/** Number text for a stat: damage keeps one decimal below 10, the interval two, range in tiles (the unit the skill sentences count in), crit as a percentage. */
 export function statText(key: StatKey, value: number): string {
   const v = shown(key, value);
   if (key === 'crit') return v + '%';
+  if (key === 'range') return tilesText(value);
   return key === 'critMult' ? 'x' + v : String(v);
 }
 
@@ -90,7 +92,7 @@ export function deltaText(key: StatKey, from: number, to: number): string {
     case 'critMult':
       return sign + Math.round(m * 10) / 10;
     case 'range':
-      return sign + m;
+      return sign + Math.round(m * 10) / 10;
   }
 }
 

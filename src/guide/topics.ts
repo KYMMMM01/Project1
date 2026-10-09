@@ -4,7 +4,7 @@
  * every number in them comes from facts.ts, so the tutorial bubble, the first-encounter card and the guidebook
  * can never disagree with the game.
  */
-import type { EnemyId, RelicId, UnitId } from '@/game';
+import type { EnemyId, RelicId, SpecialCellId, UnitId } from '@/game';
 import type { IconName } from '@/ui';
 
 export const SECTIONS = ['start', 'team', 'field', 'foes', 'home'] as const;
@@ -16,7 +16,7 @@ export type Art =
   | { k: 'cats'; ids: readonly UnitId[]; arrows?: boolean }
   | { k: 'foe'; id: EnemyId }
   | { k: 'toy'; id: RelicId }
-  | { k: 'cell'; cell: 'sun' | 'wet' | 'zap'; cat?: UnitId }
+  | { k: 'cell'; cell: SpecialCellId | 'wet' | 'zap'; cat?: UnitId }
   | { k: 'chest'; chest: 'wooden' | 'silver' | 'gold' };
 
 /** A control of the battle screen "try it" can point at. */

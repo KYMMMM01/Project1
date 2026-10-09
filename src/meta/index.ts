@@ -17,7 +17,7 @@ export type {
 } from './economy';
 export type {
   MissionScope, FreeChestView, PatrolView, CalendarView, MissionRow, DailyChestView, PassRow, PassView,
-  TierRow, CupView, EndlessView, DailyView,
+  TierRow, CupView, EndlessView, DailyView, ClaimedAll,
 } from './routines';
 export { attachPlatform, createAdPersistence, createLedgerStore } from './platformLink';
 export type { PlatformServices } from './platformLink';

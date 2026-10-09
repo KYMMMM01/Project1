@@ -31,7 +31,7 @@ export class FieldInput {
   hover = -1;
   /** True while the dragged unit is held over the sell zone. */
   selling = false;
-  /** A tap on an empty cell that nothing else claims (the field uses it to explain a sunbeam cell). */
+  /** A tap on an empty cell that nothing else claims (the field uses it to explain a special cell). */
   onEmptyTap: ((cell: number) => void) | null = null;
   /** Asked first with a press's field position: true when something small drawn over the board (a toy's chip) takes it. */
   onPress: ((x: number, y: number) => boolean) | null = null;

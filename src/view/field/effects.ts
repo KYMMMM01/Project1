@@ -1,5 +1,4 @@
-import { Color } from '@/ui';
-import type { AreaHandle, FxRect, ZoneHandle } from '@/fx';
+import { CELL_ARRIVE_GAP, type AreaHandle, type FxRect, type ZoneHandle } from '@/fx';
 import { ENEMY_IDS, enemyDef, enemySpec } from '@/game';
 import { CELL_COUNT, CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { BattleEvents, EnemyId, EnemyState, UnitId, ZoneState } from '@/game/api';
@@ -11,8 +10,6 @@ import { AuraPlan, NO_RING, RING_AND_REACH } from './auraPlan';
 import { bodySize, bodyX } from './policy';
 import { ringWidth } from './shieldRing';
 
-/** The patch of light is mustard paper: warm, flat, and quieter than a cat. */
-const SUN_COLOR = Color.mustard;
 const NO_HAZARD = 0;
 const WET = 1;
 const ZAP = 2;
@@ -95,14 +92,14 @@ class Roster {
 }
 
 /**
- * Looping ground effects that mirror the simulation board: sunbeam cells, active hazards, zone
+ * Looping ground effects that mirror the simulation board: the chapter's special cells, active hazards, zone
  * areas, the rings round haste and healing enemies, and the laser dot. Each frame compares what the simulation has with what is playing and
  * starts or fades out the difference, so a skipped event can never leave a stale effect behind.
  * Hazard warnings arrive as events (they are not part of the state) and end by themselves.
  */
 export class FieldEffects {
   private readonly rects: FxRect[] = [];
-  private readonly sun: Array<ZoneHandle | null> = [];
+  private readonly special: Array<ZoneHandle | null> = [];
   private readonly hazard: Array<AreaHandle | null> = [];
   private readonly hazardKind = new Uint8Array(CELL_COUNT);
   private readonly wanted = new Uint8Array(CELL_COUNT);
@@ -126,7 +123,7 @@ export class FieldEffects {
   ) {
     for (let c = 0; c < CELL_COUNT; c++) {
       this.rects.push({ x: cellCenterX(c) - CELL_W / 2 + 4, y: cellCenterY(c) - CELL_H / 2 + 4, w: CELL_W - 8, h: CELL_H - 8 });
-      this.sun.push(null);
+      this.special.push(null);
       this.hazard.push(null);
     }
     this.off = env.battle.events.on('hazardWarn', (e) => this.onWarn(e));
@@ -136,7 +133,7 @@ export class FieldEffects {
     this.touchWait -= dt;
     const look = this.touchWait <= 0;
     if (look) this.touchWait = TOUCH_EVERY;
-    this.syncSun();
+    this.syncSpecial();
     this.syncHazards();
     this.syncZones(look);
     this.syncRings(look);
@@ -150,16 +147,23 @@ export class FieldEffects {
     }
   }
 
-  private syncSun(): void {
+  /**
+   * The chapter's special cells: each new one drops in after the one before it, in the order the simulation lists them (the middle of the
+   * plus first); the ones that stay between two acts are left alone and the ones that go fade out.
+   */
+  private syncSpecial(): void {
     const beams = this.env.battle.sunbeams;
+    const kind = this.env.battle.specialCell;
     for (let c = 0; c < CELL_COUNT; c++) {
-      const want = beams.includes(c);
-      const h = this.sun[c] ?? null;
-      if (want && !h?.alive) this.sun[c] = this.env.ground.sunbeamCell(this.rects[c] as FxRect, { color: SUN_COLOR });
-      else if (!want && h) {
+      const h = this.special[c] ?? null;
+      if (h && !beams.includes(c)) {
         h.stop();
-        this.sun[c] = null;
+        this.special[c] = null;
       }
+    }
+    let fresh = 0;
+    for (const c of beams) {
+      if (!this.special[c]?.alive) this.special[c] = this.env.ground.specialCell(this.rects[c] as FxRect, kind, { delay: fresh++ * CELL_ARRIVE_GAP });
     }
   }
 
@@ -289,7 +293,7 @@ export class FieldEffects {
 
   destroy(): void {
     this.off();
-    for (const h of this.sun) h?.stop();
+    for (const h of this.special) h?.stop();
     for (const h of this.hazard) h?.stop();
     this.zones.stopAll();
     this.rings.stopAll();

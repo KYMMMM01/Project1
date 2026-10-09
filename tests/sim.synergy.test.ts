@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EnemyId } from '@/game/api';
+import type { BattleEvents, EnemyId } from '@/game/api';
 import { AWAKEN_MIN_TIER, LASER_DURATION, SYNERGY_MIN_RANK, SYNERGY_TIER_AT, TICK } from '@/game/data/balance';
 import { SYNERGY, SYNERGY_SPECIAL, synergyTier, tierForDistinct } from '@/game/data/classes';
 import { unitSpec } from '@/game/data/units';
@@ -86,9 +86,32 @@ describe('the steps of every class', () => {
     expect(SYNERGY.trickster.map((s) => [s.speed, s.rewardMult])).toEqual([[0.05, 0], [0.1, 0.12], [0.17, 0.3]]);
   });
 
+  it('gives the rangers damage at every step (8 / 20 / 45%) next to the crit that reaches every cat', () => {
+    expect([1, 2, 3].map((n) => synergyTier('ranger', n).damage)).toEqual([0.08, 0.2, 0.45]);
+    expect([1, 2, 3].map((n) => synergyTier('ranger', n).crit)).toEqual([0.05, 0.1, 0.2]);
+    expect([1, 2, 3].map((n) => synergyTier('ranger', n).critMult)).toEqual([0, 0.05, 0.1]);
+    // The third step pays more than the 30% it did before, and each step pays more than the one under it.
+    expect(synergyTier('ranger', 3).damage).toBeGreaterThan(0.3);
+    const sim = field();
+    const paw0 = put(sim, 10, 'w_paw');
+    const mage0 = put(sim, 11, 'm_snow');
+    put(sim, 0, 'r_archer');
+    put(sim, 1, 'r_ninja');
+    expect(sim.synergyTier('ranger')).toBe(1);
+    expect(sim.units[0]!.stats.damage).toBeCloseTo(unitSpec('r_archer').base.damage * 1.08, 9);
+    expect(sim.units[0]!.stats.crit).toBeCloseTo(unitSpec('r_archer').base.crit + 0.05, 9);
+    expect(paw0.stats.damage).toBeCloseTo(unitSpec('w_paw').base.damage, 9);
+    expect(paw0.stats.crit).toBeCloseTo(unitSpec('w_paw').base.crit + 0.05, 9);
+    expect(mage0.stats.crit).toBeCloseTo(0.05, 9);
+    put(sim, 2, 'r_gunner');
+    expect(sim.synergyTier('ranger')).toBe(2);
+    expect(sim.units[0]!.stats.damage).toBeCloseTo(unitSpec('r_archer').base.damage * 1.2, 9);
+    expect(sim.units[0]!.stats.critMult).toBeCloseTo(unitSpec('r_archer').base.critMult + 0.05, 9);
+  });
+
   it('gives the rangers\' third step damage for rangers, +20 points of crit chance and +10% crit damage for every cat', () => {
     const third = synergyTier('ranger', 3);
-    expect(third).toMatchObject({ damage: 0.3, crit: 0.2, critMult: 0.1 });
+    expect(third).toMatchObject({ damage: 0.45, crit: 0.2, critMult: 0.1 });
     const sim = field();
     const paw = put(sim, 10, 'w_paw');
     const mage = put(sim, 11, 'm_snow');
@@ -98,7 +121,7 @@ describe('the steps of every class', () => {
     put(sim, 3, 'r_star');
     expect(sim.synergyTier('ranger')).toBe(3);
     const archer = sim.units[0]!;
-    expect(archer.stats.damage).toBeCloseTo(unitSpec('r_archer').base.damage * 1.3, 9);
+    expect(archer.stats.damage).toBeCloseTo(unitSpec('r_archer').base.damage * 1.45, 9);
     for (const u of [archer, paw, mage]) {
       expect(u.stats.crit, u.id).toBeCloseTo(unitSpec(u.id).base.crit + 0.2, 9);
       expect(u.stats.critMult, u.id).toBeCloseTo(unitSpec(u.id).base.critMult + 0.1, 9);
@@ -186,35 +209,122 @@ describe('the war cry of the warriors (step 3)', () => {
   });
 });
 
-describe('the sure shot of the rangers (step 3)', () => {
-  it('makes every 5th shot of a ranger a crit, whatever the dice say, and no other shot', () => {
-    const sim = field();
+describe('the ricochet of the rangers (step 3)', () => {
+  const rangers = (sim: Sim): void => {
     put(sim, 0, 'r_archer');
     put(sim, 1, 'r_ninja');
     put(sim, 2, 'r_gunner');
     put(sim, 3, 'r_star');
-    expect(sim.synergyTier('ranger')).toBe(3);
-    expect(sim.units[0]!.sureCritEvery).toBe(SYNERGY_SPECIAL.ranger.every);
-    // Dice that never crit: only the sure shots can.
+  };
+  const bounce = SYNERGY_SPECIAL.ranger;
+  /** An archer in cell 0 that shoots only `first`: the others are out of its reach or younger (they stand still). */
+  const setup = (): { sim: Sim; first: SimEnemy; archerHits: BattleEvents['hit'][] } => {
+    const sim = field();
+    rangers(sim);
+    // No crits by dice: a hit's size is then its base damage.
     sim.rng.combat.next = () => 0.999;
-    at(sim, 'cucumber', cellCenterX(0) + 150, cellCenterY(0), 1e9, 200);
-    const hits = record(sim, 'hit');
-    advance(sim, 9);
-    const archer = hits.filter((h) => h.unitId === 'r_archer');
-    expect(archer.length).toBeGreaterThanOrEqual(10);
-    archer.slice(0, 10).forEach((h, i) => expect(h.crit, `shot ${i + 1}`).toBe((i + 1) % 5 === 0));
+    const first = at(sim, 'cucumber', cellCenterX(0) + 150, cellCenterY(0), 1e9, 300);
+    return { sim, first, archerHits: record(sim, 'hit') };
+  };
+
+  it('bounces every arrow that hits to the nearest other enemy beside it for 35% of the hit', () => {
+    expect(bounce).toMatchObject({ kind: 'ricochet', pct: 0.35, reach: 150 });
+    const { sim, first, archerHits } = setup();
+    const near = at(sim, 'cucumber', first.x + 60, first.y + 20, 1e9, 100);
+    const nearer = at(sim, 'cucumber', first.x - 30, first.y + 10, 1e9, 90);
+    advance(sim, 0.9);
+    const shot = archerHits.filter((h) => h.unitId === 'r_archer');
+    expect(shot.length).toBeGreaterThanOrEqual(2);
+    const damage = unitSpec('r_archer').base.damage * 1.45;
+    // The pairs: the arrow, then its bounce to the nearest enemy (not the farther one).
+    const hit = shot.filter((h) => h.enemy.uid === first.uid);
+    const bounced = shot.filter((h) => h.enemy.uid === nearer.uid);
+    expect(hit.length).toBeGreaterThan(0);
+    expect(bounced).toHaveLength(hit.length);
+    expect(shot.some((h) => h.enemy.uid === near.uid)).toBe(false);
+    for (const h of hit) expect(h.amount).toBeCloseTo(damage, 6);
+    for (const h of bounced) expect(h.amount).toBeCloseTo(damage * bounce.pct, 6);
   });
 
-  it('does not touch the other classes, and is off below the third step', () => {
+  it('does not bounce when no other enemy is within 150 px, nor below the third step', () => {
+    const { sim, first, archerHits } = setup();
+    at(sim, 'cucumber', first.x + bounce.reach + 18 + 40, first.y, 1e9, 100);
+    advance(sim, 0.9);
+    expect(archerHits.filter((h) => h.unitId === 'r_archer').every((h) => h.enemy.uid === first.uid)).toBe(true);
+
+    const low = field();
+    put(low, 0, 'r_archer');
+    put(low, 1, 'r_ninja');
+    put(low, 2, 'r_gunner');
+    expect(low.units[0]!.ricochet).toBe(0);
+    const f = at(low, 'cucumber', cellCenterX(0) + 150, cellCenterY(0), 1e9, 300);
+    at(low, 'cucumber', f.x + 30, f.y, 1e9, 100);
+    const hits = record(low, 'hit');
+    const bounces = record(low, 'ricochet');
+    advance(low, 0.9);
+    const archer = hits.filter((h) => h.unitId === 'r_archer');
+    expect(archer.length).toBeGreaterThan(0);
+    expect(archer.every((h) => h.enemy.uid === f.uid)).toBe(true);
+    expect(bounces).toHaveLength(0);
+  });
+
+  it('bounces once only: a third enemy beside the second takes nothing', () => {
+    const { sim, first, archerHits } = setup();
+    const second = at(sim, 'cucumber', first.x + 50, first.y, 1e9, 100);
+    const third = at(sim, 'cucumber', second.x + 50, second.y, 1e9, 90);
+    advance(sim, 0.9);
+    const archer = archerHits.filter((h) => h.unitId === 'r_archer');
+    expect(archer.some((h) => h.enemy.uid === second.uid)).toBe(true);
+    expect(archer.some((h) => h.enemy.uid === third.uid)).toBe(false);
+  });
+
+  it('shares the crit of the arrow (a crit arrow bounces a crit, no new dice) and reports the bounce as an event', () => {
+    const { sim, first, archerHits } = setup();
+    const second = at(sim, 'cucumber', first.x + 50, first.y, 1e9, 100);
+    sim.rng.combat.next = () => 0;
+    const bounces = record(sim, 'ricochet');
+    advance(sim, 0.9);
+    const critHits = archerHits.filter((h) => h.unitId === 'r_archer');
+    expect(critHits.length).toBeGreaterThanOrEqual(2);
+    expect(critHits.every((h) => h.crit)).toBe(true);
+    expect(bounces.length).toBeGreaterThan(0);
+    const archer = bounces.find((b) => b.unit.id === 'r_archer')!;
+    expect(archer).toMatchObject({ x: first.x, y: first.y, tx: second.x, ty: second.y, targetUid: second.uid });
+    const mult = sim.units[0]!.stats.critMult;
+    const base = unitSpec('r_archer').base.damage * 1.45;
+    expect(critHits.find((h) => h.enemy.uid === second.uid)!.amount).toBeCloseTo(base * mult * bounce.pct, 6);
+  });
+
+  it('works for the ninja\'s stars one by one and once for the star archer\'s volley, and only for rangers', () => {
     const sim = field();
-    const paw = put(sim, 10, 'w_paw');
-    put(sim, 0, 'r_archer');
-    put(sim, 1, 'r_ninja');
+    put(sim, 0, 'r_ninja');
+    put(sim, 1, 'r_archer');
     put(sim, 2, 'r_gunner');
-    expect(sim.units[0]!.sureCritEvery).toBe(0);
     put(sim, 3, 'r_star');
-    expect(sim.units[0]!.sureCritEvery).toBe(5);
-    expect(paw.sureCritEvery).toBe(0);
+    sim.rng.combat.next = () => 0.999;
+    const paw = put(sim, 10, 'w_paw');
+    expect(paw.ricochet).toBe(0);
+    expect(sim.units.filter((u) => u && u.ricochet > 0)).toHaveLength(4);
+    const a = at(sim, 'cucumber', cellCenterX(0) + 140, cellCenterY(0), 1e9, 300);
+    at(sim, 'cucumber', a.x + 20, a.y + 40, 1e9, 280);
+    at(sim, 'cucumber', a.x - 20, a.y + 40, 1e9, 260);
+    const hits = record(sim, 'hit');
+    const bounces = record(sim, 'ricochet');
+    advance(sim, 3);
+    const ninja = hits.filter((h) => h.unitId === 'r_ninja');
+    expect(ninja.length).toBeGreaterThan(0);
+    expect(bounces.filter((b) => b.unit.id === 'r_ninja').length).toBeGreaterThan(0);
+    expect(bounces.filter((b) => b.unit.id === 'r_star').length).toBeGreaterThan(0);
+    // The paw is not a ranger: nothing of it bounces.
+    expect(bounces.some((b) => b.unit.id === 'w_paw')).toBe(false);
+  });
+
+  it('is on at the third step and off the moment a kind is lost', () => {
+    const sim = field();
+    rangers(sim);
+    expect(sim.units[0]!.ricochet).toBe(SYNERGY_SPECIAL.ranger.pct);
+    sim.sell(3);
+    expect(sim.units[0]!.ricochet).toBe(0);
   });
 });
 

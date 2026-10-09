@@ -18,7 +18,7 @@ import { DragPreview } from './preview';
 import { Projectiles } from './projectiles';
 import { buildRug, RUG_X, RUG_Y } from './rug';
 import { rugSkin } from './rugSkins';
-import { SunNote } from './sunNote';
+import { CellNote } from './cellNote';
 import { ToyMarks } from './toyMarks';
 import { UnitViews } from './units';
 import { FieldWarmup } from './warmup';
@@ -64,12 +64,12 @@ export function createField(ctx: BattleContext): FieldPart {
   // What the weapons leave on the field (swing arcs, stuck arrows, splats ...): over the cats and enemies, under the numbers.
   const marks = new WeaponMarks(env, layers.fxFront);
   const input = new FieldInput(env, layers.floor, layers.zones, layers.projectiles, units, cells);
-  const sunNote = new SunNote(env, layers.fxFront);
+  const cellNote = new CellNote(env, layers.fxFront);
   // The lit lane goes on the ground effects' layer (under the enemies and cats); the dot's tag over the cats.
   const laser = new LaserView(env, layers.zones, layers.fxFront);
   input.onPress = (x, y) => toys.tapAt(x, y);
   input.onEmptyTap = (cell) => {
-    if (sunNote.lit(cell)) sunNote.show(cell);
+    if (cellNote.lit(cell)) cellNote.show(cell);
   };
   /** Numbers stand between the HUD's lower edge and the bottom panel, an 8 px margin in from the screen's sides, and off the board (a cat's name tags are the cells' lower edge). */
   const NUMBER_SIDE = 8;
@@ -135,7 +135,7 @@ export function createField(ctx: BattleContext): FieldPart {
     destroy(): void {
       offRefused();
       input.destroy();
-      sunNote.destroy();
+      cellNote.destroy();
       toys.destroy();
       buffs.destroy();
       laser.destroy();

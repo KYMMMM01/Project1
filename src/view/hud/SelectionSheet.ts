@@ -10,7 +10,7 @@ import { fmt, fmtPct } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { drawBuffMark } from '@/fx';
-import { AWAKEN_MIN_TIER, classDef, unitClass, unitDef, type Fail, type UnitState } from '@/game';
+import { AWAKEN_MIN_TIER, classDef, tilesText, unitClass, unitDef, type Fail, type UnitState } from '@/game';
 import {
   backOut,
   Button,
@@ -34,6 +34,7 @@ import { SHEET, sheetBoxes, type Rect } from './layoutMath';
 import type { HudEnv } from './env';
 import { BuildPlanView } from './BuildPlanView';
 import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE, tapArea, unitPhoto } from './kit';
+import { moltRefusal, moltState } from './moltMath';
 import { MoltPicker } from './popups/MoltPicker';
 
 /** Seconds a cat's full skill text stays up (it is the longest line a bubble carries). */
@@ -199,7 +200,7 @@ export class SelectionSheet {
       },
     });
     const { battle, hints, reveal } = this.env;
-    if (reveal.molt && battle.purr >= battle.moltCost()) hints.request('molt', this.molt, true);
+    if (reveal.molt && this.cell !== null && moltState(battle.moltCostOf(this.cell), battle.moltsLeft(), battle.purr) === 'ready') hints.request('molt', this.molt, true);
     if (reveal.sellHint) hints.request('sell', this.sell, true);
   }
 
@@ -293,7 +294,8 @@ export class SelectionSheet {
     };
     stat('swords', fmt(Math.round(u.stats.damage)));
     stat('clock', t('hud.stat.interval', { s: interval }));
-    stat('target', fmt(Math.round(u.stats.range)));
+    // Range in tiles, the unit the skill sentences count in.
+    stat('target', tilesText(u.stats.range));
     this.buffChips(d, facts, u.dodge, sx, EDGE + STATS_Y, textRight);
 
     this.fullSkill = def.skillText();
@@ -370,17 +372,22 @@ export class SelectionSheet {
     const b = this.env.battle;
     const sellV = b.sellValue(cell);
     const sellText = sellV.purr > 0 ? t('hud.sell.both', { fish: fmt(sellV.fish), purr: sellV.purr }) : `+${fmt(sellV.fish)}`;
-    const cost = b.moltCost();
+    const cost = b.moltCostOf(cell);
     const left = b.moltsLeft();
-    const moltText = t('hud.molt.sub', { cost, left });
-    const moltReady = left > 0 && b.purr >= cost;
+    const moltAs = moltState(cost, left, b.purr);
+    const moltText = moltAs === 'none' ? t('hud.molt.none') : t('hud.molt.sub', { cost, left });
+    const moltReady = moltAs === 'ready';
     const awakenFail = b.canAwaken(cell);
     const awakenCost = b.awakenCost();
     const key = [sellText, moltText, moltReady, awakenFail, awakenCost].join('|');
     if (key === this.buttonsKey) return;
     this.buttonsKey = key;
     this.sell.setSublabel(sellText, 'fish');
-    this.molt.setSublabel(moltText, 'purr');
+    // A guardian cannot molt: no purr price, so no purr icon (setSublabel keeps the previous icon unless the text is cleared first).
+    if (moltAs === 'none') {
+      this.molt.setSublabel(undefined);
+      this.molt.setSublabel(moltText);
+    } else this.molt.setSublabel(moltText, 'purr');
     this.molt.setStyle(moltReady ? 'info' : 'kraft');
     if (awakenFail === null) {
       this.awaken.setEnabled(true);
@@ -395,9 +402,13 @@ export class SelectionSheet {
 
   // ───────────────────────── actions ─────────────────────────
 
+  /** The picker opens only when the molt can be paid; otherwise the button says why, with this cat's price. */
   private openMolt(): void {
     if (this.cell === null) return;
-    void this.env.modal(new MoltPicker(this.env, this.cell));
+    const b = this.env.battle;
+    const refusal = moltRefusal(moltState(b.moltCostOf(this.cell), b.moltsLeft(), b.purr));
+    if (refusal) this.env.explain('molt', refusal);
+    else void this.env.modal(new MoltPicker(this.env, this.cell));
   }
 
   private doAwaken(): void {

@@ -8,7 +8,7 @@ import { Container, Point, Text } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
 import { i18nEvents, t } from '@/core/i18n';
 import { closeCodex, openCodex } from '@/codex';
-import { closeGuide, GuideProgress, guideProgress, openGuide, topicTeach, type TopicId, type TryControl } from '@/guide';
+import { closeGuide, GuideProgress, guideProgress, openGuide, setGuideCell, topicTeach, type TopicId, type TryControl } from '@/guide';
 import { renderOnce, warm, WARM_PRIO } from '@/fx';
 import { CLASS_IDS, isWaveTarget, waveKindOf } from '@/game';
 import { clearToasts, confirmDialog, popups, toast } from '@/ui';
@@ -114,6 +114,8 @@ class Hud implements HudPart {
 
   constructor(private readonly ctx: BattleContext) {
     void ensureSettings();
+    // The lesson cards name this chapter's special cell.
+    setGuideCell(ctx.battle.specialCell);
     // A sandbox run keeps what it teaches in memory only.
     this.progress = ctx.run.sandbox ? new GuideProgress(false) : guideProgress;
     this.hints = new Hints(this.progress);
@@ -183,7 +185,7 @@ class Hud implements HudPart {
     this.bubble = new HintBubble(env, ctx.layers.overlay, () => this.avoidList());
     this.card = new LessonBubble(env, ctx.layers.overlay);
     this.dodges = new DodgeStickers(env, ctx.layers.overlay);
-    // Every information bubble of the battle (this HUD's, the field's sunbeam note, the lessons' lines) is drawn by this one view; a lesson's note has the space first.
+    // Every information bubble of the battle (this HUD's, the field's special-cell note, the lessons' lines) is drawn by this one view; a lesson's note has the space first.
     info.bind(this.bubble);
     info.canOpen = () => !(this.tutorial?.noteUp ?? false);
     this.hints.bind({
@@ -259,6 +261,7 @@ class Hud implements HudPart {
   }
 
   private teardown(): void {
+    setGuideCell('sun');
     this.tutorial?.destroy();
     this.tutorial = null;
     this.guide?.destroy();

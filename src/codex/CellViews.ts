@@ -15,7 +15,7 @@ import './strings';
 
 const BOARD_W = 280;
 const LANE_W = 520;
-const GROUP_PAPER = { basic: Color.teal, danger: Color.coral, toy: Color.violet, aura: Color.leaf, lane: Color.mustard } as const;
+const GROUP_PAPER = { basic: Color.teal, special: Color.mustard, danger: Color.coral, toy: Color.violet, aura: Color.leaf, lane: Color.mustard } as const;
 
 function card(kind: CellKind, w: number): { view: Container; h: number } {
   const page = cellPage(kind);

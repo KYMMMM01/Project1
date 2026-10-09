@@ -4,6 +4,7 @@
  * toast and the game starts anyway.
  */
 import { debugEnabled } from '@/core/debug';
+import { loadGameFonts } from '@/core/fonts';
 import { detectLang, setLang, t } from '@/core/i18n';
 import { getStorageBackend } from '@/core/save';
 import type { Scene } from '@/core/scene';
@@ -51,6 +52,9 @@ export function createApp(): App {
   };
 
   async function boot(opts: AppStart): Promise<void> {
+    // The faces start loading now, beside the services, and the boot ends only when they are in: routes that build a scene right after it
+    // (the QA battle route) must not draw a single glyph in a system font.
+    const fonts = loadGameFonts();
     await attempt('platform', async () => {
       await initPlatform();
       if (getBootResult() === 'fallback') warnings.push('shell.boot.warn.platform');
@@ -80,6 +84,7 @@ export function createApp(): App {
       first = opts.home ? homeScene(opts.home.tab) : await chooseFirstScene();
     });
     first ??= homeScene();
+    await fonts;
   }
 
   return {

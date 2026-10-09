@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { CLASS_IDS, type EnemyId, type UnitId } from '@/game/api';
+import { CLASS_IDS, ENEMY_IDS, type EnemyId, type UnitId } from '@/game/api';
 import { RECOMMENDED_LEVEL } from '@/game/data/balance';
 import { enemySpec } from '@/game/data/enemies';
 import { UNIT_GRID, unitClass } from '@/game/data/roster';
 import type { AttackSpec } from '@/game/data/types';
 import { unitSpec } from '@/game/data/units';
-import { CELL_COUNT, cellCenterX, cellCenterY, isEdgeCell, pathPoint } from '@/game/geometry';
+import { CELL_COUNT, COLS, PATH_LENGTH, ROWS, cellCenterX, cellCenterY, cellCol, cellRow, isEdgeCell, pathPoint } from '@/game/geometry';
 import { createBot, worksWalkway } from '@/game/sim/bots';
 import { playRun } from '@/game/sim/runner';
 import type { Sim } from '@/game/sim/sim';
@@ -55,33 +55,59 @@ describe('the warrior line', () => {
     }
   });
 
-  it('reaches farther than the other classes\' commons and the old 165-220 px, and the top two work from the inner block', () => {
-    for (const id of WARRIORS) expect(unitSpec(id).base.range, id).toBeGreaterThan(195);
-    for (const cell of INNER_CELLS) {
+  it('reaches 200 / 210 / 220 / 230 / 240 px: clearly less far than the mage of the same rank, a short-range class again (v1.5)', () => {
+    expect(WARRIORS.map((id) => unitSpec(id).base.range)).toEqual([200, 210, 220, 230, 240]);
+    UNIT_GRID.warrior.forEach((id, rank) => {
+      const warrior = unitSpec(id).base.range;
+      const mage = unitSpec(UNIT_GRID.mage[rank] as UnitId).base.range;
+      expect(mage - warrior, `rank ${rank}`).toBeGreaterThanOrEqual(90);
+      expect(warrior / mage, `rank ${rank}`).toBeLessThan(0.72);
+    });
+  });
+
+  it('reaches the walkway from every cell of the outer ring and of the second ring, and from the middle cell never (not even a boss)', () => {
+    const lane: { x: number; y: number }[] = [];
+    for (let d = 0; d < PATH_LENGTH; d += 2) lane.push({ x: pathPoint(d).x, y: pathPoint(d).y });
+    const gap = (cell: number): number => Math.min(...lane.map((p) => Math.hypot(p.x - cellCenterX(cell), p.y - cellCenterY(cell))));
+    const bodyBoss = Math.max(...ENEMY_IDS.map((id) => enemySpec(id).radius));
+    const bodySmall = enemySpec('cucumber').radius;
+    for (let cell = 0; cell < CELL_COUNT; cell++) {
+      const ring = Math.min(cellCol(cell), cellRow(cell), COLS - 1 - cellCol(cell), ROWS - 1 - cellRow(cell));
+      for (const id of WARRIORS) {
+        const range = unitSpec(id).base.range;
+        if (ring <= 1) expect(range + bodySmall, `${id} in ${cell}`).toBeGreaterThanOrEqual(gap(cell));
+        else expect(range + bodyBoss, `${id} in ${cell}`).toBeLessThan(gap(cell));
+      }
+    }
+  });
+
+  it('keeps the bots\' warriors on cells where their swing works: the outer ring for all, the top two also on the second ring\'s near cells', () => {
+    for (let cell = 0; cell < CELL_COUNT; cell++) {
+      if (isEdgeCell(cell)) for (const id of WARRIORS) expect(worksWalkway(unitSpec(id).base.range, cell), `${id} in ${cell}`).toBe(true);
+    }
+    for (const cell of [6, 7, 8, 16, 17, 18]) {
       expect(worksWalkway(unitSpec('w_samurai').base.range, cell), `samurai in ${cell}`).toBe(true);
       expect(worksWalkway(unitSpec('w_tiger').base.range, cell), `tiger in ${cell}`).toBe(true);
       expect(worksWalkway(unitSpec('w_paw').base.range, cell), `paw in ${cell}`).toBe(false);
     }
-    for (let cell = 0; cell < CELL_COUNT; cell++) {
-      if (isEdgeCell(cell)) for (const id of WARRIORS) expect(worksWalkway(unitSpec(id).base.range, cell), `${id} in ${cell}`).toBe(true);
-    }
+    for (const cell of [11, 13]) for (const id of WARRIORS) expect(worksWalkway(unitSpec(id).base.range, cell), `${id} in ${cell}`).toBe(false);
+    expect(INNER_CELLS).toHaveLength(8);
   });
 
-  it('lets the tiger hit the walkway from the middle of the board where a paw cannot', () => {
-    const sim = newSim();
-    quietWave(sim);
-    put(sim, 12, 'w_tiger');
-    put(sim, 11, 'w_paw');
+  it('lets a tiger hit the walkway from the second ring, and not from the middle of the board', () => {
     const top = pathPoint(279);
     const radius = enemySpec('cucumber').radius;
-    const gapTiger = Math.hypot(top.x - cellCenterX(12), top.y - cellCenterY(12));
-    expect(gapTiger).toBeLessThan(unitSpec('w_tiger').base.range + radius);
-    expect(Math.hypot(top.x - cellCenterX(11), top.y - cellCenterY(11))).toBeGreaterThan(unitSpec('w_paw').base.range + radius);
-    at(sim, 'cucumber', top.x, top.y);
-    const attacks = record(sim, 'attack');
-    advance(sim, 2);
-    expect(attacks.length).toBeGreaterThan(0);
-    expect(attacks.every((a) => a.unit.id === 'w_tiger')).toBe(true);
+    for (const [cell, works] of [[7, true], [12, false]] as const) {
+      const sim = newSim();
+      quietWave(sim);
+      put(sim, cell, 'w_tiger');
+      const reach = Math.hypot(top.x - cellCenterX(cell), top.y - cellCenterY(cell));
+      expect(reach < unitSpec('w_tiger').base.range + radius, `cell ${cell}`).toBe(works);
+      at(sim, 'cucumber', top.x, top.y);
+      const attacks = record(sim, 'attack');
+      advance(sim, 2);
+      expect(attacks.length > 0, `cell ${cell}`).toBe(works);
+    }
   });
 
   it('swings the axe at the target and its nearest neighbour only, breaking the armour of both', () => {

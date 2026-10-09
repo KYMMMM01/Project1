@@ -3,8 +3,8 @@ import { CLASS_IDS, UNIT_IDS, type ClassId, type Fail, type OddsRow, type PityIn
 import { CELL_COUNT, auraCells, cellCenterX, cellCenterY, cellRow, isEdgeCell, neighbors4 } from '../geometry';
 import {
   AWAKEN_COST, AWAKEN_MIN_TIER, CLASS_UPGRADE_BONUS, CLASS_UPGRADE_COSTS, DODGE_CAP, HAZARD_RECOVER, LEVEL_DAMAGE_STEP,
-  MERGE_START_CHARGE, MOLT_COST, MOLT_LIMIT, OFFER_OPTIONS, OFFER_REROLLS, PITY_LIMIT, SELL_FISH, SELL_PURR,
-  SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, SUN_SPEED, SYNERGY_MIN_RANK,
+  MERGE_START_CHARGE, MOLT_COSTS, MOLT_LIMIT, OFFER_OPTIONS, OFFER_REROLLS, PITY_LIMIT, SELL_FISH, SELL_PURR,
+  SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, SYNERGY_MIN_RANK,
 } from '../data/balance';
 import { SYNERGY_SPECIAL, synergyTier, tierForDistinct } from '../data/classes';
 import { RARITIES, UNIT_GRID, levelSourceOf, mergeResultOf, mythicOf, unitRarityIndex } from '../data/roster';
@@ -66,7 +66,7 @@ export function makeUnit(s: Sim, id: UnitId, cell: number, charge: number): SimU
     stats: { ...spec.base }, buffAttackSpeed: 0, buffDamage: 0, shielded: false, dodge: 0, kills: 0, damageDealt: 0,
     spec, level, classIndex: classIndexOf(spec.classId), rarityIndex: unitRarityIndex(id), unitIndex: UNIT_INDEX[id],
     recoverAt: 0, searchAfter: 0, attackCount: 0, coinAt: 0,
-    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, shots: 0, sureCritEvery: 0, removed: false,
+    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, ricochet: 0, removed: false,
   };
   const coin = spec.aura.coinRain;
   unit.coinAt = coin ? s.time + coin.every : 0;
@@ -185,7 +185,13 @@ export function recomputeStats(s: Sim): void {
     if (aura.boardSpeed !== undefined && aura.boardSpeed * scale > lucky) lucky = aura.boardSpeed * scale;
   }
   const trick = s.tierData[TRICKSTER] as SynergyTier;
-  const sunSpeed = SUN_SPEED + (fx.sunSpeed ?? 0);
+  // The chapter's special cell: its one bonus (and what the prime spot toy adds to it) for the cat that stands on it.
+  const cellStat = s.cellSpec.stat;
+  const cellBonus = s.cellSpec.value + (fx.sunSpeed ?? 0);
+  const cellDamage = cellStat === 'damage' ? cellBonus : 0;
+  const cellSpeed = cellStat === 'speed' ? cellBonus : 0;
+  const cellCrit = cellStat === 'crit' ? cellBonus : 0;
+  const cellRange = cellStat === 'range' ? cellBonus : 0;
   // The side effects of the synergy steps reach every cat on the board.
   let armorIgnore = 0;
   let statusMult = 0;
@@ -200,7 +206,7 @@ export function recomputeStats(s: Sim): void {
   }
   if (armorIgnore > 1) armorIgnore = 1;
   const party = s.special[TRICKSTER] === 1 && s.laser.active ? SYNERGY_SPECIAL.trickster.speed : 0;
-  const sureEvery = s.special[RANGER] === 1 ? SYNERGY_SPECIAL.ranger.every : 0;
+  const bounce = s.special[RANGER] === 1 ? SYNERGY_SPECIAL.ranger.pct : 0;
   for (let c = 0; c < CELL_COUNT; c++) {
     const u = s.units[c];
     if (!u) continue;
@@ -224,27 +230,29 @@ export function recomputeStats(s: Sim): void {
       }
     }
     dmg += bardDamage[c] as number;
+    const onCell = s.sunCell[c] === 1;
+    if (onCell) dmg += cellDamage;
 
     let speed = trick.speed + party + lucky + bellSpeed[c] + u.perk.speed;
-    if (s.sunCell[c]) speed += sunSpeed;
+    if (onCell) speed += cellSpeed;
     if (ci === 0 || ci === 1) speed += fx.speedWarriorRanger ?? 0;
     if (isEdgeCell(c)) speed += fx.edgeSpeed ?? 0;
 
     const st = u.stats;
     st.damage = base.damage * (1 + LEVEL_DAMAGE_STEP * (u.level - 1)) * (1 + dmg);
     st.interval = (base.interval / (1 + speed)) * (u.weakened > 0 ? 2 : 1);
-    st.range = base.range * (1 + (fx.rangeAll ?? 0) + (row === 0 ? fx.topRowRange ?? 0 : 0) + u.perk.range);
-    const chance = base.crit + crit + (fx.crit ?? 0) + u.perk.crit;
+    st.range = base.range * (1 + (fx.rangeAll ?? 0) + (row === 0 ? fx.topRowRange ?? 0 : 0) + u.perk.range + (onCell ? cellRange : 0));
+    const chance = base.crit + crit + (fx.crit ?? 0) + u.perk.crit + (onCell ? cellCrit : 0);
     st.crit = chance > 1 ? 1 : chance;
     st.critMult = base.critMult + critMult + (fx.critMult ?? 0) + u.perk.critMult;
     u.armorIgnore = armorIgnore;
     u.statusMult = 1 + statusMult;
-    u.sureCritEvery = ci === RANGER ? sureEvery : 0;
+    u.ricochet = ci === RANGER ? bounce : 0;
     u.buffAttackSpeed = bellSpeed[c] as number;
     u.buffDamage = bardDamage[c] as number;
     u.dodge = dodgeAt[c] as number;
     u.shielded = shield[c] === 1;
-    u.sunlit = s.sunCell[c] === 1;
+    u.sunlit = onCell;
     u.searchAfter = 0;
   }
 }
@@ -484,6 +492,12 @@ export function cmdSell(s: Sim, cell: number): Fail | null {
   return null;
 }
 
+/** Purr a molt of the cat in `cell` costs: it rises with the cat's rank (`MOLT_COSTS`). -1 for an empty cell and for a guardian, which cannot molt. */
+export function moltCostOf(s: Sim, cell: number): number {
+  const u = Number.isInteger(cell) && cell >= 0 && cell < CELL_COUNT ? s.units[cell] : null;
+  return u ? (MOLT_COSTS[u.rarityIndex] ?? -1) : -1;
+}
+
 export function cmdMolt(s: Sim, cell: number, classId: ClassId): Fail | null {
   const g = guard(s);
   if (g) return g;
@@ -493,8 +507,9 @@ export function cmdMolt(s: Sim, cell: number, classId: ClassId): Fail | null {
   if (unit.rarityIndex >= 4 || !s.allowedClasses.includes(classId)) return 'not_available';
   if (unit.spec.classId === classId) return 'nothing_to_do';
   if (s.molts >= MOLT_LIMIT) return 'molt_limit';
-  if (s.purr < MOLT_COST) return 'not_enough_purr';
-  addPurr(s, -MOLT_COST, 'molt');
+  const cost = moltCostOf(s, cell);
+  if (s.purr < cost) return 'not_enough_purr';
+  addPurr(s, -cost, 'molt');
   s.molts++;
   unit.removed = true;
   const result = makeUnit(s, UNIT_GRID[classId][unit.rarityIndex] as UnitId, cell, MERGE_START_CHARGE);
