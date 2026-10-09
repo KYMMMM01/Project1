@@ -121,7 +121,7 @@ describe('codex monster pages quote the data', () => {
           const line = foeItem(id, level).line;
           const health = healthSpan(id, level);
           if (!health) {
-            expect(line, `${id} ${level.chapter}`).toContain(t('codex.row.normal.none', { speed: ENEMY_SPECS[id].speed, armor: Math.round(ENEMY_SPECS[id].armor * 100), ward: Math.round(ENEMY_SPECS[id].ward * 100), slow: Math.round(ENEMY_SPECS[id].slowResist * 100) }));
+            expect(line, `${id} ${level.chapter}`).toContain(t('codex.row.normal.none', { speed: ENEMY_SPECS[id].speed, armor: Math.round(ENEMY_SPECS[id].armor * 100), ward: Math.round(ENEMY_SPECS[id].ward * 100) }));
             continue;
           }
           expect(line, `${id} ${level.chapter}/${level.stake}`).toContain(exact(health.first.hp));

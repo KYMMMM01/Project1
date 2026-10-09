@@ -34,11 +34,12 @@ export const KO: Record<string, string> = {
   'codex.group.normal': '일반 적',
   'codex.group.elite': '정예',
   'codex.group.boss': '보스',
-  'codex.row.normal': '체력 {lo} ~ {hi} · 속도 {speed} · 방어 {armor}% · 저항 {ward}% · 둔화 저항 {slow}%',
-  'codex.row.normal.one': '체력 {hp} · 속도 {speed} · 방어 {armor}% · 저항 {ward}% · 둔화 저항 {slow}%',
-  'codex.row.normal.none': '이 챕터에는 안 나와요 · 속도 {speed} · 방어 {armor}% · 저항 {ward}% · 둔화 저항 {slow}%',
-  'codex.row.special': '체력 {lo} ~ {hi} · 제한 {limit}초 · 방어 {armor}% · 저항 {ward}% · 둔화 저항 {slow}%',
-  'codex.row.special.one': '체력 {lo} · 제한 {limit}초 · 방어 {armor}% · 저항 {ward}% · 둔화 저항 {slow}%',
+  'codex.row.normal': '체력 {lo} ~ {hi} · 속도 {speed} · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.normal.one': '체력 {hp} · 속도 {speed} · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.normal.none': '이 챕터에는 안 나와요 · 속도 {speed} · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.special': '체력 {lo} ~ {hi} · 제한 {limit}초 · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.special.one': '체력 {lo} · 제한 {limit}초 · 방어 {armor}% · 저항 {ward}%',
+  'codex.row.slow': '둔화 저항 {n}%',
 
   // ── monsters: a page ──
   'codex.page.traits': '특징',

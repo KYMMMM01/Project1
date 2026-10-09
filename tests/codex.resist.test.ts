@@ -42,14 +42,16 @@ describe('the codex monster page: slow resistance', () => {
       }
     });
 
-    it(`ends the list row of every enemy with its slow resistance, at every level (${lang})`, () => {
+    it(`gives the list row a second line for the enemies that resist slows, and none for the others, at every level (${lang})`, () => {
       setLang(lang);
       for (const id of FOE_IDS) {
         for (const level of LEVELS) {
-          const line = foeItem(id, level).line;
-          const tail = lang === 'ko' ? `둔화 저항 ${PCT[id] ?? 0}%` : `Slow resist ${PCT[id] ?? 0}%`;
-          expect(line.endsWith(tail), `${id} ${level.chapter}/${level.stake}: ${line}`).toBe(true);
-          expect(line, id).not.toMatch(/\{\w+\}|undefined|NaN/);
+          const lines = foeItem(id, level).line.split('\n');
+          const pct = PCT[id] ?? 0;
+          expect(lines.length, `${id} ${level.chapter}/${level.stake}`).toBe(pct > 0 ? 2 : 1);
+          if (pct > 0) expect(lines[1], id).toBe(lang === 'ko' ? `둔화 저항 ${pct}%` : `Slow resistance ${pct}%`);
+          expect(lines[0], id).not.toMatch(lang === 'ko' ? /둔화/ : /Slow/);
+          expect(lines.join(' '), id).not.toMatch(/\{\w+\}|undefined|NaN/);
         }
       }
     });
@@ -57,13 +59,13 @@ describe('the codex monster page: slow resistance', () => {
 
   it('prints the exact strings for the three enemies that have some', () => {
     setLang('ko');
-    expect(foeItem('drop', LEVELS[0] as Level).line).toContain('방어 5% · 저항 0% · 둔화 저항 30%');
-    expect(foeItem('clock', LEVELS[0] as Level).line).toContain('방어 10% · 저항 0% · 둔화 저항 30%');
-    expect(foeItem('roomba', LEVELS[0] as Level).line).toContain('방어 35% · 저항 0% · 둔화 저항 20%');
-    expect(foeItem('cucumber', LEVELS[0] as Level).line).toContain('방어 8% · 저항 0% · 둔화 저항 0%');
+    expect(foeItem('drop', LEVELS[0] as Level).line).toMatch(/방어 5% · 저항 0%\n둔화 저항 30%$/);
+    expect(foeItem('clock', LEVELS[0] as Level).line).toMatch(/방어 10% · 저항 0%\n둔화 저항 30%$/);
+    expect(foeItem('roomba', LEVELS[0] as Level).line).toMatch(/방어 35% · 저항 0%\n둔화 저항 20%$/);
+    expect(foeItem('cucumber', LEVELS[0] as Level).line).toMatch(/방어 8% · 저항 0%$/);
     setLang('en');
-    expect(foeItem('drop', LEVELS[0] as Level).line).toContain('Armour 5% · Ward 0% · Slow resist 30%');
-    expect(foeItem('roomba', LEVELS[0] as Level).line).toContain('Armour 35% · Ward 0% · Slow resist 20%');
+    expect(foeItem('drop', LEVELS[0] as Level).line).toMatch(/Armour 5% · Ward 0%\nSlow resistance 30%$/);
+    expect(foeItem('roomba', LEVELS[0] as Level).line).toMatch(/Armour 35% · Ward 0%\nSlow resistance 20%$/);
     expect(foePage('drop', LEVELS[0] as Level).stats.find((r) => r.label === 'Slow resistance')?.value).toBe('30%');
   });
 

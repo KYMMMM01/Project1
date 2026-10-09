@@ -31,11 +31,12 @@ export const EN: Record<string, string> = {
   'codex.group.normal': 'Common foes',
   'codex.group.elite': 'Elites',
   'codex.group.boss': 'Bosses',
-  'codex.row.normal': 'HP {lo} to {hi} · Speed {speed} · Armour {armor}% · Ward {ward}% · Slow resist {slow}%',
-  'codex.row.normal.one': 'HP {hp} · Speed {speed} · Armour {armor}% · Ward {ward}% · Slow resist {slow}%',
-  'codex.row.normal.none': 'Not in this chapter · Speed {speed} · Armour {armor}% · Ward {ward}% · Slow resist {slow}%',
-  'codex.row.special': 'HP {lo} to {hi} · Limit {limit}s · Armour {armor}% · Ward {ward}% · Slow resist {slow}%',
-  'codex.row.special.one': 'HP {lo} · Limit {limit}s · Armour {armor}% · Ward {ward}% · Slow resist {slow}%',
+  'codex.row.normal': 'HP {lo} to {hi} · Speed {speed} · Armour {armor}% · Ward {ward}%',
+  'codex.row.normal.one': 'HP {hp} · Speed {speed} · Armour {armor}% · Ward {ward}%',
+  'codex.row.normal.none': 'Not in this chapter · Speed {speed} · Armour {armor}% · Ward {ward}%',
+  'codex.row.special': 'HP {lo} to {hi} · Limit {limit}s · Armour {armor}% · Ward {ward}%',
+  'codex.row.special.one': 'HP {lo} · Limit {limit}s · Armour {armor}% · Ward {ward}%',
+  'codex.row.slow': 'Slow resistance {n}%',
 
   // ── monsters: a page ──
   'codex.page.traits': 'Traits',
