@@ -1,19 +1,21 @@
-import { describe, expect, it } from 'vitest';
-import { setLang } from '@/core/i18n';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { hasString, setLang, t } from '@/core/i18n';
 import { formatOdds } from '@/ui/oddsMath';
 import { bundleParts } from '@/meta/bundle';
 import { IAP_SPECS } from '@/meta/data/catalog';
-import { ODDS, oddsView } from '@/meta/odds';
+import { CHEST_BUY_BULK, CHEST_BULK_MAX, CHEST_GEM_PRICE } from '@/meta/data/economy';
+import { isPityChest, ODDS, oddsView } from '@/meta/odds';
 import { createTestProfile } from '@/meta/testing';
 import type { ChestCard, ChestKind, ChestResult } from '@/meta/types';
 import '@/meta/strings';
 import '../src/screens/shop/strings';
+import { BUY_H, PACK_H, paidCardLayout, ROW_GAP } from '../src/screens/shop/chestLayout';
 import { couponPath, cutPoly, lowered } from '../src/screens/shop/cutMath';
 import {
   bestRarity, flourishOf, gridLayout, mergePile, nameBlockOf, pilesOf, resultsOf, stacksOf, totalCards,
 } from '../src/screens/shop/revealPlan';
 import {
-  chestAction, cosmeticStatus, gemBonusPercent, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, pileSize, shortBy,
+  bonusCardsIn, CONFIRM_ARM_S, chestAction, chestBuyView, confirmArmed, cosmeticStatus, gemBonusPercent, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, pileSize, shortBy,
 } from '../src/screens/shop/shopLogic';
 
 const card = (rarity: ChestCard['rarity'], unit: ChestCard['unit']): ChestCard => ({ rarity, unit });
@@ -237,4 +239,191 @@ describe('odds screen data', () => {
     }
     expect(oddsView(ODDS.gold, { goldOpened: 7, target: 'w_samurai' }).pity?.counter).toBe(7);
   });
+});
+
+describe('buying ten chests: what the confirmation says and charges', () => {
+  // Switching to English writes the page's lang attribute; the tests run without a page.
+  beforeAll(() => {
+    vi.stubGlobal('document', { documentElement: { lang: '' } });
+  });
+  afterAll(() => {
+    setLang('ko');
+    vi.unstubAllGlobals();
+  });
+
+  it('names ten chests in the title, counts the cards of all ten and shows the price of ten', () => {
+    setLang('ko');
+    const gold = chestBuyView('gold', CHEST_BUY_BULK, ODDS.gold.cards);
+    // Ten gold chests always hold the bonus chest (8 cards): the total is the 608 the reveal adds up to, and the small line says where the 8 come from.
+    expect(gold).toMatchObject({
+      count: 10, price: 5000, cards: 608, bonus: 8, title: '금 상자 10개를 살까요?', cardsLine: '상자 10개에 카드 608장',
+      eachLine: '상자 하나는 카드 60장이고, 보너스 카드 8장이 더 들어요. 아래 확률과 보장은 상자마다 똑같이 적용돼요.',
+    });
+    const silver = chestBuyView('silver', CHEST_BUY_BULK, ODDS.silver.cards);
+    expect(silver).toMatchObject({
+      count: 10, price: 1500, cards: 240, bonus: 0, title: '은 상자 10개를 살까요?', cardsLine: '상자 10개에 카드 240장',
+      eachLine: '상자 하나는 카드 24장이에요. 아래 확률과 보장은 상자마다 똑같이 적용돼요.',
+    });
+    setLang('en');
+    expect(chestBuyView('gold', CHEST_BUY_BULK, ODDS.gold.cards)).toMatchObject({
+      price: 5000, cards: 608, bonus: 8, title: 'Buy 10 Gold chests?', cardsLine: '608 cards in 10 chests',
+      eachLine: 'Each chest holds 60 cards, and 8 bonus cards come on top. The odds and guarantees below apply to every chest.',
+    });
+    expect(chestBuyView('silver', CHEST_BUY_BULK, ODDS.silver.cards)).toMatchObject({ price: 1500, cards: 240, title: 'Buy 10 Silver chests?' });
+    setLang('ko');
+  });
+
+  it('keeps the single purchase as it was: its own title, the cards of one chest, no extra line', () => {
+    setLang('ko');
+    expect(chestBuyView('silver', 1, ODDS.silver.cards)).toEqual({
+      count: 1, price: 150, cards: 24, bonus: 0, title: '은 상자를 살까요?', cardsLine: '카드 24장', eachLine: null,
+    });
+    expect(chestBuyView('gold', 1, ODDS.gold.cards).title).toBe('금 상자를 살까요?');
+    setLang('en');
+    expect(chestBuyView('gold', 1, ODDS.gold.cards)).toMatchObject({ price: 500, title: 'Buy a Gold chest?', cardsLine: '60 cards' });
+    setLang('ko');
+  });
+
+  it('charges exactly the count times the single price, for every count the cap allows', () => {
+    setLang('ko');
+    for (const kind of ['silver', 'gold'] as const) {
+      for (let n = 1; n <= CHEST_BULK_MAX; n++) {
+        const v = chestBuyView(kind, n, ODDS[kind].cards);
+        expect(v.price).toBe(n * CHEST_GEM_PRICE[kind]);
+        // Silver has no bonus rule: its cards are the cards of its chests, and so are a lone chest's.
+        if (kind === 'silver' || n === 1) expect(v.cards).toBe(n * ODDS[kind].cards);
+      }
+    }
+  });
+
+  it('puts every new text in both languages, and the ten-pack word on the tag with the count filled in', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      for (const key of ['shop.chest.buyPack', 'shop.chest.confirmTitleN', 'shop.chest.cardsAll', 'shop.chest.cardsEach', 'shop.chest.cardsEachBonus', 'shop.chest.many.silver', 'shop.chest.many.gold', 'shop.chest.many.wooden']) {
+        expect(hasString(key)).toBe(true);
+        expect(t(key, { n: 10, count: 10, chest: 'x', bonus: 8 })).not.toContain('{');
+      }
+    }
+    setLang('ko');
+    expect(t('shop.chest.buyPack', { n: CHEST_BUY_BULK })).toBe('10개 사서 열기');
+    setLang('en');
+    expect(t('shop.chest.buyPack', { n: CHEST_BUY_BULK })).toBe('Buy 10 and open');
+    setLang('ko');
+  });
+});
+
+describe('the card total of a ten-pack is what the reveal adds up to', () => {
+  const rule = ODDS.gold.pity;
+
+  it('counts the bonus chests that fall inside the purchase, from any place in the cycle', () => {
+    if (!rule) throw new Error('the gold chest has a bonus rule');
+    for (let start = 0; start < 3 * rule.every; start++) {
+      for (let n = 1; n <= CHEST_BULK_MAX; n++) {
+        let bonusChests = 0;
+        for (let i = 0; i < n; i++) if (isPityChest(rule, start + i)) bonusChests++;
+        expect(bonusCardsIn('gold', n, start)).toBe(bonusChests * rule.bonusCards);
+      }
+      // Any ten gold chests in a row hold exactly one bonus chest.
+      expect(bonusCardsIn('gold', 10, start)).toBe(rule.bonusCards);
+    }
+    // Kinds without the rule never add cards, and nothing is added for no chests.
+    for (const kind of ['wooden', 'silver'] as const) expect(bonusCardsIn(kind, 10, 3)).toBe(0);
+    expect(bonusCardsIn('gold', 0, 9)).toBe(0);
+  });
+
+  it('matches the cards the reveal shows after a real purchase, for every start of the cycle and several pack sizes', async () => {
+    setLang('ko');
+    for (let start = 0; start < (rule?.every ?? 10); start++) {
+      for (const n of [2, 3, 7, CHEST_BUY_BULK, 13, 25]) {
+        const rig = await createTestProfile();
+        rig.profile.grant('gems', n * CHEST_GEM_PRICE.gold, 'iap');
+        rig.profile.data.goldOpened = start;
+        const view = chestBuyView('gold', n, ODDS.gold.cards, rig.profile.data.goldOpened);
+        expect(rig.profile.buyChest('gold', n).ok).toBe(true);
+        const opened = await rig.profile.openChests('gold', n);
+        if (!opened.ok) throw new Error('the pile opens: ' + opened.error);
+        expect(view.cards).toBe(totalCards(stacksOf(mergePile(opened.value))));
+        expect(view.price).toBe(n * CHEST_GEM_PRICE.gold);
+      }
+    }
+  });
+});
+
+describe('the buy button of the confirmation stays inert while the popup is new', () => {
+  it('is not armed before the popup is open, nor at the moment it opens, nor during the first repeat taps', () => {
+    expect(confirmArmed(Number.POSITIVE_INFINITY, 0)).toBe(false);
+    expect(confirmArmed(Number.POSITIVE_INFINITY, 1e9)).toBe(false);
+    expect(confirmArmed(10, 10)).toBe(false);
+    // A double tap comes within about a quarter of a second; a repeat because the popup was slow to show, within about half a second.
+    for (const dt of [0, 0.05, 0.12, 0.25, 0.5, 0.65]) expect(confirmArmed(10, 10 + dt)).toBe(false);
+  });
+
+  it('is armed once the delay has passed, and stays armed', () => {
+    expect(confirmArmed(10, 10 + CONFIRM_ARM_S)).toBe(true);
+    // The same delay measured on a large clock value (the game has run for a while) still counts, float noise or not.
+    expect(confirmArmed(1234.5, 1234.5 + CONFIRM_ARM_S)).toBe(true);
+    expect(confirmArmed(98765.4321, 98765.4321 + CONFIRM_ARM_S)).toBe(true);
+    expect(confirmArmed(1234.5, 1234.5 + CONFIRM_ARM_S - 0.01)).toBe(false);
+    expect(confirmArmed(10, 10.9)).toBe(true);
+    expect(confirmArmed(10, 60)).toBe(true);
+    // A clock that went backwards (it cannot) never arms.
+    expect(confirmArmed(10, 9)).toBe(false);
+  });
+
+  it('waits long enough to cover a repeat tap but not so long that the button feels dead', () => {
+    expect(CONFIRM_ARM_S).toBeGreaterThanOrEqual(0.6);
+    expect(CONFIRM_ARM_S).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('paid chest card layout', () => {
+  /** The note under the gold card's bonus bar: none on silver, one or two lines of 32 px on gold. */
+  const CARDS = [
+    { name: 'silver', gold: false, noteH: 0, height: { buy: 396, open: 296, pile: 396 }, mainY: 238 },
+    { name: 'gold with a one-line note', gold: true, noteH: 32, height: { buy: 478, open: 378, pile: 478 }, mainY: 320 },
+    { name: 'gold with a two-line note', gold: true, noteH: 64, height: { buy: 510, open: 410, pile: 510 }, mainY: 352 },
+  ] as const;
+  const STATES = [
+    { key: 'buy', action: 'buy', pile: false },
+    { key: 'open', action: 'open', pile: false },
+    { key: 'pile', action: 'open', pile: true },
+  ] as const;
+  /** A tag's hit area reaches 5 px below the face (its shadow). */
+  const SHADOW = 5;
+
+  for (const c of CARDS) {
+    for (const s of STATES) {
+      it(`${c.name}, ${s.key} state: rows are in order, apart, inside the card and below the text`, () => {
+        const L = paidCardLayout({ gold: c.gold, noteH: c.noteH, action: s.action, pile: s.pile });
+        expect(L.h).toBe(c.height[s.key]);
+        expect(L.rows.map((r) => r.id)).toEqual(s.key === 'buy' ? ['main', 'pack'] : s.pile ? ['main', 'pile'] : ['main']);
+        const first = L.rows[0] as (typeof L.rows)[number];
+        const last = L.rows[L.rows.length - 1] as (typeof L.rows)[number];
+        // The open button is 96 px tall and has always started 6 px under the note's last line box; the tag starts 10 px under it.
+        expect(first.top).toBeGreaterThanOrEqual(L.infoBottom + (s.action === 'open' ? 6 : 10));
+        expect(last.bottom).toBeLessThanOrEqual(L.h - 10);
+        for (let i = 1; i < L.rows.length; i++) {
+          const gap = (L.rows[i] as (typeof L.rows)[number]).top - (L.rows[i - 1] as (typeof L.rows)[number]).bottom;
+          expect(gap).toBe(ROW_GAP);
+          expect(gap).toBeGreaterThan(SHADOW);
+        }
+        for (const r of L.rows) expect(r.bottom - r.top).toBeGreaterThanOrEqual(88);
+        // The chest stands on its shelf inside the card: the art above the base line, the shelf below it.
+        expect(L.shelfBase - 138).toBeGreaterThanOrEqual(0);
+        expect(L.shelfBase + 30).toBeLessThanOrEqual(L.h);
+      });
+    }
+
+    it(`${c.name}: the buy state is the card as it was plus the second tag and a gap, with the first tag where it always was`, () => {
+      const buy = paidCardLayout({ gold: c.gold, noteH: c.noteH, action: 'buy', pile: false });
+      const open = paidCardLayout({ gold: c.gold, noteH: c.noteH, action: 'open', pile: false });
+      expect(buy.h).toBe(open.h + PACK_H + ROW_GAP);
+      expect(buy.rows[0]?.y).toBe(c.mainY);
+      expect(buy.rows[0]?.bottom).toBe(c.mainY + BUY_H / 2);
+      // The two tags are as tall as each other, so they share the width and the look of one pair.
+      expect(PACK_H).toBe(BUY_H);
+      expect(buy.rows[1]?.bottom).toBe(buy.h - 14);
+      expect(buy.infoBottom).toBe(open.infoBottom);
+    });
+  }
 });

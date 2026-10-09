@@ -9,6 +9,7 @@ import { ProfileCore } from './core';
 import {
   CHEST_BULK_MAX,
   CHEST_GEM_PRICE,
+  chestPrice,
   MAX_LEVEL,
   PLACEMENTS,
   OFFERS,
@@ -186,11 +187,17 @@ export class EconomyProfile extends ProfileCore {
     return oddsView(ODDS[kind], { goldOpened: d.goldOpened, target: pityTarget(d) });
   }
 
-  buyChest(kind: ChestKind): Result<number> {
-    const price = CHEST_GEM_PRICE[kind];
-    if (price <= 0) return fail('invalid');
-    if (!this.spend('gems', price, 'chest_buy')) return fail('not_enough_gems');
-    this.addChest(kind, 1);
+  /**
+   * Buy `count` chests (one by default) for the gems of that many singles and put them in the inventory. One command:
+   * the gems are spent once (one `currency` event with the whole price), the chests are added together and the profile is
+   * saved once, so a purchase can never be half done. A count that is not a whole number from 1 to `CHEST_BULK_MAX`, and a
+   * chest that is not sold, change nothing; neither does a balance that is too low. Returns how many of the kind are owned now.
+   */
+  buyChest(kind: ChestKind, count: number = 1): Result<number> {
+    if (!Number.isInteger(count) || count < 1 || count > CHEST_BULK_MAX) return fail('invalid');
+    if (CHEST_GEM_PRICE[kind] <= 0) return fail('invalid');
+    if (!this.spend('gems', chestPrice(kind, count), 'chest_buy')) return fail('not_enough_gems');
+    this.addChest(kind, count);
     this.commit();
     return ok(this.data.chests[kind]);
   }

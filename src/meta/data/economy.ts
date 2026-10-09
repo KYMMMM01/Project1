@@ -104,6 +104,17 @@ export const ROLLBACK_SLACK_MS = 5 * 60_000;
 export const CHEST_GEM_PRICE: Readonly<Record<ChestKind, number>> = { wooden: 0, silver: 150, gold: 500 };
 
 /**
+ * How many chests the shop's "buy 10" button sells in one purchase. The price is exactly that many singles: no discount,
+ * no bonus chest, and the odds, the guarantees and the bonus counter are the ones of a single chest.
+ */
+export const CHEST_BUY_BULK = 10;
+
+/** Gems for `count` chests of one kind (a single one by default): the unit price times the count, never a discount. */
+export function chestPrice(kind: ChestKind, count = 1): number {
+  return CHEST_GEM_PRICE[kind] * count;
+}
+
+/**
  * Most chests of one kind opened in a single go. The stored reveals kept for a replay after a crash cover a whole
  * pile, so a pile never loses its first chests to the cap.
  */

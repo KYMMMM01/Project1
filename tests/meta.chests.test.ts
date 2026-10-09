@@ -3,7 +3,7 @@ import { Rng } from '@/core/rng';
 import {
   applyGuarantees, chestTotals, drawChest, pityTarget, rarityCounts, rollRarities, type DrawState,
 } from '@/meta/chests';
-import { CHEST_BULK_MAX } from '@/meta/data/economy';
+import { CHEST_BUY_BULK, CHEST_BULK_MAX, CHEST_GEM_PRICE, chestPrice } from '@/meta/data/economy';
 import { ODDS, ODDS_VERSION, type OddsTable } from '@/meta/odds';
 import { UNITS_BY_RARITY } from '@/meta/units';
 import { BASE_UNITS, CHEST_KINDS, CHEST_RARITIES, type BaseUnitId, type ChestKind, type ChestRarity, type ChestResult } from '@/meta/types';
@@ -356,5 +356,129 @@ describe('opening a pile of chests', () => {
     const rig = await stocked('silver', 2);
     const one = await rig.profile.openChests('silver', 1);
     expect(one.ok && one.value[0]?.batch).toBeUndefined();
+  });
+});
+
+describe('buying chests ten at a time', () => {
+  /** A profile with `gems` gems and no chests, plus recorders for the currency events and the saves (change events). */
+  async function shopper(gems: number) {
+    const rig = await createTestProfile();
+    rig.profile.grant('gems', gems, 'iap');
+    const currency: { currency: string; delta: number; total: number; reason: string }[] = [];
+    rig.profile.events.on('currency', (e) => currency.push(e));
+    let changes = 0;
+    rig.profile.subscribe(() => changes++);
+    const marks = () => ({ gems: rig.profile.data.gems, chests: { ...rig.profile.data.chests }, analytics: rig.analytics.length, currency: currency.length, changes });
+    return { ...rig, currency, marks };
+  }
+
+  it('is named by one constant and priced at exactly ten singles, with no discount', () => {
+    expect(CHEST_BUY_BULK).toBe(10);
+    expect(chestPrice('silver', CHEST_BUY_BULK)).toBe(1500);
+    expect(chestPrice('gold', CHEST_BUY_BULK)).toBe(5000);
+    for (const kind of ['silver', 'gold'] as const) {
+      expect(chestPrice(kind)).toBe(CHEST_GEM_PRICE[kind]);
+      expect(chestPrice(kind, CHEST_BUY_BULK)).toBe(CHEST_BUY_BULK * CHEST_GEM_PRICE[kind]);
+    }
+    expect(chestPrice('wooden', CHEST_BUY_BULK)).toBe(0);
+  });
+
+  for (const [kind, total] of [['silver', 1500], ['gold', 5000]] as const) {
+    it(`${kind}: ten cost ${total} gems, arrive together and are reported once`, async () => {
+      const rig = await shopper(total + 7);
+      const before = rig.marks();
+      expect(rig.profile.buyChest(kind, CHEST_BUY_BULK)).toEqual({ ok: true, value: 10 });
+      expect(rig.profile.data.gems).toBe(7);
+      expect(rig.profile.data.chests[kind]).toBe(10);
+      // One currency event with the whole price, one in the analytics sink, one saved change: not ten of each.
+      expect(rig.currency).toEqual([{ currency: 'gems', delta: -total, total: 7, reason: 'chest_buy' }]);
+      const sink = rig.analytics.slice(before.analytics);
+      expect(sink.map((r) => r.event)).toEqual(['currency']);
+      expect(sink[0]?.params).toMatchObject({ currency: 'gems', delta: -total, reason: 'chest_buy' });
+      expect(rig.marks().changes - before.changes).toBe(1);
+      // The other kinds are untouched.
+      expect(rig.profile.data.chests).toMatchObject({ wooden: before.chests.wooden, [kind === 'silver' ? 'gold' : 'silver']: 0 });
+    });
+  }
+
+  it('gives the same gems and chests as ten single purchases, and adds to chests already owned', async () => {
+    const pack = await shopper(5000);
+    const singles = await shopper(5000);
+    pack.profile.data.chests.gold = 3;
+    singles.profile.data.chests.gold = 3;
+    expect(pack.profile.buyChest('gold', 10)).toEqual({ ok: true, value: 13 });
+    for (let i = 0; i < 10; i++) singles.profile.buyChest('gold');
+    expect(pack.profile.data.gems).toBe(singles.profile.data.gems);
+    expect(pack.profile.data.chests).toEqual(singles.profile.data.chests);
+    expect(singles.currency.filter((e) => e.reason === 'chest_buy')).toHaveLength(10);
+    expect(pack.currency.filter((e) => e.reason === 'chest_buy')).toHaveLength(1);
+  });
+
+  it('changes nothing when the gems fall one short of the whole price: no partial purchase, no event, no save', async () => {
+    for (const [kind, total] of [['silver', 1500], ['gold', 5000]] as const) {
+      const rig = await shopper(total - 1);
+      const before = rig.marks();
+      expect(rig.profile.buyChest(kind, 10)).toEqual({ ok: false, error: 'not_enough_gems' });
+      expect(rig.marks()).toEqual(before);
+      // Enough for nine, not for ten: still nothing is sold.
+      expect(rig.profile.data.gems).toBe(total - 1);
+    }
+  });
+
+  it('refuses a count that is not a whole number from 1 to the cap, whatever the balance', async () => {
+    const rig = await shopper(1_000_000);
+    const before = rig.marks();
+    for (const bad of [0, -1, -10, 0.5, 1.5, 9.99, NaN, Infinity, -Infinity, CHEST_BULK_MAX + 1, 1000, '10' as unknown as number, null as unknown as number]) {
+      expect(rig.profile.buyChest('silver', bad)).toEqual({ ok: false, error: 'invalid' });
+    }
+    expect(rig.marks()).toEqual(before);
+    // The edges of the range are fine; a chest that is not sold is refused at any count.
+    expect(rig.profile.buyChest('silver', 1).ok).toBe(true);
+    expect(rig.profile.buyChest('silver', CHEST_BULK_MAX).ok).toBe(true);
+    expect(rig.profile.data.chests.silver).toBe(1 + CHEST_BULK_MAX);
+    expect(rig.profile.data.gems).toBe(1_000_000 - 150 * (1 + CHEST_BULK_MAX));
+    expect(rig.profile.buyChest('wooden', 10)).toEqual({ ok: false, error: 'invalid' });
+    expect(rig.profile.data.chests.wooden).toBe(0);
+  });
+
+  it('keeps a single purchase as it was when no count is given', async () => {
+    const rig = await shopper(700);
+    expect(rig.profile.buyChest('gold')).toEqual({ ok: true, value: 1 });
+    expect(rig.profile.buyChest('silver')).toEqual({ ok: true, value: 1 });
+    expect(rig.profile.data.gems).toBe(50);
+    expect(rig.currency.map((e) => e.delta)).toEqual([-500, -150]);
+  });
+
+  it('opens as one pile of ten, and every chest counts: ten openings, ten bonus-counter steps, a stored replay', async () => {
+    const rig = await shopper(5000);
+    expect(rig.profile.buyChest('gold', 10).ok).toBe(true);
+    const seen: number[] = [];
+    rig.profile.events.on('chest', (r) => seen.push(r.id));
+    const opened = await rig.profile.openChests('gold', 10);
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    expect(opened.value).toHaveLength(10);
+    // The pile is one opening for a replay (all ten share the tag of the first), the draw counters and the analytics see ten chests.
+    expect(new Set(opened.value.map((r) => r.batch)).size).toBe(1);
+    expect(seen).toHaveLength(10);
+    expect(rig.analytics.filter((r) => r.event === 'chest_open')).toHaveLength(10);
+    expect(rig.profile.data.goldOpened).toBe(10);
+    expect(rig.profile.data.chests.gold).toBe(0);
+    // The tenth gold chest carries the bonus cards, as when they are bought one by one.
+    expect(opened.value.map((r) => r.pity.cards)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 8]);
+    // Bought, opened, stored: a restart before the animation ends still finds all ten to show.
+    const again = await createTestProfile({ keepStorage: true });
+    expect(again.profile.data.reveals).toEqual(opened.value);
+    expect(again.profile.data.chests.gold).toBe(0);
+  });
+
+  it('leaves the ten in the inventory when the app stops before they are opened', async () => {
+    const rig = await shopper(1500);
+    expect(rig.profile.buyChest('silver', 10).ok).toBe(true);
+    await rig.profile.flush();
+    const again = await createTestProfile({ keepStorage: true });
+    expect(again.profile.data.gems).toBe(0);
+    expect(again.profile.data.chests.silver).toBe(10);
+    expect(again.profile.data.reveals).toEqual([]);
   });
 });

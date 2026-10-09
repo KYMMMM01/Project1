@@ -10,7 +10,7 @@ import { Fx } from '@/fx';
 import { errorKey, profile, tn } from '@/meta';
 import { bundleParts, type BundlePart } from '@/meta/bundle';
 import { iapSpec } from '@/meta/data/catalog';
-import { CHEST_GEM_PRICE, TICKET_AD_AMOUNT } from '@/meta/data/economy';
+import { CHEST_BULK_MAX, chestPrice, TICKET_AD_AMOUNT } from '@/meta/data/economy';
 import type { ChestKind } from '@/meta/types';
 import { iap } from '@/platform';
 import { THEME_SPRAY } from '@/view/director/defs';
@@ -91,7 +91,7 @@ class ShopTab implements TabScreen {
   private readonly actions: ShopActions = {
     openChest: (kind) => void this.openAndReveal(kind),
     openAllChests: (kind) => void this.openAndReveal(kind, true),
-    buyChest: (kind) => void this.buyChest(kind),
+    buyChest: (kind, count) => void this.buyChest(kind, count),
     claimFreeChest: () => void this.claimFree(),
     skipFreeChest: (via) => void this.skipFree(via),
     buySlot: (slot) => void this.buySlot(slot),
@@ -345,37 +345,56 @@ class ShopTab implements TabScreen {
     if (this.busy) return;
     this.busy = true;
     try {
-      const r = all ? await profile.openChests(kind) : await profile.openChest(kind);
-      if (!r.ok) {
-        this.fail(r.error);
-        return;
-      }
-      this.shell.refresh();
-      await services.revealChest(r.value);
-      this.shell.refresh();
+      await this.openNow(kind, all ? CHEST_BULK_MAX : 1);
     } finally {
       this.busy = false;
     }
   }
 
-  private async buyChest(kind: ChestKind): Promise<void> {
-    if (this.busy) return;
-    const price = CHEST_GEM_PRICE[kind];
-    const short = shortBy(price, profile.data.gems);
-    if (short > 0) {
-      this.explainShort('gems', short);
-      return;
-    }
-    // The odds are shown at the moment of purchase (GDD 8.4).
-    if (!(await confirmChestBuy(kind, price))) return;
-    const r = profile.buyChest(kind);
+  /**
+   * Open `count` chests (the whole pile up to the cap when it is more than one) and play the reveal. The caller holds `busy`
+   * for the whole time. The draw is stored and written to disk before anything is shown, so a reveal that is cut short is
+   * replayed from the stored results the next time the home screen opens.
+   */
+  private async openNow(kind: ChestKind, count: number): Promise<void> {
+    const r = count > 1 ? await profile.openChests(kind, count) : await profile.openChest(kind);
     if (!r.ok) {
       this.fail(r.error);
       return;
     }
-    this.feedback('purchase');
     this.shell.refresh();
-    await this.openAndReveal(kind);
+    await services.revealChest(r.value);
+    this.shell.refresh();
+  }
+
+  /**
+   * Buy `count` chests, show what was bought and open all of them at once. The tab is busy from the tap until the reveal is
+   * over (the confirmation included), so a second tap cannot start a second purchase. The gems and the chests change in one
+   * meta call, so a failure leaves both as they were; once the chests are in the inventory the open call stores their
+   * results (the same replay a single purchase has) and an interruption never loses them.
+   */
+  private async buyChest(kind: ChestKind, count = 1): Promise<void> {
+    if (this.busy) return;
+    const short = shortBy(chestPrice(kind, count), profile.data.gems);
+    if (short > 0) {
+      this.explainShort('gems', short);
+      return;
+    }
+    this.busy = true;
+    try {
+      // The odds are shown at the moment of purchase (GDD 8.4).
+      if (!(await confirmChestBuy(kind, count))) return;
+      const r = profile.buyChest(kind, count);
+      if (!r.ok) {
+        this.fail(r.error);
+        return;
+      }
+      this.feedback('purchase');
+      this.shell.refresh();
+      await this.openNow(kind, count);
+    } finally {
+      this.busy = false;
+    }
   }
 
   private async claimFree(): Promise<void> {

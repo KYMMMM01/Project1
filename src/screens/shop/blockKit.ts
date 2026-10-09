@@ -17,7 +17,8 @@ export interface ShopActions {
   openChest(kind: ChestKind): void;
   /** Open every chest of the kind the player owns (up to the cap) in one go, as one reveal. */
   openAllChests(kind: ChestKind): void;
-  buyChest(kind: ChestKind): void;
+  /** Buy `count` chests (one by default) after the odds are shown, then open them all in one reveal. */
+  buyChest(kind: ChestKind, count?: number): void;
   claimFreeChest(): void;
   skipFreeChest(via: 'ad' | 'gems'): void;
   buySlot(slot: number): void;

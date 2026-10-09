@@ -2,7 +2,7 @@ import { Container } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { fmt, fmtDuration } from '@/core/format';
 import { profile } from '@/meta';
-import { CHEST_GEM_PRICE } from '@/meta/data/economy';
+import { CHEST_BUY_BULK, chestPrice } from '@/meta/data/economy';
 import { pityTarget } from '@/meta/chests';
 import { ODDS } from '@/meta/odds';
 import type { ChestKind } from '@/meta/types';
@@ -10,15 +10,13 @@ import { ads } from '@/platform';
 import { Button, Color, fitLabel, paperSeed, paperShape, ProgressBar, uiLabel } from '@/ui';
 import { chestArt } from './art';
 import { actionButton, currencyButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
+import { BUY_H, COL, OPEN_H, PACK_H, paidCardLayout, PILE_H, ROW_GAP } from './chestLayout';
 import { countPill, PriceTag } from './paperBits';
 import { chestAction, pileSize } from './shopLogic';
 
 const ART = 168;
-const COL = 236;
-/** The open button, the "open all" button under it (a step quieter and shorter) and the space between buttons in a column. */
-const OPEN_H = 96;
-const PILE_H = 88;
-const ROW_GAP = 12;
+/** The "buy 10" tag's number: a step smaller than the single tag's 32 (its word is then 24, the kit's smallest size), so Korean and English both fit whole. */
+const PACK_FONT = 30;
 /** Wide enough for the English word with its icon: the label may not be shortened or cut. */
 const ODDS_W = 176;
 
@@ -123,10 +121,12 @@ function buildPaid(inner: Container, y: number, w: number, env: BlockEnv, kind: 
       size: 26, color: pity.next ? Color.leafDark : Color.inkSoft, anchorX: 0, anchorY: 0, wrap: rw, lineHeight: 32, align: 'left',
     })
     : null;
+  const action = chestAction(owned);
   const pile = pileSize(owned) > 0;
-  const h = (gold ? Math.max(372, 346 + Math.ceil(note?.height ?? 0)) : 296) + (pile ? PILE_H + ROW_GAP : 0);
+  const { h, shelfBase, rows } = paidCardLayout({ gold, noteH: note?.height ?? 0, action, pile });
+  const [main, second] = rows;
   const card = subCard(inner, PAD, y, w, h);
-  chestOnShelf(card, kind, h - 84, owned);
+  chestOnShelf(card, kind, shelfBase, owned);
   title(card, t('meta.chest.' + kind), rw);
   oddsButton(card, w, kind, env);
 
@@ -145,17 +145,22 @@ function buildPaid(inner: Container, y: number, w: number, env: BlockEnv, kind: 
     card.addChild(bar, note);
   }
 
-  const by = h - 58 - (pile ? PILE_H + ROW_GAP : 0);
-  if (chestAction(owned) === 'open') {
+  if (action === 'open') {
     const b = actionButton({ label: t('shop.chest.openN', { n: owned }), width: rw, style: 'primary' }, () => env.actions.openChest(kind));
-    b.position.set(COL + rw / 2, by);
+    b.position.set(COL + rw / 2, main?.y ?? 0);
     card.addChild(b);
-    if (pile) pileButton(card, kind, owned, rw, env).position.set(COL + rw / 2, h - 10 - PILE_H / 2);
+    if (pile) pileButton(card, kind, owned, rw, env).position.set(COL + rw / 2, second?.y ?? 0);
   } else {
-    const tag = new PriceTag({ width: rw, style: 'primary', currency: 'gems', amount: CHEST_GEM_PRICE[kind], label: t('shop.chest.buy') });
-    tag.onTap(() => env.actions.buyChest(kind));
-    tag.position.set(COL + rw / 2, by);
-    card.addChild(tag);
+    const tag = new PriceTag({ width: rw, height: BUY_H, style: 'primary', currency: 'gems', amount: chestPrice(kind), label: t('shop.chest.buy') });
+    tag.onTap(() => env.actions.buyChest(kind, 1));
+    tag.position.set(COL + rw / 2, main?.y ?? 0);
+    // Ten at a time: the same tag in quieter paper (the way the mustard "open all" sits under the coral "open"), at the price of ten singles.
+    const pack = new PriceTag({
+      width: rw, height: PACK_H, style: 'mustard', currency: 'gems', amount: chestPrice(kind, CHEST_BUY_BULK), label: t('shop.chest.buyPack', { n: CHEST_BUY_BULK }), fontSize: PACK_FONT,
+    });
+    pack.onTap(() => env.actions.buyChest(kind, CHEST_BUY_BULK));
+    pack.position.set(COL + rw / 2, second?.y ?? 0);
+    card.addChild(tag, pack);
   }
   return h;
 }

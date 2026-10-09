@@ -43,7 +43,7 @@ await profile.pay('revive'|'relic_reroll'|'start_snack'|'result_double'|'chest_s
 // units / training / chests / shop
 profile.units(): UnitView[]; profile.levelUp(unit); profile.trainingRows(); profile.train(id)
 profile.oddsOf('wooden'|'silver'|'gold'): OddsView     // rows, guarantee, pity counter+target, one-line summary, version
-profile.buyChest(kind); await profile.openChest(kind): Result<ChestResult>; profile.ackReveal(id)   // reveal queue survives a restart
+profile.buyChest(kind, count = 1) /* count 1..50, one currency event; the shop sells 10 at a time (CHEST_BUY_BULK) */; await profile.openChest(kind): Result<ChestResult>; profile.ackReveal(id)   // reveal queue survives a restart
 profile.shopView(); buyShop(slot); await refreshShop(); ticketView(); buyTicket(); await watchTicketAd()
 profile.cosmetics(); buyCosmetic(id); equip(id); piggyView(); breakPiggyFree()
 

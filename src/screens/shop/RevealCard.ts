@@ -60,6 +60,8 @@ export class RevealCard extends Container {
   private shade: Container | null = null;
   private ribbonArt: Graphics | null = null;
   private mark: Container | null = null;
+  /** Bottom edge of the "Wild" / "Bonus" tag in the frame's own space, or null when the card has no tag. */
+  private tagBottom: number | null = null;
 
   constructor(readonly stack: RevealStack) {
     super();
@@ -95,6 +97,7 @@ export class RevealCard extends Container {
     if (tagText) {
       const tag = new Tag({ text: tagText, style: stack.bonus ? 'success' : 'info', shape: 'pill', fontSize: 24, tilt: -0.08 });
       tag.position.set(w / 2 - tag.uiBox.w / 2 - 2, -h / 2 + 20);
+      this.tagBottom = tag.y + tag.uiBox.h / 2;
       this.face.addChild(tag);
       this.plain.push(tag);
     }
@@ -190,7 +193,8 @@ export class RevealCard extends Container {
     const star = drawIcon('star', 34, RARITY_GOLD, { cache: false });
     this.mark = new Container();
     this.mark.addChild(disc, star);
-    this.mark.position.set(w / 2 - 8, -h / 2 + 8);
+    // The corner is the tag's when the card has one (a bonus stack is often the best card of a pile): the star then sits right under it.
+    this.mark.position.set(w / 2 - 8, this.tagBottom === null ? -h / 2 + 8 : this.tagBottom + 22);
     this.face.addChild(this.mark);
     return this.mark;
   }
