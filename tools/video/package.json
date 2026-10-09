@@ -1,0 +1,10 @@
+{
+  "name": "meow-guard-patch-video",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tooling that renders the patch-notes video (canvas + WebCodecs + mp4-muxer). Not part of the game build.",
+  "type": "module",
+  "devDependencies": {
+    "mp4-muxer": "^5.1.3"
+  }
+}

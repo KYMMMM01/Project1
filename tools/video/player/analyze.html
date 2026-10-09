@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>bgm analysis</title>
+<script type="module">
+// Decodes the owner's track (video/bgm.*), and reports its length, a loudness envelope (one value per 0.5 s), a tempo estimate and where
+// the strong part begins. analyze.mjs runs this page in headless Edge; the result lands in video/work/out/bgm_analysis.json.
+const post = (o) => fetch('/event', { method: 'POST', body: JSON.stringify(o) });
+try {
+  const bytes = await (await fetch('/bgm/track')).arrayBuffer();
+  const ctx = new OfflineAudioContext(2, 48000, 48000);
+  const buf = await ctx.decodeAudioData(bytes.slice(0));
+  const sr = buf.sampleRate, n = buf.length, L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
+  const mono = new Float32Array(n);
+  let peak = 0;
+  for (let i = 0; i < n; i++) { mono[i] = 0.5 * (L[i] + R[i]); peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i])); }
+  const db = (x) => 20 * Math.log10(Math.max(x, 1e-9));
+  const win = Math.round(sr * 0.5);
+  const env = [];
+  for (let s = 0; s + win <= n; s += win) {
+    let a = 0;
+    for (let i = s; i < s + win; i++) a += mono[i] * mono[i];
+    env.push(+db(Math.sqrt(a / win)).toFixed(1));
+  }
+  // onset envelope (energy of 512-sample hops, positive differences) and its autocorrelation for the tempo
+  const hop = 512, frames = Math.floor(n / hop);
+  const e = new Float32Array(frames);
+  for (let f = 0; f < frames; f++) { let a = 0; for (let i = f * hop; i < (f + 1) * hop; i++) a += mono[i] * mono[i]; e[f] = Math.sqrt(a / hop); }
+  const flux = new Float32Array(frames);
+  for (let f = 1; f < frames; f++) flux[f] = Math.max(0, e[f] - e[f - 1]);
+  const fps = sr / hop;
+  const a0 = Math.max(0, Math.floor(Math.min(frames * 0.3, frames - fps * 60))), a1 = Math.min(frames, a0 + Math.floor(fps * 60));
+  const seg = flux.slice(a0, a1);
+  const lagMin = Math.floor(fps * 60 / 200), lagMax = Math.ceil(fps * 60 / 60);
+  const acf = [];
+  for (let lag = lagMin; lag <= lagMax; lag++) { let s = 0; for (let i = 0; i + lag < seg.length; i++) s += seg[i] * seg[i + lag]; acf.push([lag, s]); }
+  acf.sort((p, q) => q[1] - p[1]);
+  const tempos = acf.slice(0, 6).map(([lag, s]) => ({ bpm: +(60 * fps / lag).toFixed(2), score: +s.toFixed(4) }));
+  // optional zoom: ?from=78&to=86 gives the RMS per 50 ms of that stretch, and the strongest onsets in it
+  const q = new URLSearchParams(location.search);
+  let zoom = null;
+  if (q.has('from')) {
+    const from = Number(q.get('from')), to = Number(q.get('to') || from + 8), step = 0.05, w = Math.round(sr * step);
+    const rows = [];
+    for (let t0 = from; t0 < to; t0 += step) { let a = 0; const s0 = Math.round(t0 * sr); for (let i = s0; i < s0 + w; i++) a += mono[i] * mono[i]; rows.push(+db(Math.sqrt(a / w)).toFixed(1)); }
+    const peaks = [];
+    for (let f = Math.floor(from * fps); f < Math.min(frames, Math.floor(to * fps)); f++) if (flux[f] > 0.02 && flux[f] >= flux[f - 1] && flux[f] >= flux[f + 1]) peaks.push([+(f / fps).toFixed(3), +flux[f].toFixed(3)]);
+    zoom = { from, step, rows, peaks };
+  }
+  await post({ type: 'bgm', zoom, duration: n / sr, sampleRate: sr, channels: buf.numberOfChannels, peak: +peak.toFixed(4), peakDb: +db(peak).toFixed(2), envStepSec: 0.5, envDb: env, tempos });
+  await fetch('/save/bgm_analysis.json', { method: 'POST', body: JSON.stringify({ duration: n / sr, sampleRate: sr, peak, envStepSec: 0.5, envDb: env, tempos }) });
+} catch (err) {
+  await post({ type: 'error', message: String(err && err.stack || err) });
+}
+await fetch('/finish', { method: 'POST' });
+</script>

@@ -1,0 +1,87 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>verify the finished mp4</title>
+<body style="margin:0;background:#222;color:#ddd;font:14px sans-serif">
+<video id="v" muted playsinline preload="auto" style="width:480px"></video>
+<script type="module">
+// Opens the FINISHED file (video/work/out/video.mp4) the way a viewer would: metadata, stills at chosen times (drawn from the <video> element
+// to a canvas and saved as PNG), and a decode of its audio track with loudness per 5 s window. Reports to the server as a 'verify' event.
+const post = (o) => fetch('/event', { method: 'POST', body: JSON.stringify(o) }).catch(() => {});
+window.addEventListener('error', (e) => post({ type: 'error', message: `${e.message} @${e.filename}:${e.lineno}` }));
+window.addEventListener('unhandledrejection', (e) => post({ type: 'error', message: 'unhandled: ' + ((e.reason && e.reason.stack) || e.reason) }));
+const db = (x) => +(20 * Math.log10(Math.max(x, 1e-9))).toFixed(1);
+
+async function main() {
+  const url = '/work/out/video.mp4';
+  const timeline = await (await fetch('/work/timeline.json')).json();
+  const report = { url };
+  const v = document.getElementById('v');
+  v.src = url;
+  await new Promise((res, rej) => { v.addEventListener('loadedmetadata', res, { once: true }); v.addEventListener('error', () => rej(new Error('the video element could not open the file: ' + (v.error && v.error.message))), { once: true }); });
+  report.duration = v.duration; report.width = v.videoWidth; report.height = v.videoHeight;
+  report.canPlay = { h264: v.canPlayType('video/mp4; codecs="avc1.640028, mp4a.40.2"') };
+
+  // stills: one per card (a moment where its animation has landed), plus the first and the last frame
+  const q = new URLSearchParams(location.search);
+  const times = q.get('times') ? q.get('times').split(',').map(Number) : [
+    0.1, ...timeline.cards.map((c) => c.start + Math.min(2.6, c.dur - 0.25)), timeline.total - 0.1,
+  ];
+  const canvas = document.createElement('canvas');
+  canvas.width = 1920; canvas.height = 1080;
+  const g = canvas.getContext('2d');
+  const stills = [];
+  for (const t of times) {
+    v.currentTime = Math.min(t, v.duration - 0.05);
+    await new Promise((res) => v.addEventListener('seeked', res, { once: true }));
+    await new Promise((res) => { if (v.requestVideoFrameCallback) { v.requestVideoFrameCallback(() => res()); setTimeout(res, 600); } else setTimeout(res, 200); });
+    g.drawImage(v, 0, 0, 1920, 1080);
+    const px = g.getImageData(0, 0, 1920, 1080).data;
+    let lum = 0, n = 0;
+    for (let i = 0; i < px.length; i += 4 * 97) { lum += px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11; n++; }
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    const name = `verify_${t.toFixed(2)}.png`;
+    await fetch(`/save/${name}?dir=shots`, { method: 'POST', body: blob });
+    stills.push({ t: +t.toFixed(2), file: name, meanLuma: +(lum / n).toFixed(1), at: +v.currentTime.toFixed(3) });
+  }
+  report.stills = stills;
+
+  // audio: decode the track of the finished file
+  const bytes = await (await fetch(url)).arrayBuffer();
+  const ac = new OfflineAudioContext(2, 48000, 48000);
+  const buf = await ac.decodeAudioData(bytes);
+  const L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
+  const sr = buf.sampleRate;
+  report.audio = { duration: buf.duration, sampleRate: sr, channels: buf.numberOfChannels };
+  let peak = 0, clipped = 0;
+  for (let i = 0; i < L.length; i++) { const a = Math.max(Math.abs(L[i]), Math.abs(R[i])); if (a > peak) peak = a; if (a >= 0.999) clipped++; }
+  report.audio.peakDb = db(peak); report.audio.samplesAtFullScale = clipped;
+  const rms = (a, b) => { let s = 0; const n = Math.max(1, b - a); for (let i = a; i < b; i++) s += 0.5 * (L[i] * L[i] + R[i] * R[i]); return Math.sqrt(s / n); };
+  const pk = (a, b) => { let p = 0; for (let i = a; i < b; i++) p = Math.max(p, Math.abs(L[i]), Math.abs(R[i])); return p; };
+  report.audio.windows = [];
+  for (let s = 0; s < L.length; s += 5 * sr) {
+    const e = Math.min(L.length, s + 5 * sr);
+    report.audio.windows.push({ at: s / sr, rmsDb: db(rms(s, e)), peakDb: db(pk(s, e)) });
+  }
+  // speech intervals against the gaps between them
+  const zones = timeline.cards.map((c) => [c.narrStart, c.narrStart + c.narrDur]);
+  let speechSum = 0, speechN = 0, gapSum = 0, gapN = 0;
+  const inZone = (t) => zones.some(([a, b]) => t >= a && t < b);
+  for (let i = 0; i < L.length; i += 4) {
+    const t = i / sr;
+    const e = 0.5 * (L[i] * L[i] + R[i] * R[i]);
+    if (inZone(t)) { speechSum += e; speechN++; } else { gapSum += e; gapN++; }
+  }
+  report.audio.speechRmsDb = db(Math.sqrt(speechSum / Math.max(1, speechN)));
+  report.audio.nonSpeechRmsDb = db(Math.sqrt(gapSum / Math.max(1, gapN)));
+  report.audio.nonSpeechSeconds = +(gapN * 4 / sr).toFixed(1);
+  // the quietest 0.5 s anywhere (is there any silent hole?)
+  let quiet = 1e9, quietAt = 0;
+  for (let s = 0; s + sr / 2 <= L.length; s += sr / 4) { const r = rms(s, s + sr / 2); if (r < quiet) { quiet = r; quietAt = s / sr; } }
+  report.audio.quietestHalfSecond = { at: +quietAt.toFixed(2), rmsDb: db(quiet) };
+  await post({ type: 'verify', report });
+}
+
+try { await main(); } catch (err) { await post({ type: 'error', message: String((err && err.stack) || err) }); }
+await fetch('/finish', { method: 'POST' });
+</script>
+</body>

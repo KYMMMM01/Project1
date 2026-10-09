@@ -1,0 +1,1025 @@
+{
+  "meta": {
+    "title": "냥이 수비대 패치 속보 10.10",
+    "game": "집사 없는 날: 냥이 수비대",
+    "channel": {
+      "name": "야옹 패치 속보국",
+      "sub": "MEOW PATCH DESK"
+    },
+    "url": "https://kymmmm01.github.io/Project1/",
+    "output": "패치영상_2026-10-10",
+    "bgmCredit": "BGM : UNIVERSAL"
+  },
+  "video": {
+    "bitrate": 8000000,
+    "audioBitrate": 192000
+  },
+  "tts": {
+    "voice": "Microsoft Heami Desktop",
+    "rate": 5
+  },
+  "timing": {
+    "lead": 0.15,
+    "breath": 0.28,
+    "minCard": 1.9,
+    "beatSnap": 2,
+    "enter": 0.4
+  },
+  "bgm": {
+    "dropAt": 82.059,
+    "dropInVideo": 0.3,
+    "beat": 0.46875,
+    "note": "track time of the first big hit (the drop) and the grid of the track (128 BPM); the video starts 0.3 s before the drop"
+  },
+  "mix": {
+    "speechRmsDb": -14,
+    "bedRmsDb": -19.5,
+    "levelAmount": 0.6,
+    "duckDb": -10.5,
+    "duckAttack": 0.2,
+    "duckRelease": 0.25,
+    "holdGap": 0.9,
+    "fadeOut": 2.0,
+    "peakDb": -1,
+    "speechClipFrom": -12,
+    "speechClipTo": -6
+  },
+  "chapters": [
+    {
+      "id": "balance",
+      "no": "01",
+      "title": "밸런스 패치",
+      "sub": "고양이와 보스, 전투 규칙",
+      "color": "coral",
+      "icons": [
+        "u:w_tiger",
+        "u:r_star",
+        "u:m_cosmo",
+        "u:t_lucky"
+      ]
+    },
+    {
+      "id": "system",
+      "no": "02",
+      "title": "시스템 패치",
+      "sub": "수입, 비용, 특수 칸, 편의",
+      "color": "teal",
+      "icons": [
+        "icon:fish",
+        "misc:icon_purr",
+        "cell:bowl",
+        "icon:gold"
+      ]
+    },
+    {
+      "id": "content",
+      "no": "03",
+      "title": "신규 콘텐츠",
+      "sub": "골드 던전, 도감, 새 음악",
+      "color": "mustard",
+      "icons": [
+        "icon:gold",
+        "u:t_bard",
+        "u:t_bell",
+        "icon:gem"
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "id": "c01",
+      "kind": "hook",
+      "chapter": null,
+      "say": "오늘부터 냥이 수비대에서 많은 것들이 달라집니다. 십 점 십 패치, 테스트 빌드 적용!",
+      "caption": "오늘부터 냥이 수비대에서 많은 것들이 **달라집니다.** **10.10** 패치 테스트 빌드 적용!",
+      "lines": [
+        "오늘부터 냥이 수비대에서",
+        "많은 것들이 달라집니다."
+      ],
+      "banner": {
+        "num": "10.10",
+        "text": "패치 테스트 빌드 적용!"
+      },
+      "stickers": [
+        "u:w_tiger",
+        "u:r_star",
+        "u:m_cosmo",
+        "u:t_lucky",
+        "u:t_bell",
+        "u:w_paw"
+      ],
+      "scope": "10.09 + 10.10 합본",
+      "lead": 0.7
+    },
+    {
+      "id": "c03",
+      "kind": "chapter",
+      "chapter": "balance",
+      "say": "먼저, 밸런스 패치!",
+      "caption": "먼저, **밸런스 패치!**",
+      "agenda": true
+    },
+    {
+      "id": "c04",
+      "kind": "board",
+      "chapter": "balance",
+      "tag": "adjust",
+      "since": "10.09",
+      "say": "보드가 오 곱하기 오로 넓어졌어요. 고양이는 십사 퍼센트 작아졌어요.",
+      "caption": "보드가 **5×5**로 넓어졌어요. 고양이는 약 **14%** 작아졌어요.",
+      "title": "보드 5 × 5",
+      "rows": [
+        {
+          "t": "num",
+          "label": "보드 칸 수",
+          "from": 20,
+          "to": 25,
+          "unit": "칸",
+          "dec": 0,
+          "good": null,
+          "size": "big"
+        },
+        {
+          "t": "num",
+          "label": "적이 도는 길",
+          "from": null,
+          "to": 3,
+          "unit": "% 길어짐",
+          "dec": 0,
+          "prefix": "+",
+          "good": null,
+          "size": "mid"
+        },
+        {
+          "t": "num",
+          "label": "고양이 높이",
+          "from": null,
+          "to": 14,
+          "unit": "% 작아짐",
+          "dec": 0,
+          "prefix": "-",
+          "good": null,
+          "size": "mid"
+        }
+      ]
+    },
+    {
+      "id": "c05",
+      "kind": "ladder",
+      "chapter": "balance",
+      "tag": "adjust",
+      "since": "10.09",
+      "say": "꼬마는 이제 시너지 종류에 세지 않아요. 서운하죠?",
+      "caption": "**꼬마**는 이제 시너지 종류에 세지 않아요. 서운하죠?",
+      "title": "시너지 종류 세기",
+      "ranks": [
+        "꼬마",
+        "동네",
+        "골목대장",
+        "대왕",
+        "수호신"
+      ],
+      "units": [
+        "u:w_paw",
+        "u:w_sword",
+        "u:w_viking",
+        "u:w_samurai",
+        "u:w_tiger"
+      ],
+      "foot": "동네 · 골목대장 · 대왕 · 수호신 4종이 모이면 3단계"
+    },
+    {
+      "id": "c06",
+      "kind": "specials",
+      "chapter": "balance",
+      "tag": "new",
+      "since": "10.09 + 10.10",
+      "say": "네 종을 모으면 특수 능력 발동! 마력 폭발만 살짝 너프됐어요.",
+      "caption": "네 종을 모으면 **특수 능력** 발동! 마력 폭발만 살짝 너프됐어요.",
+      "title": "3단계 특수 능력",
+      "items": [
+        {
+          "unit": "u:w_tiger",
+          "klass": "warrior",
+          "name": "전사의 함성",
+          "text": "7초마다 기절,\n방어·결계 깎기"
+        },
+        {
+          "unit": "u:r_archer",
+          "klass": "ranger",
+          "name": "튕기는 화살",
+          "text": "곁의 적에게\n피해 35% 더"
+        },
+        {
+          "unit": "u:m_fire",
+          "klass": "mage",
+          "name": "마력 폭발",
+          "text": "최대 체력의\n12% → 10%",
+          "nerf": true
+        },
+        {
+          "unit": "u:t_lucky",
+          "klass": "trickster",
+          "name": "신나는 놀이판",
+          "text": "레이저 중\n공격 속도 +40%"
+        }
+      ]
+    },
+    {
+      "id": "c07",
+      "kind": "change",
+      "chapter": "balance",
+      "tag": "buff",
+      "since": "10.10",
+      "say": "사수 삼 단계 피해가 사십오 퍼센트로! 필살 사격은 튕기는 화살!",
+      "caption": "사수 3단계 피해가 **45%**로! 필살 사격은 **튕기는 화살!**",
+      "art": "u:r_archer",
+      "title": "사수 시너지",
+      "chip": {
+        "text": "사수",
+        "klass": "ranger"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "3단계 사수 피해",
+          "from": 30,
+          "to": 45,
+          "unit": "%",
+          "dec": 0,
+          "prefix": "+",
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "text",
+          "label": "3단계 특수 능력",
+          "from": "필살 사격",
+          "to": "튕기는 화살",
+          "good": true
+        },
+        {
+          "t": "note",
+          "text": "1단계 +8%, 2단계 +20%도 새로 붙었어요"
+        }
+      ]
+    },
+    {
+      "id": "c08",
+      "kind": "change",
+      "chapter": "balance",
+      "tag": "adjust",
+      "since": "10.09",
+      "say": "보스가 갑옷을 입었어요. 대신 체력은 십 퍼센트 줄었어요.",
+      "caption": "**보스**가 갑옷을 입었어요. 대신 체력은 **10%** 줄었어요.",
+      "art": "boss:vacuum",
+      "title": "흡입왕",
+      "chip": {
+        "text": "챕터 1 보스",
+        "klass": "boss"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "방어",
+          "from": 0,
+          "to": 35,
+          "unit": "%",
+          "dec": 0,
+          "good": false,
+          "size": "big"
+        },
+        {
+          "t": "num",
+          "label": "결계",
+          "from": 0,
+          "to": 10,
+          "unit": "%",
+          "dec": 0,
+          "good": false,
+          "size": "mid"
+        },
+        {
+          "t": "num",
+          "label": "기준 체력",
+          "from": 1590,
+          "to": 1431,
+          "unit": "",
+          "dec": 0,
+          "comma": true,
+          "good": true,
+          "size": "mid"
+        }
+      ]
+    },
+    {
+      "id": "c09",
+      "kind": "change",
+      "chapter": "balance",
+      "tag": "buff",
+      "since": "10.10",
+      "say": "방어 무시가 결계에도 통해요. 우르릉은 결계 삼십오에서 이십사 점 오!",
+      "caption": "방어 무시가 **결계**에도 통해요. 우르릉은 결계 **35 → 24.5%!**",
+      "art": "boss:cloud",
+      "title": "우르릉",
+      "chip": {
+        "text": "챕터 4 보스",
+        "klass": "boss"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "결계 (30% 무시 기준)",
+          "from": 35,
+          "to": 24.5,
+          "unit": "%",
+          "dec": 1,
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "text",
+          "label": "방어 무시 · 방어 붕괴",
+          "from": "방어만",
+          "to": "방어 + 결계",
+          "good": true
+        }
+      ]
+    },
+    {
+      "id": "c10",
+      "kind": "columns",
+      "chapter": "balance",
+      "tag": "nerf",
+      "since": "10.10",
+      "say": "전사들 사거리가 짧아졌어요. 호랑이 장군은 이백사십!",
+      "caption": "**전사** 사거리가 짧아졌어요. 호랑이 장군은 **240!**",
+      "title": "전사 사거리",
+      "items": [
+        {
+          "art": "u:w_paw",
+          "name": "솜방망이",
+          "from": 200,
+          "to": 200
+        },
+        {
+          "art": "u:w_sword",
+          "name": "검사냥",
+          "from": 215,
+          "to": 210
+        },
+        {
+          "art": "u:w_viking",
+          "name": "바이킹냥",
+          "from": 235,
+          "to": 220
+        },
+        {
+          "art": "u:w_samurai",
+          "name": "사무라이냥",
+          "from": 255,
+          "to": 230
+        },
+        {
+          "art": "u:w_tiger",
+          "name": "호랑이 장군",
+          "from": 285,
+          "to": 240
+        }
+      ],
+      "good": false
+    },
+    {
+      "id": "c11",
+      "kind": "change",
+      "chapter": "balance",
+      "tag": "adjust",
+      "since": "10.10",
+      "say": "블랙홀 너프는 일부 취소! 당김은 구십으로, 면역은 이 초로.",
+      "caption": "블랙홀 너프는 **일부 취소!** 당김은 90으로, 면역은 2초로.",
+      "art": "u:m_cosmo",
+      "title": "우주냥 블랙홀",
+      "chip": {
+        "text": "마법 · 수호신",
+        "klass": "mage"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "끌어당김 (초당)",
+          "from": 55,
+          "to": 90,
+          "unit": "",
+          "dec": 0,
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "num",
+          "label": "한 번 끌린 뒤 면역",
+          "from": 4,
+          "to": 2,
+          "unit": "초",
+          "dec": 0,
+          "good": true,
+          "size": "mid"
+        },
+        {
+          "t": "note",
+          "text": "정예 ×0.35, 보스 ×0.2만 끌려요 (그대로)"
+        }
+      ]
+    },
+    {
+      "id": "c12",
+      "kind": "change",
+      "chapter": "balance",
+      "tag": "nerf",
+      "since": "10.09 + 10.10",
+      "say": "사무라이냥 너프. 사거리가 이백삼십으로, 피해도 줄었어요.",
+      "caption": "사무라이냥 너프. 사거리가 **230**으로, 피해도 줄었어요.",
+      "art": "u:w_samurai",
+      "title": "사무라이냥",
+      "chip": {
+        "text": "전사 · 대왕",
+        "klass": "warrior"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "사거리",
+          "from": 255,
+          "to": 230,
+          "unit": "",
+          "dec": 0,
+          "good": false,
+          "size": "big"
+        },
+        {
+          "t": "num",
+          "label": "피해",
+          "from": 140,
+          "to": 130,
+          "unit": "",
+          "dec": 0,
+          "good": false,
+          "size": "mid"
+        },
+        {
+          "t": "note",
+          "text": "앞뒤 베기 130 → 100 · 출혈 25 → 18%"
+        }
+      ]
+    },
+    {
+      "id": "c13",
+      "kind": "change",
+      "chapter": "balance",
+      "tag": "buff",
+      "since": "10.09",
+      "say": "번개냥에게 감전이 생겼어요. 맞은 적이 영 점 사 초 멈춰요.",
+      "caption": "번개냥에게 **감전**이 생겼어요. 맞은 적이 **0.4초** 멈춰요.",
+      "art": "u:m_storm",
+      "title": "번개냥",
+      "chip": {
+        "text": "마법 · 골목대장",
+        "klass": "mage"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "감전으로 멈추는 시간",
+          "from": 0,
+          "to": 0.4,
+          "unit": "초",
+          "dec": 1,
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "note",
+          "text": "정예는 0.2초, 보스는 면역이에요"
+        }
+      ]
+    },
+    {
+      "id": "c14",
+      "kind": "change",
+      "chapter": "balance",
+      "tag": "adjust",
+      "since": "10.09",
+      "say": "별빛 사수는 한 발이 약해졌지만, 초당 피해는 삼백십이에서 사백사십!",
+      "caption": "별빛 사수는 한 발이 약해졌지만 초당 피해는 **312 → 440!**",
+      "art": "u:r_star",
+      "title": "별빛 사수",
+      "chip": {
+        "text": "사수 · 수호신",
+        "klass": "ranger"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "초당 피해 (치명타 제외)",
+          "from": 312,
+          "to": 440,
+          "unit": "",
+          "dec": 0,
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "num",
+          "label": "공격 간격",
+          "from": 0.8,
+          "to": 0.5,
+          "unit": "초",
+          "dec": 1,
+          "good": true,
+          "size": "mid"
+        },
+        {
+          "t": "num",
+          "label": "한 발 피해",
+          "from": 250,
+          "to": 220,
+          "unit": "",
+          "dec": 0,
+          "good": false,
+          "size": "mid"
+        }
+      ]
+    },
+    {
+      "id": "c15",
+      "kind": "auras",
+      "chapter": "balance",
+      "tag": "adjust",
+      "since": "10.09",
+      "say": "악사냥은 범위 두 배, 효과는 감소. 방울냥은 확률 회피로.",
+      "caption": "악사냥은 범위 **두 배**, 효과는 감소. 방울냥은 **확률 회피**로.",
+      "title": "재주 고양이의 도움 효과",
+      "items": [
+        {
+          "art": "u:t_bard",
+          "name": "악사냥",
+          "lines": [
+            {
+              "label": "도와주는 범위",
+              "from": "4칸",
+              "to": "8칸",
+              "good": true
+            },
+            {
+              "label": "주변 피해 증가",
+              "from": "+20%",
+              "to": "+15%",
+              "good": false
+            }
+          ]
+        },
+        {
+          "art": "u:t_bell",
+          "name": "방울냥",
+          "lines": [
+            {
+              "label": "젖음·낙뢰 막기",
+              "from": "확정 면역",
+              "to": "40% 회피",
+              "good": null
+            },
+            {
+              "label": "공격 속도 범위",
+              "from": "4칸",
+              "to": "8칸",
+              "good": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c16",
+      "kind": "swap",
+      "chapter": "balance",
+      "tag": "adjust",
+      "since": "10.09",
+      "say": "요리사냥은 꼬마로, 방울냥은 동네로. 인사이동입니다.",
+      "caption": "**요리사냥**은 꼬마로, **방울냥**은 동네로. 인사이동입니다.",
+      "title": "재주 줄 등급 교체",
+      "a": {
+        "art": "u:t_chef",
+        "name": "요리사냥",
+        "from": "동네",
+        "to": "꼬마",
+        "dmg": [
+          20,
+          8
+        ],
+        "range": [
+          300,
+          260
+        ]
+      },
+      "b": {
+        "art": "u:t_bell",
+        "name": "방울냥",
+        "from": "꼬마",
+        "to": "동네",
+        "dmg": [
+          8,
+          20
+        ],
+        "range": [
+          260,
+          300
+        ]
+      }
+    },
+    {
+      "id": "c17",
+      "kind": "chapter",
+      "chapter": "system",
+      "say": "다음은 시스템 패치!",
+      "caption": "다음은 **시스템 패치!**"
+    },
+    {
+      "id": "c18",
+      "kind": "change",
+      "chapter": "system",
+      "tag": "new",
+      "since": "10.10",
+      "fx": "fish",
+      "say": "생선이 초당 영 점 오 마리씩 저절로 들어와요.",
+      "caption": "생선이 초당 **0.5마리**씩 저절로 들어와요.",
+      "art": "icon:fish",
+      "title": "초당 생선 수입",
+      "chip": {
+        "text": "전투 중 계속",
+        "klass": "plain"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "가만히 있어도",
+          "from": 0,
+          "to": 0.5,
+          "unit": "마리/초",
+          "dec": 1,
+          "prefix": "+",
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "note",
+          "text": "처치·웨이브 보상은 그대로, 그 위에 얹어요"
+        }
+      ]
+    },
+    {
+      "id": "c19",
+      "kind": "change",
+      "chapter": "system",
+      "tag": "buff",
+      "since": "10.10",
+      "fx": "purr",
+      "say": "수호신 각성이 골골 열두 개에서 열 개로 싸졌어요.",
+      "caption": "수호신 각성이 골골 **12개 → 10개**로 싸졌어요.",
+      "art": "misc:icon_purr",
+      "title": "수호신 각성",
+      "chip": {
+        "text": "대왕이 수호신으로",
+        "klass": "plain"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "필요한 골골",
+          "from": 12,
+          "to": 10,
+          "unit": "개",
+          "dec": 0,
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "note",
+          "text": "조건은 그대로: 대왕 + 직업 시너지 1단계"
+        }
+      ]
+    },
+    {
+      "id": "c20",
+      "kind": "columns",
+      "chapter": "system",
+      "tag": "nerf",
+      "since": "10.10",
+      "say": "대신 털갈이는 등급 따라 비싸져요. 대왕은 골골 세 개!",
+      "caption": "대신 **털갈이**는 등급 따라 비싸져요. 대왕은 골골 **3개!**",
+      "title": "털갈이 비용 (골골)",
+      "items": [
+        {
+          "art": "u:w_paw",
+          "name": "꼬마",
+          "from": 1,
+          "to": 1
+        },
+        {
+          "art": "u:w_sword",
+          "name": "동네",
+          "from": 1,
+          "to": 1
+        },
+        {
+          "art": "u:w_viking",
+          "name": "골목대장",
+          "from": 1,
+          "to": 2
+        },
+        {
+          "art": "u:w_samurai",
+          "name": "대왕",
+          "from": 1,
+          "to": 3
+        }
+      ],
+      "good": false,
+      "foot": "수호신은 털갈이를 할 수 없어요"
+    },
+    {
+      "id": "c21",
+      "kind": "cells",
+      "chapter": "system",
+      "tag": "new",
+      "since": "10.10",
+      "say": "챕터마다 특수 칸이 달라졌어요. 주방은 밥그릇, 욕실은 거품!",
+      "caption": "챕터마다 **특수 칸**이 달라졌어요. 주방은 밥그릇, 욕실은 거품!",
+      "title": "챕터별 특수 칸",
+      "items": [
+        {
+          "art": "cell:sun",
+          "chapter": "거실",
+          "name": "햇살 칸",
+          "text": "공격 속도 +20%"
+        },
+        {
+          "art": "cell:bowl",
+          "chapter": "주방",
+          "name": "밥그릇 칸",
+          "text": "피해 +20%"
+        },
+        {
+          "art": "cell:bubble",
+          "chapter": "욕실",
+          "name": "거품 칸",
+          "text": "치명타 확률 +20%p"
+        },
+        {
+          "art": "cell:stump",
+          "chapter": "마당",
+          "name": "그루터기 칸",
+          "text": "사거리 +20%"
+        },
+        {
+          "art": "cell:treat",
+          "chapter": "동물병원",
+          "name": "간식 칸",
+          "text": "생선 초당 +0.15 (고양이마다)"
+        }
+      ]
+    },
+    {
+      "id": "c22",
+      "kind": "laser",
+      "chapter": "system",
+      "tag": "buff",
+      "since": "10.09 + 10.10",
+      "say": "레이저 점이 보스에게 찰싹 붙어서 따라가요.",
+      "caption": "레이저 점이 **보스**에게 찰싹 붙어서 따라가요.",
+      "art": "boss:vacuum",
+      "title": "레이저 포인터",
+      "rows": [
+        {
+          "t": "num",
+          "label": "지속 시간",
+          "from": 5,
+          "to": 6.5,
+          "unit": "초",
+          "dec": 1,
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "text",
+          "label": "보스·정예",
+          "from": "먼저 노려요",
+          "to": "붙어서 따라가요",
+          "good": true
+        },
+        {
+          "t": "note",
+          "text": "찍거나 옮긴 자리에서 1.3칸 안이면 붙어요"
+        }
+      ]
+    },
+    {
+      "id": "c23",
+      "kind": "missions",
+      "chapter": "system",
+      "tag": "new",
+      "since": "10.10",
+      "say": "미션 보상은 이제 모두 받기 한 번이면 끝!",
+      "caption": "미션 보상은 이제 **모두 받기** 한 번이면 끝!",
+      "title": "모두 받기",
+      "foot": "일일·주간 미션, 주간 컵, 무한 단계"
+    },
+    {
+      "id": "c24",
+      "kind": "chapter",
+      "chapter": "content",
+      "say": "마지막은 신규 콘텐츠!",
+      "caption": "마지막은 **신규 콘텐츠!**"
+    },
+    {
+      "id": "c25",
+      "kind": "change",
+      "chapter": "content",
+      "tag": "buff",
+      "since": "10.09 + 10.10",
+      "fx": "coins",
+      "say": "골드 던전 보상이 약 일 점 칠 배로 올랐어요.",
+      "caption": "**골드 던전** 보상이 약 **1.7배**로 올랐어요.",
+      "art": "icon:gold",
+      "title": "골드 던전",
+      "chip": {
+        "text": "하루 무료 2번",
+        "klass": "plain"
+      },
+      "rows": [
+        {
+          "t": "num",
+          "label": "한 판 최대 (1단계)",
+          "from": 345,
+          "to": 574,
+          "unit": "골드",
+          "dec": 0,
+          "good": true,
+          "size": "big"
+        },
+        {
+          "t": "num",
+          "label": "처치 1마리당",
+          "from": 0.35,
+          "to": 0.6,
+          "unit": "골드",
+          "dec": 2,
+          "good": true,
+          "size": "mid"
+        },
+        {
+          "t": "num",
+          "label": "첫 승리 보너스 (1단계)",
+          "from": 100,
+          "to": 200,
+          "unit": "",
+          "dec": 0,
+          "good": true,
+          "size": "mid"
+        }
+      ]
+    },
+    {
+      "id": "c26",
+      "kind": "codex",
+      "chapter": "content",
+      "tag": "new",
+      "since": "10.09 + 10.10",
+      "say": "도감에는 몬스터 십구 종과 장난감 삼십 종이 있어요.",
+      "caption": "**도감**에는 몬스터 **19종**과 장난감 **30종**이 있어요.",
+      "title": "도감",
+      "counts": [
+        {
+          "n": 19,
+          "label": "몬스터"
+        },
+        {
+          "n": 30,
+          "label": "장난감"
+        }
+      ],
+      "foot": "보스·정예는 체력, 방어, 결계, 능력까지",
+      "monsters": [
+        "enemy:dust",
+        "enemy:drop",
+        "enemy:roomba",
+        "enemy:tangerine",
+        "enemy:balloon",
+        "enemy:clock",
+        "enemy:spray",
+        "boss:cucumber",
+        "boss:needle"
+      ],
+      "toys": [
+        "relic:cat_tower",
+        "relic:yarn_ball",
+        "relic:scratcher",
+        "relic:fishing_rod",
+        "relic:lucky_coin",
+        "relic:shooting_star",
+        "relic:hourglass",
+        "relic:nine_lives",
+        "relic:silvervine"
+      ]
+    },
+    {
+      "id": "c27",
+      "kind": "music",
+      "chapter": "content",
+      "tag": "new",
+      "since": "10.10",
+      "say": "음악이 챕터마다 달라졌어요. 아직 아무도 못 들어 봤대요.",
+      "caption": "**음악**이 챕터마다 달라졌어요. 아직 아무도 못 들어 봤대요.",
+      "title": "새 음악",
+      "art": "u:t_bard",
+      "chips": [
+        {
+          "name": "거실",
+          "bpm": 128
+        },
+        {
+          "name": "주방",
+          "bpm": 120
+        },
+        {
+          "name": "욕실",
+          "bpm": 104
+        },
+        {
+          "name": "마당",
+          "bpm": 112
+        },
+        {
+          "name": "동물병원",
+          "bpm": 124
+        },
+        {
+          "name": "골드 던전",
+          "bpm": 152
+        },
+        {
+          "name": "정예",
+          "bpm": 116
+        },
+        {
+          "name": "보스",
+          "bpm": 142
+        }
+      ]
+    },
+    {
+      "id": "c28",
+      "kind": "stat",
+      "chapter": "content",
+      "tag": "measure",
+      "since": "10.10",
+      "say": "봇 승률이 크게 올랐어요. 너무 쉬우면 알려 주세요.",
+      "caption": "봇 승률이 크게 올랐어요. **너무 쉬우면** 알려 주세요.",
+      "title": "자동 플레이 봇 승률",
+      "sub": "집사 0단계 · 시너지 봇 · 500판",
+      "bars": [
+        {
+          "label": "챕터 1",
+          "from": 75,
+          "to": 89
+        },
+        {
+          "label": "챕터 2",
+          "from": 82,
+          "to": 91
+        },
+        {
+          "label": "챕터 3",
+          "from": 78,
+          "to": 88
+        },
+        {
+          "label": "챕터 4",
+          "from": 82,
+          "to": 92
+        },
+        {
+          "label": "챕터 5",
+          "from": 83,
+          "to": 93
+        }
+      ]
+    },
+    {
+      "id": "c29",
+      "kind": "outro",
+      "chapter": null,
+      "say": "해 보시고 피드백 부탁드립니다. 구독과 좋아요도요!",
+      "caption": "해 보시고 **피드백** 부탁드립니다. 구독과 좋아요도요!",
+      "tail": 2.6
+    }
+  ]
+}
