@@ -173,7 +173,7 @@ const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
     days: CALENDAR_DAYS,
     gold: list(CALENDAR.flatMap((b, i) => (b.chests?.gold ? [i + 1] : []))),
   }),
-  pass: () => ({ tiers: PASS_TIERS, xp: PASS_XP_PER_TIER, days: SEASON_DAYS, level: FEATURE_RULES.pass.accountLevel ?? 0 }),
+  pass: () => ({ tiers: PASS_TIERS, xp: PASS_XP_PER_TIER, days: SEASON_DAYS }),
   patrol: () => ({
     gold: PATROL_GOLD_PER_HOUR, cap: hours(PATROL_CAP_MS), capPass: hours(PATROL_CAP_PASS_MS), min: Math.round(PATROL_MIN_MS / 60_000),
   }),

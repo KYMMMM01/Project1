@@ -285,10 +285,11 @@ describe('feature unlocks', () => {
   const none = { runs: 0, accountLevel: 1, chaptersCleared: 0, butler: false };
   it('opens by progress', () => {
     expect(unlockedFeatures(none)).toEqual([]);
-    expect(unlockedFeatures({ ...none, runs: 1 })).toEqual(['speed2x', 'cats', 'patrol']);
+    expect(unlockedFeatures({ ...none, runs: 1 })).toEqual(['speed2x', 'cats', 'patrol', 'pass']);
     expect(isFeatureUnlocked('missions', { ...none, runs: 3 })).toBe(true);
-    expect(isFeatureUnlocked('pass', { ...none, runs: 9, accountLevel: 3 })).toBe(false);
-    expect(isFeatureUnlocked('pass', { ...none, accountLevel: 4 })).toBe(true);
+    // The season pass opens with the first finished run, whatever the account level (it used to wait for level 4).
+    expect(isFeatureUnlocked('pass', none)).toBe(false);
+    expect(isFeatureUnlocked('pass', { ...none, runs: 1 })).toBe(true);
     expect(isFeatureUnlocked('daily', { ...none, chaptersCleared: 1 })).toBe(true);
     expect(isFeatureUnlocked('endless', { ...none, chaptersCleared: 1 })).toBe(false);
     expect(isFeatureUnlocked('endless', { ...none, chaptersCleared: 2 })).toBe(true);

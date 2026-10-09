@@ -320,7 +320,7 @@ export const KO: Record<string, string> = {
   'guide.pass.title': '시즌 패스',
   'guide.pass.teach': '경험치를 모으면 단계마다 보상이 나와요.',
   'guide.pass.full':
-    '시즌은 {days}일이고 보상 단계는 {tiers}개예요. 경험치 {xp}을(를) 모으면 한 단계가 올라가요. 판을 마칠 때마다 경험치가 쌓여요.\n무료 줄은 누구나 받고, 프리미엄 줄은 보석과 상자를 더 줘요. 계정 레벨 {level}부터 열려요.',
+    '시즌은 {days}일이고 보상 단계는 {tiers}개예요. 경험치 {xp}을(를) 모으면 한 단계가 올라가요. 판을 마칠 때마다 경험치가 쌓여요.\n무료 줄은 누구나 받고, 프리미엄 줄은 보석과 상자를 더 줘요. 첫 판을 마치면 열려요.',
 
   'guide.patrol.title': '순찰',
   'guide.patrol.teach': '고양이들이 순찰하며 골드를 모아 와요.',
