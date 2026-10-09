@@ -12,7 +12,7 @@ export const ICON_NAMES = [
   'gift', 'star', 'crown', 'paw', 'heart', 'clock', 'ad', 'coin', 'gem', 'xp', 'energy',
   'arrow_up', 'swords', 'shield', 'reroll', 'sell', 'skull', 'chest', 'fish', 'lucky_clover', 'dice', 'warning',
   'purr', 'laser', 'sun', 'molt', 'wave_call', 'class_warrior', 'class_ranger', 'class_mage', 'class_trickster',
-  'target', 'sweep', 'ticket', 'calendar', 'wardrobe', 'share', 'code', 'speed_1', 'speed_2', 'speed_3', 'eye',
+  'target', 'sweep', 'ticket', 'calendar', 'wardrobe', 'share', 'code', 'speed_1', 'speed_2', 'speed_3', 'eye', 'book',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -1046,6 +1046,15 @@ const ICONS: Record<IconName, IconDef> = {
       k.detail([shade(c, 0.35), shade(c, -0.2)], (p) => p.circle(0, 0, 20));
       k.detail(Color.outline, (p) => p.circle(0, 0, 9.5));
       k.detail(WHITE, (p) => p.circle(-6.5, -7, 5.2), 0.95);
+    },
+  },
+  book: {
+    color: Color.teal,
+    draw: (k, c) => {
+      k.solid(Color.paperLight, (p) => p.rrect(-27, -35, 62, 78, 7));
+      k.solid(c, (p) => p.rrect(-37, -42, 62, 80, 9));
+      k.detail(Color.paperLight, (p) => p.rrect(-27, -29, 42, 14, 5));
+      k.detail(Color.mustard, (p) => p.star(-6, 12, 14, 6.5, 5, 1.5));
     },
   },
   dice: {

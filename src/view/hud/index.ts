@@ -7,17 +7,19 @@ import './strings';
 import { Container, Point, Text } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
 import { i18nEvents, t } from '@/core/i18n';
+import { closeCodex, openCodex } from '@/codex';
 import { closeGuide, GuideProgress, guideProgress, openGuide, topicTeach, type TopicId, type TryControl } from '@/guide';
 import { renderOnce, warm, WARM_PRIO } from '@/fx';
 import { CLASS_IDS, isWaveTarget, waveKindOf } from '@/game';
 import { clearToasts, confirmDialog, popups, toast } from '@/ui';
-import type { UnitId } from '@/game';
+import type { EnemyId, UnitId } from '@/game';
 import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
 import type { BattleContext, BattleLayout, HudAnchor, HudPart } from '../context';
 import { BossBar } from './BossBar';
 import { BottomPanel } from './BottomPanel';
 import { DodgeStickers } from './DodgeSticker';
 import type { Weighted } from './bubbleMath';
+import { watchCodex } from './codexWatch';
 import { watchEncounters } from './encounterWatch';
 import { EnvImpl } from './env';
 import { HintBubble } from './HintBubble';
@@ -191,6 +193,8 @@ class Hud implements HudPart {
       openGuide: (id) => this.openGuideAt(id, false),
     });
     env.explainAt = (command) => this.explainTarget(command);
+    env.codexAt = (foe) => this.openCodexAt(foe, false);
+    watchCodex(env);
     // The tutorial run teaches its own topics (in order, as each control arrives); a card only comes for what it leaves out.
     this.hints.only = lessons ? new Set<TopicId>(['awaken']) : null;
 
@@ -470,6 +474,36 @@ class Hud implements HudPart {
     });
   }
 
+  /**
+   * The codex, from the pause menu (`fromPause`: the menu comes back after it) or from the link of an enemy bubble (`foe`: straight onto
+   * its page). The battle stands still meanwhile, and the numbers start at this run's own chapter and butler level.
+   */
+  private openCodexAt(foe: EnemyId | undefined, fromPause: boolean): void {
+    if (this.destroyed || (!fromPause && this.pauseOpen)) return;
+    if (!fromPause) {
+      this.pauseOpen = true;
+      this.ctx.setPaused('user', true);
+    }
+    info.close();
+    const init = this.ctx.battle.init;
+    openCodex({
+      ...(foe ? { foe } : {}),
+      level: { chapter: init.chapter, stake: init.stake },
+      progress: this.progress,
+      onClose: () => this.afterCodex(fromPause),
+    });
+  }
+
+  private afterCodex(fromPause: boolean): void {
+    if (this.destroyed) return;
+    if (fromPause) {
+      void this.pauseMenu().then((a) => this.afterPause(a));
+      return;
+    }
+    this.pauseOpen = false;
+    this.ctx.setPaused('user', false);
+  }
+
   private afterGuide(fromPause: boolean): void {
     if (this.destroyed) return;
     const tryIt = this.tryControl;
@@ -615,6 +649,10 @@ class Hud implements HudPart {
       this.openGuideAt(undefined, true);
       return;
     }
+    if (action === 'codex') {
+      this.openCodexAt(undefined, true);
+      return;
+    }
     this.pauseOpen = false;
     this.ctx.setPaused('user', false);
     if (action === 'restart') {
@@ -737,6 +775,7 @@ class Hud implements HudPart {
     this.destroyed = true;
     debugExpose('lessons', null);
     closeGuide();
+    closeCodex();
     window.removeEventListener('keydown', this.onKey);
     this.offLang();
     this.teardown();

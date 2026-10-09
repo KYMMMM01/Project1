@@ -2,8 +2,10 @@
  * QA helpers on `window.__dbg.meta` (debug builds and `?debug=1` only): give currencies and cards,
  * fake finished runs, unlock everything, and move the meta clock. Never part of the normal flow.
  */
+import { closeCodex, codexState, openCodex } from '@/codex';
 import { debugEnabled, debugExpose } from '@/core/debug';
 import type { RunStats } from '@/game';
+import { guideProgress, type CodexKey } from '@/guide';
 import { BASE_UNITS, profile, systemClock, type ChestKind } from '@/meta';
 
 const HOUR_MS = 3_600_000;
@@ -108,6 +110,16 @@ export function installCheats(): void {
     /** Reload with an empty save and the real clock (`?fresh=1` clears both at boot). */
     reset() {
       location.search = '?fresh=1&debug=1';
+    },
+  });
+  // The codex, opened and read from outside (QA): `met(keys)` marks entries as met in a run.
+  debugExpose('codex', {
+    open: openCodex,
+    close: closeCodex,
+    state: codexState,
+    progress: guideProgress,
+    met(keys: CodexKey[]) {
+      for (const key of keys) guideProgress.markMet(key);
     },
   });
 }

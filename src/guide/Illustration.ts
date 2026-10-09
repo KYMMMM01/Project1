@@ -8,7 +8,7 @@ import { hasTex, tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
 import { cacheStatic, Color, currencyIcon, drawDashedInset, drawIcon, paperSeed, paperShape, Rarity, type IconName } from '@/ui';
 import { relicDef, type UnitId } from '@/game';
-import { relicIcon } from '@/view/hud/kit';
+import { enemyPortrait, relicIcon } from '@/view/hud/kit';
 import type { Art } from './topics';
 
 /** A texture scaled to fit `box` and centred on the origin, or null when the art is not loaded. */
@@ -49,7 +49,7 @@ const ICON_PAPER: Partial<Record<IconName, number>> = {
 };
 
 /** A flat paper sun for a sunny cell: rays and a disc (no glow). */
-function sunArt(box: number): Graphics {
+export function sunArt(box: number): Graphics {
   const g = new Graphics();
   const r0 = box * 0.2;
   const r1 = box * 0.4;
@@ -62,7 +62,8 @@ function sunArt(box: number): Graphics {
   return g;
 }
 
-function boltArt(box: number): Graphics {
+/** A paper lightning bolt for a zapped cell. */
+export function boltArt(box: number): Graphics {
   const g = new Graphics();
   const s = box * 0.4;
   g.poly([s * 0.15, -s, -s * 0.55, s * 0.1, -s * 0.05, s * 0.1, -s * 0.2, s, s * 0.55, -s * 0.2, s * 0.05, -s * 0.2]).fill(Color.mustard);
@@ -70,7 +71,8 @@ function boltArt(box: number): Graphics {
   return g;
 }
 
-function puddleArt(box: number): Graphics {
+/** A paper puddle for a wet cell. */
+export function puddleArt(box: number): Graphics {
   const g = new Graphics();
   g.ellipse(-box * 0.1, box * 0.04, box * 0.3, box * 0.18).fill(Color.teal);
   g.ellipse(box * 0.2, -box * 0.12, box * 0.16, box * 0.1).fill(Color.teal);
@@ -148,12 +150,9 @@ export function illustration(art: Art, size: number): Container {
     case 'cats':
       root.addChild(catsArt(art, inner, size < 160));
       break;
-    case 'foe': {
-      const key = art.id.startsWith('boss_') ? art.id : `enemy_${art.id}`;
-      const s = sticker(key, inner * 0.8);
-      root.addChild(s ?? disc(inner, Color.berry, 'skull'));
+    case 'foe':
+      root.addChild(enemyPortrait(art.id, inner * 0.8));
       break;
-    }
     case 'toy':
       root.addChild(relicIcon(art.id, inner * 0.74, relicDef(art.id).rarity));
       break;

@@ -7,6 +7,7 @@ import { getLang, i18nEvents, t, type Lang } from '@/core/i18n';
 import { isStorageVolatile, onStorageVolatile } from '@/core/save';
 import { uiTweens } from '@/core/tween';
 import type { NumbersMode } from '@/fx';
+import { openCodex } from '@/codex';
 import { guideProgress, openGuide, type GuideHost } from '@/guide';
 import { bundleParts, errorKey, profile } from '@/meta';
 import { iap } from '@/platform';
@@ -209,6 +210,16 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     guideBtn.position.set(w / 2, y + 60);
     scaffold.content.addChild(guideBtn);
     y += 120 + GAP;
+    // Right under it: the codex of monsters, toys and board cells, with how many entries are new since the last look.
+    const fresh = guideProgress.freshCount();
+    const codexBtn = new Button({
+      label: t('codex.settings.title'), sublabel: fresh > 0 ? t('codex.settings.fresh', { n: fresh }) : t('codex.settings.hint'), style: 'info', icon: 'book',
+      width: w, height: 120, fontSize: 40,
+    });
+    codexBtn.onTap(() => void openCodex({ onClose: afterCodexClosed }));
+    codexBtn.position.set(w / 2, y + 60);
+    scaffold.content.addChild(codexBtn);
+    y += 120 + GAP;
     // Next to it, so a player who skipped the tutorial (or wants it once more) finds it where the rules are.
     const again = new Button({ label: t('guide.replay.row'), icon: 'play', style: 'neutral', width: w, height: REPLAY_H, fontSize: 32 });
     again.onTap(() => void askReplayTutorial().then((yes) => (yes ? startReplay() : undefined)));
@@ -354,6 +365,11 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
       };
     },
     replay: { ask: askReplayTutorial, start: startReplay },
+  };
+
+  /** The codex's "new" count is on the row that opened it: build the sheet again. */
+  const afterCodexClosed = (): void => {
+    if (!closed) build();
   };
 
   const afterGuideClosed = (): void => {

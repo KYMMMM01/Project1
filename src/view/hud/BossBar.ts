@@ -5,10 +5,12 @@
  * runs right under the top area, so nothing may hang below it) and marks the estimate on the
  * countdown bar, which is the time limit during such waves.
  */
-import { Container, Graphics, type Text } from 'pixi.js';
+import { Container, Graphics, Rectangle, type Text } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { enemyDef, type EnemyId, type EnemyState } from '@/game';
+import { info } from '../info';
+import { enemyInfo } from './enemyInfo';
 import {
   Color,
   drawIcon,
@@ -76,6 +78,9 @@ export class BossBar {
     this.rect = r.boss;
     this.timer = r.timer;
     this.root.visible = false;
+    // A tap on the strip opens the same card as a tap on the wave preview: what the boss is, and the link to its codex page.
+    this.root.eventMode = 'static';
+    this.root.on('pointerdown', () => this.tapStrip());
     this.hp = new ProgressBar({ width: this.rect.w - TEXT_X - RIGHT_PAD, height: 24, color: 'red', ghost: true, value: 1 });
     this.nameT = uiLabel('', { size: 26, anchorX: 0, align: 'left' });
     this.estT = uiLabel('', { size: 24, anchorX: 1, align: 'right' });
@@ -158,6 +163,12 @@ export class BossBar {
     return this.root;
   }
 
+  private tapStrip(): void {
+    const boss = this.boss;
+    if (!boss || this.finishing) return;
+    info.tap(`enemy:${boss.id}`, this.back, enemyInfo(boss.id, (foe) => this.env.openCodex(foe)), { prefer: 'below' });
+  }
+
   private hpFraction(): number {
     const e = this.boss;
     if (!e) return 0;
@@ -204,6 +215,7 @@ export class BossBar {
     for (const c of this.back.removeChildren()) c.destroy({ children: true });
     this.back.addChild(paperShape({ w, h, radius: 10, fill: Color.paper, torn: ['right'], seed: this.seed, grain: false }));
     this.back.position.set(w / 2, h / 2);
+    this.root.hitArea = new Rectangle(0, 0, w, h);
     this.hp.position.set(TEXT_X + (w - TEXT_X - RIGHT_PAD) / 2, HP_Y);
     this.sticker?.position.set(6, h / 2 - 2);
     this.nameT.position.set(TEXT_X, ROW_Y);

@@ -1,3 +1,4 @@
+import { closeCodex } from '@/codex';
 import { debugExpose } from '@/core/debug';
 import { popups } from '@/ui/Popup';
 import { ensureSettings } from '@/view/hud/settings';
@@ -40,6 +41,7 @@ export function installSystemScreens(shell: Shell): void {
     dispose: () => {
       auto.dispose();
       closeSettingsScreen();
+      closeCodex();
       calendar?.close();
       stopConfetti();
     },

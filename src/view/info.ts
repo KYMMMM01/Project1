@@ -11,6 +11,8 @@ import type { Container } from 'pixi.js';
 export interface InfoContent {
   title?: string;
   text: string;
+  /** A tappable line under the text (the enemy bubble's "see in the codex"): `run` is called on the press, and the caller closes the bubble. */
+  link?: { label: string; run: () => void };
 }
 
 export interface InfoOpts {

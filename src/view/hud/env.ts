@@ -5,7 +5,7 @@
 import { type Container, Point } from 'pixi.js';
 import { Emitter } from '@/core/events';
 import { hasString, t } from '@/core/i18n';
-import { AWAKEN_MIN_TIER, type BattleApi, type Fail } from '@/game';
+import { AWAKEN_MIN_TIER, type BattleApi, type EnemyId, type Fail } from '@/game';
 import type { GuideProgress, TopicId } from '@/guide';
 import { popups, toast, type Popup } from '@/ui';
 import { info } from '../info';
@@ -58,6 +58,8 @@ export interface HudEnv {
   note(key: CountKey): void;
   /** Explain a refused command in plain words, in a bubble on the control that was pressed (a toast when the command lives in a popup). */
   explain(command: string, fail: Fail): void;
+  /** Open the codex on this enemy's page; the battle stands still while it is open. */
+  openCodex(foe: EnemyId): void;
 }
 
 export class EnvImpl implements HudEnv {
@@ -69,6 +71,8 @@ export class EnvImpl implements HudEnv {
   private readonly tmp = new Point();
   /** The control a command's refusal is about, set by the HUD once its parts exist. */
   explainAt: ((command: string) => Container | null) | null = null;
+  /** What the codex link of an enemy bubble does, set by the HUD (which owns the pause bookkeeping). */
+  codexAt: ((foe: EnemyId) => void) | null = null;
   /** The tutorial's answers, set while one is running. */
   lessonOf: (() => TopicId | null) | null = null;
   noteTo: ((key: CountKey) => void) | null = null;
@@ -161,8 +165,13 @@ export class EnvImpl implements HudEnv {
     if (!target || !this.hints.explain(target, text)) toast(text, 'warning');
   }
 
+  openCodex(foe: EnemyId): void {
+    this.codexAt?.(foe);
+  }
+
   dispose(): void {
     this.explainAt = null;
+    this.codexAt = null;
     this.lessonOf = null;
     this.noteTo = null;
     for (const off of this.offs.splice(0)) off();

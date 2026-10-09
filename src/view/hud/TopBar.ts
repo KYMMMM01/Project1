@@ -29,8 +29,9 @@ import type { BattleLayout } from '../context';
 import { info } from '../info';
 import type { HudEnv } from './env';
 import { GAUGE_H, GaugeStrip } from './GaugeStrip';
+import { enemyInfo } from './enemyInfo';
 import { enemyPortrait, relicIcon } from './kit';
-import { gaugeLevel, nextSpeed, overflowLeft, speedSteps, traitOrder } from './policy';
+import { gaugeLevel, nextSpeed, overflowLeft, speedSteps } from './policy';
 import { CARD_GAP, CARD_H, CARD_W, cardCentre, COLUMN_W, FACE, gaugeWidth, LABEL_H, PREVIEW_MAX, previewShown, TOY_MAX, TOY_SIZE, toyCentre, toysShown, topRects, type TopRects } from './layoutMath';
 
 /** Seconds the cards of the wave that has begun take to leave before the next wave's are dealt. */
@@ -370,10 +371,7 @@ export class TopBar {
   }
 
   private showEnemy(target: Container, id: EnemyId): void {
-    const def = enemyDef(id);
-    const lines = [t(def.descKey)];
-    for (const tr of traitOrder(def.traits)) lines.push(`${t(`trait.${tr}.name`)}: ${t(`trait.${tr}.desc`)}`);
-    info.tap(`enemy:${id}`, target, { title: t(def.nameKey), text: lines.join('\n') });
+    info.tap(`enemy:${id}`, target, enemyInfo(id, (foe) => this.env.openCodex(foe)));
   }
 
   // ───────────────────────── toys ─────────────────────────

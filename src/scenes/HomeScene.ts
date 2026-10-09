@@ -1,5 +1,6 @@
 import { gameplayStop } from '@/app/lifecycle';
 import { audio } from '@/audio';
+import { closeCodex, openCodex } from '@/codex';
 import { debugExpose } from '@/core/debug';
 import { game } from '@/core/game';
 import { i18nEvents, t } from '@/core/i18n';
@@ -50,6 +51,7 @@ export class HomeScene extends Scene implements HomeSurface {
     this.topBar = new HomeTopBar({
       onPlus: (kind) => services.openShop(SHOP_SECTION[kind]),
       onSettings: () => services.openSettings(),
+      onCodex: () => void openCodex({}),
     });
     const first = opts.tab ?? shell.takeQueuedTab() ?? 'battle';
     this.host = new TabHost(shell, first, this.tweens);
@@ -85,6 +87,7 @@ export class HomeScene extends Scene implements HomeSurface {
 
   override exit(): void {
     clearPointer();
+    closeCodex();
     for (const off of this.offs) off();
     this.offs.length = 0;
     shell.detach(this);

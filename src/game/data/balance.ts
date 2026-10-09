@@ -99,6 +99,8 @@ export const CLASS_UPGRADE_COSTS: readonly number[] = [60, 100, 160, 240, 340];
 export const CLASS_UPGRADE_BONUS = 0.15;
 export const HAZARD_RECOVER = 0.3;
 export const HAZARD_WARNING = 0.8;
+/** A lightning strike (the cloud boss) covers a square of this many cells on each side. */
+export const HAZARD_BLOCK_SIDE = 2;
 /** A fifth of the board, as it was on the 5 x 4 board. */
 export const SUN_CELLS = 5;
 export const SUN_SPEED = 0.2;

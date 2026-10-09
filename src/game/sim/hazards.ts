@@ -1,7 +1,7 @@
 /** Cell hazards (wet, zap), the dryer's weakening and the pulses of elites (rules §10). */
 import type { HazardKind, HazardState } from '../api';
 import { CELL_COUNT, COLS, ROWS, cellCol, cellIndex, cellRow } from '../geometry';
-import { ENRAGE_COOLDOWN_MULT, HAZARD_WARNING } from '../data/balance';
+import { ENRAGE_COOLDOWN_MULT, HAZARD_BLOCK_SIDE, HAZARD_WARNING } from '../data/balance';
 import { recomputeStats } from './board';
 import type { Sim } from './sim';
 import type { HazardBatch, SimEnemy, SimUnit } from './types';
@@ -29,15 +29,16 @@ export function pickHazardCells(s: Sim, count: number): number[] {
   return out;
 }
 
-/** A 2x2 block of cells that covers a random unit. */
+/** A square block of cells (`HAZARD_BLOCK_SIDE` on a side) that covers a random unit. */
 export function pickHazardBlock(s: Sim): number[] {
   const pool = collectEligible(s);
   if (pool.length === 0) return [];
   const anchor = pool[Math.floor(s.rng.combat.next() * pool.length)] as number;
-  const col = Math.min(Math.max(cellCol(anchor) - (s.rng.combat.next() < 0.5 ? 1 : 0), 0), COLS - 2);
-  const row = Math.min(Math.max(cellRow(anchor) - (s.rng.combat.next() < 0.5 ? 1 : 0), 0), ROWS - 2);
+  const side = HAZARD_BLOCK_SIDE;
+  const col = Math.min(Math.max(cellCol(anchor) - (s.rng.combat.next() < 0.5 ? 1 : 0), 0), COLS - side);
+  const row = Math.min(Math.max(cellRow(anchor) - (s.rng.combat.next() < 0.5 ? 1 : 0), 0), ROWS - side);
   const out: number[] = [];
-  for (let dr = 0; dr < 2; dr++) for (let dc = 0; dc < 2; dc++) out.push(cellIndex(col + dc, row + dr));
+  for (let dr = 0; dr < side; dr++) for (let dc = 0; dc < side; dc++) out.push(cellIndex(col + dc, row + dr));
   return out;
 }
 
