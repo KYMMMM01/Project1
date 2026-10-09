@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Text } from 'pixi.js';
 import { balanceWrap } from '@/view/hud/kit';
-import { bottomRects, pickSheet, PICK, SHEET, sheetBoxes } from '@/view/hud/layoutMath';
+import { bottomRects, pickSheet, PICK, SHEET, sheetBoxes, sheetSkillInfo } from '@/view/hud/layoutMath';
 
 const layout = { w: 720, h: 1280, safeTop: 0, safeBottom: 0, fieldX: 0, fieldY: 168, topH: 168, bottomH: 452 };
 
@@ -44,6 +44,28 @@ describe('the selection sheet sits on one content box', () => {
     expect(b.textX - (b.photo.x + b.photo.w)).toBe(12);
     const row = SHEET.molt + SHEET.awaken + SHEET.sell + SHEET.buttonGap * 2;
     expect(row).toBeLessThanOrEqual(b.content.w);
+  });
+
+  it('heads a cut skill line with an "i" sticker on the corner of the photo: big, far from the close button, clear of the rows round it', () => {
+    const at = sheetSkillInfo(w, h);
+    // a 44 px sticker (it was a 26 px mark) inside a touch slot of 56 px or more each way, and the whole photo opens the text too
+    expect(at.r * 2).toBeGreaterThanOrEqual(44);
+    expect(at.slot.w).toBeGreaterThanOrEqual(56);
+    expect(at.slot.h).toBeGreaterThanOrEqual(56);
+    // the far side of the sheet from the close button: a thumb aiming at one cannot land on the other
+    expect(b.close.x - (at.slot.x + at.slot.w)).toBeGreaterThan(400);
+    // on the skill line's own row, overlapping the photo's corner, and ending above the build well (its touch slot too)
+    expect(Math.abs(at.centre.y - (SHEET.edge + SHEET.skillY))).toBeLessThanOrEqual(2);
+    expect(at.centre.x).toBeLessThan(b.photo.x + b.photo.w);
+    // the sticker may lap the well's top edge by a pixel or two (it is drawn over it); what answers a touch stops at the well
+    expect(at.centre.y + at.r).toBeLessThanOrEqual(b.well.y + 2);
+    expect(at.slot.y + at.slot.h).toBeLessThanOrEqual(b.well.y + 1e-9);
+    // clear of the first stat's icon (26 px, centred 13 px right of the text start on the stats row): its nearest corner is outside the sticker
+    const corner = { x: b.textX, y: SHEET.edge + SHEET.statsY + 13 };
+    expect(Math.hypot(corner.x - at.centre.x, corner.y - at.centre.y)).toBeGreaterThan(at.r);
+    // the line starts 8 px right of the sticker and has more room than it had with the mark at its end (the old line kept 36 px for it)
+    expect(at.lineX - (at.centre.x + at.r)).toBe(SHEET.infoGap);
+    expect(at.lineX - b.textX).toBeLessThan(36);
   });
 
   it('is cut from the 270 px the panel leaves it, which stops 8 px above the summon button\'s paper', () => {

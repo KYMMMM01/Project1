@@ -221,6 +221,10 @@ export const SHEET = {
   nameY: 16,
   statsY: 46,
   skillY: 72,
+  /** The "i" sticker of a cut skill line: its radius (the laser button's "i" plate is the same 44 px), the side of its touch slot and the gap to the line it heads. */
+  info: 22,
+  infoSlot: 76,
+  infoGap: 8,
 } as const;
 
 export interface SheetBoxes {
@@ -250,6 +254,24 @@ export function sheetBoxes(w: number, h: number): SheetBoxes {
     buttonY: buttonTop + button / 2,
     textX: edge + photo + 12,
     textRight: w - edge - close - gap,
+  };
+}
+
+/**
+ * The "i" sticker that opens a cut skill line in full. It heads the line, on the photo's lower right corner: the far side of the sheet from the
+ * close button (it used to end the line, a 26 px mark right under that button, and a miss closed the sheet). `slot` is what answers a touch:
+ * a square round the sticker that stops where the build well starts. The photo opens the same text, so the target is the photo and the sticker together.
+ */
+export function sheetSkillInfo(w: number, h: number): { centre: Point; r: number; slot: Rect; lineX: number } {
+  const b = sheetBoxes(w, h);
+  const r = SHEET.info;
+  const centre = { x: b.photo.x + b.photo.w - 7, y: SHEET.edge + SHEET.skillY };
+  const top = centre.y - SHEET.infoSlot / 2;
+  return {
+    centre,
+    r,
+    slot: { x: centre.x - SHEET.infoSlot / 2, y: top, w: SHEET.infoSlot, h: Math.min(SHEET.infoSlot, b.well.y - top) },
+    lineX: centre.x + r + SHEET.infoGap,
   };
 }
 

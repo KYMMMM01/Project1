@@ -4,7 +4,7 @@
  * it becomes (merge or awakening, see BuildPlanView) and the Molt, Awaken and Sell buttons. The SUMMON
  * row below it stays where it is.
  */
-import { Container, Graphics, type Text } from 'pixi.js';
+import { Container, Graphics, Rectangle, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { fmt, fmtPct } from '@/core/format';
 import { t } from '@/core/i18n';
@@ -30,7 +30,7 @@ import {
 } from '@/ui';
 import { info } from '../info';
 import { BuffBoard, buffFacts, chipsFit, withOwnWard, type BuffFact } from '../field/buffMath';
-import { SHEET, sheetBoxes, type Rect } from './layoutMath';
+import { SHEET, sheetBoxes, sheetSkillInfo, type Rect } from './layoutMath';
 import type { HudEnv } from './env';
 import { BuildPlanView } from './BuildPlanView';
 import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE, tapArea, unitPhoto } from './kit';
@@ -39,8 +39,6 @@ import { MoltPicker } from './popups/MoltPicker';
 
 /** Seconds a cat's full skill text stays up (it is the longest line a bubble carries). */
 const SKILL_FOR = 8;
-/** Room kept at the end of a cut skill line for its info mark. */
-const INFO_W = 36;
 /** The sticker on a buff chip (the board's badge, half width), and the space between the chips. */
 const CHIP_R = 11;
 const CHIP_GAP = 8;
@@ -303,21 +301,41 @@ export class SelectionSheet {
     const lineW = box.content.x + box.content.w - TEXT_X;
     this.fitLine(skill, lineW);
     skill.position.set(TEXT_X, EDGE + SKILL_Y);
+    let skillInfo: Container | null = null;
     if (skill.text !== this.fullSkill) {
-      // A cut line says so: an info mark closes it, and the whole band around it opens the full text.
+      // A cut line says so with an "i" sticker at its head, on the photo's corner and a sheet's width away from the close button. The sticker's
+      // slot, the photo and the line itself all open the full text; the line's band stays off the stats row above and the well below.
+      const at = sheetSkillInfo(this.rect.w, this.rect.h);
+      const open = (): void => {
+        info.tap(`skill:${def.id}`, skill, { title: t(def.nameKey), text: this.fullSkill }, { seconds: SKILL_FOR });
+      };
       skill.text = this.fullSkill;
-      this.fitLine(skill, lineW - INFO_W);
-      const mark = drawIcon('info', 26);
-      mark.position.set(TEXT_X + lineW - 13, EDGE + SKILL_Y);
-      d.addChild(mark);
-      tapArea(skill, 0, -44, lineW, 88);
-      skill.on('pointerdown', () => info.tap(`skill:${def.id}`, skill, { title: t(def.nameKey), text: this.fullSkill }, { seconds: SKILL_FOR }));
+      const cutW = box.content.x + box.content.w - at.lineX;
+      this.fitLine(skill, cutW);
+      skill.position.set(at.lineX, EDGE + SKILL_Y);
+      tapArea(skill, 0, -14, cutW, box.well.y - (EDGE + SKILL_Y) + 14);
+      skill.on('pointerdown', open);
+      tapArea(photo, -SHEET.photo / 2, -SHEET.photo / 2, SHEET.photo, SHEET.photo);
+      photo.on('pointerdown', open);
+      const sticker = new Container();
+      sticker.label = 'skill-info';
+      const plate = new Graphics();
+      drawPaper(plate, -at.r, -at.r, { w: at.r * 2, h: at.r * 2, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, edgeWidth: 3, edgeAlpha: 1, seed: this.seed + 9, shadow: 3, grain: false });
+      sticker.addChild(plate, drawIcon('info', 28, Color.tealDark));
+      sticker.position.set(at.centre.x, at.centre.y);
+      sticker.eventMode = 'static';
+      sticker.cursor = 'pointer';
+      sticker.hitArea = new Rectangle(at.slot.x - at.centre.x, at.slot.y - at.centre.y, at.slot.w, at.slot.h);
+      sticker.on('pointerdown', open);
+      skillInfo = sticker;
     }
     d.addChild(skill);
 
     const plan = new BuildPlanView(this.env, u, box.well.w);
     plan.position.set(box.well.x, box.well.y);
     d.addChild(plan);
+    // The sticker lies over the photo's corner and laps the well's edge by a pixel, so it goes on last (its touch slot stops at the well).
+    if (skillInfo) d.addChild(skillInfo);
   }
 
   /**
