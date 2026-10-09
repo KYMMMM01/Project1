@@ -10,3 +10,11 @@ coverage/
 art/*.log
 art/tests/_*.png
 .shots/
+
+# patch video outputs and the owner-supplied music (not redistributable)
+video/*.mp3
+video/*.wav
+video/*.ogg
+video/*.mp4
+video/*.webm
+video/work/
