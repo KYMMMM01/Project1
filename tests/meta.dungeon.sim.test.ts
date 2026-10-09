@@ -35,8 +35,9 @@ describe('the dungeon script', () => {
         expect(enemySpec(g.enemy).traits).not.toContain('elite');
         expect(enemySpec(g.enemy).traits).not.toContain('boss');
       }
-      // At most one armoured or one warded kind in a wave, so a board of any class has a counter in reach.
-      const kinds = s.groups.map((g) => enemySpec(g.enemy)).filter((e) => e.armor > 0 || e.ward > 0);
+      // At most one armoured or one warded kind in a wave, so a board of any class has a counter in reach. "Armoured" and "warded" are the
+      // traits (the roomba, the tangerine): since 2026-10-10 every ordinary enemy has 5 to 10% armour, which is not a kind of its own.
+      const kinds = s.groups.map((g) => enemySpec(g.enemy)).filter((e) => e.traits.includes('armored') || e.traits.includes('warded'));
       expect(kinds.length).toBeLessThanOrEqual(1);
     }
   });

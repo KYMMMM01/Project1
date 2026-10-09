@@ -245,7 +245,7 @@ export const EN: Record<string, string> = {
   'guide.trait_fast.title': '{name} enemies',
   'guide.trait_fast.teach': 'They run much faster than the rest.',
   'guide.trait_fast.full':
-    'They move at {speed}, normal enemies at {normal}. They are frail but reach the end quickly.\nSlowing attacks and cats with long range help.',
+    'They move at {speed}, normal enemies at {normal}. They are frail but reach the end quickly.\nSlowing attacks and cats with long range help. Some enemies shrug off part of a slow, and the codex shows how much.',
 
   'guide.trait_swarm.title': '{name} enemies',
   'guide.trait_swarm.teach': 'Weak, but they arrive in crowds.',

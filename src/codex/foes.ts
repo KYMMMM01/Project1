@@ -187,6 +187,8 @@ export interface FoeStats {
   baseSpeed: number;
   armorPct: number;
   wardPct: number;
+  /** The share of every slow that does not land on it (the slow that lands is cap x (1 - this)), percent. */
+  slowResistPct: number;
   /** Fish paid for the kill and purr with it (an elite or a boss pays the wave-kind amount, not its own bounty). */
   fish: number;
   purr: number;
@@ -199,13 +201,13 @@ export function foeStats(id: EnemyId): FoeStats {
   const rank = foeRank(id);
   const fish = rank === 'boss' ? BOSS_FISH : rank === 'elite' ? ELITE_FISH : spec.bounty;
   const purr = rank === 'boss' ? BOSS_PURR : rank === 'elite' ? ELITE_PURR : 0;
-  return { hpMult: spec.hpMult, speed: spec.speed, baseSpeed: ENEMY_SPECS.cucumber.speed, armorPct: pct(spec.armor), wardPct: pct(spec.ward), fish, purr };
+  return { hpMult: spec.hpMult, speed: spec.speed, baseSpeed: ENEMY_SPECS.cucumber.speed, armorPct: pct(spec.armor), wardPct: pct(spec.ward), slowResistPct: pct(spec.slowResist), fish, purr };
 }
 
 export type StunRule = 'full' | 'half' | 'none';
 
 export interface Resistance {
-  /** The most an enemy can be slowed, percent. */
+  /** The cap on one slow, percent, before the enemy's own slow resistance (`FoeStats.slowResistPct`) takes its share off what lands. */
   slowCapPct: number;
   /** How well stun and freeze work: all of it, the shortened share, or not at all. */
   stun: StunRule;
