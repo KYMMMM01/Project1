@@ -10,8 +10,9 @@ import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { enemyDef, type EnemyId, type EnemyState } from '@/game';
 import { info } from '../info';
-import { enemyInfo } from './enemyInfo';
+import { defenceLine, enemyInfo } from './enemyInfo';
 import {
+  artLabel,
   Color,
   drawIcon,
   drawPaper,
@@ -38,6 +39,8 @@ const TEXT_X = 54;
 const RIGHT_PAD = 28;
 const ROW_Y = 25;
 const HP_Y = 55;
+/** The defence line sits on the health bar's left end, which is the last part of the bar to drain. */
+const DEF_INSET = 12;
 
 /** The paper each kill-time verdict sits on, with a glyph so the colour is never the only cue. */
 const TONE_PAPER: Record<KillTone, number> = { green: Color.leaf, amber: Color.mustard, red: Color.coral };
@@ -50,6 +53,7 @@ export class BossBar {
   private readonly nameT: Text;
   private readonly estT: Text;
   private readonly timeT: Text;
+  private readonly defT: Text;
   private readonly clock = drawIcon('clock', 24);
   private readonly mark = new Graphics();
   private readonly hp: ProgressBar;
@@ -67,6 +71,7 @@ export class BossBar {
   private lastMarker = -2;
   private lastEst = '';
   private lastLeft = -1;
+  private lastBroken = false;
   private rect: Rect;
   private timer: Rect;
 
@@ -85,7 +90,8 @@ export class BossBar {
     this.nameT = uiLabel('', { size: 26, anchorX: 0, align: 'left' });
     this.estT = uiLabel('', { size: 24, anchorX: 1, align: 'right' });
     this.timeT = uiLabel('', { size: 24, anchorX: 1, align: 'right' });
-    this.root.addChild(this.back, this.hp, this.nameT, this.timeT, this.clock, this.estT, this.mark);
+    this.defT = artLabel('', { size: 24, anchorX: 0, align: 'left' });
+    this.root.addChild(this.back, this.hp, this.defT, this.nameT, this.timeT, this.clock, this.estT, this.mark);
 
     const b = env.battle;
     env.on(b.events, 'hit', ({ enemy, amount }) => {
@@ -113,6 +119,7 @@ export class BossBar {
     this.finishing = false;
     const def = enemyDef(enemy.id);
     this.nameFull = t(def.nameKey);
+    this.setDefence(enemy.id);
     this.sticker?.destroy({ children: true });
     this.sticker = enemyPortrait(enemy.id, STICKER);
     this.root.addChild(this.sticker);
@@ -154,6 +161,7 @@ export class BossBar {
   dress(id: EnemyId): Container | null {
     if (this.shown || this.finishing) return null;
     this.nameFull = t(enemyDef(id).nameKey);
+    this.setDefence(id);
     this.sticker?.destroy({ children: true });
     this.sticker = enemyPortrait(id, STICKER);
     this.root.addChild(this.sticker);
@@ -161,6 +169,16 @@ export class BossBar {
     this.estT.text = t('hud.est.wait');
     this.place();
     return this.root;
+  }
+
+  /** Armour and ward as numbers on the bar, so it is plain at a glance which kind of damage this one shrugs off. */
+  private setDefence(id: EnemyId): void {
+    const def = enemyDef(id);
+    // An elite with neither has nothing to say here: an all-zero line would only cover the bar.
+    this.defT.visible = def.armor > 0 || def.ward > 0;
+    this.defT.text = defenceLine(id);
+    this.lastBroken = false;
+    this.defT.tint = 0xffffff;
   }
 
   private tapStrip(): void {
@@ -219,6 +237,7 @@ export class BossBar {
     this.hp.position.set(TEXT_X + (w - TEXT_X - RIGHT_PAD) / 2, HP_Y);
     this.sticker?.position.set(6, h / 2 - 2);
     this.nameT.position.set(TEXT_X, ROW_Y);
+    this.defT.position.set(TEXT_X + DEF_INSET, HP_Y);
     this.mark.position.set(this.timer.x + this.timer.w / 2 - this.rect.x, this.timer.y + this.timer.h / 2 - this.rect.y);
     this.layoutRow();
   }
@@ -288,6 +307,11 @@ export class BossBar {
       this.hp.setValue(this.hpFraction(), true);
     }
     if (!this.boss) return;
+    // An armour break cuts both numbers for as long as it lasts: the line turns mustard meanwhile.
+    if (this.boss.armorBroken !== this.lastBroken) {
+      this.lastBroken = this.boss.armorBroken;
+      this.defT.tint = this.lastBroken ? Color.mustard : 0xffffff;
+    }
     const limit = Math.max(0.001, b.waveDuration);
     const left = Math.max(0, limit - Math.min(limit, b.waveTime));
     const seconds = Math.ceil(left);

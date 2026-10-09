@@ -5,9 +5,16 @@ import '@/codex/strings';
 import type { InfoContent } from '../info';
 import { traitOrder } from './policy';
 
+/** "Armour 35% · Ward 10%": the share of physical and of magic damage the enemy shrugs off, before any armour break. */
+export function defenceLine(id: EnemyId): string {
+  const def = enemyDef(id);
+  return t('hud.boss.def', { armor: Math.round(def.armor * 100), ward: Math.round(def.ward * 100) });
+}
+
 export function enemyInfo(id: EnemyId, openCodex: (id: EnemyId) => void): InfoContent {
   const def = enemyDef(id);
   const lines = [t(def.descKey)];
+  if (def.armor > 0 || def.ward > 0) lines.push(defenceLine(id));
   for (const tr of traitOrder(def.traits)) lines.push(`${t(`trait.${tr}.name`)}: ${t(`trait.${tr}.desc`)}`);
   return { title: t(def.nameKey), text: lines.join('\n'), link: { label: t('codex.link'), run: () => openCodex(id) } };
 }

@@ -14,6 +14,7 @@ addStrings('ko', {
   'hud.est.wait': '계산 중',
   'hud.est.none': '예상 불가',
   'hud.est.far': '예상 99초 이상',
+  'hud.boss.def': '방어 {armor}% · 저항 {ward}%',
 
   // bottom panel
   'hud.summon': '소환',
@@ -248,6 +249,7 @@ addStrings('en', {
   'hud.est.wait': 'Est. ?',
   'hud.est.none': 'No damage',
   'hud.est.far': 'Est. 99s+',
+  'hud.boss.def': 'Armour {armor}% · Ward {ward}%',
 
   'hud.summon': 'Summon',
   'hud.free': 'Free',
