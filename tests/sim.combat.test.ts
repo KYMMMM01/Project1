@@ -41,7 +41,8 @@ describe('damage formula', () => {
     expect(raw(sim, dummy(sim, 'roomba'), 100)).toBeCloseTo(65, 9);
     expect(raw(sim, dummy(sim, 'roomba'), 100, 'magic')).toBeCloseTo(100, 9);
     expect(raw(sim, dummy(sim, 'tangerine'), 100, 'magic')).toBeCloseTo(65, 9);
-    expect(raw(sim, dummy(sim, 'tangerine'), 100)).toBeCloseTo(100, 9);
+    // The tangerine's own armour is the 8% of an ordinary enemy (its ward of 35% is the thing it is known for).
+    expect(raw(sim, dummy(sim, 'tangerine'), 100)).toBeCloseTo(100 * (1 - 0.08), 9);
   });
 
   it('lets armour break, warrior ignore and the scratcher cut the armour', () => {
@@ -98,11 +99,18 @@ describe('damage formula', () => {
     const sim = field();
     const cat = put(sim, 0, 'w_paw');
     cat.armorIgnore = 0.9;
+    // The firecracker is the one enemy with no defence at all (every ordinary enemy has 5 to 10% armour since the 2026-10-10 batch).
+    const bare = dummy(sim, 'firecracker');
+    applyStatus(sim, bare, 'armor_break', 0.9, 5, null);
+    damageEnemy(sim, bare, 100, 'magic', cat, false, null);
+    damageEnemy(sim, bare, 100, 'physical', cat, false, null);
+    expect(1e5 - bare.hp).toBeCloseTo(200, 9);
+    // A cucumber has a ward of 0 (the magic hit stays whole) and 8% armour, which the break and the ignore cut like any other.
     const e = dummy(sim, 'cucumber');
     applyStatus(sim, e, 'armor_break', 0.9, 5, null);
     damageEnemy(sim, e, 100, 'magic', cat, false, null);
     damageEnemy(sim, e, 100, 'physical', cat, false, null);
-    expect(1e5 - e.hp).toBeCloseTo(200, 9);
+    expect(1e5 - e.hp).toBeCloseTo(100 + 100 * (1 - 0.08 * (1 - 0.9) * (1 - 0.9)), 9);
   });
 
   it('multiplies vulnerability, laser focus and the heating pad, capped at 2x', () => {
@@ -110,13 +118,15 @@ describe('damage formula', () => {
     gainRelic(sim, 'heating_pad');
     const e = dummy(sim, 'cucumber');
     applyStatus(sim, e, 'vulnerable', 0.25, 5, null);
-    expect(raw(sim, e, 100)).toBeCloseTo(125, 9);
+    // The cucumber's 8% armour comes off first; the multipliers (and their cap of 2x) apply to what is left.
+    const armoured = 100 * (1 - 0.08);
+    expect(raw(sim, e, 100)).toBeCloseTo(armoured * 1.25, 9);
     e.focused = true;
-    expect(raw(sim, e, 100)).toBeCloseTo(125 * 1.15, 9);
+    expect(raw(sim, e, 100)).toBeCloseTo(armoured * 1.25 * 1.15, 9);
     applyStatus(sim, e, 'slow', 0.2, 5, null);
-    expect(raw(sim, e, 100)).toBeCloseTo(125 * 1.15 * 1.15, 9);
+    expect(raw(sim, e, 100)).toBeCloseTo(armoured * 1.25 * 1.15 * 1.15, 9);
     applyStatus(sim, e, 'vulnerable', 0.6, 5, null);
-    expect(raw(sim, e, 100)).toBeCloseTo(200, 9);
+    expect(raw(sim, e, 100)).toBeCloseTo(armoured * 2, 9);
   });
 
   it('soaks damage with a shield first and announces the break once', () => {
@@ -164,7 +174,7 @@ describe('damage formula', () => {
     advance(sim, 2);
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((h) => h.crit)).toBe(true);
-    expect(hits[0]!.amount).toBeCloseTo(u.stats.damage * 3, 6);
+    expect(hits[0]!.amount).toBeCloseTo(u.stats.damage * 3 * (1 - 0.08), 6);
   });
 });
 
@@ -431,7 +441,8 @@ describe('attack shapes', () => {
     expect(ids).toContain(target.uid);
     expect(ids).toContain(second.uid);
     expect(ids).not.toContain(third.uid);
-    const spec = sim.units[7]!.stats.damage;
+    // Every enemy here is a cucumber: its 8% armour comes off each hit the star deals.
+    const spec = sim.units[7]!.stats.damage * (1 - 0.08);
     expect(hits.find((h) => h.enemy.uid === second.uid && !h.crit && Math.abs(h.amount - spec * 0.25) < 1e-6)).toBeDefined();
     expect(hits.find((h) => h.enemy.uid === second.uid && !h.crit && Math.abs(h.amount - spec * 0.5) < 1e-6)).toBeUndefined();
   });
@@ -712,7 +723,7 @@ describe('laser pointer', () => {
     expect(young.focused).toBe(true);
     expect(old.focused).toBe(false);
     const dmg = sim.units[7]!.stats.damage;
-    expect(hits.find((h) => !h.crit)!.amount).toBeCloseTo(dmg * 1.15, 6);
+    expect(hits.find((h) => !h.crit)!.amount).toBeCloseTo(dmg * (1 - 0.08) * 1.15, 6);
   });
 
   it('moves the dot when called again, lasts 6.5 seconds and then needs 15 seconds', () => {

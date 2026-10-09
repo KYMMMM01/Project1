@@ -235,15 +235,17 @@ describe('the ricochet of the rangers (step 3)', () => {
     advance(sim, 0.9);
     const shot = archerHits.filter((h) => h.unitId === 'r_archer');
     expect(shot.length).toBeGreaterThanOrEqual(2);
+    // A cucumber's 8% armour comes off both the arrow and its bounce (the bounce is 35% of the raw hit, armoured once on the second enemy).
     const damage = unitSpec('r_archer').base.damage * 1.45;
+    const armour = 1 - 0.08;
     // The pairs: the arrow, then its bounce to the nearest enemy (not the farther one).
     const hit = shot.filter((h) => h.enemy.uid === first.uid);
     const bounced = shot.filter((h) => h.enemy.uid === nearer.uid);
     expect(hit.length).toBeGreaterThan(0);
     expect(bounced).toHaveLength(hit.length);
     expect(shot.some((h) => h.enemy.uid === near.uid)).toBe(false);
-    for (const h of hit) expect(h.amount).toBeCloseTo(damage, 6);
-    for (const h of bounced) expect(h.amount).toBeCloseTo(damage * bounce.pct, 6);
+    for (const h of hit) expect(h.amount).toBeCloseTo(damage * armour, 6);
+    for (const h of bounced) expect(h.amount).toBeCloseTo(damage * bounce.pct * armour, 6);
   });
 
   it('does not bounce when no other enemy is within 150 px, nor below the third step', () => {
@@ -292,7 +294,7 @@ describe('the ricochet of the rangers (step 3)', () => {
     expect(archer).toMatchObject({ x: first.x, y: first.y, tx: second.x, ty: second.y, targetUid: second.uid });
     const mult = sim.units[0]!.stats.critMult;
     const base = unitSpec('r_archer').base.damage * 1.45;
-    expect(critHits.find((h) => h.enemy.uid === second.uid)!.amount).toBeCloseTo(base * mult * bounce.pct, 6);
+    expect(critHits.find((h) => h.enemy.uid === second.uid)!.amount).toBeCloseTo(base * mult * bounce.pct * (1 - 0.08), 6);
   });
 
   it('works for the ninja\'s stars one by one and once for the star archer\'s volley, and only for rangers', () => {

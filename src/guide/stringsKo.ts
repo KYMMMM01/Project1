@@ -249,7 +249,7 @@ export const KO: Record<string, string> = {
   'guide.trait_fast.title': '{name} 적',
   'guide.trait_fast.teach': '다른 적보다 훨씬 빨리 달려요.',
   'guide.trait_fast.full':
-    '이동 속도가 {speed}이고 보통 적은 {normal}이에요. 체력은 적지만 금방 끝까지 가요.\n느리게 하는 공격과 멀리 닿는 고양이가 좋아요.',
+    '이동 속도가 {speed}이고 보통 적은 {normal}이에요. 체력은 적지만 금방 끝까지 가요.\n느리게 하는 공격과 멀리 닿는 고양이가 좋아요. 일부 적은 느려지는 효과를 조금 버티는데, 그 수치는 도감에서 볼 수 있어요.',
 
   'guide.trait_swarm.title': '{name} 적',
   'guide.trait_swarm.teach': '약하지만 떼로 몰려와요.',

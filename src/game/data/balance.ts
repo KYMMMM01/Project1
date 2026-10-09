@@ -141,6 +141,7 @@ export const LASER_VULNERABLE = 0.15;
 
 // ── combat ──
 export const VULNERABLE_CAP = 2.0;
+/** The most one slow can be, before an enemy's own `slowResist` (data/enemies.ts) takes its share off what lands: ordinary enemies, then elites and bosses. */
 export const SLOW_CAP = 0.5;
 export const SLOW_CAP_BOSS = 0.25;
 export const HASTE_CAP = 0.6;

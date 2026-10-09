@@ -147,6 +147,8 @@ export interface EnemyDef {
   armor: number;
   /** Fraction of magic damage ignored (0..0.9). */
   ward: number;
+  /** Share of every slow STATUS that does not land (0..1): the slow that lands is `min(amount x (1 + toy boost), cap) x (1 - slowResist)`. */
+  slowResist: number;
   /** Collision / visual radius in px. */
   radius: number;
   /** Fish paid on death. */

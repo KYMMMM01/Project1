@@ -49,6 +49,7 @@ describe('codex foes: which enemy is what', () => {
       expect(s.speed).toBe(ENEMY_SPECS[id].speed);
       expect(s.armorPct).toBe(Math.round(ENEMY_SPECS[id].armor * 100));
       expect(s.wardPct).toBe(Math.round(ENEMY_SPECS[id].ward * 100));
+      expect(s.slowResistPct).toBe(Math.round(ENEMY_SPECS[id].slowResist * 100));
       expect(s.hpMult).toBe(ENEMY_SPECS[id].hpMult);
     }
     expect(foeStats('cucumber').fish).toBe(ENEMY_SPECS.cucumber.bounty);
@@ -168,7 +169,8 @@ describe('codex foes: control resistance', () => {
       const res = resistanceOf(id);
       const e = foe(sim, id, 0);
       applyStatus(sim, e, 'slow', 0.99, 5, null);
-      expect(e.slow, `${id} slow`).toBeCloseTo(res.slowCapPct / 100, 9);
+      // The cap first, then the enemy's own resistance takes its share off what lands (30% of the 50% cap leaves 35%).
+      expect(e.slow, `${id} slow`).toBeCloseTo((res.slowCapPct / 100) * (1 - foeStats(id).slowResistPct / 100), 9);
       expect(res.slowCapPct).toBe(Math.round((foeRank(id) === 'normal' ? SLOW_CAP : SLOW_CAP_BOSS) * 100));
       applyStatus(sim, e, 'stun', 0, 2, null);
       applyStatus(sim, e, 'freeze', 0, 2, null);

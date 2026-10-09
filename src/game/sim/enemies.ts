@@ -82,7 +82,9 @@ export function applyStatus(s: Sim, e: SimEnemy, kind: StatusKind, amount: numbe
     case 'slow': {
       if (e.slowImmuneUntil > now || s.vaccinateUntil > now) return;
       const cap = e.isBoss || e.isElite ? SLOW_CAP_BOSS : SLOW_CAP;
-      const a = Math.min(amount * (1 + (s.fx.slowBoost ?? 0)), cap);
+      // The toy's boost and the cap come first; the enemy's own resistance then takes its share off what is left (the duration is not cut).
+      const a = Math.min(amount * (1 + (s.fx.slowBoost ?? 0)), cap) * (1 - e.spec.slowResist);
+      if (a <= 0) return;
       const fresh = (e.mask & ST_SLOW) === 0;
       if (fresh || a > e.slow) e.slow = a;
       e.slowUntil = Math.max(e.slowUntil, now + length);

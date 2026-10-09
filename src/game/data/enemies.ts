@@ -1,42 +1,43 @@
 /**
  * Enemy stats and special rules (rules §11). `hpMult` is relative to the wave's cucumber health; the
- * wave's elite / boss gets its health from the BOSS_HP / ELITE_HP tables instead.
+ * wave's elite / boss gets its health from the BOSS_HP / ELITE_HP tables instead. `armor` is the share of physical damage ignored,
+ * `ward` the share of magic damage ignored, `slowResist` the share of every slow status that does not land (default 0, see applyStatus).
  */
 import { ENEMY_IDS, type BossAbilityId, type EnemyDef, type EnemyId } from '../api';
 import type { BossSpec, BossSpecById, EnemySpec } from './types';
 import './strings';
 
-function enemy(id: EnemyId, spec: Omit<EnemySpec, 'id' | 'nameKey' | 'descKey'>): EnemySpec {
-  return { id, nameKey: `enemy.${id}.name`, descKey: `enemy.${id}.desc`, ...spec };
+function enemy(id: EnemyId, spec: Omit<EnemySpec, 'id' | 'nameKey' | 'descKey' | 'slowResist'> & { slowResist?: number }): EnemySpec {
+  return { id, nameKey: `enemy.${id}.name`, descKey: `enemy.${id}.desc`, slowResist: 0, ...spec };
 }
 
 const BOSS_NOTE = 1; // placeholder multiple: boss health comes from the BOSS_HP / ELITE_HP tables
 
 export const ENEMY_SPECS: Readonly<Record<EnemyId, EnemySpec>> = {
-  cucumber: enemy('cucumber', { traits: [], hpMult: 1.0, speed: 70, armor: 0, ward: 0, radius: 18, bounty: 2 }),
-  dust: enemy('dust', { traits: ['swarm'], hpMult: 0.4, speed: 85, armor: 0, ward: 0, radius: 12, bounty: 1 }),
-  drop: enemy('drop', { traits: ['fast'], hpMult: 0.7, speed: 125, armor: 0, ward: 0, radius: 14, bounty: 2 }),
-  roomba: enemy('roomba', { traits: ['armored'], hpMult: 3.0, speed: 48, armor: 0.35, ward: 0, radius: 24, bounty: 5 }),
-  tangerine: enemy('tangerine', { traits: ['warded'], hpMult: 1.6, speed: 66, armor: 0, ward: 0.35, radius: 18, bounty: 3 }),
+  cucumber: enemy('cucumber', { traits: [], hpMult: 1.0, speed: 70, armor: 0.08, ward: 0, radius: 18, bounty: 2 }),
+  dust: enemy('dust', { traits: ['swarm'], hpMult: 0.4, speed: 85, armor: 0.05, ward: 0, radius: 12, bounty: 1 }),
+  drop: enemy('drop', { traits: ['fast'], hpMult: 0.7, speed: 125, armor: 0.05, ward: 0, slowResist: 0.3, radius: 14, bounty: 2 }),
+  roomba: enemy('roomba', { traits: ['armored'], hpMult: 3.0, speed: 48, armor: 0.35, ward: 0, slowResist: 0.2, radius: 24, bounty: 5 }),
+  tangerine: enemy('tangerine', { traits: ['warded'], hpMult: 1.6, speed: 66, armor: 0.08, ward: 0.35, radius: 18, bounty: 3 }),
   balloon: enemy('balloon', {
-    traits: ['split'], hpMult: 1.4, speed: 72, armor: 0, ward: 0, radius: 20, bounty: 2,
+    traits: ['split'], hpMult: 1.4, speed: 72, armor: 0.08, ward: 0, radius: 20, bounty: 2,
     split: { into: 'balloon_small', count: 2 },
   }),
-  balloon_small: enemy('balloon_small', { traits: [], hpMult: 0.5, speed: 95, armor: 0, ward: 0, radius: 13, bounty: 1 }),
+  balloon_small: enemy('balloon_small', { traits: [], hpMult: 0.5, speed: 95, armor: 0.05, ward: 0, radius: 13, bounty: 1 }),
   clock: enemy('clock', {
-    traits: ['haste_aura'], hpMult: 1.8, speed: 66, armor: 0, ward: 0, radius: 19, bounty: 4,
+    traits: ['haste_aura'], hpMult: 1.8, speed: 66, armor: 0.1, ward: 0, slowResist: 0.3, radius: 19, bounty: 4,
     aura: { kind: 'haste', radius: 120, value: 0.3 },
   }),
   pill: enemy('pill', {
-    traits: ['heal_aura'], hpMult: 1.8, speed: 62, armor: 0, ward: 0, radius: 18, bounty: 4,
+    traits: ['heal_aura'], hpMult: 1.8, speed: 62, armor: 0.1, ward: 0, radius: 18, bounty: 4,
     aura: { kind: 'heal', radius: 120, value: 0.02 },
   }),
   cone: enemy('cone', {
-    traits: ['shield'], hpMult: 1.2, speed: 68, armor: 0, ward: 0, radius: 20, bounty: 3,
+    traits: ['shield'], hpMult: 1.2, speed: 68, armor: 0.08, ward: 0, radius: 20, bounty: 3,
     shield: 0.4,
   }),
   dryer: enemy('dryer', {
-    traits: ['weaken'], hpMult: 2.2, speed: 60, armor: 0, ward: 0, radius: 21, bounty: 4,
+    traits: ['weaken'], hpMult: 2.2, speed: 60, armor: 0.1, ward: 0, radius: 21, bounty: 4,
     weakenPulse: { every: 5, duration: 3 },
   }),
   spray: enemy('spray', {

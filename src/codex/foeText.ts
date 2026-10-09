@@ -81,7 +81,7 @@ export function foeItem(id: EnemyId, level: Level): FoeItem {
   if (rows.length === 0) {
     // An ordinary enemy's health is the real number at the chosen chapter and butler level (its first wave to its last), not a multiple.
     const health = healthSpan(id, level);
-    const vars = { speed: stats.speed, armor: stats.armorPct, ward: stats.wardPct };
+    const vars = { speed: stats.speed, armor: stats.armorPct, ward: stats.wardPct, slow: stats.slowResistPct };
     if (!health) line = t('codex.row.normal.none', vars);
     else if (health.first.hp === health.last.hp) line = t('codex.row.normal.one', { ...vars, hp: exact(health.first.hp) });
     else line = t('codex.row.normal', { ...vars, lo: exact(health.first.hp), hi: exact(health.last.hp) });
@@ -89,7 +89,7 @@ export function foeItem(id: EnemyId, level: Level): FoeItem {
     const hps = rows.map((r) => r.hp);
     const limits = rows.map((r) => r.limit);
     const vars = {
-      lo: exact(Math.min(...hps)), hi: exact(Math.max(...hps)), limit: span(Math.min(...limits), Math.max(...limits), String), armor: stats.armorPct, ward: stats.wardPct,
+      lo: exact(Math.min(...hps)), hi: exact(Math.max(...hps)), limit: span(Math.min(...limits), Math.max(...limits), String), armor: stats.armorPct, ward: stats.wardPct, slow: stats.slowResistPct,
     };
     line = t(hps.length > 1 ? 'codex.row.special' : 'codex.row.special.one', vars);
   }
@@ -227,6 +227,8 @@ export function foePage(id: EnemyId, level: Level): FoePage {
     { label: t('codex.stat.speed'), value: stats.speed === stats.baseSpeed ? String(stats.speed) : t('codex.stat.speed.v', { n: stats.speed, base: stats.baseSpeed }) },
     { label: t('codex.stat.armor'), value: t('codex.stat.pct', { n: stats.armorPct }), bar: { pct: stats.armorPct, kind: 'armor' } },
     { label: t('codex.stat.ward'), value: t('codex.stat.pct', { n: stats.wardPct }), bar: { pct: stats.wardPct, kind: 'ward' } },
+    // Like the two rows above, shown for every enemy (0% too); a plain number, no bar.
+    { label: t('codex.stat.slowResist'), value: t('codex.stat.pct', { n: stats.slowResistPct }) },
     { label: t('codex.stat.reward'), value: stats.purr > 0 ? t('codex.stat.reward.purr', { fish: stats.fish, purr: stats.purr }) : t('codex.stat.reward.fish', { fish: stats.fish }) },
   );
   const parent = splitParent(id);
