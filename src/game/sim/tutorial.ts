@@ -11,18 +11,21 @@ import { placeRandomCommon } from './board';
 import { addFish } from './economy';
 import type { Sim } from './sim';
 
-/** The first three summons are free and fixed: two twins to merge and a ranger to start a second class. */
-export const TUTORIAL_SCRIPT: readonly UnitId[] = ['w_paw', 'w_paw', 'r_sling'];
+/**
+ * The first three summons are free and fixed: two twins to merge and a ranger to start a second class. The ranger is a rare one: the
+ * kitten rank does not count toward a synergy (v1.4), so the epic of the scripted pick-of-three completes two kinds for either class.
+ */
+export const TUTORIAL_SCRIPT: readonly UnitId[] = ['w_paw', 'w_paw', 'r_archer'];
 
 /** The wave that opens the scripted pick-of-three (the sim's `pickSummon` brings the sunbeams once it is answered). */
 export const TUTORIAL_PICK_WAVE = 3;
 /** Act 2 begins: the fish are topped up to this much so the grade and class upgrades can be bought once each and a cat or two more. */
 export const TUTORIAL_FISH_WAVE = 5;
 export const TUTORIAL_FISH_FLOOR = (SUMMON_GRADE_COSTS[0] as number) + (CLASS_UPGRADE_COSTS[0] as number) + 30;
-/** A box of kittens tips out onto the board until only this many cells are free (at most `TUTORIAL_GIFT_MAX` of them). */
+/** A box of kittens tips out onto the board until only this many cells are free (at most `TUTORIAL_GIFT_MAX` of them: enough to fill the five extra cells of the 5 x 5 board as well). */
 export const TUTORIAL_GIFT_WAVE = 6;
 export const TUTORIAL_GIFT_FREE = 2;
-export const TUTORIAL_GIFT_MAX = 8;
+export const TUTORIAL_GIFT_MAX = 13;
 
 function emptyCells(s: Sim): number {
   let n = 0;

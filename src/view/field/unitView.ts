@@ -3,20 +3,33 @@ import { tex } from '@/core/assets';
 import { Ease, type Tween, type TweenOpts, type Tweener } from '@/core/tween';
 import { clamp, clamp01, damp, lerp, TAU } from '@/core/math';
 import { popIn, type ZoneHandle } from '@/fx';
-import { cellCenterX, cellCenterY, cellCol } from '@/game/geometry';
+import { CELL_H, cellCenterX, cellCenterY, cellCol } from '@/game/geometry';
 import { unitClass, unitRarity } from '@/game';
 import type { UnitId, UnitState } from '@/game/api';
 import { t } from '@/core/i18n';
 import { Color, Tag, backOut, motion, type RarityId } from '@/ui';
 import type { FieldArt } from './art';
+import { BADGE_BITS, BADGE_KINDS, BUFF_SLOT, bitOf, type BadgeKind } from './buffMath';
 import { releaseSeconds, weaponStyle } from '@/view/weapons';
 import { breathe, coilPose, makePose, releasePose } from './motion';
 import { unitTint } from './policy';
 
+/** The cats and what hangs from their height were drawn for cells 112 px tall; `fit` brings a measure of that drawing to this board's cell height. */
+const fit = (px: number): number => Math.round((px * CELL_H) / 112);
+
 /** Where a unit's feet stand relative to its cell centre: the sprite reaches up from here. */
-export const FEET_DY = 34;
+export const FEET_DY = fit(33);
+/**
+ * Where the stickers on a cat stand, measured from its feet (the badge column of `buffMath` is tested against them): the sun a little higher
+ * than the cat's height would put it, so the column of buff badges under it is clear of it; the class sticker just above the rank tag's
+ * left end, so the longest tag (five pips) never runs under it; the rank tag tucked a little under the feet, because the cell is 96 px tall
+ * and the tag ends at its lower edge, short of the sheet's dashed line.
+ */
+export const SUN_AT = { x: fit(41), y: -fit(92) - 2 } as const;
+export const CLASS_AT = { x: -38, y: -19 } as const;
+export const RANK_AT = 7;
 const LUNGE_PX = 8;
-const UNIT_HEIGHT: Record<RarityId, number> = { common: 92, rare: 94, epic: 96, legendary: 100, mythic: 104 };
+const UNIT_HEIGHT: Record<RarityId, number> = { common: fit(92), rare: fit(94), epic: fit(96), legendary: fit(100), mythic: fit(104) };
 
 /** Scale that puts a cat's art at its rarity's on-board height (also used for the drag preview's ghosts). */
 export function unitSpriteScale(id: UnitId, textureHeight: number): number {
@@ -78,6 +91,11 @@ export class UnitView {
   private readonly noAct: Sprite;
   /** The sun sticker on a cat that stands in a sunbeam: the bonus is being applied. */
   private readonly sunMark: Sprite;
+  /** What a trickster's team effects give this cat: one badge per kind (a tidy column down its right flank), and a thin ring round its shadow that breathes. */
+  private readonly buffMarks: Sprite[] = [];
+  private readonly buffRing: Sprite;
+  private readonly buffAmt = BADGE_KINDS.map(() => 0);
+  private readonly buffAt = BADGE_KINDS.map((_, i) => i);
   /** The paper "NEW" tag on a cat that has just arrived (made when first needed, then kept with the pooled view). */
   private newTag: Tag | null = null;
   private newFrom = 0;
@@ -116,21 +134,28 @@ export class UnitView {
     this.shadow = this.makeSprite(art.shadow);
     this.shadow.position.y = 1;
     this.rank = this.makeSprite(art.rank.common);
-    this.rank.position.y = 12;
+    this.rank.position.y = RANK_AT;
     this.badge = this.makeSprite(art.badge.warrior);
-    // The class sticker sits just above the rank tag's left end, so the longest tag (five pips) never runs under it.
-    this.badge.position.set(-38, -14);
+    this.badge.position.set(CLASS_AT.x, CLASS_AT.y);
     this.dome = this.makeSprite(art.shield);
-    this.dome.position.y = -46;
+    this.dome.position.y = -fit(46);
+    this.dome.scale.set(CELL_H / 112);
     this.noAct = this.makeSprite(art.noAct);
     this.sunMark = this.makeSprite(art.sunMark);
-    this.sunMark.position.set(41, -92);
+    this.sunMark.position.set(SUN_AT.x, SUN_AT.y);
     this.sunMark.alpha = 0;
-    this.overhead.position.y = -106;
-    this.deco.addChild(this.shadow, this.rank);
+    this.buffRing = this.makeSprite(art.buffRing);
+    this.buffRing.alpha = 0;
+    for (const kind of BADGE_KINDS) {
+      const mark = this.makeSprite(art.buffBadge[kind]);
+      mark.visible = false;
+      this.buffMarks.push(mark);
+    }
+    this.overhead.position.y = -fit(106);
+    this.deco.addChild(this.shadow, this.buffRing, this.rank);
     this.body.addChild(this.sprite);
     this.rig.addChild(this.body);
-    this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.sunMark, this.overhead);
+    this.root.addChild(this.deco, this.rig, this.dome, this.badge, this.noAct, this.sunMark, ...this.buffMarks, this.overhead);
     this.root.eventMode = 'none';
     this.attackOpts = {
       duration: releaseSeconds(this.spec),
@@ -190,6 +215,12 @@ export class UnitView {
     this.dome.alpha = 0;
     this.noAct.alpha = 0;
     this.sunMark.alpha = 0;
+    this.buffRing.alpha = 0;
+    BADGE_KINDS.forEach((_, i) => {
+      this.buffAmt[i] = 0;
+      this.buffAt[i] = i;
+      (this.buffMarks[i] as Sprite).visible = false;
+    });
     this.newUntil = 0;
     if (this.newTag) this.newTag.visible = false;
     this.badge.scale.set(1);
@@ -239,7 +270,7 @@ export class UnitView {
     if (!this.newTag) {
       this.newTag = new Tag({ text: t('view.new'), style: 'primary', shape: 'pill', fontSize: 24, tilt: -0.14 });
       this.newTag.eventMode = 'none';
-      this.newTag.position.set(-38, -98);
+      this.newTag.position.set(-fit(38), -fit(98));
       this.root.addChild(this.newTag);
     }
     this.newTag.visible = false;
@@ -251,8 +282,8 @@ export class UnitView {
     this.pressed = v;
   }
 
-  /** Per-frame upkeep. `unit` is null for a view that has left the board and is playing its exit. */
-  step(dt: number, time: number, unit: UnitState | null, selected: boolean): void {
+  /** Per-frame upkeep. `unit` is null for a view that has left the board and is playing its exit; `buffMask` is what the cat receives from tricksters (`receivedMask`). */
+  step(dt: number, time: number, unit: UnitState | null, selected: boolean, buffMask = 0): void {
     if (unit) {
       this.cell = unit.cell;
       this.blocked = damp(this.blocked, unit.blocked ? 1 : 0, 0.07, dt);
@@ -345,11 +376,41 @@ export class UnitView {
     this.noAct.alpha = this.blocked;
     this.noAct.scale.set(0.8 + 0.2 * this.blocked);
     this.stickers(time);
-    this.noAct.position.set(0, -100 + Math.sin(time * 3 + this.phase) * 2);
+    this.buffs(dt, time, unit && !this.dragging && this.exit === 'none' ? buffMask & BADGE_BITS : 0);
+    this.noAct.position.set(0, -fit(100) + Math.sin(time * 3 + this.phase) * 2);
     // A lifted sticker casts a wider, fainter shadow on the paper below it.
     this.shadow.alpha = 0.34 - 0.12 * this.lift;
     this.shadow.scale.set(1 + 0.24 * this.lift);
     this.shadow.position.y = 1 + 5 * this.lift;
+  }
+
+  /**
+   * The badges of what the cat receives from a trickster: each pops in when its buff starts (a back-out on a smoothed 0..1) and shrinks
+   * away when it stops, the others slide up or down to stay a tidy column from the top, and the ring round the shadow breathes while any
+   * buff is on. A cat that is held or leaving wears none.
+   */
+  private buffs(dt: number, time: number, mask: number): void {
+    const calm = motion.reduced;
+    let index = 0;
+    let strongest = 0;
+    for (let i = 0; i < BADGE_KINDS.length; i++) {
+      const on = (mask & bitOf(BADGE_KINDS[i] as BadgeKind)) !== 0;
+      const a = calm ? (on ? 1 : 0) : damp(this.buffAmt[i] as number, on ? 1 : 0, 0.1, dt);
+      this.buffAmt[i] = a;
+      const mark = this.buffMarks[i] as Sprite;
+      mark.visible = a > 0.01;
+      if (!mark.visible) continue;
+      if (on) {
+        const slot = index++;
+        this.buffAt[i] = calm ? slot : damp(this.buffAt[i] as number, slot, 0.05, dt);
+      }
+      mark.position.set(BUFF_SLOT.x, BUFF_SLOT.y + BUFF_SLOT.step * (this.buffAt[i] as number));
+      mark.scale.set(calm ? 1 : Ease.backOut(a));
+      mark.alpha = clamp01(a * 3);
+      strongest = Math.max(strongest, a);
+    }
+    this.buffRing.alpha = strongest * (calm ? 0.55 : 0.5 + 0.3 * Math.sin(time * 2.2 + this.phase));
+    this.buffRing.position.y = this.shadow.position.y;
   }
 
   /** The two small stickers on a cat: the sun it stands in and the "NEW" tag of a fresh arrival. */

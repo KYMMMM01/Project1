@@ -2,14 +2,14 @@
 import { type EnemyId, type Fail, type RelicId, type RunStats, type UnitId } from '../api';
 import { CELL_COUNT } from '../geometry';
 import {
-  ACT_FISH_BASE, ACT_FISH_PER_ACT, BOSS_APPEAR, BOSS_CAP_BURST, BOSS_MIN_KILL, CALL_FISH_MAX, CALL_FISH_PER_SECOND, CLEAR_DELAY, DANGER_ALARM,
+  ACT_FISH_BASE, ACT_FISH_PER_ACT, ACT_LENGTH, BOSS_APPEAR, BOSS_CAP_BURST, BOSS_MIN_KILL, CALL_FISH_MAX, CALL_FISH_PER_SECOND, CLEAR_DELAY, DANGER_ALARM,
   DANGER_CAUTION, ESCORT_WINDOW, NEXT_WAVE_DELAY, REVIVE_BOSS_HP_CUT, REVIVE_BOSS_TIME, REVIVE_CAP_FRACTION, REVIVE_GRACE,
   RELIC_RARITY_WEIGHTS, SPAWN_START, SPAWN_WINDOW, SUN_CELLS, TICK, WAVE_FISH_BASE, WAVE_FISH_PER_WAVE, FIRST_SUN_CELLS,
   specialHp, specialLimit,
 } from '../data/balance';
 import { COUNTER_RELICS, RELIC_FX_KEYS, relicSpec } from '../data/relics';
 import { RARITIES, RELIC_RARITY } from '../data/roster';
-import { actFeatures, actOf, scriptFor, waveEntries, waveKindOf } from '../data/waves';
+import { actFeatures, actOf, scriptFor, waveEntries } from '../data/waves';
 import { openSummonOffer, placeRandomCommon, refresh } from './board';
 import { startBoss } from './boss';
 import { refreshLaser } from './combat';
@@ -191,7 +191,7 @@ export function cmdRerollRelics(s: Sim, paid: boolean): Fail | null {
 // ───────────────────────────── waves ─────────────────────────────
 
 function buildSpawns(s: Sim, wave: number): void {
-  const script = scriptFor(s.scriptChapter, wave);
+  const script = s.scriptOf(wave);
   const ids = s.spawnIds;
   ids.length = 0;
   const entries = waveEntries(script, s.countMult);
@@ -222,7 +222,7 @@ export function startWave(s: Sim, wave: number): void {
   if (s.snapshotEnabled) s.lastSnapshot = captureSnapshot(s, wave);
   s.wave = wave;
   s.act = actOf(wave);
-  s.waveKind = waveKindOf(wave);
+  s.waveKind = s.scriptOf(wave).kind;
   s.stage = 'run';
   s.waveClock = 0;
   s.waveTime = 0;
@@ -336,6 +336,12 @@ function completeAct(s: Sim): void {
 
 function endNormalWave(s: Sim): void {
   payWave(s, false, 0);
+  // The gold dungeon has no elite or boss to close an act: the wave clock does, through the same clear delay and act reward.
+  if (s.mode === 'gold' && s.wave % ACT_LENGTH === 0) {
+    s.stage = 'clearing';
+    s.stageTimer = CLEAR_DELAY;
+    return;
+  }
   startWave(s, s.wave + 1);
 }
 

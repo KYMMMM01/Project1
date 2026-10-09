@@ -1,8 +1,12 @@
-/** Class synergy tiers (rules §6). The tier is the number of different unit types of the class on the board. */
+/**
+ * Class synergy steps (rules §6). The step is the number of different kinds of the class on the board, counting the
+ * ranks from `SYNERGY_MIN_RANK` up: the first rank (the kitten) does not count, so the third step needs all four of the
+ * other ranks, the guardian among them. A class's damage bonus reaches that class only; the side effects reach every cat.
+ */
 import { CLASS_IDS, type ClassDef, type ClassId } from '../api';
 import { t } from '@/core/i18n';
 import { SYNERGY_TIER_AT } from './balance';
-import type { SynergyTier } from './types';
+import type { SynergySpecial, SynergyTier } from './types';
 import './strings';
 import './stringsGame';
 
@@ -12,12 +16,25 @@ function tier(partial: Partial<SynergyTier>): SynergyTier {
 
 const NONE = tier({});
 
+/**
+ * The three steps of every class (v1.4). Warriors: damage for warriors, armour ignore for everyone. Rangers: crit chance and
+ * crit damage for everyone, and at the third step damage for rangers. Mages: damage for mages, status duration for everyone.
+ * Tricksters: unchanged (their numbers already reached every cat).
+ */
 export const SYNERGY: Readonly<Record<ClassId, readonly [SynergyTier, SynergyTier, SynergyTier]>> = {
-  warrior: [tier({ damage: 0.15 }), tier({ damage: 0.36, armorIgnore: 0.2 }), tier({ damage: 0.72, armorIgnore: 0.4 })],
-  ranger: [tier({ crit: 0.07 }), tier({ crit: 0.15, critMult: 0.3 }), tier({ crit: 0.24, critMult: 0.7 })],
-  mage: [tier({ damage: 0.15 }), tier({ damage: 0.36, statusMult: 0.25 }), tier({ damage: 0.72, statusMult: 0.5 })],
+  warrior: [tier({ damage: 0.12 }), tier({ damage: 0.3, armorIgnore: 0.15 }), tier({ damage: 0.65, armorIgnore: 0.3 })],
+  ranger: [tier({ crit: 0.05 }), tier({ crit: 0.1, critMult: 0.05 }), tier({ damage: 0.3, crit: 0.2, critMult: 0.1 })],
+  mage: [tier({ damage: 0.12 }), tier({ damage: 0.3, statusMult: 0.2 }), tier({ damage: 0.65, statusMult: 0.4 })],
   trickster: [tier({ speed: 0.05 }), tier({ speed: 0.1, rewardMult: 0.12 }), tier({ speed: 0.17, rewardMult: 0.3 })],
 };
+
+/** What the third step adds: one ability per class, switched on while the class holds all four kinds. */
+export const SYNERGY_SPECIAL = {
+  warrior: { kind: 'cry', every: 7, stun: 0.5, breakAmount: 0.3, breakDuration: 3 },
+  ranger: { kind: 'sure_crit', every: 5 },
+  mage: { kind: 'shatter', radius: 70, pct: 0.12 },
+  trickster: { kind: 'party', speed: 0.4 },
+} as const satisfies Record<ClassId, SynergySpecial>;
 
 /** Numbers of one tier (all zero for tier 0). */
 export function synergyTier(classId: ClassId, tierNo: number): SynergyTier {
@@ -35,13 +52,25 @@ function pct(v: number): number {
   return Math.round(v * 100);
 }
 
-function tierArgs(classId: ClassId, tierNo: 1 | 2 | 3): { a: number; b: number } {
+/** Placeholders of `synergy.<class>.<tier>`: the tier's own numbers, in display units. */
+function tierArgs(classId: ClassId, tierNo: 1 | 2 | 3): { a: number; b: number; c: number } {
   const s = synergyTier(classId, tierNo);
   switch (classId) {
-    case 'warrior': return { a: pct(s.damage), b: pct(s.armorIgnore) };
-    case 'ranger': return { a: pct(s.crit), b: s.critMult };
-    case 'mage': return { a: pct(s.damage), b: 1 + s.statusMult };
-    case 'trickster': return { a: pct(s.speed), b: 1 + s.rewardMult };
+    case 'warrior': return { a: pct(s.damage), b: pct(s.armorIgnore), c: 0 };
+    case 'ranger': return { a: pct(s.crit), b: pct(s.critMult), c: pct(s.damage) };
+    case 'mage': return { a: pct(s.damage), b: 1 + s.statusMult, c: 0 };
+    case 'trickster': return { a: pct(s.speed), b: 1 + s.rewardMult, c: 0 };
+  }
+}
+
+/** Placeholders of `synergy.<class>.special`, from the special's own data. */
+function specialArgs(classId: ClassId): Record<string, number> {
+  const sp = SYNERGY_SPECIAL[classId];
+  switch (sp.kind) {
+    case 'cry': return { a: sp.every, b: sp.stun, c: pct(sp.breakAmount), d: sp.breakDuration };
+    case 'sure_crit': return { a: sp.every };
+    case 'shatter': return { a: sp.radius, b: pct(sp.pct) };
+    case 'party': return { a: pct(sp.speed) };
   }
 }
 
@@ -50,7 +79,9 @@ function build(id: ClassId): ClassDef {
     id,
     nameKey: `class.${id}.name`,
     roleKey: `class.${id}.role`,
-    tierText: (n) => t(`synergy.${id}.${n === 1 ? 1 : 2}`, tierArgs(id, n)),
+    specialNameKey: `synergy.${id}.special.name`,
+    tierText: (n) => t(`synergy.${id}.${n}`, tierArgs(id, n)),
+    specialText: () => t(`synergy.${id}.special`, specialArgs(id)),
   };
 }
 

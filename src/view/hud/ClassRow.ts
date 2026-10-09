@@ -1,6 +1,6 @@
 /**
- * The four class chips: class glyph, five rarity pips (which ranks are on the board) and the synergy
- * tier, each cream card taped down with its class's washi tape. In the first run the row stays hidden
+ * The four class chips: class glyph, five rarity pips (which ranks on the board count toward the synergy: the kitten's pip stays
+ * dark) and the synergy tier, each cream card taped down with its class's washi tape. In the first run the row stays hidden
  * until the first merge.
  */
 import { Container } from 'pixi.js';
@@ -8,6 +8,7 @@ import { CLASS_IDS, type ClassId } from '@/game';
 import { ClassChip, classChipTape, motion, popIn, tapeStrip, TweenBag } from '@/ui';
 import type { HudEnv } from './env';
 import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE } from './kit';
+import { countedRanks } from './planMath';
 
 const FIRST_X = 96;
 const STEP = 176;
@@ -29,7 +30,7 @@ export class ClassRow {
     CLASS_IDS.forEach((id, i) => {
       const chip = new ClassChip({
         icon: CLASS_ICON[id],
-        owned: b.classOwned(id),
+        owned: countedRanks(b.classOwned(id)),
         tier: b.synergyTier(id),
         accent: CLASS_ACCENT[id],
         onTap: () => {
@@ -77,7 +78,7 @@ export class ClassRow {
     const b = this.env.battle;
     CLASS_IDS.forEach((id, i) => {
       const chip = this.chips[i] as ClassChip;
-      chip.setOwned(b.classOwned(id), animate);
+      chip.setOwned(countedRanks(b.classOwned(id)), animate);
       chip.setTier(b.synergyTier(id), animate);
     });
   }

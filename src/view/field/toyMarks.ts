@@ -6,7 +6,7 @@
  * that moves while the player plays. They come in with a short flourish when the toy lands on the shelf, and tapping the toy's icon on the
  * shelf (its information bubble opens, see `info.listen`) or its chip on the board lights exactly those cells for a moment.
  *
- * Pooled: every frame, tint and badge is made once (20 cells for each of the three toys at most) and only shown, moved and faded.
+ * Pooled: every frame, tint and badge is made once (one per cell for each of the three toys at most) and only shown, moved and faded.
  */
 import { Container, Sprite, type Texture } from 'pixi.js';
 import { t } from '@/core/i18n';
@@ -24,7 +24,7 @@ import type { FieldEnv } from './env';
 import { MAX_TOYS, TOY_SHAPES, coverage, depthOf, positionalToys, toyColor, toyShape } from './toyCells';
 
 /** The flourish of a toy that has just landed: each cell's frame draws in `STAGGER` seconds after the one before, over `DRAW` seconds. */
-const STAGGER = 0.045;
+const STAGGER = 0.036;
 const DRAW = 0.28;
 /** Seconds a tap on a toy lights its cells, and how many times they pulse in that time. */
 export const LIGHT_FOR = 1.6;

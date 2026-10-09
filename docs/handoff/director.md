@@ -201,3 +201,8 @@ Everything that used to decide here (the density of the number layer, the 100 ms
 ## 2026-10-08 tuning
 
 The director's recipes (`defs.ts`) follow the smaller shots (sizes in `fx.md`, "2026-10-08 tuning"): the ordinary hit's flash and sparks, the muzzle flash and streak, the cast ring, the shot's landing puff and motes, the shield's glance and sparks and the piercing arrow's stars are about 60 % of what they were (a hit flash 28 -> 52 px, a landing puff 22 -> 48, a cast ring 20 -> 64): an impact is about the enemy's own size. `Fx.critBurst` shrank the same way. Nothing the director decides changed.
+
+
+## 2026-10-09 batch: the third-step abilities got a ring
+
+The `special` events (`cry`, `shatter`) of the rules phase had no picture: a war cry showed only its stun stars and a burst only the damage numbers, so the four-kind abilities, the headline of the synergy change, were hard to notice. `growth.ts` now draws `fx.shockwave` in the class colour at the event's point (`specialRing`, `policy.ts`: the roar's ring is capped at `CRY_RING_MAX` 170 px because a warrior's range runs to 285 px and up to four roar in the same tick; the burst is drawn at its own 70 px) and gives the roar a light haptic. Two ring particles per event, pooled, no new sound (the audio tables are untouched). Seen in a four-kind board fight (8 roars, 5 bursts in 18 s). Not done: a sound for either.

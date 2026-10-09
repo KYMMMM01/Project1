@@ -5,7 +5,7 @@ import { overlapArea, placeCard } from '@/view/hud/bubbleMath';
 import { bottomRects, topRects, type Rect } from '@/view/hud/layoutMath';
 
 function layout(h: number): BattleLayout {
-  const slack = Math.round((h - 168 - 452 - 624) / 2);
+  const slack = Math.round((h - 168 - 452 - FIELD_H) / 2);
   return { w: 720, h, safeTop: 0, safeBottom: 0, fieldX: 0, fieldY: 168 + slack, topH: 168, bottomH: 452 };
 }
 

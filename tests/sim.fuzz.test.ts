@@ -204,7 +204,7 @@ describe('determinism', () => {
       'summon', 'pickSummon', 'drop', 'sell', 'molt', 'awaken', 'upgradeClass', 'upgradeSummon', 'setLaser', 'callNextWave',
       'pickRelic', 'rerollRelics', 'revive',
     ]);
-    const init = initOf({ seed: 4242 });
+    const init = initOf({ seed: 1 });
     const log: { tick: number; name: string; args: unknown[] }[] = [];
     const live = createBattle(init);
     let tick = 0;

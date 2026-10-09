@@ -26,6 +26,8 @@ function areaOf(s: Sim, u: SimUnit): number {
 }
 
 function rollCrit(s: Sim, u: SimUnit): boolean {
+  // The rangers' third synergy step: every Nth shot is a sure crit (no random draw is spent on it).
+  if (u.sureCritEvery > 0 && ++u.shots % u.sureCritEvery === 0) return true;
   const c = u.stats.crit;
   return c > 0 && s.rng.combat.next() < c;
 }
@@ -92,7 +94,8 @@ function nearest(k: number): number {
 
 /**
  * The enemy a cat attacks (rules §8): the oldest one in range, the sturdiest for the gunslinger, and
- * the one closest to the laser dot when the dot is near any candidate. Records when to look again.
+ * while the laser is on the one closest to its dot, an elite or a boss inside the dot's area before any other
+ * enemy. Records when to look again.
  */
 function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
   const cx = CELL_X[u.cell] as number;
@@ -106,6 +109,7 @@ function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
   let bestKey = -1;
   let focus: SimEnemy | null = null;
   let focusD2 = Infinity;
+  let focusSpecial = false;
   let gap = Infinity;
   for (const e of s.enemies) {
     const dx = e.x - cx;
@@ -126,9 +130,11 @@ function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
       const lx = e.x - laser.x;
       const ly = e.y - laser.y;
       const ld2 = lx * lx + ly * ly;
-      if (ld2 <= laserR2 && ld2 < focusD2) {
+      const special = e.isBoss || e.isElite;
+      if (ld2 <= laserR2 && (special ? !focusSpecial || ld2 < focusD2 : !focusSpecial && ld2 < focusD2)) {
         focus = e;
         focusD2 = ld2;
+        focusSpecial = special;
       }
     }
   }
@@ -309,7 +315,8 @@ function fireChain(s: Sim, u: SimUnit, target: SimEnemy, attack: Extract<AttackS
   strike(s, u, target.x, target.y, reach, chosen);
   let mult = 1;
   for (const e of chosen) {
-    if (!e.dead) hit(s, u, e, u.stats.damage, crit, mult);
+    // Every enemy the bolt reaches is shocked: a stun (bosses are immune, elites feel half, and the window after a stun keeps it from chaining).
+    if (!e.dead && !hit(s, u, e, u.stats.damage, crit, mult)) applyStatus(s, e, 'stun', 1, attack.stun, u);
     mult *= attack.falloff;
   }
 }
@@ -438,7 +445,7 @@ export function updateUnits(s: Sim): void {
         s.statsDirty = true;
       }
     }
-    const blocked = ((s.hazardCount[c] as number) > 0 && !u.shielded && u.id !== 't_bell') || now < u.recoverAt;
+    const blocked = (s.hazardCount[c] as number) > 0 || now < u.recoverAt;
     u.blocked = blocked;
     if (blocked) continue;
     u.charge += TICK / u.stats.interval;
@@ -542,8 +549,8 @@ function tickZone(s: Sim, z: SimZone): void {
     z.tickAt += 0.1;
     const pull = attack.pull * 0.1;
     for (const e of chosen) {
-      pullEnemy(e, pull);
-      if (s.ev.has('pull')) s.ev.emit('pull', { enemy: e, distance: pull });
+      const moved = pullEnemy(s, e, pull, z);
+      if (moved > 0 && s.ev.has('pull')) s.ev.emit('pull', { enemy: e, distance: moved });
     }
   }
 }
@@ -605,6 +612,7 @@ export function cmdSetLaser(s: Sim, x: number, y: number): Fail | null {
     L.duration = laserDuration(s);
     L.timeLeft = L.duration;
     L.cooldownTotal = laserCooldownTotal(s);
+    s.statsDirty = true;
     if (s.ev.has('laser')) s.ev.emit('laser', { state: L });
   }
   s.wakeUnits();
@@ -616,6 +624,7 @@ function endLaser(s: Sim): void {
   L.active = false;
   L.timeLeft = 0;
   L.cooldown = L.cooldownTotal;
+  s.statsDirty = true;
   for (const e of s.enemies) e.focused = false;
   if (s.ev.has('laserEnd')) s.ev.emit('laserEnd', { state: L });
 }

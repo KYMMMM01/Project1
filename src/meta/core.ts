@@ -59,6 +59,8 @@ export interface MetaDeps {
   ads: AdsPort;
   /** Weekly cup score for a platform leaderboard (Toss, YouTube). */
   submitScore?: (board: string, score: number) => void;
+  /** The development platform only: the settings sheet's test buttons may hand out currencies (`grantTest`). */
+  testGrants?: boolean;
 }
 
 export class ProfileCore {

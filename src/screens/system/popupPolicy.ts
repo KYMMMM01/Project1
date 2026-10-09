@@ -24,7 +24,7 @@ export interface PopupFacts {
 
 /** Order of announcement and of the rows inside a combined "new unlocks" popup. */
 export const UNLOCK_ORDER: readonly FeatureId[] = [
-  'cats', 'missions', 'shop', 'pass', 'daily', 'cup', 'endless', 'sweep', 'patrol', 'treat', 'piggy', 'cosmetics',
+  'cats', 'missions', 'shop', 'pass', 'daily', 'cup', 'endless', 'sweep', 'dungeon', 'patrol', 'treat', 'piggy', 'cosmetics',
   'speed2x', 'speed3x',
 ];
 
@@ -45,6 +45,7 @@ const JUMP: Readonly<Record<FeatureId, TabId | null>> = {
   daily: 'battle',
   sweep: 'battle',
   endless: 'battle',
+  dungeon: 'battle',
   speed2x: null,
   speed3x: null,
 };

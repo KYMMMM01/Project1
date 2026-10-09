@@ -36,6 +36,8 @@ export interface RunConfig {
    * rewards and unlocks are applied; null or absent means there is nothing to move on to.
    */
   next?: () => NextRun | null;
+  /** Whether the same kind of run may start again right now (the gold dungeon takes an entry); absent means always. Asked when the result screen is built. */
+  canRetry?: () => boolean;
 }
 
 /** The run a victory leads on to, decided by the app flow. */
@@ -52,7 +54,7 @@ export interface BattleLayout {
   h: number;
   safeTop: number;
   safeBottom: number;
-  /** Top-left of the 720 x 624 field space (see game/geometry.ts) in scene space. */
+  /** Top-left of the 720 x 660 field space (see game/geometry.ts) in scene space. */
   fieldX: number;
   fieldY: number;
   /** Area reserved for the top HUD (y from safeTop). */

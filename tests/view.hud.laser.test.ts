@@ -9,7 +9,8 @@ const base = { duration: LASER_DURATION, cooldownTotal: LASER_COOLDOWN };
 describe('the numbers on the laser card', () => {
   it('read the laser as the battle has it, with the bonus from the rules', () => {
     const f = laserFacts(base, [], {}, undefined);
-    expect(f.duration).toBe(5);
+    expect(f.duration).toBe(LASER_DURATION);
+    expect(f.duration).toBe(6.5);
     expect(f.cooldown).toBe(15);
     expect(f.bonusPercent).toBe(Math.round(LASER_VULNERABLE * 100));
     expect(f.bonusPercent).toBe(15);
@@ -38,6 +39,7 @@ describe('the numbers on the laser card', () => {
 
   it('prints seconds without a trailing zero', () => {
     expect(secondsText(5)).toBe('5');
+    expect(secondsText(6.5)).toBe('6.5');
     expect(secondsText(14.1)).toBe('14.1');
     expect(secondsText(0.30000000000000004)).toBe('0.3');
     expect(secondsText(12.0)).toBe('12');

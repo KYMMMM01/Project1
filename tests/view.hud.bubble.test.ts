@@ -8,7 +8,7 @@ const W = 720;
 const ARROW = 20;
 
 function layout(h: number, safeTop: number, safeBottom: number): BattleLayout {
-  const slack = Math.round((h - 168 - 452 - 624) / 2);
+  const slack = Math.round((h - 168 - 452 - FIELD_H) / 2);
   return { w: W, h, safeTop, safeBottom, fieldX: 0, fieldY: 168 + slack, topH: 168, bottomH: 452 };
 }
 

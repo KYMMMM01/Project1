@@ -35,6 +35,7 @@ export type HomePoint =
   | 'battle.sweep'
   | 'battle.daily'
   | 'battle.cup'
+  | 'battle.dungeon'
   | 'battle.endless'
   | 'missions.list'
   | 'missions.chest'
@@ -76,8 +77,8 @@ export const TOPIC_LIST = [
   T('lose_boss', 'start', ico('clock')),
   T('continue', 'start', ico('play')),
   // ── team ──
-  T('classes', 'team', cats('w_sword', 'r_archer', 'm_fire', 't_chef'), { control: 'chips' }),
-  T('synergy', 'team', cats('w_paw', 'w_sword', 'w_viking'), { control: 'chips' }),
+  T('classes', 'team', cats('w_sword', 'r_archer', 'm_fire', 't_bell'), { control: 'chips' }),
+  T('synergy', 'team', cats('w_sword', 'w_viking', 'w_samurai'), { control: 'chips' }),
   T('class_sheet', 'team', ico('class_mage'), { control: 'chips' }),
   T('class_upgrade', 'team', ico('arrow_up'), { control: 'chips' }),
   T('pick3', 'team', cats('r_archer', 'w_viking', 'm_storm')),
@@ -126,6 +127,7 @@ export const TOPIC_LIST = [
   T('sweep', 'home', ico('sweep'), { tab: 'battle', point: 'battle.sweep' }),
   T('daily_challenge', 'home', ico('star'), { tab: 'battle', point: 'battle.daily' }),
   T('weekly_cup', 'home', ico('trophy'), { tab: 'battle', point: 'battle.cup' }),
+  T('gold_dungeon', 'home', ico('coin'), { tab: 'battle', point: 'battle.dungeon' }),
   T('endless', 'home', ico('crown'), { tab: 'battle', point: 'battle.endless' }),
   T('backup_code', 'home', ico('code'), { tab: 'settings', point: 'settings.backup' }),
 ] as const;

@@ -5,7 +5,7 @@ import { enemySpec } from '@/game/data/enemies';
 import { UNIT_GRID, unitClass } from '@/game/data/roster';
 import type { AttackSpec } from '@/game/data/types';
 import { unitSpec } from '@/game/data/units';
-import { cellCenterX, cellCenterY, isEdgeCell, pathPoint } from '@/game/geometry';
+import { CELL_COUNT, cellCenterX, cellCenterY, isEdgeCell, pathPoint } from '@/game/geometry';
 import { createBot, worksWalkway } from '@/game/sim/bots';
 import { playRun } from '@/game/sim/runner';
 import type { Sim } from '@/game/sim/sim';
@@ -15,7 +15,8 @@ import { advance, foe, initOf, newSim, put, quietWave, record } from './simHelpe
 const WARRIORS = UNIT_GRID.warrior;
 /** A wave of 24 cucumbers walks out over 9 s at 70 px/s: one enemy every ~26 px of walkway. */
 const FILE_GAP = 26;
-const INNER_CELLS = [6, 7, 8, 11, 12, 13];
+/** The eight cells around the middle of the 5 x 5 board (the middle cell itself is 285 px from every stretch of the walkway). */
+const INNER_CELLS = [6, 7, 8, 11, 13, 16, 17, 18];
 
 /** Enemies of that dense file one swing of the cat can hurt. */
 function swingHits(attack: AttackSpec): number {
@@ -44,7 +45,8 @@ describe('the warrior line', () => {
       if (previous) {
         const before = unitSpec(previous);
         expect(now.base.range, `${id} range`).toBeGreaterThan(before.base.range);
-        expect(now.base.damage, `${id} damage per hit`).toBeGreaterThan(before.base.damage);
+        // v1.4 trimmed the samurai's hit to 130 (the viking hits for 135 but swings more slowly): each step still out-works the last one.
+        expect(now.base.damage / now.base.interval, `${id} damage per second on one target`).toBeGreaterThan(before.base.damage / before.base.interval);
         const power = (u: typeof now): number => (u.base.damage * swingHits(u.attack)) / u.base.interval;
         expect(power(now), `${id} damage per second against a dense file`).toBeGreaterThan(power(before) * 1.5);
         expect(swingHits(now.attack), `${id} targets`).toBeGreaterThanOrEqual(Math.min(2, swingHits(before.attack)));
@@ -60,7 +62,7 @@ describe('the warrior line', () => {
       expect(worksWalkway(unitSpec('w_tiger').base.range, cell), `tiger in ${cell}`).toBe(true);
       expect(worksWalkway(unitSpec('w_paw').base.range, cell), `paw in ${cell}`).toBe(false);
     }
-    for (let cell = 0; cell < 20; cell++) {
+    for (let cell = 0; cell < CELL_COUNT; cell++) {
       if (isEdgeCell(cell)) for (const id of WARRIORS) expect(worksWalkway(unitSpec(id).base.range, cell), `${id} in ${cell}`).toBe(true);
     }
   });
@@ -68,13 +70,13 @@ describe('the warrior line', () => {
   it('lets the tiger hit the walkway from the middle of the board where a paw cannot', () => {
     const sim = newSim();
     quietWave(sim);
-    put(sim, 7, 'w_tiger');
-    put(sim, 6, 'w_paw');
+    put(sim, 12, 'w_tiger');
+    put(sim, 11, 'w_paw');
     const top = pathPoint(279);
     const radius = enemySpec('cucumber').radius;
-    const gapTiger = Math.hypot(top.x - cellCenterX(7), top.y - cellCenterY(7));
+    const gapTiger = Math.hypot(top.x - cellCenterX(12), top.y - cellCenterY(12));
     expect(gapTiger).toBeLessThan(unitSpec('w_tiger').base.range + radius);
-    expect(Math.hypot(top.x - cellCenterX(6), top.y - cellCenterY(6))).toBeGreaterThan(unitSpec('w_paw').base.range + radius);
+    expect(Math.hypot(top.x - cellCenterX(11), top.y - cellCenterY(11))).toBeGreaterThan(unitSpec('w_paw').base.range + radius);
     at(sim, 'cucumber', top.x, top.y);
     const attacks = record(sim, 'attack');
     advance(sim, 2);

@@ -16,6 +16,7 @@ import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } fro
 import type { BattleContext, BattleLayout, HudAnchor, HudPart } from '../context';
 import { BossBar } from './BossBar';
 import { BottomPanel } from './BottomPanel';
+import { DodgeStickers } from './DodgeSticker';
 import type { Weighted } from './bubbleMath';
 import { watchEncounters } from './encounterWatch';
 import { EnvImpl } from './env';
@@ -87,6 +88,7 @@ class Hud implements HudPart {
   private guide: LaserGuide | null = null;
   private readonly progress: GuideProgress;
   private card!: LessonBubble;
+  private dodges!: DodgeStickers;
   /** "Try it" in the guidebook asked to point at a control: the pause menu stays closed and the control gets a bubble. */
   private tryControl: { control: TryControl; topic: TopicId } | null = null;
   private readonly teach: LaserTeach;
@@ -178,6 +180,7 @@ class Hud implements HudPart {
     this.layoutAll(ctx.layout);
     this.bubble = new HintBubble(env, ctx.layers.overlay, () => this.avoidList());
     this.card = new LessonBubble(env, ctx.layers.overlay);
+    this.dodges = new DodgeStickers(env, ctx.layers.overlay);
     // Every information bubble of the battle (this HUD's, the field's sunbeam note, the lessons' lines) is drawn by this one view; a lesson's note has the space first.
     info.bind(this.bubble);
     info.canOpen = () => !(this.tutorial?.noteUp ?? false);
@@ -261,6 +264,7 @@ class Hud implements HudPart {
     info.bind(null);
     this.bubble.destroy();
     this.card.destroy();
+    this.dodges.destroy();
     this.env.dispose();
     this.top.destroy();
     this.bottom.destroy();
@@ -712,6 +716,7 @@ class Hud implements HudPart {
     this.top.update();
     this.boss.update();
     this.bottom.update(dt);
+    this.dodges.update(dt);
     this.tutorial?.update(dt);
     if (this.twinsFrames > 0) this.pointAtTwins();
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.

@@ -3,14 +3,17 @@
  * are inherited (core.ts -> economy.ts -> routines.ts). Pure rules are in the sibling modules.
  */
 import type { BattleInit, BattleMode, BattleSnapshot, DailyModifierId, RunStats } from '@/game/api';
+import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { waveKindOf } from '@/game/data/waves';
 import { randomSeed } from '@/core/rng';
 import { mergeLedgers, normalizeLedger, type GrantSource } from '@/platform/iapService';
 import { encodeBackup, decodeBackup } from './backup';
 import type { MetaDeps } from './core';
 import { GEM_PASS_DAYS, iapSpec } from './data/catalog';
+import { DUNGEON_AD_PLACEMENT, DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_TIERS } from './data/dungeon';
 import { PIGGY_PER_RUN, SNACK_FISH, SNACK_PURR, type SnackId } from './data/economy';
 import { cupScore, dailySetup } from './daily';
+import { dungeonCanBuy, dungeonEntriesLeft, dungeonFirstClearGold, dungeonMaxGold, dungeonTierOpen, dungeonTopTier } from './dungeon';
 import type { PayVia } from './economy';
 import { addPassXp, seasonOf } from './pass';
 import { createProfileStore, sanitizeProfile } from './profileData';
@@ -24,6 +27,8 @@ import {
   type AppliedOrder,
   type Bundle,
   type ChestKind,
+  type CurrencyId,
+  type DungeonBest,
   type PendingRun,
   type ProfileData,
   type Result,
@@ -34,13 +39,15 @@ const DAY_MS = 86_400_000;
 /** Extra gems for a second season pass bought while the first is still active (the premium row is already open). */
 const SEASON_DUPLICATE_GEMS = 600;
 export const CUP_BOARD_ID = 'weekly_cup';
+/** The most a single test grant hands out. */
+const TEST_GRANT_MAX = 100_000;
 
 export interface RunOptions {
   mode: BattleMode;
-  /** Chapter mode and endless; ignored for the tutorial and the daily challenge. */
+  /** Chapter mode and endless; the tier of the gold dungeon; ignored for the tutorial and the daily challenge. */
   chapter?: number;
   stake?: number;
-  /** Pre-run snack: pay with an ad or gems. Not offered in the tutorial or the daily challenge. */
+  /** Pre-run snack: pay with an ad or gems. Not offered in the tutorial, the daily challenge or the gold dungeon. */
   snack?: { id: SnackId; via: PayVia };
 }
 
@@ -55,6 +62,33 @@ export interface BackupPreview {
 export interface SweepResult {
   gold: number;
   xp: number;
+}
+
+export interface DungeonTierRow {
+  tier: number;
+  open: boolean;
+  /** The most a run of this tier pays (every wave cleared, every enemy killed; the first-victory bonus is on top). */
+  maxGold: number;
+  /** The bonus the day's first victory adds on this tier. */
+  bonus: number;
+  best: DungeonBest;
+}
+
+export interface DungeonView {
+  unlocked: boolean;
+  waves: number;
+  tiers: DungeonTierRow[];
+  /** The highest open tier, 0 while none is. */
+  top: number;
+  freeEntries: number;
+  used: number;
+  bought: number;
+  entriesLeft: number;
+  /** An extra entry can still be bought today (a rewarded ad or gems). */
+  canBuy: boolean;
+  entryGems: number;
+  /** The day's first-victory bonus is still to be won. */
+  firstClearOpen: boolean;
 }
 
 function snackFields(id: SnackId): Pick<BattleInit, 'bonusFish' | 'bonusPurr' | 'firstSummonRarePlus'> {
@@ -100,6 +134,7 @@ function previewOf(data: ProfileData, savedAt: number): BackupPreview {
  * wave always ended with its elite dead (running out of time loses the run instead).
  */
 function bossAndEliteKills(stats: RunStats): number {
+  if (stats.mode === 'gold') return stats.bossesKilled; // the dungeon's waves are all normal ones
   let elites = 0;
   for (let w = 1; w <= stats.wavesCleared; w++) if (waveKindOf(w) === 'elite') elites++;
   return stats.bossesKilled + elites;
@@ -148,14 +183,25 @@ export class Profile extends RoutineProfile {
         stake = 0;
         break;
       }
+      case 'gold': {
+        if (!this.featureUnlocked('dungeon')) return fail('locked');
+        this.refresh(); // the entries belong to the day the battle opens in
+        chapter = Math.round(o.chapter ?? 1);
+        stake = 0;
+        if (!dungeonTierOpen(d.cleared, chapter)) return fail('locked');
+        if (dungeonEntriesLeft(d.day.dungeon) <= 0) return fail('limit_reached');
+        break;
+      }
     }
-    if (o.snack && (o.mode === 'daily' || o.mode === 'tutorial')) return fail('locked');
+    if (o.snack && (o.mode === 'daily' || o.mode === 'tutorial' || o.mode === 'gold')) return fail('locked');
     if (o.snack) {
       const paid = await this.pay('start_snack', o.snack.via);
       if (!paid.ok) return paid;
       if (this.data.pending) return fail('run_active');
     }
     this.deps.ads.beginRun();
+    // The entry is taken when the run starts and saved with it: closing the app does not give it back, and reopening it does not give another.
+    if (o.mode === 'gold') d.day.dungeon.used++;
     const init: BattleInit = {
       seed, mode: o.mode, chapter, stake,
       loadout: buildLoadout(d.levels, d.training, o.mode === 'daily'),
@@ -199,10 +245,12 @@ export class Profile extends RoutineProfile {
    * same, but the ad policy does not count it as a completed run.
    */
   async finishRun(stats: RunStats, opts: { abandoned?: boolean } = {}): Promise<Result<RunReward>> {
+    // A dungeon run pays once, for the entry that started it: no pending run, nothing to settle.
+    if (stats.mode === 'gold' && this.data.pending?.init.mode !== 'gold') return fail('nothing_to_claim');
     this.refresh(); // a run that ends after midnight belongs to the new day, week and season
     const d = this.data;
     const date = this.today();
-    const payout = computeRunPayout(stats, { cleared: d.cleared, dailyAlreadyCleared: d.day.challengeCleared });
+    const payout = computeRunPayout(stats, { cleared: d.cleared, dailyAlreadyCleared: d.day.challengeCleared, dungeonFirstDone: d.day.dungeon.firstClear });
     let newBest = false;
 
     d.stats.runs++;
@@ -225,9 +273,18 @@ export class Profile extends RoutineProfile {
         newBest = true;
       }
       d.endless.weekBest = Math.max(d.endless.weekBest, stats.wavesCleared);
+    } else if (stats.mode === 'gold') {
+      const bonus = payout.dungeonBonus ?? 0;
+      if (bonus > 0) d.day.dungeon.firstClear = true;
+      const best = d.dungeon.best[stats.chapter - 1];
+      // The bonus is a gift of the day, not part of the record.
+      if (best && payout.gold - bonus > best.gold) {
+        d.dungeon.best[stats.chapter - 1] = { waves: stats.wavesCleared, kills: stats.kills, gold: payout.gold - bonus };
+        newBest = true;
+      }
     }
 
-    this.grant('gold', payout.gold, 'run_reward');
+    this.grant('gold', payout.gold, stats.mode === 'gold' ? 'dungeon' : 'run_reward');
     this.applyBundle(payout.bundle, payout.firstClear ? 'first_clear' : payout.dailyFirstClear ? 'daily_clear' : 'consolation');
     this.addAccountXp(payout.xp);
     d.pass = addPassXp(d.pass, payout.xp);
@@ -240,6 +297,7 @@ export class Profile extends RoutineProfile {
       id: d.nextRunId++,
       mode: stats.mode, chapter: stats.chapter, stake: stats.stake, victory: stats.victory, wavesCleared: stats.wavesCleared,
       gold: payout.gold, xp: payout.xp, bundle: payout.bundle, firstClear: payout.firstClear, doubled: false, newBest,
+      ...(stats.mode === 'gold' ? { kills: stats.kills, bonus: payout.dungeonBonus ?? 0 } : {}),
     };
     d.lastRun = reward;
     d.pending = null;
@@ -286,6 +344,71 @@ export class Profile extends RoutineProfile {
     d.stats.sweeps++;
     this.commit();
     return ok(pay);
+  }
+
+  // ───────────────────────────── gold dungeon ─────────────────────────────
+
+  dungeonView(): DungeonView {
+    const d = this.data;
+    const day = d.day.dungeon;
+    return {
+      unlocked: this.featureUnlocked('dungeon'),
+      waves: GOLD_DUNGEON_WAVES,
+      tiers: Array.from({ length: DUNGEON_TIERS }, (_, i) => ({
+        tier: i + 1,
+        open: dungeonTierOpen(d.cleared, i + 1),
+        maxGold: dungeonMaxGold(i + 1),
+        bonus: dungeonFirstClearGold(i + 1),
+        best: { ...(d.dungeon.best[i] as DungeonBest) },
+      })),
+      top: dungeonTopTier(d.cleared),
+      freeEntries: DUNGEON_FREE_ENTRIES,
+      used: day.used,
+      bought: day.bought,
+      entriesLeft: dungeonEntriesLeft(day),
+      canBuy: dungeonCanBuy(day),
+      entryGems: DUNGEON_ENTRY_GEMS,
+      firstClearOpen: !day.firstClear,
+    };
+  }
+
+  /**
+   * The day's extra entry, for a rewarded ad or gems. It is only paid for here; the run takes it when it starts.
+   * One a day: a second purchase is refused before anything is charged.
+   */
+  async buyDungeonEntry(via: PayVia): Promise<Result<DungeonView>> {
+    if (!this.featureUnlocked('dungeon')) return fail('locked');
+    this.refresh();
+    if (!dungeonCanBuy(this.data.day.dungeon)) return fail('limit_reached');
+    if (via === 'gems') {
+      if (!this.spend('gems', DUNGEON_ENTRY_GEMS, 'offer_dungeon')) return fail('not_enough_gems');
+    } else {
+      const watched = await this.watchAd(DUNGEON_AD_PLACEMENT);
+      if (!watched.ok) return watched;
+      this.refresh();
+      if (!dungeonCanBuy(this.data.day.dungeon)) return fail('limit_reached');
+    }
+    this.data.day.dungeon.bought++;
+    this.commit();
+    return ok(this.dungeonView());
+  }
+
+  // ───────────────────────────── test grants ─────────────────────────────
+
+  /**
+   * The settings sheet's test buttons (development platform only, see MetaDeps.testGrants): a currency
+   * through the one money path. Returns what really arrived (tickets stop at their cap).
+   */
+  grantTest(currency: CurrencyId, amount: number): Result<number> {
+    if (!this.deps.testGrants) return fail('unavailable');
+    const n = Math.floor(amount);
+    if (!(n > 0) || n > TEST_GRANT_MAX) return fail('invalid');
+    const before = this.data[currency];
+    this.grant(currency, n, 'test');
+    const gained = this.data[currency] - before;
+    if (gained <= 0) return fail('limit_reached');
+    this.commit();
+    return ok(gained);
   }
 
   // ───────────────────────────── purchases ─────────────────────────────
@@ -464,5 +587,6 @@ export function createProfile(deps: Pick<MetaDeps, 'analytics' | 'ads'> & Partia
     analytics: deps.analytics,
     ads: deps.ads,
     submitScore: deps.submitScore,
+    testGrants: deps.testGrants === true,
   });
 }

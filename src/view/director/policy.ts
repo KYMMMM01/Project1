@@ -452,3 +452,11 @@ export class SoundRule {
     this.lim?.reset();
   }
 }
+
+/** The largest ring a war cry draws: a warrior's range runs to 285 px, and four warriors roar at the same moment. */
+export const CRY_RING_MAX = 170;
+
+/** Radius of the ring that marks a third-step ability: the roar is capped (its reach is the warrior's whole range), the burst is drawn as it is. */
+export function specialRing(kind: 'cry' | 'shatter', radius: number): number {
+  return kind === 'cry' ? Math.min(radius, CRY_RING_MAX) : radius;
+}

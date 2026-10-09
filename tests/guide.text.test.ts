@@ -4,6 +4,8 @@ import '@/game/data/strings';
 import {
   ACT_LENGTH, AWAKEN_COST, CHAPTER_WAVES, LASER_COOLDOWN, LASER_DURATION, MOLT_COST, OFFER_EVERY, SELL_FISH, START_FISH, SUMMON_BASE, SUMMON_STEP, SUN_SPEED,
 } from '@/game/data/balance';
+import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
+import { DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_VICTORY_MULT } from '@/meta/data/dungeon';
 import { factsOf } from '@/guide/facts';
 import { EN } from '@/guide/stringsEn';
 import { KO } from '@/guide/stringsKo';
@@ -88,8 +90,16 @@ describe('guide topics', () => {
     }
   });
 
+  it('says in the synergy lesson itself that the first rank does not count (v1.4)', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      expect(topicTeach('synergy'), lang).toContain(t('rarity.common'));
+    }
+  });
+
   it('quotes the numbers of the game data', () => {
     setLang('ko');
+    expect(factsOf('gold_dungeon')).toMatchObject({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES, gems: DUNGEON_ENTRY_GEMS, win: DUNGEON_VICTORY_MULT });
     expect(factsOf('summon')).toMatchObject({ start: START_FISH, first: SUMMON_BASE, step: SUMMON_STEP });
     expect(factsOf('sell')).toMatchObject({ f1: SELL_FISH[0], f5: SELL_FISH[4] });
     expect(factsOf('molt')).toMatchObject({ cost: MOLT_COST });

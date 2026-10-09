@@ -30,6 +30,7 @@ describe('placement table mirrors docs/기획서_GDD.md section 8.2', () => {
       patrol_double: { daily: 3, home: true },
       shop_refresh: { daily: 2, home: true },
       sweep_ticket: { daily: 2, home: true }, // not a GDD 8.2 row: docs/명세_메타.md section 8
+      dungeon_entry: { daily: 1, home: true }, // not a GDD 8.2 row either: docs/명세_메타.md section 13
     });
     expect([...AD_PLACEMENT_IDS].sort()).toEqual(Object.keys(AD_PLACEMENTS).sort());
     expect(isPlacement('sweep_ticket')).toBe(true); // the meta layer's PLACEMENTS.ticket
@@ -198,7 +199,7 @@ describe('AdLimiter: global rewarded rules', () => {
     expect(l.offersLeft()).toBe(0);
     expect(l.verdict('relic_reroll', t0 + 600_000, true)).toBe('offer_cap');
     expect(l.verdict('snack_box', t0 + 600_000, true)).toBe('offer_cap'); // result screen: part of the run
-    for (const id of ['daily_treat', 'free_chest', 'patrol_double', 'shop_refresh', 'sweep_ticket']) {
+    for (const id of ['daily_treat', 'free_chest', 'patrol_double', 'shop_refresh', 'sweep_ticket', 'dungeon_entry']) {
       expect(l.verdict(id, t0 + 600_000, true), id).toBe('ok');
     }
     // an offer with no placement named is counted, as before

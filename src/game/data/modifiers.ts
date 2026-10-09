@@ -17,7 +17,7 @@ const SPECS: Record<DailyModifierId, ModifierSpec> = {
   glass_cannon: { id: 'glass_cannon', damageBonus: 0.5, enemyCap: 35, args: { a: 50, b: 35 } },
   no_rangers: { id: 'no_rangers', banClass: 'ranger', args: {} },
   toy_box: { id: 'toy_box', relicPicks: 2, args: { a: 2 } },
-  sunny_day: { id: 'sunny_day', sunCells: 8, args: { a: 8 } },
+  sunny_day: { id: 'sunny_day', sunCells: 10, args: { a: 10 } },
   long_laser: { id: 'long_laser', laserCooldown: 6, args: { a: 6 } },
 };
 

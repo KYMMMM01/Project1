@@ -161,7 +161,7 @@ describe('summoning', () => {
     const fish = sim.fish;
     const placed = record(sim, 'summon');
     for (let i = 0; i < 3; i++) expect(sim.summon()).toBeNull();
-    expect(placed.map((p) => p.unit.id)).toEqual(['w_paw', 'w_paw', 'r_sling']);
+    expect(placed.map((p) => p.unit.id)).toEqual(['w_paw', 'w_paw', 'r_archer']);
     expect(placed.every((p) => p.source === 'script')).toBe(true);
     expect(sim.fish).toBe(fish);
     expect(sim.summonCost()).toBe(12);
@@ -314,7 +314,7 @@ describe('board commands', () => {
     expect(sim.dropAction(5, 6)).toBe('swap');
     expect(sim.dropAction(7, 8)).toBe('none');
     expect(sim.dropAction(-1, 3)).toBe('none');
-    expect(sim.dropAction(0, 20)).toBe('none');
+    expect(sim.dropAction(0, CELL_COUNT)).toBe('none');
   });
 
   it('moves and swaps without touching the attack gauge', () => {
@@ -355,7 +355,7 @@ describe('board commands', () => {
       warrior: ['w_paw', 'w_sword', 'w_viking', 'w_samurai', 'w_tiger'],
       ranger: ['r_sling', 'r_archer', 'r_ninja', 'r_gunner', 'r_star'],
       mage: ['m_snow', 'm_fire', 'm_storm', 'm_frost', 'm_cosmo'],
-      trickster: ['t_bell', 't_chef', 't_bard', 't_alch', 't_lucky'],
+      trickster: ['t_chef', 't_bell', 't_bard', 't_alch', 't_lucky'],
     };
     for (const [classId, line] of Object.entries(lines)) {
       expect(UNIT_GRID[classId as ClassId]).toEqual(line);
@@ -502,10 +502,14 @@ describe('board commands', () => {
     expect(sim.awaken(0)).toBe('empty_cell');
     put(sim, 0, 'w_viking');
     expect(sim.canAwaken(0)).toBe('not_legendary');
+    // A legendary alone, even with a kitten beside it (the kitten rank does not count), has no synergy to awaken with.
+    put(sim, 5, 'm_frost');
+    put(sim, 6, 'm_snow');
+    expect(sim.synergyTier('mage')).toBe(0);
+    expect(sim.canAwaken(5)).toBe('synergy_too_low');
+    // Two kinds are enough (v1.4: step 1 of the class, it was step 2).
     put(sim, 1, 'w_samurai');
-    expect(sim.canAwaken(1)).toBe('synergy_too_low');
-    put(sim, 2, 'w_paw');
-    expect(sim.synergyTier('warrior')).toBe(2);
+    expect(sim.synergyTier('warrior')).toBe(1);
     expect(sim.canAwaken(1)).toBe('not_enough_purr');
     sim.purr = AWAKEN_COST;
     expect(sim.canAwaken(1)).toBeNull();
@@ -568,51 +572,65 @@ describe('synergy by distinct unit types', () => {
     put(sim, 0, 'w_paw');
     put(sim, 1, 'w_paw');
     put(sim, 2, 'w_paw');
-    expect(sim.classDistinct('warrior')).toBe(1);
+    // The first rank (the kitten) does not count toward the kinds of a class.
+    expect(sim.classDistinct('warrior')).toBe(0);
     expect(sim.synergyTier('warrior')).toBe(0);
     put(sim, 3, 'w_sword');
-    expect(sim.synergyTier('warrior')).toBe(1);
+    expect(sim.classDistinct('warrior')).toBe(1);
+    expect(sim.synergyTier('warrior')).toBe(0);
     put(sim, 4, 'w_viking');
-    expect(sim.synergyTier('warrior')).toBe(2);
+    expect(sim.synergyTier('warrior')).toBe(1);
     put(sim, 5, 'w_samurai');
-    expect(sim.synergyTier('warrior')).toBe(3);
+    expect(sim.synergyTier('warrior')).toBe(2);
+    // The third step needs the guardian: all four of the other ranks.
     put(sim, 6, 'w_tiger');
-    expect(sim.classDistinct('warrior')).toBe(5);
+    expect(sim.classDistinct('warrior')).toBe(4);
     expect(sim.synergyTier('warrior')).toBe(3);
     expect(tiers.map((t) => [t.classId, t.previous, t.tier, t.distinct])).toEqual([
       ['warrior', 0, 1, 2], ['warrior', 1, 2, 3], ['warrior', 2, 3, 4],
     ]);
+    // The ladder still shows every rank that stands on the board, the kitten included.
     expect(sim.classOwned('warrior')).toEqual([true, true, true, true, true]);
     expect(sim.classOwned('mage')).toEqual([false, false, false, false, false]);
-    sim.sell(5);
-    expect(sim.synergyTier('warrior')).toBe(3);
     sim.sell(6);
     expect(sim.synergyTier('warrior')).toBe(2);
+    sim.sell(5);
+    expect(sim.synergyTier('warrior')).toBe(1);
   });
 
-  it('applies each class bonus only to its own cats (warrior damage tier 1)', () => {
+  it('applies each class damage bonus only to its own cats (warrior damage step 1)', () => {
     const sim = newSim();
     const mage = put(sim, 12, 'm_snow');
+    const sling = put(sim, 13, 'r_sling');
     const lone = put(sim, 0, 'w_paw');
     const base = lone.stats.damage;
+    const slingBase = sling.stats.damage;
     put(sim, 1, 'w_sword');
-    expect(lone.stats.damage).toBeCloseTo(base * 1.15, 9);
+    put(sim, 2, 'w_viking');
+    expect(sim.synergyTier('warrior')).toBe(1);
+    expect(lone.stats.damage).toBeCloseTo(base * 1.12, 9);
     expect(mage.stats.damage).toBeCloseTo(unitSpec('m_snow').base.damage, 9);
+    expect(sling.stats.damage).toBeCloseTo(slingBase, 9);
   });
 
-  it('gives rangers crit chance and multiplier, tricksters attack speed to everyone', () => {
+  it('gives every cat the rangers\' crit chance and crit damage, and the tricksters\' attack speed to everyone', () => {
     const sim = newSim();
     const sling = put(sim, 12, 'r_sling');
     const paw = put(sim, 0, 'w_paw');
+    const mage = put(sim, 1, 'm_snow');
     const baseInterval = paw.stats.interval;
     const baseCrit = sling.stats.crit;
     put(sim, 13, 'r_archer');
     put(sim, 14, 'r_ninja');
+    put(sim, 16, 'r_gunner');
     expect(sim.synergyTier('ranger')).toBe(2);
-    expect(sling.stats.crit).toBeCloseTo(baseCrit + 0.15, 9);
-    expect(sling.stats.critMult).toBeCloseTo(2.3, 9);
-    put(sim, 15, 't_bell');
-    put(sim, 16, 't_chef');
+    for (const u of [sling, paw, mage]) {
+      expect(u.stats.crit, u.id).toBeCloseTo(unitSpec(u.id).base.crit + 0.1, 9);
+      expect(u.stats.critMult, u.id).toBeCloseTo(unitSpec(u.id).base.critMult + 0.05, 9);
+    }
+    expect(baseCrit).toBeCloseTo(unitSpec('r_sling').base.crit, 9);
+    put(sim, 17, 't_bell');
+    put(sim, 18, 't_bard');
     expect(sim.synergyTier('trickster')).toBe(1);
     expect(paw.stats.interval).toBeCloseTo(baseInterval / 1.05, 9);
   });
@@ -645,9 +663,9 @@ describe('command failure reasons', () => {
 
   it('reports cell errors', () => {
     expect(sim.drop(-1, 0)).toBe('invalid_cell');
-    expect(sim.drop(0, 20)).toBe('invalid_cell');
+    expect(sim.drop(0, CELL_COUNT)).toBe('invalid_cell');
     expect(sim.drop(0, 1)).toBe('empty_cell');
-    expect(sim.sell(20)).toBe('invalid_cell');
+    expect(sim.sell(CELL_COUNT)).toBe('invalid_cell');
     expect(sim.sell(freeCell(sim))).toBe('empty_cell');
     const s = newSim();
     put(s, 3, 'w_paw');

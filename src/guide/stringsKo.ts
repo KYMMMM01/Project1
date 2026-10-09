@@ -110,14 +110,14 @@ export const KO: Record<string, string> = {
     '{warrior}: {warriorRole}\n{ranger}: {rangerRole}\n{mage}: {mageRole}\n{trickster}: {tricksterRole}\n아래 직업 칩에는 가진 등급과 시너지 단계가 보여요.',
 
   'guide.synergy.title': '시너지',
-  'guide.synergy.teach': '같은 직업의 다른 고양이가 모일수록 강해져요.',
+  'guide.synergy.teach': '같은 직업의 다른 고양이가 모일수록 강해져요. {kitten}는 세지 않아요.',
   'guide.synergy.full':
-    '같은 직업의 서로 다른 고양이가 {a}종, {b}종, {c}종 모이면 시너지가 단계별로 켜져요. 같은 고양이 여러 마리는 한 종으로 쳐요.\n전사: {warrior}\n사수: {ranger}\n마법: {mage}\n재주: {trickster}\n(위 줄은 각각 첫째, 둘째, 셋째 단계의 보너스예요.)',
+    '같은 직업의 서로 다른 고양이가 {a}종, {b}종, {c}종 모이면 시너지가 단계별로 켜져요. {kitten}는 종류에 세지 않고, 같은 고양이 여러 마리는 한 종이에요. 그래서 {c}종은 {guardian}까지 있어야 켜져요.\n직업 피해 보너스는 그 직업 고양이만 받고, 방어 무시·치명타·상태 이상 지속처럼 곁들여 붙는 효과는 모든 고양이가 받아요.\n전사: {warrior}\n사수: {ranger}\n마법: {mage}\n재주: {trickster}\n(위 줄은 각각 첫째, 둘째, 셋째 단계의 보너스예요.)\n{c}종이 되면 직업마다 특수 능력이 하나 더 켜져요.\n{warriorAbility}\n{rangerAbility}\n{mageAbility}\n{tricksterAbility}',
 
   'guide.class_sheet.title': '직업 표',
   'guide.class_sheet.teach': '직업 칩을 누르면 그 직업의 모든 것이 보여요.',
   'guide.class_sheet.full':
-    '직업 칩을 누르면 그 직업의 합성 줄이 펼쳐져요. 가진 등급은 사진으로 밝게, 없는 등급은 점선 칸으로 보여요.\n화살표는 합성이나 각성이 가능할 때 직업 색으로 변해요.\n그 아래에는 다음 시너지까지 몇 종이 모자란지, 단계별 보너스({a}종부터 {c}종까지)가 나와요.',
+    '직업 칩을 누르면 그 직업의 합성 줄이 펼쳐져요. 가진 등급은 사진으로 밝게, 없는 등급은 점선 칸으로 보여요. 칩의 작은 점은 시너지에 세는 등급이라서 {kitten}의 점은 켜지지 않아요.\n화살표는 합성이나 각성이 가능할 때 직업 색으로 변해요.\n그 아래에는 다음 시너지까지 몇 종이 모자란지, 단계별 보너스({a}종부터 {c}종까지)와 {c}종에서 켜지는 특수 능력이 나와요.',
 
   'guide.class_upgrade.title': '직업 강화',
   'guide.class_upgrade.teach': '직업 칩을 눌러 강화해요. 직업 전체가 세져요.',
@@ -142,7 +142,7 @@ export const KO: Record<string, string> = {
   'guide.awaken.title': '각성과 수호신',
   'guide.awaken.teach': '대왕이 골골을 모으면 수호신이 돼요.',
   'guide.awaken.full':
-    '대왕은 더 합칠 수 없어요. 대신 직업 시너지가 {tier}단계 이상일 때 골골 {cost}개를 내면 같은 직업의 수호신으로 각성해요.\n수호신은 가장 강한 고양이예요. 대왕을 누르면 조건이 두 줄로 나오고, 채운 조건에는 체크가 붙어요.',
+    '대왕은 더 합칠 수 없어요. 대신 직업 시너지가 {tier}단계({kinds}종) 이상일 때 골골 {cost}개를 내면 같은 직업의 수호신으로 각성해요.\n수호신은 가장 강한 고양이예요. 대왕을 누르면 조건이 두 줄로 나오고, 채운 조건에는 체크가 붙어요.',
 
   'guide.sell.title': '팔기',
   'guide.sell.teach': '고양이를 눌러 팔면 칸과 생선을 얻어요.',
@@ -163,12 +163,12 @@ export const KO: Record<string, string> = {
   'guide.hazards.title': '칸 위험',
   'guide.hazards.teach': '물이 튀거나 번개가 치는 칸에서는 공격하지 못해요.',
   'guide.hazards.full':
-    '일부 적과 보스는 칸에 물웅덩이나 번개를 일으켜요. 그 칸의 고양이는 효과가 끝날 때까지 공격하지 못해요.\n물은 {wet}초, 번개는 {zap}초 이어져요. 위험한 칸은 {warn}초 먼저 반짝여서 알려 줘요. 그동안 고양이를 다른 칸으로 옮겨요.\n이웃한 방울 고양이는 옆 칸을 지켜 줘요.',
+    '일부 적과 보스는 칸에 물웅덩이나 번개를 일으켜요. 그 칸의 고양이는 효과가 끝날 때까지 공격하지 못해요.\n물은 {wet}초, 번개는 {zap}초 이어져요. 위험한 칸은 {warn}초 먼저 반짝여서 알려 줘요. 그동안 고양이를 다른 칸으로 옮겨요.\n방울 고양이와 그 둘레 한 칸 안의 고양이는 물과 번개를 가끔 피해요.',
 
   'guide.laser.title': '레이저 포인터',
   'guide.laser.teach': '길 위에 점을 찍으면 고양이들이 그 근처 적부터 공격해요.',
   'guide.laser.full':
-    '레이저 버튼을 누르고 길 위를 눌러 빨간 점을 찍어요. {dur}초 동안 고양이들이 점에서 가장 가까운 적부터 공격해요.\n점 근처의 표시된 적은 받는 피해가 {vuln}% 늘어요. 쓰고 나면 {cd}초 뒤에 다시 쓸 수 있어요.\n보스나 위험한 적을 먼저 잡을 때 써요. 버튼 옆 i 표시로 자세한 설명 카드를 다시 볼 수 있어요.',
+    '레이저 버튼을 누르고 길 위를 눌러 빨간 점을 찍어요. {dur}초 동안 고양이들이 점에서 가장 가까운 적부터 공격해요. 점 안에 정예나 보스가 있으면 그 적을 가장 먼저 노려요.\n점 근처의 표시된 적은 받는 피해가 {vuln}% 늘어요. 쓰고 나면 {cd}초 뒤에 다시 쓸 수 있어요.\n보스나 위험한 적을 먼저 잡을 때 써요. 버튼 옆 i 표시로 자세한 설명 카드를 다시 볼 수 있어요.',
 
   'guide.call_wave.title': '다음 웨이브 부르기',
   'guide.call_wave.teach': '미리 불러서 생선 보너스를 받아요. 눌러 봐요!',
@@ -341,6 +341,11 @@ export const KO: Record<string, string> = {
   'guide.weekly_cup.teach': '한 주의 일일 도전 점수를 모아 상을 받아요.',
   'guide.weekly_cup.full':
     '한 주 동안 일일 도전에서 거둔 웨이브 수를 더해요. 날마다 끝까지 가면 최고 {best}점이에요.\n{t1}점, {t2}점, {t3}점에 닿을 때마다 더 좋은 상자를 받아요.',
+
+  'guide.gold_dungeon.title': '골드 던전',
+  'guide.gold_dungeon.teach': '하루 두 번, 짧은 판으로 골드를 모아요.',
+  'guide.gold_dungeon.full':
+    '{waves}웨이브를 버티는 짧은 판이에요. 보스는 없고, 넘긴 웨이브와 처치한 적의 수만큼 골드를 받아요.\n끝까지 막으면 골드가 {win}배가 되고, 그날의 첫 클리어에는 골드가 더 붙어요. 하루에 {free}번은 공짜이고, 한 번 더는 광고나 보석 {gems}개로 들어가요.\n단계는 깬 챕터만큼 열리고, 높을수록 골드를 더 줘요.',
 
   'guide.endless.title': '끝없는 모드',
   'guide.endless.teach': '끝이 없는 웨이브를 얼마나 버티는지 겨뤄요.',

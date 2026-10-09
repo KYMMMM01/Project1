@@ -16,7 +16,7 @@ export interface RunPlan {
   chapter: number;
   stake: number;
   modifiers: readonly DailyModifierId[];
-  /** The tutorial and the daily challenge have no pre-run snack. */
+  /** The tutorial, the daily challenge and the gold dungeon have no pre-run snack. */
   snackAllowed: boolean;
 }
 
@@ -35,6 +35,8 @@ export function planRun(request: StartRunRequest, input: RunPlanInput): RunPlan 
       const top = chaptersCleared(input.cleared);
       return { mode: 'endless', chapter: clampInt(request.chapter ?? top, 1, Math.max(1, Math.min(top, last))), stake: 0, modifiers: [], snackAllowed: true };
     }
+    case 'gold':
+      return { mode: 'gold', chapter: clampInt(request.chapter ?? 1, 1, last), stake: 0, modifiers: [], snackAllowed: false };
     case 'chapter':
       return {
         mode: 'chapter',

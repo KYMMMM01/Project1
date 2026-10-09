@@ -155,11 +155,20 @@ describe('choices', () => {
 
   it('prefers a new kind of a class already on the board over a plain rarity lead', () => {
     const options = [
-      { id: 'w_paw' as const, classId: 'warrior' as const, rarity: 'epic' as const },
       { id: 'w_sword' as const, classId: 'warrior' as const, rarity: 'epic' as const },
+      { id: 'w_viking' as const, classId: 'warrior' as const, rarity: 'epic' as const },
       { id: 'r_ninja' as const, classId: 'ranger' as const, rarity: 'epic' as const },
     ];
-    expect(recommendPick(options, ['w_paw'], classOf)).toBe(1);
+    expect(recommendPick(options, ['w_sword'], classOf)).toBe(1);
+  });
+
+  it('does not count a kitten as a class on the board: only a cat that counts toward the synergy leads the way', () => {
+    const options = [
+      { id: 'w_viking' as const, classId: 'warrior' as const, rarity: 'epic' as const },
+      { id: 'r_ninja' as const, classId: 'ranger' as const, rarity: 'epic' as const },
+    ];
+    expect(recommendPick(options, ['w_paw', 'r_archer'], classOf)).toBe(1);
+    expect(recommendPick(options, ['w_paw', 'w_paw'], classOf)).toBe(0);
   });
 
   it('falls back to rarity, then to the first card', () => {

@@ -35,9 +35,9 @@ describe('which toys mark the board, and the cells each one boosts', () => {
     expect(toyShape('window_perch')).toBe('ring');
     const cells = toyCells('window_perch', NOBODY, []);
     expect(cells.length).toBe(COLS * ROWS - (COLS - 2) * (ROWS - 2));
-    expect(cells.length).toBe(14);
+    expect(cells.length).toBe(16);
     for (const c of cells) expect(isEdgeCell(c)).toBe(true);
-    const inner = [6, 7, 8, 11, 12, 13];
+    const inner = [6, 7, 8, 11, 12, 13, 16, 17, 18];
     for (const c of inner) expect(cells).not.toContain(c);
     expect(cells).toContain(cellIndex(0, 0));
     expect(cells).toContain(cellIndex(COLS - 1, ROWS - 1));
@@ -97,8 +97,8 @@ describe('where several toys boost one cell', () => {
     // Cell 5 (the left edge, below the top row): the perch only, so its frame is the outermost there.
     expect(cover[5 * MAX_TOYS + 1]).toBe(1);
     expect(depthOf(cover, 5, 1)).toBe(0);
-    // The ring's 14 cells, the five of the row and the two of the pair, counted once each where they overlap.
-    expect(cells).toBe(14);
+    // The ring's 16 cells hold the five of the row and the two of the pair too, counted once each where they overlap.
+    expect(cells).toBe(16);
   });
 
   it('a toy that boosts nothing here leaves no flag', () => {
@@ -116,7 +116,7 @@ describe('the flourish and the light', () => {
     expect(reveal(0.1, 0)).toBeLessThan(1);
     expect(reveal(0.1, 5)).toBe(0);
     expect(reveal(0.1, 2)).toBeGreaterThan(reveal(0.1, 3));
-    // The last of twenty is in about a second.
+    // The last cell of the board is in about a second.
     expect(reveal(1.2, CELL_COUNT - 1)).toBe(1);
     expect(reveal(0.5, CELL_COUNT - 1)).toBe(0);
   });

@@ -83,6 +83,7 @@ export class LaserCard extends Popup<LaserCardResult> {
     const sticker = new Graphics();
     drawTargetMark(sticker, 24);
     row(sticker, t('hud.laserCard.row2', { pct: f.bonusPercent }));
+    row(drawIcon('crown', 50), t('hud.laserCard.row4'));
     row(drawIcon('clock', 50), t('hud.laserCard.row3', { cd: secondsText(f.cooldown) }));
 
     y += 6;

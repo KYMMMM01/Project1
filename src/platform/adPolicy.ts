@@ -31,13 +31,15 @@ export const AD_PLACEMENT_IDS = [
   'patrol_double',
   'shop_refresh',
   'sweep_ticket',
+  'dungeon_entry',
 ] as const;
 
 export type AdPlacementId = (typeof AD_PLACEMENT_IDS)[number];
 
 /**
  * GDD 8.2 "제한" column. Cells without a limit are simply absent. `sweep_ticket` (the sweep-ticket ad on the
- * stage card, twice a day) is not a GDD 8.2 row: its cap comes from docs/명세_메타.md section 8.
+ * stage card, twice a day) is not a GDD 8.2 row: its cap comes from docs/명세_메타.md section 8. `dungeon_entry` (the gold dungeon's one extra
+ * entry a day, docs/명세_메타.md section 13) is not one either.
  */
 export const AD_PLACEMENTS: Readonly<Record<AdPlacementId, Readonly<PlacementRule>>> = {
   pre_run_snack: { perRun: 1 },
@@ -50,6 +52,7 @@ export const AD_PLACEMENTS: Readonly<Record<AdPlacementId, Readonly<PlacementRul
   patrol_double: { daily: 3, home: true },
   shop_refresh: { daily: 2, home: true },
   sweep_ticket: { daily: 2, home: true },
+  dungeon_entry: { daily: 1, home: true },
 };
 
 /**

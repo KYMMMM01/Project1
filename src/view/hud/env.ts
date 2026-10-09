@@ -5,7 +5,7 @@
 import { type Container, Point } from 'pixi.js';
 import { Emitter } from '@/core/events';
 import { hasString, t } from '@/core/i18n';
-import type { BattleApi, Fail } from '@/game';
+import { AWAKEN_MIN_TIER, type BattleApi, type Fail } from '@/game';
 import type { GuideProgress, TopicId } from '@/guide';
 import { popups, toast, type Popup } from '@/ui';
 import { info } from '../info';
@@ -156,7 +156,7 @@ export class EnvImpl implements HudEnv {
 
   explain(command: string, fail: Fail): void {
     const key = failKeys(command, fail).find((k) => hasString(k));
-    const text = key ? t(key) : t('hud.fail.not_available');
+    const text = key ? t(key, { tier: AWAKEN_MIN_TIER }) : t('hud.fail.not_available');
     const target = this.explainAt?.(command) ?? null;
     if (!target || !this.hints.explain(target, text)) toast(text, 'warning');
   }

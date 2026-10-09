@@ -26,6 +26,8 @@ import {
 import {
   CALENDAR, CALENDAR_DAYS, CUP_TIERS, DAILY_CHEST_REWARD, DAILY_MISSIONS, DAILY_FIRST_CLEAR, ENDLESS_TIERS, FEATURE_RULES, PASS_TIERS, PASS_XP_PER_TIER, SEASON_DAYS, WEEKLY_MISSIONS,
 } from '@/meta/data/schedule';
+import { DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_VICTORY_MULT } from '@/meta/data/dungeon';
+import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { ODDS, WILD_SHARE } from '@/meta/odds';
 import { REVIVE_MIN_WAVES, speedSteps } from '@/view/hud/policy';
 import type { TopicId } from './topics';
@@ -53,6 +55,7 @@ const weightText = (row: readonly number[]): string =>
 const chestOdds = (kind: 'wooden' | 'silver' | 'gold'): string =>
   ODDS[kind].rows.filter((r) => r.p > 0).map((r) => `${t(`rarity.${r.key}`)} ${pct(r.p)}%`).join(' · ');
 const tierLines = (c: ClassId): string => ([1, 2, 3] as const).map((n) => classDef(c).tierText(n)).join(' / ');
+const abilityLine = (c: ClassId): string => `${t(classDef(c).specialNameKey)}: ${classDef(c).specialText()}`;
 const enemyName = (id: EnemyId): string => t(`enemy.${id}.name`);
 /** The first wave of a kind and how many waves apart they come (read from the wave table's own rule). */
 function waveRhythm(kind: 'elite' | 'boss'): { first: number; gap: number } {
@@ -92,14 +95,16 @@ const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
   }),
   synergy: () => ({
     a: SYNERGY_TIER_AT[0] as number, b: SYNERGY_TIER_AT[1] as number, c: SYNERGY_TIER_AT[2] as number,
+    kitten: rarityName(RARITIES[0] as RarityId), guardian: rarityName(RARITIES[RARITIES.length - 1] as RarityId),
     warrior: tierLines('warrior'), ranger: tierLines('ranger'), mage: tierLines('mage'), trickster: tierLines('trickster'),
+    warriorAbility: abilityLine('warrior'), rangerAbility: abilityLine('ranger'), mageAbility: abilityLine('mage'), tricksterAbility: abilityLine('trickster'),
   }),
-  class_sheet: () => ({ a: SYNERGY_TIER_AT[0] as number, c: SYNERGY_TIER_AT[2] as number }),
+  class_sheet: () => ({ a: SYNERGY_TIER_AT[0] as number, c: SYNERGY_TIER_AT[2] as number, kitten: rarityName(RARITIES[0] as RarityId) }),
   class_upgrade: () => ({ bonus: pct(CLASS_UPGRADE_BONUS), costs: list(CLASS_UPGRADE_COSTS), max: CLASS_UPGRADE_COSTS.length }),
   pick3: () => ({ every: OFFER_EVERY, options: OFFER_OPTIONS }),
   purr: () => ({ elite: ELITE_PURR, boss: BOSS_PURR, act: ACT_PURR, cost: MOLT_COST, awaken: AWAKEN_COST }),
   molt: () => ({ cost: MOLT_COST, limit: MOLT_LIMIT }),
-  awaken: () => ({ tier: AWAKEN_MIN_TIER, cost: AWAKEN_COST }),
+  awaken: () => ({ tier: AWAKEN_MIN_TIER, kinds: SYNERGY_TIER_AT[AWAKEN_MIN_TIER - 1] as number, cost: AWAKEN_COST }),
   sell: () => ({
     f1: SELL_FISH[0] as number, f2: SELL_FISH[1] as number, f3: SELL_FISH[2] as number, f4: SELL_FISH[3] as number, f5: SELL_FISH[4] as number,
     purr: list(SELL_PURR.slice(2)),
@@ -164,6 +169,7 @@ const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
   sweep: () => ({ tickets: TICKETS_PER_DAY, pay: pct(SWEEP_PAYOUT), stock: TICKET_STOCK }),
   daily_challenge: () => ({ waves: DAILY_WAVES, level: DAILY_UNIT_LEVEL, rules: MODIFIER_IDS.length, chest: DAILY_FIRST_CLEAR.chests?.silver ?? 0 }),
   weekly_cup: () => ({ best: 7 * DAILY_WAVES, t1: CUP_TIERS[0]?.min ?? 0, t2: CUP_TIERS[1]?.min ?? 0, t3: CUP_TIERS[2]?.min ?? 0 }),
+  gold_dungeon: () => ({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES, gems: DUNGEON_ENTRY_GEMS, win: DUNGEON_VICTORY_MULT }),
   endless: () => ({
     chapter: FEATURE_RULES.endless.chapter ?? 0, w1: ENDLESS_TIERS[0]?.wave ?? 0, w2: ENDLESS_TIERS[1]?.wave ?? 0, w3: ENDLESS_TIERS[2]?.wave ?? 0,
     growth: pct(ENDLESS_GROWTH - 1),

@@ -130,15 +130,17 @@ describe('balance report', () => {
     const cells: { label: string; chapter: number; stake: number }[] = [];
     for (const chapter of CHAPTERS) cells.push({ label: `ch${chapter} s${CHAPTER_STAKE}`, chapter, stake: CHAPTER_STAKE });
     for (const stake of STAKES) cells.push({ label: `ch1 s${stake}`, chapter: 1, stake });
-    const rows = cells.map((cell) => {
+    const wins: (string | number)[][] = [];
+    const bosses: (string | number)[][] = [];
+    for (const cell of cells) {
       const level = RECOMMENDED_LEVEL[cell.chapter - 1] as number;
       const make = (seed: number) => loadoutInit(seed, cell.chapter, cell.stake, level);
-      return [
-        cell.label, pct(batch(RUNS, 'synergy', make).winRate),
-        ...CLASS_IDS.map((focus) => pct(batch(RUNS, 'synergy', make, { focus }).winRate)),
-      ];
-    });
-    printTable(`Win rate of the synergy bot free / pinned to one class line (${RUNS} runs per cell)`, ['case', 'free', ...CLASS_IDS], rows);
+      const batches = [batch(RUNS, 'synergy', make), ...CLASS_IDS.map((focus) => batch(RUNS, 'synergy', make, { focus }))];
+      wins.push([cell.label, ...batches.map((b) => pct(b.winRate))]);
+      bosses.push([cell.label, ...batches.map((b) => pct(b.bossRatio))]);
+    }
+    printTable(`Win rate of the synergy bot free / pinned to one class line (${RUNS} runs per cell)`, ['case', 'free', ...CLASS_IDS], wins);
+    printTable(`Elite and boss kill time as a share of the time limit (median over the kills in those runs; lower is faster)`, ['case', 'free', ...CLASS_IDS], bosses);
   });
 
   it('full matrix', () => {

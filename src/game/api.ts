@@ -18,7 +18,10 @@ export type { RarityId };
 export const CLASS_IDS = ['warrior', 'ranger', 'mage', 'trickster'] as const;
 export type ClassId = (typeof CLASS_IDS)[number];
 
-/** 4 classes x 5 rarities. Order inside each class is common -> mythic. */
+/**
+ * 4 classes x 5 rarities. Order inside each class is common -> mythic, except the tricksters' first two: v1.4 swapped the ranks of the
+ * bell kitten and the chef (the chef is the kitten now, `UNIT_GRID` is the line), and this list kept its order so no per-cat table moved.
+ */
 export const UNIT_IDS = [
   'w_paw', 'w_sword', 'w_viking', 'w_samurai', 'w_tiger',
   'r_sling', 'r_archer', 'r_ninja', 'r_gunner', 'r_star',
@@ -76,7 +79,8 @@ export type HazardKind = 'wet' | 'zap';
 
 export type WaveKind = 'normal' | 'elite' | 'boss';
 
-export type BattleMode = 'tutorial' | 'chapter' | 'daily' | 'endless';
+/** `gold` is the gold dungeon: eight normal waves with their own script (game/data/goldDungeon.ts); `chapter` is its tier. */
+export type BattleMode = 'tutorial' | 'chapter' | 'daily' | 'endless' | 'gold';
 
 export type DailyModifierId =
   | 'rich' | 'swarm' | 'giants' | 'lucky_day' | 'rush' | 'glass_cannon' | 'no_rangers' | 'toy_box' | 'sunny_day' | 'long_laser';
@@ -152,8 +156,11 @@ export interface ClassDef {
   id: ClassId;
   nameKey: string;
   roleKey: string;
-  /** Bonus description for synergy tiers 1..3 in the current language. */
+  /** Bonus description for synergy tiers 1..3 in the current language (the numbers of the step; tier 3's ability is `specialText`). */
   tierText(tier: 1 | 2 | 3): string;
+  /** i18n key of the name of the ability the third synergy step adds, and its sentence with the real numbers. */
+  specialNameKey: string;
+  specialText(): string;
 }
 
 // ───────────────────────────── run setup ─────────────────────────────
@@ -196,6 +203,8 @@ export interface UnitState {
   readonly uid: number;
   readonly id: UnitId;
   cell: number;
+  /** Collection level 1..10 the cat plays at (its perks of levels 4, 7 and 10 apply). */
+  readonly level: number;
   /** Progress toward the next attack, 0 (just fired) .. 1 (ready). */
   charge: number;
   /** True while the unit stands on a hazard cell and cannot attack. */
@@ -209,8 +218,10 @@ export interface UnitState {
   /** Aura bonuses currently received from neighbours (for buff icons), as fractions. */
   buffAttackSpeed: number;
   buffDamage: number;
-  /** True when a neighbouring bell kitten shields this cell from hazards. */
+  /** True when a bell kitten next to this cat covers it (the dashed dome); see `dodge` for what that is worth. */
   shielded: boolean;
+  /** Chance 0..1 that a wet or zap cell misses this cat: the bell kitten and the cats around it have one, the others 0. */
+  dodge: number;
   kills: number;
   damageDealt: number;
 }
@@ -425,6 +436,14 @@ export interface BattleEvents {
   status: { enemy: EnemyState; kind: StatusKind; duration: number };
   /** Enemy was dragged backwards along the path by `distance` px. */
   pull: { enemy: EnemyState; distance: number };
+  /** A cat covered by a bell kitten dodged a wet or zap cell (show a small "Dodged!" over it). */
+  dodge: { unit: UnitState; hazard: HazardKind };
+  /**
+   * The third synergy step of a class set off an area effect to draw at (`x`, `y`): the warriors' roar (one per roaring warrior,
+   * `radius` = its range) or the mages' burst (`radius` = the blast); `points` are the enemies it touches. A ranger's sure crit
+   * arrives as an ordinary `hit` with `crit: true`, the tricksters' play time as the faster attacks while the laser is on.
+   */
+  special: { classId: ClassId; kind: 'cry' | 'shatter'; x: number; y: number; radius: number; points: StrikePoint[] };
   shieldBreak: { enemy: EnemyState };
   heal: { enemy: EnemyState; amount: number };
   enrage: { enemy: EnemyState };
@@ -451,7 +470,7 @@ export interface BattleEvents {
 
   fish: { total: number; delta: number; reason: CurrencyReason; x?: number; y?: number };
   purr: { total: number; delta: number; reason: CurrencyReason; x?: number; y?: number };
-  /** `distinct` = number of different unit types of the class on the board. */
+  /** `distinct` = number of different unit types of the class on the board, counted from the second rank up. */
   synergy: { classId: ClassId; tier: number; previous: number; distinct: number };
   upgrade: { kind: 'class' | 'summon'; classId: ClassId | null; level: number };
   pity: PityInfo;
@@ -551,7 +570,7 @@ export interface BattleApi {
   pity(): PityInfo;
   /** Paid summons made toward the next pick-1-of-3 / how many are needed (0/0 when disabled). */
   summonOfferProgress(): { count: number; every: number };
-  /** Number of different unit types of the class on the board. */
+  /** Number of different unit types of the class on the board that count toward its synergy (ranks 2 to 5; the kitten does not). */
   classDistinct(classId: ClassId): number;
   /** Which of the class's five rarities are present on the board (index = rarity order). */
   classOwned(classId: ClassId): boolean[];

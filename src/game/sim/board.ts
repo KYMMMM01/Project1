@@ -1,12 +1,12 @@
-/** The 5x4 board: summoning, merging, molting, awakening, selling, upgrades and the stat recompute. */
+/** The 5x5 board: summoning, merging, molting, awakening, selling, upgrades and the stat recompute. */
 import { CLASS_IDS, UNIT_IDS, type ClassId, type Fail, type OddsRow, type PityInfo, type RarityId, type UnitId } from '../api';
-import { CELL_COUNT, cellCenterX, cellCenterY, cellRow, isEdgeCell, neighbors4 } from '../geometry';
+import { CELL_COUNT, auraCells, cellCenterX, cellCenterY, cellRow, isEdgeCell, neighbors4 } from '../geometry';
 import {
-  AWAKEN_COST, AWAKEN_MIN_TIER, CLASS_UPGRADE_BONUS, CLASS_UPGRADE_COSTS, HAZARD_RECOVER, LEVEL_DAMAGE_STEP,
+  AWAKEN_COST, AWAKEN_MIN_TIER, CLASS_UPGRADE_BONUS, CLASS_UPGRADE_COSTS, DODGE_CAP, HAZARD_RECOVER, LEVEL_DAMAGE_STEP,
   MERGE_START_CHARGE, MOLT_COST, MOLT_LIMIT, OFFER_OPTIONS, OFFER_REROLLS, PITY_LIMIT, SELL_FISH, SELL_PURR,
-  SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, SUN_SPEED,
+  SUMMON_BASE, SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_STEP, SUN_SPEED, SYNERGY_MIN_RANK,
 } from '../data/balance';
-import { synergyTier, tierForDistinct } from '../data/classes';
+import { SYNERGY_SPECIAL, synergyTier, tierForDistinct } from '../data/classes';
 import { RARITIES, UNIT_GRID, levelSourceOf, mergeResultOf, mythicOf, unitRarityIndex } from '../data/roster';
 import type { PerkSpec, SynergyTier } from '../data/types';
 import { unitSpec } from '../data/units';
@@ -16,8 +16,21 @@ import type { Sim } from './sim';
 import type { PerkTotals, SimUnit } from './types';
 
 const UNIT_INDEX = Object.fromEntries(UNIT_IDS.map((id, i) => [id, i])) as Record<UnitId, number>;
+/** Up / down / left / right: the kneading cushion's neighbours. */
 const NEIGHBORS: readonly number[][] = Array.from({ length: CELL_COUNT }, (_, c) => neighbors4(c, []));
+/** The cells a team effect reaches from each cell, by how far it reaches (the cats' data asks for 1 cell: the 8 cells around). */
+const AURA_REACH = new Map<number, readonly number[][]>();
+
+function auraTable(reach: number): readonly number[][] {
+  let table = AURA_REACH.get(reach);
+  if (!table) {
+    table = Array.from({ length: CELL_COUNT }, (_, c) => auraCells(c, [], reach));
+    AURA_REACH.set(reach, table);
+  }
+  return table;
+}
 const CLASS_INDEX: Readonly<Record<ClassId, number>> = { warrior: 0, ranger: 1, mage: 2, trickster: 3 };
+const RANGER = 1;
 const TRICKSTER = 3;
 
 function classIndexOf(id: ClassId): number {
@@ -50,10 +63,10 @@ export function makeUnit(s: Sim, id: UnitId, cell: number, charge: number): SimU
   const level = unitLevelOf(s, id);
   const unit: SimUnit = {
     uid: ++s.uidUnit, id, cell, charge, blocked: false, weakened: 0, sunlit: false,
-    stats: { ...spec.base }, buffAttackSpeed: 0, buffDamage: 0, shielded: false, kills: 0, damageDealt: 0,
+    stats: { ...spec.base }, buffAttackSpeed: 0, buffDamage: 0, shielded: false, dodge: 0, kills: 0, damageDealt: 0,
     spec, level, classIndex: classIndexOf(spec.classId), rarityIndex: unitRarityIndex(id), unitIndex: UNIT_INDEX[id],
     recoverAt: 0, searchAfter: 0, attackCount: 0, coinAt: 0,
-    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, removed: false,
+    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, shots: 0, sureCritEvery: 0, removed: false,
   };
   const coin = spec.aura.coinRain;
   unit.coinAt = coin ? s.time + coin.every : 0;
@@ -105,12 +118,12 @@ export function placeRandomCommon(s: Sim, u: number, v: number): boolean {
 
 const presence = new Uint8Array(CLASS_IDS.length * RARITIES.length);
 
-/** Counts distinct unit types per class and announces tier changes. */
+/** Counts the distinct unit types per class that count (the first rank does not) and announces tier changes. */
 function updateSynergy(s: Sim): void {
   presence.fill(0);
   for (let c = 0; c < CELL_COUNT; c++) {
     const u = s.units[c];
-    if (u) presence[u.classIndex * RARITIES.length + u.rarityIndex] = 1;
+    if (u && u.rarityIndex >= SYNERGY_MIN_RANK) presence[u.classIndex * RARITIES.length + u.rarityIndex] = 1;
   }
   const k = 1 + (s.fx.synergyScale ?? 0);
   for (let ci = 0; ci < CLASS_IDS.length; ci++) {
@@ -120,6 +133,7 @@ function updateSynergy(s: Sim): void {
     const tier = tierForDistinct(distinct);
     s.distinct[ci] = distinct;
     s.tier[ci] = tier;
+    s.special[ci] = tier >= 3 ? 1 : 0;
     const t = s.tierData[ci] as SynergyTier;
     const base = synergyTier(CLASS_IDS[ci] as ClassId, tier);
     t.damage = base.damage * k;
@@ -137,6 +151,7 @@ function updateSynergy(s: Sim): void {
 
 const bellSpeed = new Float64Array(CELL_COUNT);
 const bardDamage = new Float64Array(CELL_COUNT);
+const dodgeAt = new Float64Array(CELL_COUNT);
 const shield = new Uint8Array(CELL_COUNT);
 
 /** Recomputes every unit's final stats from level, upgrades, synergies, relics and neighbours. */
@@ -144,6 +159,7 @@ export function recomputeStats(s: Sim): void {
   const fx = s.fx;
   bellSpeed.fill(0);
   bardDamage.fill(0);
+  dodgeAt.fill(0);
   shield.fill(0);
   let lucky = 0;
   for (let c = 0; c < CELL_COUNT; c++) {
@@ -151,8 +167,13 @@ export function recomputeStats(s: Sim): void {
     if (!u) continue;
     const aura = u.spec.aura;
     const scale = 1 + u.perk.aura;
-    const nb = NEIGHBORS[c] as number[];
+    const nb = auraTable(aura.reach ?? 1)[c] as number[];
     if (aura.shieldNeighbours) for (const n of nb) shield[n] = 1;
+    if (aura.dodge !== undefined) {
+      const v = Math.min(DODGE_CAP, aura.dodge * scale);
+      if (v > (dodgeAt[c] as number)) dodgeAt[c] = v;
+      for (const n of nb) if (v > (dodgeAt[n] as number)) dodgeAt[n] = v;
+    }
     if (aura.neighbourSpeed !== undefined) {
       const v = aura.neighbourSpeed * scale;
       for (const n of nb) if (v > (bellSpeed[n] as number)) bellSpeed[n] = v;
@@ -165,6 +186,21 @@ export function recomputeStats(s: Sim): void {
   }
   const trick = s.tierData[TRICKSTER] as SynergyTier;
   const sunSpeed = SUN_SPEED + (fx.sunSpeed ?? 0);
+  // The side effects of the synergy steps reach every cat on the board.
+  let armorIgnore = 0;
+  let statusMult = 0;
+  let crit = 0;
+  let critMult = 0;
+  for (let ci = 0; ci < CLASS_IDS.length; ci++) {
+    const sy = s.tierData[ci] as SynergyTier;
+    armorIgnore += sy.armorIgnore;
+    statusMult += sy.statusMult;
+    crit += sy.crit;
+    critMult += sy.critMult;
+  }
+  if (armorIgnore > 1) armorIgnore = 1;
+  const party = s.special[TRICKSTER] === 1 && s.laser.active ? SYNERGY_SPECIAL.trickster.speed : 0;
+  const sureEvery = s.special[RANGER] === 1 ? SYNERGY_SPECIAL.ranger.every : 0;
   for (let c = 0; c < CELL_COUNT; c++) {
     const u = s.units[c];
     if (!u) continue;
@@ -174,8 +210,7 @@ export function recomputeStats(s: Sim): void {
     const row = cellRow(c);
     const physical = u.spec.damageType === 'physical';
 
-    let dmg = (s.classLevels[ci] as number) * CLASS_UPGRADE_BONUS + s.trainDamage + s.modDamage + u.perk.damage;
-    if (ci === 0 || ci === 2) dmg += sy.damage;
+    let dmg = (s.classLevels[ci] as number) * CLASS_UPGRADE_BONUS + s.trainDamage + s.modDamage + u.perk.damage + sy.damage;
     dmg += physical ? fx.damagePhysical ?? 0 : fx.damageMagic ?? 0;
     if (u.rarityIndex >= 3) dmg += fx.royalDamage ?? 0;
     if (row === 0) dmg += fx.topRowDamage ?? 0;
@@ -190,7 +225,7 @@ export function recomputeStats(s: Sim): void {
     }
     dmg += bardDamage[c] as number;
 
-    let speed = trick.speed + lucky + bellSpeed[c] + u.perk.speed;
+    let speed = trick.speed + party + lucky + bellSpeed[c] + u.perk.speed;
     if (s.sunCell[c]) speed += sunSpeed;
     if (ci === 0 || ci === 1) speed += fx.speedWarriorRanger ?? 0;
     if (isEdgeCell(c)) speed += fx.edgeSpeed ?? 0;
@@ -199,13 +234,15 @@ export function recomputeStats(s: Sim): void {
     st.damage = base.damage * (1 + LEVEL_DAMAGE_STEP * (u.level - 1)) * (1 + dmg);
     st.interval = (base.interval / (1 + speed)) * (u.weakened > 0 ? 2 : 1);
     st.range = base.range * (1 + (fx.rangeAll ?? 0) + (row === 0 ? fx.topRowRange ?? 0 : 0) + u.perk.range);
-    const crit = base.crit + (ci === 1 ? sy.crit : 0) + (fx.crit ?? 0) + u.perk.crit;
-    st.crit = crit > 1 ? 1 : crit;
-    st.critMult = base.critMult + (ci === 1 ? sy.critMult : 0) + (fx.critMult ?? 0) + u.perk.critMult;
-    u.armorIgnore = ci === 0 ? sy.armorIgnore : 0;
-    u.statusMult = 1 + (ci === 2 ? sy.statusMult : 0);
+    const chance = base.crit + crit + (fx.crit ?? 0) + u.perk.crit;
+    st.crit = chance > 1 ? 1 : chance;
+    st.critMult = base.critMult + critMult + (fx.critMult ?? 0) + u.perk.critMult;
+    u.armorIgnore = armorIgnore;
+    u.statusMult = 1 + statusMult;
+    u.sureCritEvery = ci === RANGER ? sureEvery : 0;
     u.buffAttackSpeed = bellSpeed[c] as number;
     u.buffDamage = bardDamage[c] as number;
+    u.dodge = dodgeAt[c] as number;
     u.shielded = shield[c] === 1;
     u.sunlit = s.sunCell[c] === 1;
     u.searchAfter = 0;
@@ -371,7 +408,7 @@ function enterCell(s: Sim, unit: SimUnit, leftHazard: boolean): void {
 }
 
 function onHazard(s: Sim, unit: SimUnit): boolean {
-  return (s.hazardCount[unit.cell] as number) > 0 && !unit.shielded && unit.id !== 't_bell';
+  return (s.hazardCount[unit.cell] as number) > 0;
 }
 
 export function cmdDrop(s: Sim, from: number, to: number): Fail | null {

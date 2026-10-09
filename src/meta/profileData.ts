@@ -7,6 +7,7 @@ import { emptyCounters } from '@/platform/adPolicy';
 import { emptyLedger } from '@/platform/iapService';
 import { DAILY_MISSIONS, WEEKLY_MISSIONS } from './data/schedule';
 import { CHAPTER_COUNT, CHEST_BULK_MAX, MAX_LEVEL, TRAINING_MAX, TREAT_SLOTS } from './data/economy';
+import { DUNGEON_TIERS } from './data/dungeon';
 import { SHOP_SLOTS } from './data/catalog';
 import { MAX_STAKE } from '@/game/data/roster';
 import { freshDay, freshWeek } from './missions';
@@ -45,6 +46,7 @@ export function defaultProfile(now: number, seed: number): ProfileData {
     accountXp: 0,
     cleared: Array.from({ length: CHAPTER_COUNT }, () => 0),
     endless: { best: 0, week: '', weekBest: 0, claimed: [] },
+    dungeon: { best: Array.from({ length: DUNGEON_TIERS }, () => ({ waves: 0, kills: 0, gold: 0 })) },
     stats: { runs: 0, wins: 0, merges: 0, kills: 0, bosses: 0, sweeps: 0 },
     time: { lastSeenAt: 0, lastActiveDate: '' },
     day: freshDay(''),
@@ -99,6 +101,12 @@ export function normalizeProfile(p: ProfileData): ProfileData {
   p.cleared = Array.from({ length: CHAPTER_COUNT }, (_, i) => clampInt(p.cleared[i] ?? 0, 0, MAX_STAKE + 1));
   fitMissions(p.day.missions, DAILY_MISSIONS.length, DAILY_MISSIONS);
   fitMissions(p.week.missions, WEEKLY_MISSIONS.length, WEEKLY_MISSIONS);
+  p.day.dungeon.used = clampInt(p.day.dungeon.used, 0, COUNTER_MAX);
+  p.day.dungeon.bought = clampInt(p.day.dungeon.bought, 0, COUNTER_MAX);
+  p.dungeon.best = Array.from({ length: DUNGEON_TIERS }, (_, i) => {
+    const b = p.dungeon.best[i];
+    return { waves: clampInt(b?.waves ?? 0, 0, COUNTER_MAX), kills: clampInt(b?.kills ?? 0, 0, COUNTER_MAX), gold: clampInt(b?.gold ?? 0, 0, COUNTER_MAX) };
+  });
   p.day.treat = Array.from({ length: TREAT_SLOTS }, (_, i) => p.day.treat[i] === true);
   p.shop.bought = Array.from({ length: SHOP_SLOTS }, (_, i) => p.shop.bought[i] === true);
   p.piggy.gems = clampInt(p.piggy.gems, 0, COUNTER_MAX);

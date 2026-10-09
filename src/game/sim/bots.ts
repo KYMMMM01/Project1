@@ -9,7 +9,7 @@
  *             picks toys by score
  *   synergy - everything merge does plus: builds one class line on purpose (a merge never changes class; `focus`
  *             pins the line from the first cat instead of letting the heaviest class decide):
- *             keeps one cat of each rarity of its focus class for the distinct-type synergy, merges the
+ *             keeps one cat of each rarity of its focus class (the kitten rank does not count toward the synergy), merges the
  *             surplus pairs and every other class, molts off-class cats into the rungs it lacks while
  *             keeping the purr of one awakening, stands strong cats on sunbeams, aims the laser at the boss
  *             or the oldest enemy, and takes the early-call bonus when the field is empty
@@ -17,6 +17,7 @@
 import { CLASS_IDS, type BattleApi, type ClassId, type RelicId, type UnitId, type UnitState } from '../api';
 import { CELL_COUNT, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP, cellCenterX, cellCenterY } from '../geometry';
 import { Rng } from '@/core/rng';
+import { SYNERGY_MIN_RANK } from '../data/balance';
 import { unitClass, unitRarityIndex } from '../data/roster';
 
 export type BotPolicy = 'random' | 'merge' | 'synergy';
@@ -264,7 +265,8 @@ function ladderAllows(b: BattleApi, focus: ClassId, id: UnitId, count: number): 
  */
 function moltIntoLadder(b: BattleApi, c: Census, focus: ClassId): void {
   const f = CLASS_IDS.indexOf(focus);
-  for (let r = 3; r >= 0; r--) {
+  // The kitten rank (0) is never molted into: it does not count toward a synergy.
+  for (let r = 3; r >= SYNERGY_MIN_RANK; r--) {
     if (r < 3 && b.purr <= b.awakenCost()) break;
     if ((c.has[f] as boolean[])[r]) continue;
     let donor = -1;
@@ -308,7 +310,7 @@ function synergyBot(seed: number, forced?: ClassId): Bot {
 
       // Money: upgrades once the board is established, summons otherwise.
       for (let guard = 0; guard < 3; guard++) {
-        const board = 20 - emptyCount(b);
+        const board = CELL_COUNT - emptyCount(b);
         const upCost = b.classUpgradeCost(focus);
         if (board >= 9 && upCost > 0 && b.fish >= upCost && b.classUpgradeLevel(focus) < Math.floor(board / 3)) {
           b.upgradeClass(focus);

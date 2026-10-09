@@ -2,7 +2,7 @@
  * HUD decisions with no display objects in them: which parts are visible on which run, how the gauge
  * reads, what the summon button says, which offers may be shown. Pure so they can be unit tested.
  */
-import type { BattlePhase, ClassId, EnemyTrait, Fail, PityInfo, RarityId, UnitId } from '@/game';
+import { SYNERGY_MIN_RANK, unitRarityIndex, type BattlePhase, type ClassId, type EnemyTrait, type Fail, type PityInfo, type RarityId, type UnitId } from '@/game';
 import type { TopicId } from '@/guide';
 
 // ───────────────────────────── staged reveal (GDD 9.1) ─────────────────────────────
@@ -268,14 +268,15 @@ const RARITY_RANK: Record<RarityId, number> = { common: 0, rare: 1, epic: 2, leg
 
 /**
  * Which of three offered kittens to highlight: one that adds a new kind to a class already on the
- * board (a step toward the next synergy tier) beats a bare rarity lead. Index of the best option.
+ * board (a step toward the next synergy tier) beats a bare rarity lead. A class is "on the board" only
+ * through a cat that counts toward its synergy: the kitten rank does not. Index of the best option.
  */
 export function recommendPick(options: readonly PickInfo[], board: readonly UnitId[], classOf: (id: UnitId) => ClassId): number {
   let best = 0;
   let bestScore = -1;
   options.forEach((o, i) => {
     const sameKind = board.includes(o.id);
-    const classOnBoard = board.some((b) => classOf(b) === o.classId);
+    const classOnBoard = board.some((b) => classOf(b) === o.classId && unitRarityIndex(b) >= SYNERGY_MIN_RANK);
     const score = RARITY_RANK[o.rarity] * 2 + (classOnBoard && !sameKind ? 5 : 0) + (sameKind ? 1 : 0);
     if (score > bestScore) {
       bestScore = score;

@@ -38,6 +38,7 @@ addStrings('ko', {
   'platform.placement.patrol_double': '순찰 2배',
   'platform.placement.shop_refresh': '상점 새로고침',
   'platform.placement.sweep_ticket': '소탕권',
+  'platform.placement.dungeon_entry': '골드 던전 입장',
 });
 addStrings('en', {
   'platform.ad.title': 'Ad (test)',
@@ -65,6 +66,7 @@ addStrings('en', {
   'platform.placement.patrol_double': 'Double patrol',
   'platform.placement.shop_refresh': 'Shop refresh',
   'platform.placement.sweep_ticket': 'Sweep ticket',
+  'platform.placement.dungeon_entry': 'Gold Dungeon entry',
 });
 
 export const OVERLAY_ID = 'lp-overlay';

@@ -17,11 +17,12 @@ import {
   type Pt,
 } from '@/ui/classChipMath';
 import { wobbleAmp } from '@/ui/paperMath';
+import { FIELD_H } from '@/game/geometry';
 import type { BattleLayout } from '@/view/context';
 import { bottomRects, FACE, fitScale, gaugeWidth, PICK, pickCardX, pickHand, SKIP_FACE, SKIP_H, SKIP_W, skipRect, topRects } from '@/view/hud/layoutMath';
 
 function layout(h: number, safeTop = 0, safeBottom = 0): BattleLayout {
-  const slack = Math.round((h - safeTop - safeBottom - 168 - 452 - 624) / 2);
+  const slack = Math.round((h - safeTop - safeBottom - 168 - 452 - FIELD_H) / 2);
   return { w: 720, h, safeTop, safeBottom, fieldX: 0, fieldY: safeTop + 168 + slack, topH: 168, bottomH: 452 };
 }
 
@@ -96,12 +97,12 @@ describe('sell strip', () => {
     const tall = layout(1600);
     const r = bottomRects(tall);
     // tall screens: the strip reaches at most 120 px above the panel, the field's bottom edge is farther
-    expect(tall.fieldY + 624).toBeLessThan(r.top - 120);
+    expect(tall.fieldY + FIELD_H).toBeLessThan(r.top - 120);
     expect(r.sell.y).toBe(-120);
     expect(r.sell.y + r.sell.h).toBe(112);
     const tight = layout(1280);
     const t = bottomRects(tight);
-    expect(t.sell.y + t.top).toBe(tight.fieldY + 624);
+    expect(t.sell.y + t.top).toBe(tight.fieldY + FIELD_H);
     expect(t.sell.y + t.sell.h).toBe(112);
   });
 });

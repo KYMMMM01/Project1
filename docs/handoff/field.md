@@ -217,3 +217,83 @@ A toy that does not work on a place lights nothing when tapped. `__dbg.battle.re
 **Not verified.** A real phone: the chips are 30 px with a 40 px target at the corner of the first cell (a cat's ear can be under one: the cat in cell 0 loses a corner of itself to the chip column; nothing else on the board moves). The cushion on a board of one class marks every cat that has a neighbour, which can be most of them (that is the toy's real effect).
 
 REQUESTS: see `fx.md` (the two unused pictures and the gallery's ring call).
+
+
+## 2026-10-09 batch: the board is 5 x 5, and the buff markers
+
+Directive 16 (the board becomes 5 columns x 5 rows) and the display half of directive 15 (markers on the cats a trickster helps). Rules, numbers and texts of the cats were not touched (the next phase does them on top of this board). `npx tsc --noEmit` prints nothing for `src` and `tests`; the whole suite is green.
+
+### 1. The board
+
+`ROWS` is the single source: `src/game/geometry.ts` derives everything from `COLS`, `ROWS`, `CELL_W`, `CELL_H` and the floor margin (`BOARD_Y = BOARD_X`): `CELL_COUNT`, `BOARD_*`, `FIELD_H` and the loop (`PATH_LEFT/TOP` = half the margin, `PATH_RIGHT/BOTTOM` mirrored). Nothing in the simulation, the view, the tutorial, the bots, the guide or the tests assumes 4 rows or 20 cells any more (`tests/board.geometry.test.ts`, 14 tests).
+
+| | 5 x 4 board | 5 x 5 board |
+|---|---|---|
+| cell | 108 x 112 | 108 x 96 |
+| board | 540 x 448 | 540 x 480 |
+| field | 720 x 624 | 720 x 660 |
+| floor margin round the board (lane in its middle) | 90 at the sides, 88 top and bottom | 90 on all four sides |
+| lane centre line top / bottom | 44 / 580 | 45 / 615 |
+| loop length | 2270.2 px | 2338.2 px (+68 px, +3.0 %) |
+| outer ring / middle | 14 / 6 cells | 16 / 9 cells |
+| cats' height on the board | 92 to 104 px | 79 to 89 px (x 0.857) |
+
+**Why 96 px.** 660 is exactly the band between the two HUD blocks on a 1280 screen (168 + 660 + 452), so the field is flush with both (it had 18 px to spare above and below) and nothing overlaps; five rows and a 90 px floor margin then leave 96 px per row. The lane keeps the margin it had (its centre line stays half way between the field's edge and the board, the 82 px walkway does not touch the cells), so no enemy picture, ring or banner that hangs off the lane moved. A taller screen is unchanged in kind: the spare height is split evenly above and below the field (160 px each at 1600), where the banners now have a lot of room. The HUD blocks keep their grids (`TOP_HUD_H` 168, `BOTTOM_PANEL_H` 452, no change in `layoutMath`).
+
+**Cats on 96 px cells (`unitView.ts`).** Everything that hangs from a cat's height was drawn for 112 px cells; `fit(px)` = `px * CELL_H / 112` brings a measure of that drawing to this board: the sprite heights (`UNIT_HEIGHT` 79 / 81 / 82 / 86 / 89), `FEET_DY` 34 -> 28, the sun sticker, the NEW tag, the shield dome (scaled with the cell), the "cannot act" sticker, the overhead point. The stickers keep their size (a 32 px class sticker, a 26 px rank tag): the rank tag is tucked 5 px higher under the feet (`RANK_AT` 7; it ended 3 px past a 112 px cell, on 96 px it would have crossed the sheet's dashed line) and the class sticker follows it (`CLASS_AT` -38, -19). `SUN_AT`, `CLASS_AT` and `RANK_AT` are exported so the tests measure against the real numbers. A mythic cat's ears reach 13 px above its cell (they reached 14); a common cat's head is inside its cell.
+
+**Banners.** The band between the HUD and the sheet is 78 px at 1280 (was 88), so the two rows run at their minimum scale 0.8 (were 0.875) and end 1.2 px short of the sheet. `SHEET_PAD` 14 -> 12 for that: it keeps the contract "both rows between the HUD and the sheet at 1280, scale at least 0.8" (the cell paper is 17 px from the sheet's edge now, was 19; the dashed line is 8 px in as before). The act-clear / victory ribbon and the overflow gauge sit on the field's middle (`fieldY + FIELD_H / 2` instead of `+ 330`: the same 330 now).
+
+**Other things that followed the geometry.**
+- Sunbeams: `SUN_CELLS` 4 -> 5 (a fifth of the board, as it was), `sunny_day` 8 -> 10 (two fifths), and the first sunbeams (`FIRST_SUN_CELLS`) are a plus on the middle cell `[7, 11, 12, 13, 17]` (they were `[6, 7, 12, 13]`, which on 5 rows sits in the upper middle). Guide and card texts read the count from the data. `sim.ts` had a literal 4 for the base count: it reads `SUN_CELLS`.
+- Toys that work on a place: the top row is still cells 0 to 4, the window perch marks the 16 ring cells, the cushion the cats beside their class (all through `isEdgeCell`, `cellRow`, `neighbors4`: nothing to change in `toyCells.ts`). The chips' flourish draws the cells in 36 ms apart (was 45), so the last of 25 cells is in at 1.14 s, as the last of 20 was.
+- Hazards: `pickHazardBlock` (2 x 2) clamps with `ROWS - 2`; tested in every corner and on the edges.
+- The tutorial's gift of kittens (`TUTORIAL_GIFT_MAX` 8 -> 13) still fills the board until 2 cells are free, so the selling lesson still has a full board; its sunbeam reveal is the plus above. No other tutorial cell is fixed (the scripted summons land on random cells).
+- Bots: `board = 20 - emptyCount` (the synergy bot's count of its own cats) reads `CELL_COUNT` now; on 25 cells it called a board of ten cats "five" and bought no upgrades (a test fails with the old literal). Their other thresholds are in empty cells (`<= 10`, `<= 6`, `CROWDED = 3`) and were left alone. `worksWalkway` follows the lane constants.
+- Numbers: the crowd rule cuts the field into 4 x 4 regions, `REGION_H` 156 -> 165.
+- Saves: a wave-start save of the old board holds 20 cats and is refused by `parseSnapshot` (its existing size check), so a run in progress on the old build is not resumed; nothing else reads cell indices from storage. `SIM_VERSION` was not bumped (the rules phase changes the rules and should bump it).
+
+**What the 5th row does to reach (for the rules phase; nothing was retuned).** Distance from a cell's middle to the nearest stretch of the walkway's centre line, px: the outer ring 93 to 99 (was 99 to 100), the cells one step in 189 to 207 (were 207 to 212), the middle cell **285** (there was no such cell). A warrior's range is 200 to 285, so the bots' `worksWalkway` (range at least distance + 40) is true for the ring and for the eight cells round the middle for the samurai and the tiger, and for no warrior in the middle cell. A cat of range 195 now reaches the walkway from the cells one step in along the top and bottom rows (189 plus the enemy's 18 to 24 px radius). `tests/sim.warriors.test.ts` was updated to say so (the eight cells round the middle; the tiger fights from the middle cell, the paw cannot).
+
+**Wave timing (loop 2270.2 -> 2338.2 px).** Time for one enemy to walk one loop, seconds: dust (85 px/s) 26.7 -> 27.5, drop (125) 18.2 -> 18.7, cucumber (70) 32.4 -> 33.4, tangerine (66) 34.4 -> 35.4, elite (60) 37.8 -> 39.0, roomba (48) 47.3 -> 48.7, the bosses (38 to 42) 54.1 to 59.7 -> 55.7 to 61.5. A normal wave lasts 15 s with a 9 s spawn window, so an enemy walks at most half a loop before the next wave starts, and the extra second only shows when one comes round again. Spawn spacing is by time and the enemy cap by count: neither moved.
+
+**Frame time of the standard crowded wave** (`tools/crowded_wave.js`, new: the script of the "crowded wave" note in `fx.md`, `ALL = true` for 25 cats; chapter 3, wave 21, speed 3, 150 frames of tick + render + finish, three runs each, Aside machine, noise about 1.5 ms):
+
+| | mean ms | p95 ms | enemies on screen |
+|---|---|---|---|
+| before (5 x 4, 20 cats) | 11.4, 11.5, 12.7 | 22.2, 20.7, 26.5 | 43.5 |
+| after, the same 20 cats | 11.9, 10.5, 11.3 | 22.4, 19.5, 24.8 | 35.2 |
+| after, 25 cats | 11.7, 12.3, 12.2 | 21.3, 22.1, 23.3 | 35.2 |
+
+No measurable change. (The enemies on screen differ because `skipToWave(21)` plays the bot on the other board; the area count is the same, 21 of 24.)
+
+**The bots, before and after** (`npm run sim`, 200 runs a cell, chapter 1 and chapters 2 to 5 at the recommended level; win rate in %, before -> after): merge bot ch1 59 -> 53, ch2 61 -> 55, ch3 62 -> 56, ch4 65 -> 65, ch5 65 -> 61; synergy bot ch1 87 -> 80, ch2 92 -> 87, ch3 84 -> 84, ch4 90 -> 88, ch5 86 -> 87; the random bot loses everywhere, as before (mean wave in chapter 1: 13.5 -> 12.4). A fall of 0 to 7 points; the 95 % band of a 200-run cell is about +-7 points, so only the averages (merge -4, synergy -3) say anything. The likeliest cause is that the bots' empty-cell thresholds (`CROWDED`, "upgrade when 6 are free") fire later on a board with five more cells; they were not retuned, as asked.
+
+### 2. The buff markers
+
+A cat that a trickster helps wears a badge, the cells a helper reaches show when it matters, and the selection sheet lists the numbers. It is the finished work of branch `wip/balance-2` (commit `d8abeca`: `buffMarks.ts`, the art, `UnitView`, the sheet, the strings, `fx/marks.ts`, the test), brought onto `main` without that commit's simulation changes and rebuilt on main's simulation, which keeps no list of who helps whom. How it looks and behaves is the branch's section "2026-10-09 buff markers" (`git show d8abeca:docs/handoff/field.md`), apart from what is said here.
+
+**Where the state comes from: one pure function.** `src/view/field/buffMath.ts` `BuffBoard.refresh(cats)` works out, from where the cats stand, what each cat receives and from whom and which cells each helper reaches, with the data the simulation reads: `unitSpec(id).aura` (`neighbourSpeed`, `neighbourDamage`, `shieldNeighbours`, `boardSpeed`), `auraScale(spec, level)` (new, in `data/units.ts`: 1 plus the cat's level perks of kind aura) and `UnitState.level` (new, read-only: the simulation's own field made public). It follows the simulation's arithmetic: speed = the strongest bell + the lucky cat (which reaches every cat, itself too), damage = the strongest bard, ward = any bell. The field refreshes one `BuffBoard` per frame (`env.buffs`; every record and gift is pooled, nothing is allocated once the pool has grown); the selection sheet keeps its own for its chips.
+
+**The aura's shape is read, never copied.** The cells a bell or a bard reaches come from `auraCells(cell)` in `geometry.ts` (the 4 neighbours today). The simulation (`recomputeStats`, `AURA` in `board.ts`) and the markers both call it, so the next phase makes the auras "the 8 cells around" by changing that one function and no line of the view. `tests/view.field.buff.test.ts` states every expectation through `auraCells` and has the real simulation vouch for the view: a bell, a bard and a lucky cat at levels 1, 4, 7 and 10 give the same speed, damage and ward as the simulation's `buffAttackSpeed`, `buffDamage`, `shielded` and the lucky cat's effect on an attack interval, and the cells a bell shields in six different cells are exactly `auraCells` of that cell. If the simulation and the view ever differ, those tests fail.
+
+**Changed from the branch.**
+- Two badge kinds, speed and damage, not three: on 96 px cells the right flank has 53 px between the sun sticker and the rank tag, room for two 25 px badges. A cat a bell shields already wears the dashed dome, and the sheet keeps the ward chip ("Safe from wet and zap"). A ward badge would need a third slot (`BADGE_KINDS`, `BUFF_SLOT`); `BUFF_KINDS` (chips, facts) keeps all three. Slots: x 35, the first centre 49 above the feet, step 25; tested against the sun circle, the rank tag of every rank and the class sticker.
+- No `UnitBuff` list in the API (the branch added one): `BuffCat` = `{ id, gifts, speed, damage, ward, reach }`.
+- Selection sheet (`SelectionSheet.ts`, `hud.buff.*` in both languages): as on the branch, a chip per kind after the stats (the board's badge and the number), a tap opens the bubble naming the givers.
+
+Tests: `view.field.buff.test.ts` (36). Proof (stills in the session scratchpad `shots/zoom/buff1/`): `buff_select_bell` (a bell selected: its reach and the badges on the cats it and the bard help), `buff_zoom` (4x), and the ghosts while dragging in `drag1/`.
+
+### 3. Playing it (720 x 1280 and 720 x 1600, Korean and English, Aside, `PAGE_ERRORS []` in every run)
+
+Stills in the session scratchpad `shots/`: `zoom/mats/mat_00..12` and the sheets `mats_a.png`, `mats_b.png` (every craft mat on a chapter background, a full board of 25 cats, enemies on the lane, 720 x 1280); `zoom/z1/board_all` (2x), `board_top`, `board_bottom` (3x: the board's edges and the lane under it); `zoom/boss1` (a boss on the lane in English; `top_zoom` and `bottom_zoom` at 3x: the top block and the bottom panel against the field, nothing overlaps: the panel's torn edge starts 6 px above 828 and the sheet ends about 80 px above it); `zoom/drag1` (a merge in the bottom row and in the top row, a move to an edge, the same at 1600: the bubble goes under the bottom row only when the screen has room); `zoom/toys1` (the three toys' frames, badges and chips on 25 cells, a wet and a zap block, the range ring of a 420 px cat); `zoom/tut2/tut_*` and `tut_sheet.png` (a fresh tutorial: the opening with 25 empty cells and the paw on the summon button, the merge lesson's window and paw on the twins, the gauge and class lessons, the scripted pick of three); `zoom/peek1` and `peek_sheet.png` (the pick of three and the toy choice, open and folded: the board is visible with its five sunbeams and the way-back paper is clear of the field).
+
+**Not verified.** A real phone (touch, 60 fps; the cats are 14 % smaller, which only a thumb can judge). The tutorial's sun and selling lessons live (the scripted run to wave 6 was too slow to finish in the session; both read the sunbeams and cells generically, and the sunbeam reveal and the gift are covered by `sim.tutorial.test.ts`). The 1600 screen with a wave banner up. A bell, a bard and a lucky cat together on one board (a bell with the lucky cat, and a bell with a bard, were; the sim-agreement tests cover the sums).
+
+REQUESTS (for the rules phase): (1) change `auraCells` in `geometry.ts` for "the 8 cells around"; the markers, the sheet and the sim follow, and the agreement tests say if anything is left. (2) The warriors' role text (`class.warrior.role`: "the outer ring is still the best spot") and the bots' `worksWalkway` give the middle cell to nobody: look at it with the distances above. (3) Bump `SIM_VERSION` with the rules. (4) The window perch (`relic.window_perch`) marks 16 of 25 cells (64 %), it was 14 of 20 (70 %): numbers untouched.
+
+## 2026-10-09 batch: release test (field part)
+
+- `buffMath.reachOf` reads `unitSpec(id).aura.reach ?? 1` like the simulation does, instead of the default of `auraCells` (equal today; the rules engineer's REQUEST 1, so a cat with another reach changes the markers with the data).
+- Played the bell and bard markers on a mixed board (bell at cell 6, bard at 12, a lucky cat in the corner): every cat's speed, damage, dodge and shield numbers from the simulation equal what `auraCells` says for the two helpers (`buffAttackSpeed` 8 on the bell's 8 neighbours, `buffDamage` 15 on the bard's, `dodge` 40 on the bell and its neighbours); the dotted reach frames show for about 1.8 s after a helper is placed and while one is selected.
+- The window perch, the top row toy and the cushion mark their cells on 25 cells as before; a first pick of three and a toy choice fold to "돌아가기" and back at 1280 and 1600.

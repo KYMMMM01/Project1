@@ -37,23 +37,30 @@ export type AttackSpec =
   | { shape: 'pierce'; targets: number; width: number; blastRadius: number; blastPct: number }
   /** Area damage around the impact point plus a status on everything hit. */
   | { shape: 'splash'; radius: number; effect: HitEffect }
-  /** `targets` hits in total, each jump at most `reach` away and `falloff` times the previous. */
-  | { shape: 'chain'; targets: number; reach: number; falloff: number }
+  /** `targets` hits in total, each jump at most `reach` away and `falloff` times the previous; every enemy hit is shocked (stunned) for `stun` seconds. */
+  | { shape: 'chain'; targets: number; reach: number; falloff: number; stun: number }
   /** Blizzard: damage + slow every `tick`, sometimes a short freeze. */
   | { shape: 'frost'; radius: number; duration: number; tick: number; tickPct: number; slow: number; freezeChance: number; freezeTime: number }
-  /** Black hole: drags enemies back along the path, then explodes for the full damage. */
+  /** Black hole: drags enemies back along the path (`pull` px per second; see `PULL_IMMUNE_AFTER` for who is dragged), then explodes for the full damage. */
   | { shape: 'void'; radius: number; duration: number; pull: number }
   /** Potion cloud: enemies inside take more damage and are poisoned. */
   | { shape: 'brew'; radius: number; duration: number; vulnerable: number; poisonPct: number };
 
-/** Passive abilities of the trickster line. Values are fractions unless noted. */
+/**
+ * Passive abilities of the trickster line. Values are fractions unless noted. The cats a team effect reaches are the ones
+ * within `reach` cells of the helper (1 = the 8 cells around it, diagonals included; see `auraCells`).
+ */
 export interface UnitAura {
-  /** Neighbouring cells cannot be soaked or zapped. */
+  /** The cats around it are marked as covered (`UnitState.shielded`, the dashed dome): a wet or zap cell may miss them, see `dodge`. */
   shieldNeighbours?: boolean;
-  /** Attack speed bonus given to the four neighbours. */
+  /** Chance that a wet or zap cell misses the helper and the cats around it; the helper's level scales it (`auraScale`), the strongest one counts. */
+  dodge?: number;
+  /** Attack speed bonus given to the cats around it (the largest one counts, they do not add up). */
   neighbourSpeed?: number;
-  /** Damage bonus given to the four neighbours. */
+  /** Damage bonus given to the cats around it (the largest one counts). */
   neighbourDamage?: number;
+  /** How far the effects above reach, in cells (default 1). */
+  reach?: number;
   /** Attack speed bonus given to every cat on the board (does not stack). */
   boardSpeed?: number;
   /** +1 fish for kills within range, at most `cap` per wave across the whole board. */
@@ -68,7 +75,7 @@ export type PerkKey =
 export interface PerkSpec extends UnitPerk {
   level: 4 | 7 | 10;
   key: PerkKey;
-  /** Fraction for range / damage / speed / crit / radius / effect / aura, absolute for the rest. */
+  /** Fraction for range / damage / speed / crit / critMult (crit damage) / radius / effect / aura, absolute for the rest. */
   value: number;
 }
 
@@ -158,6 +165,11 @@ export interface RelicSpec {
   args: { a?: number; b?: number };
 }
 
+/**
+ * The numbers of one synergy step. `damage` reaches the cats of the class only; every other number is a side effect
+ * that reaches EVERY cat on the board (v1.4): the warriors' armour ignore, the rangers' crit chance and crit damage, the
+ * mages' status duration, the tricksters' attack speed and wave reward.
+ */
 export interface SynergyTier {
   damage: number;
   armorIgnore: number;
@@ -167,6 +179,17 @@ export interface SynergyTier {
   speed: number;
   rewardMult: number;
 }
+
+/** What a class's third synergy step (all four kinds, the guardian among them) adds besides its numbers: one ability per class. */
+export type SynergySpecial =
+  /** Warriors: every `every` seconds each warrior roars; enemies in its range are stunned and lose armour. */
+  | { kind: 'cry'; every: number; stun: number; breakAmount: number; breakDuration: number }
+  /** Rangers: every `every`-th shot of every ranger is a sure crit. */
+  | { kind: 'sure_crit'; every: number }
+  /** Mages: an enemy that falls with a magic status on it bursts; enemies within `radius` take `pct` of its maximum health (elites and bosses do not burst). */
+  | { kind: 'shatter'; radius: number; pct: number }
+  /** Tricksters: while the laser pointer is on, every cat attacks `speed` faster. */
+  | { kind: 'party'; speed: number };
 
 export interface ModifierSpec {
   id: DailyModifierId;

@@ -380,3 +380,51 @@ Owner's feedback from a phone (screenshot `21.webp`): the pick of three covers t
 **Not verified:** a real touch screen (the stills and taps come from a mouse in the Aside browser), the bob and the fold at 60 fps on a phone, the tutorial's first toy choice live (the tutorial run holds on its first lessons and cannot reach the act's end without playing it; its lock is unit-tested), a popup of another kind opened over the folded toy screen (only the pick's side was run with a real dialog), sound (`whoosh` on each fold and unfold, at half volume).
 
 REQUESTS: none.
+
+
+## 2026-10-09 batch
+
+The battle screen's field is 660 px tall now (the board is 5 x 5, see `field.md`, "2026-10-09 batch"), exactly the band between the two blocks on a 1280 screen, so the HUD's own grids did not move: `TOP_HUD_H` 168, `BOTTOM_PANEL_H` 452, `layoutMath` untouched. Checked with `tools/hud_zoom.sh` at 3x on the top block and the bottom panel in Korean and English (a boss wave up): nothing overlaps; the panel's torn edge starts 6 px above 828 and the board's sheet ends about 80 px above it.
+
+What changed on the HUD side:
+- **Sell strip.** On a 1280 screen the field's bottom edge is the panel's top edge, so the strip starts at the panel (`sellRect` gives y = 0; it was 18 px above) and the rest is as before: on a taller screen it still reaches up to 120 px above the panel. A lifted cat is seen above the strip with its price tag over it (`zoom/sell1/sell_hold`).
+- **Selection sheet** (`SelectionSheet.ts`, `hud.buff.speed/damage/ward/from` in Korean and English): after damage, interval and range, one chip per kind of help the cat receives from tricksters (the board's badge and the real number; the ward has no number), as many as fit before the close button, the stats standing 12 px apart instead of 24 while there are chips. A tap on a chip opens the information bubble ("Attack speed +25%" / "Trickster effect . Bell Kitten"). The sheet works the list out with its own `BuffBoard` (`field/buffMath.ts`) every time it checks whether it has to redraw, and the key of its picture includes the chips.
+- **Peek toggle** (the pick of three, the toy choice): looked at again on the new board; the dim drops, the board with its sunbeams shows, the way-back paper sits on the tracker row and is clear of the field (`zoom/peek1`, `peek_sheet.png`); `view.hud.peek.test.ts` (gap of at least 8 px between the field and the way-back paper at 1280 and 1600) is green with the new field height.
+- Tests that built a layout from the old field height (`624`) read `FIELD_H` (`view.hud.layout/card/bubble.test.ts`).
+
+REQUESTS: none.
+
+
+## 2026-10-09 batch: rules v1.4 on the HUD
+
+The rules half of the owner's batch (`sim.md`, "2026-10-09 batch: rules v1.4") reaches the HUD in these places. Stills in the session scratchpad `shots/rules/` (`sheet_war_ko`, `sheet_rng_en`, `sheet_trk_en`: the class sheet at 1280, `laser_card_ko`, `board1`).
+
+- **Class chips** (`ClassRow.ts`, `planMath.countedRanks`): the five pips show the ranks that count toward the synergy, so the kitten's pip never lights (a kitten on the board still shows in the sheet's ladder). The tier bars are as before.
+- **Class sheet** (`popups/ClassSheet.ts`): the rule line under the ladder is two sentences ("merging makes the next rank" and "the kitten does not count as a kind", `hud.class.rule` + `hud.class.skip`, up to three lines in English); the header reads "시너지 종류 N종 / Kinds counted: N" (`hud.class.have`); the three steps are 24 px with 28 px lines in a 422 px column (the third row is 96 px tall for the rangers' three numbers); under them **the ability of the third step** has its own paper (name and one or two lines, lit with the class colour and a check at four kinds, dim before): `hud.class.special`, `ClassDef.specialNameKey` / `specialText()`. The popup grew 146 px (content 1,206 px of the 1,232 px a 1280 screen leaves, so it is still shown at full size; the ladder moved up 12 px, the gaps shrank).
+- **Awakening reasons**: `hud.awaken.r.synergy` and `hud.fail.synergy_too_low` take `{tier}` (the sheet and the refusal toast pass `AWAKEN_MIN_TIER`), the build plan already did.
+- **Buff chip of a covered cat** (`SelectionSheet.ts`): "Dodges wet and zap 40%" with the cat's real `UnitState.dodge` (`hud.buff.ward` has `{n}`), and the sheet's redraw key includes it.
+- **Dodge sticker** (`DodgeSticker.ts`, wired in `index.ts` on the overlay layer): on the `dodge` event a paper pill "피했어요!" / "Dodged!" (`hud.dodge`) pops in above that cat's cell, rises 40 px and fades in 1.1 s; at most four, pooled, no touch; reduced motion shows and removes it. The math is tested (`view.hud.dodge.test.ts`); the object itself needs a canvas, so it was checked in the browser only.
+- **Laser card** (`popups/LaserCard.ts`): a crown row "an elite or a boss inside the dot is attacked first" (`hud.laserCard.row4`); the duration is the battle's own (6.5 s).
+- **Three-pick recommendation** (`policy.recommendPick`): a class is "on the board" only through a cat that counts toward its synergy.
+
+Not verified: a real phone, the sticker in a live wet hazard (forced only), the sheet in English at 1600 high.
+
+REQUESTS: none beyond `sim.md` (the field view should draw the `special` events).
+
+## 2026-10-09 batch: release test of the whole batch (hud part)
+
+Played as a whole after the board, meta and rules engineers (stills in the session scratchpad `shots/tut*`, `shots/cs`, `shots/au*`, `shots/dd`, `shots/rt`). What I found and fixed on the HUD:
+
+- **Class sheet, third step** (`popups/ClassSheet.ts`): the row said "4종 이상" / "4+ kinds", but only four kinds can count since the kitten left the count, so it read as if a fifth mattered. It says "4종" / "4 kinds" now (`hud.class.need.more` removed).
+- **English warrior role** (`class.warrior.role`, 99 -> 77 characters): three lines, centred on the sheet's 112 px line, reached 12 to 18 px into the ladder's "Merge" and "Awaken" labels (the `hzAudit` overlap check found it). It is two lines now; `tests/view.hud.strings.test.ts` keeps every class role to two lines (52 Korean, 80 English characters).
+- **Result screen of a gold run** (`screens/ResultScreen.ts`): "오늘 첫 클리어 +250 골드" (`hud.res.dungeonBonus`, a green paper line from `RunReward.bonus`, between the level line and "new best"; the new-best line sits one row lower, under the fold on a 1280 screen, the page scrolls). "다시 도전" is greyed with its lock when the day has no entry left and the way home pulses instead: `RunConfig.canRetry` (`view/context.ts`), set for gold runs by `app/flow.ts` `dungeonEntryLeft()`, which the restart guard uses too (`tests/screens.shell.flow.test.ts`, +2).
+- **Selection sheet**: a bell kitten now lists its own dodge chip ("Dodges wet and zap 40%": `withOwnWard` in `field/buffMath.ts`). The board lists a ward only for cats another bell covers, so the bell itself had none although it dodges.
+- **Synergy lesson**: its text says the kitten rank does not count (`guide.synergy.teach`, both languages, inside the two-line limit). Checked in play: the lesson fires on the first step-1 class after the scripted epic pick, with the rank pips of the chip lit for the counted ranks only.
+
+**What I played** (real taps and drags, `PAGE_ERRORS []` everywhere): the tutorial on a fresh profile in Korean at 1280, wave 0 to the boss: all 19 lessons begin, point at the right thing and are completed (3 summons, merge drag in the twins' cells, gauge, class sheet and its close, acts, pick of three with the taped card, synergy, sun drag, the laser's whole guided use, elite, purr, toy choice, molt with the class pick, grade, class upgrade, call wave, speed, sell, boss). English at 1600: wave 0 to the elite, same. The tutorial ends in its dialog. Drag merges in all four corners and the edge middles of the 5 x 5 board (corner to corner, column and row ends): all merge. Four-kind boards of every class: the four abilities fire (8 war cries, 5 bursts, 36% crits with the sure shot in an 18 s fight). Bell dodge: 2 of 9 covered cells dodged in a forced wet block, the "Dodged!" sticker pops over them. Awakening from step 1 (samurai with a sword cat: "Synergy 1/1", "Purr 20/12"). Crowded wave (`tools/crowded_wave.js`, ALL = true, 25 cats, three runs): mean 10.9 / 10.9 / 11.3 ms, p95 19.8 / 25.1 / 25.1 ms, no change from the board engineer's 11.7 to 12.3 / 21 to 23.
+
+**Not verified.** A real phone. Korean tutorial at 1600 and English at 1280 (only English 1600 first half and Korean 1280 were played through). The tutorial's result page after its dialog.
+
+**Notes for whoever plays it next.** The Aside tab runs this game at about 1.5 frames a second, so nothing advances by itself: stop the ticker and step `game.tick(dt)` (`tools/battle_motion.js` `mcInit` / `mcWarp`). One `aside repl` call lives about 120 s (then "fetch failed: other side closed", which also says "Aside isn't running"): a tutorial needs two calls (play waves 1 to 4, then reopen with `?scene=battle&mode=tutorial&seed=7&debug=1` after `lessons.progress.markTaught` of the first lessons on a `?fresh=1` page). The runner passes the whole script as one command line argument (Windows limit about 32 KB): `battle_motion.js` + `hud_zoom.js` + a body fit, a longer driver does not. A first-encounter card ("알겠어요" / "Got it") holds the pause in a sandbox battle and swallows drags: press it before dragging.
+
+REQUESTS: none for the HUD. See `director.md`, `guide.md`, `platform.md`, `meta.md` and `field.md` of the same date for the rest.

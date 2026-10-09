@@ -12,7 +12,7 @@ export const UNIT_GRID: Record<ClassId, readonly [UnitId, UnitId, UnitId, UnitId
   warrior: ['w_paw', 'w_sword', 'w_viking', 'w_samurai', 'w_tiger'],
   ranger: ['r_sling', 'r_archer', 'r_ninja', 'r_gunner', 'r_star'],
   mage: ['m_snow', 'm_fire', 'm_storm', 'm_frost', 'm_cosmo'],
-  trickster: ['t_bell', 't_chef', 't_bard', 't_alch', 't_lucky'],
+  trickster: ['t_chef', 't_bell', 't_bard', 't_alch', 't_lucky'],
 };
 
 const CLASS_PREFIX: Record<string, ClassId> = { w: 'warrior', r: 'ranger', m: 'mage', t: 'trickster' };

@@ -6,8 +6,11 @@ import type { Sim } from './sim';
 /**
  * Bump when the rules change in a way that makes an old save meaningless.
  * 2: a merge keeps the class (rules v1.2), so the merge stream no longer holds a class roll per merge.
+ * 3: rules v1.4 on the 5 x 5 board: the first rank no longer counts toward a synergy, the chef and the bell kitten swapped ranks,
+ *    a wet or zap cell is dodged by chance, bosses have less health. A wave-start save of the 5 x 4 board is refused by the size
+ *    check as well, and any save of version 2 or lower by this one.
  */
-export const SIM_VERSION = 2;
+export const SIM_VERSION = 3;
 
 export interface SnapData {
   init: BattleInit;

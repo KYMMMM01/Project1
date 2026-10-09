@@ -9,6 +9,7 @@ import { POINT_MARGIN } from '../shell/pointerMath';
 import { ChapterCard, CHAPTER_CARD_H } from './ChapterCard';
 import { ChestCard } from './ChestCard';
 import { DailyCard } from './DailyCard';
+import { DungeonCard } from './DungeonCard';
 import { EndlessCard } from './EndlessCard';
 import type { HomeCard } from './HomeCard';
 import { PatrolCard } from './PatrolCard';
@@ -63,7 +64,7 @@ function waitingCount(): number {
 /**
  * The home tab: the chapter card with its butler-level selector, the big start button, and below it
  * the cards for everything the player can collect or play today (patrol, free chest, sweep, treats,
- * the daily challenge, endless mode, the first-purchase pack).
+ * the daily challenge, the gold dungeon, endless mode, the first-purchase pack).
  */
 export class BattleTab implements TabScreen {
   readonly view = new Container();
@@ -79,6 +80,7 @@ export class BattleTab implements TabScreen {
   private readonly patrol: PatrolCard;
   private readonly chest: ChestCard;
   private readonly daily: DailyCard;
+  private readonly dungeon: DungeonCard;
   private readonly endless: EndlessCard;
   private promo: PromoCard | null = null;
   private area: ContentArea = { x: 0, y: 0, w: 720, h: 800 };
@@ -108,6 +110,7 @@ export class BattleTab implements TabScreen {
     this.patrol = new PatrolCard(CARD_W, shell);
     this.chest = new ChestCard(HALF_W, shell);
     this.daily = new DailyCard(CARD_W, shell);
+    this.dungeon = new DungeonCard(CARD_W, shell);
     this.endless = new EndlessCard(CARD_W, shell);
     this.entries.push(
       { card: this.patrol, feature: 'patrol' },
@@ -115,6 +118,7 @@ export class BattleTab implements TabScreen {
       { card: this.sweep, feature: 'sweep', half: true },
       { card: new TreatsCard(CARD_W, shell), feature: 'treat' },
       { card: this.daily, feature: 'daily' },
+      { card: this.dungeon, feature: 'dungeon' },
       { card: this.endless, feature: 'endless' },
     );
     for (const e of this.entries) content.addChild(e.card);
@@ -185,6 +189,7 @@ export class BattleTab implements TabScreen {
       'battle.sweep': card(this.sweep),
       'battle.daily': card(this.daily),
       'battle.cup': () => (this.daily.visible ? this.daily.cupBar : null),
+      'battle.dungeon': card(this.dungeon),
       'battle.endless': card(this.endless),
     };
     return picks[point] ?? null;

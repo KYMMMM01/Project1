@@ -7,7 +7,7 @@ import { Container, Graphics, Sprite, type Text } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { mixColor } from '@/core/math';
 import { fxTexture } from '@/fx';
-import { PATH_TOP } from '@/game/geometry';
+import { FIELD_H, PATH_TOP } from '@/game/geometry';
 import { Hue } from '@/fx/palette';
 import { drawIcon, type IconName } from '@/ui/icons';
 import { drawPaper, paperSeed, tapeStrip } from '@/ui/paper';
@@ -321,7 +321,7 @@ class BigLane implements Lane {
 
   resize(layout: BattleLayout): void {
     this.root.x = layout.w / 2;
-    this.baseY = layout.fieldY + 330;
+    this.baseY = layout.fieldY + FIELD_H / 2;
     this.root.y = this.baseY;
   }
 }

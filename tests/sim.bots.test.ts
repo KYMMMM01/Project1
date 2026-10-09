@@ -62,14 +62,14 @@ describe('balance bots under the fixed class lines', () => {
     expect(r.merges).toBe(0);
   });
 
-  it('lets the synergy bot build a class line on purpose: three kinds of one class by wave 9 in most runs (60%), more often than the merge bot', () => {
+  it('lets the synergy bot build a class line on purpose: two counting kinds (synergy step 1) of one class by wave 9 in most runs (60%), more often than the merge bot', () => {
     const lines = (policy: BotPolicy): number[] => SEEDS.map((seed) => bestLine(play(policy, seed, 9).battle));
     const synergy = lines('synergy');
     const merge = lines('merge');
-    const reached = (v: number[]): number => v.filter((n) => n >= 3).length;
+    const reached = (v: number[]): number => v.filter((n) => n >= 2).length;
     expect(reached(synergy)).toBeGreaterThanOrEqual(Math.ceil(SEEDS.length * 0.6));
     expect(reached(synergy)).toBeGreaterThan(reached(merge));
-    expect(Math.max(...synergy)).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...synergy)).toBeGreaterThanOrEqual(3);
   });
 
   it('lets the synergy bot molt only into the one line it builds, and never below zero purr', () => {

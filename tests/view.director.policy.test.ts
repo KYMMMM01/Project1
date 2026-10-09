@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BannerQueue,
+  CRY_RING_MAX,
   FlightLedger,
   FrameBudget,
   GapGate,
@@ -17,6 +18,7 @@ import {
   intensityTarget,
   overflowSeconds,
   shareOf,
+  specialRing,
   summonPlan,
   type BannerItem,
 } from '@/view/director/policy';
@@ -304,5 +306,13 @@ describe('SoundRule pool', () => {
     const b = new SoundRule(0.01, 0, 0, pool);
     expect([a.allow(0), b.allow(0.05), a.allow(0.1), b.allow(0.15), a.allow(0.2)]).toEqual([true, true, true, false, false]);
     expect(b.allow(0.5)).toBe(true);
+  });
+});
+
+describe('the ring of a third-step ability', () => {
+  it('caps the roar at the largest ring and draws the burst as it is', () => {
+    expect(specialRing('cry', 285)).toBe(CRY_RING_MAX);
+    expect(specialRing('cry', 120)).toBe(120);
+    expect(specialRing('shatter', 70)).toBe(70);
   });
 });

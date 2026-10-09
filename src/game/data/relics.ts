@@ -27,7 +27,7 @@ const SPECS: Record<RelicId, RelicSpec> = {
   tuna_cans: { id: 'tuna_cans', fx: { waveFish: 12 }, args: { a: 12 } },
   window_perch: { id: 'window_perch', fx: { edgeSpeed: 0.15 }, args: { a: 15 } },
   purr_pillow: { id: 'purr_pillow', fx: { actPurr: 1 }, args: { a: 1 } },
-  silvervine: { id: 'silvervine', fx: { critMult: 0.5 }, args: { a: 0.5 } },
+  silvervine: { id: 'silvervine', fx: { critMult: 0.5 }, args: { a: 50 } },
   auto_feeder: { id: 'auto_feeder', fx: { feederEvery: 10, feederFish: 6 }, args: { a: 10, b: 6 } },
   glass_marble: { id: 'glass_marble', fx: { areaScale: 0.25 }, args: { a: 25 } },
   nap_blanket: { id: 'nap_blanket', fx: { enemySlow: 0.1 }, args: { a: 10 } },

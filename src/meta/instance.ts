@@ -2,7 +2,7 @@
  * The app's one profile, on the default store, the system clock and the platform singletons. This is
  * the only meta module that imports the platform barrel; tests build their own with createProfile().
  */
-import { ads, analytics, iap, platform } from '@/platform';
+import { ads, analytics, iap, platform, PLATFORM_ID } from '@/platform';
 import './strings';
 import { attachPlatform } from './platformLink';
 import { createProfile } from './profile';
@@ -13,6 +13,8 @@ export const profile = createProfile({
   submitScore: (board, score) => {
     platform.leaderboard?.submit(board, score).catch(() => undefined);
   },
+  // The same condition that shows the test ad and the test purchase sheet: the development adapter.
+  testGrants: PLATFORM_ID === 'dev',
 });
 
 /**

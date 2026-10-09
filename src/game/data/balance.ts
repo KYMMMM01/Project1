@@ -91,20 +91,30 @@ export const SELL_PURR: readonly number[] = [0, 0, 1, 1, 3];
 export const MOLT_COST = 1;
 export const MOLT_LIMIT = 6;
 export const AWAKEN_COST = 12;
-export const AWAKEN_MIN_TIER = 2;
+/** Synergy step a class needs before one of its legendaries may awaken (v1.4: step 1, two kinds; it was step 2). */
+export const AWAKEN_MIN_TIER = 1;
 export const MERGE_START_CHARGE = 0.5;
 export const LEVEL_DAMAGE_STEP = 0.1;
 export const CLASS_UPGRADE_COSTS: readonly number[] = [60, 100, 160, 240, 340];
 export const CLASS_UPGRADE_BONUS = 0.15;
 export const HAZARD_RECOVER = 0.3;
 export const HAZARD_WARNING = 0.8;
-export const SUN_CELLS = 4;
+/** A fifth of the board, as it was on the 5 x 4 board. */
+export const SUN_CELLS = 5;
 export const SUN_SPEED = 0.2;
-export const FIRST_SUN_CELLS: readonly number[] = [6, 7, 12, 13];
+/** The first sunbeams: a plus in the middle of the board (centre, and the four cells touching it). */
+export const FIRST_SUN_CELLS: readonly number[] = [7, 11, 12, 13, 17];
+/**
+ * Different kinds of a class a synergy step asks for (steps 1, 2 and 3). Since v1.4 only ranks 2 to 5 count
+ * (`SYNERGY_MIN_RANK`), so the third step needs all four of them: the guardian (rank 5) included.
+ */
 export const SYNERGY_TIER_AT: readonly number[] = [2, 3, 4];
+/** Index of the lowest rank that counts toward a class's kinds: the first rank (the kitten) does not. */
+export const SYNERGY_MIN_RANK = 1;
 
 // ── laser pointer ──
-export const LASER_DURATION = 5;
+/** Seconds the dot stays on (v1.4: 5 -> 6.5). While it is on, elites and bosses inside its area are targeted first. */
+export const LASER_DURATION = 6.5;
 export const LASER_COOLDOWN = 15;
 export const LASER_RADIUS = 130;
 export const LASER_VULNERABLE = 0.15;
@@ -114,8 +124,21 @@ export const VULNERABLE_CAP = 2.0;
 export const SLOW_CAP = 0.5;
 export const SLOW_CAP_BOSS = 0.25;
 export const HASTE_CAP = 0.6;
-export const CC_IMMUNE_AFTER = 3;
+/**
+ * Seconds after a stun or a freeze ends in which the enemy cannot be stunned or frozen again (v1.4: 3 -> 4). The one
+ * window for both: the storm cat's shock and the blizzard's freeze cannot chain an enemy into a permanent stop.
+ */
+export const CC_IMMUNE_AFTER = 4;
 export const ELITE_CC_FACTOR = 0.5;
+/**
+ * Black hole (v1.4): once a hole has caught an enemy, no hole drags it again until this many seconds after that hole
+ * ended; elites and bosses are dragged by this fraction of the pull.
+ */
+export const PULL_IMMUNE_AFTER = 4;
+export const PULL_ELITE_FACTOR = 0.35;
+export const PULL_BOSS_FACTOR = 0.2;
+/** Strongest dodge chance a cat can get from bell kittens (their chance grows with the bell's level). */
+export const DODGE_CAP = 0.85;
 export const DOT_TICK = 0.5;
 export const PROJECTILE_RETARGET = 80;
 export const MAX_ENEMY_SPEED = 210;
@@ -159,9 +182,12 @@ export const HP_INDEX: readonly number[] = [
   996, 1165, 1363, 1595, 1866, 2183,
 ];
 
-/** Elite health at waves 4, 12, 20 (index 0..2) and boss health at 8, 16, 24. */
+/**
+ * Elite health at waves 4, 12, 20 (index 0..2) and boss health at 8, 16, 24. The bosses carry armour and ward now, so
+ * v1.4 took 10% off their health (1590 / 4064 / 14405 x 0.9); the elites did not change.
+ */
 export const ELITE_HP: readonly number[] = [1055, 3848, 10080];
-export const BOSS_HP: readonly number[] = [1590, 4064, 14405];
+export const BOSS_HP: readonly number[] = [1431, 3658, 12965];
 
 /** Cucumber health at `wave`; past wave 24 it keeps growing by ENDLESS_GROWTH per wave. */
 export function hpIndex(wave: number): number {

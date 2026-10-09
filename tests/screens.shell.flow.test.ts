@@ -21,6 +21,7 @@ const h = vi.hoisted(() => {
     runs: 0,
     reveals: [] as Array<{ id: number }>,
     cleared: [0, 0, 0, 0, 0] as number[],
+    entries: 2,
     lastRun: null as null | { mode: string; chapter: number; stake: number; victory: boolean; firstClear: boolean },
   };
   const profile = {
@@ -56,6 +57,8 @@ const h = vi.hoisted(() => {
       return { ok: true as const, value: { gold: 40, bundle: {} } };
     }),
     saveSnapshot: vi.fn(async () => undefined),
+    refresh: vi.fn(),
+    dungeonView: () => ({ entriesLeft: state.entries }),
   };
   const scenes = {
     current: new FakeHome() as FakeScene,
@@ -119,12 +122,12 @@ function bus(): Bus {
 const RUN = { init: { mode: 'chapter', chapter: 2, stake: 1, seed: 7 }, sandbox: false } as const;
 
 /** Make a battle through the flow's factory and hand back what the flow wired onto it. */
-function wiredBattle(): { battle: Bus; ctx: { events: Bus; retry: () => void }; fire: () => void } {
-  flow.battleScene(RUN as never)();
+function wiredBattle(run: { init: { mode: string; chapter: number; stake: number; seed: number }; sandbox: boolean } = RUN): { battle: Bus; ctx: { events: Bus; retry: () => void }; fire: () => void } {
+  flow.battleScene(run as never)();
   const hook = h.setHook.mock.calls.at(-1)?.[0] as ((scene: unknown) => void) | undefined;
   const battle = bus();
   const ctx = { events: bus(), retry: () => undefined };
-  return { battle, ctx, fire: () => hook?.({ run: RUN, battle: { events: battle, snapshot: () => ({ wave: 3 }) }, ctx }) };
+  return { battle, ctx, fire: () => hook?.({ run, battle: { events: battle, snapshot: () => ({ wave: 3 }) }, ctx }) };
 }
 
 beforeEach(() => {
@@ -134,6 +137,7 @@ beforeEach(() => {
   h.state.reveals = [];
   h.state.cleared = [0, 0, 0, 0, 0];
   h.state.lastRun = null;
+  h.state.entries = 2;
   h.scenes.current = new h.FakeHome();
   h.continuePrompt.mockResolvedValue(false);
   h.confirmDialog.mockResolvedValue(true);
@@ -317,5 +321,27 @@ describe('what the won result screen offers next', () => {
     expect(await handlers.start()).toBe(true);
     expect(h.profile.prepareRun).toHaveBeenCalledWith({ mode: 'chapter', chapter: 2, stake: 0 });
     expect(h.remember).toHaveBeenCalledWith({ chapter: 2, stake: 0 });
+  });
+});
+
+describe('the gold dungeon takes an entry for every run', () => {
+  const GOLD = { init: { mode: 'gold', chapter: 3, stake: 0, seed: 7 }, sandbox: false } as const;
+
+  it('may be played again only while the day has an entry left', () => {
+    expect(flow.dungeonEntryLeft()).toBe(true);
+    h.state.entries = 0;
+    expect(flow.dungeonEntryLeft()).toBe(false);
+    expect(h.profile.refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the run in progress when a restart finds no entry left, and says so', async () => {
+    h.state.entries = 0;
+    h.state.pending = { init: GOLD.init, snapshot: null };
+    const { ctx, fire } = wiredBattle(GOLD);
+    fire();
+    ctx.retry();
+    await vi.waitFor(() => expect(h.toast).toHaveBeenCalled());
+    expect(h.profile.discardPendingRun).not.toHaveBeenCalled();
+    expect(h.profile.prepareRun).not.toHaveBeenCalled();
   });
 });

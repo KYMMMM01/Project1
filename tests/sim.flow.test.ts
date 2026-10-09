@@ -3,7 +3,7 @@ import type { RelicId } from '@/game/api';
 import { createBot } from '@/game/sim/bots';
 import { createBattle } from '@/game/sim/create';
 import { SIM_VERSION } from '@/game/sim/snapshot';
-import { CHAPTER_HP_MULT, TICK } from '@/game/data/balance';
+import { CHAPTER_HP_MULT, FIRST_SUN_CELLS, SUN_CELLS, TICK } from '@/game/data/balance';
 import { COUNTER_RELICS } from '@/game/data/relics';
 import { STAKE_STEPS } from '@/game/data/stakes';
 import { RELIC_RARITY } from '@/game/data/roster';
@@ -61,9 +61,9 @@ describe('normal waves', () => {
     advance(sim, 15.1);
     expect(ends[0]!.fish).toBe(7 + 12);
     put(sim, 0, 't_bell');
-    put(sim, 1, 't_chef');
-    put(sim, 2, 't_bard');
-    put(sim, 3, 't_alch');
+    put(sim, 1, 't_bard');
+    put(sim, 2, 't_alch');
+    put(sim, 3, 't_lucky');
     expect(sim.synergyTier('trickster')).toBe(3);
     advance(sim, 15.1);
     expect(ends[1]!.fish).toBe(Math.floor(9 * 1.3) + 12);
@@ -266,14 +266,14 @@ describe('act clear, sunbeams and relic offers', () => {
     advance(sim, 1.3);
   }
 
-  it('starts with the four middle sunbeams and moves them at every act clear', () => {
+  it('starts with the plus of middle sunbeams and moves them at every act clear', () => {
     const sim = newSim();
-    expect([...sim.sunbeams].sort((a, b) => a - b)).toEqual([6, 7, 12, 13]);
+    expect([...sim.sunbeams].sort((a, b) => a - b)).toEqual([...FIRST_SUN_CELLS]);
     const moves = record(sim, 'sunbeams');
     clearAct(sim);
     expect(moves).toHaveLength(1);
-    expect(moves[0]!.cells).toHaveLength(4);
-    expect(new Set(moves[0]!.cells).size).toBe(4);
+    expect(moves[0]!.cells).toHaveLength(SUN_CELLS);
+    expect(new Set(moves[0]!.cells).size).toBe(SUN_CELLS);
     expect([...sim.sunbeams]).toEqual(moves[0]!.cells);
     for (const c of sim.sunbeams) expect(sim.units[c]).toBeNull();
     put(sim, moves[0]!.cells[0]!, 'w_paw');

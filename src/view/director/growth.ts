@@ -18,7 +18,7 @@ import type { CurrencyService } from './currency';
 import { SPARKLE_UP, STAR_POP, THEME_SPRAY } from './defs';
 import type { MusicService } from './music';
 import { CLASS_COLOR, themeOf } from './palette';
-import { DUCK_BY_TIER, SummonRate, summonPlan } from './policy';
+import { DUCK_BY_TIER, SummonRate, specialRing, summonPlan } from './policy';
 import type { Bus, Stage } from './stage';
 import { Hue } from '@/fx/palette';
 import { MERGE_SECONDS, MOLT_SECONDS, REVEAL_DELAY, SLIDE_SECONDS } from '@/view/timing';
@@ -183,6 +183,12 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
       0.15,
       0.2,
     );
+  });
+
+  /** The third step's abilities: a ring of the class's colour where the warriors roar and where a fallen enemy bursts (the stun and the damage show on the enemies). */
+  on('special', (e) => {
+    fx.shockwave(e.x, e.y, { color: CLASS_COLOR[e.classId], radius: specialRing(e.kind, e.radius) });
+    if (e.kind === 'cry') stage.buzz('light');
   });
 
   on('upgrade', (e) => {

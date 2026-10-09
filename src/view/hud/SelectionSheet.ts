@@ -6,10 +6,11 @@
  */
 import { Container, Graphics, type Text } from 'pixi.js';
 import { audio } from '@/audio';
-import { fmt } from '@/core/format';
+import { fmt, fmtPct } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { classDef, unitClass, unitDef, type Fail, type UnitState } from '@/game';
+import { drawBuffMark } from '@/fx';
+import { AWAKEN_MIN_TIER, classDef, unitClass, unitDef, type Fail, type UnitState } from '@/game';
 import {
   backOut,
   Button,
@@ -28,6 +29,7 @@ import {
   type IconName,
 } from '@/ui';
 import { info } from '../info';
+import { BuffBoard, buffFacts, chipsFit, withOwnWard, type BuffFact } from '../field/buffMath';
 import { SHEET, sheetBoxes, type Rect } from './layoutMath';
 import type { HudEnv } from './env';
 import { BuildPlanView } from './BuildPlanView';
@@ -38,11 +40,14 @@ import { MoltPicker } from './popups/MoltPicker';
 const SKILL_FOR = 8;
 /** Room kept at the end of a cut skill line for its info mark. */
 const INFO_W = 36;
+/** The sticker on a buff chip (the board's badge, half width), and the space between the chips. */
+const CHIP_R = 11;
+const CHIP_GAP = 8;
 
 /** One short line for a refused awakening, shown on the (disabled) button itself. */
 function awakenReason(fail: Fail, cost: number): string {
   if (fail === 'not_enough_purr') return t('hud.awaken.r.purr', { n: cost });
-  if (fail === 'synergy_too_low') return t('hud.awaken.r.synergy');
+  if (fail === 'synergy_too_low') return t('hud.awaken.r.synergy', { tier: AWAKEN_MIN_TIER });
   if (fail === 'not_legendary') return t('hud.awaken.r.legend');
   return t('hud.awaken.r.other');
 }
@@ -75,6 +80,8 @@ export class SelectionSheet {
   private readonly sell: Button;
   private readonly close: IconButton;
   private readonly seed = paperSeed();
+  /** Who helps this cat, worked out from the board (the field keeps its own copy for the badges). */
+  private readonly helpers = new BuffBoard();
   private cell: number | null = null;
   private dirty = false;
   private rect: Rect = { x: 12, y: 6, w: 696, h: 270 };
@@ -240,7 +247,11 @@ export class SelectionSheet {
     if (!u || this.cell === null) return;
     this.refreshButtons(this.cell);
     const interval = (Math.round(u.stats.interval * 100) / 100).toString();
-    const key = [u.id, Math.round(u.stats.damage), interval, Math.round(u.stats.range), b.synergyTier(unitClass(u.id)), b.purr, b.awakenCost(), b.units.filter((o) => o?.id === u.id).length, b.canAwaken(this.cell)].join('|');
+    this.helpers.refresh(b.units);
+    const cat = this.helpers.at(this.cell);
+    const facts = withOwnWard(cat ? buffFacts(cat) : [], u.id, u.dodge);
+    const buffKey = facts.map((f) => `${f.kind}${Math.round((f.value ?? 0) * 100)}${f.from.join('+')}`).join(',');
+    const key = [u.id, Math.round(u.dodge * 100), Math.round(u.stats.damage), interval, Math.round(u.stats.range), b.synergyTier(unitClass(u.id)), b.purr, b.awakenCost(), b.units.filter((o) => o?.id === u.id).length, b.canAwaken(this.cell), buffKey].join('|');
     if (key === this.shownKey) return;
     this.shownKey = key;
     const def = unitDef(u.id);
@@ -277,11 +288,13 @@ export class SelectionSheet {
       const tx = uiLabel(text, { size: 26, anchorX: 0, align: 'left' });
       tx.position.set(sx + 32, EDGE + STATS_Y + 1);
       d.addChild(ic, tx);
-      sx += 32 + tx.width + 24;
+      // With buff chips to follow, the stats stand a little closer so the chips have room.
+      sx += 32 + tx.width + (facts.length > 0 ? 12 : 24);
     };
     stat('swords', fmt(Math.round(u.stats.damage)));
     stat('clock', t('hud.stat.interval', { s: interval }));
     stat('target', fmt(Math.round(u.stats.range)));
+    this.buffChips(d, facts, u.dodge, sx, EDGE + STATS_Y, textRight);
 
     this.fullSkill = def.skillText();
     const skill = uiLabel(this.fullSkill, { size: 24, color: Color.inkSoft, anchorX: 0, align: 'left' });
@@ -303,6 +316,43 @@ export class SelectionSheet {
     const plan = new BuildPlanView(this.env, u, box.well.w);
     plan.position.set(box.well.x, box.well.y);
     d.addChild(plan);
+  }
+
+  /**
+   * What the cat receives from tricksters, in the same line as its stats: the board's badge and the real number, as many as fit. Tapping a chip
+   * says what it is and who gives it.
+   */
+  private buffChips(into: Container, facts: readonly BuffFact[], dodge: number, x0: number, y: number, right: number): void {
+    const chips = facts.map((f) => {
+      const chip = new Container();
+      const badge = new Graphics();
+      drawBuffMark(badge, CHIP_R, f.kind);
+      badge.position.set(CHIP_R, 0);
+      chip.addChild(badge);
+      let w = 2 * CHIP_R;
+      if (f.value !== null) {
+        const label = uiLabel(fmtPct(f.value), { size: 24, anchorX: 0, align: 'left' });
+        label.position.set(2 * CHIP_R + 5, 1);
+        chip.addChild(label);
+        w += 5 + label.width;
+      }
+      return { chip, w, f };
+    });
+    const fit = chipsFit(chips.map((c) => c.w), right - x0, CHIP_GAP);
+    let x = x0;
+    chips.forEach(({ chip, w, f }, i) => {
+      if (i >= fit) {
+        chip.destroy({ children: true });
+        return;
+      }
+      chip.position.set(x, y);
+      x += w + CHIP_GAP;
+      const title = t(`hud.buff.${f.kind}`, { n: Math.round((f.kind === 'ward' ? dodge : f.value ?? 0) * 100) });
+      const names = f.from.map((id) => t(unitDef(id).nameKey)).join(' · ');
+      tapArea(chip, -6, -24, w + 12, 48);
+      chip.on('pointerdown', () => info.tap(`buff:${f.kind}`, chip, { title, text: names ? t('hud.buff.from', { names }) : title }));
+      into.addChild(chip);
+    });
   }
 
   /** Cut `label` to one line of at most `maxW`, ending with an ellipsis. */

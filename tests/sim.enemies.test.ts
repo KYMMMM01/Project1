@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMY_IDS } from '@/game/api';
 import { BOSS_SPECS, enemySpec } from '@/game/data/enemies';
+import { PATH_TOP } from '@/game/geometry';
 import { applyStatus, damageEnemy, hasteEnemy } from '@/game/sim/enemies';
 import { startWave } from '@/game/sim/flow';
 import type { Sim } from '@/game/sim/sim';
@@ -34,7 +35,7 @@ describe('walking', () => {
     quietWave(sim);
     const e = foe(sim, 'cucumber', 0);
     expect(e.x).toBeCloseTo(81, 6);
-    expect(e.y).toBe(44);
+    expect(e.y).toBe(PATH_TOP);
     expect(e.angle).toBe(0);
     e.travelled = 558 + 40;
     advance(sim, 1 / 60);

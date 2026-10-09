@@ -20,7 +20,7 @@ import { warm } from '@/fx';
 import type { RunConfig } from '../context';
 import { DEFAULT_RUG } from './rugSkins';
 
-const MODES: readonly BattleMode[] = ['tutorial', 'chapter', 'daily', 'endless'];
+const MODES: readonly BattleMode[] = ['tutorial', 'chapter', 'daily', 'endless', 'gold'];
 
 function int(params: URLSearchParams, key: string, fallback: number, lo: number, hi: number): number {
   const v = Number(params.get(key));

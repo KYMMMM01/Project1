@@ -4,6 +4,7 @@
  */
 import { UNIT_IDS, type DamageType, type UnitDef, type UnitId } from '../api';
 import { t } from '@/core/i18n';
+import { CC_IMMUNE_AFTER, PULL_IMMUNE_AFTER } from './balance';
 import { unitClass, unitRarity } from './roster';
 import type { AttackSpec, PerkKey, PerkSpec, UnitAura, UnitSpec } from './types';
 import './strings';
@@ -12,7 +13,7 @@ import './stringsGame';
 type Row = [damage: number, interval: number, range: number, crit: number, critMult: number];
 
 /** Perk values are fractions for these keys, plain numbers for the rest. */
-const PERCENT_KEYS: ReadonlySet<PerkKey> = new Set<PerkKey>(['range', 'damage', 'speed', 'crit', 'radius', 'effect', 'aura']);
+const PERCENT_KEYS: ReadonlySet<PerkKey> = new Set<PerkKey>(['range', 'damage', 'speed', 'crit', 'critMult', 'radius', 'effect', 'aura']);
 
 function perk(level: 4 | 7 | 10, key: PerkKey, value: number): PerkSpec {
   const shown = PERCENT_KEYS.has(key) ? Math.round(value * 100) : value;
@@ -33,6 +34,15 @@ function pct(v: number): number {
   return Math.round(v * 100);
 }
 
+/** How many cells a team effect with `reach` cells of reach covers from a cell in the middle of the board (reach 1: the 8 around it). */
+function around(reach: number): number {
+  return (2 * reach + 1) ** 2 - 1;
+}
+
+/** The bell kitten's chance to dodge a wet or zap cell, and what its level-7 perk adds to every team effect it gives. */
+const BELL_DODGE = 0.4;
+const BELL_LEVEL_7 = 0.5;
+
 const DEFS: Record<UnitId, Def> = {
   w_paw: {
     type: 'physical', row: [7.5, 0.55, 200, 0.05, 2], proj: 0,
@@ -52,10 +62,10 @@ const DEFS: Record<UnitId, Def> = {
     args: { a: pct(0.5), b: 4, c: 75, d: 2 },
   },
   w_samurai: {
-    type: 'physical', row: [140, 1.4, 255, 0.15, 2], proj: 0,
-    attack: { shape: 'line', reach: 130, effect: { kind: 'bleed', amount: 0.25, duration: 3 } },
+    type: 'physical', row: [130, 1.4, 255, 0.15, 2], proj: 0,
+    attack: { shape: 'line', reach: 100, effect: { kind: 'bleed', amount: 0.18, duration: 3 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'reach', 30), perk(10, 'effect', 0.15)],
-    args: { a: 130, b: 3, c: pct(0.25) },
+    args: { a: 100, b: 3, c: pct(0.18) },
   },
   w_tiger: {
     type: 'physical', row: [220, 1.1, 285, 0.2, 2], proj: 0,
@@ -84,13 +94,13 @@ const DEFS: Record<UnitId, Def> = {
     type: 'physical', row: [420, 2.0, 620, 0.3, 3], proj: 1400,
     attack: { shape: 'single', priority: 'max_hp' },
     perks: [perk(4, 'range', 0.1), perk(7, 'crit', 0.1), perk(10, 'critMult', 0.5)],
-    args: { a: 3 },
+    args: { a: 3, b: pct(0.3) },
   },
   r_star: {
-    type: 'physical', row: [250, 0.8, 620, 0.3, 2.5], proj: 1200,
-    attack: { shape: 'pierce', targets: 2, width: 40, blastRadius: 90, blastPct: 0.5 },
+    type: 'physical', row: [220, 0.5, 620, 0.3, 2.5], proj: 1200,
+    attack: { shape: 'pierce', targets: 1, width: 40, blastRadius: 90, blastPct: 0.25 },
     perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'radius', 0.25)],
-    args: { a: 2, b: 90, c: pct(0.5) },
+    args: { a: 1, b: 90, c: pct(0.25) },
   },
   m_snow: {
     type: 'magic', row: [8, 1.2, 290, 0, 2], proj: 700,
@@ -106,42 +116,44 @@ const DEFS: Record<UnitId, Def> = {
   },
   m_storm: {
     type: 'magic', row: [50, 1.1, 320, 0, 2], proj: 0,
-    attack: { shape: 'chain', targets: 4, reach: 130, falloff: 0.8 },
+    attack: { shape: 'chain', targets: 4, reach: 130, falloff: 0.8, stun: 0.4 },
     perks: [perk(4, 'range', 0.1), perk(7, 'targets', 1), perk(10, 'reach', 30)],
-    args: { a: 4, b: pct(0.8), c: 130 },
+    args: { a: 4, b: pct(0.8), c: 130, d: 0.4 },
   },
   m_frost: {
     type: 'magic', row: [50, 1.6, 340, 0, 2], proj: 0,
-    attack: { shape: 'frost', radius: 95, duration: 3, tick: 0.5, tickPct: 0.4, slow: 0.4, freezeChance: 0.08, freezeTime: 0.8 },
+    attack: { shape: 'frost', radius: 95, duration: 3, tick: 0.5, tickPct: 0.4, slow: 0.4, freezeChance: 0.12, freezeTime: 0.8 },
     perks: [perk(4, 'range', 0.1), perk(7, 'radius', 0.15), perk(10, 'duration', 1)],
-    args: { a: 95, b: 3, c: pct(0.4), d: pct(0.08) },
+    args: { a: 95, b: 3, c: pct(0.4), d: pct(0.12), e: CC_IMMUNE_AFTER },
   },
   m_cosmo: {
     type: 'magic', row: [200, 2.6, 380, 0, 2], proj: 0,
-    attack: { shape: 'void', radius: 120, duration: 1.2, pull: 90 },
+    attack: { shape: 'void', radius: 120, duration: 1.2, pull: 55 },
     perks: [perk(4, 'range', 0.08), perk(7, 'radius', 0.15), perk(10, 'damage', 0.2)],
-    args: { a: 120, b: 1.2 },
+    args: { a: 120, b: 1.2, c: PULL_IMMUNE_AFTER },
   },
-  t_bell: {
-    type: 'magic', row: [8, 1.0, 260, 0, 2], proj: 800,
-    attack: { shape: 'single' },
-    aura: { shieldNeighbours: true, neighbourSpeed: 0.08 },
-    perks: [perk(4, 'range', 0.1), perk(7, 'aura', 0.5), perk(10, 'speed', 0.2)],
-    args: { a: pct(0.08) },
-  },
+  // v1.4: the chef is the trickster line's kitten (rank 1) and the bell kitten its second rank. The two rows were swapped with the
+  // ranks, so each rank of the line keeps the numbers it had: [8, 1.0, 260] is rank 1 and [20, 1.0, 300] rank 2.
   t_chef: {
-    type: 'magic', row: [20, 1.0, 300, 0, 2], proj: 800,
+    type: 'magic', row: [8, 1.0, 260, 0, 2], proj: 800,
     attack: { shape: 'single' },
     aura: { chef: { cap: 12 } },
     perks: [perk(4, 'range', 0.1), perk(7, 'damage', 0.3), perk(10, 'aura', 0.5)],
     args: { a: 12 },
   },
+  t_bell: {
+    type: 'magic', row: [20, 1.0, 300, 0, 2], proj: 800,
+    attack: { shape: 'single' },
+    aura: { shieldNeighbours: true, dodge: BELL_DODGE, neighbourSpeed: 0.08, reach: 1 },
+    perks: [perk(4, 'range', 0.1), perk(7, 'aura', BELL_LEVEL_7), perk(10, 'speed', 0.2)],
+    args: { a: pct(0.08), b: pct(BELL_DODGE), c: pct(BELL_DODGE * (1 + BELL_LEVEL_7)), n: around(1) },
+  },
   t_bard: {
     type: 'magic', row: [42, 1.2, 320, 0, 2], proj: 800,
     attack: { shape: 'single' },
-    aura: { neighbourDamage: 0.2 },
+    aura: { neighbourDamage: 0.15, reach: 1 },
     perks: [perk(4, 'range', 0.1), perk(7, 'aura', 0.25), perk(10, 'aura', 0.25)],
-    args: { a: pct(0.2) },
+    args: { a: pct(0.15), n: around(1) },
   },
   t_alch: {
     type: 'magic', row: [90, 1.8, 340, 0, 2], proj: 0,
@@ -186,6 +198,13 @@ export function unitDef(id: UnitId): UnitDef {
 
 export function unitSpec(id: UnitId): UnitSpec {
   return SPECS[id];
+}
+
+/** How much a cat's level strengthens its team effect: 1 plus the "aura" perks it has reached (levels 4, 7 and 10). */
+export function auraScale(spec: UnitSpec, level: number): number {
+  let scale = 1;
+  for (const p of spec.perks) if (p.key === 'aura' && level >= p.level) scale += p.value;
+  return scale;
 }
 
 export function allUnitDefs(): UnitDef[] {

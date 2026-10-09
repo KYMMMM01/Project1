@@ -15,7 +15,7 @@ import {
 import {
   CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, DAILY_UNIT_LEVEL, DAILY_WAVES, ENEMY_CAP, LASER_RADIUS, MAX_TICKS_PER_STEP,
   MOLT_COST, MOLT_LIMIT, NORMAL_WAVE_TIME, OFFER_EVERY, OVERFLOW_GRACE, PREP_TIME, START_FISH, TICK, TUTORIAL_HP_MULT,
-  TUTORIAL_WAVES, TUTORIAL_WAVE_TIME, AWAKEN_COST, FIRST_SUN_CELLS, hpIndex, specialHp,
+  TUTORIAL_WAVES, TUTORIAL_WAVE_TIME, AWAKEN_COST, FIRST_SUN_CELLS, SUN_CELLS, hpIndex, specialHp,
 } from '../data/balance';
 import { synergyTier } from '../data/classes';
 import { budgetMult } from '../data/enemies';
@@ -24,7 +24,8 @@ import { BASE_UNIT_IDS } from '../data/roster';
 import { stakeRules } from '../data/stakes';
 import { trainingBonus } from '../data/training';
 import type { ModifierSpec, RelicFx, StakeRules, SynergyTier } from '../data/types';
-import { actOf, scriptFor, waveEntries, waveKindOf } from '../data/waves';
+import { goldDungeonScript, GOLD_DUNGEON_WAVES } from '../data/goldDungeon';
+import { actOf, scriptFor, waveEntries, type WaveScript } from '../data/waves';
 import {
   awakenCheck, classOwned, classUpgradeCostOf, cmdAwaken, cmdDrop, cmdMolt, cmdPickSummon, cmdSell, cmdSummon,
   cmdUpgradeClass, cmdUpgradeSummon, dropActionOf, makeUnit, oddsRows, pityOf, recomputeStats, refresh, sellValueOf,
@@ -41,6 +42,7 @@ import {
 import { updateHazards } from './hazards';
 import type { LuckTotals } from './odds';
 import type { SnapData } from './snapshot';
+import { updateSpecials } from './specials';
 import { Streams } from './streams';
 import { TUTORIAL_SCRIPT } from './tutorial';
 import type { HazardBatch, SimEnemy, SimProjectile, SimUnit, SimZone } from './types';
@@ -133,6 +135,12 @@ export class Sim implements BattleApi {
   readonly tierData: SynergyTier[] = Array.from({ length: 4 }, () => ({ ...synergyTier('warrior', 0) }));
   readonly tier = new Uint8Array(CLASS_IDS.length);
   readonly distinct = new Uint8Array(CLASS_IDS.length);
+  /** 1 for each class whose third synergy step is on (its ability is active). */
+  readonly special = new Uint8Array(CLASS_IDS.length);
+  /** When the warriors roar next (their ability), and the burst of the mages' ability waiting to go off: x, y, damage per burst. */
+  cryAt = 0;
+  readonly shatterQueue: number[] = [];
+  shattering = false;
   readonly classLevels: number[] = [0, 0, 0, 0];
   grade = 0;
   paidSummons = 0;
@@ -202,7 +210,7 @@ export class Sim implements BattleApi {
     this.stake = clampInt(init.stake, 0, 5);
     this.endless = init.mode === 'endless';
     this.scriptChapter = init.mode === 'tutorial' ? 1 : this.chapter;
-    this.totalWaves = init.mode === 'tutorial' ? TUTORIAL_WAVES : init.mode === 'daily' ? DAILY_WAVES : this.endless ? 0 : CHAPTER_WAVES;
+    this.totalWaves = init.mode === 'tutorial' ? TUTORIAL_WAVES : init.mode === 'daily' ? DAILY_WAVES : init.mode === 'gold' ? GOLD_DUNGEON_WAVES : this.endless ? 0 : CHAPTER_WAVES;
     this.rules = stakeRules(this.stake);
     this.rng = new Streams(init.seed);
 
@@ -234,7 +242,7 @@ export class Sim implements BattleApi {
       epic += m.epicBonus ?? 0;
       damage += m.damageBonus ?? 0;
       picks = Math.max(picks, m.relicPicks ?? 1);
-      sun = Math.max(sun, (m.sunCells ?? 0) - 4);
+      sun = Math.max(sun, (m.sunCells ?? 0) - SUN_CELLS);
       if (m.laserCooldown !== undefined) laserCd = laserCd > 0 ? Math.min(laserCd, m.laserCooldown) : m.laserCooldown;
       if (m.banClass) banned.add(m.banClass);
     }
@@ -320,11 +328,16 @@ export class Sim implements BattleApi {
     this.luck.variance = st.luck.variance;
     this.wave = d.wave - 1;
     this.act = actOf(Math.max(1, this.wave));
-    this.waveKind = waveKindOf(Math.max(1, this.wave));
+    this.waveKind = this.scriptOf(Math.max(1, this.wave)).kind;
   }
 
   get killFishBonus(): number {
     return this.trainKillFish + (this.fx.killFish ?? 0);
+  }
+
+  /** The script of `wave`: the gold dungeon plays its own, every other mode the chapter's. */
+  scriptOf(wave: number): WaveScript {
+    return this.mode === 'gold' ? goldDungeonScript(wave) : scriptFor(this.scriptChapter, wave);
   }
 
   /** Health of one cucumber of the wave being spawned, with the chapter and daily multipliers. */
@@ -334,7 +347,7 @@ export class Sim implements BattleApi {
 
   /** Total health the wave spawns (children of splitters and the elite or boss included), for balance tools. */
   waveHealth(wave: number): number {
-    const script = scriptFor(this.scriptChapter, wave);
+    const script = this.scriptOf(wave);
     const base = hpIndex(wave) * this.hpMult;
     let total = 0;
     const entries = waveEntries(script, this.countMult);
@@ -404,6 +417,7 @@ export class Sim implements BattleApi {
     updateUnits(this);
     updateProjectiles(this);
     updateZones(this);
+    updateSpecials(this);
     updateWave(this);
     if (this.phase === 'wave') updateAlarms(this);
   }
@@ -549,7 +563,7 @@ export class Sim implements BattleApi {
   previewWave(wave?: number): WavePreviewEntry[] {
     const w = wave ?? this.wave + 1;
     if (w < 1 || (!this.endless && w > this.totalWaves)) return [];
-    return waveEntries(scriptFor(this.scriptChapter, w), this.countMult);
+    return waveEntries(this.scriptOf(w), this.countMult);
   }
 
   canRevive(): boolean {

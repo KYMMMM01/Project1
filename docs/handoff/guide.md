@@ -87,3 +87,25 @@ The guidebook's "try it" line and every refused command's reason are information
 ## 2026-10-07 leftovers
 
 The guidebook's own text was not changed. The English teaching lines of the 19 lessons (`guide.<id>.teach`) were read on screen in the real tutorial, at 1280 and 1600: each fits its note in two lines at 26 px, none needed a shorter English string. What changed around them (`hud.md`): the note of a lesson now waits for the "nice!" sticker of the one before (1.1 s), the paw avoids the control's own writing, the elite and boss strips say "Est. ?" instead of "Estimating" while the estimate is unknown (`hud.est.wait`), and the pick of three draws its lines and its "Best" flag at 24 px or more. The first-encounter cards (here the awakening card, which the tutorial run lets through) show "Got it" and "More in the guidebook" on one row without cutting either in English.
+
+
+## 2026-10-09 batch: rules v1.4
+
+Texts that state a rule changed with it, all numbers still read from data (`facts.ts`):
+
+- **Synergy** (`guide.synergy.full`): the kitten rank does not count, the last step needs the guardian, class damage goes to the class and the side effects (armour ignore, crit, status duration) to every cat; the four abilities of the third step are listed (`abilityLine` builds "name: sentence" from `ClassDef.specialNameKey` / `specialText()`). Facts `kitten`, `guardian`, `warriorAbility`, `rangerAbility`, `mageAbility`, `tricksterAbility`. The topic's picture is sword, viking, samurai (counting kinds).
+- **Class sheet** (`guide.class_sheet.full`): the chip's dots are the ranks that count (the kitten's never lights), the sheet shows the ability of the third step.
+- **Awakening** (`guide.awaken.full`): "step {tier} ({kinds} kinds)" from `AWAKEN_MIN_TIER` and `SYNERGY_TIER_AT`.
+- **Hazards** (`guide.hazards.full`): the bell cat and the cats around it dodge sometimes (no digit in the sentence: the guide test forbids typed numbers).
+- **Laser** (`guide.laser.full`): an elite or a boss inside the dot comes first; the duration (6.5) is `LASER_DURATION`.
+- **The classes topic** shows the rare cats of every class (`t_bell` replaces `t_chef`, the trickster rare after the swap).
+- Crit wording: the guide never said "multiplier"; the unit and toy texts it links to now say crit damage.
+- The tutorial's scripted third summon is a rare ranger (`src/game/sim/tutorial.ts`), see `sim.md`, so the synergy lesson (step 1 after the scripted pick) still comes.
+
+Tests: `guide.text`, `guide.topics`, `guide.progress` unchanged and green (they check that every placeholder is filled and no typed number stands in a string).
+
+## 2026-10-09 batch: release test (guide part)
+
+- **New topic `gold_dungeon`** (section home, coin picture, "try it" = the battle tab's dungeon card): the meta engineer's REQUEST 2, with the text it proposed. Facts `waves` (`GOLD_DUNGEON_WAVES`), `free`, `gems`, `win` from `src/meta/data/dungeon.ts` and `src/game/data/goldDungeon.ts`; the first-clear bonus has no number in it (it depends on the tier). `HomePoint` has `'battle.dungeon'` (the tab already answered it). `tests/guide.text.test.ts` checks the facts.
+- **`guide.synergy.teach`** (the tutorial's synergy note and the first-encounter card) now ends with "the kitten rank does not count" (`{kitten}` fact): Korean 37 characters, English 68, both inside the two-line limits; a test requires the rank name in both.
+- Read every rules text of the batch against the data (synergy, class sheet, awaken, hazards, laser, classes, molt, boss, elite, sun, class upgrade, pick3, merge, toys, trait pages) in both languages: all numbers agree with `balance.ts`, `classes.ts` and `units.ts`. The boss pages say nothing yet of the bosses' armour and ward (that is the codex job).

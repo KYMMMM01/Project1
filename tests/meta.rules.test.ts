@@ -10,6 +10,7 @@ import {
   CARD_BASE, CHAPTER_MULT, OFFERS, PLACEMENTS, SNACKS, TRAINING_MAX,
 } from '@/meta/data/economy';
 import { COSMETICS, IAP_SPECS, iapProductDefs } from '@/meta/data/catalog';
+import { DUNGEON_AD_PLACEMENT } from '@/meta/data/dungeon';
 import {
   CALENDAR, CALENDAR_DAYS, CUP_TIERS, DAILY_MISSIONS, DAILY_MODIFIERS, FEATURES, PASS_TIERS, WEEKLY_MISSIONS,
   passFreeReward, passPremiumReward,
@@ -271,7 +272,7 @@ describe('catalogue', () => {
   });
 
   it('uses ad placements the platform knows', () => {
-    const known = [...Object.values(OFFERS).map((o) => o.ad), ...Object.values(PLACEMENTS)];
+    const known = [...Object.values(OFFERS).map((o) => o.ad), ...Object.values(PLACEMENTS), DUNGEON_AD_PLACEMENT];
     for (const id of known) expect(isPlacement(id), id).toBe(true);
     expect(Object.fromEntries(Object.entries(OFFERS).map(([k, o]) => [k, o.gems]))).toEqual({
       revive: 30, result_double: 20, chest_skip: 20, relic_reroll: 10, start_snack: 15,

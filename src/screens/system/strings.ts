@@ -44,6 +44,13 @@ addStrings('ko', {
   'rt.sys.version': '버전 {v}',
   'rt.sys.volatile': '이 브라우저 모드에서는 진행 상황이 저장되지 않을 수 있어요.',
   'rt.sys.section.about': '정보',
+  'rt.sys.section.test': '테스트',
+  'rt.sys.test.hint': '개발용 빌드에서만 보여요. 누르면 바로 받아요.',
+  'rt.sys.test.gold': '골드 +{n}',
+  'rt.sys.test.gems': '보석 +{n}',
+  'rt.sys.test.tickets': '소탕권 +{n}',
+  'rt.sys.test.got': '{what}, 받았어요!',
+  'rt.sys.test.full': '더 받을 수 없어요.',
   'rt.sys.link.privacy': '개인정보 처리방침',
   'rt.sys.link.terms': '이용약관',
   'rt.sys.link.support': '문의하기',
@@ -116,6 +123,7 @@ addStrings('ko', {
   'rt.sys.feat.sweep': '소탕권으로 클리어한 판을 바로 끝내요.',
   'rt.sys.feat.cup': '일일 도전 기록으로 주간 컵 상자를 받아요.',
   'rt.sys.feat.endless': '끝없이 밀려오는 적을 막아요.',
+  'rt.sys.feat.dungeon': '하루 두 번, 짧은 판으로 골드를 모아요.',
 });
 
 addStrings('en', {
@@ -160,6 +168,13 @@ addStrings('en', {
   'rt.sys.version': 'Version {v}',
   'rt.sys.volatile': 'Progress may not be saved in this browser mode.',
   'rt.sys.section.about': 'About',
+  'rt.sys.section.test': 'Test',
+  'rt.sys.test.hint': 'Shown in development builds only. Tap to get it right away.',
+  'rt.sys.test.gold': 'Gold +{n}',
+  'rt.sys.test.gems': 'Gems +{n}',
+  'rt.sys.test.tickets': 'Tickets +{n}',
+  'rt.sys.test.got': '{what}: got it!',
+  'rt.sys.test.full': 'No room for more.',
   'rt.sys.link.privacy': 'Privacy policy',
   'rt.sys.link.terms': 'Terms of service',
   'rt.sys.link.support': 'Contact support',
@@ -229,6 +244,7 @@ addStrings('en', {
   'rt.sys.feat.sweep': 'Finish cleared stages instantly with tickets.',
   'rt.sys.feat.cup': 'Daily challenge scores earn weekly cup chests.',
   'rt.sys.feat.endless': 'Hold off enemies that never stop.',
+  'rt.sys.feat.dungeon': 'Two short runs a day that pay gold.',
 });
 
 /** Shown in the settings footer. Replace with a build-time define when the build provides one. */

@@ -44,6 +44,7 @@ const FEATURE_ICON: Readonly<Record<FeatureId, IconName>> = {
   sweep: 'sweep',
   cup: 'trophy',
   endless: 'skull',
+  dungeon: 'coin',
 };
 
 /** Offers already made in this app session: a dismissed one is not repeated until the next launch. */

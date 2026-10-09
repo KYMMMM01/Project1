@@ -8,13 +8,10 @@ import type { HazardBatch, SimEnemy, SimUnit } from './types';
 
 const eligible: number[] = [];
 
-/** Cells a hazard may hit: occupied, not next to a bell kitten and not a bell kitten itself. */
+/** Cells a hazard may hit: every occupied one (a cat a bell kitten covers may dodge it when it lands, see `activate`). */
 function collectEligible(s: Sim): number[] {
   eligible.length = 0;
-  for (let c = 0; c < CELL_COUNT; c++) {
-    const u = s.units[c];
-    if (u && !u.shielded && u.id !== 't_bell') eligible.push(c);
-  }
+  for (let c = 0; c < CELL_COUNT; c++) if (s.units[c]) eligible.push(c);
   return eligible;
 }
 
@@ -32,7 +29,7 @@ export function pickHazardCells(s: Sim, count: number): number[] {
   return out;
 }
 
-/** A 2x2 block of cells that covers a random eligible unit (cells next to bells stay dry). */
+/** A 2x2 block of cells that covers a random unit. */
 export function pickHazardBlock(s: Sim): number[] {
   const pool = collectEligible(s);
   if (pool.length === 0) return [];
@@ -40,13 +37,7 @@ export function pickHazardBlock(s: Sim): number[] {
   const col = Math.min(Math.max(cellCol(anchor) - (s.rng.combat.next() < 0.5 ? 1 : 0), 0), COLS - 2);
   const row = Math.min(Math.max(cellRow(anchor) - (s.rng.combat.next() < 0.5 ? 1 : 0), 0), ROWS - 2);
   const out: number[] = [];
-  for (let dr = 0; dr < 2; dr++) {
-    for (let dc = 0; dc < 2; dc++) {
-      const c = cellIndex(col + dc, row + dr);
-      const u = s.units[c];
-      if (!u || (!u.shielded && u.id !== 't_bell')) out.push(c);
-    }
-  }
+  for (let dr = 0; dr < 2; dr++) for (let dc = 0; dc < 2; dc++) out.push(cellIndex(col + dc, row + dr));
   return out;
 }
 
@@ -58,15 +49,27 @@ export function scheduleHazard(s: Sim, kind: HazardKind, cells: number[], durati
   if (s.ev.has('hazardWarn')) s.ev.emit('hazardWarn', { cells, kind, delay: HAZARD_WARNING });
 }
 
+/**
+ * The warning is over: the cells become hazardous. A cat a bell kitten covers (or the bell itself) rolls its dodge chance once per
+ * cell; a dodged cell stays dry and is announced with a `dodge` event, so the batch ends up holding only the cells that were hit.
+ */
 function activate(s: Sim, b: HazardBatch): void {
   b.active = true;
+  const wet: number[] = [];
   for (const cell of b.cells) {
+    const unit = s.units[cell];
+    if (unit && unit.dodge > 0 && s.rng.combat.next() < unit.dodge) {
+      if (s.ev.has('dodge')) s.ev.emit('dodge', { unit, hazard: b.kind });
+      continue;
+    }
     const state: HazardState = { cell, kind: b.kind, timeLeft: b.duration, duration: b.duration };
     b.states.push(state);
     s.hazards.push(state);
     s.hazardCount[cell] = (s.hazardCount[cell] as number) + 1;
+    wet.push(cell);
   }
-  if (s.ev.has('hazard')) s.ev.emit('hazard', { cells: b.cells, kind: b.kind, duration: b.duration });
+  b.cells = wet;
+  if (wet.length > 0 && s.ev.has('hazard')) s.ev.emit('hazard', { cells: wet, kind: b.kind, duration: b.duration });
 }
 
 function end(s: Sim, b: HazardBatch): void {
@@ -75,7 +78,7 @@ function end(s: Sim, b: HazardBatch): void {
     if (i >= 0) s.hazards.splice(i, 1);
     s.hazardCount[state.cell] = (s.hazardCount[state.cell] as number) - 1;
   }
-  if (s.ev.has('hazardEnd')) s.ev.emit('hazardEnd', { cells: b.cells, kind: b.kind });
+  if (b.cells.length > 0 && s.ev.has('hazardEnd')) s.ev.emit('hazardEnd', { cells: b.cells, kind: b.kind });
 }
 
 export function updateHazards(s: Sim): void {

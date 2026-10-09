@@ -18,10 +18,14 @@ import {
 import { DAILY_UNIT_LEVEL } from './data/schedule';
 import { BASE_UNITS, CHEST_RARITIES, TRAINING_IDS, type BaseUnitId, type ChestRarity, type TrainingId } from './types';
 
-/** The four units of each rarity, one per class (warrior, ranger, mage, trickster). */
+/**
+ * The four units of each rarity, one per class (warrior, ranger, mage, trickster). Levels and cards belong to the cat, not to its
+ * rank: since v1.4 the chef is the trickster kitten and the bell kitten its second rank, so a saved bell kitten keeps its level and its
+ * cards and only pays the rare price for the next level.
+ */
 export const UNITS_BY_RARITY: Readonly<Record<ChestRarity, readonly BaseUnitId[]>> = {
-  common: ['w_paw', 'r_sling', 'm_snow', 't_bell'],
-  rare: ['w_sword', 'r_archer', 'm_fire', 't_chef'],
+  common: ['w_paw', 'r_sling', 'm_snow', 't_chef'],
+  rare: ['w_sword', 'r_archer', 'm_fire', 't_bell'],
   epic: ['w_viking', 'r_ninja', 'm_storm', 't_bard'],
   legendary: ['w_samurai', 'r_gunner', 'm_frost', 't_alch'],
 };

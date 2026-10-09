@@ -194,3 +194,15 @@ No change to the battle scene or its layout contract (`src/view/layout.ts`, `TOP
 ## 2026-10-07 final leftovers
 
 The two sheets left in "What is left" above are staged now (`Staged`, `ui.md` and `hud.md`): class sheet 43.6 / 34.2 ms first / second open to 12.8 to 20.3 / 14.0 to 14.4, result screen 42.9 to 14.3 to 23.6 (same method, machine idle 5 to 6 ms). `sheetWarm` finishes a staged sheet before listing its parts (`Popup.finishBuild`). REQUEST 1 above is done.
+
+
+## 2026-10-09 batch
+
+The board is 5 x 5 and the field 720 x 660 (`field.md`, "2026-10-09 batch", has the numbers, the layout, the loop and the measurements). For this scene:
+- `computeBattleLayout` is unchanged and gives `fieldY` = 168 on a 1280 screen (the field is flush with both HUD blocks) and 160 px of spare above and below on a 1600 screen; `bannerSlots` puts the routine banners in the 78 px band under the HUD at scale 0.8 (`SHEET_PAD` 12).
+- The act-clear ribbon and the overflow gauge follow `FIELD_H / 2` (`director/banners.ts`, `director/flow.ts`).
+- Debug hooks are as before (`__dbg.battle.board({ cell: id })` takes cells 0 to 24). The standard crowded wave is `tools/crowded_wave.js` now (run with `tools/battle_motion.sh`).
+- A wave-start save from the 5 x 4 board is refused by `parseSnapshot` (20 cats, not 25), so a run in progress on the old build starts over; the rules phase should bump `SIM_VERSION`.
+- Tutorial: no cell is fixed in the script; the sunbeam reveal is a plus on the middle cell and the kitten box of wave 6 holds up to 13 kittens (`sim/tutorial.ts`).
+
+REQUESTS: none.

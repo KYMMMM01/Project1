@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { RELIC_IDS, type RelicId, type UnitId } from '@/game/api';
-import { hpIndex } from '@/game/data/balance';
+import { FIRST_SUN_CELLS, LASER_DURATION, SUN_CELLS, hpIndex } from '@/game/data/balance';
 import { RELIC_FX_KEYS, relicSpec } from '@/game/data/relics';
 import { unitRarityIndex } from '@/game/data/roster';
 import { unitSpec } from '@/game/data/units';
@@ -42,7 +42,7 @@ describe('relic bookkeeping', () => {
 describe('stat relics', () => {
   it('yarn ball: warriors and rangers attack 12% faster, mages and tricksters do not', () => {
     const sim = newSim();
-    const units = [put(sim, 16, 'w_paw'), put(sim, 17, 'r_sling'), put(sim, 18, 'm_snow'), put(sim, 19, 't_bell')];
+    const units = [put(sim, 20, 'w_paw'), put(sim, 21, 'r_sling'), put(sim, 22, 'm_snow'), put(sim, 23, 't_bell')];
     const before = units.map((u) => u.stats.interval);
     gainRelic(sim, 'yarn_ball');
     expect(units[0]!.stats.interval).toBeCloseTo(before[0]! / 1.12, 9);
@@ -106,9 +106,10 @@ describe('stat relics', () => {
     gainRelic(sim, 'kneading_cushion');
     expect(a.stats.damage).toBeCloseTo(raw, 9);
     put(sim, 17, 'w_sword');
-    // Two warrior types are on the board now: synergy +15% adds to the cushion's +12%.
-    expect(a.stats.damage).toBeCloseTo(raw * (1 + 0.15 + 0.12), 9);
-    expect(b.stats.damage).toBeCloseTo(raw * (1 + 0.15 + 0.12), 9);
+    // The kitten rank does not count toward a synergy, so the sword makes one kind and the cushion's +12% stands alone.
+    expect(sim.synergyTier('warrior')).toBe(0);
+    expect(a.stats.damage).toBeCloseTo(raw * 1.12, 9);
+    expect(b.stats.damage).toBeCloseTo(raw * 1.12, 9);
   });
 
   it('window perch: the outer ring attacks 15% faster', () => {
@@ -127,24 +128,24 @@ describe('stat relics', () => {
     const u = put(sim, 12, 'w_paw');
     const before = u.stats.interval;
     gainRelic(sim, 'sunny_spot');
-    expect(sim.sunbeams).toHaveLength(6);
+    expect(sim.sunbeams).toHaveLength(SUN_CELLS + 2);
     expect(sun).toHaveLength(1);
-    expect(sim.sunbeams.slice(0, 4)).toEqual([6, 7, 12, 13]);
-    expect(new Set(sim.sunbeams).size).toBe(6);
+    expect(sim.sunbeams.slice(0, FIRST_SUN_CELLS.length)).toEqual([...FIRST_SUN_CELLS]);
+    expect(new Set(sim.sunbeams).size).toBe(SUN_CELLS + 2);
     expect(u.stats.interval).toBeCloseTo((before * 1.2) / 1.3, 9);
   });
 
   it('golden catnip: all synergy numbers 25% larger', () => {
     const sim = newSim();
-    put(sim, 0, 'w_paw');
-    put(sim, 1, 'w_sword');
-    put(sim, 2, 'w_viking');
+    put(sim, 0, 'w_sword');
+    put(sim, 1, 'w_viking');
+    put(sim, 2, 'w_samurai');
     const u = sim.units[0]!;
     const base = u.stats.damage;
     expect(sim.synergyTier('warrior')).toBe(2);
     gainRelic(sim, 'golden_catnip');
-    expect(u.stats.damage).toBeCloseTo((base / 1.36) * (1 + 0.36 * 1.25), 9);
-    expect(u.armorIgnore).toBeCloseTo(0.2 * 1.25, 9);
+    expect(u.stats.damage).toBeCloseTo((base / 1.3) * (1 + 0.3 * 1.25), 9);
+    expect(u.armorIgnore).toBeCloseTo(0.15 * 1.25, 9);
   });
 
   it('royal crown: legendary and mythic cats deal 30% more', () => {
@@ -155,9 +156,9 @@ describe('stat relics', () => {
     const l = low.stats.damage;
     gainRelic(sim, 'royal_crown');
     expect(low.stats.damage).toBeCloseTo(l, 9);
-    // Bonuses add up: the frost queen and the cosmic cat are two mage types (+15%) and the crown adds +30%.
-    expect(high.stats.damage).toBeCloseTo(unitSpec('m_frost').base.damage * (1 + 0.15 + 0.3), 9);
-    expect(mythic.stats.damage).toBeCloseTo(unitSpec('m_cosmo').base.damage * (1 + 0.15 + 0.3), 9);
+    // Bonuses add up: the frost queen and the cosmic cat are two mage types (+12%) and the crown adds +30%.
+    expect(high.stats.damage).toBeCloseTo(unitSpec('m_frost').base.damage * (1 + 0.12 + 0.3), 9);
+    expect(mythic.stats.damage).toBeCloseTo(unitSpec('m_cosmo').base.damage * (1 + 0.12 + 0.3), 9);
   });
 });
 
@@ -250,10 +251,10 @@ describe('behaviour relics', () => {
   it('batteries: the laser lasts 2 seconds longer and comes back 3 seconds sooner', () => {
     const sim = withRelic('batteries');
     quietWave(sim);
-    expect(sim.laser.duration).toBe(7);
+    expect(sim.laser.duration).toBe(LASER_DURATION + 2);
     expect(sim.laser.cooldownTotal).toBe(12);
     sim.setLaser(100, 100);
-    advance(sim, 6.9);
+    advance(sim, LASER_DURATION + 2 - 0.1);
     expect(sim.laser.active).toBe(true);
     advance(sim, 0.2);
     expect(sim.laser.active).toBe(false);

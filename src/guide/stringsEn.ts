@@ -106,14 +106,14 @@ export const EN: Record<string, string> = {
     '{warrior}: {warriorRole}\n{ranger}: {rangerRole}\n{mage}: {mageRole}\n{trickster}: {tricksterRole}\nThe class chips at the bottom show the ranks you own and your synergy step.',
 
   'guide.synergy.title': 'Synergy',
-  'guide.synergy.teach': 'More different cats of one class make them stronger.',
+  'guide.synergy.teach': 'More kinds of one class, more power. The {kitten} rank does not count.',
   'guide.synergy.full':
-    'When {a}, {b} or {c} different cats of one class stand on the board, synergy turns on step by step. Several copies of the same cat count as one kind.\nWarrior: {warrior}\nRanger: {ranger}\nMage: {mage}\nTrickster: {trickster}\n(Each line gives the bonus of the first, second and third step.)',
+    'When {a}, {b} or {c} different cats of one class stand on the board, synergy turns on step by step. The {kitten} rank does not count and several copies of the same cat are one kind, so the last step needs the {guardian} too.\nThe damage bonus goes to the cats of that class only; side effects such as armour ignore, crit and status duration go to every cat.\nWarrior: {warrior}\nRanger: {ranger}\nMage: {mage}\nTrickster: {trickster}\n(Each line gives the bonus of the first, second and third step.)\nAt {c} kinds every class also gets an ability.\n{warriorAbility}\n{rangerAbility}\n{mageAbility}\n{tricksterAbility}',
 
   'guide.class_sheet.title': 'The class sheet',
   'guide.class_sheet.teach': 'Tap a class chip to see everything about it.',
   'guide.class_sheet.full':
-    'Tap a class chip to open its line. Ranks you own are lit photos, missing ones are dashed slots.\nAn arrow takes the class colour when a merge or an awakening is possible.\nBelow it you see how many kinds are missing for the next synergy step and the bonus of each step (from {a} kinds up to {c}).',
+    'Tap a class chip to open its line. Ranks you own are lit photos, missing ones are dashed slots. The small dots on the chip are the ranks that count toward synergy, so the dot of the {kitten} rank never lights.\nAn arrow takes the class colour when a merge or an awakening is possible.\nBelow it you see how many kinds are missing for the next synergy step, the bonus of each step (from {a} kinds up to {c}) and the ability that turns on at {c} kinds.',
 
   'guide.class_upgrade.title': 'Class upgrade',
   'guide.class_upgrade.teach': 'Tap a class chip to upgrade the whole class.',
@@ -138,7 +138,7 @@ export const EN: Record<string, string> = {
   'guide.awaken.title': 'Awakening and Guardians',
   'guide.awaken.teach': 'A King that gathers purr becomes a Guardian.',
   'guide.awaken.full':
-    'Kings cannot merge further. With the class synergy at step {tier} or better, pay {cost} purr and the King awakens into the Guardian of its class.\nGuardians are the strongest cats. Tap a King to see the two conditions, each gets a check when it is met.',
+    'Kings cannot merge further. With the class synergy at step {tier} ({kinds} kinds) or better, pay {cost} purr and the King awakens into the Guardian of its class.\nGuardians are the strongest cats. Tap a King to see the two conditions, each gets a check when it is met.',
 
   'guide.sell.title': 'Selling',
   'guide.sell.teach': 'Tap a cat and sell it for fish and room.',
@@ -159,12 +159,12 @@ export const EN: Record<string, string> = {
   'guide.hazards.title': 'Cell hazards',
   'guide.hazards.teach': 'Cats on a soaked or zapped cell cannot attack.',
   'guide.hazards.full':
-    'Some enemies and bosses soak cells with water or strike them with lightning. A cat there cannot attack until it ends.\nWater lasts {wet} seconds, lightning {zap}. The cell flashes {warn} seconds before, so move your cat to another cell in time.\nA neighbouring bell cat guards the cells next to it.',
+    'Some enemies and bosses soak cells with water or strike them with lightning. A cat there cannot attack until it ends.\nWater lasts {wet} seconds, lightning {zap}. The cell flashes {warn} seconds before, so move your cat to another cell in time.\nA bell cat and the cats right around it sometimes dodge them.',
 
   'guide.laser.title': 'Laser pointer',
   'guide.laser.teach': 'Drop a dot on the path: cats hit the enemies near it first.',
   'guide.laser.full':
-    'Press the laser button, then tap the path to drop a red dot. For {dur} seconds your cats attack the enemy closest to it first.\nMarked enemies near the dot take {vuln}% more damage. It is ready again {cd} seconds after use.\nUse it on bosses and dangerous enemies. The i mark beside the button reopens the full explanation.',
+    'Press the laser button, then tap the path to drop a red dot. For {dur} seconds your cats attack the enemy closest to it first, and an elite or a boss inside the dot comes before any other.\nMarked enemies near the dot take {vuln}% more damage. It is ready again {cd} seconds after use.\nUse it on bosses and dangerous enemies. The i mark beside the button reopens the full explanation.',
 
   'guide.call_wave.title': 'Calling the next wave',
   'guide.call_wave.teach': 'Call the next wave early for bonus fish. Tap it!',
@@ -337,6 +337,11 @@ export const EN: Record<string, string> = {
   'guide.weekly_cup.teach': 'Add up the week\'s daily challenges for prizes.',
   'guide.weekly_cup.full':
     'All the waves you reach in a week of daily challenges are added up. Going all the way every day gives the best score, {best}.\nReaching {t1}, {t2} and {t3} points each pays a better chest.',
+
+  'guide.gold_dungeon.title': 'Gold dungeon',
+  'guide.gold_dungeon.teach': 'Two short runs a day to collect gold.',
+  'guide.gold_dungeon.full':
+    'A short run of {waves} waves. There is no boss, and you are paid for every wave you get past and every enemy you defeat.\nHolding out to the end multiplies the gold by {win}, and the first clear of the day pays extra. {free} runs a day are free; one more costs an ad or {gems} gems.\nTiers open as you clear chapters, and a higher tier pays more gold.',
 
   'guide.endless.title': 'Endless mode',
   'guide.endless.teach': 'See how long you last against endless waves.',

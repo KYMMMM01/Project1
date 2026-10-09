@@ -336,9 +336,9 @@ export class Pending {
 
 // ───────────────────────────── the crowd rule ─────────────────────────────
 
-/** The screen is cut into 4 x 4 regions of the field; each holds only so many numbers. */
+/** The field (720 x 660) is cut into 4 x 4 regions; each holds only so many numbers. */
 const REGION_W = 180;
-const REGION_H = 156;
+const REGION_H = 165;
 const REGION_COLS = 4;
 
 /** The region of a point of the field. */

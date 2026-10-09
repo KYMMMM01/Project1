@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EnemyId } from '@/game/api';
-import { cellCenterX, cellCenterY } from '@/game/geometry';
-import { TICK } from '@/game/data/balance';
+import { FIELD_H, cellCenterX, cellCenterY } from '@/game/geometry';
+import { CC_IMMUNE_AFTER, LASER_DURATION, TICK } from '@/game/data/balance';
 import { enemySpec } from '@/game/data/enemies';
 import { unitSpec } from '@/game/data/units';
 import { applyStatus, damageEnemy } from '@/game/sim/enemies';
@@ -150,7 +150,7 @@ describe('statuses', () => {
     expect(e.slow).toBe(0.5);
   });
 
-  it('stops walkers while stunned, halves it on elites, ignores bosses, and grants 3 seconds of immunity', () => {
+  it('stops walkers while stunned, halves it on elites, ignores bosses, and grants a window of immunity (4 seconds) to stun and freeze alike', () => {
     const sim = field();
     const e = foe(sim, 'cucumber');
     const before = e.travelled;
@@ -164,7 +164,10 @@ describe('statuses', () => {
     applyStatus(sim, e, 'stun', 1, 1, null);
     applyStatus(sim, e, 'freeze', 1, 1, null);
     expect(e.stunned || e.frozen).toBe(false);
-    advance(sim, 3);
+    advance(sim, CC_IMMUNE_AFTER - 1);
+    applyStatus(sim, e, 'freeze', 1, 1, null);
+    expect(e.frozen).toBe(false);
+    advance(sim, 1.1);
     applyStatus(sim, e, 'freeze', 1, 1, null);
     expect(e.frozen).toBe(true);
     const elite = foe(sim, 'spray');
@@ -197,19 +200,22 @@ describe('statuses', () => {
     expect(e.burning || e.poisoned || e.bleeding).toBe(false);
   });
 
-  it('lengthens mage statuses with the mage synergy, and no one else\'s', () => {
+  it('lengthens the magic statuses of every cat with the mage synergy, and never the other statuses', () => {
     const sim = field();
-    put(sim, 0, 'm_snow');
-    put(sim, 1, 'm_fire');
-    put(sim, 2, 'm_storm');
+    put(sim, 0, 'm_fire');
+    put(sim, 1, 'm_storm');
+    put(sim, 2, 'm_frost');
     expect(sim.synergyTier('mage')).toBe(2);
     const mage = sim.units[0]!;
-    const e = foe(sim, 'cucumber');
-    applyStatus(sim, e, 'slow', 0.2, 2, mage);
-    expect(e.slowUntil - sim.time).toBeCloseTo(2 * 1.25, 9);
-    const f = foe(sim, 'cucumber');
-    applyStatus(sim, f, 'armor_break', 0.2, 2, mage);
-    expect(f.breakUntil - sim.time).toBeCloseTo(2, 9);
+    const paw = put(sim, 5, 'w_paw');
+    for (const src of [mage, paw]) {
+      const e = foe(sim, 'cucumber');
+      applyStatus(sim, e, 'slow', 0.2, 2, src);
+      expect(e.slowUntil - sim.time, src.id).toBeCloseTo(2 * 1.2, 9);
+      const f = foe(sim, 'cucumber');
+      applyStatus(sim, f, 'armor_break', 0.2, 2, src);
+      expect(f.breakUntil - sim.time, src.id).toBeCloseTo(2, 9);
+    }
   });
 
   it('makes pills\' neighbours immune to slows and heals them, and clocks speed their neighbours up', () => {
@@ -365,7 +371,7 @@ describe('attack shapes', () => {
     expect(first.every((a) => a.projectile !== null)).toBe(true);
   });
 
-  it('pierces the target and the two behind it, and explodes what it kills', () => {
+  it('pierces the target and the one behind it, and explodes what it kills for a quarter of the hit', () => {
     const sim = field();
     put(sim, 7, 'r_star');
     const y = cellCenterY(7);
@@ -373,17 +379,15 @@ describe('attack shapes', () => {
     const target = at(sim, 'cucumber', x + 100, y, 1, 900);
     const second = at(sim, 'cucumber', x + 160, y + 10, 1e9, 800);
     const third = at(sim, 'cucumber', x + 230, y - 10, 1e9, 700);
-    const fourth = at(sim, 'cucumber', x + 330, y, 1e9, 600);
     const hits = record(sim, 'hit');
-    advance(sim, 0.9);
+    advance(sim, 0.5);
     const ids = hits.filter((h) => h.unitId === 'r_star').map((h) => h.enemy.uid);
     expect(ids).toContain(target.uid);
     expect(ids).toContain(second.uid);
-    expect(ids).toContain(third.uid);
-    expect(ids).not.toContain(fourth.uid);
+    expect(ids).not.toContain(third.uid);
     const spec = sim.units[7]!.stats.damage;
-    const blast = hits.find((h) => h.enemy.uid === second.uid && !h.crit && Math.abs(h.amount - spec * 0.5) < 1e-6);
-    expect(blast).toBeDefined();
+    expect(hits.find((h) => h.enemy.uid === second.uid && !h.crit && Math.abs(h.amount - spec * 0.25) < 1e-6)).toBeDefined();
+    expect(hits.find((h) => h.enemy.uid === second.uid && !h.crit && Math.abs(h.amount - spec * 0.5) < 1e-6)).toBeUndefined();
   });
 
   it('chains lightning across up to four enemies, weaker at every jump', () => {
@@ -497,15 +501,15 @@ describe('neighbour auras', () => {
     expect(stranger.buffAttackSpeed).toBe(0);
   });
 
-  it('strengthens neighbours with a bard, and two bards do not add up', () => {
+  it('strengthens the cats around a bard by 15%, and two bards do not add up', () => {
     const sim = field();
     const paw = put(sim, 16, 'w_paw');
     const base = paw.stats.damage;
     put(sim, 15, 't_bard');
-    expect(paw.stats.damage).toBeCloseTo(base * 1.2, 9);
+    expect(paw.stats.damage).toBeCloseTo(base * 1.15, 9);
     put(sim, 17, 't_bard');
-    expect(paw.stats.damage).toBeCloseTo(base * 1.2, 9);
-    expect(paw.buffDamage).toBeCloseTo(0.2, 9);
+    expect(paw.stats.damage).toBeCloseTo(base * 1.15, 9);
+    expect(paw.buffDamage).toBeCloseTo(0.15, 9);
   });
 
   it('gives every cat +20% attack speed with a lucky cat, without stacking', () => {
@@ -541,6 +545,10 @@ describe('neighbour auras', () => {
 });
 
 describe('hazards', () => {
+  const dodging = (sim: Sim, roll: number): void => {
+    sim.rng.combat.next = () => roll;
+  };
+
   it('warns 0.8 seconds ahead, then stops the cat on that cell until the hazard ends', () => {
     const sim = field();
     const u = put(sim, 7, 'r_sling');
@@ -584,21 +592,41 @@ describe('hazards', () => {
     expect(newcomer.blocked).toBe(true);
   });
 
-  it('keeps cats next to a bell kitten dry and never picks them as targets', () => {
+  it('lets the bell kitten and the cats around it dodge a wet or zap cell by chance, and shows each dodge', () => {
     const sim = field();
     put(sim, 7, 'r_sling');
     put(sim, 8, 't_bell');
-    put(sim, 12, 'w_paw');
-    put(sim, 6, 'w_paw');
-    for (let i = 0; i < 200; i++) {
-      const cells = pickHazardCells(sim, 2);
-      expect(cells.every((c) => c === 6 || c === 12)).toBe(true);
-    }
+    put(sim, 18, 'w_paw');
     expect(sim.units[7]!.shielded).toBe(true);
-    scheduleHazard(sim, 'wet', [7, 8], 3);
+    expect(sim.units[7]!.dodge).toBeCloseTo(0.4, 9);
+    expect(sim.units[8]!.dodge).toBeCloseTo(0.4, 9);
+    expect(sim.units[18]!.dodge).toBe(0);
+    // Cells next to a bell are targets like any other now.
+    const seen = new Set<number>();
+    for (let i = 0; i < 300; i++) for (const c of pickHazardCells(sim, 1)) seen.add(c);
+    expect([...seen].sort((a, b) => a - b)).toEqual([7, 8, 18]);
+
+    const dodges = record(sim, 'dodge');
+    const starts = record(sim, 'hazard');
+    dodging(sim, 0.39);
+    scheduleHazard(sim, 'wet', [7, 8, 18], 3);
     advance(sim, 1.2);
+    expect(dodges.map((d) => [d.unit.cell, d.hazard])).toEqual([[7, 'wet'], [8, 'wet']]);
+    expect(starts).toEqual([{ cells: [18], kind: 'wet', duration: 3 }]);
     expect(sim.units[7]!.blocked).toBe(false);
     expect(sim.units[8]!.blocked).toBe(false);
+    expect(sim.units[18]!.blocked).toBe(true);
+    expect(sim.hazards.map((h) => h.cell)).toEqual([18]);
+    advance(sim, 3);
+    expect(sim.hazards).toHaveLength(0);
+
+    dodges.length = 0;
+    dodging(sim, 0.41);
+    scheduleHazard(sim, 'zap', [7, 8], 3);
+    advance(sim, 1.2);
+    expect(dodges).toHaveLength(0);
+    expect(sim.units[7]!.blocked).toBe(true);
+    expect(sim.units[8]!.blocked).toBe(true);
   });
 
   it('weakens a cat to half attack speed for the duration, and the effect follows it', () => {
@@ -641,16 +669,17 @@ describe('laser pointer', () => {
     expect(hits.find((h) => !h.crit)!.amount).toBeCloseTo(dmg * 1.15, 6);
   });
 
-  it('moves the dot when called again, lasts 5 seconds and then needs 15 seconds', () => {
+  it('moves the dot when called again, lasts 6.5 seconds and then needs 15 seconds', () => {
     const sim = field();
     const ends = record(sim, 'laserEnd');
     expect(sim.setLaser(100, 100)).toBeNull();
-    expect(sim.laser.duration).toBe(5);
+    expect(sim.laser.duration).toBe(LASER_DURATION);
+    expect(LASER_DURATION).toBe(6.5);
     advance(sim, 1);
     expect(sim.setLaser(200, 220)).toBeNull();
     expect(sim.laser.x).toBe(200);
     expect(sim.laser.y).toBe(220);
-    advance(sim, 3.9);
+    advance(sim, LASER_DURATION - 1.1);
     expect(sim.laser.active).toBe(true);
     advance(sim, 0.2);
     expect(sim.laser.active).toBe(false);
@@ -671,6 +700,6 @@ describe('laser pointer', () => {
     expect(daily.laser.cooldownTotal).toBe(6);
     daily.setLaser(-50, 99999);
     expect(daily.laser.x).toBe(0);
-    expect(daily.laser.y).toBe(624);
+    expect(daily.laser.y).toBe(FIELD_H);
   });
 });

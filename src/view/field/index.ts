@@ -5,6 +5,8 @@ import type { BattleContext, BattleLayout, FieldPart } from '../context';
 import '../strings';
 import { fieldArt } from './art';
 import { Background } from './background';
+import { BuffBoard } from './buffMath';
+import { BuffMarks } from './buffMarks';
 import { CellLayer, type CellLook } from './cells';
 import { FieldEffects } from './effects';
 import { EnemyViews } from './enemies';
@@ -33,7 +35,7 @@ export function createField(ctx: BattleContext): FieldPart {
   const art = fieldArt();
   // Ground effects sit under the characters; the context's own Fx draws over them.
   const ground = new Fx(layers.zones, ctx.tweens);
-  const env: FieldEnv = { ctx, battle, art, ground, time: 0 };
+  const env: FieldEnv = { ctx, battle, art, buffs: new BuffBoard(), ground, time: 0 };
 
   const background = new Background(layers.background, ctx.run.init.chapter);
   background.resize(ctx.layout);
@@ -45,6 +47,8 @@ export function createField(ctx: BattleContext): FieldPart {
   const cells = new CellLayer(layers.floor, layers.projectiles, art);
   // Where the toys that boost a row or a ring of cells work: over the cats, under the shots.
   const toys = new ToyMarks(env, layers.floor, layers.projectiles, art);
+  // Where a trickster's help reaches and who gets it: the same layers, over the cats (each cat wears its own badges).
+  const buffs = new BuffMarks(env, layers.floor, layers.projectiles, art);
   const preview = new DragPreview(env, layers.floor, layers.projectiles);
   // Field space, above the HUD (the overlay layer, under the director's banners): where a cat is shown while it is held over the sell strip.
   const lift = new Container();
@@ -108,6 +112,7 @@ export function createField(ctx: BattleContext): FieldPart {
       if (!ctx.paused) env.time += dt;
       // A selection whose cat has left (merged away, sold) is dropped.
       if (ctx.selected !== null && (battle.units[ctx.selected] ?? null) === null) ctx.select(null);
+      env.buffs.refresh(battle.units);
       units.update(dt, ctx.selected);
       enemies.update(dt);
       shots.update();
@@ -117,6 +122,7 @@ export function createField(ctx: BattleContext): FieldPart {
       updateCells(dt);
       cells.update(dt, env.time);
       toys.update(dt, input.dragFrom ?? -1);
+      buffs.update(dt, input.dragFrom ?? -1, input.hover);
       laser.update(dt, env.time);
       ground.update(dt);
       spares.update(dt);
@@ -131,6 +137,7 @@ export function createField(ctx: BattleContext): FieldPart {
       input.destroy();
       sunNote.destroy();
       toys.destroy();
+      buffs.destroy();
       laser.destroy();
       effects.destroy();
       marks.destroy();

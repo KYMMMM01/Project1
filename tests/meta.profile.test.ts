@@ -34,7 +34,7 @@ const REASONS: readonly Reason[] = [
   'chest_overflow', 'chest_skip', 'patrol', 'patrol_double', 'mission', 'mission_chest', 'weekly_mission', 'calendar',
   'comeback', 'treat', 'snack_chest', 'shop_buy', 'shop_refresh', 'ticket_buy', 'ticket_ad', 'ticket_daily', 'pass_free',
   'pass_premium', 'account_level', 'cup', 'endless', 'cosmetic_buy', 'piggy', 'iap', 'iap_revoke', 'gem_pass',
-  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation',
+  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'test',
 ];
 
 describe('the one money path', () => {
@@ -155,7 +155,7 @@ describe('runs', () => {
     expect(d.day.missions.progress).toEqual([1, 20, 4, 5, 1]);
     expect(d.pending).toBeNull();
     expect(d.lastRun).toMatchObject({ gold: 470, xp: 58, firstClear: true, doubled: false });
-    expect(unlocks).toEqual(['speed2x', 'cats', 'patrol', 'daily', 'sweep', 'cup']);
+    expect(unlocks).toEqual(['speed2x', 'cats', 'patrol', 'daily', 'sweep', 'cup', 'dungeon']);
     expect(ads.runs).toEqual(['begin', 'victory']);
     expect(rig.analytics.map((a) => a.event).filter((e) => e === 'run_start' || e === 'run_end')).toEqual(['run_start', 'run_end']);
 

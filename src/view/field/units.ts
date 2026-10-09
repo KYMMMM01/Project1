@@ -11,6 +11,7 @@ import type { FieldEnv } from './env';
 import { Arrivals } from './arrivals';
 import { NEW_TAG_SECONDS, tossFor } from '../toss';
 import { MERGE_SECONDS, MOLT_SECONDS, QUICK_REVEAL_WINDOW, REVEAL_DELAY, REVEAL_MS, REVEAL_OVERSHOOT, SLIDE_SECONDS } from '@/view/timing';
+import { receivedMask } from './buffMath';
 import { hopArc } from './motion';
 import { liftsAboveHud } from './policy';
 import { UnitView, type ExitMode } from './unitView';
@@ -75,7 +76,7 @@ export class UnitViews {
 
   /** Follow the board: create, step and retire views. Call once per frame after the simulation has stepped. */
   update(dt: number, selected: number | null): void {
-    const { battle } = this.env;
+    const { battle, buffs } = this.env;
     const time = this.env.time;
     this.frame++;
     for (let cell = 0; cell < CELL_COUNT; cell++) {
@@ -84,7 +85,7 @@ export class UnitViews {
       let v = this.byUid.get(u.uid);
       if (!v) v = this.create(u, 'pop');
       v.mark = this.frame;
-      v.step(dt, time, u, cell === selected);
+      v.step(dt, time, u, cell === selected, receivedMask(buffs.at(cell)));
       this.seat(v);
       this.syncSwirl(v, u);
       if (v.awaiting) this.checkReveal(v);

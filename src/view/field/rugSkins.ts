@@ -52,7 +52,7 @@ export function rugSkin(id: string): RugSkin {
   return byId.get(id) ?? (byId.get(DEFAULT_RUG) as RugSkin);
 }
 
-/** The paper of the twenty cell squares: the sheet a shade darker, so cells read as pieces laid on it. */
+/** The paper of the cell squares: the sheet a shade darker, so cells read as pieces laid on it. */
 export function cellPaper(skin: RugSkin): number {
   return mixColor(skin.paper, Color.shadow, 0.1);
 }

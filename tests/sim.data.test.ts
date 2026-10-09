@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CLASS_IDS, ENEMY_IDS, RELIC_IDS, UNIT_IDS } from '@/game/api';
 import {
-  ACT_LENGTH, BOSS_HP, CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, ELITE_HP, ENDLESS_GROWTH, HP_INDEX, SUMMON_ODDS,
-  WAVE_BUDGET, hpIndex, specialHp, specialLimit,
+  ACT_LENGTH, BOSS_HP, CC_IMMUNE_AFTER, CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, ELITE_HP, ENDLESS_GROWTH, HP_INDEX, PULL_IMMUNE_AFTER,
+  SUMMON_ODDS, WAVE_BUDGET, hpIndex, specialHp, specialLimit,
 } from '@/game/data/balance';
 import { allClassDefs, classDef, synergyTier, tierForDistinct } from '@/game/data/classes';
 import { allEnemyDefs, bossSpec, budgetMult, enemyDef } from '@/game/data/enemies';
@@ -11,7 +11,7 @@ import { allRelicDefs, relicDef, relicSpec } from '@/game/data/relics';
 import { RARITIES, RELIC_RARITY, UNIT_GRID, unitClass, unitRarityIndex } from '@/game/data/roster';
 import { STAKE_STEPS, stakeRules, stakeText } from '@/game/data/stakes';
 import { TRAINING, TRAINING_IDS, trainingBonus } from '@/game/data/training';
-import { allUnitDefs, unitDef, unitSpec } from '@/game/data/units';
+import { allUnitDefs, auraScale, unitDef, unitSpec } from '@/game/data/units';
 import { actFeatures, chapterWaves, entriesBudget, scriptFor, waveEntries, waveKindOf } from '@/game/data/waves';
 import { getLang, setLang, t } from '@/core/i18n';
 import '@/game/index';
@@ -87,7 +87,13 @@ describe('unit table', () => {
     };
     for (const d of allUnitDefs()) {
       const spec = unitSpec(d.id);
-      const known = numbers([spec.attack, spec.aura, spec.base.critMult, spec.base.crit], new Set<number>());
+      // The windows the black hole and the freeze quote are rules of the whole game (data/balance), a bell's chance
+      // grows with its level-7 perk, and the cells around a helper follow from its reach: all data too.
+      const around = (2 * (spec.aura.reach ?? 0) + 1) ** 2 - 1;
+      const known = numbers(
+        [spec.attack, spec.aura, spec.base.critMult, spec.base.crit, CC_IMMUNE_AFTER, PULL_IMMUNE_AFTER, (spec.aura.dodge ?? 0) * auraScale(spec, 7), around],
+        new Set<number>(),
+      );
       for (const [key, value] of Object.entries(spec.skillArgs)) {
         expect(known.has(value), `${d.id} skill {${key}} = ${value}`).toBe(true);
       }
@@ -182,10 +188,10 @@ describe('classes and synergy', () => {
   });
 
   it('keeps the rule values of §6', () => {
-    expect(synergyTier('warrior', 3).damage).toBe(0.72);
-    expect(synergyTier('warrior', 3).armorIgnore).toBe(0.4);
-    expect(synergyTier('ranger', 2).critMult).toBe(0.3);
-    expect(synergyTier('mage', 2).statusMult).toBe(0.25);
+    expect(synergyTier('warrior', 3).damage).toBe(0.65);
+    expect(synergyTier('warrior', 3).armorIgnore).toBe(0.3);
+    expect(synergyTier('ranger', 2).critMult).toBe(0.05);
+    expect(synergyTier('mage', 2).statusMult).toBe(0.2);
     expect(synergyTier('trickster', 3).rewardMult).toBe(0.3);
     expect(synergyTier('trickster', 0).speed).toBe(0);
   });
@@ -198,8 +204,8 @@ describe('classes and synergy', () => {
       }
     }
     setLang('en');
-    expect(classDef('warrior').tierText(2)).toContain('36');
-    expect(classDef('warrior').tierText(2)).toContain('20');
+    expect(classDef('warrior').tierText(2)).toContain('30');
+    expect(classDef('warrior').tierText(2)).toContain('15');
   });
 });
 

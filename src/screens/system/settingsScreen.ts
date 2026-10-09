@@ -8,7 +8,7 @@ import { isStorageVolatile, onStorageVolatile } from '@/core/save';
 import { uiTweens } from '@/core/tween';
 import type { NumbersMode } from '@/fx';
 import { guideProgress, openGuide, type GuideHost } from '@/guide';
-import { profile } from '@/meta';
+import { bundleParts, errorKey, profile } from '@/meta';
 import { iap } from '@/platform';
 import { backOut, Button, Color, drawIcon, fitLabel, motion, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, TweenBag, uiLabel } from '@/ui';
 import { refusalCue } from '@/ui/press';
@@ -16,11 +16,13 @@ import { shell } from '@/screens/shell/controller';
 import { clearPointer, showPointer } from '@/screens/shell/HomePointer';
 import { currentSettings, ensureSettings, updateSettings } from '@/view/hud/settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '@/view/hud/settingsMath';
+import { playClaim } from '@/screens/battle/claim';
 import { CodeExportPopup, CodeImportPopup } from './backupPopups';
 import { paperSheet } from './kit/sheets';
 import { routinePrefs, setQuality } from './prefs';
 import { resetProgress } from './resetProgress';
 import { QUALITIES, type Quality } from './settingsModel';
+import { testBundle, testTools, type TestTool } from './testTools';
 import { askReplayTutorial, startTutorialReplay } from './tutorialReplay';
 import { formSheet, LABEL_OVERHANG, type FormRow } from './settingsForm';
 import { GAME_VERSION } from './strings';
@@ -35,6 +37,8 @@ const REPLAY_H = 96;
 const LANG_SLIDE = 0.2;
 const RELAY_DROP = 18;
 const RELAY_BEAT = 0.05;
+
+const TEST_ICON: Record<TestTool['currency'], 'coin' | 'gem' | 'ticket'> = { gold: 'coin', gems: 'gem', tickets: 'ticket' };
 
 const LINK_LABEL: Record<LegalLinkId, string> = {
   privacy: 'rt.sys.link.privacy',
@@ -152,6 +156,29 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     draw: (row, w) => {
       const b = new Button({ label: t(LINK_LABEL[link.id]), style: 'neutral', width: w - SIDE * 2, height: LINK_H, fontSize: 32 });
       b.onTap(() => openLegalLink(link.url));
+      b.position.set(w / 2, (LINK_H + 24) / 2);
+      row.addChild(b);
+    },
+  });
+
+  /** One test button: the currency arrives through the meta layer and flies to the top bar like any claim. */
+  const testRow = (tool: TestTool): FormRow => ({
+    height: LINK_H + 24,
+    draw: (row, w) => {
+      const label = t('rt.sys.test.' + tool.currency, { n: tool.amount.toLocaleString('en-US') });
+      const b = new Button({ label, icon: TEST_ICON[tool.currency], style: 'neutral', width: w - SIDE * 2, height: LINK_H, fontSize: 32 });
+      b.onTap(() => {
+        const r = profile.grantTest(tool.currency, tool.amount);
+        if (!r.ok) {
+          refusalCue();
+          toast(t(r.error === 'limit_reached' ? 'rt.sys.test.full' : errorKey(r.error)), 'warning');
+          return;
+        }
+        playClaim(b, bundleParts(testBundle(tool.currency, r.value)), shell);
+        // The balances are behind this sheet: say what arrived.
+        toast(t('rt.sys.test.got', { what: label }), 'success');
+        onChanged();
+      });
       b.position.set(w / 2, (LINK_H + 24) / 2);
       row.addChild(b);
     },
@@ -288,6 +315,17 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
       const version = versionLabel();
       version.position.set(w / 2, y + 36 + 20);
       scaffold.content.addChild(version);
+      y += 80 + GAP + LABEL_OVERHANG;
+    }
+
+    // At the very bottom, and only in a build for the development platform: the buttons testers use to skip the grind.
+    const tools = testTools();
+    if (tools.length > 0) {
+      const hint = uiLabel(t('rt.sys.test.hint'), { size: 26, color: Color.inkSoft, wrap: w - SIDE * 2, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 36 });
+      add(t('rt.sys.section.test'), [
+        { height: 24 + Math.ceil(hint.height), draw: (row) => { hint.position.set(SIDE, 12); row.addChild(hint); } },
+        ...tools.map(testRow),
+      ]);
     }
     scaffold.refresh();
   };

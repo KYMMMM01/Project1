@@ -92,4 +92,12 @@ describe('hud strings', () => {
       expect(/(요|요!|요\.|요\?)$/.test(t(key)), key).toBe(true);
     }
   });
+
+  it('keeps every class role to the two lines the class sheet gives it above the ladder', () => {
+    // The sheet wraps the role at 458 px of 26 px type: about 40 English or 26 Korean characters a line.
+    for (const [lang, limit] of [['ko', 52], ['en', 80]] as const) {
+      setLang(lang);
+      for (const id of ['warrior', 'ranger', 'mage', 'trickster']) expect(t(`class.${id}.role`).length, `${lang} ${id}`).toBeLessThanOrEqual(limit);
+    }
+  });
 });

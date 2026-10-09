@@ -5,6 +5,7 @@
  * follows from the unit table alone.
  */
 import {
+  SYNERGY_MIN_RANK,
   SYNERGY_TIER_AT,
   UNIT_GRID,
   mergeResultOf,
@@ -24,6 +25,11 @@ type BoardLike = ReadonlyArray<{ readonly id: UnitId } | null>;
 /** The five rank slots of a class, common to mythic. */
 export function ladderOf(classId: ClassId): readonly UnitId[] {
   return UNIT_GRID[classId];
+}
+
+/** Which ranks of a class count toward its synergy: the ranks on the board, minus the first rank (the kitten), which never counts. */
+export function countedRanks(owned: readonly boolean[]): boolean[] {
+  return owned.map((on, rank) => on && rank >= SYNERGY_MIN_RANK);
 }
 
 /** How many cats of exactly this kind stand on the board. */

@@ -37,7 +37,7 @@ export type Reason =
   | 'weekly_mission' | 'calendar' | 'comeback' | 'treat' | 'snack_chest' | 'shop_buy' | 'shop_refresh'
   | 'ticket_buy' | 'ticket_ad' | 'ticket_daily' | 'pass_free' | 'pass_premium' | 'account_level' | 'cup'
   | 'endless' | 'cosmetic_buy' | 'piggy' | 'iap' | 'iap_revoke' | 'gem_pass' | 'offer_revive' | 'offer_double'
-  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation';
+  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation' | 'dungeon' | 'offer_dungeon' | 'test';
 
 // ───────────────────────────── rewards ─────────────────────────────
 
@@ -108,6 +108,23 @@ export interface MissionState {
   claimed: boolean[];
 }
 
+/** The gold dungeon's counters of one day. */
+export interface DungeonDay {
+  /** Entries used today (each run takes one when it starts). */
+  used: number;
+  /** Extra entries bought today (a rewarded ad or gems). */
+  bought: number;
+  /** The first victory of the day has paid its bonus. */
+  firstClear: boolean;
+}
+
+/** The best run of a tier (index = tier - 1) by gold. */
+export interface DungeonBest {
+  waves: number;
+  kills: number;
+  gold: number;
+}
+
 export interface DaySlice {
   date: string;
   missions: MissionState;
@@ -119,6 +136,7 @@ export interface DaySlice {
   patrolDoubles: number;
   chestSkips: number;
   challengeCleared: boolean;
+  dungeon: DungeonDay;
 }
 
 export interface WeekSlice {
@@ -172,6 +190,9 @@ export interface RunReward {
   xp: number;
   /** Everything else the run paid: chests, gems, cards, first-clear rewards. */
   bundle: Bundle;
+  /** Gold dungeon only: the kills, and the first-victory-of-the-day bonus that `gold` already holds. */
+  kills?: number;
+  bonus?: number;
   firstClear: boolean;
   doubled: boolean;
   newBest: boolean;
@@ -196,6 +217,7 @@ export interface ProfileData {
   /** cleared[c - 1] = how many stakes of chapter c are cleared in a row from stake 0 (0..6). */
   cleared: number[];
   endless: { best: number; week: string; weekBest: number; claimed: number[] };
+  dungeon: { best: DungeonBest[] };
   stats: RunStatsTotals;
   time: { lastSeenAt: number; lastActiveDate: string };
   day: DaySlice;

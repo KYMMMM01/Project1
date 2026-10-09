@@ -3,18 +3,21 @@ import type { DamageType, EnemyId, StatusKind } from '../api';
 import { pathPoint, type PathPoint } from '../geometry';
 import {
   AURA_TICK, BOSS_CAP_BURST, BOSS_FISH, BOSS_PURR, CC_IMMUNE_AFTER, DOT_TICK, ELITE_CC_FACTOR, ELITE_FISH, ELITE_PURR, ENRAGE_HP_FRACTION,
-  HASTE_CAP, LASER_VULNERABLE, SLOW_CAP, SLOW_CAP_BOSS, TICK, VULNERABLE_CAP,
+  HASTE_CAP, LASER_VULNERABLE, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, PULL_IMMUNE_AFTER, SLOW_CAP, SLOW_CAP_BOSS, TICK, VULNERABLE_CAP,
 } from '../data/balance';
 import { BOSS_SPECS, enemySpec } from '../data/enemies';
 import { addPurr, chefHarvest, earnFish } from './economy';
 import { pulseEnemy } from './hazards';
 import type { Sim } from './sim';
+import { queueShatter } from './specials';
 import {
-  ST_BLEED, ST_BREAK, ST_BURN, ST_DOT, ST_FREEZE, ST_HASTE, ST_POISON, ST_SLOW, ST_STUN, ST_VULN,
-  type SimEnemy, type SimUnit,
+  ST_BLEED, ST_BREAK, ST_BURN, ST_DOT, ST_FREEZE, ST_HASTE, ST_MAGIC, ST_POISON, ST_SLOW, ST_STUN, ST_VULN,
+  type SimEnemy, type SimUnit, type SimZone,
 } from './types';
 
 const point: PathPoint = { x: 0, y: 0, angle: 0 };
+/** Index of the mage class (the mages' third synergy step bursts the fallen). */
+const MAGE = 2;
 const AURA_EVERY = Math.round(AURA_TICK / TICK);
 
 export function spawnEnemy(s: Sim, id: EnemyId, travelled: number, baseHp: number, target: boolean, hpOverride = 0): SimEnemy {
@@ -27,7 +30,7 @@ export function spawnEnemy(s: Sim, id: EnemyId, travelled: number, baseHp: numbe
     vulnerable: false, hasted: false, focused: false, enraged: false, age: 0,
     spec, index: s.enemies.length, baseHp, speed: spec.speed, target, dead: false, mark: 0,
     isBoss: spec.traits.includes('boss'), isElite: spec.traits.includes('elite'),
-    mask: 0, slowUntil: 0, stunUntil: 0, freezeUntil: 0, ccImmuneUntil: 0, slowImmuneUntil: 0,
+    mask: 0, slowUntil: 0, stunUntil: 0, freezeUntil: 0, ccImmuneUntil: 0, slowImmuneUntil: 0, pullUid: 0, pullImmuneUntil: 0,
     burnDps: 0, burnUntil: 0, burnSrc: null, poisonDps: 0, poisonUntil: 0, poisonSrc: null,
     bleedDps: 0, bleedUntil: 0, bleedSrc: null, breakAmount: 0, breakUntil: 0, vulnAmount: 0, vulnUntil: 0,
     hasteAmount: 0, hasteUntil: 0, dotAt: 0,
@@ -319,6 +322,7 @@ export function killEnemy(s: Sim, e: SimEnemy, killer: SimUnit | null): void {
     }
   }
   chefHarvest(s, e.x, e.y);
+  if (s.special[MAGE] === 1 && !s.shattering && !e.isElite && !e.isBoss && (e.mask & ST_MAGIC) !== 0) queueShatter(s, e);
   if (e.target) s.onTargetKilled(e);
 }
 
@@ -392,11 +396,24 @@ export function updateEnemies(s: Sim): void {
   }
 }
 
-/** Moves an enemy back along the path (black hole). Never below the start. */
-export function pullEnemy(e: SimEnemy, distance: number): void {
-  e.travelled = e.travelled > distance ? e.travelled - distance : 0;
+/**
+ * Drags an enemy back along the path (black hole), never below the start, and returns how far it moved. The hole that caught an
+ * enemy keeps dragging it until it ends; no other hole drags it until `PULL_IMMUNE_AFTER` seconds after that. Elites and bosses
+ * move by a fraction of the pull.
+ */
+export function pullEnemy(s: Sim, e: SimEnemy, distance: number, zone: SimZone): number {
+  if (e.pullUid !== zone.uid) {
+    if (s.time < e.pullImmuneUntil) return 0;
+    e.pullUid = zone.uid;
+    e.pullImmuneUntil = s.time + zone.timeLeft + PULL_IMMUNE_AFTER;
+  }
+  const want = distance * (e.isBoss ? PULL_BOSS_FACTOR : e.isElite ? PULL_ELITE_FACTOR : 1);
+  const moved = want < e.travelled ? want : e.travelled;
+  if (moved <= 0) return 0;
+  e.travelled -= moved;
   pathPoint(e.travelled, point);
   e.x = point.x;
   e.y = point.y;
   e.angle = point.angle;
+  return moved;
 }

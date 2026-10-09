@@ -3,27 +3,29 @@
  *
  * Field space: origin at the field's top-left corner, x right, y down, in design pixels. The board
  * (the rug) sits in the middle; enemies walk a clockwise rounded-rectangle loop on the floor around
- * it and keep circling until killed.
+ * it and keep circling until killed. `COLS`, `ROWS` and the cell size are the only numbers that
+ * decide the size of the board and of the field: everything else (cell count, margins, the loop) follows.
  */
-export const FIELD_W = 720;
-export const FIELD_H = 624;
-
 export const COLS = 5;
-export const ROWS = 4;
+export const ROWS = 5;
 export const CELL_COUNT = COLS * ROWS;
 export const CELL_W = 108;
-export const CELL_H = 112;
+export const CELL_H = 96;
 
-export const BOARD_X = (FIELD_W - COLS * CELL_W) / 2; // 90
-export const BOARD_Y = (FIELD_H - ROWS * CELL_H) / 2; // 88
 export const BOARD_W = COLS * CELL_W; // 540
-export const BOARD_H = ROWS * CELL_H; // 448
+export const BOARD_H = ROWS * CELL_H; // 480
 
-/** Centre line of the enemy loop. */
-export const PATH_LEFT = 45;
-export const PATH_RIGHT = FIELD_W - 45;
-export const PATH_TOP = 44;
-export const PATH_BOTTOM = FIELD_H - 44;
+/** The field is as wide as the screen's design width; the same floor margin runs round the board on every side. */
+export const FIELD_W = 720;
+export const BOARD_X = (FIELD_W - BOARD_W) / 2; // 90
+export const BOARD_Y = BOARD_X; // 90
+export const FIELD_H = BOARD_H + 2 * BOARD_Y; // 660: exactly the band between the HUD blocks on a 1280 screen
+
+/** Centre line of the enemy loop: the middle of the floor margin. */
+export const PATH_LEFT = BOARD_X / 2;
+export const PATH_RIGHT = FIELD_W - PATH_LEFT;
+export const PATH_TOP = BOARD_Y / 2;
+export const PATH_BOTTOM = FIELD_H - PATH_TOP;
 export const PATH_RADIUS = 36;
 /** Visual width of the walkway the enemies use. */
 export const LANE_WIDTH = 82;
@@ -164,6 +166,23 @@ export function isEdgeCell(cell: number): boolean {
   const c = cellCol(cell);
   const r = cellRow(cell);
   return c === 0 || r === 0 || c === COLS - 1 || r === ROWS - 1;
+}
+
+/**
+ * The cells a team effect (a bell kitten's attack speed and ward, a bard's damage) reaches from `cell`: every other cell within `reach`
+ * cells in both directions, so reach 1 (the default, and what the cats' data asks for) is the 8 cells around it, diagonals included.
+ * The simulation and the board's buff markers both read this one function, so changing the shape of those effects changes both.
+ */
+export function auraCells(cell: number, out: number[] = [], reach = 1): number[] {
+  out.length = 0;
+  const c = cellCol(cell);
+  const r = cellRow(cell);
+  for (let row = Math.max(0, r - reach); row <= Math.min(ROWS - 1, r + reach); row++) {
+    for (let col = Math.max(0, c - reach); col <= Math.min(COLS - 1, c + reach); col++) {
+      if (row !== r || col !== c) out.push(cellIndex(col, row));
+    }
+  }
+  return out;
 }
 
 /** Up / down / left / right neighbours. Appends into `out` when given and returns it. */

@@ -155,7 +155,7 @@ export const FIRST_CLEAR_CHEST: readonly Bundle[] = [
 
 export const FEATURES = [
   'speed2x', 'cats', 'patrol', 'missions', 'shop', 'treat', 'piggy', 'cosmetics',
-  'pass', 'daily', 'sweep', 'cup', 'endless', 'speed3x',
+  'pass', 'daily', 'sweep', 'cup', 'endless', 'speed3x', 'dungeon',
 ] as const;
 export type FeatureId = (typeof FEATURES)[number];
 
@@ -183,4 +183,5 @@ export const FEATURE_RULES: Readonly<Record<FeatureId, FeatureRule>> = {
   cup: { chapter: 1 },
   endless: { chapter: 2 },
   speed3x: { butler: true },
+  dungeon: { chapter: 1 },
 };

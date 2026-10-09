@@ -8,7 +8,7 @@ import { audio } from '@/audio';
 import { t } from '@/core/i18n';
 import { Ease, type Tween } from '@/core/tween';
 import { Trauma, screenFx } from '@/fx';
-import { CELL_COUNT } from '@/game/geometry';
+import { CELL_COUNT, FIELD_H } from '@/game/geometry';
 import { label } from '@/ui/text';
 import { Color } from '@/ui/theme';
 import type { BannerService } from './banners';
@@ -133,7 +133,7 @@ export function mountFlow(stage: Stage, on: Bus, banners: BannerService, music: 
         overflowing = true;
         applyDanger();
       }
-      host.position.set(l.w / 2, l.fieldY + 330);
+      host.position.set(l.w / 2, l.fieldY + FIELD_H / 2);
       if (secs !== shownSecs) {
         shownSecs = secs;
         digits.text = String(secs);

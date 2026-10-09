@@ -465,3 +465,10 @@ REQUESTS
 1. Art (`src/assets/img/fx_foe_haste.webp`, `fx_foe_heal.webp`, 2 x 15 KB; `art/fx_v3/build_fx.py` and `sheet_foe_rings.png`): no longer used by anything, delete them (every image is loaded at boot).
 2. Demo (`src/demo/FxDemo.ts` lines 768 and 769): `fx.enemyRing('haste', c.cx, c.cy, 80)` now draws a 160 px ring; a body is 29 across and the reach 120: `fx.enemyRing('haste', c.cx, c.cy, 29, 120)`.
 3. As before: lazy loading of the `fx_*` pictures (`src/core/assets.ts`), a shield-hit ping, `fmt` below 10,000.
+
+
+## 2026-10-09 batch
+
+Two small things on the fx side of the 5 x 5 board (the rest is in `field.md`): `numberPlan.ts` cuts the 720 x 660 field into 4 x 4 regions (`REGION_H` 165, was 156), and `fx/marks.ts` has `drawBuffMark` / `BuffMarkKind` (the badge of a cat a trickster helps, baked by the field's art and drawn on the selection sheet's chips). The frame time of the standard crowded wave before and after the board change is in `field.md` (mean 11.4 to 12.7 ms before, 10.5 to 12.3 after, 20 or 25 cats); its script is `tools/crowded_wave.js`.
+
+REQUESTS: none.

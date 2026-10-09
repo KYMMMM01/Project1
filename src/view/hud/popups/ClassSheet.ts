@@ -10,7 +10,7 @@ import { t } from '@/core/i18n';
 import { CLASS_UPGRADE_BONUS, SYNERGY_TIER_AT, classDef, type ClassId } from '@/game';
 import { Hand } from '../Hand';
 import { FROM_BELOW, pawBounds, placePaw, tipSpot } from '../handMath';
-import { Button, Color, drawDashedInset, drawIcon, drawPaper, drawPaperFace, fitLabel, Panel, paperSeed, Popup, punch, Staged, TweenBag, uiLabel } from '@/ui';
+import { Button, Color, drawDashedInset, drawIcon, drawPaper, drawPaperFace, fitLabel, Panel, paperSeed, Popup, punch, rarityName, Staged, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from '../env';
 import { ClassLadder, LADDER_H } from '../ClassLadder';
 import { CLASS_ACCENT, CLASS_ICON, Subs } from '../kit';
@@ -18,14 +18,23 @@ import { nextTierGoal, rankCounts } from '../planMath';
 
 const W = 672;
 const SIDE = 24;
+/** The first two steps state at most two lines; the third states the most (the rangers' three numbers). */
 const ROW_H = 80;
-const LADDER_Y = 160;
-const RULE_Y = LADDER_Y + LADDER_H + 26;
-const HEAD_Y = RULE_Y + 62;
+const LAST_ROW_H = 96;
+/** The ability of the third step: its name and two lines. */
+const SPECIAL_H = 118;
+const LADDER_Y = 140;
+/** The rule under the ladder is two sentences (the merge rule, and the kitten that does not count): up to three lines in English. */
+const RULE_Y = LADDER_Y + LADDER_H + 12;
+const HEAD_Y = RULE_Y + 108;
 const ROWS_Y = HEAD_Y + 42;
-const UPGRADE_Y = ROWS_Y + ROW_H * 3 + 18;
+const SPECIAL_Y = ROWS_Y + ROW_H * 2 + LAST_ROW_H + 6;
+const UPGRADE_Y = SPECIAL_Y + SPECIAL_H + 12;
 /** Centre of the column holding each step's dots and its count. */
 const DOTS_X = 100;
+/** Where a step's words begin and how wide they run (the check mark has the strip after them). */
+const TEXT_X = 170;
+const TEXT_W = W - TEXT_X - 80;
 
 interface TierRow {
   g: Graphics;
@@ -33,6 +42,13 @@ interface TierRow {
   check: Container;
   tier: number;
   need: number;
+  h: number;
+}
+
+/** The ability the third step adds: its own paper under the three steps. */
+interface Special {
+  g: Graphics;
+  check: Container;
 }
 
 /** The synergy steps, once built. */
@@ -40,6 +56,7 @@ interface Steps {
   haveT: Text;
   goalT: Text;
   rows: TierRow[];
+  special: Special;
 }
 
 /** The upgrade block, once built. */
@@ -124,8 +141,8 @@ export class ClassSheet extends Popup<void> {
     const ladder = new ClassLadder(this.classId, W - SIDE * 2 - 8);
     ladder.position.set(SIDE + 4, LADDER_Y);
     // The tutorial's first look at the sheet says what to look at and how to leave it.
-    const rule = uiLabel(this.env.lesson() === 'classes' ? t('guide.tut.sheet') : t('hud.class.rule'), { size: 24, color: Color.inkSoft, wrap: W - SIDE * 2 - 20, lineHeight: 30 });
-    rule.position.set(W / 2, RULE_Y + 18);
+    const rule = uiLabel(this.env.lesson() === 'classes' ? t('guide.tut.sheet') : `${t('hud.class.rule')}\n${t('hud.class.skip', { kitten: rarityName('common') })}`, { size: 24, color: Color.inkSoft, wrap: W - SIDE * 2 - 20, lineHeight: 30 });
+    rule.position.set(W / 2, RULE_Y + 44);
     this.panel.content.addChild(ladder, rule);
     this.ladder = ladder;
     this.refresh(false);
@@ -144,23 +161,33 @@ export class ClassSheet extends Popup<void> {
     for (let i = 0; i < 3; i++) {
       const tierNo = (i + 1) as 1 | 2 | 3;
       const need = SYNERGY_TIER_AT[i] ?? i + 2;
+      const h = tierNo === 3 ? LAST_ROW_H : ROW_H;
       const y = ROWS_Y + i * ROW_H;
       const g = new Graphics();
       g.position.set(0, y);
       // The dots sit over their count, centred in a column of their own.
       const dots = new Graphics();
-      dots.position.set(DOTS_X - (need * 22) / 2, y + ROW_H / 2 - 13);
-      const count = uiLabel(t(tierNo === 3 ? 'hud.class.need.more' : 'hud.class.need', { n: need }), { size: 24 });
+      dots.position.set(DOTS_X - (need * 22) / 2, y + h / 2 - 13);
+      const count = uiLabel(t('hud.class.need', { n: need }), { size: 24 });
       fitLabel(count, 110, 24, 0.8);
-      count.position.set(DOTS_X, y + ROW_H / 2 + 16);
-      const text = uiLabel(def.tierText(tierNo), { size: 26, wrap: W - 190 - 90, lineHeight: 32, align: 'left', anchorX: 0 });
-      text.position.set(190, y + ROW_H / 2);
+      count.position.set(DOTS_X, y + h / 2 + 16);
+      const text = uiLabel(def.tierText(tierNo), { size: 24, wrap: TEXT_W, lineHeight: 28, align: 'left', anchorX: 0 });
+      text.position.set(TEXT_X, y + h / 2);
       const check = drawIcon('check', 38);
-      check.position.set(W - SIDE - 34, y + ROW_H / 2);
+      check.position.set(W - SIDE - 34, y + h / 2);
       c.addChild(g, dots, count, text, check);
-      rows.push({ g, dots, check, tier: tierNo, need });
+      rows.push({ g, dots, check, tier: tierNo, need, h });
     }
-    this.steps = { haveT, goalT, rows };
+    const sg = new Graphics();
+    sg.position.set(0, SPECIAL_Y);
+    const name = uiLabel(t('hud.class.special', { n: SYNERGY_TIER_AT[2] ?? 4, name: t(def.specialNameKey) }), { size: 26, anchorX: 0, align: 'left' });
+    name.position.set(SIDE + 20, SPECIAL_Y + 26);
+    const words = uiLabel(def.specialText(), { size: 24, color: Color.inkSoft, wrap: W - (SIDE + 20) * 2, lineHeight: 28, align: 'left', anchorX: 0, anchorY: 0 });
+    words.position.set(SIDE + 20, SPECIAL_Y + 46);
+    const sCheck = drawIcon('check', 38);
+    sCheck.position.set(W - SIDE - 34, SPECIAL_Y + 26);
+    c.addChild(sg, name, words, sCheck);
+    this.steps = { haveT, goalT, rows, special: { g: sg, check: sCheck } };
     this.refresh(false);
   }
 
@@ -213,7 +240,7 @@ export class ClassSheet extends Popup<void> {
     r.check.visible = lit;
     r.g.clear();
     const face = {
-      w: W - SIDE * 2, h: ROW_H - 12, radius: 20, fill: lit ? Color.paperLight : Color.paperDim,
+      w: W - SIDE * 2, h: r.h - 12, radius: 20, fill: lit ? Color.paperLight : Color.paperDim,
       edge: lit ? accent : Color.kraftDark, edgeWidth: lit ? 3 : 2, edgeAlpha: lit ? 0.95 : 0.4, grain: false, seed: this.seed + r.tier,
     } as const;
     drawPaperFace(r.g, SIDE, 6, face);
@@ -223,6 +250,19 @@ export class ClassSheet extends Popup<void> {
       const on = i < distinct;
       r.dots.circle(i * 22 + 11, 0, 9).fill(on ? accent : Color.paperDim).stroke({ width: 2.5, color: on ? Color.ink : Color.kraftDark });
     }
+  }
+
+  /** The ability's paper: lit with the class colour while the third step is on, dim paper before. */
+  private drawSpecial(s: Special, on: boolean): void {
+    const accent = CLASS_ACCENT[this.classId];
+    s.check.visible = on;
+    s.g.clear();
+    const face = {
+      w: W - SIDE * 2, h: SPECIAL_H - 12, radius: 20, fill: on ? Color.paperLight : Color.paperDim,
+      edge: on ? accent : Color.kraftDark, edgeWidth: on ? 3 : 2, edgeAlpha: on ? 0.95 : 0.4, grain: false, seed: this.seed + 4,
+    } as const;
+    drawPaperFace(s.g, SIDE, 6, face);
+    if (on) drawDashedInset(s.g, SIDE, 6, face, 6, { color: accent, width: 2.5, dash: 10, gap: 7 });
   }
 
   /** Brings what is built so far up to date; a part that comes later is brought up to date when it is built. */
@@ -239,6 +279,7 @@ export class ClassSheet extends Popup<void> {
       fitLabel(steps.goalT, W - SIDE * 2 - 8 - steps.haveT.width - 16, 24, 0.75);
       const tier = b.synergyTier(id);
       for (const r of steps.rows) this.drawRow(r, distinct, tier);
+      this.drawSpecial(steps.special, tier >= 3);
       if (animate && tier > this.tierNow && this.tierNow >= 0) punch(this.bag, this.panel, 0.03, 0.2);
       this.tierNow = tier;
     }

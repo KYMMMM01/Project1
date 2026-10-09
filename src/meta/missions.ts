@@ -24,6 +24,7 @@ export function freshDay(date: string): DaySlice {
     patrolDoubles: 0,
     chestSkips: 0,
     challengeCleared: false,
+    dungeon: { used: 0, bought: 0, firstClear: false },
   };
 }
 

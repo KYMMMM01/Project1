@@ -406,6 +406,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     };
     if (levelAfter > levelBefore) callout(t('hud.res.level', { a: levelBefore, b: levelAfter }), 'mustard', 0.5);
     if (reward.firstClear) callout(t('hud.res.firstClear', { chapter: reward.chapter, stake: reward.stake }), 'success', 0.8);
+    if (reward.bonus) callout(t('hud.res.dungeonBonus', { n: reward.bonus }), 'success', 1.0);
     if (reward.newBest) callout(t('hud.res.newBest'), 'primary', null);
 
     const tiles = rewardTiles(0, 0, reward.bundle);
@@ -535,8 +536,11 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     });
     retry.position.set(box.retry.x, box.retry.y);
     retry.onTap(() => handlers.retry());
+    // A run that needs something the day has run out of (the gold dungeon's entry) cannot be played again: its button is greyed and the way home pulses.
+    const again = env.ctx.run.canRetry?.() ?? true;
+    retry.setEnabled(again);
     bar.addChild(home, retry);
-    let main: Button = retry;
+    let main: Button = again ? retry : home;
     if (next && box.next) {
       const text = nextText(env.ctx.run.init, next);
       const go = new Button({

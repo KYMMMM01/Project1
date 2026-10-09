@@ -20,7 +20,6 @@ export interface SimUnit extends UnitState {
   spec: UnitSpec;
   /** Index in UNIT_IDS (for per-unit totals). */
   unitIndex: number;
-  level: number;
   classIndex: number;
   rarityIndex: number;
   /** Time until which the unit is still dazed after leaving a hazard cell. */
@@ -31,10 +30,13 @@ export interface SimUnit extends UnitState {
   /** Next coin rain (lucky cat), 0 for cats without one. */
   coinAt: number;
   perk: PerkTotals;
-  /** Fraction of armour the unit ignores (warrior synergy). */
+  /** Fraction of armour the unit ignores (warrior synergy, every cat). */
   armorIgnore: number;
-  /** Multiplier on the status durations the unit inflicts (mage synergy). */
+  /** Multiplier on the status durations the unit inflicts (mage synergy, every cat). */
   statusMult: number;
+  /** Rolls made for the rangers' sure crit, and the interval in force (0 while their third synergy step is off). */
+  shots: number;
+  sureCritEvery: number;
   /** True once merged away, sold, molted or awakened. */
   removed: boolean;
 }
@@ -50,6 +52,8 @@ export const ST_BREAK = 64;
 export const ST_VULN = 128;
 export const ST_HASTE = 256;
 export const ST_DOT = ST_BURN | ST_POISON | ST_BLEED;
+/** The statuses the mages' third synergy step looks for on an enemy that falls. */
+export const ST_MAGIC = ST_SLOW | ST_FREEZE | ST_BURN | ST_POISON | ST_VULN;
 
 export interface SimEnemy extends EnemyState {
   spec: EnemySpec;
@@ -71,6 +75,9 @@ export interface SimEnemy extends EnemyState {
   freezeUntil: number;
   ccImmuneUntil: number;
   slowImmuneUntil: number;
+  /** The black hole that dragged it last, and when no hole may drag it again. */
+  pullUid: number;
+  pullImmuneUntil: number;
   burnDps: number;
   burnUntil: number;
   burnSrc: SimUnit | null;

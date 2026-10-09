@@ -11,7 +11,8 @@ import { TAU, mixColor } from '@/core/math';
 import { Color, RARITY_ORDER, Rarity, TapeColors, drawDashedRect, drawIcon, drawPaperFace, type IconName, type RarityId } from '@/ui';
 import type { ClassId } from '@/game/api';
 import { CELL_H, CELL_W } from '@/game/geometry';
-import { Light, drawPaw, drawSunMark, drawTargetMark } from '@/fx';
+import { Light, drawBuffMark, drawPaw, drawSunMark, drawTargetMark } from '@/fx';
+import { BADGE_KINDS, type BadgeKind } from './buffMath';
 import { RING_LOOKS, RING_SIZES, type RingLook } from './shieldRing';
 
 const CLASS_ICON: Record<ClassId, IconName> = {
@@ -116,7 +117,15 @@ export interface FieldArt {
   toss: Record<RarityId, Texture>;
   /** The thin rounded frame a positional toy draws round a cell it boosts, white (tint it), baked at each of `TOY_INSETS` so the frames of toys on one cell nest. */
   toyFrame: readonly Texture[];
+  /** The badge of a buffed cat, one per kind that has one (mustard, dark glyph), and the dotted frame round a cell a helper reaches (white, tint it). */
+  buffBadge: Record<BadgeKind, Texture>;
+  reachFrame: Texture;
+  /** A thin ellipse round a buffed cat's shadow (mustard; its opacity breathes slowly). */
+  buffRing: Texture;
 }
+
+/** The buff badge's half width (rim included), design px. */
+export const BUFF_R = 12.5;
 
 /** How far in from the cell's edge each nested toy frame lies, px: the outermost first. */
 export const TOY_INSETS: readonly number[] = [4, 9, 14];
@@ -187,6 +196,13 @@ export function fieldArt(): FieldArt {
     toyFrame: TOY_INSETS.map((inset) =>
       bake(gfx((g) => g.roundRect(-CELL_W / 2 + inset, -CELL_H / 2 + inset, CELL_W - 2 * inset, CELL_H - 2 * inset, 20 - inset / 2).stroke({ width: 2.6, color: Color.white, join: 'round' })), CELL_W, CELL_H),
     ),
+    buffBadge: bakeBuffBadges(),
+    reachFrame: bake(
+      gfx((g) => drawDashedRect(g, -(CELL_W - 12) / 2, -(CELL_H - 12) / 2, CELL_W - 12, CELL_H - 12, { radius: 22, color: Color.white, width: 3, dash: 7, gap: 8, seed: 0x7119 })),
+      CELL_W,
+      CELL_H,
+    ),
+    buffRing: bake(gfx((g) => g.ellipse(0, 0, 46, 13.5).stroke({ width: 2.6, color: Color.mustardDark })), 100, 34),
   };
   return cached;
 }
@@ -377,6 +393,12 @@ function bakeShieldRings(): Record<RingLook, Texture[]> {
       );
     }
   }
+  return out;
+}
+
+function bakeBuffBadges(): Record<BadgeKind, Texture> {
+  const out = {} as Record<BadgeKind, Texture>;
+  for (const kind of BADGE_KINDS) out[kind] = bake(gfx((g) => drawBuffMark(g, BUFF_R, kind)), 2 * BUFF_R + 6, 2 * BUFF_R + 6);
   return out;
 }
 

@@ -58,6 +58,12 @@ function nextRunOf(init: BattleInit): () => NextRun | null {
   };
 }
 
+/** The gold dungeon takes an entry for every run: another one may start only while the day has one left. */
+export function dungeonEntryLeft(): boolean {
+  profile.refresh();
+  return profile.dungeonView().entriesLeft > 0;
+}
+
 function runConfig(init: BattleInit, snapshot?: BattleSnapshot | null): RunConfig {
   return {
     init,
@@ -67,6 +73,7 @@ function runConfig(init: BattleInit, snapshot?: BattleSnapshot | null): RunConfi
     runsPlayed: profile.data.stats.runs,
     sandbox: false,
     next: nextRunOf(init),
+    ...(init.mode === 'gold' ? { canRetry: dungeonEntryLeft } : {}),
   };
 }
 
@@ -134,6 +141,11 @@ async function retry(previous: RunConfig): Promise<void> {
   retrying = true;
   try {
     const { mode, chapter, stake } = previous.init;
+    // A dungeon run takes an entry: with none left nothing is thrown away and nothing starts.
+    if (mode === 'gold' && !dungeonEntryLeft()) {
+      toast(t('meta.err.limit_reached'), 'warning');
+      return;
+    }
     // A restart leaves the run in progress as the pending one and a new run cannot be prepared over it: it is thrown away without a reward. After a result nothing is pending and this does nothing.
     await profile.discardPendingRun();
     await begin({ mode, chapter, stake }, undefined);

@@ -10,7 +10,7 @@ import './strings';
 
 export { profile, initMeta } from './instance';
 export { Profile, createProfile, systemClock, CUP_BOARD_ID } from './profile';
-export type { RunOptions, BackupPreview, SweepResult } from './profile';
+export type { RunOptions, BackupPreview, SweepResult, DungeonView, DungeonTierRow } from './profile';
 export type { MetaDeps, AdsPort } from './core';
 export type {
   PayVia, UnitView, TrainingRow, ShopView, TicketView, CosmeticRow, PiggyView,
@@ -34,6 +34,7 @@ export { ODDS, ODDS_VERSION, oddsView, percentText } from './odds';
 export type { OddsTable, OddsView, Guarantee, PityRule } from './odds';
 export { drawChest, chestTotals, pityTarget } from './chests';
 export { dailyCode, parseDailyCode, dailySetup, cupScore } from './daily';
+export { dungeonGold, dungeonWaveGold, dungeonMaxGold, dungeonFirstClearGold, dungeonTierOpen, dungeonTopTier, dungeonEntriesLeft } from './dungeon';
 export type { DailySetup } from './daily';
 export { shopOffers } from './shop';
 export type { ShopOffer } from './shop';

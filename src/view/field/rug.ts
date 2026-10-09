@@ -5,7 +5,7 @@ import { BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT, CELL_H, CELL_W, COLS } 
 import { SHEET_PAD } from '../layout';
 import { cellPaper, type RugSkin } from './rugSkins';
 
-/** Margin of the sheet around the 5 x 4 cells. */
+/** Margin of the sheet around the cells. */
 export const RUG_PAD = SHEET_PAD;
 export const RUG_X = BOARD_X - RUG_PAD;
 export const RUG_Y = BOARD_Y - RUG_PAD;
@@ -116,7 +116,7 @@ const PATTERNS: Record<RugSkin['pattern'], Pattern | null> = {
 /**
  * The board: a sheet of craft paper lying on the floor, built once from a skin and baked into one
  * texture. Hand-cut edge on a flat shadow, a flat pattern, a dashed line just inside, a strip of tape
- * at the top, and twenty slightly darker paper squares laid on it for the cells. Its origin is the
+ * at the top, and one slightly darker paper square per cell laid on it. Its origin is the
  * sheet's top-left corner at (RUG_X, RUG_Y) in field space.
  */
 export function buildRug(skin: RugSkin): Container {

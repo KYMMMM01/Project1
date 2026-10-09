@@ -156,3 +156,50 @@ New API, nothing else in the meta layer changed:
 - **Safety, as for a single open.** The whole pile is decided in one synchronous pass, `commit()` once, then `await flush()`, and only then does the call resolve; nothing is shown before it is on disk. If the app dies before the flush none of it happened; after it, every result is in `profile.data.reveals` and the replay after a restart shows them.
 - `ChestResult.batch?: number` (new, optional): set to the id of the first chest on every chest of a pile of two or more; the replay groups consecutive stored reveals with the same tag into one opening. `CHEST_BULK_MAX = 50` (`data/economy.ts`) caps a pile and is also how many stored reveals are kept (it was 20), so a pile never loses its first chests from the replay list. Saves written before this still load (the field is optional).
 - Tests (`tests/meta.chests.test.ts`, "opening a pile of chests"): for wooden, silver and gold, a pile of six equals six single opens (results, cards, wild, gold, `goldOpened`, ids, stored reveals); a pity bonus on exactly the tenth chest of a pile that starts at the eighth; two bonuses in a pile of twelve; stored before it resolves, a restart finds the whole pile tagged, acknowledging each id empties the list; asking for more than owned opens what is owned, the cap holds, an empty stock refuses with `nothing_to_claim`; a lone chest carries no tag.
+
+## 2026-10-09 batch (gold dungeon, test grants)
+
+Rules and numbers: `docs/명세_메타.md` section 13 (the spec is v1.1 now). Two items of the owner's batch: a daily dungeon for earning gold (directive 11) and a test button that adds gold (directive 14).
+
+**New files.** `src/meta/dungeon.ts` (pure rules: `dungeonWaveGold`, `dungeonGold`, `dungeonFirstClearGold`, `dungeonMaxGold`, `dungeonTierOpen`, `dungeonTopTier`, `dungeonEntriesLeft`, `dungeonCanBuy`), `src/meta/data/dungeon.ts` (every number), `src/game/data/goldDungeon.ts` (the eight waves, `goldDungeonScript(wave)`, `goldDungeonSpawns()` = 399). Tests: `tests/meta.dungeon.test.ts` (38), `tests/meta.dungeon.sim.test.ts` (10), `tests/screens.shell.dungeon.test.ts` (13).
+
+**Profile API.**
+```ts
+profile.dungeonView(): DungeonView        // unlocked, waves, tiers[5] { open, maxGold, bonus, best }, top, freeEntries, used, bought, entriesLeft, canBuy, entryGems, firstClearOpen
+await profile.buyDungeonEntry('ad' | 'gems'): Result<DungeonView>   // the day's one extra entry; only paid for here, the run takes it when it starts
+await profile.prepareRun({ mode: 'gold', chapter: tier })           // takes the entry NOW and flushes; no snack; stake 0
+profile.grantTest(currency, amount): Result<number>                 // development platform only (MetaDeps.testGrants)
+```
+`RunReward` gains optional `kills` and `bonus` (gold dungeon only; `gold` already holds the bonus). `DaySlice.dungeon = { used, bought, firstClear }`, `ProfileData.dungeon.best[5] = { waves, kills, gold }`; both default in old saves (deepFill) and are clamped by `normalizeProfile`. New feature id `dungeon` (chapter 1 cleared) with its strings, unlock popup row and jump target. New `Reason`s: `dungeon`, `offer_dungeon`, `test`.
+
+**Rules that matter.** The entry is taken when the run starts and saved with it (a discarded run, a killed app or a restart never gives it back, and never gives another). `finishRun` for a gold run needs the pending run that started it, so a second settlement, or one for a run that never started, returns `nothing_to_claim` (no double pay on restart; tested with `keepStorage` restarts and `settlePendingRun`). A run that ends after midnight belongs to the new day (same rule as every other slice). The "boss and elite" missions skip gold runs (`bossAndEliteKills`): the dungeon has no wave 4 elite. Payout `round((sum(8 + 2w) + 0.35 x kills) x chapter multiplier x (win ? 1.25 : 1))` plus 100 x multiplier for the first win of the day; full clear 345 / 448 / 551 / 689 / 861 per tier, a tier-3 day of two wins 1,262 (about 23% of a chapter-3 player's ~5,400 gold a day, the table is in the spec). Doubling on the result screen works as for every run.
+
+**Battle side (additive edits outside my paths, as the brief allowed).**
+- `src/game/api.ts`: `BattleMode` gains `'gold'`.
+- `src/game/sim/sim.ts`: imports `goldDungeonScript` / `GOLD_DUNGEON_WAVES` and `WaveScript` (the `waveKindOf` import is gone); `totalWaves` has a `gold` arm; new method `scriptOf(wave)` (gold script, else `scriptFor(scriptChapter, wave)`); `restore` (wave kind), `waveHealth` and `previewWave` call it.
+- `src/game/sim/flow.ts`: `ACT_LENGTH` import (the `waveKindOf` import is gone); `buildSpawns` and `startWave` read the script through `s.scriptOf`; `endNormalWave` closes an act of the gold dungeon on the wave clock (`stage = 'clearing'`, the usual clear delay, then `completeAct`: act reward, toy offer, and after wave 8 the victory).
+- Nothing in geometry, units, synergy or the other modes moved; `scriptOf` returns exactly what the old calls returned for them (the whole existing suite stays green).
+
+**Measured (not tuned against).** Bots on the 5x5 board, tiers 1 / 3 / 5 x unit level 1 / 3 / 6, 12 seeds: synergy bot wins 75 to 100% (kills 326 to 396), the merge-only bot 58 to 100% (kills 283 to 369); a win takes 126 s of game time. After the unit-rule change a re-measure is due: the spawn count (399) and the payout table do not depend on the rules, the win rate does.
+
+**Verified in the browser** (Aside, port 5199, ko and en, 720 x 1280 and 1600): the card locked / entries left / none left with ad + gems / all used; real taps on the tier stepper, the gem entry (30 gems paid, "Entries 1/3", pre-run opens, back keeps the entry), a whole run from the card through the pre-run page to the result (+500 gold with the 160 first-win bonus, XP +26, "최고 기록!" callout, the "홈" button, then the top bar counting up while the coins fly in), day rollover (`advance({days:1})`: entries 2/2, bonus open again), a run left pending and given up from the "continue?" prompt (nothing paid twice, entries unchanged after a reload), the settings test block (all three buttons, flight and toast). Not tapped in the browser: the result screen's "다시 도전" with no entry left (covered by the guard in `retry`, not by a test).
+
+**Known gaps.**
+- The ad button of the extra entry stays off until the platform row exists (REQUEST 1). Proven with the row added at run time in the page: the test ad opens (`dungeon_entry`), the claim books the entry, the pre-run page follows.
+- A run the app dies in pays by the last saved wave only (kills are not in `RunStats` of an interrupted run: `interruptedStats`).
+- The restart in the pause menu takes a second entry (the first is already gone); with none left it now only shows a toast and keeps the current run (`src/app/flow.ts`).
+
+**REQUESTS (outside my paths).**
+1. `src/platform/adPolicy.ts`: add `'dungeon_entry'` to `AD_PLACEMENT_IDS` and `dungeon_entry: { daily: 1, home: true }` to `AD_PLACEMENTS`; `src/platform/adapters/devOverlay.ts`: `'platform.placement.dungeon_entry': '골드 던전 입장'` / `'Gold Dungeon entry'` (a test checks every placement has a string); `tests/platform.adPolicy.test.ts`: the pinned table gets the row. Nothing else: the meta layer already asks for `DUNGEON_AD_PLACEMENT`.
+2. `src/guide`: a topic for the dungeon. `topics.ts`: `T('gold_dungeon', 'home', ico('coin'), { tab: 'battle', point: 'battle.dungeon' })` and `'battle.dungeon'` in `HomePoint` (the battle tab already answers it); `facts.ts`: `gold_dungeon: () => ({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES, gems: DUNGEON_ENTRY_GEMS, win: DUNGEON_VICTORY_MULT, bonus: DUNGEON_FIRST_CLEAR_GOLD })`; `stringsKo.ts`: title `골드 던전`, teach `하루 두 번, 짧은 판으로 골드를 모아요.`, full `{waves}웨이브를 버티는 2분짜리 판이에요. 보스는 없고, 넘긴 웨이브와 처치한 적의 수만큼 골드를 받아요.\n끝까지 막으면 {win}배, 그날 첫 클리어는 골드가 더 붙어요. 하루에 {free}번은 공짜이고, 한 번 더는 광고나 보석 {gems}개로 들어가요.\n단계는 깬 챕터만큼 열리고, 높을수록 골드를 더 줘요.`; `stringsEn.ts` the same in English.
+3. `src/view/hud` (result screen): show the first-clear bonus of a gold run (`RunReward.bonus`, "오늘 첫 클리어 +160") next to the new-best callout; hide or soften "다시 도전" when `profile.dungeonView().entriesLeft` is 0 (the click now only toasts). In the battle, a running "gold earned" readout and a coin pop on each kill would carry "enemies drop gold" (`RunReward.kills` x 0.35 is the rate); I have no art or HUD slot for it.
+4. `src/view/field/debug.ts`: `MODES` lacks `'gold'`, so `?scene=battle&mode=gold` falls back to a chapter run.
+
+
+## 2026-10-09 batch: the swap of the chef and the bell kitten
+
+One line outside the gold-dungeon work: `UNITS_BY_RARITY` (`src/meta/units.ts`) moved `t_chef` to common and `t_bell` to rare, with the sim's roster (`sim.md`, "2026-10-09 batch: rules v1.4"). A saved profile needs no migration: levels, cards and chest history are keyed by cat id, so the bell kitten keeps its level and cards and the chef keeps its own; what changes is the price of each cat's next level (rare table for the bell, common for the chef) and which card slot of a chest drops which cat. `tests/meta.rules.test.ts` (meta table against the sim's rarities) covers it.
+
+## 2026-10-09 batch: release test (gold dungeon)
+
+Played with real taps: home card (2 entries, tier stepper, first-clear sticker) -> pre-run page -> a won run (bot with the debug `win()`) -> result (+683 gold with the 250 first-clear bonus, shown now as its own line) -> home (entries 1/2, best 436 gold, sticker gone), then the last entry: the result's "다시 도전" is greyed because no entry is left (`RunConfig.canRetry`). The test block in the settings: "골드 +10,000" took 2,686 to 12,686 and 12,686 to 22,686 gold in Korean and English. The meta engineer's REQUESTS 1 to 4 are done (ad placement in `platform.md`, guide topic in `guide.md`, result bonus and retry in `hud.md`, `?scene=battle&mode=gold` in `view/field/debug.ts` `MODES`). Not tapped: buying the entry with the ad on a real SDK, a run killed by the app dying.

@@ -9,7 +9,7 @@ export const BOTTOM_PANEL_H = 452;
 
 /**
  * Scene-space rectangles of one battle screen. The field sits centred in the band left between the
- * two HUD blocks: on a 1280 design height the band is 660 tall so the field is nearly flush, and on
+ * two HUD blocks: on a 1280 design height the band is exactly the field's 660, so the field is flush with both, and on
  * taller screens the spare height is split evenly above and below it. When safe insets squeeze the
  * band below the field's height the field overlaps both blocks by the same amount (its outer lane
  * margins are empty floor, so only background is covered).
@@ -28,8 +28,8 @@ export function computeBattleLayout(w: number, h: number, safeTop: number, safeB
   };
 }
 
-/** Margin of the board's paper sheet around the 5 x 4 cells (the field draws the sheet; banners must stay clear of it). */
-export const SHEET_PAD = 14;
+/** Margin of the board's paper sheet around the cells (the field draws the sheet; banners must stay clear of it). */
+export const SHEET_PAD = 12;
 
 /** Nominal heights of the two routine banner rows and the gap between them (design px). */
 export const BANNER_TOP_H = 52;
@@ -52,7 +52,7 @@ export interface BannerSlots {
 /**
  * Where the routine banners (wave label, synergy, toys, boss captions) sit: in the free band between
  * the top HUD and the board's sheet, flush against the sheet, so they never cover a cat or a cell. The
- * band is 88 px on a 1280 screen and grows on taller ones; when it is shorter than both rows the rows
+ * band is 78 px on a 1280 screen and grows on taller ones; when it is shorter than both rows the rows
  * shrink to fit, and below the minimum scale they spill into the sheet's empty margin (the first cell
  * starts one margin below the sheet's edge).
  */
