@@ -5,8 +5,8 @@
  */
 import { ENEMY_IDS, UNIT_IDS, type ClassId, type DamageType, type EnemyId, type UnitId, type WaveKind } from '@/game/api';
 import {
-  BOSS_CAP_BURST, BOSS_FISH, BOSS_MIN_KILL, BOSS_PURR, CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, ELITE_CC_FACTOR, ELITE_FISH, ELITE_PURR, ENRAGE_COOLDOWN_MULT,
-  ENRAGE_HP_FRACTION, HAZARD_BLOCK_SIDE, LASER_DURATION, LASER_VULNERABLE, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, SLOW_CAP, SLOW_CAP_BOSS, hpIndex, specialHp,
+  BOSS_CAP_BURST, BOSS_FISH, BOSS_MIN_KILL, BOSS_PURR, CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, ELITE_FISH, ELITE_PURR, ENRAGE_COOLDOWN_MULT,
+  ENRAGE_HP_FRACTION, HAZARD_BLOCK_SIDE, LASER_DURATION, LASER_VULNERABLE, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, SLOW_CAP, hpIndex, specialHp,
   specialLimit,
 } from '@/game/data/balance';
 import { BOSS_SPECS, ENEMY_SPECS } from '@/game/data/enemies';
@@ -216,13 +216,15 @@ export interface Resistance {
   pullPct: number;
 }
 
-export function resistanceOf(id: EnemyId): Resistance {
+/** What an enemy resists at the butler level `level.stake`: elites and bosses resist control more with every level (`stakeRules`). */
+export function resistanceOf(id: EnemyId, level: Level): Resistance {
   const rank = foeRank(id);
   const special = rank !== 'normal';
+  const rules = stakeRules(clampLevel(level).stake);
   return {
-    slowCapPct: pct(special ? SLOW_CAP_BOSS : SLOW_CAP),
+    slowCapPct: pct(special ? rules.specialSlowCap : SLOW_CAP),
     stun: rank === 'boss' ? 'none' : rank === 'elite' ? 'half' : 'full',
-    stunPct: pct(rank === 'elite' ? ELITE_CC_FACTOR : 1),
+    stunPct: pct(rank === 'elite' ? rules.eliteCcFactor : 1),
     pullPct: pct(rank === 'boss' ? PULL_BOSS_FACTOR : rank === 'elite' ? PULL_ELITE_FACTOR : 1),
   };
 }
@@ -329,7 +331,7 @@ export function tipsOf(id: EnemyId, level: Level): Tip[] {
     if (a.kind === 'enrage' || a.kind === 'inhale' || a.kind === 'whirl' || a.kind === 'splash' || a.kind === 'lightning' || a.kind === 'vaccinate'
       || a.kind === 'wet_pulse' || a.kind === 'death_burst') tips.push({ kind: a.kind, vars: a.vars });
   }
-  const res = resistanceOf(id);
+  const res = resistanceOf(id, level);
   tips.push(res.stun === 'none' ? { kind: 'stun_none', vars: { slow: res.slowCapPct } } : { kind: 'stun_half', vars: { slow: res.slowCapPct, stun: res.stunPct } });
   const rows = targetRows(id, level);
   const row = rows[rows.length - 1];

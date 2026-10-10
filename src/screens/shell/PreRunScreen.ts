@@ -10,7 +10,7 @@ import { fmt } from '@/core/format';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
-import { modifierName, modifierText, stakeText, type ClassId } from '@/game';
+import { modifierName, modifierText, stakeControlText, stakeText, type ClassId } from '@/game';
 import { NORMAL_WAVE_TIME } from '@/game/data/balance';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { OFFERS, SNACKS, profile, type SnackId } from '@/meta';
@@ -99,7 +99,8 @@ function ruleLines(plan: RunPlan): string[] {
     }
     default: {
       if (plan.stake <= 0) return [t('shell.pre.rules.none')];
-      return Array.from({ length: plan.stake }, (_, i) => stakeText(i + 1));
+      // One line per rule the level has reached, then one for elites and bosses: their control resistance is the level's own, not a sum.
+      return [...Array.from({ length: plan.stake }, (_, i) => stakeText(i + 1)), stakeControlText(plan.stake)];
     }
   }
 }

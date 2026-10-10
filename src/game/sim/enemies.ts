@@ -2,8 +2,8 @@
 import type { DamageType, EnemyId, StatusKind } from '../api';
 import { pathPoint, type PathPoint } from '../geometry';
 import {
-  AURA_TICK, BOSS_CAP_BURST, BOSS_FISH, BOSS_PURR, CC_IMMUNE_AFTER, DOT_TICK, ELITE_CC_FACTOR, ELITE_FISH, ELITE_PURR, ENRAGE_HP_FRACTION,
-  HASTE_CAP, LASER_VULNERABLE, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, PULL_IMMUNE_AFTER, SLOW_CAP, SLOW_CAP_BOSS, TICK, VULNERABLE_CAP,
+  AURA_TICK, BOSS_CAP_BURST, BOSS_FISH, BOSS_PURR, CC_IMMUNE_AFTER, DOT_TICK, ELITE_FISH, ELITE_PURR, ENRAGE_HP_FRACTION,
+  HASTE_CAP, LASER_VULNERABLE, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, PULL_IMMUNE_AFTER, SLOW_CAP, TICK, VULNERABLE_CAP,
 } from '../data/balance';
 import { BOSS_SPECS, enemySpec } from '../data/enemies';
 import { addPurr, chefHarvest, earnFish } from './economy';
@@ -81,7 +81,8 @@ export function applyStatus(s: Sim, e: SimEnemy, kind: StatusKind, amount: numbe
   switch (kind) {
     case 'slow': {
       if (e.slowImmuneUntil > now || s.vaccinateUntil > now) return;
-      const cap = e.isBoss || e.isElite ? SLOW_CAP_BOSS : SLOW_CAP;
+      // Elites and bosses use the run's cap (SLOW_CAP_BOSS at butler level 0, lower above it: `rules.specialSlowCap`).
+      const cap = e.isBoss || e.isElite ? s.rules.specialSlowCap : SLOW_CAP;
       // The toy's boost and the cap come first; the enemy's own resistance then takes its share off what is left (the duration is not cut).
       const a = Math.min(amount * (1 + (s.fx.slowBoost ?? 0)), cap) * (1 - e.spec.slowResist);
       if (a <= 0) return;
@@ -95,7 +96,8 @@ export function applyStatus(s: Sim, e: SimEnemy, kind: StatusKind, amount: numbe
     case 'stun':
     case 'freeze': {
       if (e.isBoss || now < e.ccImmuneUntil) return;
-      const d = e.isElite ? length * ELITE_CC_FACTOR : length;
+      // Bosses never get here (immune above); an elite feels the run's share (ELITE_CC_FACTOR at butler level 0, lower above it).
+      const d = e.isElite ? length * s.rules.eliteCcFactor : length;
       if (kind === 'stun') {
         if ((e.mask & ST_STUN) === 0) {
           e.stunned = true;
@@ -244,6 +246,8 @@ export function damageEnemy(
   let mult = 1 + (e.vulnerable ? e.vulnAmount : 0);
   if (e.focused) mult *= 1 + LASER_VULNERABLE;
   if (e.slow > 0 && s.fx.slowedDamage) mult *= 1 + s.fx.slowedDamage;
+  // The nap blanket: every enemy takes more damage, whatever the type or the source (a tick of burn included); one more factor under the same cap.
+  if (s.fx.enemyDamageTaken) mult *= 1 + s.fx.enemyDamageTaken;
   if (mult > VULNERABLE_CAP) mult = VULNERABLE_CAP;
   amount *= mult;
   if (e.spec.ability === 'inhale' && s.inhaleUntil > s.time) amount *= s.inhaleTaken;

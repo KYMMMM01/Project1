@@ -2,8 +2,8 @@
  * First-encounter lessons: which guide topic a thing the player meets in a real run belongs to. Pure; the wiring (which event asks
  * for which card, and what the card points at) is in encounterWatch.ts. The tutorial run teaches its own topics itself.
  */
-import type { BattleMode, EnemyId, EnemyTrait } from '@/game';
-import { enemyDef } from '@/game';
+import type { BattleMode, EnemyId, EnemyTrait, WaveKind } from '@/game';
+import { enemyDef, isWaveTarget } from '@/game';
 import { isTopicId, type TopicId } from '@/guide';
 
 /** The guide topic of an enemy trait (the elite and boss traits have their own topics). */
@@ -37,6 +37,15 @@ export function arrivalTopics(enemy: EnemyId, waveKind: 'normal' | 'elite' | 'bo
   const own = bossTopicOf(enemy);
   if (own) out.push(own);
   return out;
+}
+
+/**
+ * The cards an enemy that has just spawned asks for: those of the wave's elite or boss, none for anyone else. The simulation announces the
+ * spawn before it names the enemy as the wave's `boss`, so the question is put to the enemy and the kind of wave, never to `battle.boss`.
+ */
+export function spawnTopics(enemy: EnemyId, waveKind: WaveKind): TopicId[] {
+  if (waveKind === 'normal' || !isWaveTarget(enemy)) return [];
+  return arrivalTopics(enemy, waveKind);
 }
 
 /** The topic a run's own rules open with (a butler level, the daily challenge, endless mode), or null for a plain chapter run. */

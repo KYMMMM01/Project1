@@ -135,6 +135,11 @@ class InfoBubbles {
     return this.rule.key;
   }
 
+  /** The open bubble is a lesson's own line (the laser guide's, the summon nudge's), not an answer to a tap of the player's. */
+  get sticky(): boolean {
+    return this.rule.isOpen && this.rule.sticky;
+  }
+
   get generation(): number {
     return this.rule.gen;
   }

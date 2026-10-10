@@ -9,13 +9,14 @@
 import { Emitter } from '@/core/events';
 import { SaveStore } from '@/core/save';
 import { ENEMY_IDS, RELIC_IDS, type EnemyId, type RelicId } from '@/game/api';
+import { badgeCount, closeVisit, hasSticker, openVisit, type MarkSets } from './codexMarks';
 import { TOPIC_IDS, isTopicId, type TopicId } from './topics';
 
 interface Saved {
   taught: string[];
   read: string[];
   skipped: boolean;
-  /** Codex entries first met in a run (an enemy that walked, a toy that was offered), and those whose page or card the player has since looked at. */
+  /** Codex entries first met in a run (an enemy that walked, a toy that was offered), and those the player has since been shown by opening the codex. */
   met: string[];
   looked: string[];
 }
@@ -68,6 +69,8 @@ export class GuideProgress {
   private readonly readSet = new Set<string>();
   private readonly metSet = new Set<string>();
   private readonly lookedSet = new Set<string>();
+  /** The entries that were new when the open codex was opened (memory only); null while no codex is open. */
+  private visit: Set<string> | null = null;
   private skippedFlag = false;
   private readonly store: SaveStore<Saved> | null;
   private loaded: boolean;
@@ -124,20 +127,43 @@ export class GuideProgress {
     return this.metSet.has(key);
   }
 
-  /** The player has looked at this codex entry since they met it. */
+  /** The player has been shown this codex entry since they met it (a codex visit that began after the meeting has ended). */
   isLooked(key: CodexKey): boolean {
     return this.lookedSet.has(key);
   }
 
-  /** Met and not yet looked at: the codex's "new" stickers. */
+  /** The codex's "새로 만남" sticker: inside an open codex, what was new when it opened; otherwise met and not yet seen. */
   isFresh(key: CodexKey): boolean {
-    return this.metSet.has(key) && !this.lookedSet.has(key);
+    return hasSticker(key, this.marks());
   }
 
+  /** The "+N" on the buttons that open the codex: new entries the player has not been shown yet (zero from the moment a codex opens). */
   freshCount(): number {
-    let n = 0;
-    for (const key of this.metSet) if (!this.lookedSet.has(key)) n++;
-    return n;
+    return badgeCount(this.marks());
+  }
+
+  /**
+   * The codex was opened: the count on its buttons goes away at once, and the entries that are new now keep their sticker until
+   * `endCodexVisit`. Opening it twice without closing changes nothing.
+   */
+  beginCodexVisit(): void {
+    if (this.visit) return;
+    this.visit = openVisit(this.metSet, this.lookedSet);
+    if (this.visit.size > 0) this.events.emit('change', { id: null });
+  }
+
+  /** The codex was closed: everything the visit showed is seen from now on. Entries met since then stay new. */
+  endCodexVisit(): void {
+    const visit = this.visit;
+    if (!visit) return;
+    for (const key of closeVisit(visit, this.metSet, this.lookedSet)) this.lookedSet.add(key);
+    this.visit = null;
+    this.persist();
+    this.events.emit('change', { id: null });
+  }
+
+  private marks(): MarkSets {
+    return { met: this.metSet, looked: this.lookedSet, visit: this.visit };
   }
 
   markMet(key: CodexKey): void {
@@ -147,7 +173,7 @@ export class GuideProgress {
     this.events.emit('change', { id: null });
   }
 
-  /** Looking at an entry that was never met changes nothing: it is still new when it is met. */
+  /** Mark one entry seen right away (the codex itself does it for all of a visit at once, see `endCodexVisit`). Seeing one never met changes nothing: it is still new when it is met. */
   markLooked(key: CodexKey): void {
     if (!this.metSet.has(key) || this.lookedSet.has(key)) return;
     this.lookedSet.add(key);

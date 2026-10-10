@@ -1,9 +1,10 @@
 import { closeCodex } from '@/codex';
 import { debugExpose } from '@/core/debug';
+import { profile } from '@/meta';
 import { popups } from '@/ui/Popup';
 import { ensureSettings } from '@/view/hud/settings';
 import { provide, services, type Shell } from '../contract';
-import { AutoPopups } from './autoPopups';
+import { AutoPopups, markCalendarOffered } from './autoPopups';
 import { CalendarPopup } from './calendarPopup';
 import { stopConfetti } from './kit/confetti';
 import { loadRoutinePrefs, markProfileSeen } from './prefs';
@@ -26,16 +27,19 @@ export function installSystemScreens(shell: Shell): void {
   void ensureSettings();
   void loadRoutinePrefs();
 
-  const auto = new AutoPopups(shell);
   let calendar: CalendarPopup | null = null;
-  provide('openSettings', () => void openSettingsScreen(() => shell.refresh()));
-  provide('openCalendar', () => {
-    if (calendar && !calendar.destroyed) return;
-    calendar = new CalendarPopup(shell);
-    void popups.open(calendar).then(() => {
-      calendar = null;
+  /** The attendance calendar, from the home tab's button or by itself at the start: one at a time, resolves when it has been closed. */
+  const openCalendar = (): Promise<void> => {
+    if (calendar && !calendar.destroyed) return Promise.resolve();
+    const popup = new CalendarPopup(shell);
+    calendar = popup;
+    return popups.open(popup).then(() => {
+      if (calendar === popup) calendar = null;
     });
-  });
+  };
+  const auto = new AutoPopups(shell, openCalendar);
+  provide('openSettings', () => void openSettingsScreen(() => shell.refresh()));
+  provide('openCalendar', () => void openCalendar());
 
   const self: Installed = {
     dispose: () => {
@@ -52,7 +56,10 @@ export function installSystemScreens(shell: Shell): void {
     openCalendar: () => services.openCalendar(),
     popups,
     scrollSettingsTo,
-    /** QA: count every level and unlock as announced, so no automatic popup interrupts a screenshot. */
-    markSeen: markProfileSeen,
+    /** QA: count every level and unlock as announced and today's attendance as offered, so no automatic popup interrupts a screenshot. */
+    markSeen: () => {
+      markProfileSeen();
+      markCalendarOffered(profile.today());
+    },
   });
 }

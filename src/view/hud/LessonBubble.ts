@@ -6,7 +6,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { Ease } from '@/core/tween';
 import { illustration, topicDef, type TopicId } from '@/guide';
-import { Button, drawSpeechBubble, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
+import { balanceWrap, Button, drawSpeechBubble, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
 import { FIELD_H } from '@/game/geometry';
 import { BUBBLE_MARGIN, placeCard } from './bubbleMath';
@@ -55,13 +55,16 @@ export class LessonBubble {
     return this.box;
   }
 
-  show(spec: BubbleSpec, onButton: (index: number) => void): void {
+  /** `pop` false puts a bubble that is already up down again without the pop-in (its text changed, or its target came to rest elsewhere): it does not blink. */
+  show(spec: BubbleSpec, onButton: (index: number) => void, pop = true): void {
     this.hide(false);
     const { width: W, tile } = spec;
     const textX = PAD + tile + 18;
     const textW = W - textX - PAD;
     const title = spec.title ? uiLabel(spec.title, { size: 32, anchorX: 0, anchorY: 0, wrap: textW, align: 'left', lineHeight: 38 }) : null;
     const body = uiLabel(spec.text, { size: 26, anchorX: 0, anchorY: 0, wrap: textW, align: 'left', lineHeight: 34 });
+    // Two lines of about the same length, not one full line and a stray word under it (the first-encounter cards do the same).
+    balanceWrap(body, textW);
     const textH = (title ? title.height + 6 : 0) + body.height;
     const contentH = Math.max(tile, textH);
     const rowH = spec.buttons.length > 0 ? 88 : 0;
@@ -113,7 +116,7 @@ export class LessonBubble {
     this.layer.addChild(view);
     this.view = view;
     this.box = { x: fit.x, y: fit.y, w: W, h };
-    if (!motion.reduced) popIn(this.bag, view, { from: 0.7, duration: 0.18, overshoot: 2 });
+    if (pop && !motion.reduced) popIn(this.bag, view, { from: 0.7, duration: 0.18, overshoot: 2 });
   }
 
   hide(animate = true): void {

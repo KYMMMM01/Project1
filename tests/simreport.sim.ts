@@ -1,12 +1,16 @@
 /**
  * Balance report (`npm run sim`). Plays bot runs and prints compact tables; it never fails on a
  * balance number. Environment: SIM_RUNS (runs per cell, default 500), SIM_FULL=1 (every chapter x stake
- * x level), SIM_ONLY=ch1|stakes|chapters|damage|units|focus|reach|control|income|calibrate to run one section, SIM_CHAPTERS=1,2
+ * x level), SIM_ONLY=ch1|stakes|chapters|damage|units|focus|reach|control|income|toys|calibrate to run one section, SIM_CHAPTERS=1,2
  * and SIM_STAKES=1,2 to limit the chapters (of `chapters`, `units`, `focus` and `income`) and the chapter-1 stakes of `units` and
  * `focus`; SIM_CHAPTER_STAKE=3 plays the `focus` chapters at that stake instead of 0; SIM_FOCUS=warrior,mage limits the pinned classes of `focus`.
+ * The `toys` section (only when asked for with SIM_ONLY=toys) hands one toy at a time to the merge and the synergy bot in chapters 1 and 3 at stake 0
+ * and prints the change against the same seeds without it. SIM_TOYS=cat_tunnel,nap_blanket limits the toys; SIM_TOY_WAVE=5 hands them out before
+ * that wave (default 5: as the first toy, at the offer after act 1; `start` = before wave 1; `rank` = at the earliest offer that can hold the
+ * toy's rank: 5 / 5 / 13 / 21).
  */
 import { describe, it } from 'vitest';
-import { CLASS_IDS, UNIT_IDS, type CurrencyReason } from '@/game/api';
+import { CLASS_IDS, RELIC_IDS, UNIT_IDS, type CurrencyReason, type RelicId } from '@/game/api';
 import { RECOMMENDED_LEVEL, hpIndex } from '@/game/data/balance';
 import type { BotPolicy } from '@/game/sim/bots';
 import { createBattle } from '@/game/sim/create';
@@ -14,7 +18,10 @@ import type { Sim } from '@/game/sim/sim';
 import { CELL_COUNT, COLS, ROWS, cellCenterX, cellCenterY, cellCol, cellRow, PATH_LENGTH, pathPoint } from '@/game/geometry';
 import { unitSpec } from '@/game/data/units';
 import { enemySpec } from '@/game/data/enemies';
-import { batch, controlRow, loadoutInit, median, pct, printTable, unitRows, type BatchSummary, type UnitRow } from './simReportKit';
+import { RELIC_RARITY } from '@/game/data/roster';
+import {
+  batch, controlRow, loadoutInit, median, pairedDelta, pct, printTable, signed, unitRows, type BatchSummary, type PairedDelta, type UnitRow,
+} from './simReportKit';
 
 const RUNS = Number(process.env.SIM_RUNS ?? 500);
 const ONLY = process.env.SIM_ONLY ?? '';
@@ -26,6 +33,17 @@ const STAKES = list('SIM_STAKES', '1,2,3,4,5');
 const CHAPTER_STAKE = Number(process.env.SIM_CHAPTER_STAKE ?? 0);
 const FOCUS_ONLY = (process.env.SIM_FOCUS ?? '').split(',').filter(Boolean);
 const PINNED = FOCUS_ONLY.length > 0 ? CLASS_IDS.filter((c) => FOCUS_ONLY.includes(c)) : CLASS_IDS;
+const TOY_ONLY = (process.env.SIM_TOYS ?? '').split(',').filter(Boolean);
+const TOY_BOTS: BotPolicy[] = ['merge', 'synergy'];
+const TOY_CHAPTERS = [1, 3];
+
+/** The wave before which the `toys` section hands a toy out (see the header). */
+function toyWave(id: RelicId): number {
+  const mode = process.env.SIM_TOY_WAVE ?? '5';
+  if (mode === 'start') return 1;
+  if (mode === 'rank') return { common: 5, rare: 5, epic: 13, legendary: 21 }[RELIC_RARITY[id]];
+  return Number(mode);
+}
 
 function unitLine(r: UnitRow): (string | number)[] {
   return [r.label, pct(r.share), r.boardMin.toFixed(1), r.kills.toFixed(0), pct(r.uptime), r.hitsPerAttack.toFixed(1), (r.perCe / 1000).toFixed(2)];
@@ -164,6 +182,44 @@ describe('balance report', () => {
     }
     printTable(`Win rate of the synergy bot free / pinned to one class line (${RUNS} runs per cell)`, ['case', 'free', ...PINNED], wins);
     printTable(`Elite and boss kill time as a share of the time limit (median over the kills in those runs; lower is faster)`, ['case', 'free', ...PINNED], bosses);
+  });
+
+  it('toys: what holding one toy is worth, same seeds with and without', () => {
+    if (ONLY !== 'toys') return;
+    const level = (chapter: number): number => RECOMMENDED_LEVEL[chapter - 1] as number;
+    const cells = TOY_BOTS.flatMap((policy) => TOY_CHAPTERS.map((chapter) => ({ policy, chapter, label: `${policy === 'merge' ? 'm' : 's'}${chapter}` })));
+    const make = (chapter: number) => (seed: number) => loadoutInit(seed, chapter, 0, level(chapter));
+    const base = cells.map((c) => batch(RUNS, c.policy, make(c.chapter)));
+    printTable(
+      `Toys, the base state without any toy handed out (stake 0, ${TOY_CHAPTERS.map((c) => `ch${c} L${level(c)}`).join(' / ')}, ${RUNS} runs per cell; the bots pick their own toys as usual)`,
+      ['cell', 'win', 'wave', 'purr in', 'awakenings', 'ms'],
+      cells.map((c, i) => {
+        const b = base[i] as BatchSummary;
+        const purr = b.results.reduce((a, r) => a + r.purrIn, 0) / b.runs;
+        const awak = b.results.reduce((a, r) => a + r.stats.awakenings, 0) / b.runs;
+        return [c.label, pct(b.winRate), b.meanWave.toFixed(2), purr.toFixed(1), awak.toFixed(2), b.simMs.toFixed(0)];
+      }),
+    );
+    const ids = TOY_ONLY.length > 0 ? RELIC_IDS.filter((id) => TOY_ONLY.includes(id)) : RELIC_IDS;
+    const rows: (string | number)[][] = [];
+    for (const id of ids) {
+      const wave = toyWave(id);
+      const deltas = cells.map((c, i) => pairedDelta(base[i] as BatchSummary, batch(RUNS, c.policy, make(c.chapter), { toy: { id, wave } })));
+      const mean = (pick: (d: PairedDelta) => number): number => deltas.reduce((a, d) => a + pick(d), 0) / deltas.length;
+      const se = (pick: (d: PairedDelta) => number): number => Math.sqrt(deltas.reduce((a, d) => a + pick(d) ** 2, 0)) / deltas.length;
+      rows.push([
+        id, RELIC_RARITY[id], wave,
+        ...deltas.flatMap((d) => [signed(d.win), signed(d.wave, 2)]),
+        signed(mean((d) => d.win)), se((d) => d.winSe).toFixed(1), signed(mean((d) => d.wave), 2), se((d) => d.waveSe).toFixed(2),
+        signed(mean((d) => d.purr)), signed(mean((d) => d.awakenings), 2),
+      ]);
+      process.stderr.write(`toy ${id} done\n`);
+    }
+    printTable(
+      'Toys: change against the base state when handed out before the wave "from" (win in points, wave in waves; per cell, then the mean of the four cells with its standard error)',
+      ['toy', 'rank', 'from', ...cells.flatMap((c) => [`${c.label} win`, `${c.label} wave`]), 'win', 'se', 'wave', 'se', 'purr', 'awaken'],
+      rows,
+    );
   });
 
   it('full matrix', () => {

@@ -9,7 +9,7 @@ import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
 import { t } from '@/core/i18n';
 import { Ease, type EaseFn } from '@/core/tween';
-import { MAX_STAKE, stakeText } from '@/game';
+import { MAX_STAKE, stakeControlText, stakeText } from '@/game';
 import { profile } from '@/meta';
 import {
   Button,
@@ -42,7 +42,12 @@ const DOTS_Y = FRAME_Y + FRAME_H + 34;
 const CHIP_Y = FRAME_Y + FRAME_H + 62;
 const CHIP_H = 92;
 const BUBBLE_Y = CHIP_Y + CHIP_H + 22;
-const BUBBLE_H = 118;
+/** Room for the longest bubble, butler level 5 in either language: two lines of rule (62) and two of control (58) with the gap between, and 20 around them. */
+const BUBBLE_H = 168;
+/** Wrap width of the two lines in the bubble (the bubble is `W - 56` wide, with 28 of paper on each side of the text). */
+const RULE_WRAP = W - 56 - 56;
+/** Gap between the rule and the control line under it. */
+const RULE_GAP = 8;
 export const CHAPTER_CARD_H = BUBBLE_Y + BUBBLE_H + 28;
 const SWIPE_MIN = 90;
 const BOSS_BOX = 176;
@@ -115,7 +120,9 @@ export class ChapterCard extends Container {
   private readonly chips: Button[] = [];
   private readonly stamps: Container[] = [];
   private readonly chipW = (W - PAD * 2 - 10 * MAX_STAKE) / STAKE_COUNT;
-  private readonly ruleText = uiLabel('', { size: 26, anchorX: 0, align: 'left', wrap: W - 56 - 56 });
+  private readonly ruleText = uiLabel('', { size: 26, anchorX: 0, anchorY: 0, align: 'left', wrap: RULE_WRAP });
+  /** Under the rule, from butler level 1 up: what elites and bosses now shrug off, with that level's numbers. */
+  private readonly ctrlText = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, align: 'left', wrap: RULE_WRAP, color: Color.berryDark });
   private art: Container | null = null;
   private artKey = '';
   private sel: Selection = { chapter: 1, stake: 0 };
@@ -162,8 +169,9 @@ export class ChapterCard extends Container {
       this.chips.push(chip);
       this.stamps.push(stamp);
     }
-    this.ruleText.position.set(28 + 28, BUBBLE_Y + BUBBLE_H / 2 + 2);
-    this.addChild(this.bubble, this.ruleText, ...this.chips);
+    this.ruleText.x = 28 + 28;
+    this.ctrlText.x = 28 + 28;
+    this.addChild(this.bubble, this.ruleText, this.ctrlText, ...this.chips);
   }
 
   /** The butler-level tags: what the guidebook points at for the levels. */
@@ -316,8 +324,16 @@ export class ChapterCard extends Container {
     const { chapter, stake } = this.sel;
     const open = chapterUnlocked(profile.data.cleared, chapter);
     const text = !open ? t('battle.chapter.locked') : stake === 0 ? t('battle.stake.base') : stakeText(stake);
-    const changed = this.ruleText.text !== text;
+    const ctrl = open ? stakeControlText(stake) : '';
+    // A slide still running would finish at the places of the old text: end it and set the labels down where this text puts them.
+    this.bag.killKeyed(this.ruleText);
+    this.ruleText.alpha = 1;
+    this.ctrlText.alpha = 1;
+    const changed = this.ruleText.text !== text || this.ctrlText.text !== ctrl;
     this.ruleText.text = text;
+    this.ctrlText.text = ctrl;
+    this.ctrlText.visible = ctrl !== '';
+    const top = this.placeRule();
     const tipX = PAD + this.chipW / 2 + stake * (this.chipW + 10);
     const from = this.tipX;
     this.bag.killKeyed(this.bubble);
@@ -334,20 +350,38 @@ export class ChapterCard extends Container {
       onComplete: () => this.drawBubble(tipX),
     });
     if (!changed) return;
-    const text0 = this.ruleText;
-    const y0 = BUBBLE_Y + BUBBLE_H / 2 + 2;
-    this.bag.runKeyed(text0, {
+    const rule = this.ruleText;
+    const control = this.ctrlText;
+    const y0 = top.rule;
+    const y1 = top.ctrl;
+    this.bag.runKeyed(rule, {
       duration: 0.2,
       ease: Ease.cubicOut,
       onUpdate: (k) => {
-        text0.alpha = k;
-        text0.y = y0 + 10 * (1 - k);
+        rule.alpha = k;
+        control.alpha = k;
+        rule.y = y0 + 10 * (1 - k);
+        control.y = y1 + 10 * (1 - k);
       },
       onComplete: () => {
-        text0.alpha = 1;
-        text0.y = y0;
+        rule.alpha = 1;
+        control.alpha = 1;
+        rule.y = y0;
+        control.y = y1;
       },
     });
+  }
+
+  /** Stack the rule and the control line in the middle of the bubble; returns where each one's top is. */
+  private placeRule(): { rule: number; ctrl: number } {
+    const rule = this.ruleText;
+    const control = this.ctrlText;
+    const both = control.visible ? rule.height + RULE_GAP + control.height : rule.height;
+    const rule0 = BUBBLE_Y + (BUBBLE_H - both) / 2 + 2;
+    const ctrl0 = rule0 + rule.height + RULE_GAP;
+    rule.y = rule0;
+    control.y = ctrl0;
+    return { rule: rule0, ctrl: ctrl0 };
   }
 
   private drawBubble(tipX: number): void {

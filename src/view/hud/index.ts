@@ -144,6 +144,9 @@ class Hud implements HudPart {
       laser: () => this.guide?.flow.step ?? null,
       rectOf: (target: Target) => this.tutorialHost().rectOf(target),
       progress: this.progress,
+      /** The lessons and the first-encounter cards themselves (the QA runners count what they repaint). */
+      tutorial: () => this.tutorial,
+      hints: () => this.hints,
     });
     this.build();
     window.addEventListener('keydown', this.onKey);
@@ -397,6 +400,16 @@ class Hud implements HudPart {
     return onScreen(c) ? this.boundsRect(c) : null;
   }
 
+  /**
+   * Where a control the lessons point at lies once it has arrived: shown (it may still be fading in) with its own pop-in or breathing scale taken
+   * out, so a control that is arriving does not move the lit window, the note and the paw for a third of a second.
+   */
+  private restRectOf(c: Container): Rect | null {
+    if (c.destroyed || !shownChain(c)) return null;
+    const r = this.restingRect(c);
+    return r.w > 0 && r.h > 0 ? r : null;
+  }
+
   /** What the tutorial needs from the screen: where each thing it points at is, and the few things that are not its own. */
   private tutorialHost(): TutorialHost {
     const previewRect = (): Rect => topRects(this.ctx.layout).preview;
@@ -409,6 +422,7 @@ class Hud implements HudPart {
         case 'bossbar': return this.boss.root;
         case 'purr': return this.bottom.currency.purr;
         case 'molt': return this.bottom.sheet.buttonFor('molt');
+        case 'awaken': return this.bottom.sheet.buttonFor('awaken');
         case 'sell': return this.bottom.sheet.buttonFor('sell');
         case 'grade': return this.bottom.actions.grade;
         case 'call': return this.bottom.actions.callBtn;
@@ -422,8 +436,10 @@ class Hud implements HudPart {
           const label = this.rectOfContainer(this.top.waveLabel);
           return label ? unionRect(label, previewRect()) : null;
         }
+        // The strip of an elite or a boss rises and fades in on arrival: the lesson points at where it rests.
+        if (target === 'bossbar') return shownChain(this.boss.root) ? { ...topRects(this.ctx.layout).boss } : null;
         const c = control(target);
-        return c ? this.rectOfContainer(c) : null;
+        return c ? this.restRectOf(c) : null;
       },
       rectOfReveal: (key: RevealKey) => {
         switch (key) {
@@ -444,6 +460,7 @@ class Hud implements HudPart {
       keepClear: () => this.avoidList(),
       stickerKeep: () => this.avoidList(true),
       laserGuided: () => this.teach.guided,
+      laserHolds: () => this.guide?.holdsClock ?? false,
       startLaserGuide: () => this.guide?.arm(),
       chipColumn: () => this.bottom.actions.chipColumn(),
       restingRects: (keys) => {
@@ -767,7 +784,8 @@ class Hud implements HudPart {
     // A bubble never shows over a popup, a staged moment or a drag; while a cat is selected only the selection bar's own hints may.
     // A card that is up holds the battle and counts as a modal itself; it must not make its own stage look busy.
     const cardUp = this.hints.holding;
-    const calm = (!this.ctx.paused || cardUp) && this.env.modalCount - (cardUp ? 1 : 0) === 0 && !this.dragging && !this.pauseOpen && !this.ending;
+    // The clock held by a lesson alone (waiting for a touch) is not another thing taking the screen.
+    const calm = (!this.ctx.paused || cardUp || this.ctx.lessonHold) && this.env.modalCount - (cardUp ? 1 : 0) === 0 && !this.dragging && !this.pauseOpen && !this.ending;
     const lesson = this.tutorial?.active ?? false;
     this.hints.update(dt, calm && !lesson, this.ctx.selected !== null);
     // The tutorial's laser lesson is the guide's own: any other lesson makes the guide wait.

@@ -148,3 +148,47 @@ export function printTable(title: string, head: string[], rows: (string | number
   const out = [`\n== ${title} ==`, line(head), ...rows.map((r) => line(r.map(String)))];
   process.stdout.write(`${out.join('\n')}\n`);
 }
+
+/** What holding one toy changed, over the same seeds: means of the per-run differences and their standard errors. */
+export interface PairedDelta {
+  /** Win rate, in points. */
+  win: number;
+  winSe: number;
+  /** Wave in progress when the run ended (24 for a win), in waves. */
+  wave: number;
+  waveSe: number;
+  /** Purr that came in over the run, and awakenings, per run. */
+  purr: number;
+  awakenings: number;
+}
+
+function meanAndSe(values: number[]): [number, number] {
+  const n = values.length || 1;
+  const mean = values.reduce((a, v) => a + v, 0) / n;
+  const variance = values.reduce((a, v) => a + (v - mean) ** 2, 0) / Math.max(1, n - 1);
+  return [mean, Math.sqrt(variance / n)];
+}
+
+/** `held` and `base` must have been played from the same seeds (`batch` does that); runs are compared pair by pair. */
+export function pairedDelta(base: BatchSummary, held: BatchSummary): PairedDelta {
+  const n = Math.min(base.results.length, held.results.length);
+  const win: number[] = [];
+  const wave: number[] = [];
+  const purr: number[] = [];
+  const awakenings: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = base.results[i] as RunResult;
+    const b = held.results[i] as RunResult;
+    win.push((Number(b.victory) - Number(a.victory)) * 100);
+    wave.push(b.wave - a.wave);
+    purr.push(b.purrIn - a.purrIn);
+    awakenings.push(b.stats.awakenings - a.stats.awakenings);
+  }
+  const [w, wSe] = meanAndSe(win);
+  const [v, vSe] = meanAndSe(wave);
+  return { win: w, winSe: wSe, wave: v, waveSe: vSe, purr: meanAndSe(purr)[0], awakenings: meanAndSe(awakenings)[0] };
+}
+
+export function signed(v: number, digits = 1): string {
+  return `${v >= 0 ? '+' : ''}${v.toFixed(digits)}`;
+}

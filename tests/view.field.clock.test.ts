@@ -24,6 +24,19 @@ describe('battle clock', () => {
     expect(c.tick(0.1)).toBeCloseTo(0.1);
   });
 
+  it('says whether one reason alone holds the battle (a lesson waiting for a gesture lets the field take it; a popup over it does not)', () => {
+    const c = new BattleClock();
+    expect(c.heldOnlyBy('tutorial')).toBe(false);
+    c.setPaused('tutorial', true);
+    expect(c.heldOnlyBy('tutorial')).toBe(true);
+    expect(c.heldOnlyBy('popup')).toBe(false);
+    c.setPaused('popup', true);
+    expect(c.heldOnlyBy('tutorial')).toBe(false);
+    c.setPaused('tutorial', false);
+    expect(c.heldOnlyBy('tutorial')).toBe(false);
+    expect(c.heldOnlyBy('popup')).toBe(true);
+  });
+
   it('freezes for real time and the longest request wins', () => {
     const c = new BattleClock();
     c.freeze(100);

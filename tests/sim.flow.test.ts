@@ -60,14 +60,14 @@ describe('normal waves', () => {
     gainRelic(sim, 'tuna_cans');
     sim.fish = 0;
     advance(sim, 15.1);
-    expect(ends[0]!.fish).toBe(7 + 12);
+    expect(ends[0]!.fish).toBe(7 + 16);
     put(sim, 0, 't_bell');
     put(sim, 1, 't_bard');
     put(sim, 2, 't_alch');
     put(sim, 3, 't_lucky');
     expect(sim.synergyTier('trickster')).toBe(3);
     advance(sim, 15.1);
-    expect(ends[1]!.fish).toBe(Math.floor(9 * 1.3) + 12);
+    expect(ends[1]!.fish).toBe(Math.floor(9 * 1.3) + 16);
   });
 
   it('can be called early once its spawns are over: 1.5 fish per remaining second, rounded up', () => {
@@ -308,7 +308,7 @@ describe('act clear, sunbeams and relic offers', () => {
     gainRelic(pillow, 'purr_pillow');
     const c3 = record(pillow, 'actClear');
     clearAct(pillow);
-    expect(c3[0]!.purr).toBe(2);
+    expect(c3[0]!.purr).toBe(1 + 2);
     const later = newSim();
     const c4 = record(later, 'actClear');
     clearAct(later, 8);
@@ -360,9 +360,11 @@ describe('act clear, sunbeams and relic offers', () => {
         clearAct(sim, wave);
         const counters = actFeatures(1, act + 1).flatMap((f) => COUNTER_RELICS[f] ?? []);
         const options = (sim.pending as { options: RelicId[] }).options;
-        const plain = options.filter((o) => !counters.includes(o));
-        expect(plain.length).toBeGreaterThanOrEqual(2);
-        for (const id of plain) expect(allowed as readonly string[]).toContain(RELIC_RARITY[id]);
+        // At most one toy (the counter slot) may sit outside the act's rarities, and it must be one of the counter toys. (A toy of the
+        // right rarity may also be on the counter list by chance, so "not on the list" is not the same as "drawn by rarity".)
+        const off = options.filter((o) => !(allowed as readonly string[]).includes(RELIC_RARITY[o]));
+        expect(off.length).toBeLessThanOrEqual(1);
+        for (const id of off) expect(counters).toContain(id);
       }
     }
   });

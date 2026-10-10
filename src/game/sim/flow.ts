@@ -204,10 +204,13 @@ function buildSpawns(s: Sim, wave: number): void {
   const special = script.kind !== 'normal';
   const start = special ? BOSS_APPEAR : SPAWN_START;
   const window = special ? ESCORT_WINDOW : SPAWN_WINDOW * (1 + (s.fx.spawnSlow ?? 0));
+  // The stretched window of the blanket and the hourglass together (+18%) reaches past the end of the daily rule's 11-second wave; an
+  // enemy due after the end would never come, so the last ones come on the last tick instead (a 15-second wave never gets here).
+  const lastAt = special ? Infinity : s.waveDuration - TICK;
   let prev = 0;
   for (let i = 0; i < ids.length; i++) {
     const jitter = (s.rng.wave.next() - 0.5) * 0.6;
-    const t = Math.max(prev, start + (window * (i + 0.5 + jitter)) / ids.length);
+    const t = Math.min(lastAt, Math.max(prev, start + (window * (i + 0.5 + jitter)) / ids.length));
     times.push(t);
     prev = t;
   }
@@ -231,7 +234,8 @@ export function startWave(s: Sim, wave: number): void {
   s.boss = null;
   s.waveDuration = s.waveKind === 'normal' ? s.normalWaveTime : waveLimit(s, s.waveKind, Math.floor((wave - 1) / 8));
   buildSpawns(s, wave);
-  if (s.fx.tunnel) placeRandomCommon(s, s.rng.toy.next(), s.rng.toy.next());
+  // The tunnel's value is the number of waves between two visits (1 = every wave); the wave number decides, so a resumed run agrees.
+  if (s.fx.tunnel && wave % s.fx.tunnel === 0) placeRandomCommon(s, s.rng.toy.next(), s.rng.toy.next());
   if (s.ev.has('waveStart')) s.ev.emit('waveStart', { wave, act: s.act, kind: s.waveKind, duration: s.waveDuration });
   s.phase = 'wave';
   if (s.mode === 'tutorial') {

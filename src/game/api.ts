@@ -39,11 +39,11 @@ export type EnemyId = (typeof ENEMY_IDS)[number];
 
 export const RELIC_IDS = [
   // common
-  'yarn_ball', 'glitter_ball', 'mouse_toy', 'cardboard_box', 'bell_collar', 'fishing_rod', 'scratcher', 'feather_wand',
+  'yarn_ball', 'glitter_ball', 'mouse_toy', 'cardboard_box', 'bell_collar', 'fishing_rod', 'scratcher', 'feather_wand', 'batteries',
   // rare
-  'cat_tower', 'kneading_cushion', 'cat_tunnel', 'heating_pad', 'batteries', 'snack_stick', 'tuna_cans', 'window_perch',
+  'cat_tower', 'kneading_cushion', 'snack_stick', 'tuna_cans', 'window_perch', 'glass_marble', 'nap_blanket',
   // epic
-  'purr_pillow', 'silvervine', 'auto_feeder', 'glass_marble', 'nap_blanket', 'twin_bells', 'lucky_coin', 'sardine_crate',
+  'cat_tunnel', 'heating_pad', 'twin_bells', 'silvervine', 'auto_feeder', 'sardine_crate', 'purr_pillow', 'lucky_coin',
   // legendary
   'sunny_spot', 'nine_lives', 'shooting_star', 'golden_catnip', 'royal_crown', 'hourglass',
 ] as const;

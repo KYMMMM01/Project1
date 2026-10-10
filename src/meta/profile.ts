@@ -4,7 +4,6 @@
  */
 import type { BattleInit, BattleMode, BattleSnapshot, DailyModifierId, RunStats } from '@/game/api';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
-import { waveKindOf } from '@/game/data/waves';
 import { randomSeed } from '@/core/rng';
 import { mergeLedgers, normalizeLedger, type GrantSource } from '@/platform/iapService';
 import { encodeBackup, decodeBackup } from './backup';
@@ -15,6 +14,7 @@ import { PIGGY_PER_RUN, SNACK_FISH, SNACK_PURR, type SnackId } from './data/econ
 import { cupScore, dailySetup } from './daily';
 import { dungeonCanBuy, dungeonEntriesLeft, dungeonFirstClearGold, dungeonMaxGold, dungeonTierOpen, dungeonTopTier } from './dungeon';
 import type { PayVia } from './economy';
+import { runMissionDelta } from './missions';
 import { addPassXp, seasonOf } from './pass';
 import { createProfileStore, sanitizeProfile } from './profileData';
 import { canPlayStake, chaptersCleared, computeRunPayout, sweepPayout } from './rewards';
@@ -127,17 +127,6 @@ function previewOf(data: ProfileData, savedAt: number): BackupPreview {
     chaptersCleared: chaptersCleared(data.cleared),
     savedAt,
   };
-}
-
-/**
- * The "boss and elite" missions count both. The simulation reports bosses only, but a cleared elite
- * wave always ended with its elite dead (running out of time loses the run instead).
- */
-function bossAndEliteKills(stats: RunStats): number {
-  if (stats.mode === 'gold') return stats.bossesKilled; // the dungeon's waves are all normal ones
-  let elites = 0;
-  for (let w = 1; w <= stats.wavesCleared; w++) if (waveKindOf(w) === 'elite') elites++;
-  return stats.bossesKilled + elites;
 }
 
 export class Profile extends RoutineProfile {
@@ -289,9 +278,8 @@ export class Profile extends RoutineProfile {
     this.addAccountXp(payout.xp);
     d.pass = addPassXp(d.pass, payout.xp);
     if (stats.mode !== 'tutorial') this.addPiggy(PIGGY_PER_RUN);
-    this.advanceMissionMetrics({
-      runs: 1, wins: stats.victory ? 1 : 0, merges: stats.merges, bosses: bossAndEliteKills(stats), relics: stats.relics.length,
-    });
+    // The tutorial teaches; it is not a day's play, so it advances no daily or weekly mission (a win in it must not tick "win once").
+    this.advanceMissionMetrics(runMissionDelta(stats));
 
     const reward: RunReward = {
       id: d.nextRunId++,

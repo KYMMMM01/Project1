@@ -1,13 +1,13 @@
 import { addStrings } from '@/core/i18n';
 
 addStrings('ko', {
-  'director.wave': '{act}막 · 웨이브 {wave}',
+  'director.wave': '스테이지 {act} · 웨이브 {wave}',
   'director.warning': '경고!',
   'director.bossIncoming': '{name} 등장!',
   'director.eliteIncoming': '{name} 출현!',
   'director.bossDefeated': '보스 격파!',
   'director.eliteDefeated': '대장 격파!',
-  'director.actClear': '{act}막 클리어!',
+  'director.actClear': '스테이지 {act} 클리어!',
   'director.callNext': '다음 웨이브 호출!',
   'director.victory': '승리!',
   'director.rescued': '아홉 번째 목숨! 적 {n}마리가 물러났어요',
@@ -26,13 +26,13 @@ addStrings('ko', {
 });
 
 addStrings('en', {
-  'director.wave': 'Act {act} · Wave {wave}',
+  'director.wave': 'Stage {act} · Wave {wave}',
   'director.warning': 'WARNING',
   'director.bossIncoming': '{name} incoming!',
   'director.eliteIncoming': '{name} appears!',
   'director.bossDefeated': 'BOSS DEFEATED',
   'director.eliteDefeated': 'ELITE DEFEATED',
-  'director.actClear': 'Act {act} clear!',
+  'director.actClear': 'Stage {act} clear!',
   'director.callNext': 'Next wave called!',
   'director.victory': 'VICTORY',
   'director.rescued': 'Nine lives! {n} enemies backed off',

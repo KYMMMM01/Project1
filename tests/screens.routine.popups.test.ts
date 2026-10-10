@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { FEATURES } from '@/meta/data/schedule';
 import {
-  jumpTarget, mayShowPopup, newUnlocks, nextPopup, primaryJump, reconcileSeen, seenAfterImport, sortUnlocks, UNLOCK_ORDER, type PopupFacts,
+  calendarDue, jumpTarget, mayShowPopup, newUnlocks, nextPopup, primaryJump, reconcileSeen, seenAfterImport, sortUnlocks, UNLOCK_ORDER, type PopupFacts,
 } from '@/screens/system/popupPolicy';
 
 function facts(patch: Partial<PopupFacts> = {}): PopupFacts {
   return {
     comebackReady: false,
+    calendarReady: false,
+    tutorialDone: true,
+    today: '2026-10-10',
+    calendarOfferedOn: '',
     gemPassReady: false,
     level: 1,
     seenLevel: 1,
@@ -37,6 +41,55 @@ describe('which popup is next', () => {
   it('does not repeat a dismissed offer in the same session', () => {
     expect(nextPopup(facts({ comebackReady: true, offered: new Set(['comeback']) }))).toBeNull();
     expect(nextPopup(facts({ gemPassReady: true, offered: new Set(['gemPass']) }))).toBeNull();
+  });
+});
+
+describe('the attendance popup', () => {
+  const due = facts({ calendarReady: true });
+
+  it('opens by itself when the reward of the day is still to be taken', () => {
+    expect(nextPopup(due)).toEqual({ kind: 'calendar' });
+    expect(calendarDue(due)).toBe(true);
+  });
+
+  it('stays away when there is nothing to take', () => {
+    expect(nextPopup(facts({ calendarReady: false }))).toBeNull();
+  });
+
+  it('stays away until the tutorial is over, however much is waiting', () => {
+    expect(nextPopup({ ...due, tutorialDone: false })).toBeNull();
+    expect(nextPopup({ ...due, tutorialDone: false, level: 3, unlocked: ['cats'] })?.kind).toBe('levelUp');
+  });
+
+  it('is not repeated on the day it was dismissed, but is offered again on the next launch (the record is only memory)', () => {
+    expect(nextPopup({ ...due, calendarOfferedOn: '2026-10-10' })).toBeNull();
+    // A launch starts with no record.
+    expect(nextPopup({ ...due, calendarOfferedOn: '' })).toEqual({ kind: 'calendar' });
+  });
+
+  it('is a new offer when the app is left open over midnight', () => {
+    expect(nextPopup({ ...due, calendarOfferedOn: '2026-10-10', today: '2026-10-11' })).toEqual({ kind: 'calendar' });
+    expect(nextPopup({ ...due, calendarOfferedOn: '2026-10-11', today: '2026-10-11' })).toBeNull();
+  });
+
+  it('comes after the welcome-back chest and before everything else, and the others follow one at a time', () => {
+    const all = facts({ calendarReady: true, comebackReady: true, gemPassReady: true, level: 4, seenLevel: 2, unlocked: ['cats'] });
+    expect(nextPopup(all)).toEqual({ kind: 'comeback' });
+    const afterComeback = { ...all, offered: new Set<'comeback' | 'gemPass'>(['comeback']) };
+    expect(nextPopup(afterComeback)).toEqual({ kind: 'calendar' });
+    const afterCalendar = { ...afterComeback, calendarOfferedOn: '2026-10-10' };
+    expect(nextPopup(afterCalendar)).toEqual({ kind: 'gemPass' });
+    expect(nextPopup({ ...afterCalendar, offered: new Set(['comeback', 'gemPass']) })).toEqual({ kind: 'levelUp', from: 2, to: 4 });
+    expect(nextPopup({ ...afterCalendar, offered: new Set(['comeback', 'gemPass']), seenLevel: 4 })).toEqual({ kind: 'unlock', features: ['cats'] });
+  });
+
+  it('goes before a level-up or an unlock that is due at the same time', () => {
+    expect(nextPopup(facts({ calendarReady: true, level: 5, seenLevel: 2, unlocked: ['cats'] }))).toEqual({ kind: 'calendar' });
+    expect(nextPopup(facts({ calendarReady: true, unlocked: ['cats'] }))).toEqual({ kind: 'calendar' });
+  });
+
+  it('is claimed once: taking the reward ends the offer for the day', () => {
+    expect(nextPopup(facts({ calendarReady: false, calendarOfferedOn: '2026-10-10', level: 2, seenLevel: 1 }))?.kind).toBe('levelUp');
   });
 });
 

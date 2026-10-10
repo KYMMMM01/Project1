@@ -1,6 +1,6 @@
 /**
- * The popups the game opens by itself: welcome back, the gem pass's daily gems, an account level-up
- * and newly unlocked features. They are decided from the profile (not from events), so one that
+ * The popups the game opens by itself: welcome back, the day's attendance calendar, the gem pass's daily gems,
+ * an account level-up and newly unlocked features. They are decided from the profile (not from events), so one that
  * happened during a battle is simply waiting when the home screen is shown again. One at a time,
  * never over another popup or a full screen, and never while a scene is changing.
  */
@@ -16,6 +16,7 @@ import type { FeatureId } from '@/meta/data/schedule';
 import { drawIcon, type IconName } from '@/ui/icons';
 import { popups } from '@/ui/Popup';
 import { toast } from '@/ui/Toast';
+import { cardsVisible } from '../battle/model';
 import type { Shell } from '../contract';
 import { payout } from './kit/claimFx';
 import { NoticePopup, type NoticeRow } from './kit/noticePopup';
@@ -49,6 +50,16 @@ const FEATURE_ICON: Readonly<Record<FeatureId, IconName>> = {
 
 /** Offers already made in this app session: a dismissed one is not repeated until the next launch. */
 const offered = new Set<'comeback' | 'gemPass'>();
+/**
+ * The date the attendance popup was last opened on in this app session. The offer belongs to a day, not to the session: left open
+ * over midnight, the app offers the new day's reward, and a dismissed one is not repeated until then or the next launch.
+ */
+let calendarOfferedOn = '';
+
+/** QA: count today's attendance popup as offered, so it does not interrupt a screenshot. */
+export function markCalendarOffered(day: string): void {
+  calendarOfferedOn = day;
+}
 
 export class AutoPopups {
   private dirty = true;
@@ -59,7 +70,11 @@ export class AutoPopups {
   private readonly offChange: () => void;
   private readonly offFrame: () => void;
 
-  constructor(private readonly shell: Shell) {
+  /** `openCalendar` opens the attendance popup (the same one the home tab's button opens) and resolves when it has closed. */
+  constructor(
+    private readonly shell: Shell,
+    private readonly openCalendar: () => Promise<void>,
+  ) {
     this.offChange = profile.subscribe(() => {
       this.dirty = true;
     });
@@ -106,6 +121,10 @@ export class AutoPopups {
     const p = routinePrefs();
     return {
       comebackReady: profile.calendarView().comebackReady,
+      calendarReady: profile.calendarView().canClaim,
+      tutorialDone: cardsVisible(profile.data.stats.runs),
+      today: profile.today(),
+      calendarOfferedOn,
       gemPassReady: profile.gemPassView().canClaim,
       level: accountProgress(profile.data.accountXp).level,
       seenLevel: p.seenLevel,
@@ -121,6 +140,10 @@ export class AutoPopups {
       switch (due.kind) {
         case 'comeback':
           await this.comeback();
+          break;
+        case 'calendar':
+          calendarOfferedOn = profile.today();
+          await this.openCalendar();
           break;
         case 'gemPass':
           await this.gemPass();

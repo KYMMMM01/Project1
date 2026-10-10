@@ -19,7 +19,7 @@ import { MODIFIER_IDS } from '@/game/data/modifiers';
 import { waveKindOf } from '@/game/data/waves';
 import { CHAPTERS, RARITIES, UNIT_GRID } from '@/game/data/roster';
 import { MAX_STAKE } from '@/game/data/roster';
-import { stakeText } from '@/game/data/stakes';
+import { stakeControlText, stakeText } from '@/game/data/stakes';
 import {
   CARD_BASE, CHEST_GEM_PRICE, DAILY_MISSION_CHEST_POINTS, FREE_CHEST_MS, MAX_LEVEL, OFFERS, PATROL_CAP_MS, PATROL_CAP_PASS_MS, PATROL_GOLD_PER_HOUR, PATROL_MIN_MS, STAKE_STEP,
   SWEEP_PAYOUT, TICKET_STOCK, TICKETS_PER_DAY,
@@ -37,6 +37,8 @@ export type Facts = Record<string, string | number>;
 
 const pct = (v: number): number => Math.round(v * 100);
 const list = (v: readonly (string | number)[]): string => v.join(' · ');
+/** A short rule such as "Summon cost +10%" closed as a sentence, so a line that says more can follow it in the same paragraph. */
+const closed = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
 const hours = (ms: number): number => Math.round(ms / 3_600_000);
 const unitName = (id: UnitId): string => t(`unit.${id}.name`);
 const rarityName = (r: RarityId): string => t(`rarity.${r}`);
@@ -135,7 +137,9 @@ const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
   }),
   toy_reroll: () => ({ free: FREE_REROLLS, gems: OFFERS.relic_reroll.gems }),
   stakes: () => ({
-    max: MAX_STAKE, reward: pct(STAKE_STEP), s1: stakeText(1), s2: stakeText(2), s3: stakeText(3), s4: stakeText(4), s5: stakeText(5),
+    max: MAX_STAKE, reward: pct(STAKE_STEP), s1: closed(stakeText(1)), s2: closed(stakeText(2)), s3: closed(stakeText(3)), s4: closed(stakeText(4)), s5: closed(stakeText(5)),
+    // The control line of each level (it follows the level's rule in the same paragraph): elites and bosses take less of a slow, elites a shorter stun.
+    c1: stakeControlText(1), c2: stakeControlText(2), c3: stakeControlText(3), c4: stakeControlText(4), c5: stakeControlText(5),
   }),
   elite: () => ({
     time: ELITE_LIMITS[0] as number, fish: ELITE_FISH, purr: ELITE_PURR, rage: pct(boss('enrage').maxBonus), ...waveRhythm('elite'),

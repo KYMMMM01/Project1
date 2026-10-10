@@ -105,7 +105,7 @@ describe('the armour table (2026-10-10)', () => {
     const bare = foe(sim, 'cucumber', 0, 1e5);
     gainRelic(sim, 'scratcher');
     damageEnemy(sim, bare, 100, 'physical', null, false, null);
-    expect(1e5 - bare.hp).toBeCloseTo(100 * (1 - 0.08 * 0.8), 9);
+    expect(1e5 - bare.hp).toBeCloseTo(100 * (1 - 0.08 * 0.6), 9);
   });
 });
 

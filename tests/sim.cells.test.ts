@@ -123,7 +123,7 @@ describe('the one bonus of each special cell', () => {
     for (const id of SPECIAL_CELL_IDS) expect(SPECIAL_CELLS[id].value, id).toBe(id === 'treat' ? 0.15 : 0.2);
   });
 
-  it('adds 10 points of the prime-spot toy to whichever bonus the chapter has, and 2 cells', () => {
+  it('adds 10 points of the prime-spot toy to whichever bonus the chapter has, and 3 cells', () => {
     const wanted: Record<SpecialCellId, (on: UnitStats, off: UnitStats) => number> = {
       sun: (on, off) => off.interval / on.interval - 1,
       bowl: (on, off) => on.damage / off.damage - 1,
@@ -134,7 +134,7 @@ describe('the one bonus of each special cell', () => {
     for (let chapter = 1; chapter <= 5; chapter++) {
       const sim = field(chapter);
       gainRelic(sim, 'sunny_spot');
-      expect(sim.sunbeams, `chapter ${chapter}`).toHaveLength(SUN_CELLS + 2);
+      expect(sim.sunbeams, `chapter ${chapter}`).toHaveLength(SUN_CELLS + 3);
       const on = put(sim, sim.sunbeams[0] as number, 'w_sword');
       const off = put(sim, plainCell(sim), 'w_sword');
       expect(wanted[KIND[chapter - 1] as SpecialCellId](on.stats, off.stats), `chapter ${chapter}`).toBeCloseTo(chapter === 5 ? 0.25 : 0.3, 9);

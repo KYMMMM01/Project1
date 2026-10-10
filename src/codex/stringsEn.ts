@@ -144,7 +144,7 @@ export const EN: Record<string, string> = {
   'codex.cellgroup.lane': 'Where enemies walk',
   'codex.cell.plain.name': 'Plain cell',
   'codex.cell.plain.text': 'A cell with no effect. The board is {cols} cells wide and {rows} deep, {cells} cells in all, and one cat stands on each. Drag cats around; two of the same cat merge.',
-  'codex.cell.special.text': 'The special tile of the {chapter}. {effect} The board has {cells} of them, a plus in the middle at first, and they move to new places when an act ends. With the {toy} toy there are {toyCells} more tiles, and the bonus becomes: {boosted}',
+  'codex.cell.special.text': 'The special tile of the {chapter}. {effect} The board has {cells} of them, a plus in the middle at first, and they move to new places when a stage ends. With the {toy} toy there are {toyCells} more tiles, and the bonus becomes: {boosted}',
   'codex.cell.wet.name': 'Wet cell',
   'codex.cell.wet.text': 'A cell that got splashed. A cat there cannot attack until it dries. The cell flashes {warn}s before. The {spray} soaks {sprayCells} of the cells your cats stand on every {sprayEvery}s for {sprayDur}s, and the {bath} soaks {soakCells} every {soakEvery}s for {soakDur}s. A cat that is moved attacks again after {recover}s. The {bell} and the cats around it dodge it {dodge}% of the time.',
   'codex.cell.zap.name': 'Zap cell',

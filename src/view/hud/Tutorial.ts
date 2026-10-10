@@ -2,13 +2,17 @@
  * The tutorial run's lessons on screen. The plan is tutorialScript.ts; this turns what it says into paper: a spotlight on the
  * control or the board feature being taught (with a flat starburst when a control arrives), a hand showing the gesture, a note with
  * the topic's picture and one or two short lines, a cheerful sticker and confetti when the player has done it, and a "skip" button
- * in the top right. A lesson holds the clock only while it waits for a tap on a control of the screen (never for a gesture on the
- * field, which the field ignores while paused), and every hold is released when the lesson ends, is skipped or is destroyed.
+ * in the top right. A lesson holds the clock for as long as it waits for the player (a tap on a control, or a gesture on the field,
+ * which the field takes while only a lesson holds the clock: `BattleContext.lessonHold`), and every hold is released when the
+ * lesson ends, is skipped or is destroyed.
+ *
+ * The note and the paw are laid ONCE for a place the target has come to rest at (spotMath.ts `SpotSettle`): the lit window follows
+ * a target that is still arriving, but the note is not rebuilt and the paw does not start over each time it moves.
  */
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { audio } from '@/audio';
 import { t } from '@/core/i18n';
-import { CLASS_IDS, type UnitId, unitRarityIndex } from '@/game';
+import { CLASS_IDS, type UnitId } from '@/game';
 import { CELL_COUNT, CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
 import { topicTeach, type TopicId } from '@/guide';
 import { Button, Color, confirmDialog, Dim, drawDashedRect, motion, paperSeed, toast, TweenBag } from '@/ui';
@@ -23,7 +27,9 @@ import { LessonBubble } from './LessonBubble';
 import { LessonFx } from './LessonFx';
 import { bottomRects, laserFace, LASER_SPOT, type Point, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, spotRadius, spotWindow, topRects } from './layoutMath';
 import { findTwins } from './planMath';
+import { firstCat, kingCell, shadeCat, sunLanding, twinPair, weakestCat } from './pawTarget';
 import { REVEAL_KEYS, type RevealKey } from './policy';
+import { MEASURE_EVERY, SpotSettle, windowMoved } from './spotMath';
 import { FIRST_SUMMON_AFTER, NUDGE_FOR, nudgeDue } from './tutorialFlow';
 import {
   emptyCounts, HOLD_LIMIT, STEP_IDS, TUTORIAL_SUMMONS, TutorialScript, type CountKey, type ScriptEvent, type StepDef, type Target, type World,
@@ -41,10 +47,10 @@ const NUDGE_ROOM = 130;
 const NUDGE = 'nudge';
 const NOTE_W = 620;
 const NOTE_TILE = 92;
-/** Seconds between two measurements of where things are (a lesson does not need them every frame). */
-const MEASURE_EVERY = 0.1;
 /** Seconds a lesson may wait for the thing it points at to appear before it is dropped. */
 const UNSEEN_LIMIT = 6;
+/** Seconds the clock runs after the awakening so the guardian can arrive on screen before the next lesson holds it again. */
+const AWAKEN_BREATH = 1.6;
 
 /** What the HUD lends the tutorial: where its controls are and the summon button's breathing. */
 export interface TutorialHost {
@@ -57,6 +63,8 @@ export interface TutorialHost {
   keepClear(): readonly Keep[];
   /** The laser's guided first use has been done (it runs on its own, see LaserGuide.ts). */
   laserGuided(): boolean;
+  /** The guided first use waits for a touch (the button, then the lane): the lesson holds the clock meanwhile. */
+  laserHolds(): boolean;
   /** The guided first use of the laser should run now. */
   startLaserGuide(): void;
   /** What the "nice!" sticker must keep off, weighed for it: controls and writing first, then cats, the lane last. */
@@ -97,7 +105,13 @@ export class Tutorial {
   private skipped: boolean;
   private breath = 0;
   private measure = 0;
-  private paintedKey = '';
+  /** Decides when the note and the paw are laid for the place the target has come to rest at. */
+  private readonly settle = new SpotSettle();
+  /** What the note says, and what the paw points at, as last laid: a change of either lays it again. */
+  private noteLook = '';
+  private pawLook = '';
+  /** Whether the dim blocks the touches outside the window, as last drawn. */
+  private blockingNow = false;
   private carrying = false;
   /** Whether the lesson on screen has a paw to show (it comes back after the player's own drag only then). */
   private handOn = false;
@@ -105,11 +119,16 @@ export class Tutorial {
   private nudgeLeft = 0;
   private nudges = 0;
   private rect: Rect = NO_RECT;
-  /** The spotlight's window as last painted (holeOf keeps it still while the control only breathes). */
+  /** The spotlight's window as last drawn. */
   private hole: Rect = NO_RECT;
   private pair: [number, number] | null = null;
   private cat = -1;
   private sunTo = -1;
+  /** What the paw pointed at the last time, kept while it still fits (pawTarget.ts): a cat that arrives elsewhere does not pull it across the board. */
+  private lastPair: [number, number] | null = null;
+  private lastCat = -1;
+  private lastSunCat = -1;
+  private lastSunTo = -1;
   private lastTarget: Target | '' = '';
   private releaseDialog: (() => void) | null = null;
   /** Whether the speed button was out when the skip button was last placed: it takes its place beside the speed button then. */
@@ -136,8 +155,8 @@ export class Tutorial {
     this.countLeft();
     this.world = {
       phase: 'prep', wave: 0, waveKind: 'normal', pending: null, busy: false, cats: 0, empties: CELL_COUNT, twins: false, enemies: 0, targetAlive: false,
-      fish: 0, purr: 0, moltCost: 1, gradeCost: -1, classCost: -1, maxTier: 0, sun: 0, laserReady: false, laserGuided: false, callBonus: -1, selected: false,
-      counts: this.counts,
+      fish: 0, purr: 0, moltCost: 1, gradeCost: -1, classCost: -1, maxTier: 0, sun: 0, laserReady: false, laserGuided: false, laserHold: false, callBonus: -1, selected: false,
+      king: false, kingSelected: false, counts: this.counts,
     };
 
     const parent = env.ctx.layers.overlay;
@@ -200,6 +219,7 @@ export class Tutorial {
       if (called) this.bump('call');
     });
     env.on(b.events, 'relicGain', () => this.bump('relic'));
+    env.on(b.events, 'awaken', () => this.bump('awaken'));
     env.on(b.events, 'purr', ({ delta, reason }) => {
       if (delta > 0 && reason !== 'start') this.bump('purrGain');
     });
@@ -257,8 +277,12 @@ export class Tutorial {
     w.sun = b.sunbeams.length;
     w.laserReady = !b.laser.active && b.laser.cooldown <= 0;
     w.laserGuided = this.host.laserGuided();
+    w.laserHold = this.host.laserHolds();
     w.callBonus = b.callBonus();
     w.selected = ctx.selected !== null;
+    const king = kingCell(b.units, (c) => b.canAwaken(c) === null, ctx.selected ?? -1);
+    w.king = king >= 0;
+    w.kingSelected = king >= 0 && ctx.selected === king;
     return w;
   }
 
@@ -313,7 +337,7 @@ export class Tutorial {
     if (e.kind === 'begin') {
       for (const key of e.step.reveal) this.arrive(key);
       if (id === 'laser') this.host.startLaserGuide();
-      this.paintedKey = '';
+      this.resetLook();
       this.lastTarget = '';
       this.measure = 0;
       return;
@@ -322,6 +346,8 @@ export class Tutorial {
     if (e.kind === 'done') {
       this.env.progress.markTaught(id);
       this.cheerFor = e.step;
+      // The guardian arrives on the field's own time: the clock runs on for a moment before the next lesson may hold it again.
+      if (id === 'awaken') this.breath = AWAKEN_BREATH;
     }
   }
 
@@ -356,7 +382,7 @@ export class Tutorial {
 
   /** The spotlight, the hand and the note go away; the clock is released unless something else holds it. */
   private endVisuals(): void {
-    this.paintedKey = '';
+    this.resetLook();
     this.layer.visible = false;
     for (const b of this.blockers) b.visible = false;
     this.note.hide();
@@ -368,13 +394,29 @@ export class Tutorial {
     info.close(true, NUDGE);
   }
 
+  /** Nothing is laid: the next measurement of a target starts a new settling (the lit window is redrawn with it). */
+  private resetLook(): void {
+    this.settle.reset();
+    this.noteLook = '';
+    this.pawLook = '';
+    this.hole = NO_RECT;
+    this.blockingNow = false;
+    this.lastPair = null;
+    this.lastCat = -1;
+    this.lastSunCat = -1;
+    this.lastSunTo = -1;
+  }
+
   private setHold(on: boolean): void {
     if (on === this.held) return;
     this.held = on;
     this.env.ctx.setPaused('tutorial', on);
   }
 
-  /** The active lesson, drawn: re-measured a few times a second, repainted when something it points at has moved. */
+  /**
+   * The active lesson, drawn. What it points at is measured a few times a second (first, so the hold below goes by this frame's measurement);
+   * `SpotSettle` says whether the note and the paw are laid now, or whether only the lit window follows a target that is still arriving.
+   */
   private tick(dt: number, w: World): void {
     const step = this.script.active;
     this.placeSkipFor(step);
@@ -384,44 +426,89 @@ export class Tutorial {
       return;
     }
     this.endNudge();
-    const modal = w.busy;
-    // The clock is held while the lesson waits for a tap on a control (and for a beat after each summon so the sticker can pop in).
-    // A hold only makes sense while there is something on screen to tap, and never for ever: a player who ignores the lesson is let go.
+    // A popup carries its own lesson, and the laser's guided first use is the laser's own.
+    const away = step.popup || step.id === 'laser';
+    // The next note waits for the sticker to go: the two never share the screen (nor with a popup, or a beat after a tap that must be seen).
+    const hushed = w.busy || this.breath > 0 || this.fx.cheering;
+    if (!away) {
+      if (hushed) this.hush();
+      else this.look(step, w, dt);
+    } else if (step.id === 'laser') {
+      // The guide draws its own spotlight and words; the lesson only needs to know the button is there for its hold.
+      this.rect = this.host.rectOf('laser') ?? NO_RECT;
+    }
+    // The clock is held while the lesson waits for the player (and let go for a beat after a summon, so the new kitten can pop in).
+    // A hold only makes sense while there is something on screen to point at, and never for ever, except for a note that waits for its
+    // "got it" and has nothing else to wait for: a player who ignores an action lesson is let go.
     this.setHold(step.holds(w) && !step.popup && this.breath <= 0 && !this.skipAsked && this.rect.w > 0 && !this.script.relaxed);
     if (this.held) {
       this.heldFor += dt;
-      if (this.heldFor > HOLD_LIMIT) this.script.relax();
+      if (this.heldFor > HOLD_LIMIT && !step.ok) this.script.relax();
     }
-    if (step.popup || step.id === 'laser') {
-      // A popup carries its own lesson, and the laser's guided first use is the laser's own.
+    if (away) {
       this.layer.visible = false;
       this.note.hide();
-      return;
     }
-    // The next note waits for the sticker to go: the two never share the screen.
-    if (modal || this.breath > 0 || this.fx.cheering) {
-      this.layer.visible = false;
-      this.note.hide();
-      this.paintedKey = '';
-      return;
-    }
+  }
+
+  /** The note, the window and the paw give way for a moment (a sticker, a popup, a tap that must be seen): laid again at the next measure of a target that has not moved. */
+  private hush(): void {
+    this.layer.visible = false;
+    for (const b of this.blockers) b.visible = false;
+    this.note.hide();
+    this.hand.visible = false;
+    this.handOn = false;
+    this.hole = NO_RECT;
+    this.noteLook = '';
+    this.pawLook = '';
+    this.blockingNow = false;
+    this.settle.suspend();
+    this.measure = 0;
+  }
+
+  /** Measure what the lesson points at (a few times a second) and draw what the measurement calls for. */
+  private look(step: StepDef, w: World, dt: number): void {
     this.measure -= dt;
     const target = step.target(w);
-    if (this.measure <= 0 || target !== this.lastTarget || this.paintedKey === '') {
-      this.measure = MEASURE_EVERY;
-      this.lastTarget = target;
-      this.aim(target);
-      // Re-measured a few times a second: only a change in what is lit, said or blocked repaints the paper.
-      const hole = target === 'laser' ? this.holeOf(this.rect, LASER_SPOT, 2) : this.holeOf(this.rect, MARGIN, HOLE_GRID);
-      const text = this.textOf(step);
-      const blocking = step.holds(w) && !step.popup && !this.script.relaxed;
-      const key = `${step.id}|${target}|${hole.x}|${hole.y}|${hole.w}|${hole.h}|${blocking}|${text}|${this.layout.w}|${this.layout.h}`;
-      if (key !== this.paintedKey) {
-        this.paintedKey = key;
-        this.paint(step, target, hole, text, blocking);
-      }
-    } else if (!this.note.visible && this.rect.w > 0) {
-      this.paintedKey = '';
+    if (this.measure > 0 && target === this.lastTarget) {
+      // The note was taken away by something else (the info bubble the player opened gave way to it, not the other way round): bring it back.
+      if (!this.note.visible && this.settle.at !== null) this.settle.suspend();
+      return;
+    }
+    this.measure = MEASURE_EVERY;
+    this.lastTarget = target;
+    this.aim(target);
+    const hole = this.rect.w <= 0 ? NO_RECT : target === 'laser' ? spotWindow(this.rect, LASER_SPOT, 2, this.layout) : spotWindow(this.rect, MARGIN, HOLE_GRID, this.layout);
+    const blocking = step.holds(w) && !step.popup && !this.script.relaxed;
+    const text = this.textOf(step, w);
+    const noteLook = `${step.id}|${text}|${this.layout.w}|${this.layout.h}`;
+    const where = this.pair ? this.pair.join('-') : '';
+    const pawLook = `${target}|${where}|${this.cat}|${this.sunTo}|${this.layout.w}|${this.layout.h}`;
+    // The paw points at something else now (another target, another cat): it is taken away and laid again for the new spot.
+    if (pawLook !== this.pawLook) {
+      this.pawLook = pawLook;
+      this.unpoint();
+    }
+    switch (this.settle.step(hole)) {
+      case 'clear':
+        this.clearSpot();
+        break;
+      case 'keep':
+        break;
+      case 'wait':
+        this.drawWindow(hole, blocking);
+        break;
+      case 'follow':
+        this.drawWindow(hole, blocking);
+        if (noteLook !== this.noteLook) this.say(step, hole, text, noteLook);
+        break;
+      case 'lay':
+        this.drawWindow(hole, blocking);
+        this.host.pulse(step.id === 'summon');
+        this.say(step, hole, text, noteLook);
+        // The paw comes in after the note has found its place, so it can keep off it.
+        this.placeHand(step, target);
+        break;
     }
   }
 
@@ -438,7 +525,8 @@ export class Tutorial {
       x: ctx.toSceneX(cellCenterX(cell)) - CELL_W / 2, y: ctx.toSceneY(cellCenterY(cell)) - CELL_H / 2, w: CELL_W, h: CELL_H,
     });
     if (target === 'pair') {
-      this.pair = findTwins(b.units);
+      this.pair = twinPair(b.units, this.lastPair);
+      this.lastPair = this.pair;
       if (!this.pair) {
         this.rect = NO_RECT;
         return;
@@ -446,14 +534,17 @@ export class Tutorial {
       const a = cellRect(this.pair[0]);
       const c = cellRect(this.pair[1]);
       this.rect = unionOf(a, c);
-    } else if (target === 'cat' || target === 'sellcat') {
-      this.cat = this.pickCat(target === 'sellcat');
+    } else if (target === 'cat' || target === 'weakcat' || target === 'king') {
+      this.cat = target === 'king' ? kingCell(b.units, (c) => b.canAwaken(c) === null, this.lastCat) : target === 'weakcat' ? weakestCat(b.units, this.lastCat) : firstCat(b.units);
+      this.lastCat = this.cat;
       this.rect = this.cat >= 0 ? cellRect(this.cat) : NO_RECT;
     } else if (target === 'sun') {
       let box: Rect | null = null;
       for (const c of b.sunbeams) box = box ? unionOf(box, cellRect(c)) : cellRect(c);
-      this.cat = this.pickSunCat();
-      this.sunTo = this.pickSunCell(this.cat);
+      this.cat = shadeCat(b.units, (c) => b.units[c]?.sunlit === true, this.lastSunCat);
+      this.sunTo = sunLanding(b.units, b.sunbeams, this.cat, this.lastSunTo);
+      this.lastSunCat = this.cat;
+      this.lastSunTo = this.sunTo;
       this.rect = box ?? NO_RECT;
       if (this.cat >= 0 && box) this.rect = unionOf(box, cellRect(this.cat));
     } else {
@@ -461,74 +552,27 @@ export class Tutorial {
     }
   }
 
-  /** A cat to tap: the weakest one for selling, otherwise the first (the lesson is about the button that follows). */
-  private pickCat(weakest: boolean): number {
-    const units = this.env.battle.units;
-    let best = -1;
-    let score = Infinity;
-    for (let c = 0; c < units.length; c++) {
-      const u = units[c];
-      if (!u) continue;
-      const s = weakest ? unitRarityIndex(u.id) : c;
-      if (s < score) {
-        score = s;
-        best = c;
-      }
-    }
-    return best;
-  }
-
-  /** A cat that stands in the shade: the one the hand carries into the sun. */
-  private pickSunCat(): number {
-    const units = this.env.battle.units;
-    for (let c = 0; c < units.length; c++) {
-      const u = units[c];
-      if (u && !u.sunlit) return c;
-    }
-    return -1;
-  }
-
-  /** A special cell for it to land on: an empty one first, otherwise any special cell with another cat on it (they swap). */
-  private pickSunCell(from: number): number {
-    const b = this.env.battle;
-    let taken = -1;
-    for (const c of b.sunbeams) {
-      if (c === from) continue;
-      if (!b.units[c]) return c;
-      if (taken < 0) taken = c;
-    }
-    return taken;
-  }
-
-  /**
-   * The spotlight's window round a rectangle (layoutMath.spotWindow: equal insets on all four sides about the control's centre). A button that
-   * breathes can sit on the edge between two grid steps and flip between them every beat: the window stays where it was until the control has
-   * really moved or grown (a flip would repaint the note and start its paw over each time).
-   */
-  private holeOf(r: Rect, margin: number, grid: number): Rect {
-    if (r.w <= 0) {
-      this.hole = NO_RECT;
-      return NO_RECT;
-    }
-    const next = spotWindow(r, margin, grid, this.layout);
-    const was = this.hole;
-    const still = was.w > 0 && Math.abs(next.x + next.w / 2 - (was.x + was.w / 2)) <= 0.5 && Math.abs(next.y + next.h / 2 - (was.y + was.h / 2)) <= 0.5
-      && Math.abs(next.w - was.w) <= HOLE_GRID * 2 && Math.abs(next.h - was.h) <= HOLE_GRID * 2;
-    if (!still) this.hole = next;
-    return this.hole;
-  }
-
-  private textOf(step: StepDef): string {
+  /** What the note says: the topic's own line, with the lesson's count or the step it is on. */
+  private textOf(step: StepDef, w: World): string {
     const base = topicTeach(step.id);
     if (step.id === 'summon') return `${base} ${t('guide.tut.count', { n: Math.min(this.counts.summon, TUTORIAL_SUMMONS), total: TUTORIAL_SUMMONS })}`;
+    // The awakening: first the king is tapped, then the button; the cost is the game's own.
+    if (step.id === 'awaken') return t(w.kingSelected ? 'hud.tut.awaken.go' : 'hud.tut.awaken.pick', { cost: this.env.battle.awakenCost() });
     return base;
   }
 
-  private paint(step: StepDef, target: Target, hole: Rect, text: string, blocking: boolean): void {
+  /**
+   * The warm-brown dim with a window cut out of it, the window edged with a dashed cream line like a cut-out. Drawn again only when the window
+   * has moved or the dim's strength has changed (it follows a target that is still arriving); the line's own pulse is not restarted by it.
+   */
+  private drawWindow(hole: Rect, blocking: boolean): void {
+    if (this.layer.visible && blocking === this.blockingNow && !windowMoved(this.hole, hole)) return;
     const W = this.layout.w;
     const H = this.layout.h;
+    const first = !this.layer.visible || this.hole.w <= 0;
+    this.hole = hole;
+    this.blockingNow = blocking;
     this.layer.visible = hole.w > 0;
-    // The warm-brown dim with a hole cut out of it; the hole is edged with a dashed cream line, like a cut-out window.
     const alpha = blocking ? Dim.backdropAlpha : Dim.backdropAlpha * 0.7;
     this.dim.clear().rect(0, 0, W, H).fill({ color: Dim.backdrop, alpha });
     this.ring.clear();
@@ -536,11 +580,13 @@ export class Tutorial {
       const corner = spotRadius(hole, HOLE_CORNER);
       this.dim.roundRect(hole.x, hole.y, hole.w, hole.h, corner).cut();
       drawDashedRect(this.ring, hole.x, hole.y, hole.w, hole.h, { radius: corner, color: Color.paper, width: 5, seed: this.seed });
-      if (!motion.reduced) {
-        this.bag.killKeyed(this.ring);
-        this.bag.runKeyed(this.ring, { duration: 0.6, yoyo: true, repeat: -1, onUpdate: (k) => (this.ring.alpha = 0.55 + 0.45 * k) });
-      } else {
-        this.ring.alpha = 1;
+      if (first) {
+        if (!motion.reduced) {
+          this.bag.killKeyed(this.ring);
+          this.bag.runKeyed(this.ring, { duration: 0.6, yoyo: true, repeat: -1, onUpdate: (k) => (this.ring.alpha = 0.55 + 0.45 * k) });
+        } else {
+          this.ring.alpha = 1;
+        }
       }
     }
     const rects: Array<[number, number, number, number]> = [
@@ -554,12 +600,14 @@ export class Tutorial {
       const [bx, by, bw, bh] = rects[i] as [number, number, number, number];
       blocker.hitArea = new Rectangle(bx, by, bw, bh);
     });
-    this.host.pulse(step.id === 'summon');
-    if (hole.w <= 0) {
-      this.note.hide();
-      this.placeHand(step, target);
-      return;
-    }
+  }
+
+  /**
+   * The lesson's note over the half of the screen its window is not on. It pops in when it was not up; a note that is up (its text changed,
+   * or its target came to rest somewhere else) is put down again in the same frame without the pop, so nothing blinks.
+   */
+  private say(step: StepDef, hole: Rect, text: string, look: string): void {
+    this.noteLook = look;
     // A lesson's note has the space first: an information bubble the player opened gives way.
     info.close();
     this.note.show(
@@ -573,9 +621,27 @@ export class Tutorial {
         buttons: step.ok ? [{ label: t('guide.ok'), style: 'primary', width: 220 }] : [],
       },
       () => this.script.tapOk(),
+      !this.note.visible,
     );
-    // The paw comes in after the note has found its place, so it can keep off it.
-    this.placeHand(step, target);
+  }
+
+  /** The paw points at something else (or at nothing yet): it leaves, and `SpotSettle` lays it again for the new spot. */
+  private unpoint(): void {
+    this.hand.visible = false;
+    this.handOn = false;
+    this.settle.suspend();
+  }
+
+  /** What the lesson pointed at is gone for good (a control that went away): the window, the note and the paw leave with it. */
+  private clearSpot(): void {
+    this.layer.visible = false;
+    for (const b of this.blockers) b.visible = false;
+    this.note.hide();
+    this.hand.visible = false;
+    this.handOn = false;
+    this.hole = NO_RECT;
+    this.noteLook = '';
+    this.blockingNow = false;
   }
 
   /** What the paw must not lie on besides the label of what it points at: the lesson's note and the skip button, then the cats and buttons. */
@@ -622,12 +688,12 @@ export class Tutorial {
       drag(this.cat, this.sunTo);
       return true;
     }
-    if ((target === 'cat' || target === 'sellcat') && this.cat >= 0) {
+    if ((target === 'cat' || target === 'weakcat' || target === 'king') && this.cat >= 0) {
       const c = cell(this.cat);
       this.pat(h, { x: c.x + 10, y: c.y - 6 }, keep);
       return true;
     }
-    if (this.rect.w > 0 && target !== 'sun' && target !== 'cat' && target !== 'sellcat' && target !== 'pair') {
+    if (this.rect.w > 0 && target !== 'sun' && target !== 'cat' && target !== 'weakcat' && target !== 'king' && target !== 'pair') {
       // The whole chip row is lit; the paw pats the first chip.
       const r = target === 'chips' ? { x: this.rect.x + 20, y: this.rect.y, w: 150, h: this.rect.h } : this.rect;
       const { label } = tipSpot(r);
@@ -827,7 +893,7 @@ export class Tutorial {
 
   resize(l: BattleLayout): void {
     this.layout = l;
-    this.paintedKey = '';
+    this.resetLook();
     this.placeSkip();
   }
 

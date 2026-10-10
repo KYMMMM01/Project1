@@ -8,7 +8,7 @@
 import type { Container } from 'pixi.js';
 import { CLASS_IDS, unitRarityIndex, type EnemyState } from '@/game';
 import type { EnvImpl } from './env';
-import { arrivalTopics, runTopic, traitTopicsOf } from './encounters';
+import { runTopic, spawnTopics, traitTopicsOf } from './encounters';
 
 export interface EncounterTargets {
   /** The enemy count strip. */
@@ -54,15 +54,16 @@ export function watchEncounters(env: EnvImpl, at: EncounterTargets): void {
     for (const u of b.units) {
       if (!u || unitRarityIndex(u.id) !== 3) continue;
       const view = env.ctx.unitView(u.uid);
-      // The card is about the cat that has just arrived, and the player can act on it now: it does not wait behind the others.
-      if (view) ask.request('awaken', view, false, true);
+      // The card is about the cat that has just arrived, and the player can act on it now: it does not wait behind the others. The tutorial run
+      // has a lesson of its own for it (a skipped one does not).
+      if (view && !env.lessonOn('awaken')) ask.request('awaken', view, false, true);
       return;
     }
   };
   for (const type of ['summon', 'merge', 'molt'] as const) env.on(b.events, type, () => env.ctx.ui.call(0.9, king));
   env.on(b.events, 'enemySpawn', ({ enemy }: { enemy: EnemyState }) => {
-    // The elite or boss of the wave: the rule first, then the boss's own trick. The first card goes to the front of the line.
-    if (b.boss !== enemy) return;
-    arrivalTopics(enemy.id, b.waveKind).forEach((topic, i) => ask.request(topic, at.boss, false, i === 0));
+    // The elite or boss of the wave: the rule first, then the boss's own trick. The first card goes to the front of the line. (The simulation
+    // names it `battle.boss` only after this event, so it is told apart by what it is.)
+    spawnTopics(enemy.id, b.waveKind).forEach((topic, i) => ask.request(topic, at.boss, false, i === 0));
   });
 }

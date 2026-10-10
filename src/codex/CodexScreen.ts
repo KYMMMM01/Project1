@@ -55,7 +55,14 @@ export function codexState(): { section: CodexSection; page: EnemyId | null } | 
 export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
   if (current) return null;
   const progress = opts.progress ?? guideProgress;
-  if (!progress.ready) void progress.load().then(() => render());
+  // The visit begins once the progress is read (before that nothing is known to be new): the buttons' count goes, the stickers stay until the codex is closed.
+  if (progress.ready) progress.beginCodexVisit();
+  else
+    void progress.load().then(() => {
+      if (closed) return;
+      progress.beginCodexVisit();
+      render();
+    });
   const scaffold = new ScreenScaffold({ title: t('codex.title'), onBack: () => back(), scroll: true, actionBarHeight: BAR_H });
   game.popupLayer.addChild(scaffold);
   const bag = new TweenBag();
@@ -64,6 +71,8 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
   let page: EnemyId | null = opts.foe ?? null;
   let level = clampLevel(opts.level ?? lastLevel);
   let filter: ToyFilter = 'all';
+  /** The sections the player has been in during this visit: a tab carries a dot only for a section with new entries that has not been shown yet. */
+  const viewed = new Set<CodexSection>([section]);
   /** What lies under the selector or filter: rebuilt when the level or the filter changes. */
   let body: Container | null = null;
   let bodyTop = 0;
@@ -78,11 +87,6 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
     body = null;
     for (const c of scaffold.content.removeChildren()) c.destroy({ children: true });
     for (const c of scaffold.actionBar.removeChildren()) c.destroy({ children: true });
-  };
-
-  /** Everything the toy list showed is looked at once the player leaves it: its "new" marks go. */
-  const leaveSection = (): void => {
-    if (section === 'toys' && !page) for (const id of toysFor('all')) progress.markLooked(toyKey(id));
   };
 
   const freshIn = (id: CodexSection): boolean =>
@@ -115,14 +119,14 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
       tabs: CODEX_SECTIONS.map((id) => ({ id, label: t(`codex.section.${id}`) })),
     });
     tabs.onSelect((id) => {
-      leaveSection();
       section = id as CodexSection;
+      viewed.add(section);
       showList();
     });
     scaffold.actionBar.addChild(tabs);
     const cell = (w - 12) / CODEX_SECTIONS.length;
     CODEX_SECTIONS.forEach((id, i) => {
-      if (id === section || !freshIn(id)) return;
+      if (id === section || viewed.has(id) || !freshIn(id)) return;
       const dot = new Graphics().circle(0, 0, 10).fill(Color.berry).circle(0, 0, 10).stroke({ color: Color.paperLight, width: 3 });
       dot.position.set(-w / 2 + 6 + cell * (i + 1) - 18, -TAB_H / 2 + 10);
       scaffold.actionBar.addChild(dot);
@@ -187,7 +191,7 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
   function showPage(id: EnemyId): void {
     page = id;
     section = 'foes';
-    progress.markLooked(foeKey(id));
+    viewed.add(section);
     clear();
     scaffold.setTitle(t('codex.title'));
     const w = scaffold.contentWidth;
@@ -241,7 +245,7 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
   function close(): void {
     if (closed) return;
     closed = true;
-    leaveSection();
+    progress.endCodexVisit();
     current = null;
     off();
     bag.killAll();
@@ -260,7 +264,7 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
     close: () => {
       if (closed) return;
       closed = true;
-      leaveSection();
+      progress.endCodexVisit();
       current = null;
       off();
       bag.killAll();

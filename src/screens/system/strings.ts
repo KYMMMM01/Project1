@@ -241,7 +241,7 @@ addStrings('en', {
   'rt.sys.feat.cosmetics': 'Decorate with rugs and summon effects.',
   'rt.sys.feat.pass': 'A season pass with rewards every tier.',
   'rt.sys.feat.daily': 'A new challenge every day.',
-  'rt.sys.feat.sweep': 'Finish cleared stages instantly with tickets.',
+  'rt.sys.feat.sweep': 'Finish cleared chapters instantly with tickets.',
   'rt.sys.feat.cup': 'Daily challenge scores earn weekly cup chests.',
   'rt.sys.feat.endless': 'Hold off enemies that never stop.',
   'rt.sys.feat.dungeon': 'Two short runs a day that pay gold.',

@@ -129,6 +129,8 @@ export interface BattleContext {
   /** 1, 2 or 3 (3 needs the Butler Pass; the HUD decides what it offers). */
   setSpeed(speed: number): void;
   readonly paused: boolean;
+  /** The only thing holding the battle is a tutorial lesson waiting for the player's gesture: the field still takes touches (a drag, a tap on a cat). */
+  readonly lessonHold: boolean;
   /** Pauses nest per reason: the battle runs only when no reason is active. */
   setPaused(reason: PauseReason, paused: boolean): void;
   /** Hit-stop: freeze the simulation and battle-time tweens for `ms` of real time (longest request wins). */

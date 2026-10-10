@@ -152,6 +152,13 @@ export const HASTE_CAP = 0.6;
 export const CC_IMMUNE_AFTER = 4;
 export const ELITE_CC_FACTOR = 0.5;
 /**
+ * Butler levels 1 to 5 (`stakeRules`, data/stakes.ts) make elites and bosses harder to control, one step per level, as fractions: the cap on
+ * one slow (`SLOW_CAP_BOSS`) drops by the first and an elite's stun and freeze share (`ELITE_CC_FACTOR`) by the second, so 25% becomes
+ * 23 / 21 / 19 / 17 / 15% and 50% becomes 46 / 42 / 38 / 34 / 30%. Level 0 keeps both as they are; bosses are immune to stun and freeze at every level.
+ */
+export const STAKE_SLOW_CAP_STEP = 0.02;
+export const STAKE_ELITE_CC_STEP = 0.04;
+/**
  * Black hole (v1.4, immunity 4 -> 2 s in v1.5.1): once a hole has caught an enemy, no hole drags it again until this many seconds after that
  * hole ended; elites and bosses are dragged by this fraction of the pull.
  */

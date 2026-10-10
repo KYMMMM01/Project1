@@ -41,7 +41,7 @@ Hero (picture, name, rank, met mark, flavour line) on a cream sheet; then **trai
 
 ## Discovery and "new" (`src/guide/progress.ts`)
 
-`GuideProgress` now keeps two more lists in the same save (`meowguard.hints`, version 3; a version 2 save loads with both empty): `met` (`foe:<id>`, `toy:<id>`) and `looked`. `isFresh(key)` is met and not looked; `freshCount()` drives the badge on the home button and the settings row's sub line. A foe is met when it spawns, a toy when it is offered or won (`view/hud/codexWatch.ts`, built with the HUD, also marks what a restored run already holds). A monster page marks its enemy looked when it opens; the toy list marks every toy looked when the player leaves it. Looking at an entry that was never met changes nothing. A sandbox run keeps its marks in memory only (like its lessons). "Erase progress" wipes them with the rest.
+`GuideProgress` now keeps two more lists in the same save (`meowguard.hints`, version 3; a version 2 save loads with both empty): `met` (`foe:<id>`, `toy:<id>`) and `looked`. `isFresh(key)` is met and not looked; `freshCount()` drives the badge on the home button and the settings row's sub line. A foe is met when it spawns, a toy when it is offered or won (`view/hud/codexWatch.ts`, built with the HUD, also marks what a restored run already holds). (Superseded 2026-10-10, see `docs/handoff/batch4_meta.md`: opening the codex now clears the count at once, the stickers stay for that visit and closing marks everything seen; no page or list has to be opened one by one.) Looking at an entry that was never met changes nothing. A sandbox run keeps its marks in memory only (like its lessons). "Erase progress" wipes them with the rest.
 
 ## Entrances
 

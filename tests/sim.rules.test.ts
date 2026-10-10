@@ -107,7 +107,7 @@ describe('summoning', () => {
     const crate = newSim();
     gainRelic(crate, 'sardine_crate');
     crate.paidSummons = 30;
-    expect(crate.summonCost()).toBe(SUMMON_CAP - 15);
+    expect(crate.summonCost()).toBe(SUMMON_CAP - 10);
     const stake = newSim({ stake: 3 });
     expect(stake.summonCost()).toBe(Math.ceil(SUMMON_BASE * 1.1));
     stake.paidSummons = 30;

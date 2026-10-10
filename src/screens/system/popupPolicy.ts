@@ -7,12 +7,21 @@ import type { TabId } from '../contract';
 
 export type DuePopup =
   | { kind: 'comeback' }
+  | { kind: 'calendar' }
   | { kind: 'gemPass' }
   | { kind: 'levelUp'; from: number; to: number }
   | { kind: 'unlock'; features: FeatureId[] };
 
 export interface PopupFacts {
   comebackReady: boolean;
+  /** Today's attendance reward can be taken. */
+  calendarReady: boolean;
+  /** The first run (the tutorial) is over: until then the home screen says nothing by itself. */
+  tutorialDone: boolean;
+  /** Today's date key. */
+  today: string;
+  /** The date the attendance popup was last offered on in this app session ('' = not yet): dismissed, it stays away for the day, and a new day is a new offer. */
+  calendarOfferedOn: string;
   gemPassReady: boolean;
   level: number;
   seenLevel: number;
@@ -92,9 +101,15 @@ export function seenAfterImport(unlocked: readonly string[], level: number): { s
   return { seenUnlocked: unlocked.slice(), seenLevel: level };
 }
 
-/** The next popup to show, or null. Priority: welcome back, gem pass, level up, new unlocks. */
+/** Whether the attendance popup opens by itself: a reward to take, a finished tutorial, and not yet offered today in this session. */
+export function calendarDue(f: Pick<PopupFacts, 'calendarReady' | 'tutorialDone' | 'today' | 'calendarOfferedOn'>): boolean {
+  return f.tutorialDone && f.calendarReady && f.calendarOfferedOn !== f.today;
+}
+
+/** The next popup to show, or null. Priority: welcome back, attendance, gem pass, level up, new unlocks. */
 export function nextPopup(f: PopupFacts): DuePopup | null {
   if (f.comebackReady && !f.offered.has('comeback')) return { kind: 'comeback' };
+  if (calendarDue(f)) return { kind: 'calendar' };
   if (f.gemPassReady && !f.offered.has('gemPass')) return { kind: 'gemPass' };
   if (f.level > f.seenLevel) return { kind: 'levelUp', from: f.seenLevel, to: f.level };
   const fresh = newUnlocks(f.unlocked, f.seenUnlocked);

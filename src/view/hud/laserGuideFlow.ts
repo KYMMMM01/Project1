@@ -68,3 +68,35 @@ export class LaserGuideFlow {
     return this.step === 'done';
   }
 }
+
+// ───────────────────────── the paw that rides the lane ─────────────────────────
+
+/**
+ * The enemy the paw rides while the player is asked to put the dot down: the one it has been riding for as long as that one is on the field,
+ * otherwise the one furthest along the loop. Without the first rule a faster enemy that overtakes the leader, or a new leader after a kill,
+ * pulled the paw across the whole lane and back.
+ */
+export function followedEnemy<E extends { uid: number; travelled: number }>(enemies: ReadonlyArray<E>, riding: number | null): E | null {
+  let lead: E | null = null;
+  for (const e of enemies) {
+    if (e.uid === riding) return e;
+    if (!lead || e.travelled > lead.travelled) lead = e;
+  }
+  return lead;
+}
+
+/** Which side the paw's arm trails from while it rides at (x, y) on a screen of w x h. */
+export type RideArm = 'upperLeft' | 'upperRight' | 'lowerLeft' | 'lowerRight';
+
+/** How far past the line between two arms the paw has to ride before it turns the other way (px): riding along the line does not make it flip. */
+export const ARM_HYSTERESIS = 60;
+/** Where the arms change: below this share of the screen's height the arm comes down from above, right of this share of its width it leans left. */
+const ARM_Y = 0.45;
+const ARM_X = 0.6;
+
+export function ridingArm(x: number, y: number, w: number, h: number, was: RideArm | null): RideArm {
+  const below = was === null ? y > h * ARM_Y : was.startsWith('upper') ? y > h * ARM_Y - ARM_HYSTERESIS : y > h * ARM_Y + ARM_HYSTERESIS;
+  const right = was === null ? x > w * ARM_X : was.endsWith('Left') ? x > w * ARM_X - ARM_HYSTERESIS : x > w * ARM_X + ARM_HYSTERESIS;
+  if (below) return right ? 'upperLeft' : 'upperRight';
+  return right ? 'lowerLeft' : 'lowerRight';
+}

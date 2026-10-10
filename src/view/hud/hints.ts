@@ -57,6 +57,15 @@ export interface HintHost {
   openGuide(id: HintId): void;
 }
 
+/**
+ * A bubble that is in a card's way: one the player opened (the answer to a tap) while a card waits or is up. A lesson's own sticky line (the
+ * laser guide's "press the button", which waits for the player for as long as it takes) is not: it goes quiet by itself when a card comes up,
+ * and a card that waited for it would never come (the first elite and boss of a run were starved by it).
+ */
+export function bubbleInTheWay(visible: boolean, sticky: boolean): boolean {
+  return visible && !sticky;
+}
+
 /** True when the container and every ancestor are shown and it has something to point at. */
 export function onScreen(c: Container): boolean {
   if (c.destroyed) return false;
@@ -72,7 +81,10 @@ export class Hints {
   private holdoff = 0;
   private live: Pending | null = null;
   private release: (() => void) | null = null;
-  /** While set, only these topics may ask for a card (the tutorial run teaches the rest itself). */
+  /**
+   * While set, only these topics may ask for a card (the tutorial run teaches the rest itself). The filter ends the
+   * moment the lessons do: a player who skips them mid-run gets every card from then on, in that same run.
+   */
   only: ReadonlySet<HintId> | null = null;
 
   constructor(private readonly progress: GuideProgress) {}
@@ -102,7 +114,7 @@ export class Hints {
    * puts it at the front of the queue and sends a card that is up right now back to wait its turn.
    */
   request(id: HintId, target: Container, onSelection = false, first = false, also: Container | null = null): void {
-    if (this.only && !this.only.has(id)) return;
+    if (this.only && !this.progress.skipped && !this.only.has(id)) return;
     if (this.progress.isSeen(id) || this.queue.some((q) => q.id === id) || this.live?.id === id) return;
     if (!first) {
       this.queue.push({ id, target, also, onSelection });
@@ -145,11 +157,11 @@ export class Hints {
     if (this.holdoff > 0) this.holdoff -= dt;
     if (this.live) {
       // An information bubble (an enemy card the player pressed) is the answer to a tap: the lesson steps aside for it.
-      if (!allowed || info.visible || this.live.onSelection !== selecting || this.live.target.destroyed) this.interrupt();
+      if (!allowed || bubbleInTheWay(info.visible, info.sticky) || this.live.onSelection !== selecting || this.live.target.destroyed) this.interrupt();
       return;
     }
     if (this.quiet > 0) this.quiet -= dt;
-    if (!allowed || !this.progress.ready || this.quiet > 0 || this.holdoff > 0 || info.visible || !this.host) return;
+    if (!allowed || !this.progress.ready || this.quiet > 0 || this.holdoff > 0 || bubbleInTheWay(info.visible, info.sticky) || !this.host) return;
     const at = this.queue.findIndex((q) => q.onSelection === selecting);
     const next = at >= 0 ? this.queue.splice(at, 1)[0] : undefined;
     if (!next) return;

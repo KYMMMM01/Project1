@@ -3,8 +3,10 @@ import { addStrings } from '@/core/i18n';
 
 addStrings('ko', {
   // top area
-  'hud.wave': '{act}막 · 웨이브 {wave}/{total}',
-  'hud.waveOpen': '{act}막 · 웨이브 {wave}',
+  // The wave label is 204 px of 24 px text: "스테이지 3 · 웨이브 12/24" is 236 px and would be cut, so the word "웨이브" is left out
+  // (the banner at the start of every wave says it in full). The endless label has no total and room for "번째".
+  'hud.wave': '스테이지 {act} · {wave}/{total}',
+  'hud.waveOpen': '스테이지 {act} · {wave}번째',
   'hud.prep': '준비해요',
   'hud.ready': '소환해요',
   'hud.secs': '{s}초',
@@ -97,7 +99,7 @@ addStrings('ko', {
 
   // toy choice
   'hud.relic.title': '장난감 고르기',
-  'hud.relic.cleared': '{act}막 클리어!',
+  'hud.relic.cleared': '스테이지 {act} 클리어!',
   'hud.relic.one': '장난감을 하나 골라요.',
   'hud.relic.many': '장난감을 {n}개 더 고를 수 있어요.',
   'hud.relic.reroll': '다시 뽑기',
@@ -107,6 +109,9 @@ addStrings('ko', {
 
   // pause and settings
   'hud.pause.title': '일시정지',
+  // The pause menu has room for the word the top bar leaves out.
+  'hud.pause.where': '스테이지 {act} · 웨이브 {wave}/{total}',
+  'hud.pause.whereOpen': '스테이지 {act} · 웨이브 {wave}',
   'hud.pause.resume': '계속하기',
   'hud.pause.restart': '다시 시작',
   'hud.pause.restartAsk': '지금 판은 사라지고 처음부터 시작해요. 괜찮아요?',
@@ -183,6 +188,8 @@ addStrings('ko', {
 
   // tutorial
   'hud.tut.more': '생선이 넉넉해요! 고양이를 더 불러요!',
+  'hud.tut.awaken.pick': '골골이 모였어요! 대왕 고양이는 골골 {cost}개로 수호신이 돼요. 대왕을 눌러 봐요!',
+  'hud.tut.awaken.go': '각성 버튼을 눌러요! 수호신은 가장 강한 고양이예요.',
 
   // laser
   'hud.laser.hint': '길 위를 눌러 빨간 점을 찍어요. 점 가까이 있는 적부터 공격해요. 보스·정예 가까이에 찍으면 점이 붙어요.',
@@ -209,7 +216,7 @@ addStrings('ko', {
 
   // refused commands
   'hud.fail.not_enough_fish': '생선이 모자라요.',
-  'hud.fail.not_enough_purr': '골골이 모자라요. 막을 깰 때 받아요.',
+  'hud.fail.not_enough_purr': '골골이 모자라요. 스테이지를 깰 때 받아요.',
   'hud.fail.board_full': '자리가 없어요. 고양이를 합치거나 팔아 보세요.',
   'hud.fail.choice_pending': '먼저 고르는 중이에요.',
   'hud.fail.not_in_battle': '지금은 쓸 수 없어요.',
@@ -239,8 +246,9 @@ addStrings('ko', {
 });
 
 addStrings('en', {
-  'hud.wave': 'Act {act} · Wave {wave}/{total}',
-  'hud.waveOpen': 'Act {act} · Wave {wave}',
+  // Same form as the Korean label: "Stage 3 · Wave 12/24" is 218 px and the label has 204. The endless label has no total, so it keeps "Wave".
+  'hud.wave': 'Stage {act} · {wave}/{total}',
+  'hud.waveOpen': 'Stage {act} · Wave {wave}',
   'hud.prep': 'Get ready',
   'hud.ready': 'Summon!',
   'hud.secs': '{s}s',
@@ -324,7 +332,7 @@ addStrings('en', {
   'hud.peek.back': 'Go back',
 
   'hud.relic.title': 'Pick a toy',
-  'hud.relic.cleared': 'Act {act} cleared!',
+  'hud.relic.cleared': 'Stage {act} cleared!',
   'hud.relic.one': 'Choose one toy.',
   'hud.relic.many': 'You can choose {n} more toys.',
   'hud.relic.reroll': 'Reroll',
@@ -333,6 +341,8 @@ addStrings('en', {
   'hud.relic.noMore': 'You already used the reroll.',
 
   'hud.pause.title': 'Paused',
+  'hud.pause.where': 'Stage {act} · Wave {wave}/{total}',
+  'hud.pause.whereOpen': 'Stage {act} · Wave {wave}',
   'hud.pause.resume': 'Resume',
   'hud.pause.restart': 'Restart',
   'hud.pause.restartAsk': 'This run will be lost and a new one starts. Sure?',
@@ -385,7 +395,7 @@ addStrings('en', {
   'hud.res.seed': 'Seed {seed}',
   'hud.res.rewards': 'Rewards',
   'hud.res.level': 'Account level {a} → {b}!',
-  'hud.res.firstClear': 'New stage cleared! Chapter {chapter} · Butler {stake}',
+  'hud.res.firstClear': 'First clear! Chapter {chapter} · Butler {stake}',
   'hud.res.newBest': 'New best!',
   'hud.res.dungeonBonus': 'First clear today +{n} gold',
   'hud.res.r.gold': 'Gold',
@@ -406,6 +416,8 @@ addStrings('en', {
   'hud.res.retry': 'Try again',
 
   'hud.tut.more': 'Fish ready! Summon more cats!',
+  'hud.tut.awaken.pick': 'Purr is ready! A King becomes a Guardian for {cost} purr. Tap the King!',
+  'hud.tut.awaken.go': 'Tap Awaken! A Guardian is your strongest cat.',
 
   'hud.laser.hint': 'Tap the walkway to place the red dot. Cats hit enemies near it first. Near a boss or elite it sticks.',
   'hud.laser.coolLeft': 'Recharging. Ready again in {s}s.',
@@ -430,7 +442,7 @@ addStrings('en', {
   'hud.laser.active': 'The laser is on. Drag the dot to move it.',
 
   'hud.fail.not_enough_fish': 'Not enough fish.',
-  'hud.fail.not_enough_purr': 'Not enough purr. You get it when you clear an act.',
+  'hud.fail.not_enough_purr': 'Not enough purr. You get it when you clear a stage.',
   'hud.fail.board_full': 'No space left. Merge or sell a cat.',
   'hud.fail.choice_pending': 'Finish your choice first.',
   'hud.fail.not_in_battle': 'Not possible right now.',

@@ -7,8 +7,8 @@ import {
 function world(over: Partial<World> = {}): World {
   return {
     phase: 'wave', wave: 1, waveKind: 'normal', pending: null, busy: false, cats: 3, empties: 17, twins: false, enemies: 4, targetAlive: false,
-    fish: 20, purr: 0, moltCost: 1, gradeCost: 60, classCost: 60, maxTier: 0, sun: 0, laserReady: true, laserGuided: false, callBonus: -1,
-    selected: false, counts: emptyCounts(), ...over,
+    fish: 20, purr: 0, moltCost: 1, gradeCost: 60, classCost: 60, maxTier: 0, sun: 0, laserReady: true, laserGuided: false, laserHold: false, callBonus: -1,
+    selected: false, king: false, kingSelected: false, counts: emptyCounts(), ...over,
   };
 }
 
@@ -36,14 +36,15 @@ const MOMENT: Record<string, { at: Partial<World>; act?: (w: World) => World }> 
   call_wave: { at: { wave: 6, callBonus: 5 }, act: (w) => bump(w, 'call') },
   speed: { at: { wave: 6 }, act: (w) => bump(w, 'speed') },
   sell: { at: { wave: 7, empties: 2, cats: 18 }, act: (w) => bump(w, 'sell') },
+  awaken: { at: { wave: 7, king: true, purr: 13 }, act: (w) => bump(w, 'awaken') },
   boss: { at: { wave: 8, waveKind: 'boss', targetAlive: true } },
 };
 
 describe('the tutorial lesson plan', () => {
-  it('teaches the owner\'s order: summon, merge, the enemy gauge, classes, the pick, sun, laser, elite, purr, toys, molt, upgrades, call, speed, sell, boss', () => {
+  it('teaches the owner\'s order: summon, merge, the enemy gauge, classes, the pick, sun, laser, elite, purr, toys, molt, upgrades, call, speed, sell, awaken, boss', () => {
     expect(STEP_IDS).toEqual([
       'summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'synergy', 'sun', 'laser', 'elite', 'purr', 'toys', 'molt', 'summon_grade',
-      'class_upgrade', 'call_wave', 'speed', 'sell', 'boss',
+      'class_upgrade', 'call_wave', 'speed', 'sell', 'awaken', 'boss',
     ]);
     expect(new Set(STEP_IDS).size).toBe(STEP_IDS.length);
   });
@@ -63,8 +64,8 @@ describe('the tutorial lesson plan', () => {
     expect(by('acts')).toEqual(['preview']);
     expect(by('pick3')).toEqual(['tracker']);
     expect(by('sell')).toEqual(['sellHint']);
-    // awakening cannot fit in a first run: no lesson reveals it
-    expect(all).not.toContain('awaken');
+    // the awakening is taught in the first run now: its own lesson brings the button in
+    expect(by('awaken')).toEqual(['awaken']);
   });
 
   it('teaches every lesson in order when the player does what each one asks', () => {
@@ -119,8 +120,11 @@ describe('the tutorial lesson plan', () => {
     w = world({ twins: true, counts: w.counts });
     expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:merge']);
     const merge = STEPS.find((s) => s.id === 'merge') as StepDef;
-    expect(merge.holds(w)).toBe(false);
-    expect(script.update(w, merge.patience - 1, false)).toEqual([]);
+    // the merge waits for a drag on the field, which the field takes while the lesson holds the clock: no patience runs until it lets go
+    expect(merge.holds(w)).toBe(true);
+    expect(script.update(w, merge.patience * 10, false)).toEqual([]);
+    script.relax();
+    expect(script.update(w, RELAXED_PATIENCE - 1, false)).toEqual([]);
     expect(kinds(script.update(w, 2, false))).toEqual(['drop:merge', 'begin:lose_gauge']);
     expect(script.active?.id).toBe('lose_gauge');
   });
@@ -221,5 +225,73 @@ describe('the tutorial lesson plan', () => {
     script.update(world({ twins: true }), 0.1, false);
     expect(script.abandon()).toMatchObject({ kind: 'drop', step: { id: 'merge' } });
     expect(script.active).toBeNull();
+  });
+});
+
+describe('the battle stands still while a lesson waits for the player', () => {
+  it('holds the clock in every lesson that is not a popup or the laser\'s own guide, at the moment it is taught', () => {
+    for (const s of STEPS) {
+      if (s.popup || s.id === 'laser') continue;
+      const m = MOMENT[s.id] as (typeof MOMENT)[string];
+      const w = world({ ...m.at, counts: m.at.counts ?? emptyCounts() });
+      expect(s.holds(w), s.id).toBe(true);
+      // both stages of a lesson that goes from a cat to a button
+      expect(s.holds({ ...w, selected: true, kingSelected: true }), `${s.id} selected`).toBe(true);
+    }
+  });
+
+  it('ends a timed note by the real clock while it holds the battle still', () => {
+    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3']));
+    const w = world({ wave: 3, maxTier: 1 });
+    expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:synergy']);
+    const synergy = STEPS.find((s) => s.id === 'synergy') as StepDef;
+    expect(synergy.holds(w)).toBe(true);
+    expect(script.update(w, synergy.timed - 1, false)).toEqual([]);
+    expect(kinds(script.update(w, 1.2, false))).toEqual(['done:synergy']);
+  });
+
+  it('counts no time for a lesson while a popup or a card holds the clock', () => {
+    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3']));
+    const w = world({ wave: 3, maxTier: 1 });
+    script.update(w, 0.1, false);
+    expect(script.update(w, 100, true)).toEqual([]);
+    expect(script.active?.id).toBe('synergy');
+  });
+});
+
+describe('the awakening lesson', () => {
+  const taughtBefore = new Set<TopicId>(STEP_IDS.slice(0, STEP_IDS.indexOf('awaken')));
+  const awaken = STEPS.find((s) => s.id === 'awaken') as StepDef;
+
+  it('comes after selling and before the boss, and brings the awaken button in', () => {
+    expect(STEP_IDS.indexOf('awaken')).toBe(STEP_IDS.indexOf('sell') + 1);
+    expect(STEP_IDS.indexOf('boss')).toBe(STEP_IDS.indexOf('awaken') + 1);
+    expect(awaken.reveal).toEqual(['awaken']);
+    expect(awaken.ok).toBe(false);
+    expect(awaken.popup).toBe(false);
+  });
+
+  it('waits for a king that can awaken now, and does not begin without one', () => {
+    const script = new TutorialScript(taughtBefore);
+    expect(script.update(world({ wave: 7, purr: 3 }), 0.1, false)).toEqual([]);
+    expect(script.active).toBeNull();
+    expect(kinds(script.update(world({ wave: 7, king: true, purr: 13 }), 0.1, false))).toEqual(['begin:awaken']);
+  });
+
+  it('points at the king first and at the awaken button once the king is selected, and is done by the awakening alone', () => {
+    const w = world({ wave: 7, king: true, purr: 13 });
+    expect(awaken.target(w)).toBe('king');
+    expect(awaken.target({ ...w, selected: true, kingSelected: false })).toBe('king');
+    expect(awaken.target({ ...w, selected: true, kingSelected: true })).toBe('awaken');
+    const script = new TutorialScript(taughtBefore);
+    script.update(w, 0.1, false);
+    expect(script.update({ ...w, selected: true, kingSelected: true }, 0.1, false)).toEqual([]);
+    expect(kinds(script.update(bump(w, 'awaken'), 0.1, false))).toEqual(['done:awaken']);
+  });
+
+  it('is dropped, not taught late, once the boss wave has come', () => {
+    const script = new TutorialScript(taughtBefore);
+    const w = world({ wave: 8, king: true, waveKind: 'boss', targetAlive: true });
+    expect(kinds(script.update(w, 0.1, false))).toEqual(['drop:awaken', 'begin:boss']);
   });
 });

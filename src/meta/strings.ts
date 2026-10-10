@@ -195,7 +195,7 @@ const en: Record<string, string> = {
   'meta.err.already_owned': 'You already have this.',
   'meta.err.not_owned': 'You do not have this yet.',
   'meta.err.nothing_to_claim': 'Nothing to claim.',
-  'meta.err.not_cleared': 'You can only sweep stages you have already cleared.',
+  'meta.err.not_cleared': 'You can only sweep a chapter you have already cleared at that butler level.',
   'meta.err.run_active': 'There is a run that has not finished.',
 
   'meta.toast.claimed': 'Claimed!',

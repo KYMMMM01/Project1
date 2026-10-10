@@ -8,15 +8,14 @@ import { Container, Graphics } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { damp } from '@/core/math';
 import { Color, Dim, drawDashedRect, paperSeed } from '@/ui';
-import type { EnemyState } from '@/game';
 import type { BattleLayout } from '../context';
 import { startAim, stopAim } from '../aim';
 import { info } from '../info';
 import type { HudEnv } from './env';
 import { Hand } from './Hand';
-import { bestRimPose, FROM_BELOW, type Keep, pawBounds, pawRotation, type PawFrom, rimSpots, soften } from './handMath';
+import { bestRimPose, FROM_BELOW, type Keep, pawBounds, pawRotation, rimSpots, soften } from './handMath';
 import { INFO_R, laserFace, LASER_INFO, LASER_RING, LASER_SPOT, type Rect, spotRadius, spotWindow } from './layoutMath';
-import { guideDue, LaserGuideFlow, SEE_FOR, type GuideStep } from './laserGuideFlow';
+import { followedEnemy, guideDue, LaserGuideFlow, ridingArm, SEE_FOR, type GuideStep, type RideArm } from './laserGuideFlow';
 
 /** How far from the button's centre the bubble's tail points, away from the paw. */
 const TAIL_SIDE = 40;
@@ -26,13 +25,6 @@ const SEE_SPLIT = SEE_FOR * 0.55;
 const RIDE_TILT = 0.44;
 /** Key of the guide's own bubble (src/view/info.ts). */
 const SAY = 'laser-guide';
-
-/** The enemy furthest along the loop, or null: the dot is best put where the enemies are about to be. */
-export function leadEnemy(enemies: ReadonlyArray<EnemyState>): EnemyState | null {
-  let lead: EnemyState | null = null;
-  for (const e of enemies) if (!lead || e.travelled > lead.travelled) lead = e;
-  return lead;
-}
 
 export class LaserGuide {
   readonly flow = new LaserGuideFlow();
@@ -49,6 +41,9 @@ export class LaserGuide {
   private seeAge = 0;
   private handX = 0;
   private handY = 0;
+  /** The enemy the paw rides, and the side its arm trails from (they are kept until they have to change: laserGuideFlow.ts). */
+  private riding: number | null = null;
+  private lean: RideArm | null = null;
   private layout: BattleLayout;
 
   constructor(
@@ -70,6 +65,11 @@ export class LaserGuide {
     this.layer.visible = false;
     env.ctx.layers.overlay.addChild(this.layer);
     env.on(env.battle.events, 'laser', () => this.flow.onDot());
+  }
+
+  /** The guide is at a step that waits for the player's touch (the button, the lane): the tutorial's laser lesson holds the clock for it. */
+  get holdsClock(): boolean {
+    return this.layer.visible && (this.flow.step === 'press' || this.flow.step === 'place');
   }
 
   /** The tutorial's laser lesson has begun: the guide may start as soon as a wave gives it enemies to mark. */
@@ -169,6 +169,8 @@ export class LaserGuide {
       this.line = t('hud.laserGuide.place');
       this.hand.tap();
       this.handX = this.handY = 0;
+      this.riding = null;
+      this.lean = null;
       this.follow(1);
       // The words stay on the button (a bubble does not follow a moving marker); the hand does the pointing.
       this.anchorAt(r.x + r.w / 2, r.y);
@@ -181,8 +183,9 @@ export class LaserGuide {
 
   /** The hand rides the leading enemy along the lane: tap here, in front of the cats' shots. */
   private follow(dt: number): void {
-    const lead = leadEnemy(this.env.battle.enemies);
+    const lead = followedEnemy(this.env.battle.enemies, this.riding);
     if (!lead) return;
+    this.riding = lead.uid;
     const { ctx } = this.env;
     const tx = ctx.toSceneX(lead.x);
     const ty = ctx.toSceneY(lead.y);
@@ -190,7 +193,8 @@ export class LaserGuide {
     this.handX = first ? tx : damp(this.handX, tx, 0.1, dt);
     this.handY = first ? ty : damp(this.handY, ty, 0.1, dt);
     // Above the middle of the field the arm trails below the spot, below it the arm comes down from above; near the right edge it leans left.
-    const arm: PawFrom = this.handY > this.layout.h * 0.45 ? (this.handX > this.layout.w * 0.6 ? 'upperLeft' : 'upperRight') : this.handX > this.layout.w * 0.6 ? 'lowerLeft' : 'lowerRight';
+    const arm = ridingArm(this.handX, this.handY, this.layout.w, this.layout.h, this.lean);
+    this.lean = arm;
     this.hand.turnTo(pawRotation(arm, RIDE_TILT));
     this.hand.position.set(this.handX, this.handY);
   }

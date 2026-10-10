@@ -79,10 +79,10 @@ export const EN: Record<string, string> = {
   'guide.class_lines.full':
     'Merging always moves along the same class line.\nWarrior: {warrior}\nRanger: {ranger}\nMage: {mage}\nTrickster: {trickster}\nThe last step, the Guardian, is never merged: awaken a King. To change lines, use molting.',
 
-  'guide.acts.title': 'Acts and waves',
-  'guide.acts.teach': '{actLen} waves make an act. Each act ends with rewards.',
+  'guide.acts.title': 'Stages and waves',
+  'guide.acts.teach': '{actLen} waves make a stage. Each stage ends with rewards.',
   'guide.acts.full':
-    'Enemies arrive wave by wave. {actLen} waves make an act, and a chapter is {acts} acts, {waves} waves.\nWhen an act ends you get fish and purr and choose a toy. The special tiles move to new places.\nThe small cards at the top show the next wave. Tap one to learn about that enemy.',
+    'Enemies arrive wave by wave. {actLen} waves make a stage, and a chapter is {acts} stages, {waves} waves.\nWhen a stage ends you get fish and purr and choose a toy. The special tiles move to new places.\nThe small cards at the top show the next wave. Tap one to learn about that enemy.',
 
   'guide.lose_gauge.title': 'Losing: too many enemies',
   'guide.lose_gauge.teach': 'If this bar stays full you lose. Thin them out!',
@@ -128,7 +128,7 @@ export const EN: Record<string, string> = {
   'guide.purr.title': 'Purr',
   'guide.purr.teach': 'Purr is the rare material for molting and awakening.',
   'guide.purr.full':
-    'Purr is the happy sound of your cats, collected. You spend it on molting and awakening.\nAn elite pays {elite}, a boss {boss}, and each cleared act {act}. Selling an Alley Boss or better returns some too.\nMolting costs a different amount for each rank ({molt}); awakening costs {awaken}.',
+    'Purr is the happy sound of your cats, collected. You spend it on molting and awakening.\nAn elite pays {elite}, a boss {boss}, and each cleared stage {act}. Selling an Alley Boss or better returns some too.\nMolting costs a different amount for each rank ({molt}); awakening costs {awaken}.',
 
   'guide.molt.title': 'Molting',
   'guide.molt.teach': 'Tap a cat, then molt it into another class.',
@@ -154,7 +154,7 @@ export const EN: Record<string, string> = {
   'guide.sun.title': 'Special tiles',
   'guide.sun.teach': 'Drag a cat onto the {cell} to get its bonus!',
   'guide.sun.full':
-    'Every chapter has its own special tile, {cells} of them on the board. A cat standing on one gets its bonus.\n{kinds}\nThe special tiles move to new places whenever an act ends, so move your strong cats in. Tap an empty special tile to see what it does; a cat standing on one wears the tile\'s badge.',
+    'Every chapter has its own special tile, {cells} of them on the board. A cat standing on one gets its bonus.\n{kinds}\nThe special tiles move to new places whenever a stage ends, so move your strong cats in. Tap an empty special tile to see what it does; a cat standing on one wears the tile\'s badge.',
 
   'guide.hazards.title': 'Cell hazards',
   'guide.hazards.teach': 'Cats on a soaked or zapped cell cannot attack.',
@@ -184,7 +184,7 @@ export const EN: Record<string, string> = {
   'guide.toys.title': 'Toys',
   'guide.toys.teach': 'Pick a toy. It helps for the whole run.',
   'guide.toys.full':
-    'After every act {options} toys appear and you keep one. Your toys gather in the top row and help for the rest of the run.\nToys have ranks like cats. Early acts offer {early}, the middle acts {mid}, the late acts {late}.\nOne of them usually answers the enemies of the next act. Tap a toy in the top row to read its effect again.',
+    'After every stage {options} toys appear and you keep one. Your toys gather in the top row and help for the rest of the run.\nToys have ranks like cats. Early stages offer {early}, the middle stages {mid}, the late stages {late}.\nOne of them usually answers the enemies of the next stage. Tap a toy in the top row to read its effect again.',
 
   'guide.toy_reroll.title': 'Toy reroll',
   'guide.toy_reroll.teach': 'Not happy with the toys? Roll them again.',
@@ -194,7 +194,7 @@ export const EN: Record<string, string> = {
   'guide.stakes.title': 'Butler levels',
   'guide.stakes.teach': 'Clear a chapter to unlock a harder level.',
   'guide.stakes.full':
-    'Clearing a chapter unlocks the next butler level. Each level adds a rule on top of the lower ones (the top is level {max}) and raises rewards by {reward}% per level.\nFirst: {s1}\nSecond: {s2}\nThird: {s3}\nFourth: {s4}\nFifth: {s5}\nEvery level includes the rules of the lower ones.',
+    'Clearing a chapter unlocks the next butler level. Each level adds a rule on top of the lower ones (the top is level {max}) and raises rewards by {reward}% per level.\nFirst: {s1} {c1}\nSecond: {s2} {c2}\nThird: {s3} {c3}\nFourth: {s4} {c4}\nFifth: {s5} {c5}\nEvery level includes the rules of the lower ones. Only how well elites and bosses resist control is replaced by that level\'s numbers.',
 
   // ── Enemies ──
   'guide.elite.title': 'Elites',

@@ -2,7 +2,7 @@
  * Plays whole runs with a bot, headlessly, and measures what the balance report needs. Used by the
  * `npm run sim` report and by the tests; the game itself never imports it.
  */
-import type { BattleApi, BattleInit, ClassId, CurrencyReason, RunStats, UnitId, UnitState } from '../api';
+import type { BattleApi, BattleInit, ClassId, CurrencyReason, RelicId, RunStats, UnitId, UnitState } from '../api';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '../geometry';
 import { TICK } from '../data/balance';
 import { enemySpec } from '../data/enemies';
@@ -11,6 +11,7 @@ import type { AttackSpec } from '../data/types';
 import { unitRarityIndex } from '../data/roster';
 import { createBot, type BotPolicy } from './bots';
 import { createBattle } from './create';
+import { gainRelic } from './flow';
 import { Sim } from './sim';
 
 export interface WaveSample {
@@ -70,6 +71,8 @@ export interface RunResult {
   control: ControlTally;
   /** Fish that came in by reason (kills, wave rewards, the steady income, sales...); empty unless `RunOptions.tally` was set. */
   income: Partial<Record<CurrencyReason, number>>;
+  /** Purr that came in over the run (spending not counted): acts, elites and bosses, sales, the toys that add to them. */
+  purrIn: number;
 }
 
 export interface RunOptions {
@@ -82,6 +85,11 @@ export interface RunOptions {
   focus?: ClassId;
   /** Measure board time, uptime and kills per unit type (subscribes to `enemyDie`, a little slower). */
   tally?: boolean;
+  /**
+   * Measuring a toy: hand the run this toy just before `wave` starts (1 or less: before the first wave), as if the bot had picked it at
+   * the offer after the previous act. The offers after it skip it, as they would any toy already held. For the balance report only.
+   */
+  toy?: { id: RelicId; wave: number };
 }
 
 /** How many enemies an attack typically hurts at once, to turn single-target damage into firepower. */
@@ -162,9 +170,17 @@ export function playRun(init: BattleInit, policy: BotPolicy, options: RunOptions
   const result: RunResult = {
     victory: false, wave: 0, time: 0, stats: b.getStats(), firstLegendary: 0, firstMythic: 0, caution: false,
     samples: [], bossRatios: [], lossReason: null, simMs: 0, units: {},
-    control: { enemySec: 0, slowed: 0, frozen: 0, stunned: 0, armorBroken: 0, pulled: 0 }, income: {},
+    control: { enemySec: 0, slowed: 0, frozen: 0, stunned: 0, armorBroken: 0, pulled: 0 }, income: {}, purrIn: 0,
   };
   const dt = every * TICK;
+  b.events.on('purr', (e) => {
+    if (e.delta > 0) result.purrIn += e.delta;
+  });
+  let toy = options.toy ?? null;
+  if (toy && toy.wave <= 1) {
+    gainRelic(sim, toy.id);
+    toy = null;
+  }
   if (options.tally) {
     b.events.on('enemyDie', (e) => {
       if (e.killer) tallyOf(result, e.killer.id).kills++;
@@ -198,6 +214,10 @@ export function playRun(init: BattleInit, policy: BotPolicy, options: RunOptions
     }
     guard = 0;
     if (tick % every === 0) {
+      if (toy && b.wave === toy.wave - 1 && b.phase === 'wave' && sim.stage === 'between') {
+        gainRelic(sim, toy.id);
+        toy = null;
+      }
       if (b.wave !== lastWave) {
         if (lastWave > 0) {
           result.samples.push({

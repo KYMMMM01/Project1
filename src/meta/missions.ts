@@ -2,11 +2,37 @@
  * Daily and weekly missions, the day/week slices they live in, and the date rollovers. Pure: each
  * function returns a new slice and never reads the clock; the caller passes the date.
  */
+import type { RunStats } from '@/game/api';
+import { waveKindOf } from '@/game/data/waves';
 import { DAILY_MISSIONS, WEEKLY_MISSIONS, type MissionDef, type MissionMetric } from './data/schedule';
 import { TREAT_SLOTS } from './data/economy';
 import type { Bundle, DaySlice, MissionState, WeekSlice } from './types';
 
 export type MetricDelta = Partial<Record<MissionMetric, number>>;
+
+/**
+ * The "boss and elite" missions count both. The simulation reports bosses only, but a cleared elite
+ * wave always ended with its elite dead (running out of time loses the run instead).
+ */
+function bossAndEliteKills(stats: Pick<RunStats, 'mode' | 'wavesCleared' | 'bossesKilled'>): number {
+  if (stats.mode === 'gold') return stats.bossesKilled; // the dungeon's waves are all normal ones
+  let elites = 0;
+  for (let w = 1; w <= stats.wavesCleared; w++) if (waveKindOf(w) === 'elite') elites++;
+  return stats.bossesKilled + elites;
+}
+
+/**
+ * What a settled run adds to the daily and weekly missions. The tutorial adds nothing at all (it is
+ * the lesson, played once at the start and again from the settings sheet, and "win once today" must
+ * mean a win the player played for); its run still counts for the unlock rules and its rewards are
+ * paid, both elsewhere.
+ */
+export function runMissionDelta(stats: Pick<RunStats, 'mode' | 'victory' | 'wavesCleared' | 'bossesKilled' | 'merges' | 'relics'>): MetricDelta {
+  if (stats.mode === 'tutorial') return {};
+  return {
+    runs: 1, wins: stats.victory ? 1 : 0, merges: stats.merges, bosses: bossAndEliteKills(stats), relics: stats.relics.length,
+  };
+}
 
 export function emptyMissions(defs: readonly MissionDef[]): MissionState {
   return { progress: defs.map(() => 0), claimed: defs.map(() => false) };

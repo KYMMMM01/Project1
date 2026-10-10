@@ -147,7 +147,7 @@ export const KO: Record<string, string> = {
   'codex.cellgroup.lane': '적이 걷는 길',
   'codex.cell.plain.name': '보통 칸',
   'codex.cell.plain.text': '아무 효과도 없는 칸이에요. 판은 가로 {cols}칸, 세로 {rows}칸이라 모두 {cells}칸이고, 한 칸에 고양이 한 마리가 서요. 끌어서 옮기고, 같은 고양이끼리 만나면 합쳐져요.',
-  'codex.cell.special.text': '{chapter}의 특수 칸이에요. {effect} 판에 {cells}칸이 있고, 처음에는 가운데 십자 모양이에요. 막이 끝날 때마다 새 자리로 옮겨요. {toy}이(가) 있으면 칸이 {toyCells}칸 늘고 효과가 이렇게 커져요. {boosted}',
+  'codex.cell.special.text': '{chapter}의 특수 칸이에요. {effect} 판에 {cells}칸이 있고, 처음에는 가운데 십자 모양이에요. 스테이지가 끝날 때마다 새 자리로 옮겨요. {toy}이(가) 있으면 칸이 {toyCells}칸 늘고 효과가 이렇게 커져요. {boosted}',
   'codex.cell.wet.name': '젖은 칸',
   'codex.cell.wet.text': '물이 튄 칸이에요. 그 칸의 고양이는 물이 마를 때까지 공격하지 못해요. 칸은 닿기 {warn}초 전에 반짝여요. {spray}은(는) {sprayEvery}초마다 {sprayCells}칸을 {sprayDur}초 동안, {bath}은(는) {soakEvery}초마다 {soakCells}칸을 {soakDur}초 동안 적셔요. 고양이를 옮기면 {recover}초 뒤에 다시 공격해요. {bell}과 둘레의 고양이는 {dodge}% 확률로 피해요.',
   'codex.cell.zap.name': '낙뢰 칸',

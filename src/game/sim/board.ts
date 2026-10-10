@@ -114,6 +114,14 @@ export function placeRandomCommon(s: Sim, u: number, v: number): boolean {
   return true;
 }
 
+/** A named unit from nowhere (the tutorial's gifts): on the first empty cell, announced like a cat the board was handed. False when the board is full. */
+export function placeGift(s: Sim, id: UnitId): boolean {
+  const cell = nthEmpty(s, 0);
+  if (cell < 0) return false;
+  placeUnit(s, id, cell, 'relic');
+  return true;
+}
+
 // ───────────────────────────── synergy and stats ─────────────────────────────
 
 const presence = new Uint8Array(CLASS_IDS.length * RARITIES.length);

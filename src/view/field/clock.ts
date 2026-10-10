@@ -26,6 +26,11 @@ export class BattleClock {
     return [...this.reasons];
   }
 
+  /** True when `reason` is the only one holding the battle (no list is made: the HUD asks every frame while a lesson holds). */
+  heldOnlyBy(reason: PauseReason): boolean {
+    return this.reasons.size === 1 && this.reasons.has(reason);
+  }
+
   get frozen(): boolean {
     return this.freezeLeft > 0;
   }

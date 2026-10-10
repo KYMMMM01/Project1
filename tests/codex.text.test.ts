@@ -256,9 +256,9 @@ describe('codex board cells', () => {
       warn: HAZARD_WARNING, recover: HAZARD_RECOVER, sprayEvery: ENEMY_SPECS.spray.hazardPulse?.every, soakCells: BOSS_SPECS.splash.soakCells, dodge: 40,
     });
     expect(cellFacts('zap')).toMatchObject({ every: BOSS_SPECS.lightning.cooldown, dur: BOSS_SPECS.lightning.duration, side: 2 });
-    expect(cellFacts('tower')).toMatchObject({ range: 25, damage: 10, cells: COLS });
-    expect(cellFacts('perch')).toMatchObject({ speed: 15, cells: CELL_COUNT - (COLS - 2) * (ROWS - 2) });
-    expect(cellFacts('cushion')).toMatchObject({ damage: 12, sides: 4 });
+    expect(cellFacts('tower')).toMatchObject({ range: 45, damage: 22, cells: COLS });
+    expect(cellFacts('perch')).toMatchObject({ speed: 18, cells: CELL_COUNT - (COLS - 2) * (ROWS - 2) });
+    expect(cellFacts('cushion')).toMatchObject({ damage: 22, sides: 4 });
     expect(cellFacts('bard')).toMatchObject({ damage: 15, cells: 8, level: 7, max: 22.5 });
     expect(cellFacts('bell')).toMatchObject({ speed: 8, dodge: 40, dodgeMax: 60, cells: 8, level: 7 });
     expect(cellFacts('lane')).toMatchObject({

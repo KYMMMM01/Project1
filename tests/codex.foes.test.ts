@@ -162,29 +162,59 @@ describe('codex foes: the damage allowance', () => {
 });
 
 describe('codex foes: control resistance', () => {
-  it('says what the simulation does to a slow, a stun and a freeze', () => {
-    const sim = newSim();
-    quietWave(sim);
-    for (const id of FOE_IDS) {
-      const res = resistanceOf(id);
-      const e = foe(sim, id, 0);
-      applyStatus(sim, e, 'slow', 0.99, 5, null);
-      // The cap first, then the enemy's own resistance takes its share off what lands (30% of the 50% cap leaves 35%).
-      expect(e.slow, `${id} slow`).toBeCloseTo((res.slowCapPct / 100) * (1 - foeStats(id).slowResistPct / 100), 9);
-      expect(res.slowCapPct).toBe(Math.round((foeRank(id) === 'normal' ? SLOW_CAP : SLOW_CAP_BOSS) * 100));
-      applyStatus(sim, e, 'stun', 0, 2, null);
-      applyStatus(sim, e, 'freeze', 0, 2, null);
-      if (res.stun === 'none') {
-        expect(e.stunned || e.frozen, id).toBe(false);
-      } else {
-        expect(e.stunned && e.frozen, id).toBe(true);
-        expect(e.stunUntil - sim.time, id).toBeCloseTo(res.stun === 'half' ? 2 * ELITE_CC_FACTOR : 2, 9);
-        expect(res.stunPct).toBe(res.stun === 'half' ? Math.round(ELITE_CC_FACTOR * 100) : 100);
+  it('says what the simulation does to a slow, a stun and a freeze, at every butler level', () => {
+    // The page's numbers follow the butler level (elites and bosses resist control more with each level), so the run is played at each one.
+    for (let stake = 0; stake <= MAX_STAKE; stake++) {
+      const level: Level = { chapter: 1, stake };
+      const sim = newSim({ stake });
+      quietWave(sim);
+      for (const id of FOE_IDS) {
+        const res = resistanceOf(id, level);
+        const e = foe(sim, id, 0);
+        applyStatus(sim, e, 'slow', 0.99, 5, null);
+        // The cap first, then the enemy's own resistance takes its share off what lands (30% of the 50% cap leaves 35%).
+        expect(e.slow, `${id} slow, level ${stake}`).toBeCloseTo((res.slowCapPct / 100) * (1 - foeStats(id).slowResistPct / 100), 9);
+        // Level 0 shows the base caps; an elite or a boss shows the level's own cap, a normal enemy the same cap at every level.
+        const cap = foeRank(id) === 'normal' ? SLOW_CAP : stakeRules(stake).specialSlowCap;
+        expect(res.slowCapPct, `${id} cap, level ${stake}`).toBe(Math.round(cap * 100));
+        if (stake === 0) expect(res.slowCapPct).toBe(Math.round((foeRank(id) === 'normal' ? SLOW_CAP : SLOW_CAP_BOSS) * 100));
+        applyStatus(sim, e, 'stun', 0, 2, null);
+        applyStatus(sim, e, 'freeze', 0, 2, null);
+        if (res.stun === 'none') {
+          expect(e.stunned || e.frozen, id).toBe(false);
+        } else {
+          expect(e.stunned && e.frozen, id).toBe(true);
+          const share = res.stun === 'half' ? stakeRules(stake).eliteCcFactor : 1;
+          expect(e.stunUntil - sim.time, `${id} stun, level ${stake}`).toBeCloseTo(2 * share, 9);
+          expect(e.freezeUntil - sim.time, `${id} freeze, level ${stake}`).toBeCloseTo(2 * share, 9);
+          expect(res.stunPct, `${id} stun share, level ${stake}`).toBe(Math.round(share * 100));
+          if (stake === 0 && res.stun === 'half') expect(res.stunPct).toBe(Math.round(ELITE_CC_FACTOR * 100));
+        }
       }
     }
-    expect(resistanceOf('boss_vacuum').pullPct).toBe(Math.round(PULL_BOSS_FACTOR * 100));
-    expect(resistanceOf('spray').pullPct).toBe(Math.round(PULL_ELITE_FACTOR * 100));
-    expect(resistanceOf('cucumber').pullPct).toBe(100);
+    // The pull-back is the same at every level.
+    for (let stake = 0; stake <= MAX_STAKE; stake++) {
+      const level: Level = { chapter: 1, stake };
+      expect(resistanceOf('boss_vacuum', level).pullPct).toBe(Math.round(PULL_BOSS_FACTOR * 100));
+      expect(resistanceOf('spray', level).pullPct).toBe(Math.round(PULL_ELITE_FACTOR * 100));
+      expect(resistanceOf('cucumber', level).pullPct).toBe(100);
+    }
+  });
+
+  it('follows the butler level: 25 to 15% of slow and 50 to 30% of an elite\'s stun, a normal enemy and a boss\'s stun immunity unchanged', () => {
+    const at = (id: EnemyId, stake: number) => resistanceOf(id, { chapter: 3, stake });
+    expect([0, 1, 2, 3, 4, 5].map((s) => at('spray', s).slowCapPct)).toEqual([25, 23, 21, 19, 17, 15]);
+    expect([0, 1, 2, 3, 4, 5].map((s) => at('boss_needle', s).slowCapPct)).toEqual([25, 23, 21, 19, 17, 15]);
+    expect([0, 1, 2, 3, 4, 5].map((s) => at('firecracker', s).stunPct)).toEqual([50, 46, 42, 38, 34, 30]);
+    for (let s = 0; s <= 5; s++) {
+      // The first chapter's wave-8 "boss" is an elite by trait (it can be stunned); the five real bosses never can.
+      expect(at('boss_cucumber', s).stun).toBe('half');
+      expect(at('boss_vacuum', s).stun).toBe('none');
+      expect(at('cucumber', s)).toEqual({ slowCapPct: 50, stun: 'full', stunPct: 100, pullPct: 100 });
+    }
+    // A level outside the table is read as the nearest one, as the selector and the simulation do.
+    expect(at('spray', 9)).toEqual(at('spray', 5));
+    expect(at('spray', -2)).toEqual(at('spray', 0));
   });
 });
 

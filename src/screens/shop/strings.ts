@@ -200,7 +200,7 @@ addStrings('en', {
   'shop.cos.chapter': 'Opens when you clear chapter {n}',
   'shop.cos.reward': 'Pack or event reward',
 
-  'shop.tickets.sub': 'Collect the rewards of a cleared stage without fighting.',
+  'shop.tickets.sub': 'Collect the rewards of a cleared chapter without fighting.',
   'shop.tickets.have': '{n}/{stock} tickets',
   'shop.tickets.buy': 'Buy 1',
   'shop.tickets.ad': 'Watch an ad for {n}',

@@ -20,7 +20,7 @@ export class PauseMenu extends Popup<PauseAction> {
     const panel = new Panel({ width: W, height: h, title: t('hud.pause.title'), torn: 'bottom', tape: 'sky' });
     const c = panel.content;
 
-    const where = b.totalWaves > 0 ? t('hud.wave', { act: Math.max(1, b.act), wave: Math.max(1, b.wave), total: b.totalWaves }) : t('hud.waveOpen', { act: Math.max(1, b.act), wave: Math.max(1, b.wave) });
+    const where = b.totalWaves > 0 ? t('hud.pause.where', { act: Math.max(1, b.act), wave: Math.max(1, b.wave), total: b.totalWaves }) : t('hud.pause.whereOpen', { act: Math.max(1, b.act), wave: Math.max(1, b.wave) });
     const info = uiLabel(`${where}  ·  ${fmtDuration(b.time)}`, { size: 28, color: Color.inkSoft });
     info.position.set(W / 2, 98);
     c.addChild(info);

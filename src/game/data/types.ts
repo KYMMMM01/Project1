@@ -126,6 +126,7 @@ export interface RelicFx {
   topRowRange?: number;
   topRowDamage?: number;
   sameClassNeighbourDamage?: number;
+  /** Waves between two visits of the tunnel's cat (1 = at the start of every wave, 3 = of waves 3, 6, 9...: the wave number divides by it). */
   tunnel?: number;
   slowBoost?: number;
   slowedDamage?: number;
@@ -140,6 +141,8 @@ export interface RelicFx {
   feederFish?: number;
   areaScale?: number;
   enemySlow?: number;
+  /** Extra damage every enemy takes from every source (0.12: 12% more), physical and magic, direct hits and damage over time; one factor of the vulnerability product, under its cap (sim/enemies.ts `damageEnemy`). */
+  enemyDamageTaken?: number;
   twinChance?: number;
   bossPurr?: number;
   instantFish?: number;
@@ -220,6 +223,10 @@ export interface StakeRules {
   freeRerolls: number;
   /** Multiplier on the health of every elite and boss. */
   specialHpMult: number;
+  /** The most one slow can be on an elite or a boss, before its own `slowResist` (butler levels lower it step by step). */
+  specialSlowCap: number;
+  /** The share of a stun or freeze an elite feels (bosses feel none); butler levels lower it step by step. */
+  eliteCcFactor: number;
 }
 
 export interface TrainingDef {

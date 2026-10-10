@@ -81,7 +81,7 @@ addStrings('ko', {
   'modifier.no_rangers.name': '사수 없는 날',
   'modifier.no_rangers.desc': '사수 고양이가 나오지 않아요.',
   'modifier.toy_box.name': '장난감 상자의 날',
-  'modifier.toy_box.desc': '막을 깰 때마다 장난감을 {a}개 골라요.',
+  'modifier.toy_box.desc': '스테이지를 깰 때마다 장난감을 {a}개 골라요.',
   'modifier.sunny_day.name': '명당 가득한 날',
   'modifier.sunny_day.desc': '특수 칸이 {a}개예요.',
   'modifier.long_laser.name': '긴 레이저의 날',
@@ -90,10 +90,11 @@ addStrings('ko', {
   // stakes
   'stake.0': '기본 규칙',
   'stake.1': '적 한도가 {a}마리로 줄어요.',
-  'stake.2': '막을 깰 때 받는 골골이 {a}개로 줄어요.',
+  'stake.2': '스테이지를 깰 때 받는 골골이 {a}개로 줄어요.',
   'stake.3': '소환 비용 +{a}%',
   'stake.4': '보스·정예 제한 시간 −{a}초',
   'stake.5': '장난감 선택지가 {a}개로 줄고 무료 다시 뽑기가 없어요. 정예와 보스의 체력이 {b}% 늘어요.',
+  'stake.ctrl': '정예·보스는 둔화가 {a}%까지만 통하고, 정예는 기절·얼림 시간이 {b}%로 줄어요.',
 
   // training ground
   'training.start_fish.name': '든든한 시작',
@@ -190,7 +191,7 @@ addStrings('en', {
   'modifier.no_rangers.name': 'No Rangers Day',
   'modifier.no_rangers.desc': 'Ranger cats never appear.',
   'modifier.toy_box.name': 'Toy Box Day',
-  'modifier.toy_box.desc': 'Pick {a} toys every time you clear an act.',
+  'modifier.toy_box.desc': 'Pick {a} toys every time you clear a stage.',
   'modifier.sunny_day.name': 'Prime Spots Day',
   'modifier.sunny_day.desc': 'There are {a} special tiles.',
   'modifier.long_laser.name': 'Long Laser Day',
@@ -198,10 +199,11 @@ addStrings('en', {
 
   'stake.0': 'Base rules',
   'stake.1': 'The enemy limit drops to {a}.',
-  'stake.2': 'Clearing an act pays {a} purr.',
+  'stake.2': 'Clearing a stage pays {a} purr.',
   'stake.3': 'Summon cost +{a}%',
   'stake.4': 'Boss and elite time limit -{a} s',
   'stake.5': 'Toy offers shrink to {a} choices with no free reroll, and elites and bosses have {b}% more health.',
+  'stake.ctrl': 'Elites and bosses take slows only up to {a}%, and elites are stunned or frozen for just {b}% as long.',
 
   'training.start_fish.name': 'Solid Start',
   'training.start_fish.desc': 'Start every run with more fish.',

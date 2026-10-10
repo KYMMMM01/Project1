@@ -83,6 +83,10 @@ class Context implements BattleContext {
     return this.clock.paused;
   }
 
+  get lessonHold(): boolean {
+    return this.clock.heldOnlyBy('tutorial');
+  }
+
   /** Battle seconds for a real frame of `dt`. */
   advance(dt: number): number {
     return this.clock.tick(dt, this.fxClock.timeScale);

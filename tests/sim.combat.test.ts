@@ -56,8 +56,9 @@ describe('damage formula', () => {
     damageEnemy(sim, e, 100, 'physical', warrior, false, null);
     expect(1e5 - e.hp).toBeCloseTo(100 * (1 - 0.35 * 0.6), 9);
     gainRelic(sim, 'scratcher');
-    expect(raw(sim, dummy(sim, 'roomba'), 100)).toBeCloseTo(100 * (1 - 0.35 * 0.8), 9);
-    expect(raw(sim, dummy(sim, 'tangerine'), 100, 'magic')).toBeCloseTo(100 * (1 - 0.35 * 0.8), 9);
+    // The scratcher cuts every armour and ward by 40% (v1.7: it was 20%).
+    expect(raw(sim, dummy(sim, 'roomba'), 100)).toBeCloseTo(100 * (1 - 0.35 * 0.6), 9);
+    expect(raw(sim, dummy(sim, 'tangerine'), 100, 'magic')).toBeCloseTo(100 * (1 - 0.35 * 0.6), 9);
   });
 
   it('lets armour break, armour ignore and the scratcher cut the ward in the same proportion as the armour (v1.5)', () => {
@@ -87,12 +88,12 @@ describe('damage formula', () => {
     const toy = warded();
     applyStatus(sim, toy, 'armor_break', 0.5, 5, null);
     damageEnemy(sim, toy, 100, 'magic', cat, false, null);
-    expect(lost(toy)).toBeCloseTo(100 * (1 - 0.35 * 0.8 * 0.5 * 0.6), 9);
+    expect(lost(toy)).toBeCloseTo(100 * (1 - 0.35 * 0.6 * 0.5 * 0.6), 9);
     const burn = warded();
     applyStatus(sim, burn, 'burn', 100, 3, cat);
     applyStatus(sim, burn, 'armor_break', 0.5, 5, null);
     advance(sim, 0.52);
-    expect(lost(burn)).toBeCloseTo(100 * 0.5 * (1 - 0.35 * 0.8 * 0.5 * 0.6), 6);
+    expect(lost(burn)).toBeCloseTo(100 * 0.5 * (1 - 0.35 * 0.6 * 0.5 * 0.6), 6);
   });
 
   it('breaks no armour on an enemy without any (a ward of 0 stays 0 whatever the break and the ignore)', () => {

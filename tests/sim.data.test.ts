@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CLASS_IDS, ENEMY_IDS, RELIC_IDS, UNIT_IDS } from '@/game/api';
 import {
-  ACT_LENGTH, BOSS_HP, CC_IMMUNE_AFTER, CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, ELITE_HP, ENDLESS_GROWTH, HP_INDEX, PULL_IMMUNE_AFTER,
-  SUMMON_ODDS, SUN_SPEED, WAVE_BUDGET, hpIndex, specialHp, specialLimit,
+  ACT_LENGTH, BOSS_HP, CC_IMMUNE_AFTER, CHAPTER_COUNT, CHAPTER_HP_MULT, CHAPTER_WAVES, ELITE_CC_FACTOR, ELITE_HP, ENDLESS_GROWTH, HP_INDEX, PULL_IMMUNE_AFTER,
+  SLOW_CAP_BOSS, SUMMON_ODDS, SUN_SPEED, WAVE_BUDGET, hpIndex, specialHp, specialLimit,
 } from '@/game/data/balance';
 import { allClassDefs, classDef, synergyTier, tierForDistinct } from '@/game/data/classes';
 import { allEnemyDefs, bossSpec, budgetMult, enemyDef } from '@/game/data/enemies';
@@ -278,9 +278,9 @@ describe('relics', () => {
 
   it('keeps the rule values of §13', () => {
     expect(relicSpec('yarn_ball').fx.speedWarriorRanger).toBe(0.12);
-    expect(relicSpec('snack_stick').fx.jumpChance).toBe(0.12);
-    expect(relicSpec('sardine_crate').fx).toEqual({ instantFish: 150, costCapCut: 15 });
-    expect(relicSpec('golden_catnip').fx.synergyScale).toBe(0.25);
+    expect(relicSpec('snack_stick').fx.jumpChance).toBe(0.18);
+    expect(relicSpec('sardine_crate').fx).toEqual({ instantFish: 50, costCapCut: 10 });
+    expect(relicSpec('golden_catnip').fx.synergyScale).toBe(0.5);
     expect(relicSpec('hourglass').fx.bossTime).toBe(15);
   });
 });
@@ -466,7 +466,11 @@ describe('wave scripts', () => {
 
 describe('stakes, modifiers and training text', () => {
   it('adds one rule per stake, cumulatively', () => {
-    expect(stakeRules(0)).toEqual({ enemyCapCut: 0, actPurr: 2, summonCostMult: 1, bossTimeCut: 0, relicChoices: 3, freeRerolls: 1, specialHpMult: 1 });
+    // Level 0 keeps today's control caps exactly (the base constants, not a derived copy of them): 25% slow cap, an elite feels half a stun.
+    expect(stakeRules(0)).toEqual({
+      enemyCapCut: 0, actPurr: 2, summonCostMult: 1, bossTimeCut: 0, relicChoices: 3, freeRerolls: 1, specialHpMult: 1,
+      specialSlowCap: SLOW_CAP_BOSS, eliteCcFactor: ELITE_CC_FACTOR,
+    });
     expect(stakeRules(1).enemyCapCut).toBe(STAKE_STEPS.enemyCapCut);
     expect(stakeRules(2).actPurr).toBe(1);
     expect(stakeRules(3).summonCostMult).toBeCloseTo(1.1);
@@ -474,6 +478,8 @@ describe('stakes, modifiers and training text', () => {
     expect(stakeRules(5)).toEqual({
       enemyCapCut: STAKE_STEPS.enemyCapCut, actPurr: 1, summonCostMult: 1.1, bossTimeCut: 13, relicChoices: 2, freeRerolls: 0,
       specialHpMult: STAKE_STEPS.specialHpMult,
+      // The top level: 25% - 5 x 2 points of slow cap, 50% - 5 x 4 points of an elite's stun share (the whole ladder: tests/sim.stakeResist.test.ts).
+      specialSlowCap: 0.15, eliteCcFactor: 0.3,
     });
     expect(stakeRules(9)).toEqual(stakeRules(5));
   });

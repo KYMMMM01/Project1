@@ -20,7 +20,7 @@ export { enemyDef, enemySpec, allEnemyDefs, bossSpec, BOSS_SPECS, budgetMult, is
 export { relicDef, relicSpec, allRelicDefs, COUNTER_RELICS } from './data/relics';
 export { classDef, allClassDefs, synergyTier, tierForDistinct, SYNERGY, SYNERGY_SPECIAL } from './data/classes';
 export { chapterWaves, scriptFor, waveEntries, entriesBudget, waveKindOf, actOf, actFeatures } from './data/waves';
-export { stakeRules, stakeText, STAKE_STEPS } from './data/stakes';
+export { stakeControlText, stakeRules, stakeText, STAKE_STEPS } from './data/stakes';
 export { MODIFIER_IDS, modifierSpec, modifierName, modifierText } from './data/modifiers';
 export { TRAINING, TRAINING_IDS, trainingBonus, trainingDef } from './data/training';
 export * from './data/balance';

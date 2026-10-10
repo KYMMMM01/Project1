@@ -9,18 +9,22 @@ import type { TopicId } from '@/guide';
 import type { RevealKey } from './policy';
 
 
-/** What a lesson points at. `cat` is a cat to tap, `pair` the two twins, the rest are controls or board features. */
+/**
+ * What a lesson points at. `cat` is a cat to tap (a popup lesson's placeholder), `weakcat` the weakest cat on the board (what a molt or a
+ * sale costs least on), `king` the cat that can awaken now, `pair` the two twins, the rest are controls or board features.
+ */
 export type Target =
-  | 'summon' | 'pair' | 'gauge' | 'chips' | 'wave' | 'sun' | 'laser' | 'bossbar' | 'purr' | 'cat' | 'molt' | 'grade' | 'call' | 'speed' | 'sell' | 'sellcat';
+  | 'summon' | 'pair' | 'gauge' | 'chips' | 'wave' | 'sun' | 'laser' | 'bossbar' | 'purr' | 'cat' | 'weakcat' | 'king' | 'molt' | 'awaken' | 'grade'
+  | 'call' | 'speed' | 'sell';
 
 /** Things the player did since the run began; a step is done when its own counter has moved. */
 export type CountKey =
-  | 'summon' | 'merge' | 'molt' | 'sell' | 'gradeUp' | 'classUp' | 'call' | 'speed' | 'relic' | 'pick' | 'sheetClose' | 'sunMove' | 'purrGain';
+  | 'summon' | 'merge' | 'molt' | 'sell' | 'gradeUp' | 'classUp' | 'call' | 'speed' | 'relic' | 'pick' | 'sheetClose' | 'sunMove' | 'purrGain' | 'awaken';
 
 export type Counts = Readonly<Record<CountKey, number>>;
 
 export function emptyCounts(): Record<CountKey, number> {
-  return { summon: 0, merge: 0, molt: 0, sell: 0, gradeUp: 0, classUp: 0, call: 0, speed: 0, relic: 0, pick: 0, sheetClose: 0, sunMove: 0, purrGain: 0 };
+  return { summon: 0, merge: 0, molt: 0, sell: 0, gradeUp: 0, classUp: 0, call: 0, speed: 0, relic: 0, pick: 0, sheetClose: 0, sunMove: 0, purrGain: 0, awaken: 0 };
 }
 
 /** The battle as the script sees it. */
@@ -50,9 +54,15 @@ export interface World {
   laserReady: boolean;
   /** The laser's own guided first use has been done. */
   laserGuided: boolean;
+  /** The guided first use is at a step that waits for the player's touch (the button, then the lane): the clock stands still for it, and runs again for the marks. */
+  laserHold: boolean;
   callBonus: number;
   /** A cat is selected. */
   selected: boolean;
+  /** A king stands on the board that can awaken right now (a legendary, its class at the synergy step the awakening asks for, enough purr). */
+  king: boolean;
+  /** The selected cat is that king. */
+  kingSelected: boolean;
   counts: Counts;
 }
 
@@ -65,11 +75,14 @@ export interface StepDef {
   target(w: World): Target;
   /** True once the player has done the thing (`since` = the counters when the lesson began). */
   done(w: World, since: Counts): boolean;
-  /** The clock is held while the lesson waits for the player. */
+  /**
+   * The clock is held while the lesson waits for the player: no enemy moves, no timer or income runs, and the field still takes the player's
+   * gesture (`BattleContext.lessonHold`). A lesson that holds is let go of after `HOLD_LIMIT` seconds, unless it is a read-only note.
+   */
   holds(w: World): boolean;
   /** A read-only lesson: it shows a "got it" button and ends when it is tapped. */
   ok: boolean;
-  /** A lesson without an action ends by itself after this many game seconds (a cheerful note). */
+  /** A lesson without an action ends by itself after this many seconds (a cheerful note); one that holds the clock counts them by the real clock. */
   timed: number;
   /** Game seconds of waiting (the clock held does not count) after which the lesson is dropped, not taught. */
   patience: number;
@@ -102,7 +115,7 @@ export const STEPS: readonly StepDef[] = [
     id: 'summon', when: () => true, target: () => 'summon', done: (w, from) => w.counts.summon - from.summon >= TUTORIAL_SUMMONS, holds: () => true,
   }),
   step({
-    id: 'merge', when: (w) => calm(w) && w.twins, target: () => 'pair', done: since('merge'), patience: 45, staleAt: 3,
+    id: 'merge', when: (w) => calm(w) && w.twins, target: () => 'pair', done: since('merge'), holds: () => true, patience: 45, staleAt: 3,
   }),
   step({
     id: 'lose_gauge', when: (w) => calm(w) && w.phase === 'wave' && w.enemies >= 2, target: () => 'gauge', done: () => false, holds: () => true, ok: true, staleAt: 3,
@@ -117,14 +130,14 @@ export const STEPS: readonly StepDef[] = [
     id: 'pick3', reveal: ['tracker'], when: (w) => w.pending === 'summon', target: () => 'cat', done: since('pick'), popup: true,
   }),
   step({
-    id: 'synergy', when: (w) => calm(w) && w.maxTier >= 1, target: () => 'chips', done: () => false, timed: 4.5, staleAt: 7,
+    id: 'synergy', when: (w) => calm(w) && w.maxTier >= 1, target: () => 'chips', done: () => false, holds: () => true, timed: 4.5, staleAt: 7,
   }),
   step({
-    id: 'sun', when: (w) => calm(w) && w.sun > 0 && w.phase === 'wave', target: () => 'sun', done: since('sunMove'), patience: 40, staleAt: 6,
+    id: 'sun', when: (w) => calm(w) && w.sun > 0 && w.phase === 'wave', target: () => 'sun', done: since('sunMove'), holds: () => true, patience: 40, staleAt: 6,
   }),
   step({
     id: 'laser', reveal: ['laser'], when: (w) => calm(w) && w.phase === 'wave' && w.enemies >= 2 && w.laserReady, target: () => 'laser',
-    done: (w) => w.laserGuided, patience: 40, staleAt: 6,
+    done: (w) => w.laserGuided, holds: (w) => w.laserHold, patience: 40, staleAt: 6,
   }),
   step({
     id: 'elite', when: (w) => !w.busy && w.waveKind === 'elite' && w.targetAlive, target: () => 'bossbar', done: () => false, holds: () => true, ok: true, staleAt: 5,
@@ -138,7 +151,7 @@ export const STEPS: readonly StepDef[] = [
   }),
   step({
     id: 'molt', reveal: ['molt'], when: (w) => calm(w) && w.phase === 'wave' && w.wave >= 5 && w.purr >= w.moltCost && w.cats >= 1,
-    target: (w) => (w.selected ? 'molt' : 'cat'), done: since('molt'), holds: (w) => w.selected, patience: 45, staleAt: 9,
+    target: (w) => (w.selected ? 'molt' : 'weakcat'), done: since('molt'), holds: () => true, patience: 45, staleAt: 9,
   }),
   step({
     id: 'summon_grade', reveal: ['gradeUpgrade', 'odds'], when: (w) => calm(w) && w.wave >= 5 && w.gradeCost >= 0 && w.fish >= w.gradeCost,
@@ -156,7 +169,11 @@ export const STEPS: readonly StepDef[] = [
   }),
   step({
     id: 'sell', reveal: ['sellHint'], when: (w) => calm(w) && w.phase === 'wave' && w.wave >= 6 && w.cats >= 2 && (w.empties <= 3 || w.wave >= 7),
-    target: (w) => (w.selected ? 'sell' : 'sellcat'), done: since('sell'), holds: (w) => w.selected, patience: 50, staleAt: 8,
+    target: (w) => (w.selected ? 'sell' : 'weakcat'), done: since('sell'), holds: () => true, patience: 50, staleAt: 8,
+  }),
+  step({
+    id: 'awaken', reveal: ['awaken'], when: (w) => calm(w) && w.phase === 'wave' && w.king,
+    target: (w) => (w.kingSelected ? 'awaken' : 'king'), done: since('awaken'), holds: () => true, patience: 45, staleAt: 8,
   }),
   step({
     id: 'boss', when: (w) => !w.busy && w.waveKind === 'boss' && w.targetAlive, target: () => 'bossbar', done: () => false, holds: () => true, ok: true, urgent: true,
@@ -277,7 +294,8 @@ export class TutorialScript {
         this.finish();
         continue;
       }
-      if (!held && (this.relaxedFlag || !s.holds(w))) this.clock += dt;
+      // A timed note that holds the clock counts its seconds by the real clock (the battle clock is the one it holds).
+      if (!held && (s.timed > 0 || this.relaxedFlag || !s.holds(w))) this.clock += dt;
       if (s.timed > 0 && this.clock >= s.timed) {
         out.push({ kind: 'done', step: s, how: 'timer' });
         this.finish();

@@ -187,7 +187,7 @@ function specialBlock(id: EnemyId, level: Level): SpecialBlock | null {
   const rows = targetRows(id, level);
   const first = rows[0];
   if (!first) return null;
-  const res = resistanceOf(id);
+  const res = resistanceOf(id, level);
   const toy = limitToy();
   const control: Row[] = [
     { label: t('codex.control.slow'), value: t('codex.control.slow.v', { n: res.slowCapPct }) },
