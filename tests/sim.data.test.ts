@@ -279,7 +279,7 @@ describe('relics', () => {
   it('keeps the rule values of §13', () => {
     expect(relicSpec('yarn_ball').fx.speedWarriorRanger).toBe(0.12);
     expect(relicSpec('snack_stick').fx.jumpChance).toBe(0.18);
-    expect(relicSpec('sardine_crate').fx).toEqual({ instantFish: 50, costCapCut: 10 });
+    expect(relicSpec('sardine_crate').fx).toEqual({ instantFish: 100, costCapCut: 15 });
     expect(relicSpec('golden_catnip').fx.synergyScale).toBe(0.5);
     expect(relicSpec('hourglass').fx.bossTime).toBe(15);
   });

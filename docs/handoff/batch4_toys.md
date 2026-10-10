@@ -2,7 +2,7 @@
 
 Engineer key: `toys`. The before / after table of all 30 toys is in the spec, §13 "장난감 값의 측정"; the full write-up is in the engineer's final message.
 
-**Latest state:** the numbers of `glass_marble`, `sunny_spot` and `nap_blanket` below were superseded by the owner and the lead in the third pass; see "Owner's values and the blanket" at the end of this file.
+**Latest state:** the numbers of `glass_marble`, `sunny_spot` and `nap_blanket` below were superseded by the owner and the lead in the third pass ("Owner's values and the blanket"); the owner then set `batteries` (back at rare, 2 s / 3 s), the blanket (damage 8%) and the `sardine_crate` (100 fish, cap -15) in the fourth pass ("Owner's values, second round"), the last section of this file. Rank counts are now common 8 / rare 8 / epic 8 / legendary 6.
 
 ## What changed
 
@@ -202,3 +202,77 @@ Standard errors 0.4-0.6. The base state (no toy handed out) moved a little: m1 6
 ### Checks
 
 `npx tsc --noEmit -p .` prints nothing. Whole suite: 163 files, 3,505 tests, all pass (3,504 as found in this job: minus two blanket-spawn tests, plus three). `npm run font` reproduces the same subset. Note: `tests/sim.perf.test.ts` ("under 150 ms") fails when the machine is loaded with other simulations (171 ms once while 15 report runs were going); it passes on an idle machine.
+
+
+## Owner's values, second round (batch 4, fourth pass)
+
+Engineer key: `toys4`. Supersedes the numbers and ranks of these three toys in the sections above; everything else in the tree is as the third pass left it. Nothing is committed, pushed or deployed. The owner-facing table of all 30 toys is `docs/qa/batch4_toys_report.md` (updated in place); the spec is §13 (toy table, "장난감 값의 측정", the paragraph "리드 조정") and §9 (the damage product).
+
+The owner's words (verbatim): "건전지는 왜 버프했는데 꼬마로 내려갔어. 그대로 있어도 되겠는데. 낮잠 담요는 동네 등급으로 내렸으니까 받는 피해는 8%로 하고, 정어리 상자는 소비 상한 -15에 즉시 생선만 +100으로."
+
+### What was set
+
+| toy | rank before -> now | in the tree before -> now | text args |
+|---|---|---|---|
+| batteries | common -> **rare** (back as at a3b8536) | `laserDuration` 4 -> **2**, `laserCooldownCut` 5 -> **3** | `a` 4 -> 2, `b` 5 -> 3 |
+| nap_blanket | rare (unchanged) | `enemyDamageTaken` 0.12 -> **0.08** | `b` 12 -> 8 (`a` stays 10) |
+| sardine_crate | epic (unchanged) | `instantFish` 50 -> **100**, `costCapCut` 10 -> **15** | `a` 50 -> 100, `b` 10 -> 15 |
+
+Rank counts now: common 8 (yarn_ball, glitter_ball, mouse_toy, cardboard_box, bell_collar, fishing_rod, scratcher, feather_wand), rare 8 (cat_tower, kneading_cushion, batteries, snack_stick, tuna_cans, window_perch, glass_marble, nap_blanket), epic 8, legendary 6. The same counts as a3b8536 (8 / 8 / 8 / 6).
+
+**Where the batteries sit.** In `RELIC_IDS` (`src/game/api.ts`) and in `RELIC_RARITY` (`src/game/data/roster.ts`) they are the third rare: `cat_tower, kneading_cushion, batteries, snack_stick, ...`. That is the place they had at a3b8536 (there they came after `cat_tunnel` and `heating_pad`, which have since moved up to epic). The codex lists and `toysFor` follow `RELIC_IDS`; `tests/sim.toyRanks.test.ts` "lists the toys rank by rank" (rank order of the array, and the codex list equal to the array) passes. `relics.ts` keeps its own row order (the batteries row was never moved there).
+
+`src/game/data/strings.ts` is untouched: the texts read the numbers through `{a}` / `{b}` (batteries ko `레이저가 {a}초 더 오래가고 {b}초 빨리 돌아와요` now says 2 and 3; blanket `... 적이 받는 피해 +{b}%` says 8; crate `바로 생선 +{a}, 소환 비용 상한 −{b}` says 100 and 15). `npm run font` reproduces `game-kr.a3dcbdba.woff2` (no new glyph). The laser card (`LaserCard.ts`) and the guide read `relicSpec('batteries').fx` through `laserMath.laserFacts`, so they show +2 s / -3 s with no edit; `docs/handoff/hud.md` and the spec's §8 line ("8.5 s / 12 s") already said 2 and 3 (they had gone stale while the tree held 4 and 5; they are right again).
+
+### Files
+
+| File | Change |
+|---|---|
+| `src/game/data/relics.ts` | the three rows |
+| `src/game/data/roster.ts` | `RELIC_RARITY`: batteries rare, entry moved behind `kneading_cushion` |
+| `src/game/api.ts` | `RELIC_IDS`: batteries moved from the common group to the rare group (behind `kneading_cushion`) |
+| `tests/*` | see below |
+| `docs/명세_전투규칙.md` | §9 (formula 1.12 -> 1.08, the damage-product paragraph 12% -> 8%), §12 economy line (crate +50 -> +100), §13 (rank sentence, toy table, measurement table, rank means, notes, "리드 조정" sentence, whole-run table) |
+| `docs/기획서_GDD.md` | toy rank table: common 8 / rare 8 (batteries listed among the rares) |
+| `docs/진행상황.md` | the toy line and the whole-run line |
+| `docs/qa/batch4_toys_report.md` | rebuilt: the one table of all 30 toys, now |
+| `docs/handoff/batch4_toys.md` | this section |
+
+### Tests (each edit is the number only; formulas kept)
+
+* `tests/sim.relics.test.ts`
+  * batteries: title "4 seconds longer and comes back 5 seconds sooner" -> "2 ... 3"; `LASER_DURATION + 4` -> `+ 2` (twice); `cooldownTotal` `10` -> `12` (twice; 15 - 3).
+  * sardine crate: title "+50 fish ... 10 lower" -> "+100 fish ... 15 lower"; `toBe(50)` -> `toBe(100)`; `SUMMON_CAP - 10` -> `- 15`.
+  * nap blanket "takes 12% more damage ...": title 12% -> 8%; `enemyDamageTaken: 0.12` -> `0.08`; every `1.12` -> `1.08` (cucumber `100 * (1 - 0.08) * 1.08`, tangerine `100 * (1 - 0.35) * 1.08`, burn and bleed ticks `... * 1.08`, the cone's `[blanket, 1.08]`); comment "33.6 + 33.6" -> "32.4 + 32.4".
+  * nap blanket "the damage factor is one of the vulnerability factors ...": `armoured * 1.12` -> `1.08`; `armoured * 1.25 * 1.12` -> `1.25 * 1.08` (comment: "1.25 x 1.08 = 1.35, not 1.33"); `1.25 * 1.15 * 1.15 * 1.12` -> `* 1.08` (twice; comment 1.85 -> 1.79, still under 2). The first cap case (vulnerability 60%, 1.6 x 1.15 x 1.15 = 2.1 before the blanket, held at 2x with or without it) is untouched. **The last case had to be recomputed, not just renumbered:** with 8% the old sum 1.6 x 1.15 x 1.08 = 1.99 no longer crosses the cap of 2.0, so "the blanket reaches the cap on its own account" would have tested nothing. The vulnerability of that case went `0.6` -> `0.65`: alone 1.65 x 1.08 = 1.78 (`armoured * 1.65`, `armoured * 1.65 * 1.08`); with the focus 1.65 x 1.15 = 1.90 without the blanket (`armoured * 1.65 * 1.15`, not held) and 1.65 x 1.15 x 1.08 = 2.05 with it, held at `VULNERABLE_CAP`. The old `expect(1.6 * 1.15 * 1.12).toBeGreaterThan(VULNERABLE_CAP)` became `expect(1.65 * 1.15 * 1.08).toBeGreaterThan(VULNERABLE_CAP)`, plus a new `expect(1.65 * 1.15).toBeLessThan(VULNERABLE_CAP)` (stricter: the cap is reached only because of the blanket).
+* `tests/view.hud.laser.test.ts`: `f.toy.duration` `4` -> `2`, `f.toy.cooldownCut` `5` -> `3`.
+* `tests/sim.rules.test.ts`: crate price `SUMMON_CAP - 10` -> `- 15`.
+* `tests/sim.data.test.ts`: `sardine_crate` fx `{ instantFish: 50, costCapCut: 10 }` -> `{ instantFish: 100, costCapCut: 15 }`.
+* `tests/sim.toyRanks.test.ts`: counts `9 / 7 / 8 / 6` -> `8 / 8 / 8 / 6` (title and the object); the blanket's pin `enemyDamageTaken: 0.12` -> `0.08` (comment); **new test** "keeps the second-round values the owner set": batteries rare with `{ laserDuration: 2, laserCooldownCut: 3 }`, blanket rare with `enemyDamageTaken` 0.08, crate epic with `{ instantFish: 100, costCapCut: 15 }`. The "shown numbers" record needs no edit (it reads `fx`).
+* Looked at and left alone: `tests/sim.flow.test.ts` (`summonCost()` 12 after a crate at zero paid summons: the cap does not apply yet; the offer tests), `tests/sim.enemyResist.test.ts` (the blanket's 10% slow), `tests/view.field.cells.test.ts` (`cellExtra(['batteries', 'sunny_spot'])` is about the sunny spot), `tests/sim.stakeResist.test.ts` (a saved snapshot lists the relic pool in its old order; the snapshot is data, not a rank check), `tests/codex.text.test.ts`.
+* Negative controls (a scratch copy of the tree, one change at a time, seven test files; each fails 2-4 tests, the unchanged copy passes): batteries at 4 / 5, at 3 s only, at 4 s of recharge only, batteries back at common; blanket at 12%, 10%, 6%; crate at 50 / 10, at 150 fish only, with the cap at 10 only, at rare.
+
+### What depends on a rank or on a count per rank, and how it was checked
+
+* Offer odds by stage (`RELIC_RARITY_WEIGHTS`, `rollRelicOffer`): weights are per rank, so only a toy's share inside its rank moved (rare: 8 toys instead of 7, common: 8 instead of 9). Measured on 1,500 seeds per stage in a scratch copy (`rollRelicOffer` exported there only): rank shares of the offers 70.4/20.9/8.7/0 (after stage 1; the 9% epic is the counter slot), 68.5/31.5/0/0, 16.8/39.5/43.6/0, 8.7/47.6/43.6/0, 0/0/60.7/39.3 (the third pass: 70/21/9/0, 68.5/31.5/0/0, 17/40/44/0, 9/48/44/0, 0/0/61/39). Offer share of one toy: batteries 2.7% / 2.7% / 5.2% / 5.3% / 0 after stages 1-5 (as a common toy it shared the common rank's 70% with eight others; as a rare it shares the rare rank's share with seven), blanket 2.4 / 2.5 / 4.5 / 4.7 / 0, crate 0 / 0 / 3.8 / 3.8 / 7.4. `tests/sim.flow.test.ts` "weights rarities by act" and "puts a toy that answers the next act's trait into the offer" pass unchanged; `tests/sim.toyRanks.test.ts` pins that every weighted rank has toys and that each rank can fill an offer of three twice over.
+* Codex filter and order (`toysFor`, `TOY_RARITIES`, `RELIC_IDS` order): both come from `RELIC_RARITY` and `RELIC_IDS`; "lists the toys rank by rank" and `tests/codex.text.test.ts` pass.
+* `COUNTER_RELICS`: none of the three is on a list, none was added (`tests/sim.toyRanks.test.ts` still asserts that no list holds the blanket).
+* `RELIC_SCORE` in `src/game/sim/bots.ts` (batteries 4, blanket 5, crate 5) was not touched. The bots' own picks change a little with the ranks, so the base state moves a point (see below).
+
+### Measurement (report only; no value was changed because of it)
+
+Same method as before: `SIM_ONLY=toys`, each toy handed out before wave 5, stake 0, chapter 1 L1 / chapter 3 L3 x merge / synergy bot, 600 runs per cell, same seeds, one toy per process (`before.txt`, `after.txt`), then all 30 in ten processes of three (`after_all30.txt`). Raw output: the lead's scratchpad `batch4/toys4/` (`before.txt`, `after.txt`, `after_all30.txt`, `out_before/`, `out_after/`, `out_all30/`, `out_bots/`, `rankmeans.txt`). The "before" run (the tree as found) reproduces the third pass to the digit (batteries +2.3, blanket +4.3, crate +8.8; base 66 / 57 / 91 / 87%).
+
+| toy | before (tree as found) | after | cells after (m1 / m3 / s1 / s3) |
+|---|---|---|---|
+| batteries (common +4 s / -5 s -> **rare +2 s / -3 s**) | +2.3 (-0.3 / +0.5 / +3.5 / +5.3) | **+1.9** | +0.2 / +0.2 / +3.3 / +4.0 |
+| nap_blanket (rare, damage 12% -> **8%**) | +4.3 (+5.5 / +8.2 / +2.2 / +1.2) | **+3.1** | +4.2 / +5.2 / +2.7 / +0.5 |
+| sardine_crate (epic, +50 / -10 -> **+100 / -15**) | +8.8 (+10.7 / +15.0 / +4.0 / +5.7) | **+12.0** | +15.3 / +19.5 / +6.5 / +6.8 |
+
+Standard errors 0.3 (batteries), 0.5 (blanket), 0.7 (crate). The base state (no toy handed out): m1 66 -> 65%, m3 57%, s1 91 -> 90%, s3 87%. The 27 toys that were not touched read 0.2 points higher on average than in the third pass's run (largest: yarn ball +1.0).
+
+**Alarming, said again here:** the crate is the strongest of the 30 by far (+12.0; next shooting star +9.0, auto feeder +8.4, hourglass +7.9), and +19.5 in the merge-bot chapter-3 cell. a3b8536's +150 / -15 was +13.4. Per-rank mean of all 30 after (one run): **common 4.5 (8) / rare 4.0 (8) / epic 5.9 (8) / legendary 5.0 (6)**; the third pass was 4.1 / 4.2 / 5.3 / 4.8 (9 / 7 / 8 / 6 toys), a3b8536 3.7 / 4.8 / 3.8 / 3.8 (8 / 8 / 8 / 6). Rare is now the lowest rank (batteries +1.9, kneading cushion +2.5, glass marble +2.7, blanket +3.1, cat tower +3.3) and epic is carried by the crate (5.0 without it); legendary is 5.9 without the nine lives (+0.2). Whole runs (1000 runs, stake 0), merge / synergy: ch1 66 / 90, ch2 64 / 91, ch3 58 / 86, ch4 71 / 92, ch5 73 / 95 (third pass: 66 / 91, 63 / 92, 58 / 86, 71 / 92, 74 / 95; a3b8536: 62 / 88, 61 / 90, 59 / 88, 69 / 92, 72 / 93). Outside the targets 60-75 / 85-92: ch3 merge 58% (2 under) and ch5 synergy 95% (3 over), as in the third pass.
+
+### Checks
+
+`npx tsc --noEmit -p .` prints nothing. Whole suite: 163 files, 3,506 tests, all pass (3,505 as found + the new pin test). `npm run font` reproduces the same subset.

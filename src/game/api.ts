@@ -39,9 +39,9 @@ export type EnemyId = (typeof ENEMY_IDS)[number];
 
 export const RELIC_IDS = [
   // common
-  'yarn_ball', 'glitter_ball', 'mouse_toy', 'cardboard_box', 'bell_collar', 'fishing_rod', 'scratcher', 'feather_wand', 'batteries',
+  'yarn_ball', 'glitter_ball', 'mouse_toy', 'cardboard_box', 'bell_collar', 'fishing_rod', 'scratcher', 'feather_wand',
   // rare
-  'cat_tower', 'kneading_cushion', 'snack_stick', 'tuna_cans', 'window_perch', 'glass_marble', 'nap_blanket',
+  'cat_tower', 'kneading_cushion', 'batteries', 'snack_stick', 'tuna_cans', 'window_perch', 'glass_marble', 'nap_blanket',
   // epic
   'cat_tunnel', 'heating_pad', 'twin_bells', 'silvervine', 'auto_feeder', 'sardine_crate', 'purr_pillow', 'lucky_coin',
   // legendary

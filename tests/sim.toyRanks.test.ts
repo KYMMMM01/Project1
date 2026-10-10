@@ -28,9 +28,9 @@ afterAll(() => {
 });
 
 describe('toy ranks', () => {
-  it('has 9 common, 7 rare, 8 epic and 6 legendary toys, and every rank can fill an offer of three twice over', () => {
+  it('has 8 common, 8 rare, 8 epic and 6 legendary toys, and every rank can fill an offer of three twice over', () => {
     const count = Object.fromEntries(RANKS.map((r) => [r, RELIC_IDS.filter((id) => RELIC_RARITY[id] === r).length]));
-    expect(count).toEqual({ common: 9, rare: 7, epic: 8, legendary: 6 });
+    expect(count).toEqual({ common: 8, rare: 8, epic: 8, legendary: 6 });
     for (const r of RANKS) expect(count[r], r).toBeGreaterThanOrEqual(6);
   });
 
@@ -42,12 +42,24 @@ describe('toy ranks', () => {
     // bots measured it weak at rare: the rank goes up, not the numbers (docs/명세_전투규칙.md §13, "리드 조정").
     expect(RELIC_RARITY.heating_pad).toBe('epic');
     expect(relicSpec('heating_pad').fx).toEqual({ slowBoost: 0.3, slowedDamage: 0.15 });
-    // Nap blanket: "weak" -> rare, with the walk slowed 10% as before and a second effect: every enemy takes 12% more damage. The spawn-window
+    // Nap blanket: "weak" -> rare, with the walk slowed 10% as before and a second effect: every enemy takes 8% more damage (the owner's number). The spawn-window
     // stretch the lead tried first (spawnSlow 0.08) measured neutral and was taken out again; only the hourglass has one.
     expect(RELIC_RARITY.nap_blanket).toBe('rare');
-    expect(relicSpec('nap_blanket').fx).toEqual({ enemySlow: 0.1, enemyDamageTaken: 0.12 });
+    expect(relicSpec('nap_blanket').fx).toEqual({ enemySlow: 0.1, enemyDamageTaken: 0.08 });
     expect(relicSpec('nap_blanket').fx.spawnSlow).toBeUndefined();
     expect(relicSpec('hourglass').fx.spawnSlow).toBe(0.1);
+  });
+
+  it('keeps the second-round values the owner set: the batteries back at rare with 2 s and 3 s, the blanket taking 8%, the sardine crate 100 fish and a price cap 15 lower', () => {
+    // Batteries: the owner put them back as they were before batch 4 (a3b8536): rare, +2 s of laser, 3 s off the recharge.
+    expect(RELIC_RARITY.batteries).toBe('rare');
+    expect(relicSpec('batteries').fx).toEqual({ laserDuration: 2, laserCooldownCut: 3 });
+    // Nap blanket: still rare, every enemy takes 8% (not the 12% of the third pass).
+    expect(RELIC_RARITY.nap_blanket).toBe('rare');
+    expect(relicSpec('nap_blanket').fx.enemyDamageTaken).toBe(0.08);
+    // Sardine crate: still epic, 100 fish at once and the summon price cap 15 lower (+50 / -10 before).
+    expect(RELIC_RARITY.sardine_crate).toBe('epic');
+    expect(relicSpec('sardine_crate').fx).toEqual({ instantFish: 100, costCapCut: 15 });
   });
 
   it('lists the toys rank by rank in the data (the toy codex shows them in that order)', () => {

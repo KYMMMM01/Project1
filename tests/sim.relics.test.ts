@@ -180,13 +180,13 @@ describe('economy relics', () => {
     expect(fed()).toBe(20);
   });
 
-  it('sardine crate: +50 fish at once, and the summon price tops out 10 lower', () => {
+  it('sardine crate: +100 fish at once, and the summon price tops out 15 lower', () => {
     const sim = newSim();
     const fish = sim.fish;
     gainRelic(sim, 'sardine_crate');
-    expect(sim.fish - fish).toBe(50);
+    expect(sim.fish - fish).toBe(100);
     sim.paidSummons = 100;
-    expect(sim.summonCost()).toBe(SUMMON_CAP - 10);
+    expect(sim.summonCost()).toBe(SUMMON_CAP - 15);
   });
 
   it('lucky coin: elites and bosses pay two more purr', () => {
@@ -276,17 +276,17 @@ describe('behaviour relics', () => {
     expect(hits[1]!.amount).toBeCloseTo(115, 9);
   });
 
-  it('batteries: the laser lasts 4 seconds longer and comes back 5 seconds sooner', () => {
+  it('batteries: the laser lasts 2 seconds longer and comes back 3 seconds sooner', () => {
     const sim = withRelic('batteries');
     quietWave(sim);
-    expect(sim.laser.duration).toBe(LASER_DURATION + 4);
-    expect(sim.laser.cooldownTotal).toBe(10);
+    expect(sim.laser.duration).toBe(LASER_DURATION + 2);
+    expect(sim.laser.cooldownTotal).toBe(12);
     sim.setLaser(100, 100);
-    advance(sim, LASER_DURATION + 4 - 0.1);
+    advance(sim, LASER_DURATION + 2 - 0.1);
     expect(sim.laser.active).toBe(true);
     advance(sim, 0.2);
     expect(sim.laser.active).toBe(false);
-    expect(sim.laser.cooldownTotal).toBe(10);
+    expect(sim.laser.cooldownTotal).toBe(12);
   });
 
   it('glass marble: area attacks reach 30% further (not 25%, not 40%, not 60%)', () => {
@@ -333,9 +333,9 @@ describe('behaviour relics', () => {
     expect(a.travelled / b.travelled).toBeCloseTo(0.9, 6);
   });
 
-  it('nap blanket: every enemy takes 12% more damage from every source, physical and magic, hits and damage over time, shield and health alike', () => {
+  it('nap blanket: every enemy takes 8% more damage from every source, physical and magic, hits and damage over time, shield and health alike', () => {
     // The data: the blanket slows the walk and raises the damage taken; it no longer stretches the spawn window (that is the hourglass's).
-    expect(relicSpec('nap_blanket').fx).toEqual({ enemySlow: 0.1, enemyDamageTaken: 0.12 });
+    expect(relicSpec('nap_blanket').fx).toEqual({ enemySlow: 0.1, enemyDamageTaken: 0.08 });
     const plain = newSim();
     const blanket = withRelic('nap_blanket');
     quietWave(plain);
@@ -348,10 +348,10 @@ describe('behaviour relics', () => {
     };
     // Physical: the cucumber's 8% armour comes off first, the factor multiplies what is left.
     expect(lost(plain, dummy(plain, 'cucumber'), 100, 'physical')).toBeCloseTo(100 * (1 - 0.08), 9);
-    expect(lost(blanket, dummy(blanket, 'cucumber'), 100, 'physical')).toBeCloseTo(100 * (1 - 0.08) * 1.12, 9);
+    expect(lost(blanket, dummy(blanket, 'cucumber'), 100, 'physical')).toBeCloseTo(100 * (1 - 0.08) * 1.08, 9);
     // Magic: the tangerine's 35% ward.
     expect(lost(plain, dummy(plain, 'tangerine'), 100, 'magic')).toBeCloseTo(100 * (1 - 0.35), 9);
-    expect(lost(blanket, dummy(blanket, 'tangerine'), 100, 'magic')).toBeCloseTo(100 * (1 - 0.35) * 1.12, 9);
+    expect(lost(blanket, dummy(blanket, 'tangerine'), 100, 'magic')).toBeCloseTo(100 * (1 - 0.35) * 1.08, 9);
     // Damage over time: one tick of a burn of 100 a second is half a second of it (the cucumber has no ward), and a tick of bleed is physical.
     for (const [kind, armour] of [['burn', 1], ['bleed', 1 - 0.08]] as const) {
       const ticks = [plain, blanket].map((sim) => {
@@ -361,10 +361,10 @@ describe('behaviour relics', () => {
         return 1e5 - e.hp;
       });
       expect(ticks[0], `${kind} without`).toBeCloseTo(100 * 0.5 * armour, 9);
-      expect(ticks[1], `${kind} with`).toBeCloseTo(100 * 0.5 * armour * 1.12, 9);
+      expect(ticks[1], `${kind} with`).toBeCloseTo(100 * 0.5 * armour * 1.08, 9);
     }
-    // A shield takes the same 12% more as the health does: two blows of 30 at a cone (100 health, 40 shield) cost 33.6 + 33.6 in all, the shield first.
-    for (const [sim, factor] of [[plain, 1], [blanket, 1.12]] as const) {
+    // A shield takes the same 8% more as the health does: two blows of 30 at a cone (100 health, 40 shield) cost 32.4 + 32.4 in all, the shield first.
+    for (const [sim, factor] of [[plain, 1], [blanket, 1.08]] as const) {
       const cone = foe(sim, 'cone', 0, 100);
       const wall = 100 * (enemySpec('cone').shield ?? NaN);
       expect(cone.shield).toBeCloseTo(wall, 9);
@@ -391,32 +391,34 @@ describe('behaviour relics', () => {
       return before - e.hp;
     };
     const [a, b] = [plain, blanket].map((sim) => foe(sim, 'cucumber', 0, 1e5)) as [SimEnemy, SimEnemy];
-    // The factor alone, then multiplied (not added) with a vulnerability of 25%: 1.25 x 1.12 = 1.4, not 1.37.
-    expect(hit(blanket, b)).toBeCloseTo(armoured * 1.12, 9);
+    // The factor alone, then multiplied (not added) with a vulnerability of 25%: 1.25 x 1.08 = 1.35, not 1.33.
+    expect(hit(blanket, b)).toBeCloseTo(armoured * 1.08, 9);
     for (const [sim, e] of [[plain, a], [blanket, b]] as const) applyStatus(sim, e, 'vulnerable', 0.25, 5, null);
     expect(hit(plain, a)).toBeCloseTo(armoured * 1.25, 9);
-    expect(hit(blanket, b)).toBeCloseTo(armoured * 1.25 * 1.12, 9);
-    // With the laser's focus (+15%) and a slowed enemy under the heating pad (+15%): 1.25 x 1.15 x 1.15 x 1.12 = 1.85, still under 2.
+    expect(hit(blanket, b)).toBeCloseTo(armoured * 1.25 * 1.08, 9);
+    // With the laser's focus (+15%) and a slowed enemy under the heating pad (+15%): 1.25 x 1.15 x 1.15 x 1.08 = 1.79, still under 2.
     for (const [sim, e] of [[plain, a], [blanket, b]] as const) {
       e.focused = true;
       applyStatus(sim, e, 'slow', 0.2, 5, null);
     }
     expect(hit(plain, a)).toBeCloseTo(armoured * 1.25 * 1.15 * 1.15, 9);
-    expect(hit(blanket, b)).toBeCloseTo(armoured * 1.25 * 1.15 * 1.15 * 1.12, 9);
-    expect(1.25 * 1.15 * 1.15 * 1.12).toBeLessThan(VULNERABLE_CAP);
+    expect(hit(blanket, b)).toBeCloseTo(armoured * 1.25 * 1.15 * 1.15 * 1.08, 9);
+    expect(1.25 * 1.15 * 1.15 * 1.08).toBeLessThan(VULNERABLE_CAP);
     // A vulnerability of 60% brings the product to 1.6 x 1.15 x 1.15 = 2.1 before the blanket, so the cap holds it at 2x with or without it.
     for (const [sim, e] of [[plain, a], [blanket, b]] as const) applyStatus(sim, e, 'vulnerable', 0.6, 5, null);
     expect(hit(plain, a)).toBeCloseTo(armoured * VULNERABLE_CAP, 9);
     expect(hit(blanket, b)).toBeCloseTo(armoured * VULNERABLE_CAP, 9);
-    // The blanket reaches the cap on its own account: 1.6 alone is 1.6 x 1.12 = 1.79 with it; with the focus only, 1.6 x 1.15 x 1.12 = 2.06 is held at 2x.
+    // The blanket reaches the cap on its own account: a vulnerability of 65% alone is 1.65 x 1.08 = 1.78 with it; with the focus only, 1.65 x 1.15 x 1.08 = 2.05 is held at 2x
+    // (1.65 x 1.15 = 1.90 without it is not). At 60% the same sum is 1.6 x 1.15 x 1.08 = 1.99, which no longer crosses the cap, so this case uses 65%.
     const [c, d] = [plain, blanket].map((sim) => foe(sim, 'cucumber', 0, 1e5)) as [SimEnemy, SimEnemy];
-    for (const [sim, e] of [[plain, c], [blanket, d]] as const) applyStatus(sim, e, 'vulnerable', 0.6, 5, null);
-    expect(hit(plain, c)).toBeCloseTo(armoured * 1.6, 9);
-    expect(hit(blanket, d)).toBeCloseTo(armoured * 1.6 * 1.12, 9);
+    for (const [sim, e] of [[plain, c], [blanket, d]] as const) applyStatus(sim, e, 'vulnerable', 0.65, 5, null);
+    expect(hit(plain, c)).toBeCloseTo(armoured * 1.65, 9);
+    expect(hit(blanket, d)).toBeCloseTo(armoured * 1.65 * 1.08, 9);
     for (const e of [c, d]) e.focused = true;
-    expect(hit(plain, c)).toBeCloseTo(armoured * 1.6 * 1.15, 9);
+    expect(hit(plain, c)).toBeCloseTo(armoured * 1.65 * 1.15, 9);
     expect(hit(blanket, d)).toBeCloseTo(armoured * VULNERABLE_CAP, 9);
-    expect(1.6 * 1.15 * 1.12).toBeGreaterThan(VULNERABLE_CAP);
+    expect(1.65 * 1.15).toBeLessThan(VULNERABLE_CAP);
+    expect(1.65 * 1.15 * 1.08).toBeGreaterThan(VULNERABLE_CAP);
   });
 
   it('the hourglass alone keeps every enemy of the daily rule\'s 11-second wave inside it, and a bigger stretch still ends on the last tick', () => {
