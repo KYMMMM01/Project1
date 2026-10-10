@@ -50,10 +50,10 @@ describe('toy ranks', () => {
     expect(relicSpec('hourglass').fx.spawnSlow).toBe(0.1);
   });
 
-  it('keeps the second-round values the owner set: the batteries back at rare with 2 s and 3 s, the blanket taking 8%, the sardine crate 100 fish and a price cap 15 lower', () => {
-    // Batteries: the owner put them back as they were before batch 4 (a3b8536): rare, +2 s of laser, 3 s off the recharge.
+  it('keeps the second-round values the owner set: the batteries at rare with 3 s and 4 s, the blanket taking 8%, the sardine crate 100 fish and a price cap 15 lower', () => {
+    // Batteries: the owner put them back at rare (as before batch 4) and then set +3 s of laser and 4 s off the recharge himself (they were 2 and 3).
     expect(RELIC_RARITY.batteries).toBe('rare');
-    expect(relicSpec('batteries').fx).toEqual({ laserDuration: 2, laserCooldownCut: 3 });
+    expect(relicSpec('batteries').fx).toEqual({ laserDuration: 3, laserCooldownCut: 4 });
     // Nap blanket: still rare, every enemy takes 8% (not the 12% of the third pass).
     expect(RELIC_RARITY.nap_blanket).toBe('rare');
     expect(relicSpec('nap_blanket').fx.enemyDamageTaken).toBe(0.08);

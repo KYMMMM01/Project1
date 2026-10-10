@@ -276,17 +276,17 @@ describe('behaviour relics', () => {
     expect(hits[1]!.amount).toBeCloseTo(115, 9);
   });
 
-  it('batteries: the laser lasts 2 seconds longer and comes back 3 seconds sooner', () => {
+  it('batteries: the laser lasts 3 seconds longer and comes back 4 seconds sooner', () => {
     const sim = withRelic('batteries');
     quietWave(sim);
-    expect(sim.laser.duration).toBe(LASER_DURATION + 2);
-    expect(sim.laser.cooldownTotal).toBe(12);
+    expect(sim.laser.duration).toBe(LASER_DURATION + 3);
+    expect(sim.laser.cooldownTotal).toBe(11);
     sim.setLaser(100, 100);
-    advance(sim, LASER_DURATION + 2 - 0.1);
+    advance(sim, LASER_DURATION + 3 - 0.1);
     expect(sim.laser.active).toBe(true);
     advance(sim, 0.2);
     expect(sim.laser.active).toBe(false);
-    expect(sim.laser.cooldownTotal).toBe(12);
+    expect(sim.laser.cooldownTotal).toBe(11);
   });
 
   it('glass marble: area attacks reach 30% further (not 25%, not 40%, not 60%)', () => {

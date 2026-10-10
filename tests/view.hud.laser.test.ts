@@ -15,8 +15,8 @@ describe('the numbers on the laser card', () => {
     expect(f.bonusPercent).toBe(Math.round(LASER_VULNERABLE * 100));
     expect(f.bonusPercent).toBe(15);
     expect(f.toy.has).toBe(false);
-    expect(f.toy.duration).toBe(2);
-    expect(f.toy.cooldownCut).toBe(3);
+    expect(f.toy.duration).toBe(3);
+    expect(f.toy.cooldownCut).toBe(4);
     expect(f.training.level).toBe(0);
     expect(f.rule).toBe(0);
   });

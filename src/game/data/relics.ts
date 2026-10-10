@@ -22,7 +22,7 @@ const SPECS: Record<RelicId, RelicSpec> = {
   kneading_cushion: { id: 'kneading_cushion', fx: { sameClassNeighbourDamage: 0.22 }, args: { a: 22 } },
   cat_tunnel: { id: 'cat_tunnel', fx: { tunnel: 3 }, args: { a: 3 } },
   heating_pad: { id: 'heating_pad', fx: { slowBoost: 0.3, slowedDamage: 0.15 }, args: { a: 30, b: 15 } },
-  batteries: { id: 'batteries', fx: { laserDuration: 2, laserCooldownCut: 3 }, args: { a: 2, b: 3 } },
+  batteries: { id: 'batteries', fx: { laserDuration: 3, laserCooldownCut: 4 }, args: { a: 3, b: 4 } },
   snack_stick: { id: 'snack_stick', fx: { jumpChance: 0.18 }, args: { a: 18 } },
   tuna_cans: { id: 'tuna_cans', fx: { waveFish: 16 }, args: { a: 16 } },
   window_perch: { id: 'window_perch', fx: { edgeSpeed: 0.18 }, args: { a: 18 } },
