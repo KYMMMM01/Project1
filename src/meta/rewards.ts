@@ -23,7 +23,7 @@ import {
 } from './data/economy';
 import { DAILY_FIRST_CLEAR, FIRST_CLEAR_CHEST } from './data/schedule';
 import { mergeBundles } from './bundle';
-import { dungeonFirstClearGold, dungeonGold } from './dungeon';
+import { dungeonChestGold, dungeonGold } from './dungeon';
 import { UNITS_BY_RARITY } from './units';
 import type { BaseUnitId, Bundle } from './types';
 
@@ -73,15 +73,13 @@ export interface RunPayout {
   firstClear: boolean;
   /** The daily challenge's one silver chest per day. */
   dailyFirstClear: boolean;
-  /** Gold dungeon only: the first victory of the day's bonus, already part of `gold`. */
+  /** Gold dungeon only: the treasure chest's share of `gold` (0 for a run that did not open it). */
   dungeonBonus?: number;
 }
 
 export interface RunContext {
   cleared: readonly number[];
   dailyAlreadyCleared: boolean;
-  /** The gold dungeon's first-victory bonus of today is already paid. */
-  dungeonFirstDone?: boolean;
 }
 
 /**
@@ -92,10 +90,9 @@ export interface RunContext {
 export function computeRunPayout(stats: RunStats, ctx: RunContext): RunPayout {
   const xp = runXp(stats.wavesCleared);
   if (stats.mode === 'gold') {
-    // The dungeon pays gold and XP only: no chest, no first-clear reward of a chapter, no consolation cards.
-    const bonus = stats.victory && !ctx.dungeonFirstDone ? dungeonFirstClearGold(stats.chapter) : 0;
+    // The dungeon pays gold and XP only (the treasure chest is part of the gold): no chest to open, no first-clear reward of a chapter, no consolation cards.
     const run = { tier: stats.chapter, wavesCleared: stats.wavesCleared, kills: stats.kills, victory: stats.victory };
-    return { gold: dungeonGold(run) + bonus, xp, bundle: {}, firstClear: false, dailyFirstClear: false, dungeonBonus: bonus };
+    return { gold: dungeonGold(run), xp, bundle: {}, firstClear: false, dailyFirstClear: false, dungeonBonus: dungeonChestGold(run) };
   }
   const gold = runGold(stats.wavesCleared, stats.chapter, stats.stake, stats.victory);
   let bundle: Bundle = {};

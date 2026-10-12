@@ -8,6 +8,11 @@
  * and prints the change against the same seeds without it. SIM_TOYS=cat_tunnel,nap_blanket limits the toys; SIM_TOY_WAVE=5 hands them out before
  * that wave (default 5: as the first toy, at the offer after act 1; `start` = before wave 1; `rank` = at the earliest offer that can hold the
  * toy's rank: 5 / 5 / 13 / 21).
+ * The `endless` section (only when asked for with SIM_ONLY=endless) plays endless mode with the merge and the synergy bot (SIM_ENDLESS_BOTS=merge,synergy)
+ * at stake 0 for the cases of SIM_ENDLESS_CASES=2:2,2:3,5:6,5:10 (chapter:unit level) and prints the waves cleared (median / top 10% / best), what
+ * ended the runs, the share reaching the weekly tiers, the minutes a run takes and the board against the wave (see tests/simEndlessKit.ts).
+ * SIM_ENDLESS_MAXWAVE=120 is the wave at which a living board counts as having survived; SIM_ENDLESS_REACH=24,30,40,50,60,80,100 the waves it counts;
+ * SIM_ENDLESS_DUMP=<file> appends one JSON line per run (waves cleared, how it ended, and per wave: start second, firepower, need, peak enemies).
  */
 import { describe, it } from 'vitest';
 import { CLASS_IDS, RELIC_IDS, UNIT_IDS, type CurrencyReason, type RelicId } from '@/game/api';
@@ -22,6 +27,7 @@ import { RELIC_RARITY } from '@/game/data/roster';
 import {
   batch, controlRow, loadoutInit, median, pairedDelta, pct, printTable, signed, unitRows, type BatchSummary, type PairedDelta, type UnitRow,
 } from './simReportKit';
+import { endlessReport, type EndlessCase } from './simEndlessKit';
 
 const RUNS = Number(process.env.SIM_RUNS ?? 500);
 const ONLY = process.env.SIM_ONLY ?? '';
@@ -220,6 +226,17 @@ describe('balance report', () => {
       ['toy', 'rank', 'from', ...cells.flatMap((c) => [`${c.label} win`, `${c.label} wave`]), 'win', 'se', 'wave', 'se', 'purr', 'awaken'],
       rows,
     );
+  });
+
+  it('endless mode: the wave the bots reach and what ends the run', () => {
+    if (ONLY !== 'endless') return;
+    const cases: EndlessCase[] = (process.env.SIM_ENDLESS_CASES ?? '2:2,2:3,5:6,5:10').split(',').filter(Boolean).map((spec) => {
+      const [chapter, level] = spec.split(':').map(Number) as [number, number];
+      return { chapter, level, label: `ch${chapter} L${level}` };
+    });
+    const bots = (process.env.SIM_ENDLESS_BOTS ?? 'merge,synergy').split(',').filter(Boolean) as BotPolicy[];
+    const reachAt = list('SIM_ENDLESS_REACH', '24,30,40,50,60,80,100');
+    endlessReport(cases, bots, RUNS, Number(process.env.SIM_ENDLESS_MAXWAVE ?? 120), reachAt, (c, seed) => loadoutInit(seed, c.chapter, 0, c.level, 'endless'));
   });
 
   it('full matrix', () => {

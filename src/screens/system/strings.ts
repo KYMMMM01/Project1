@@ -123,7 +123,7 @@ addStrings('ko', {
   'rt.sys.feat.sweep': '소탕권으로 클리어한 판을 바로 끝내요.',
   'rt.sys.feat.cup': '일일 도전 기록으로 주간 컵 상자를 받아요.',
   'rt.sys.feat.endless': '끝없이 밀려오는 적을 막아요.',
-  'rt.sys.feat.dungeon': '하루 두 번, 짧은 판으로 골드를 모아요.',
+  'rt.sys.feat.dungeon': '짧은 판에서 금화를 잡아 골드를 모아요.',
 });
 
 addStrings('en', {
@@ -244,7 +244,7 @@ addStrings('en', {
   'rt.sys.feat.sweep': 'Finish cleared chapters instantly with tickets.',
   'rt.sys.feat.cup': 'Daily challenge scores earn weekly cup chests.',
   'rt.sys.feat.endless': 'Hold off enemies that never stop.',
-  'rt.sys.feat.dungeon': 'Two short runs a day that pay gold.',
+  'rt.sys.feat.dungeon': 'A short run where catching coins pays gold.',
 });
 
 /** Shown in the settings footer. Replace with a build-time define when the build provides one. */

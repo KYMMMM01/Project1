@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getLang, setLang, t, type Lang } from '@/core/i18n';
 import { PLATFORM_ID } from '@/platform';
 import { dungeonOffer, entriesText, shownTier, stepTier } from '@/screens/battle/dungeonModel';
+import { dungeonCanBuy, dungeonEntriesLeft, dungeonGold, dungeonMaxChest, dungeonMaxGold } from '@/meta/dungeon';
 import { selectionAfterRun } from '@/screens/battle/model';
 import { planRun } from '@/screens/shell/runPlan';
 import { TEST_TOOLS, testBundle, testTools } from '@/screens/system/testTools';
@@ -14,13 +15,21 @@ import '@/screens/battle/strings';
 import '@/screens/shell/strings';
 import '@/screens/system/strings';
 import '@/meta/strings';
+import '@/view/hud/strings';
 
 describe('what the card offers', () => {
-  it('lets the player in while an entry is left, sells the extra one when the free ones are gone, and says tomorrow when everything is used', () => {
+  it('lets the player in while an entry is left, sells the extra one when the free ones are gone (if the rules sell one), and says tomorrow when everything is used', () => {
     expect(dungeonOffer({ entriesLeft: 2, canBuy: true })).toBe('enter');
     expect(dungeonOffer({ entriesLeft: 1, canBuy: false })).toBe('enter');
     expect(dungeonOffer({ entriesLeft: 0, canBuy: true })).toBe('buy');
     expect(dungeonOffer({ entriesLeft: 0, canBuy: false })).toBe('spent');
+  });
+
+  it('never offers a purchase with the rules as they are: one free entry, none to buy, so a used day says tomorrow', () => {
+    const none = { entriesLeft: 0, canBuy: dungeonCanBuy({ used: 1, bought: 0 }) };
+    expect(none.canBuy).toBe(false);
+    expect(dungeonOffer(none)).toBe('spent');
+    expect(dungeonOffer({ entriesLeft: dungeonEntriesLeft({ used: 0, bought: 0 }), canBuy: dungeonCanBuy({ used: 0, bought: 0 }) })).toBe('enter');
   });
 
   it('shows the tier the player picked while it is open, and otherwise the highest open one', () => {
@@ -41,9 +50,10 @@ describe('what the card offers', () => {
   });
 
   it('writes the entries left over the entries of the day, a bought one included', () => {
+    expect(entriesText(1, 1, 0)).toBe('1/1');
+    expect(entriesText(0, 1, 0)).toBe('0/1');
+    expect(entriesText(1, 1, 1)).toBe('1/2');
     expect(entriesText(2, 2, 0)).toBe('2/2');
-    expect(entriesText(0, 2, 0)).toBe('0/2');
-    expect(entriesText(1, 2, 1)).toBe('1/3');
   });
 });
 
@@ -110,9 +120,9 @@ describe('the words', () => {
 
   const keys = [
     'battle.dungeon.title', 'battle.dungeon.tier', 'battle.dungeon.entries', 'battle.dungeon.reward', 'battle.dungeon.best',
-    'battle.dungeon.none', 'battle.dungeon.bonus', 'battle.dungeon.play', 'battle.dungeon.ad', 'battle.dungeon.buy',
+    'battle.dungeon.none', 'battle.dungeon.chest', 'battle.dungeon.play', 'battle.dungeon.ad', 'battle.dungeon.buy',
     'battle.dungeon.spent', 'battle.dungeon.tomorrow', 'shell.pre.mode.gold', 'shell.pre.gold.rules.waves', 'shell.pre.gold.rules.pay',
-    'shell.pre.gold.rules.win', 'shell.pre.gold.rules.first', 'rt.sys.section.test', 'rt.sys.test.hint', 'rt.sys.test.gold',
+    'shell.pre.gold.rules.chest', 'hud.res.dungeonBonus', 'rt.sys.section.test', 'rt.sys.test.hint', 'rt.sys.test.gold',
     'rt.sys.test.gems', 'rt.sys.test.tickets', 'rt.sys.test.got', 'rt.sys.test.full', 'rt.sys.feat.dungeon', 'meta.feature.dungeon',
   ];
   const holes = (s: string): string[] => (s.match(/\{\w+\}/g) ?? []).sort();
@@ -132,10 +142,27 @@ describe('the words', () => {
   it('read well with their numbers filled in', () => {
     setLang('ko');
     expect(t('rt.sys.test.gold', { n: '10,000' })).toBe('골드 +10,000');
-    expect(t('battle.dungeon.entries', { n: '2/2' })).toBe('입장 2/2');
+    expect(t('battle.dungeon.entries', { n: '1/1' })).toBe('입장 1/1');
     expect(t('battle.dungeon.tier', { n: 3 })).toBe('3단계');
+    // The chest's share is part of the maximum and of the pay shown beside it, so it is worded as "of it" and never as "+n".
+    expect(t('battle.dungeon.chest', { n: '456' })).toBe('그중 보물상자 456');
+    expect(t('shell.pre.gold.rules.chest', { n: '456' })).toBe('보물상자를 쓰러뜨리면 골드를 456 더 줘요.');
+    expect(t('hud.res.dungeonBonus', { n: '456' })).toBe('그중 보물상자 456 골드');
     setLang('en');
     expect(t('rt.sys.test.gold', { n: '10,000' })).toBe('Gold +10,000');
     expect(t('battle.dungeon.tier', { n: 3 })).toBe('Tier 3');
+    expect(t('battle.dungeon.chest', { n: '456' })).toBe('Chest pays 456 of it');
+    expect(t('shell.pre.gold.rules.chest', { n: '456' })).toBe('Beat the coin chest and it pays 456 more gold.');
+    expect(t('hud.res.dungeonBonus', { n: '456' })).toBe('The coin chest gave 456 of that');
+    for (const key of ['battle.dungeon.chest', 'hud.res.dungeonBonus']) expect(t(key, { n: '1' }), key).not.toMatch(/\+/);
+  });
+
+  it('shows the chest as a part of the maximum on the card (it is inside the number beside it, not on top of it)', () => {
+    for (let tier = 1; tier <= 5; tier++) {
+      const chest = dungeonMaxChest(tier);
+      expect(chest, `tier ${tier}`).toBeGreaterThan(0);
+      expect(chest, `tier ${tier}`).toBeLessThan(dungeonMaxGold(tier));
+      expect(dungeonGold({ tier, wavesCleared: 8, kills: 131, victory: true }), `tier ${tier}`).toBe(dungeonMaxGold(tier));
+    }
   });
 });

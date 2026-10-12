@@ -10,10 +10,21 @@ import type { DiscKind } from '@/fx';
 export const SPARE_MIN = 4;
 export const SPARE_MAX = 12;
 
-/** Texture key of an enemy: bosses use their own id, the small balloon borrows the big one's art (the same rule as `enemyTextureKey`). */
+/**
+ * What shows in place of a gold-dungeon sprite that is not in the art folder (yet): the gold coin and the gold chest of the icon set, so the
+ * enemy is never an invisible body with only its shadow and bar. Nothing else has a stand-in.
+ */
+const STAND_IN: Readonly<Record<string, string>> = { enemy_coin: 'icon_gold', boss_treasure: 'icon_chest_gold' };
+
+/**
+ * Texture key of an enemy: bosses use their own id, the small balloon borrows the big one's art, and the dungeon's coin and chest fall back to
+ * an icon while their own picture is missing. `EnemyView` takes its texture by this rule too (`enemyTextureKey`).
+ */
 export function enemyArtKey(id: string, has: (key: string) => boolean): string {
   const key = id.startsWith('boss_') ? id : `enemy_${id}`;
-  return has(key) ? key : key.replace(/_small$/, '');
+  if (has(key)) return key;
+  const own = key.replace(/_small$/, '');
+  return has(own) ? own : (STAND_IN[own] ?? own);
 }
 
 /** The disc area an enemy's aura is drawn with, or null (a kind with no aura). */

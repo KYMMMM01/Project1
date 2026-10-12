@@ -168,6 +168,10 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
         stage.direct('buff', 0.6, 0.9);
         break;
       }
+      case 'spill':
+        fx.coinBurst(en.x, en.y, { count: 14, scale: 1.1 });
+        stage.direct('coin_many', 0.5);
+        break;
       case 'enrage':
         break;
     }

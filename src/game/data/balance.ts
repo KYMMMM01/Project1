@@ -179,7 +179,11 @@ export const CHAPTER_ACTS = 6;
 export const CHAPTER_WAVES = CHAPTER_ACTS * ACT_LENGTH;
 export const TUTORIAL_WAVES = 8;
 export const DAILY_WAVES = 16;
-export const ENDLESS_GROWTH = 1.14;
+/**
+ * Endless mode: past wave 24 the health of every enemy, and of each later elite and boss (8 waves apart: this to the 8th), grows by this factor per
+ * wave. Changed 2026-10-12 from 1.14 to 1.07: wave 50 has 5.8 times the health of wave 24 (it was 30 times), wave 100 has 171 times (it was 21,000).
+ */
+export const ENDLESS_GROWTH = 1.07;
 /**
  * Chapters 1..5. Tuned so the recommended unit level clears each chapter at the same rate: the unit
  * levels (+10% damage per level) carry most of the growth, the chapters add rules instead.

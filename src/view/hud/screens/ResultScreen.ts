@@ -406,7 +406,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     };
     if (levelAfter > levelBefore) callout(t('hud.res.level', { a: levelBefore, b: levelAfter }), 'mustard', 0.5);
     if (reward.firstClear) callout(t('hud.res.firstClear', { chapter: reward.chapter, stake: reward.stake }), 'success', 0.8);
-    if (reward.bonus) callout(t('hud.res.dungeonBonus', { n: reward.bonus }), 'success', 1.0);
+    if (reward.bonus) callout(t('hud.res.dungeonBonus', { n: fmt(reward.bonus) }), 'success', 1.0);
     if (reward.newBest) callout(t('hud.res.newBest'), 'primary', null);
 
     const tiles = rewardTiles(0, 0, reward.bundle);

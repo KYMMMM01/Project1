@@ -9,8 +9,8 @@ import { traitOrder } from '@/view/hud/policy';
 import type { ClassId, EnemyId, EnemyTrait, UnitId } from '@/game/api';
 import './strings';
 import {
-  abilitiesOf, appearances, armourBreakers, chapterMult, classesDealing, enrageRule, foeRank, foeStats, healthSpan, limitToy, rageApplies, resistanceOf,
-  splitParent, targetRows, tipsOf, type Ability, type FoeRank, type Level, type TargetRow, type Tip,
+  abilitiesOf, appearances, armourBreakers, chapterMult, classesDealing, dungeonWaves, enrageRule, foeRank, foeStats, healthSpan, levelOf, limitToy, rageApplies,
+  resistanceOf, splitParent, targetRows, tipsOf, type Ability, type FoeRank, type Level, type TargetRow, type Tip,
 } from './foes';
 
 export interface Row {
@@ -72,7 +72,8 @@ export interface FoeItem {
 
 const span = (a: number, b: number, show: (v: number) => string): string => (a === b ? show(a) : `${show(a)}~${show(b)}`);
 
-export function foeItem(id: EnemyId, level: Level): FoeItem {
+export function foeItem(id: EnemyId, chosen: Level): FoeItem {
+  const level = levelOf(id, chosen);
   const spec = ENEMY_SPECS[id];
   const rank = foeRank(id);
   const stats = foeStats(id);
@@ -207,7 +208,8 @@ function specialBlock(id: EnemyId, level: Level): SpecialBlock | null {
   };
 }
 
-export function foePage(id: EnemyId, level: Level): FoePage {
+export function foePage(id: EnemyId, chosen: Level): FoePage {
+  const level = levelOf(id, chosen);
   const spec = ENEMY_SPECS[id];
   const rank = foeRank(id);
   const stats = foeStats(id);
@@ -239,6 +241,11 @@ export function foePage(id: EnemyId, level: Level): FoePage {
     label: t('codex.appear.row', { n: chapter, name: t(`chapter.${chapter}.name`) }),
     value: t(waves.length === 1 ? 'codex.appear.wave' : 'codex.appear.waves', { waves: waveText(waves) }),
   }));
+  // The gold dungeon's own enemies live there and nowhere else: its row comes first, and says so.
+  const inDungeon = dungeonWaves(id);
+  if (inDungeon.length > 0) {
+    where.unshift({ label: t('codex.appear.dungeon'), value: t(inDungeon.length === 1 ? 'codex.appear.wave' : 'codex.appear.waves', { waves: waveText(inDungeon) }) });
+  }
   const appears: Row[] = where.length > 0 ? where : [{ label: t('codex.page.appears'), value: t('codex.appear.none') }];
   if (parent) appears.unshift({ label: t('codex.page.appears'), value: t('codex.appear.split', { parent: foeName(parent) }) });
   const abilities = abilitiesOf(id).map(abilityLine);

@@ -10,6 +10,7 @@ import {
   specialLimit,
 } from '@/game/data/balance';
 import { BOSS_SPECS, ENEMY_SPECS } from '@/game/data/enemies';
+import { GOLD_DUNGEON_BOSS_HP, GOLD_DUNGEON_BOSS_LIMIT, GOLD_DUNGEON_WAVES, goldDungeonScript } from '@/game/data/goldDungeon';
 import { MAX_STAKE, unitClass } from '@/game/data/roster';
 import { stakeRules } from '@/game/data/stakes';
 import { unitSpec } from '@/game/data/units';
@@ -87,8 +88,32 @@ export function slotsIn(id: EnemyId, chapter: number): Slot[] {
   return out;
 }
 
+/** The enemies that live in the gold dungeon and nowhere else: their pages say so, and the butler level plays no part in their numbers. */
+export function dungeonOnly(id: EnemyId): boolean {
+  return dungeonWaves(id).length > 0 && appearancesInChapters(id).length === 0;
+}
+
+/** The waves of the gold dungeon's script an enemy walks in (the chest ends the last; the coins walk all of them, and escort the chest). Tier n plays chapter n's health. */
+export function dungeonWaves(id: EnemyId): number[] {
+  const out: number[] = [];
+  for (let wave = 1; wave <= GOLD_DUNGEON_WAVES; wave++) {
+    const script = goldDungeonScript(wave);
+    if (script.boss === id || script.groups.some((g) => g.enemy === id)) out.push(wave);
+  }
+  return out;
+}
+
+/** The level a page's numbers are worked out at: the gold dungeon's own enemies ignore the butler level (a tier is a chapter at level 0). */
+export function levelOf(id: EnemyId, level: Level): Level {
+  return dungeonOnly(id) ? { ...level, stake: 0 } : level;
+}
+
 /** The waves of every chapter the enemy walks in (a chapter without it is left out). */
 export function appearances(id: EnemyId): Array<{ chapter: number; waves: number[] }> {
+  return appearancesInChapters(id);
+}
+
+function appearancesInChapters(id: EnemyId): Array<{ chapter: number; waves: number[] }> {
   const out: Array<{ chapter: number; waves: number[] }> = [];
   for (let chapter = 1; chapter <= CHAPTER_COUNT; chapter++) {
     const waves = slotsIn(id, chapter).map((s) => s.wave);
@@ -106,11 +131,12 @@ export interface HealthPoint {
 
 /** An ordinary enemy's health at its first and last wave of the chapter, or null when it does not come in that chapter. */
 export function healthSpan(id: EnemyId, level: Level): { first: HealthPoint; last: HealthPoint } | null {
-  const slots = slotsIn(id, level.chapter);
-  if (slots.length === 0) return null;
+  // An enemy of the gold dungeon has no chapter wave: its health is the tier's (the chosen chapter's) at the dungeon's waves.
+  const waves = dungeonOnly(id) ? dungeonWaves(id) : slotsIn(id, level.chapter).map((s) => s.wave);
+  if (waves.length === 0) return null;
   const mult = ENEMY_SPECS[id].hpMult;
   const at = (wave: number): HealthPoint => ({ wave, hp: cucumberHealth(level.chapter, wave) * mult });
-  return { first: at((slots[0] as Slot).wave), last: at((slots[slots.length - 1] as Slot).wave) };
+  return { first: at(waves[0] as number), last: at(waves[waves.length - 1] as number) };
 }
 
 /** What the damage allowance of a time-limited enemy comes to (BOSS_MIN_KILL, BOSS_CAP_BURST). */
@@ -158,6 +184,15 @@ function waveSlotsOf(kind: 'elite' | 'boss'): number[] {
 export function targetRows(id: EnemyId, level: Level): TargetRow[] {
   const kind = targetKind(foeRank(id));
   if (!kind) return [];
+  if (dungeonOnly(id)) {
+    // The chest: one row, the dungeon's own health and limit (the tier's multiple on top), and no butler level.
+    const wave = dungeonWaves(id).find((w) => goldDungeonScript(w).boss === id) ?? GOLD_DUNGEON_WAVES;
+    const hp = GOLD_DUNGEON_BOSS_HP * chapterMult(level.chapter);
+    const limit = GOLD_DUNGEON_BOSS_LIMIT;
+    return [{
+      wave, kind, ordinal: 0, imagined: false, hp, times: hp / cucumberHealth(level.chapter, wave), limit, limitBase: limit, cut: 0, cap: capRule(hp, limit),
+    }];
+  }
   const rules = stakeRules(level.stake);
   const real = slotsIn(id, level.chapter).filter((s) => s.target);
   const waves = real.length > 0 ? real.map((s) => s.wave) : waveSlotsOf(kind);
@@ -238,7 +273,7 @@ export function enrageRule(): { hpPct: number; shorterPct: number } {
 
 /** A kind of ability a page can describe; each has `codex.ability.<kind>.name` and `.text` and the numbers in `vars`. */
 export type AbilityKind =
-  | 'enrage' | 'inhale' | 'whirl' | 'splash' | 'lightning' | 'vaccinate'
+  | 'enrage' | 'inhale' | 'whirl' | 'splash' | 'lightning' | 'vaccinate' | 'spill'
   | 'aura_haste' | 'aura_heal' | 'shield' | 'split' | 'weaken' | 'wet_pulse' | 'death_burst';
 
 export interface Ability {
@@ -272,6 +307,7 @@ export function abilitiesOf(id: EnemyId): Ability[] {
     }
     case 'lightning': add('lightning', { every: BOSS_SPECS.lightning.cooldown, dur: BOSS_SPECS.lightning.duration, side: HAZARD_BLOCK_SIDE }); break;
     case 'vaccinate': add('vaccinate', { every: BOSS_SPECS.vaccinate.cooldown, dur: BOSS_SPECS.vaccinate.duration, pct: pct(BOSS_SPECS.vaccinate.regen) }); break;
+    case 'spill': add('spill', { count: BOSS_SPECS.spill.count, n: BOSS_SPECS.spill.at.length }, { coin: BOSS_SPECS.spill.spawn }); break;
     default: break;
   }
   return out;

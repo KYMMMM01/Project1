@@ -19,7 +19,7 @@ export function stepTier(top: number, tier: number, dir: -1 | 1): number {
   return Math.min(Math.max(1, top), Math.max(1, tier + dir));
 }
 
-/** "2/2" while the free entries last; a bought one makes it "1/3". */
+/** "1/1" while the free entry lasts; one bought on top (an old purchase, or a rule that sells one) makes it "1/2". */
 export function entriesText(entriesLeft: number, freeEntries: number, bought: number): string {
   return `${entriesLeft}/${freeEntries + bought}`;
 }

@@ -343,14 +343,14 @@ export const KO: Record<string, string> = {
     '한 주 동안 일일 도전에서 거둔 웨이브 수를 더해요. 날마다 끝까지 가면 최고 {best}점이에요.\n{t1}점, {t2}점, {t3}점에 닿을 때마다 더 좋은 상자를 받아요.',
 
   'guide.gold_dungeon.title': '골드 던전',
-  'guide.gold_dungeon.teach': '하루 두 번, 짧은 판으로 골드를 모아요.',
+  'guide.gold_dungeon.teach': '짧은 판에서 금화를 잡아 골드를 모아요.',
   'guide.gold_dungeon.full':
-    '{waves}웨이브를 버티는 짧은 판이에요. 보스는 없고, 넘긴 웨이브와 처치한 적의 수만큼 골드를 받아요.\n끝까지 막으면 골드가 {win}배가 되고, 그날의 첫 클리어에는 골드가 더 붙어요. 하루에 {free}번은 공짜이고, 한 번 더는 광고나 보석 {gems}개로 들어가요.\n단계는 깬 챕터만큼 열리고, 높을수록 골드를 더 줘요.',
+    '{waves}웨이브를 버티는 짧은 판이에요. 나오는 건 금화뿐이고, 마지막 웨이브에는 보물상자가 걸어와요.\n넘긴 웨이브와 잡은 금화의 수만큼 골드를 받고, 보물상자를 쓰러뜨리면 큼직한 골드를 더 받아요. 하루 입장은 {free}번이에요.\n단계는 깬 챕터만큼 열리고, 높을수록 골드를 더 줘요.',
 
-  'guide.endless.title': '끝없는 모드',
+  'guide.endless.title': '무한 모드',
   'guide.endless.teach': '끝이 없는 웨이브를 얼마나 버티는지 겨뤄요.',
   'guide.endless.full':
-    '{chapter}챕터를 깨면 열려요. 웨이브가 끝없이 이어지고 적은 웨이브마다 {growth}%씩 단단해져요.\n{w1}, {w2}, {w3}웨이브에 닿으면 보상을 받아요.',
+    '{chapter}챕터를 깨면 열려요. 웨이브가 끝없이 이어지고, {after}웨이브를 넘으면 적이 웨이브마다 {growth}%씩 단단해져요.\n{w1}, {w2}, {w3}웨이브에 닿으면 보상을 받아요.',
 
   'guide.backup_code.title': '냥이 코드(백업)',
   'guide.backup_code.teach': '코드 한 줄로 진행 상황을 옮길 수 있어요.',

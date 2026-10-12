@@ -101,6 +101,8 @@ export interface EnemySpec extends EnemyDef {
   split?: { into: EnemyId; count: number };
   /** On death: nearby enemies get faster for a moment (firecracker). */
   deathBurst?: { radius: number; haste: number; duration: number };
+  /** A wave target that never rages at half health (no red tint, no banner, no faster abilities): the gold dungeon's chest. */
+  calm?: boolean;
 }
 
 export type BossSpec =
@@ -109,7 +111,9 @@ export type BossSpec =
   | { id: 'whirl'; cooldown: number; duration: number; speed: number }
   | { id: 'splash'; spawnEvery: number; spawnCount: number; spawn: EnemyId; soakEvery: number; soakCells: number; soakDuration: number }
   | { id: 'lightning'; cooldown: number; duration: number }
-  | { id: 'vaccinate'; cooldown: number; duration: number; regen: number };
+  | { id: 'vaccinate'; cooldown: number; duration: number; regen: number }
+  /** Coins pop out of the boss when its health first falls to each share in `at` (descending): `count` of `spawn` each time. */
+  | { id: 'spill'; at: readonly number[]; count: number; spawn: EnemyId };
 
 export type BossSpecById<K extends BossAbilityId> = Extract<BossSpec, { id: K }>;
 

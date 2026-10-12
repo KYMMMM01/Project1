@@ -31,7 +31,8 @@ describe('director palette', () => {
     }
     for (const id of CLASS_IDS) expect(CLASS_COLOR[id]).toBeTypeOf('number');
     expect(Object.keys(STATUS_COLOR)).toHaveLength(8);
-    expect(Object.keys(ABILITY_CAPTION)).toHaveLength(6);
+    // The six abilities of the chapter bosses and the chest's coin spill (2026-10-12).
+    expect(Object.keys(ABILITY_CAPTION)).toHaveLength(7);
   });
 
   it('only the three zone and chain casters skip the projectile muzzle', () => {

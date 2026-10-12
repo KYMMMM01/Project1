@@ -52,6 +52,9 @@ export function enemySounds(id: EnemyId): SfxId[] {
     case 'vaccinate':
       out.push('buff');
       break;
+    case 'spill':
+      out.push('coin_many');
+      break;
     default:
       break;
   }

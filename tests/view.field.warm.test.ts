@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { chapterWaves, waveEntries } from '@/game';
+import { ENEMY_IDS, chapterWaves, waveEntries } from '@/game';
+import { goldDungeonScript } from '@/game/data/goldDungeon';
 import { auraAreaOf, enemyArtKey, SPARE_MAX, SPARE_MIN, spareFor, waveNeeds } from '@/view/field/warmPlan';
 
 const HAS = new Set(['enemy_cucumber', 'enemy_balloon', 'enemy_clock', 'enemy_pill', 'enemy_firecracker', 'boss_vacuum']);
@@ -10,6 +12,32 @@ describe('what a wave needs on screen', () => {
     expect(enemyArtKey('cucumber', has)).toBe('enemy_cucumber');
     expect(enemyArtKey('boss_vacuum', has)).toBe('boss_vacuum');
     expect(enemyArtKey('balloon_small', has)).toBe('enemy_balloon');
+  });
+
+  it('puts a stand-in under the gold dungeon coin and chest while their pictures are missing, and uses the pictures once they are there', () => {
+    expect(enemyArtKey('coin', has)).toBe('icon_gold');
+    expect(enemyArtKey('boss_treasure', has)).toBe('icon_chest_gold');
+    const withArt = (k: string): boolean => has(k) || k === 'enemy_coin' || k === 'boss_treasure';
+    expect(enemyArtKey('coin', withArt)).toBe('enemy_coin');
+    expect(enemyArtKey('boss_treasure', withArt)).toBe('boss_treasure');
+    // Nobody else has one: a missing picture of any other enemy is still named by its own key.
+    expect(enemyArtKey('dryer', has)).toBe('enemy_dryer');
+    expect(enemyArtKey('boss_cloud', has)).toBe('boss_cloud');
+  });
+
+  it('has a picture file in the art folder for every enemy (the small balloon borrows the big one)', () => {
+    for (const id of ENEMY_IDS) {
+      if (id === 'balloon_small') continue;
+      const key = enemyArtKey(id, () => true);
+      expect(existsSync(`src/assets/img/${key}.webp`), key).toBe(true);
+    }
+  });
+
+  it('asks for the coin picture and the chest picture in the last dungeon wave, and for no area', () => {
+    const needs = waveNeeds(waveEntries(goldDungeonScript(8)), () => true);
+    expect(needs.images).toEqual(['boss_treasure', 'enemy_coin']);
+    expect(needs.areas).toEqual([]);
+    expect(waveNeeds(waveEntries(goldDungeonScript(3)), () => true).images).toEqual(['enemy_coin']);
   });
 
   it('knows which enemies draw a ground area', () => {

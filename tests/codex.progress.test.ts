@@ -26,7 +26,8 @@ describe('codex progress', () => {
   });
 
   it('knows every enemy and every toy by one key, and nothing else', () => {
-    expect(CODEX_KEYS).toHaveLength(19 + RELIC_IDS.length);
+    // The 19 enemies of the chapters and the gold dungeon's two (the coin and the treasure chest), and every toy.
+    expect(CODEX_KEYS).toHaveLength(19 + 2 + RELIC_IDS.length);
     expect(isCodexKey('foe:boss_vacuum')).toBe(true);
     expect(isCodexKey('toy:yarn_ball')).toBe(true);
     expect(isCodexKey('foe:yarn_ball')).toBe(false);

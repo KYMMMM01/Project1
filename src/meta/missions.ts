@@ -15,7 +15,8 @@ export type MetricDelta = Partial<Record<MissionMetric, number>>;
  * wave always ended with its elite dead (running out of time loses the run instead).
  */
 function bossAndEliteKills(stats: Pick<RunStats, 'mode' | 'wavesCleared' | 'bossesKilled'>): number {
-  if (stats.mode === 'gold') return stats.bossesKilled; // the dungeon's waves are all normal ones
+  // The dungeon's treasure chest is a pay day, not a boss fight: it does not count for the missions (nor for the lifetime boss count, see `finishRun`).
+  if (stats.mode === 'gold') return 0;
   let elites = 0;
   for (let w = 1; w <= stats.wavesCleared; w++) if (waveKindOf(w) === 'elite') elites++;
   return stats.bossesKilled + elites;
@@ -50,7 +51,7 @@ export function freshDay(date: string): DaySlice {
     patrolDoubles: 0,
     chestSkips: 0,
     challengeCleared: false,
-    dungeon: { used: 0, bought: 0, firstClear: false },
+    dungeon: { used: 0, bought: 0 },
   };
 }
 

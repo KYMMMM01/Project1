@@ -28,6 +28,8 @@ export const ENEMY_TINT: Readonly<Record<EnemyId, number>> = {
   boss_bath: Color.teal,
   boss_cloud: mixColor(TapeColors.sky.base, Color.paperDim, 0.5),
   boss_needle: mixColor(Color.leaf, Color.teal, 0.5),
+  coin: Color.mustard,
+  boss_treasure: mixColor(Color.mustard, Color.kraft, 0.4),
 };
 
 /** Effect colour of each cat's shots, sparks and impacts: its class paper, shifted a little per cat. */
@@ -130,6 +132,7 @@ export const ABILITY_CAPTION: Readonly<Record<BossAbilityId, string>> = {
   splash: 'director.ability.splash',
   lightning: 'director.ability.lightning',
   vaccinate: 'director.ability.vaccinate',
+  spill: 'director.ability.spill',
 };
 
 /** A cosmetic summon-effect theme: extra particles added on top of the rarity colours, never instead. */

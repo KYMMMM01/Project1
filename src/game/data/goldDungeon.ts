@@ -1,52 +1,50 @@
 /**
- * The gold dungeon's wave script: a short run of normal waves that get richer toward the end. It has
- * no elite or boss, so there is no boss timer; each wave ends on the wave clock (15 s), which is also
- * the hard limit of the whole run. The acts end on the wave clock too (see `endNormalWave`).
- * What the run pays is the meta layer's business (docs/명세_메타.md section 11).
+ * The gold dungeon's wave script: eight short waves of gold coins and, at the end of the last one, a treasure chest. It is a pay day, not
+ * a test (2026-10-12): the coins are few and thin, the chest is slow and has no trick that hurts, and a board of any kind is meant to win.
+ * Waves 1 to 7 are normal waves that end on the wave clock (15 s); the fourth closes the first stage on the clock (see `endNormalWave`).
+ * Wave 8 is a boss wave: the chest walks in at once with a few coins as its escort, the wave ends when it falls, and that is the victory.
+ * Only `coin` and `boss_treasure` appear here, and they appear nowhere else. What the run pays is the meta layer's business
+ * (docs/명세_메타.md section 13).
  */
-import type { EnemyId } from '../api';
-import { WAVE_BUDGET } from './balance';
-import { enemySpec } from './enemies';
-import { actOf, waveEntries, type WaveGroup, type WaveScript } from './waves';
+import { BOSS_SPECS, budgetMult, enemySpec } from './enemies';
+import { actOf, waveEntries, type WaveScript } from './waves';
 
-/** Two acts of four waves; the second act's end is the victory. */
+/** Two stages of four waves; the chest at the end of the second is the victory. */
 export const GOLD_DUNGEON_WAVES = 8;
 
-interface GoldWave {
-  /** Share of the normal wave budget. */
-  scale: number;
-  groups: readonly WaveGroup[];
-}
-
-const g = (enemy: EnemyId, weight: number): WaveGroup => ({ enemy, weight });
-
 /**
- * Swarms of small, quick enemies (many kills for the health they hold), a splitter or two, and one
- * armoured or one warded enemy at most per wave, so a board of any class has a counter in reach.
+ * The chest's health at tier 1; a tier multiplies it by its chapter's health multiple like any other enemy (`CHAPTER_HP_MULT`). For
+ * scale: a tier-1 cucumber of the last wave has 209, and the chapter-1 boss has 1,431 x 1.18 = 1,688 at the same wave, with a clock of 50 s.
  */
-const WAVES: readonly GoldWave[] = [
-  { scale: 0.8, groups: [g('dust', 3), g('cucumber', 1)] },
-  { scale: 0.9, groups: [g('dust', 3), g('drop', 2)] },
-  { scale: 1.0, groups: [g('balloon', 2), g('dust', 2), g('cucumber', 1)] },
-  { scale: 1.1, groups: [g('dust', 3), g('drop', 2), g('tangerine', 1)] },
-  { scale: 1.2, groups: [g('cucumber', 2), g('dust', 3), g('balloon', 2)] },
-  { scale: 1.3, groups: [g('drop', 3), g('dust', 3), g('cone', 1)] },
-  { scale: 1.4, groups: [g('balloon', 3), g('dust', 3), g('drop', 2)] },
-  { scale: 1.5, groups: [g('dust', 4), g('balloon', 3), g('drop', 2), g('roomba', 1)] },
-];
+export const GOLD_DUNGEON_BOSS_HP = 600;
+/**
+ * The chest's time limit, seconds: generous, the longest a boss has (BOSS_LIMITS goes 50 / 55 / 60). A boss cannot be melted in less than
+ * `BOSS_MIN_KILL` of its limit (balance.ts: 27 s of these 60), so the limit is also what keeps the chest on the field long enough to be a moment.
+ */
+export const GOLD_DUNGEON_BOSS_LIMIT = 60;
 
-/** The script of `wave` (1..GOLD_DUNGEON_WAVES; anything else is clamped). Every wave is a normal wave. */
+/** Coins in waves 1 to 7, then the chest's escort in wave 8 (the chest itself is not in this list). */
+const COINS: readonly number[] = [10, 12, 13, 14, 15, 16, 17, 24];
+
+/** The script of `wave` (1..GOLD_DUNGEON_WAVES; anything else is clamped). */
 export function goldDungeonScript(wave: number): WaveScript {
   const n = Math.min(Math.max(Math.floor(wave), 1), GOLD_DUNGEON_WAVES);
-  const w = WAVES[n - 1] as GoldWave;
-  return { wave: n, act: actOf(n), kind: 'normal', boss: null, groups: w.groups.map((x) => ({ ...x })), budget: WAVE_BUDGET * w.scale };
+  const last = n === GOLD_DUNGEON_WAVES;
+  return {
+    wave: n, act: actOf(n), kind: last ? 'boss' : 'normal', boss: last ? 'boss_treasure' : null,
+    groups: [{ enemy: 'coin', weight: 1 }], budget: (COINS[n - 1] as number) * budgetMult('coin'),
+  };
 }
 
-/** Enemies a whole run spawns, the pieces of the splitters included: the most kills a run can have. */
+/**
+ * Enemies a whole run spawns: the coins of the waves, the chest, and the coins it spills. This is the most kills a run can have, and
+ * what the payout table (`dungeonMaxGold`) and the codex count on.
+ */
 export function goldDungeonSpawns(): number {
   let n = 0;
   for (let wave = 1; wave <= GOLD_DUNGEON_WAVES; wave++) {
     for (const e of waveEntries(goldDungeonScript(wave))) n += e.count * (1 + (enemySpec(e.enemy).split?.count ?? 0));
   }
-  return n;
+  const spill = BOSS_SPECS.spill;
+  return n + spill.at.length * spill.count;
 }

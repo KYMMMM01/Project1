@@ -497,6 +497,6 @@ describe('the bosses (v1.4)', () => {
     [1590, 4064, 14405].forEach((old, i) => expect((BOSS_HP[i] as number) / old).toBeCloseTo(0.9, 3));
     expect([...ELITE_HP]).toEqual([1055, 3848, 10080]);
     expect(specialHp('boss', 0)).toBe(1431);
-    expect(specialHp('boss', 3)).toBeCloseTo(12965 * 1.14 ** 8, 6);
+    expect(specialHp('boss', 3)).toBeCloseTo(12965 * 1.07 ** 8, 6);
   });
 });

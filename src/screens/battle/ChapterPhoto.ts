@@ -90,11 +90,11 @@ export class ChapterPhoto extends Container {
 /**
  * The chapter boss as a sticker lying on the page: its own white border, a flat shadow under it, a
  * slight tilt. Origin = bottom centre; it is scaled to fit `boxW x boxH`, whatever its proportions.
- * `hidden` turns it into a flat silhouette (a chapter that is still locked).
+ * `hidden` turns it into a flat silhouette (a chapter that is still locked). `boss` names another boss's picture than the chapter's (the gold dungeon's chest).
  */
-export function bossSticker(chapter: number, boxW: number, boxH: number, hidden: boolean): Container {
+export function bossSticker(chapter: number, boxW: number, boxH: number, hidden: boolean, boss?: string): Container {
   const root = new Container();
-  const id = chapterInfo(chapter).boss;
+  const id = boss ?? chapterInfo(chapter).boss;
   if (hasTex(id)) {
     const texture = tex(id);
     const scale = Math.min(boxW / texture.width, boxH / texture.height);

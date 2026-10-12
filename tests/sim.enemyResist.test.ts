@@ -19,6 +19,8 @@ const ARMOUR: Record<EnemyId, number> = {
   cucumber: 0.08, dust: 0.05, drop: 0.05, roomba: 0.35, tangerine: 0.08, balloon: 0.08, balloon_small: 0.05, clock: 0.1, pill: 0.1, cone: 0.08, dryer: 0.1,
   spray: 0.2, firecracker: 0, boss_cucumber: 0.15,
   boss_vacuum: 0.35, boss_blender: 0.3, boss_bath: 0.3, boss_cloud: 0.1, boss_needle: 0.2,
+  // The gold dungeon's pair (2026-10-12): the coin is an ordinary enemy and keeps the 5% of the small quick ones; the chest has none.
+  coin: 0.05, boss_treasure: 0,
 };
 
 /** The share of magic damage each enemy ignores (not touched by this batch). */
@@ -26,12 +28,13 @@ const WARD: Record<EnemyId, number> = {
   cucumber: 0, dust: 0, drop: 0, roomba: 0, tangerine: 0.35, balloon: 0, balloon_small: 0, clock: 0, pill: 0, cone: 0, dryer: 0,
   spray: 0.2, firecracker: 0, boss_cucumber: 0,
   boss_vacuum: 0.1, boss_blender: 0.1, boss_bath: 0.15, boss_cloud: 0.35, boss_needle: 0.25,
+  coin: 0, boss_treasure: 0,
 };
 
 /** The enemies that shrug off part of a slow; every other enemy has none. */
 const SLOW_RESIST: Partial<Record<EnemyId, number>> = { drop: 0.3, clock: 0.3, roomba: 0.2 };
 
-const NORMAL: EnemyId[] = ['cucumber', 'dust', 'drop', 'roomba', 'tangerine', 'balloon', 'balloon_small', 'clock', 'pill', 'cone', 'dryer'];
+const NORMAL: EnemyId[] = ['cucumber', 'dust', 'drop', 'roomba', 'tangerine', 'balloon', 'balloon_small', 'clock', 'pill', 'cone', 'dryer', 'coin'];
 const SPECIAL: EnemyId[] = ENEMY_IDS.filter((id) => !NORMAL.includes(id));
 
 function field(): Sim {
@@ -58,15 +61,21 @@ function lost(sim: Sim, id: EnemyId, amount: number, type: 'physical' | 'magic')
 }
 
 describe('the armour table (2026-10-10)', () => {
-  it('gives every ordinary enemy 5 to 10% armour, keeps the roomba at 35% and leaves the elites and bosses as they were', () => {
+  it('gives every ordinary enemy 5 to 10% armour (the dungeon coin included), keeps the roomba at 35%, leaves the elites and bosses as they were', () => {
     for (const id of ENEMY_IDS) expect(ENEMY_SPECS[id].armor, `${id} armour`).toBe(ARMOUR[id]);
-    for (const id of ['dust', 'drop', 'balloon_small'] as const) expect(ENEMY_SPECS[id].armor, id).toBe(0.05);
+    for (const id of NORMAL) {
+      if (id === 'roomba') continue;
+      expect(ENEMY_SPECS[id].armor, id).toBeGreaterThanOrEqual(0.05);
+      expect(ENEMY_SPECS[id].armor, id).toBeLessThanOrEqual(0.1);
+    }
+    for (const id of ['dust', 'drop', 'balloon_small', 'coin'] as const) expect(ENEMY_SPECS[id].armor, id).toBe(0.05);
     for (const id of ['cucumber', 'balloon', 'tangerine', 'cone'] as const) expect(ENEMY_SPECS[id].armor, id).toBe(0.08);
     for (const id of ['clock', 'pill', 'dryer'] as const) expect(ENEMY_SPECS[id].armor, id).toBe(0.1);
     expect(ENEMY_SPECS.roomba.armor).toBe(0.35);
     expect(SPECIAL.map((id) => [id, ENEMY_SPECS[id].armor])).toEqual([
       ['spray', 0.2], ['firecracker', 0], ['boss_cucumber', 0.15],
       ['boss_vacuum', 0.35], ['boss_blender', 0.3], ['boss_bath', 0.3], ['boss_cloud', 0.1], ['boss_needle', 0.2],
+      ['boss_treasure', 0],
     ]);
   });
 

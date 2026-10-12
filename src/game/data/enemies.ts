@@ -66,6 +66,14 @@ export const ENEMY_SPECS: Readonly<Record<EnemyId, EnemySpec>> = {
   boss_needle: enemy('boss_needle', {
     traits: ['boss'], hpMult: BOSS_NOTE, speed: 40, armor: 0.2, ward: 0.25, radius: 34, bounty: 60, ability: 'vaccinate',
   }),
+  // The gold dungeon's pair (goldDungeon.ts). The coin is an ordinary enemy with nothing about it to counter: a little quicker than a
+  // cucumber, thin on health, the 5% armour every small quick enemy has (batch 3: dust, drop and balloon_small), no ward, no resistance to
+  // slows. The chest is a slow boss with no trick that hurts (it spills coins as it is hit, which only pays) and no rage; its health and
+  // time limit are the dungeon's own (`GOLD_DUNGEON_BOSS_HP`, `GOLD_DUNGEON_BOSS_LIMIT`).
+  coin: enemy('coin', { traits: [], hpMult: 0.6, speed: 82, armor: 0.05, ward: 0, radius: 14, bounty: 3 }),
+  boss_treasure: enemy('boss_treasure', {
+    traits: ['boss'], hpMult: BOSS_NOTE, speed: 34, armor: 0, ward: 0, radius: 36, bounty: 60, ability: 'spill', calm: true,
+  }),
 };
 
 /** Boss ability numbers (rules §11). Cooldowns are multiplied by ENRAGE_COOLDOWN_MULT once enraged. */
@@ -78,6 +86,7 @@ export const BOSS_SPECS: Readonly<{ [K in BossAbilityId]: BossSpecById<K> }> = {
   },
   lightning: { id: 'lightning', cooldown: 9, duration: 2.5 },
   vaccinate: { id: 'vaccinate', cooldown: 11, duration: 5, regen: 0.01 },
+  spill: { id: 'spill', at: [0.75, 0.5, 0.25], count: 3, spawn: 'coin' },
 };
 
 export function enemyDef(id: EnemyId): EnemyDef {

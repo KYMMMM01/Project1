@@ -27,7 +27,7 @@ import {
 import {
   CALENDAR, CALENDAR_DAYS, CUP_TIERS, DAILY_CHEST_REWARD, DAILY_MISSIONS, DAILY_FIRST_CLEAR, ENDLESS_TIERS, FEATURE_RULES, PASS_TIERS, PASS_XP_PER_TIER, SEASON_DAYS, WEEKLY_MISSIONS,
 } from '@/meta/data/schedule';
-import { DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_VICTORY_MULT } from '@/meta/data/dungeon';
+import { DUNGEON_FREE_ENTRIES } from '@/meta/data/dungeon';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { ODDS, WILD_SHARE } from '@/meta/odds';
 import { REVIVE_MIN_WAVES, speedSteps } from '@/view/hud/policy';
@@ -184,10 +184,10 @@ const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
   sweep: () => ({ tickets: TICKETS_PER_DAY, pay: pct(SWEEP_PAYOUT), stock: TICKET_STOCK }),
   daily_challenge: () => ({ waves: DAILY_WAVES, level: DAILY_UNIT_LEVEL, rules: MODIFIER_IDS.length, chest: DAILY_FIRST_CLEAR.chests?.silver ?? 0 }),
   weekly_cup: () => ({ best: 7 * DAILY_WAVES, t1: CUP_TIERS[0]?.min ?? 0, t2: CUP_TIERS[1]?.min ?? 0, t3: CUP_TIERS[2]?.min ?? 0 }),
-  gold_dungeon: () => ({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES, gems: DUNGEON_ENTRY_GEMS, win: DUNGEON_VICTORY_MULT }),
+  gold_dungeon: () => ({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES }),
   endless: () => ({
     chapter: FEATURE_RULES.endless.chapter ?? 0, w1: ENDLESS_TIERS[0]?.wave ?? 0, w2: ENDLESS_TIERS[1]?.wave ?? 0, w3: ENDLESS_TIERS[2]?.wave ?? 0,
-    growth: pct(ENDLESS_GROWTH - 1),
+    after: CHAPTER_WAVES, growth: pct(ENDLESS_GROWTH - 1),
   }),
 };
 

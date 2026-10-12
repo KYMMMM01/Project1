@@ -14,7 +14,6 @@ import { modifierName, modifierText, stakeControlText, stakeText, type ClassId }
 import { NORMAL_WAVE_TIME } from '@/game/data/balance';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { OFFERS, SNACKS, profile, type SnackId } from '@/meta';
-import { DUNGEON_VICTORY_MULT } from '@/meta/data/dungeon';
 import { SNACK_FISH, SNACK_PURR } from '@/meta/data/economy';
 import { ads } from '@/platform';
 import {
@@ -89,13 +88,11 @@ function ruleLines(plan: RunPlan): string[] {
       return [t('shell.pre.endless.rules')];
     case 'gold': {
       const row = profile.dungeonView().tiers[plan.chapter - 1];
-      const lines = [
+      return [
         t('shell.pre.gold.rules.waves', { n: GOLD_DUNGEON_WAVES, s: NORMAL_WAVE_TIME }),
         t('shell.pre.gold.rules.pay'),
-        t('shell.pre.gold.rules.win', { x: DUNGEON_VICTORY_MULT }),
+        t('shell.pre.gold.rules.chest', { n: fmt(row?.chest ?? 0) }),
       ];
-      if (row && profile.dungeonView().firstClearOpen) lines.push(t('shell.pre.gold.rules.first', { n: fmt(row.bonus) }));
-      return lines;
     }
     default: {
       if (plan.stake <= 0) return [t('shell.pre.rules.none')];
@@ -125,8 +122,8 @@ function buildHero(plan: RunPlan, w: number): Container {
   kicker.position.set(26 - kicker.uiBox.x, PHOTO_TOP + 46);
   const name = new PaperLabel({ text: t(chapterInfo(plan.chapter).nameKey), size: 56, paper: 'mustard', padX: 34, padY: 12, maxWidth: w * 0.52 });
   name.position.set(22 - name.uiBox.x, PHOTO_TOP + PHOTO_H - 56);
-  // The dungeon has no boss: its sticker is a coin, and the caption says what a full clear pays.
-  const boss = plan.mode === 'gold' ? drawIcon('coin', BOSS_BOX * 0.7) : bossSticker(plan.chapter, BOSS_BOX, BOSS_BOX, false);
+  // The dungeon's boss is its treasure chest (shown instead of the chapter's), and the caption says what a full clear pays.
+  const boss = bossSticker(plan.chapter, BOSS_BOX, BOSS_BOX, false, plan.mode === 'gold' ? 'boss_treasure' : undefined);
   boss.position.set(w - BOSS_BOX / 2 - 14, PHOTO_TOP + PHOTO_H + 28);
   const captionText = plan.mode === 'gold' ? t('battle.dungeon.reward', { n: fmt(profile.dungeonView().tiers[plan.chapter - 1]?.maxGold ?? 0) }) : t('shell.pre.boss');
   const caption = new PaperLabel({ text: captionText, size: 24, paper: 'kraft', padX: 20, padY: 6, maxWidth: BOSS_BOX });

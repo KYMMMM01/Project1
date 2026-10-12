@@ -8,6 +8,7 @@ import { enemyDef } from '@/game';
 import type { EnemyId, EnemyState } from '@/game/api';
 import type { FieldArt, StatusSticker, ZoneMark } from './art';
 import { barOffset, barSegments, barWidth, bodySize, bodyX, depthKey, type BarSegments } from './policy';
+import { enemyArtKey } from './warmPlan';
 import { BOSS_DROP } from '@/view/timing';
 import { deathScale, stepRate, walkBob, walkTilt } from './motion';
 import { ShieldRing } from './shieldRing';
@@ -32,11 +33,9 @@ const ZONE_HOLD = 0.6;
 /** The tag is baked 40 px across; it is shown a little smaller than that so a row of enemies does not become a row of tags. */
 const ZONE_TAG_SCALE = 0.72;
 
-/** Texture key of an enemy: bosses use their own id, the small balloon borrows the big one's art. */
+/** Texture key of an enemy: bosses use their own id, the small balloon borrows the big one's art, a dungeon sprite still missing falls back to an icon (`enemyArtKey`). */
 export function enemyTextureKey(id: EnemyId): string {
-  const key = id.startsWith('boss_') ? id : 'enemy_' + id;
-  if (hasTex(key)) return key;
-  return key.replace(/_small$/, '');
+  return enemyArtKey(id, hasTex);
 }
 
 /**

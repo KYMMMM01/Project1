@@ -83,6 +83,9 @@ const MATERIALS: Record<EnemyId, Material> = {
   boss_bath: { hit: 'foe_water_hit', die: 'foe_boss_bath', pitch: 0.6 },
   boss_cloud: { hit: 'foe_cloud_hit', die: 'foe_boss_cloud', pitch: 1 },
   boss_needle: { hit: 'foe_glass_hit', die: 'foe_boss_needle', pitch: 0.9 },
+  // The gold dungeon's pair: a coin rings like tin, higher than the clock; the chest is struck low and bursts like the blender's glass (it has no death of its own yet).
+  coin: { hit: 'foe_tin_hit', die: 'foe_tin_die', pitch: 1.5 },
+  boss_treasure: { hit: 'foe_tin_hit', die: 'foe_boss_blender', pitch: 0.7 },
 };
 
 const FOE_HIT_VOLUME = 0.65;

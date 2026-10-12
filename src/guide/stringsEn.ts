@@ -339,14 +339,14 @@ export const EN: Record<string, string> = {
     'All the waves you reach in a week of daily challenges are added up. Going all the way every day gives the best score, {best}.\nReaching {t1}, {t2} and {t3} points each pays a better chest.',
 
   'guide.gold_dungeon.title': 'Gold dungeon',
-  'guide.gold_dungeon.teach': 'Two short runs a day to collect gold.',
+  'guide.gold_dungeon.teach': 'A short run where catching coins pays gold.',
   'guide.gold_dungeon.full':
-    'A short run of {waves} waves. There is no boss, and you are paid for every wave you get past and every enemy you defeat.\nHolding out to the end multiplies the gold by {win}, and the first clear of the day pays extra. {free} runs a day are free; one more costs an ad or {gems} gems.\nTiers open as you clear chapters, and a higher tier pays more gold.',
+    'A short run of {waves} waves. Only gold coins come, and a coin chest walks in during the last wave.\nYou are paid for every wave you get past and every coin you catch, and beating the chest pays a big lump on top. Entries per day: {free}.\nTiers open as you clear chapters, and a higher tier pays more gold.',
 
   'guide.endless.title': 'Endless mode',
   'guide.endless.teach': 'See how long you last against endless waves.',
   'guide.endless.full':
-    'It opens after you clear chapter {chapter}. The waves never end and enemies get {growth}% tougher every wave.\nReaching wave {w1}, {w2} and {w3} pays rewards.',
+    'It opens after you clear chapter {chapter}. The waves never end, and past wave {after} enemies get {growth}% tougher every wave.\nReaching wave {w1}, {w2} and {w3} pays rewards.',
 
   'guide.backup_code.title': 'Meow code (backup)',
   'guide.backup_code.teach': 'One line of text carries your progress to a new device.',

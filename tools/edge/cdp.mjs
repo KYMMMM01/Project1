@@ -10,7 +10,7 @@ export async function launch({ port, userDir, width = 450, height = 900 }) {
   const child = spawn(exe, [
     '--headless=new', `--user-data-dir=${userDir}`, '--no-first-run', '--disable-extensions', `--remote-debugging-port=${port}`,
     '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
-    '--autoplay-policy=no-user-gesture-required', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', 'about:blank',
+    '--mute-audio', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', 'about:blank',
   ], { stdio: 'ignore', detached: false });
   let targets = null;
   for (let i = 0; i < 100; i++) {

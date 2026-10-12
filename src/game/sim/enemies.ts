@@ -282,7 +282,7 @@ export function damageEnemy(
     killEnemy(s, e, src && !src.removed ? src : null);
     return true;
   }
-  if (e.target && !e.enraged && e.hp <= e.maxHp * ENRAGE_HP_FRACTION) {
+  if (e.target && !e.enraged && !e.spec.calm && e.hp <= e.maxHp * ENRAGE_HP_FRACTION) {
     e.enraged = true;
     if (s.ev.has('enrage')) s.ev.emit('enrage', { enemy: e });
   }

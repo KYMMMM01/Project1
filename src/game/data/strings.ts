@@ -124,6 +124,10 @@ addStrings('ko', {
   'enemy.boss_cloud.desc': '바닥에 번개를 내리꽂는 먹구름. 번쩍이는 칸에서 피하세요.',
   'enemy.boss_needle.name': '따끔 선생',
   'enemy.boss_needle.desc': '예방접종으로 적을 튼튼하게 만드는 주사기.',
+  'enemy.coin.name': '금화',
+  'enemy.coin.desc': '데구루루 굴러오는 금화예요. 잡을수록 골드가 쌓여요.',
+  'enemy.boss_treasure.name': '보물상자',
+  'enemy.boss_treasure.desc': '느릿느릿 걸어와요. 두드리면 금화가 쏟아져요!',
 
   // traits
   'trait.armored.name': '갑옷',
@@ -324,6 +328,10 @@ addStrings('en', {
   'enemy.boss_cloud.desc': 'A storm cloud that strikes the floor. Move off the flashing tiles.',
   'enemy.boss_needle.name': 'Dr. Pinch',
   'enemy.boss_needle.desc': 'A syringe whose booster shots toughen enemies up.',
+  'enemy.coin.name': 'Gold Coin',
+  'enemy.coin.desc': 'A shiny coin rolling your way. Every catch adds to your gold.',
+  'enemy.boss_treasure.name': 'Coin Chest',
+  'enemy.boss_treasure.desc': 'It plods along slowly. Hit it and coins spill out!',
 
   'trait.armored.name': 'Armoured',
   'trait.armored.desc': 'Takes less physical damage. Use magic, armour break or armour ignore.',

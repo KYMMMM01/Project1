@@ -74,9 +74,11 @@ describe('the codex monster page: slow resistance', () => {
     for (const id of FOE_IDS.filter((x) => foeRank(x) === 'normal')) {
       const page = foePage(id, LEVELS[0] as Level);
       expect(page.armorPct, id).toBe(Math.round(ENEMY_SPECS[id].armor * 100));
+      // Every ordinary enemy has 5% or more (batch 3, standing rule), the gold dungeon's coin included.
       expect(page.armorPct, id).toBeGreaterThanOrEqual(5);
       expect(page.stats.find((r) => r.label === t('codex.stat.armor'))?.bar?.pct, id).toBe(page.armorPct);
     }
+    expect(foePage('coin', LEVELS[0] as Level).armorPct).toBe(5);
     expect(foePage('cucumber', LEVELS[0] as Level).stats.find((r) => r.label === t('codex.stat.armor'))?.value).toBe('8%');
   });
 });

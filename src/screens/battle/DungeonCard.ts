@@ -19,9 +19,10 @@ const STEP = 88;
 let picked = 0;
 
 /**
- * The gold dungeon: a short run that pays gold by waves cleared and kills. The card says which tier
- * it will play, the best result there, what a full clear pays, how many entries are left today, and
- * offers the extra entry (a rewarded ad or gems) once the free ones are used.
+ * The gold dungeon: a short run that pays gold by waves cleared and coins caught, and a lump for the treasure chest at the end. The card says
+ * which tier it will play, the best result there, what a full clear pays and how much of it is the chest, and how many entries are left today.
+ * When the rules sell an extra entry (`DUNGEON_EXTRA_ENTRIES` above 0; none since 2026-10-12) it offers it, a rewarded ad or gems, once the free
+ * ones are used.
  */
 export class DungeonCard extends HomeCard {
   private readonly entries: Tag;
@@ -31,7 +32,7 @@ export class DungeonCard extends HomeCard {
   private readonly more: Button;
   private readonly best = uiLabel('', { size: 24, anchorX: 0, color: Color.inkSoft });
   private readonly reward = uiLabel('', { size: 28, anchorX: 0 });
-  private readonly bonus: Tag;
+  private readonly chest: Tag;
   private readonly note = uiLabel('', { size: 24, anchorX: 0, anchorY: 0, align: 'left', wrap: LEFT_W });
   private readonly play: Button;
   private readonly ad: Button;
@@ -63,10 +64,10 @@ export class DungeonCard extends HomeCard {
     this.coin.position.set(left + 20, this.contentTop + 16 + STEP + 32);
     this.reward.position.set(left + 48, this.contentTop + 16 + STEP + 32);
     this.best.position.set(left, this.contentTop + 16 + STEP + 66);
-    this.bonus = new Tag({ text: '-', style: 'success', shape: 'pill', fontSize: 24 });
-    this.bonus.position.set(left + LEFT_W / 2, this.contentTop + 16 + STEP + 118);
+    this.chest = new Tag({ text: '-', style: 'success', shape: 'pill', fontSize: 24 });
+    this.chest.position.set(left + LEFT_W / 2, this.contentTop + 16 + STEP + 118);
     this.note.position.set(left, this.contentTop + 16 + STEP + 88);
-    this.body.addChild(this.coin, this.reward, this.best, this.bonus, this.note);
+    this.body.addChild(this.coin, this.reward, this.best, this.chest, this.note);
 
     const x = w - CARD_PAD - BTN_W / 2;
     this.play = new Button({ label: t('battle.dungeon.play'), icon: 'play', style: 'primary', width: BTN_W, height: 136, fontSize: 40, disabledMark: 'none' });
@@ -131,9 +132,9 @@ export class DungeonCard extends HomeCard {
       fitLabel(this.reward, LEFT_W - 48, 28);
       this.best.text = row.best.gold > 0 ? t('battle.dungeon.best', { gold: fmt(row.best.gold), waves: row.best.waves, kills: row.best.kills }) : t('battle.dungeon.none');
       fitLabel(this.best, LEFT_W, 24);
-      this.bonus.setText(t('battle.dungeon.bonus', { n: fmt(row.bonus) }));
+      this.chest.setText(t('battle.dungeon.chest', { n: fmt(row.chest) }));
     }
-    this.bonus.visible = offer === 'enter' && v.firstClearOpen;
+    this.chest.visible = offer === 'enter';
     this.note.visible = offer !== 'enter';
     this.note.text = offer === 'buy' ? t('battle.dungeon.buy') : t('battle.dungeon.spent');
 

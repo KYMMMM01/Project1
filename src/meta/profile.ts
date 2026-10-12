@@ -12,7 +12,7 @@ import { GEM_PASS_DAYS, iapSpec } from './data/catalog';
 import { DUNGEON_AD_PLACEMENT, DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_TIERS } from './data/dungeon';
 import { PIGGY_PER_RUN, SNACK_FISH, SNACK_PURR, type SnackId } from './data/economy';
 import { cupScore, dailySetup } from './daily';
-import { dungeonCanBuy, dungeonEntriesLeft, dungeonFirstClearGold, dungeonMaxGold, dungeonTierOpen, dungeonTopTier } from './dungeon';
+import { dungeonCanBuy, dungeonEntriesLeft, dungeonMaxChest, dungeonMaxGold, dungeonTierOpen, dungeonTopTier } from './dungeon';
 import type { PayVia } from './economy';
 import { runMissionDelta } from './missions';
 import { addPassXp, seasonOf } from './pass';
@@ -67,10 +67,10 @@ export interface SweepResult {
 export interface DungeonTierRow {
   tier: number;
   open: boolean;
-  /** The most a run of this tier pays (every wave cleared, every enemy killed; the first-victory bonus is on top). */
+  /** The most a run of this tier pays (every wave cleared, every enemy killed, the chest opened). */
   maxGold: number;
-  /** The bonus the day's first victory adds on this tier. */
-  bonus: number;
+  /** The treasure chest's share of `maxGold` on this tier. */
+  chest: number;
   best: DungeonBest;
 }
 
@@ -87,8 +87,6 @@ export interface DungeonView {
   /** An extra entry can still be bought today (a rewarded ad or gems). */
   canBuy: boolean;
   entryGems: number;
-  /** The day's first-victory bonus is still to be won. */
-  firstClearOpen: boolean;
 }
 
 function snackFields(id: SnackId): Pick<BattleInit, 'bonusFish' | 'bonusPurr' | 'firstSummonRarePlus'> {
@@ -239,14 +237,15 @@ export class Profile extends RoutineProfile {
     this.refresh(); // a run that ends after midnight belongs to the new day, week and season
     const d = this.data;
     const date = this.today();
-    const payout = computeRunPayout(stats, { cleared: d.cleared, dailyAlreadyCleared: d.day.challengeCleared, dungeonFirstDone: d.day.dungeon.firstClear });
+    const payout = computeRunPayout(stats, { cleared: d.cleared, dailyAlreadyCleared: d.day.challengeCleared });
     let newBest = false;
 
     d.stats.runs++;
     if (stats.victory) d.stats.wins++;
     d.stats.merges += stats.merges;
     d.stats.kills += stats.kills;
-    d.stats.bosses += stats.bossesKilled;
+    // The dungeon's chest is a pay day, not a boss for the lifetime count (nor for the missions, see missions.ts).
+    if (stats.mode !== 'gold') d.stats.bosses += stats.bossesKilled;
     if (payout.firstClear) d.cleared[stats.chapter - 1] = stats.stake + 1;
 
     if (stats.mode === 'daily') {
@@ -263,12 +262,10 @@ export class Profile extends RoutineProfile {
       }
       d.endless.weekBest = Math.max(d.endless.weekBest, stats.wavesCleared);
     } else if (stats.mode === 'gold') {
-      const bonus = payout.dungeonBonus ?? 0;
-      if (bonus > 0) d.day.dungeon.firstClear = true;
       const best = d.dungeon.best[stats.chapter - 1];
-      // The bonus is a gift of the day, not part of the record.
-      if (best && payout.gold - bonus > best.gold) {
-        d.dungeon.best[stats.chapter - 1] = { waves: stats.wavesCleared, kills: stats.kills, gold: payout.gold - bonus };
+      // The record is the run's whole pay, the chest's share included (a record made before 2026-10-12 had no chest and a longer script: any win now beats it).
+      if (best && payout.gold > best.gold) {
+        d.dungeon.best[stats.chapter - 1] = { waves: stats.wavesCleared, kills: stats.kills, gold: payout.gold };
         newBest = true;
       }
     }
@@ -346,7 +343,7 @@ export class Profile extends RoutineProfile {
         tier: i + 1,
         open: dungeonTierOpen(d.cleared, i + 1),
         maxGold: dungeonMaxGold(i + 1),
-        bonus: dungeonFirstClearGold(i + 1),
+        chest: dungeonMaxChest(i + 1),
         best: { ...(d.dungeon.best[i] as DungeonBest) },
       })),
       top: dungeonTopTier(d.cleared),
@@ -356,7 +353,6 @@ export class Profile extends RoutineProfile {
       entriesLeft: dungeonEntriesLeft(day),
       canBuy: dungeonCanBuy(day),
       entryGems: DUNGEON_ENTRY_GEMS,
-      firstClearOpen: !day.firstClear,
     };
   }
 

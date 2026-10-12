@@ -4,7 +4,7 @@ import { t } from '@/core/i18n';
 import { profile } from '@/meta';
 import type { MissionRow } from '@/meta/routines';
 import { msUntilNextMidnight } from '../system/kit/time';
-import { CHEST_STRIP_H, ChestStrip } from './ChestStrip';
+import { ChestStrip } from './ChestStrip';
 import { MissionRowView } from './MissionRowView';
 import { waitingMissions } from './model';
 import { Notebook } from './Notebook';
@@ -39,7 +39,7 @@ export class DailySection implements Section {
     const missions = profile.missionsView('daily');
     const book = new Notebook(w, missions.length, t('rt.mis.daily.list'), 'yellow', (from) => act.claimAllMissions('daily', from));
     this.book = book;
-    book.position.set(0, TOP + CHEST_STRIP_H + GAP);
+    book.position.set(0, TOP + this.strip.cardH + GAP);
     missions.forEach((row, i) => {
       const rv = new MissionRowView(w, row, true, {
         claim: (b) => act.claimMission('daily', i, b),
@@ -50,7 +50,7 @@ export class DailySection implements Section {
       this.rows.push(rv);
     });
     this.view.addChild(this.strip, book);
-    this.height = TOP + CHEST_STRIP_H + GAP + book.pageH;
+    this.height = TOP + this.strip.cardH + GAP + book.pageH;
     this.sync(false);
   }
 

@@ -112,10 +112,8 @@ export interface MissionState {
 export interface DungeonDay {
   /** Entries used today (each run takes one when it starts). */
   used: number;
-  /** Extra entries bought today (a rewarded ad or gems). */
+  /** Extra entries bought today (a rewarded ad or gems; none are sold since 2026-10-12, but one bought before still counts). */
   bought: number;
-  /** The first victory of the day has paid its bonus. */
-  firstClear: boolean;
 }
 
 /** The best run of a tier (index = tier - 1) by gold. */
@@ -190,7 +188,7 @@ export interface RunReward {
   xp: number;
   /** Everything else the run paid: chests, gems, cards, first-clear rewards. */
   bundle: Bundle;
-  /** Gold dungeon only: the kills, and the first-victory-of-the-day bonus that `gold` already holds. */
+  /** Gold dungeon only: the kills, and the treasure chest's share that `gold` already holds (`bonus`, 0 when the chest was not opened). */
   kills?: number;
   bonus?: number;
   firstClear: boolean;

@@ -6,7 +6,7 @@ import { WEEKLY_CHEST_REWARD } from '@/meta/data/schedule';
 import { dateKey } from '@/meta/time';
 import { msUntilNextMonday } from '../system/kit/time';
 import { TimerTag } from '../system/kit/tags';
-import { CHEST_STRIP_H, ChestStrip } from './ChestStrip';
+import { ChestStrip } from './ChestStrip';
 import { waitingMissions, weekDays } from './model';
 import { MissionRowView } from './MissionRowView';
 import { Notebook } from './Notebook';
@@ -56,7 +56,7 @@ export class WeeklySection implements Section {
       odds: () => act.openOdds('gold'),
     });
     this.strip.position.set(0, y);
-    y += CHEST_STRIP_H + GAP - 8;
+    y += this.strip.cardH + GAP - 8;
 
     this.cup = new TierCard(w, {
       titleKey: 'rt.mis.cup.title',

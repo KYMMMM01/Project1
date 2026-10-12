@@ -214,8 +214,9 @@ describe('special cells', () => {
 });
 
 describe('enemies', () => {
-  it('defines all 19 enemies with names in both languages', () => {
+  it('defines all 21 enemies (the 19 of the chapters and the gold dungeon\'s coin and chest) with names in both languages', () => {
     expect(allEnemyDefs()).toHaveLength(ENEMY_IDS.length);
+    expect(ENEMY_IDS).toHaveLength(21);
     for (const lang of LANGS) {
       setLang(lang);
       for (const d of allEnemyDefs()) {

@@ -25,7 +25,7 @@ import { BASE_UNIT_IDS } from '../data/roster';
 import { stakeRules } from '../data/stakes';
 import { trainingBonus } from '../data/training';
 import type { ModifierSpec, RelicFx, StakeRules, SynergyTier } from '../data/types';
-import { goldDungeonScript, GOLD_DUNGEON_WAVES } from '../data/goldDungeon';
+import { goldDungeonScript, GOLD_DUNGEON_BOSS_HP, GOLD_DUNGEON_WAVES } from '../data/goldDungeon';
 import { actOf, scriptFor, waveEntries, type WaveScript } from '../data/waves';
 import {
   awakenCheck, classOwned, classUpgradeCostOf, cmdAwaken, cmdDrop, cmdMolt, cmdPickSummon, cmdSell, cmdSummon,
@@ -208,6 +208,8 @@ export class Sim implements BattleApi {
   whirlUntil = 0;
   whirlSpeed = 0;
   vaccinateUntil = 0;
+  /** The chest's spills so far this wave (the shares of `BOSS_SPECS.spill.at` it has already fallen to). */
+  spillStep = 0;
 
   readonly onTargetKilled = (e: SimEnemy): void => targetKilled(this, e);
 
@@ -364,7 +366,9 @@ export class Sim implements BattleApi {
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i] as WavePreviewEntry;
       if (i === 0 && script.boss) {
-        total += specialHp(script.kind === 'boss' ? 'boss' : 'elite', Math.floor((wave - 1) / 8)) * this.hpChapterMult * this.rules.specialHpMult;
+        total += this.mode === 'gold'
+          ? GOLD_DUNGEON_BOSS_HP * this.hpChapterMult
+          : specialHp(script.kind === 'boss' ? 'boss' : 'elite', Math.floor((wave - 1) / 8)) * this.hpChapterMult * this.rules.specialHpMult;
       } else {
         total += e.count * budgetMult(e.enemy) * base;
       }

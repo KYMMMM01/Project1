@@ -8,7 +8,7 @@ import { SPECIAL_CELL_IDS } from '@/game/api';
 import { specialCellName, specialCellText } from '@/game/data/cells';
 import { CHAPTERS } from '@/game/data/roster';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
-import { DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_VICTORY_MULT } from '@/meta/data/dungeon';
+import { DUNGEON_FREE_ENTRIES } from '@/meta/data/dungeon';
 import { factsOf, setGuideCell } from '@/guide/facts';
 import { EN } from '@/guide/stringsEn';
 import { KO } from '@/guide/stringsKo';
@@ -147,7 +147,7 @@ describe('guide topics', () => {
 
   it('quotes the numbers of the game data', () => {
     setLang('ko');
-    expect(factsOf('gold_dungeon')).toMatchObject({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES, gems: DUNGEON_ENTRY_GEMS, win: DUNGEON_VICTORY_MULT });
+    expect(factsOf('gold_dungeon')).toMatchObject({ waves: GOLD_DUNGEON_WAVES, free: DUNGEON_FREE_ENTRIES });
     expect(factsOf('summon')).toMatchObject({ start: START_FISH, first: SUMMON_BASE, step: SUMMON_STEP, rate: BASE_FISH_PER_SECOND });
     expect(factsOf('sell')).toMatchObject({ f1: SELL_FISH[0], f5: SELL_FISH[4] });
     expect(factsOf('molt')).toMatchObject({ limit: 6 });

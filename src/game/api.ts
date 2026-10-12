@@ -32,9 +32,11 @@ export type UnitId = (typeof UNIT_IDS)[number];
 
 export const ENEMY_IDS = [
   'cucumber', 'dust', 'drop', 'roomba', 'tangerine', 'balloon', 'balloon_small',
-  'clock', 'pill', 'cone', 'dryer', 'spray', 'firecracker',
-  'boss_cucumber', 'boss_vacuum', 'boss_blender', 'boss_bath', 'boss_cloud', 'boss_needle',
+  'clock', 'pill', 'cone', 'dryer', 'coin', 'spray', 'firecracker',
+  'boss_cucumber', 'boss_vacuum', 'boss_blender', 'boss_bath', 'boss_cloud', 'boss_needle', 'boss_treasure',
 ] as const;
+// `coin` and `boss_treasure` are the gold dungeon's own pair (game/data/goldDungeon.ts), listed with their rank: they never walk in a chapter,
+// the daily challenge or endless mode.
 export type EnemyId = (typeof ENEMY_IDS)[number];
 
 export const RELIC_IDS = [
@@ -72,7 +74,8 @@ export type BossAbilityId =
   | 'whirl' // boss_blender: every enemy speeds up
   | 'splash' // boss_bath: spawns drops and soaks cells
   | 'lightning' // boss_cloud: zaps a 2x2 block of cells
-  | 'vaccinate'; // boss_needle: enemies ignore slows, boss heals
+  | 'vaccinate' // boss_needle: enemies ignore slows, boss heals
+  | 'spill'; // boss_treasure (the gold dungeon's chest): coins pop out of it as it is hit, which is more gold for the player
 
 /** A cell hazard: units standing on the cell cannot attack until it ends or they are moved away. */
 export type HazardKind = 'wet' | 'zap';

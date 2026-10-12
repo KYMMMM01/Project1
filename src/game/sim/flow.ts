@@ -9,7 +9,8 @@ import {
 } from '../data/balance';
 import { COUNTER_RELICS, RELIC_FX_KEYS, relicSpec } from '../data/relics';
 import { RARITIES, RELIC_RARITY } from '../data/roster';
-import { actFeatures, actOf, scriptFor, waveEntries } from '../data/waves';
+import { GOLD_DUNGEON_BOSS_HP, GOLD_DUNGEON_BOSS_LIMIT } from '../data/goldDungeon';
+import { actFeatures, actOf, waveEntries } from '../data/waves';
 import { openSummonOffer, placeRandomCommon, refresh } from './board';
 import { startBoss } from './boss';
 import { refreshLaser } from './combat';
@@ -218,7 +219,9 @@ function buildSpawns(s: Sim, wave: number): void {
 }
 
 function waveLimit(s: Sim, kind: 'elite' | 'boss', ordinal: number): number {
-  return specialLimit(kind, ordinal) + (s.fx.bossTime ?? 0) + s.trainBossTime - s.rules.bossTimeCut;
+  // The gold dungeon's chest has a limit of its own; the toys and the training add to it like to any other (butler level 0: no cut).
+  const base = s.mode === 'gold' ? GOLD_DUNGEON_BOSS_LIMIT : specialLimit(kind, ordinal);
+  return base + (s.fx.bossTime ?? 0) + s.trainBossTime - s.rules.bossTimeCut;
 }
 
 export function startWave(s: Sim, wave: number): void {
@@ -248,10 +251,12 @@ export function startWave(s: Sim, wave: number): void {
 }
 
 function spawnTarget(s: Sim): void {
-  const script = scriptFor(s.scriptChapter, s.wave);
+  const script = s.scriptOf(s.wave);
   const kind = s.waveKind === 'boss' ? 'boss' : 'elite';
   const ordinal = Math.floor((s.wave - 1) / 8);
-  const e = spawnEnemy(s, script.boss as EnemyId, 0, s.baseHp(), true, specialHp(kind, ordinal) * s.hpChapterMult * s.rules.specialHpMult);
+  // The dungeon's chest has a health of its own (the tier's multiple on top); a butler level never applies there.
+  const hp = s.mode === 'gold' ? GOLD_DUNGEON_BOSS_HP * s.hpChapterMult : specialHp(kind, ordinal) * s.hpChapterMult * s.rules.specialHpMult;
+  const e = spawnEnemy(s, script.boss as EnemyId, 0, s.baseHp(), true, hp);
   e.capRate = e.maxHp / (BOSS_MIN_KILL * s.waveDuration);
   e.capTokens = e.capRate * BOSS_CAP_BURST;
   s.boss = e;
@@ -270,6 +275,8 @@ function payWave(s: Sim, called: boolean, bonus: number): void {
 
 export function callBonusOf(s: Sim): number {
   if (s.phase !== 'wave' || s.stage !== 'run' || s.waveKind !== 'normal') return -1;
+  // The dungeon's first stage closes on its wave clock (endNormalWave): calling past it would skip the stage reward and the toy pick.
+  if (s.mode === 'gold' && s.wave % ACT_LENGTH === 0) return -1;
   if (s.spawnIdx < s.spawnIds.length || s.waveClock >= s.waveDuration) return -1;
   return Math.min(CALL_FISH_MAX, Math.ceil(CALL_FISH_PER_SECOND * (s.waveDuration - s.waveClock) - 1e-9));
 }
@@ -340,7 +347,7 @@ function completeAct(s: Sim): void {
 
 function endNormalWave(s: Sim): void {
   payWave(s, false, 0);
-  // The gold dungeon has no elite or boss to close an act: the wave clock does, through the same clear delay and act reward.
+  // The gold dungeon has no elite or boss to close its first stage (the chest closes the second): the wave clock does, through the same clear delay and act reward.
   if (s.mode === 'gold' && s.wave % ACT_LENGTH === 0) {
     s.stage = 'clearing';
     s.stageTimer = CLEAR_DELAY;

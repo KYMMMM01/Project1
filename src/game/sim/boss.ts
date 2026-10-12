@@ -20,6 +20,7 @@ export function startBoss(s: Sim, boss: SimEnemy): void {
       break;
     case 'lightning': s.abilityAt = now + BOSS_SPECS.lightning.cooldown * FIRST_USE; break;
     case 'vaccinate': s.abilityAt = now + BOSS_SPECS.vaccinate.cooldown * FIRST_USE; break;
+    case 'spill': s.spillStep = 0; break;
     default: break;
   }
 }
@@ -90,6 +91,17 @@ export function updateBoss(s: Sim): void {
         s.abilityAt = now + spec.cooldown * rage;
       }
       if (s.vaccinateUntil > now) boss.hp = Math.min(boss.maxHp, boss.hp + boss.maxHp * spec.regen * TICK);
+      return;
+    }
+    case 'spill': {
+      // The chest (the gold dungeon's): each time its health falls to the next share, a few coins pop out around it. Nothing here hurts anyone.
+      const spec = BOSS_SPECS.spill;
+      const share = boss.hp / boss.maxHp;
+      while (s.spillStep < spec.at.length && share <= (spec.at[s.spillStep] as number)) {
+        for (let i = 0; i < spec.count; i++) spawnEnemy(s, spec.spawn, Math.max(0, boss.travelled + (i - (spec.count - 1) / 2) * 16), s.baseHp(), false);
+        s.spillStep++;
+        announce(s, boss, 0);
+      }
       return;
     }
     default:

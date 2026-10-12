@@ -34,7 +34,7 @@ export { ODDS, ODDS_VERSION, oddsView, percentText } from './odds';
 export type { OddsTable, OddsView, Guarantee, PityRule } from './odds';
 export { drawChest, chestTotals, pityTarget } from './chests';
 export { dailyCode, parseDailyCode, dailySetup, cupScore } from './daily';
-export { dungeonGold, dungeonWaveGold, dungeonMaxGold, dungeonFirstClearGold, dungeonTierOpen, dungeonTopTier, dungeonEntriesLeft } from './dungeon';
+export { dungeonGold, dungeonWaveGold, dungeonMaxGold, dungeonMaxChest, dungeonChestGold, dungeonTierOpen, dungeonTopTier, dungeonEntriesLeft } from './dungeon';
 export type { DailySetup } from './daily';
 export { shopOffers } from './shop';
 export type { ShopOffer } from './shop';

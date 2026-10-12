@@ -21,6 +21,7 @@ addStrings('ko', {
   'director.ability.splash': '첨벙! 바닥이 젖어요',
   'director.ability.lightning': '번개가 떨어져요!',
   'director.ability.vaccinate': '약효 발동! 느려지지 않아요',
+  'director.ability.spill': '금화가 쏟아져요!',
   'director.hazard.wet': '젖은 칸은 공격할 수 없어요',
   'director.hazard.zap': '번개 맞은 칸은 쉬어요',
 });
@@ -46,6 +47,7 @@ addStrings('en', {
   'director.ability.splash': 'Splash! The floor is wet',
   'director.ability.lightning': 'Lightning incoming!',
   'director.ability.vaccinate': 'Vaccinated! Slows are ignored',
+  'director.ability.spill': 'Coins are spilling out!',
   'director.hazard.wet': 'Wet cells cannot attack',
   'director.hazard.zap': 'Zapped cells rest',
 });

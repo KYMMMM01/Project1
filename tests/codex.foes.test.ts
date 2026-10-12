@@ -7,18 +7,21 @@ import {
 import { ENEMY_SPECS } from '@/game/data/enemies';
 import { MAX_STAKE } from '@/game/data/roster';
 import { stakeRules } from '@/game/data/stakes';
+import { GOLD_DUNGEON_BOSS_HP, GOLD_DUNGEON_BOSS_LIMIT, GOLD_DUNGEON_WAVES, goldDungeonScript } from '@/game/data/goldDungeon';
 import { chapterWaves, scriptFor } from '@/game/data/waves';
 import { startWave } from '@/game/sim/flow';
 import { applyStatus } from '@/game/sim/enemies';
 import {
-  FOE_IDS, abilitiesOf, appearances, armourBreakers, capRule, classesDealing, enrageRule, foeRank, foeStats, healthSpan, rageApplies, resistanceOf, slotsIn, splitParent,
-  targetRows, tipsOf, type Level,
+  FOE_IDS, abilitiesOf, appearances, armourBreakers, capRule, classesDealing, dungeonOnly, dungeonWaves, enrageRule, foeRank, foeStats, healthSpan, levelOf, rageApplies,
+  resistanceOf, slotsIn, splitParent, targetRows, tipsOf, type Level,
 } from '@/codex/foes';
 import { advance, foe, newSim, quietWave } from './simHelpers';
 
 const LEVELS: Level[] = [];
 for (let chapter = 1; chapter <= CHAPTER_COUNT; chapter++) for (let stake = 0; stake <= MAX_STAKE; stake++) LEVELS.push({ chapter, stake });
 const TARGETS = FOE_IDS.filter((id) => foeRank(id) !== 'normal');
+/** The elites and bosses of the chapters: the dungeon's chest has its own tests below (its health, limit and waves are not the chapters' tables). */
+const CHAPTER_TARGETS = TARGETS.filter((id) => !dungeonOnly(id));
 
 describe('codex foes: which enemy is what', () => {
   it('lists every enemy once, ordinary ones first, then the elites, then the bosses', () => {
@@ -26,7 +29,9 @@ describe('codex foes: which enemy is what', () => {
     const ranks = FOE_IDS.map(foeRank);
     expect(ranks.lastIndexOf('normal')).toBeLessThan(ranks.indexOf('elite'));
     expect(ranks.lastIndexOf('elite')).toBeLessThan(ranks.indexOf('boss'));
-    expect(TARGETS).toHaveLength(3 + 5);
+    // Three elites (the first chapter boss is one), the five chapter bosses and the dungeon's chest.
+    expect(TARGETS).toHaveLength(3 + 5 + 1);
+    expect(FOE_IDS.filter((id) => foeRank(id) === 'normal')).toContain('coin');
   });
 
   it('finds an enemy in the waves the scripts put it in, and a mini balloon where the balloon is', () => {
@@ -63,7 +68,8 @@ describe('codex foes: health at a chapter and butler level', () => {
         const span = healthSpan(id, { chapter, stake: 0 });
         const slots = slotsIn(id, chapter);
         if (slots.length === 0) {
-          expect(span, `${id} ${chapter}`).toBeNull();
+          // The dungeon's coin walks no chapter wave but has a health in every tier: it is checked on its own below.
+          if (!dungeonOnly(id)) expect(span, `${id} ${chapter}`).toBeNull();
           continue;
         }
         const at = (wave: number): number => (HP_INDEX[wave] as number) * (CHAPTER_HP_MULT[chapter - 1] as number) * ENEMY_SPECS[id].hpMult;
@@ -92,7 +98,7 @@ describe('codex foes: health at a chapter and butler level', () => {
   });
 
   it('gives an elite or boss the table health of its wave, the chapter multiple and the stake multiple', () => {
-    for (const id of TARGETS) {
+    for (const id of CHAPTER_TARGETS) {
       for (const level of LEVELS) {
         const rows = targetRows(id, level);
         expect(rows.length, `${id} ${level.chapter}/${level.stake}`).toBeGreaterThan(0);
@@ -112,7 +118,7 @@ describe('codex foes: health at a chapter and butler level', () => {
   });
 
   it('lists the waves the script gives the enemy, or the three waves of its kind when the chapter has none', () => {
-    for (const id of TARGETS) {
+    for (const id of CHAPTER_TARGETS) {
       for (let chapter = 1; chapter <= CHAPTER_COUNT; chapter++) {
         const rows = targetRows(id, { chapter, stake: 0 });
         const real = chapterWaves(chapter).filter((s) => s.boss === id).map((s) => s.wave);
@@ -129,7 +135,7 @@ describe('codex foes: health at a chapter and butler level', () => {
   });
 
   it('is the health, the time limit and the damage allowance the simulation spawns the wave with', () => {
-    for (const id of TARGETS) {
+    for (const id of CHAPTER_TARGETS) {
       for (const level of [{ chapter: 1, stake: 0 }, { chapter: 2, stake: 4 }, { chapter: 5, stake: 5 }]) {
         for (const row of targetRows(id, level).filter((r) => !r.imagined)) {
           expect(scriptFor(level.chapter, row.wave).boss).toBe(id);
@@ -147,6 +153,64 @@ describe('codex foes: health at a chapter and butler level', () => {
         }
       }
     }
+  });
+});
+
+describe('codex foes: the gold dungeon\'s coin and treasure chest (2026-10-12)', () => {
+  it('knows they live in the dungeon and nowhere else, and which waves of its script they walk', () => {
+    expect(FOE_IDS.filter(dungeonOnly)).toEqual(['coin', 'boss_treasure']);
+    expect(dungeonWaves('coin')).toEqual(Array.from({ length: GOLD_DUNGEON_WAVES }, (_, i) => i + 1));
+    expect(dungeonWaves('boss_treasure')).toEqual([GOLD_DUNGEON_WAVES]);
+    expect(dungeonWaves('cucumber')).toEqual([]);
+    for (const id of ['coin', 'boss_treasure'] as const) {
+      expect(appearances(id), id).toEqual([]);
+      for (let chapter = 1; chapter <= CHAPTER_COUNT; chapter++) expect(slotsIn(id, chapter), `${id} ${chapter}`).toEqual([]);
+    }
+  });
+
+  it('gives the coin the health of its dungeon waves in the chosen tier, whatever the butler level', () => {
+    for (let chapter = 1; chapter <= CHAPTER_COUNT; chapter++) {
+      for (const stake of [0, 3, 5]) {
+        const span = healthSpan('coin', levelOf('coin', { chapter, stake }));
+        const at = (wave: number): number => (HP_INDEX[wave] as number) * (CHAPTER_HP_MULT[chapter - 1] as number) * ENEMY_SPECS.coin.hpMult;
+        expect(span?.first.wave).toBe(1);
+        expect(span?.last.wave).toBe(GOLD_DUNGEON_WAVES);
+        expect(span?.first.hp).toBeCloseTo(at(1), 6);
+        expect(span?.last.hp).toBeCloseTo(at(GOLD_DUNGEON_WAVES), 6);
+      }
+    }
+    expect(levelOf('coin', { chapter: 2, stake: 4 })).toEqual({ chapter: 2, stake: 0 });
+    expect(levelOf('boss_vacuum', { chapter: 2, stake: 4 })).toEqual({ chapter: 2, stake: 4 });
+  });
+
+  it('gives the chest one row: the dungeon\'s own health (the tier\'s multiple on top) and limit, no butler cut, and the simulation spawns it so', () => {
+    for (let chapter = 1; chapter <= CHAPTER_COUNT; chapter++) {
+      const rows = targetRows('boss_treasure', { chapter, stake: 0 });
+      expect(rows).toHaveLength(1);
+      const row = rows[0]!;
+      expect(row).toMatchObject({ wave: GOLD_DUNGEON_WAVES, kind: 'boss', imagined: false, limit: GOLD_DUNGEON_BOSS_LIMIT, limitBase: GOLD_DUNGEON_BOSS_LIMIT, cut: 0 });
+      expect(row.hp).toBeCloseTo(GOLD_DUNGEON_BOSS_HP * (CHAPTER_HP_MULT[chapter - 1] as number), 6);
+      expect(goldDungeonScript(row.wave).boss).toBe('boss_treasure');
+      const sim = newSim({ mode: 'gold', chapter });
+      quietWave(sim);
+      startWave(sim, row.wave);
+      sim.spawnIds.length = 0;
+      sim.spawnTimes.length = 0;
+      advance(sim, 1.05);
+      expect(sim.boss?.id).toBe('boss_treasure');
+      expect(sim.boss?.maxHp).toBeCloseTo(row.hp, 6);
+      expect(sim.waveDuration).toBe(row.limit);
+      expect(sim.boss?.capRate).toBeCloseTo(row.cap.perSecond, 6);
+    }
+    // The butler level of the page does not reach it.
+    expect(targetRows('boss_treasure', { chapter: 3, stake: 5 })[0]?.limit).toBe(GOLD_DUNGEON_BOSS_LIMIT);
+  });
+
+  it('describes the chest\'s one ability from its data, and gives the coin none', () => {
+    const [spill] = abilitiesOf('boss_treasure');
+    expect(spill).toMatchObject({ kind: 'spill', vars: { count: 3, n: 3 }, names: { coin: 'coin' } });
+    expect(abilitiesOf('coin')).toEqual([]);
+    expect(rageApplies('boss_treasure')).toBe(false);
   });
 });
 
@@ -220,7 +284,7 @@ describe('codex foes: control resistance', () => {
 
 describe('codex foes: abilities and tips', () => {
   it('has a boss ability for every boss and an elite one for every elite', () => {
-    for (const id of ['boss_cucumber', 'boss_vacuum', 'boss_blender', 'boss_bath', 'boss_cloud', 'boss_needle', 'spray', 'firecracker'] as const) {
+    for (const id of ['boss_cucumber', 'boss_vacuum', 'boss_blender', 'boss_bath', 'boss_cloud', 'boss_needle', 'boss_treasure', 'spray', 'firecracker'] as const) {
       expect(abilitiesOf(id).length, id).toBeGreaterThan(0);
     }
     expect(abilitiesOf('cucumber')).toEqual([]);
