@@ -1,0 +1,56 @@
+[
+ {
+  "name": "enemy_coin_a",
+  "ref": [
+   "art/enemies_v2/enemy_cucumber.png",
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "Image 1 is an approved enemy character from our game and image 2 an approved cat from the same game. Both are RENDERING references only: match their line weight, matte colouring, sticker border, face style and proportions, but draw the new character described below (do not draw a cucumber or a cat, do not copy their props).",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite shown small (about 70 px)\nSubject: a living gold coin: a thick round gold coin standing on its edge and running on stubby legs, a cat paw print embossed on its face, a cheeky grin, tiny arms pumping. A funny target the cats chase for treasure, never scary or gross.\nStyle: 2D cartoon sticker illustration with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours (warm mustard gold, never neon or over-saturated). Simple large shapes that read at thumbnail size.\nFace: small solid black dot eyes (no iris, no highlights), short thick EYEBROWS that clearly show a cheeky or grumpy expression, and a simple cartoon mouth.\nAnatomy: limbs attach where they naturally would; nothing fused, duplicated or floating unless described.\nComposition: full body, facing left like image 1, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no numbers, no currency symbols, no watermark, nothing cropped."
+ },
+ {
+  "name": "enemy_coin_b",
+  "ref": [
+   "art/enemies_v2/enemy_cucumber.png",
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "Image 1 is an approved enemy character from our game and image 2 an approved cat from the same game. Both are RENDERING references only: match their line weight, matte colouring, sticker border, face style and proportions, but draw the new character described below (do not draw a cucumber or a cat, do not copy their props).",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite shown small (about 70 px)\nSubject: a living gold coin: a chubby round gold coin seen from the front with a cat paw print embossed above a smug little face, short legs and tiny arms on its hips, a notched rim. A funny target the cats chase for treasure, never scary or gross.\nStyle: 2D cartoon sticker illustration with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours (warm mustard gold, never neon or over-saturated). Simple large shapes that read at thumbnail size.\nFace: small solid black dot eyes (no iris, no highlights), short thick EYEBROWS that clearly show a cheeky or grumpy expression, and a simple cartoon mouth.\nAnatomy: limbs attach where they naturally would; nothing fused, duplicated or floating unless described.\nComposition: full body, facing left like image 1, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no numbers, no currency symbols, no watermark, nothing cropped."
+ },
+ {
+  "name": "enemy_coin_c",
+  "ref": [
+   "art/enemies_v2/enemy_cucumber.png",
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "Image 1 is an approved enemy character from our game and image 2 an approved cat from the same game. Both are RENDERING references only: match their line weight, matte colouring, sticker border, face style and proportions, but draw the new character described below (do not draw a cucumber or a cat, do not copy their props).",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game enemy sprite shown small (about 70 px)\nSubject: a living gold coin: a round gold coin rolling along with a mischievous face in its middle, a ring of small notches on the rim, stubby legs kicking, one small flat motion line behind it. A funny target the cats chase for treasure, never scary or gross.\nStyle: 2D cartoon sticker illustration with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours (warm mustard gold, never neon or over-saturated). Simple large shapes that read at thumbnail size.\nFace: small solid black dot eyes (no iris, no highlights), short thick EYEBROWS that clearly show a cheeky or grumpy expression, and a simple cartoon mouth.\nAnatomy: limbs attach where they naturally would; nothing fused, duplicated or floating unless described.\nComposition: full body, facing left like image 1, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no numbers, no currency symbols, no watermark, nothing cropped."
+ },
+ {
+  "name": "boss_treasure_a",
+  "ref": [
+   "art/enemies_v2/enemy_cucumber.png",
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "Image 1 is an approved enemy character from our game and image 2 an approved cat from the same game. Both are RENDERING references only: match their line weight, matte colouring, sticker border, face style and proportions, but draw the new character described below (do not draw a cucumber or a cat, do not copy their props).",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game BOSS sprite shown large (about 260 px), a little more detail is welcome\nSubject: a giant living treasure chest: a big wooden treasure chest with mustard-gold metal bands and a paw-print lock, its lid open like a grinning mouth with a row of flat teeth, a heap of gold coins showing inside, stubby clawed feet, greedy smug look. A funny target the cats chase for treasure, never scary or gross.\nStyle: 2D cartoon sticker illustration with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours (warm mustard gold, never neon or over-saturated). Simple large shapes that read at thumbnail size.\nFace: small solid black dot eyes (no iris, no highlights), short thick EYEBROWS that clearly show a cheeky or grumpy expression, and a simple cartoon mouth.\nAnatomy: limbs attach where they naturally would; nothing fused, duplicated or floating unless described.\nComposition: full body, facing left like image 1, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no numbers, no currency symbols, no watermark, nothing cropped."
+ },
+ {
+  "name": "boss_treasure_b",
+  "ref": [
+   "art/enemies_v2/enemy_cucumber.png",
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "Image 1 is an approved enemy character from our game and image 2 an approved cat from the same game. Both are RENDERING references only: match their line weight, matte colouring, sticker border, face style and proportions, but draw the new character described below (do not draw a cucumber or a cat, do not copy their props).",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game BOSS sprite shown large (about 260 px), a little more detail is welcome\nSubject: a giant living treasure chest: a fat round-lidded wooden chest with gold corner plates, the half-open lid is its brow and two dot eyes peek from the dark inside above a pile of gold coins, short sturdy legs, small arms hugging the coins, proud grumpy look. A funny target the cats chase for treasure, never scary or gross.\nStyle: 2D cartoon sticker illustration with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours (warm mustard gold, never neon or over-saturated). Simple large shapes that read at thumbnail size.\nFace: small solid black dot eyes (no iris, no highlights), short thick EYEBROWS that clearly show a cheeky or grumpy expression, and a simple cartoon mouth.\nAnatomy: limbs attach where they naturally would; nothing fused, duplicated or floating unless described.\nComposition: full body, facing left like image 1, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no numbers, no currency symbols, no watermark, nothing cropped."
+ },
+ {
+  "name": "boss_treasure_c",
+  "ref": [
+   "art/enemies_v2/enemy_cucumber.png",
+   "art/units_v2/unit_w_paw.png"
+  ],
+  "ref_note": "Image 1 is an approved enemy character from our game and image 2 an approved cat from the same game. Both are RENDERING references only: match their line weight, matte colouring, sticker border, face style and proportions, but draw the new character described below (do not draw a cucumber or a cat, do not copy their props).",
+  "prompt": "Use case: stylized-concept\nAsset type: mobile game BOSS sprite shown large (about 260 px), a little more detail is welcome\nSubject: a giant living treasure chest: a heavy wooden chest with gold bands, a small golden crown sitting on its closed domed lid, a big keyhole for a nose, a wide toothy grin where the lid meets the box, coins spilling from one corner, stubby legs, imposing but funny. A funny target the cats chase for treasure, never scary or gross.\nStyle: 2D cartoon sticker illustration with a thick dark-brown outline and a clean white sticker border. MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours (warm mustard gold, never neon or over-saturated). Simple large shapes that read at thumbnail size.\nFace: small solid black dot eyes (no iris, no highlights), short thick EYEBROWS that clearly show a cheeky or grumpy expression, and a simple cartoon mouth.\nAnatomy: limbs attach where they naturally would; nothing fused, duplicated or floating unless described.\nComposition: full body, facing left like image 1, centred, generous padding, no ground shadow.\nBackground: genuinely transparent background (alpha) outside the white sticker border.\nConstraints: single character, no text, no letters, no numbers, no currency symbols, no watermark, nothing cropped."
+ }
+]
