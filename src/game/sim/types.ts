@@ -36,6 +36,8 @@ export interface SimUnit extends UnitState {
   statusMult: number;
   /** Share of a hit that bounces to a second enemy (the rangers' third synergy step; 0 while it is off). */
   ricochet: number;
+  /** A full skill gauge that found nothing to do looks again at this time (0 = at once); reset when the skill casts. */
+  spCheckAt: number;
   /** True once merged away, sold, molted or awakened. */
   removed: boolean;
 }
@@ -77,6 +79,18 @@ export interface SimEnemy extends EnemyState {
   /** The black hole that dragged it last, and when no hole may drag it again. */
   pullUid: number;
   pullImmuneUntil: number;
+  /**
+   * The viking's shove: px of the slide back along the road still to go, px per tick, and when it may be pushed again. The window is its
+   * own, the black hole's (`pullImmuneUntil`) is separate.
+   */
+  shoveLeft: number;
+  shoveStep: number;
+  shoveImmuneUntil: number;
+  /**
+   * The gunner's pool on this elite or boss: how much of its maximum health (in health points) bites have already taken, all gunners
+   * together. It stops at `SP_ROWS.wanted.pool` x `maxHp`. Plain enemies never carry any.
+   */
+  bountyTaken: number;
   burnDps: number;
   burnUntil: number;
   burnSrc: SimUnit | null;

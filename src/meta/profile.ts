@@ -5,6 +5,7 @@
 import type { BattleInit, BattleMode, BattleSnapshot, DailyModifierId, RunStats } from '@/game/api';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { randomSeed } from '@/core/rng';
+import { skillsOn } from '@/core/skillSwitch';
 import { mergeLedgers, normalizeLedger, type GrantSource } from '@/platform/iapService';
 import { encodeBackup, decodeBackup } from './backup';
 import type { MetaDeps } from './core';
@@ -192,6 +193,8 @@ export class Profile extends RoutineProfile {
     const init: BattleInit = {
       seed, mode: o.mode, chapter, stake,
       loadout: buildLoadout(d.levels, d.training, o.mode === 'daily'),
+      // The cats' skills: decided once, here, from the switch (core/skillSwitch.ts); the run keeps it, saved with its init.
+      sp: skillsOn(),
       ...(modifiers ? { modifiers } : {}),
       ...(o.snack ? snackFields(o.snack.id) : {}),
     };

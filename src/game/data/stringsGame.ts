@@ -28,6 +28,12 @@ addStrings('ko', {
   'unit.t_alch.skill': '주변 {a} 안에 구름을 {b}초 동안 깔아 적이 받는 피해를 {c}% 늘리고 독을 입혀요.',
   'unit.t_lucky.skill': '모든 고양이의 공격 속도 +{a}%. {b}초마다 동전 비가 모든 적을 때려요.',
 
+  // the cats' skills (the name over the cat the first time it casts; step 1 of docs/design_skills_v2.md)
+  'sp.shove.name': '방패 밀치기',
+  'sp.charge.name': '진짜 호랑이 납신다!',
+  'sp.lap.name': '별빛 한 바퀴',
+  'sp.wanted.name': '현상수배! 한 방!',
+
   // level perks
   'perk.range': '사거리 +{a}%',
   'perk.damage': '피해 +{a}%',
@@ -141,6 +147,11 @@ addStrings('en', {
   'unit.t_bard.skill': 'The {n} cats around it deal {a}% more damage.',
   'unit.t_alch.skill': 'A cloud within {a} lasts {b} s: enemies in it take {c}% more damage and are poisoned.',
   'unit.t_lucky.skill': 'Every cat attacks {a}% faster. Every {b} s a coin rain hits every enemy.',
+
+  'sp.shove.name': 'Shield Shove',
+  'sp.charge.name': 'The Tiger Has Arrived!',
+  'sp.lap.name': 'Starlight Lap',
+  'sp.wanted.name': 'Wanted: One Shot!',
 
   'perk.range': 'Range +{a}%',
   'perk.damage': 'Damage +{a}%',

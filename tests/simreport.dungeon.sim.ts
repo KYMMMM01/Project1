@@ -3,7 +3,8 @@
  * Plays the dungeon with the merge and the synergy bot at each tier's recommended unit level and prints, per tier: the win rate, the waves
  * got through, the enemies killed, the run's length, the share of the chest's time limit used, and the gold a bot run pays by the meta layer's
  * own formula. It never fails on a balance number. Environment: SIM_RUNS (runs per cell, default 300), SIM_TIERS=1,2 (default all five),
- * SIM_BOTS=merge,synergy,random (default merge,synergy), SIM_LEVEL=n (a unit level for every tier instead of the recommended one).
+ * SIM_BOTS=merge,synergy,random (default merge,synergy), SIM_LEVEL=n (a unit level for every tier instead of the recommended one),
+ * SIM_SP=0|1 (default: the app's `SKILLS_ON`, off until all twelve skills are in; 1 plays the same seeds with the cats' skills; the title of each table says which).
  */
 import { describe, it } from 'vitest';
 import { RECOMMENDED_LEVEL } from '@/game/data/balance';

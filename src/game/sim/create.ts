@@ -13,5 +13,8 @@ export function createBattle(init: BattleInit, snapshot?: BattleSnapshot): Battl
   if (!snapshot) return new Sim(init, null);
   const data = parseSnapshot(snapshot);
   if (!data || data.init.seed !== init.seed || data.init.mode !== init.mode || data.init.chapter !== init.chapter) return null;
-  return new Sim(data.init, data);
+  // A save made before the skills existed carries no `sp`: it keeps the setting the caller gives it (the app passes `sp: false` for those),
+  // so a run that began without skills never gets them half way. A save that has the field keeps its own.
+  const own = data.init.sp === undefined && init.sp !== undefined ? { ...data.init, sp: init.sp } : data.init;
+  return new Sim(own, data);
 }

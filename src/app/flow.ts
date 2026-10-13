@@ -7,6 +7,7 @@ import { debugEnabled } from '@/core/debug';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { Scene, scenes, type TransitionKind } from '@/core/scene';
+import { resumeInit } from '@/core/skillSwitch';
 import type { BattleInit, BattleSnapshot } from '@/game';
 // The leaf module: the guide's index would pull its whole screen in before the first scene.
 import { guideProgress } from '@/guide/progress';
@@ -203,7 +204,7 @@ export async function offerContinue(): Promise<void> {
     if (!pending) return;
     const resume = await continuePrompt(pending.init.chapter, pending.snapshot?.wave);
     if (resume) {
-      const make = battleScene(runConfig(pending.init, pending.snapshot));
+      const make = battleScene(runConfig(resumeInit(pending.init), pending.snapshot));
       if (!(await gotoWhenIdle(make, 'iris'))) toast(t('meta.err.unavailable'), 'warning');
       return;
     }

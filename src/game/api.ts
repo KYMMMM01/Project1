@@ -51,6 +51,18 @@ export const RELIC_IDS = [
 ] as const;
 export type RelicId = (typeof RELIC_IDS)[number];
 
+/**
+ * The per-cat skills (docs/design_skills_v2.md): one for each cat from the third rank up (Alley Boss, King, Guardian). All twelve names
+ * are reserved here; `UnitDef.spSkill` exists only for a cat whose skill is built (`game/data/spSkills.ts`, the row's `built` flag).
+ */
+export const SP_SKILL_IDS = [
+  'shove', 'cut', 'charge', 'clones', 'wanted', 'lap', 'cloud', 'knock', 'meteor', 'jam', 'fish', 'capsule',
+] as const;
+export type SpSkillId = (typeof SP_SKILL_IDS)[number];
+
+/** The rank of a cat with a skill: 3 = epic (Alley Boss), 4 = legendary (King), 5 = mythic (Guardian). It sets the cooldown (18 / 24 / 34 s). */
+export type SpRank = 3 | 4 | 5;
+
 export type DamageType = 'physical' | 'magic';
 
 export type EnemyTrait =
@@ -118,10 +130,22 @@ export interface UnitPerk {
   text(): string;
 }
 
+/** A cat's skill as the view needs it: which one, how long its gauge takes to fill, and the key of its name. */
+export interface SpSkillDef {
+  id: SpSkillId;
+  rank: SpRank;
+  /** Seconds of simulation time the gauge takes to go from 0 to 1 (a gauge that is blocked or waiting for its condition does not count). */
+  cooldown: number;
+  /** i18n key of the skill's name (`sp.<id>.name`), shown in the bubble over the cat the first time it casts. */
+  nameKey: string;
+}
+
 export interface UnitDef {
   id: UnitId;
   classId: ClassId;
   rarity: RarityId;
+  /** The cat's skill. Absent for the cats that have none, and for the cats whose skill is not built yet (so a ring is never shown for nothing). */
+  spSkill?: SpSkillDef;
   damageType: DamageType;
   /** i18n keys: `unit.<id>.name`, `unit.<id>.desc` (flavour line). */
   nameKey: string;
@@ -203,6 +227,11 @@ export interface BattleInit {
   bonusFish?: number;
   bonusPurr?: number;
   firstSummonRarePlus?: boolean;
+  /**
+   * The cats' skills. Absent = on (so the tests exercise them); `false` switches the whole pass off and the battle then plays exactly as it
+   * did before the skills existed. The app decides it in one place (`core/skillSwitch.ts`) and a saved run keeps the value it started with.
+   */
+  sp?: boolean;
 }
 
 /** Opaque wave-start save produced by `snapshot()` and accepted by `createBattle(init, snapshot)`. */
@@ -222,6 +251,12 @@ export interface UnitState {
   readonly level: number;
   /** Progress toward the next attack, 0 (just fired) .. 1 (ready). */
   charge: number;
+  /**
+   * The skill gauge, 0 (just cast) .. 1 (full: it casts the moment the skill's own condition holds, so a full gauge can wait). Fills by
+   * simulation time only. Always 0 for a cat without a skill (`UnitDef.spSkill`), and for every cat while `BattleApi.spOn` is false
+   * (nothing fills a gauge then; a ring should be gated on `spOn` all the same).
+   */
+  sp: number;
   /** True while the unit stands on a hazard cell and cannot attack. */
   blocked: boolean;
   /** Seconds of "weakened" (half attack speed) left; 0 when normal. */
@@ -414,7 +449,151 @@ export interface StrikePoint {
   uid: number;
 }
 
+// ───────────────────────────── skill casts ─────────────────────────────
+//
+// One event, `spCast`, announces every cast. Its payload is a union on `skill`: the view narrows on it and draws the scene of the design
+// from the numbers alone, never from simulation internals. The damage of a cast arrives as ordinary `hit` events AFTER `spCast` (the scene
+// starts first, the numbers pop up on it). Each skill's agent owns its member below and may add fields; renaming or removing one breaks
+// the view.
+
+/** One enemy the shield shove pushed: where it stood, where its slide ends, and how far it slides. */
+export interface SpShoved {
+  uid: number;
+  /** Where it stood when the shield came down (the afterimage stays here) and which way it faced, in radians. */
+  x: number;
+  y: number;
+  angle: number;
+  /** Where the slide ends. The enemy itself moves there in the simulation over `SpShoveData.slide` seconds, back along the road. */
+  toX: number;
+  toY: number;
+  /** px it slides back (the floor at the start of the road and the elite / boss factors are applied: 0 never appears, a boss gets 32). */
+  distance: number;
+}
+
+/** Shield Shove (viking): the shield slam at the cat's cell, a wedge of dust over the road inside its reach, and every pushed enemy. */
+export interface SpShoveData {
+  /** The cat's reach in px: the wedge spreads over the stretch of road inside it. */
+  range: number;
+  /** Seconds the slide takes. */
+  slide: number;
+  /** Ordered like the casts' targets (laser dot first, elites and bosses, longest on the road). Empty never happens: the cast needs one. */
+  pushed: SpShoved[];
+}
+
+/**
+ * What the two running bodies (the tiger and the star archer's arrow) tell the view about their run, so it can draw the body without
+ * reading the simulation. The body's place at simulation time `t` (`BattleApi.time`) is
+ * `pathPoint(startPath + dir * min(dist, speed * max(0, t - at - delay)))`: it does not move before `at + delay` and is at the end of its
+ * run from `at + delay + duration` on. Each enemy it touches arrives as an `spRunHit` (then a `hit`), a felled enemy of the lap bursts as an
+ * `spRunBurst`, and `spRunEnd` closes the run. A run is not saved: a resumed battle starts with none.
+ */
+export interface SpRunData {
+  /** Names the run in `spRunHit`, `spRunBurst` and `spRunEnd`; unique in the battle, counting up from 1. */
+  runId: number;
+  /** `BattleApi.time` of the cast. */
+  at: number;
+  /** Direction along the road: +1 with the flow of the enemies (the arrow), -1 against it (the tiger). */
+  dir: 1 | -1;
+  /** Seconds after `at` before the body starts to move along the road (the tiger's leap; 0 for the arrow). */
+  delay: number;
+  /** Seconds the body spends moving along the road: `dist / speed`. */
+  duration: number;
+}
+
+/**
+ * The Tiger Has Arrived: the tiger leaps to the front of the busiest stretch of road and runs against the flow. Each enemy it passes is
+ * stomped once (`spRunHit`, then `hit`); the tile keeps attacking all the while.
+ */
+export interface SpChargeData extends SpRunData {
+  /** Road coordinate (distance along the loop, in [0, PATH_LENGTH)) of the front of the stretch where the tiger lands, and that point in field px. */
+  startPath: number;
+  landX: number;
+  landY: number;
+  /** px the run covers against the flow, its speed in px/s and the seconds of the leap before the run starts (`delay` is the same number). */
+  dist: number;
+  speed: number;
+  leap: number;
+}
+
+/**
+ * Starlight Lap: a silver arrow comes down on the road at the point nearest the cat and runs once round it with the flow, a star flashing on
+ * every enemy it passes (`spRunHit`, then `hit`); an enemy it fells bursts as the passive's does (`spRunBurst`).
+ */
+export interface SpLapData extends SpRunData {
+  /** Road coordinate (in [0, PATH_LENGTH)) and field position of the point nearest the archer, where the arrow comes down. */
+  startPath: number;
+  startX: number;
+  startY: number;
+  /** px the arrow covers (one lap plus the extra) and its speed in px/s. */
+  dist: number;
+  speed: number;
+}
+
+/**
+ * Wanted: One Shot (gunner): a poster is pasted on the target and a cork bullet takes a bite out of it. `bite` is an elite or a boss
+ * losing a share of its maximum health outside its damage allowance (announced by a `bite` event of its own, not a `hit`); `small` is the
+ * plain enemy that loses part of its current health when no elite or boss is there (its damage arrives as an ordinary `hit`).
+ */
+export interface SpWantedData {
+  mode: 'bite' | 'small';
+  targetUid: number;
+  /** Where the target stands (the poster goes here; the cork bullet flies from the cat's tile, `SpCastEvent.unit`, to this point). */
+  x: number;
+  y: number;
+  /** The share this shot took: of the target's maximum health for a bite (0.06; less when the pool had less left), of its current health for a small one (0.2). */
+  share: number;
+  /**
+   * Bite only (0 for a small shot): the share of maximum health this target has given in all so far, including this shot, and its pool
+   * (0.12). Two eggs (one per half of the pool) and the "case closed" stamp follow from it.
+   */
+  taken: number;
+  pool: number;
+  /** Health points the shot takes before multipliers: `share` x the target's maximum health (bite) or current health (small). */
+  amount: number;
+  /** Bite only: this shot emptied the target's pool, so the "case closed" stamp goes on its name tag. */
+  closed: boolean;
+}
+
+/** What a cast tells the view, one member per built skill. The next agents add theirs. */
+export type SpPayload =
+  | { skill: 'shove'; data: SpShoveData }
+  | { skill: 'charge'; data: SpChargeData }
+  | { skill: 'lap'; data: SpLapData }
+  | { skill: 'wanted'; data: SpWantedData };
+
+export interface SpCastCommon {
+  /** The cat that cast (still on the board at this point; it may be sold during the scene). */
+  unit: UnitState;
+  /**
+   * True the first time this skill is cast in the run, for any cat. The view shows the skill's name bubble on it and, for a rank 5 skill, the
+   * cut-in. Nothing is saved: a resumed run shows them once more.
+   */
+  first: boolean;
+  /** Where the scene is anchored in field px: the cat's cell centre unless the skill's data says otherwise. */
+  x: number;
+  y: number;
+}
+
+/** A skill was cast: `skill` tells which, `data` is its payload. */
+export type SpCastEvent = SpCastCommon & SpPayload;
+
 export interface BattleEvents {
+  /** A skill was cast: the gauge went back to 0 (see `SpCastEvent`). */
+  spCast: SpCastEvent;
+  /**
+   * A running body (the tiger, the star archer's arrow; `SpRunData`) touched an enemy. Once per enemy and run; the damage follows as an
+   * ordinary `hit` of the cat (none when the lap's pool is spent, or kept for the enemies that stood on the field at the cast and an
+   * enemy that appeared later is passed: then there is no `spRunHit` either, so draw a star from this event and never from the arrow's
+   * place). `x`, `y` is where the enemy stood and `head` how many px of its run the body had covered.
+   */
+  spRunHit: { runId: number; skill: 'charge' | 'lap'; enemy: EnemyState; x: number; y: number; head: number };
+  /**
+   * An enemy the lap felled bursts like the passive's kill burst: a circle of `radius` at (`x`, `y`) hurting the enemies it touches
+   * (`points`, in skill order; may be empty). Emitted before their `hit` events. A burst never sets off another.
+   */
+  spRunBurst: { runId: number; skill: 'lap'; x: number; y: number; radius: number; points: StrikePoint[] };
+  /** The body reached the end of its run (not emitted if the battle ends first). `hits` = enemies it touched. */
+  spRunEnd: { runId: number; skill: 'charge' | 'lap'; unit: UnitState; hits: number };
   /** A unit appeared on the board. */
   summon: { unit: UnitState; source: SummonSource };
   /** The every-Nth summon offer opened; the sim is paused until pickSummon(). */
@@ -474,6 +653,14 @@ export interface BattleEvents {
   shieldBreak: { enemy: EnemyState };
   heal: { enemy: EnemyState; amount: number };
   enrage: { enemy: EnemyState };
+  /**
+   * The gunner's bite (Wanted: One Shot) took `amount` health from an elite or a boss OUTSIDE its damage allowance. It is emitted
+   * AFTER the `spCast` of the shot and after the damage was done (`enemy.hp` is already lower; when `killed` the `enemyDie` came first),
+   * and it is never a `hit`: the boss bar reads `hit` events as firepower for its estimated time to kill, so a bite must not be one.
+   * `share` = `amount` / maximum health; `taken` = the share this target has given in all so far (including this bite), `pool` = the most
+   * it can give (0.12, all gunners together).
+   */
+  bite: { unit: UnitState; enemy: EnemyState; amount: number; share: number; taken: number; pool: number; killed: boolean };
 
   enemySpawn: { enemy: EnemyState };
   enemyDie: { enemy: EnemyState; x: number; y: number; fish: number; purr: number; killer: UnitState | null };
@@ -558,6 +745,8 @@ export interface BattleApi {
   readonly boss: EnemyState | null;
   /** Simulated seconds since the run started. */
   readonly time: number;
+  /** True when this battle plays with the cats' skills (`BattleInit.sp`, absent = true). When false no gauge moves and no skill casts: draw no rings. */
+  readonly spOn: boolean;
 
   // ── driving ──
   /** Advance by `dt` seconds (already multiplied by game speed). No-op while a choice is pending or the run is over. */

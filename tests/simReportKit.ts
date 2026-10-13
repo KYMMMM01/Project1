@@ -1,12 +1,27 @@
 /** Shared by the balance report: batches of bot runs and their summary statistics. */
+import { SKILLS_ON } from '@/core/skillSwitch';
 import { RELIC_IDS, UNIT_IDS, type BattleInit, type ClassId, type UnitId } from '@/game/api';
 import { BASE_UNIT_IDS, unitClass } from '@/game/data/roster';
 import type { BotPolicy } from '@/game/sim/bots';
 import { playRun, type RunOptions, type RunResult } from '@/game/sim/runner';
 
+/**
+ * Whether the report plays with the cats' skills: `SIM_SP=1` with them, `SIM_SP=0` without, the same seeds either way so two reports can be
+ * set side by side. WITHOUT the variable it plays the game the players have, which is the app's own switch (`SKILLS_ON`, off until all twelve
+ * skills are in), so the tables stay comparable with the documented numbers. Anything else is a mistake and stops the report. Every report
+ * builds its runs through `loadoutInit` (so does `simEndlessKit`), and every table's title says which it is (`printTable`).
+ */
+export function spFromEnv(env: Record<string, string | undefined> = process.env): { sp: boolean } {
+  const v = env.SIM_SP;
+  if (v === undefined || v === '') return { sp: SKILLS_ON };
+  if (v === '0') return { sp: false };
+  if (v === '1') return { sp: true };
+  throw new Error(`SIM_SP must be 0 or 1, not "${v}"`);
+}
+
 export function loadoutInit(seed: number, chapter: number, stake: number, level: number, mode: BattleInit['mode'] = 'chapter'): BattleInit {
   const unitLevels = Object.fromEntries(BASE_UNIT_IDS.map((id) => [id, level]));
-  return { seed, mode, chapter, stake, loadout: { unitLevels, training: {}, relicPool: [...RELIC_IDS] } };
+  return { seed, mode, chapter, stake, loadout: { unitLevels, training: {}, relicPool: [...RELIC_IDS] }, ...spFromEnv() };
 }
 
 export function median(values: number[]): number {
@@ -140,12 +155,12 @@ export function pct(v: number): string {
   return `${(v * 100).toFixed(0)}%`;
 }
 
-/** Plain aligned table for the console. */
+/** Plain aligned table for the console. The title always ends with `[skills on]` or `[skills off]`: what the runs were played with. */
 export function printTable(title: string, head: string[], rows: (string | number)[][]): void {
   const cells = [head, ...rows.map((r) => r.map(String))];
   const widths = head.map((_, c) => Math.max(...cells.map((r) => (r[c] as string).length)));
   const line = (r: string[]): string => r.map((v, c) => v.padEnd(widths[c] as number)).join('  ');
-  const out = [`\n== ${title} ==`, line(head), ...rows.map((r) => line(r.map(String)))];
+  const out = [`\n== ${title} [skills ${spFromEnv().sp ? 'on' : 'off'}] ==`, line(head), ...rows.map((r) => line(r.map(String)))];
   process.stdout.write(`${out.join('\n')}\n`);
 }
 

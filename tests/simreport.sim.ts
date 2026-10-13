@@ -13,6 +13,8 @@
  * ended the runs, the share reaching the weekly tiers, the minutes a run takes and the board against the wave (see tests/simEndlessKit.ts).
  * SIM_ENDLESS_MAXWAVE=120 is the wave at which a living board counts as having survived; SIM_ENDLESS_REACH=24,30,40,50,60,80,100 the waves it counts;
  * SIM_ENDLESS_DUMP=<file> appends one JSON line per run (waves cleared, how it ended, and per wave: start second, firepower, need, peak enemies).
+ * SIM_SP=0|1 plays every run without / with the cats' skills (`BattleInit.sp`), the same seeds either way, so two reports compare. Without it
+ * the report plays the game the players have: the app's `SKILLS_ON` (off until all twelve skills are in). Every table title ends with `[skills on]` or `[skills off]`.
  */
 import { describe, it } from 'vitest';
 import { CLASS_IDS, RELIC_IDS, UNIT_IDS, type CurrencyReason, type RelicId } from '@/game/api';

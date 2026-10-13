@@ -16,6 +16,10 @@ export {
 } from './data/cells';
 export { TILE_PX, tilesOf, tilesText } from './data/lengthText';
 export { unitDef, unitSpec, allUnitDefs, auraScale } from './data/units';
+export {
+  SP_COOLDOWN, SP_RANK5_GAP, SP_RANK_OF, SP_RECHECK, SP_ROWS, SP_START_MERGE, SP_START_NEW, SP_START_RESTORE, SP_UNIT_OF, spRowOf,
+  spSkillOfUnit, type SpRow, type SpRows,
+} from './data/spSkills';
 export { enemyDef, enemySpec, allEnemyDefs, bossSpec, BOSS_SPECS, budgetMult, isWaveTarget } from './data/enemies';
 export { relicDef, relicSpec, allRelicDefs, COUNTER_RELICS } from './data/relics';
 export { classDef, allClassDefs, synergyTier, tierForDistinct, SYNERGY, SYNERGY_SPECIAL } from './data/classes';

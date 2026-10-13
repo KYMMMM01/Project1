@@ -31,6 +31,7 @@ export function spawnEnemy(s: Sim, id: EnemyId, travelled: number, baseHp: numbe
     spec, index: s.enemies.length, baseHp, speed: spec.speed, target, dead: false, mark: 0,
     isBoss: spec.traits.includes('boss'), isElite: spec.traits.includes('elite'),
     mask: 0, slowUntil: 0, stunUntil: 0, freezeUntil: 0, ccImmuneUntil: 0, slowImmuneUntil: 0, pullUid: 0, pullImmuneUntil: 0,
+    shoveLeft: 0, shoveStep: 0, shoveImmuneUntil: 0, bountyTaken: 0,
     burnDps: 0, burnUntil: 0, burnSrc: null, poisonDps: 0, poisonUntil: 0, poisonSrc: null,
     bleedDps: 0, bleedUntil: 0, bleedSrc: null, breakAmount: 0, breakUntil: 0, vulnAmount: 0, vulnUntil: 0,
     hasteAmount: 0, hasteUntil: 0, dotAt: 0,
@@ -232,16 +233,23 @@ function statusStep(s: Sim, e: SimEnemy, now: number): boolean {
 /**
  * One instance of damage. `raw` already includes the crit multiplier. Returns true when the enemy
  * died. Rules §9: defence, vulnerability cap, shield first, then health.
+ *
+ * `ignoreDefence` (the tiger's stomp) skips the armour or ward altogether; the vulnerability product and the elite / boss damage allowance
+ * still apply. `dealDamage` below is the part after the allowance.
  */
 export function damageEnemy(
   s: Sim, e: SimEnemy, raw: number, type: DamageType, src: SimUnit | null, crit: boolean, dot: StatusKind | null,
+  ignoreDefence = false,
 ): boolean {
   if (e.dead) return false;
   // Armour (against physical damage) and ward (against magic) are cut the same way: by the toy, by an armour break on the enemy and by
   // the armour ignore of the cat that hits (v1.5: they used to work on armour only).
-  let defence = (type === 'physical' ? e.spec.armor : e.spec.ward) * (1 - (s.fx.defenceCut ?? 0));
-  if (e.armorBroken) defence *= 1 - e.breakAmount;
-  if (src) defence *= 1 - src.armorIgnore;
+  let defence = 0;
+  if (!ignoreDefence) {
+    defence = (type === 'physical' ? e.spec.armor : e.spec.ward) * (1 - (s.fx.defenceCut ?? 0));
+    if (e.armorBroken) defence *= 1 - e.breakAmount;
+    if (src) defence *= 1 - src.armorIgnore;
+  }
   let amount = raw * (1 - defence);
   let mult = 1 + (e.vulnerable ? e.vulnAmount : 0);
   if (e.focused) mult *= 1 + LASER_VULNERABLE;
@@ -256,7 +264,19 @@ export function damageEnemy(
     if (amount > e.capTokens) amount = e.capTokens;
     e.capTokens -= amount;
   }
+  return dealDamage(s, e, amount, type, src, crit, dot, true);
+}
 
+/**
+ * The part of `damageEnemy` after the elite / boss allowance: `amount` (already worked out) goes to the shield first and then the health,
+ * the `hit` event follows (unless `announce` is false), then death and rage are checked. Ordinary damage reaches it through `damageEnemy`;
+ * the one caller allowed to skip the allowance is the gunner's bite (`announce` false: it has an event of its own, and a `hit` would
+ * feed the boss bar's kill-time estimate). Returns true when the enemy died.
+ */
+export function dealDamage(
+  s: Sim, e: SimEnemy, amount: number, type: DamageType, src: SimUnit | null, crit: boolean, dot: StatusKind | null, announce: boolean,
+): boolean {
+  if (e.dead) return false;
   let absorbed = 0;
   if (e.shield > 0) {
     absorbed = Math.min(e.shield, amount);
@@ -271,7 +291,7 @@ export function damageEnemy(
     src.damageDealt += dealt;
     s.damageByUnit[src.unitIndex] += dealt;
   }
-  if (s.ev.has('hit')) {
+  if (announce && s.ev.has('hit')) {
     s.ev.emit('hit', { enemy: e, amount, crit, type, unitId: dot ? null : src ? src.id : null, dot, absorbed, killed });
   }
   if (absorbed > 0 && e.shield <= 1e-9) {
@@ -366,6 +386,20 @@ function applyAuras(s: Sim, now: number): void {
   }
 }
 
+/** One tick of a shove's slide: back along the road, never below the start. A sliding enemy is carried, not walking: it does not advance meanwhile. */
+function slideBack(e: SimEnemy): void {
+  let step = e.shoveStep < e.shoveLeft ? e.shoveStep : e.shoveLeft;
+  if (step > e.travelled) step = e.travelled;
+  e.shoveLeft -= step;
+  if (step <= 0 || e.shoveLeft < 1e-9) e.shoveLeft = 0;
+  if (step <= 0) return;
+  e.travelled -= step;
+  pathPoint(e.travelled, point);
+  e.x = point.x;
+  e.y = point.y;
+  e.angle = point.angle;
+}
+
 /** Walks every enemy one tick, expires statuses, ticks damage over time and runs periodic enemy abilities. */
 export function updateEnemies(s: Sim): void {
   const now = s.time;
@@ -373,6 +407,7 @@ export function updateEnemies(s: Sim): void {
   if (s.auraCount > 0 && s.tickCount % AURA_EVERY === 0) applyAuras(s, now);
   const nap = 1 - (s.fx.enemySlow ?? 0);
   const whirl = s.whirlUntil > now ? s.whirlSpeed : 0;
+  let slid = false;
   for (let i = list.length - 1; i >= 0; i--) {
     const e = list[i] as SimEnemy;
     if (e.mask !== 0 && !statusStep(s, e, now)) continue;
@@ -382,6 +417,11 @@ export function updateEnemies(s: Sim): void {
       e.capTokens = e.capTokens + e.capRate * TICK > burst ? burst : e.capTokens + e.capRate * TICK;
     }
     e.age += TICK;
+    if (e.shoveLeft > 0) {
+      slideBack(e);
+      slid = true;
+      continue;
+    }
     if (e.stunned || e.frozen) continue;
     let haste = e.hasted ? e.hasteAmount : 0;
     if (whirl > haste) haste = whirl;
@@ -396,6 +436,10 @@ export function updateEnemies(s: Sim): void {
     e.y = point.y;
     e.angle = point.angle;
   }
+  // A cat that found nothing in range sleeps until the nearest enemy could be there at the fastest walking speed (`pickTarget`). A slide
+  // is faster than that (160 px in 21 ticks, 457 px/s), so while one goes on the cats look again every tick. Only a shove makes enemies slide:
+  // with the skills off this line never runs.
+  if (slid) s.wakeUnits();
 }
 
 /**
@@ -417,5 +461,21 @@ export function pullEnemy(s: Sim, e: SimEnemy, distance: number, zone: SimZone):
   e.x = point.x;
   e.y = point.y;
   e.angle = point.angle;
+  return moved;
+}
+
+/**
+ * Starts a slide back along the road (the viking's shove), next to the black hole's pull: `distance` px (already scaled for elites and
+ * bosses by the caller) taken over `slide` seconds, never below the start of the road, and returns how far it will slide. 0 when the enemy is
+ * still inside its own window (`shoveImmuneUntil`, `window` seconds from the push; the black hole's window is a separate field) or is at the
+ * start. The slide itself is `slideBack` in `updateEnemies`: a sliding enemy does not walk, it is carried.
+ */
+export function shoveEnemy(s: Sim, e: SimEnemy, distance: number, slide: number, window: number): number {
+  if (e.dead || s.time < e.shoveImmuneUntil) return 0;
+  const moved = distance < e.travelled ? distance : e.travelled;
+  if (!(moved > 0)) return 0;
+  e.shoveImmuneUntil = s.time + window;
+  e.shoveLeft = moved;
+  e.shoveStep = moved / Math.max(1, Math.round(slide / TICK));
   return moved;
 }

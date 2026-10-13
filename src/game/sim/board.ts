@@ -8,6 +8,7 @@ import {
 } from '../data/balance';
 import { SYNERGY_SPECIAL, synergyTier, tierForDistinct } from '../data/classes';
 import { RARITIES, UNIT_GRID, levelSourceOf, mergeResultOf, mythicOf, unitRarityIndex } from '../data/roster';
+import { SP_START_MERGE, SP_START_NEW } from '../data/spSkills';
 import type { PerkSpec, SynergyTier } from '../data/types';
 import { unitSpec } from '../data/units';
 import { addFish, addPurr } from './economy';
@@ -58,19 +59,29 @@ function unitLevelOf(s: Sim, id: UnitId): number {
   return lv < 1 ? 1 : lv > 10 ? 10 : Math.floor(lv);
 }
 
-export function makeUnit(s: Sim, id: UnitId, cell: number, charge: number): SimUnit {
+/**
+ * A new cat. `charge` is where its attack gauge starts; `sp` where its skill gauge starts (ignored by a cat without a skill, whose gauge
+ * stays 0, and in a battle played without skills, where nothing fills a gauge so it stays 0 too): a cat put on the board starts at
+ * `SP_START_NEW`, a merge result at `SP_START_MERGE`, a restored cat at `SP_START_RESTORE`.
+ */
+export function makeUnit(s: Sim, id: UnitId, cell: number, charge: number, sp: number = SP_START_NEW): SimUnit {
   const spec = unitSpec(id);
   const level = unitLevelOf(s, id);
   const unit: SimUnit = {
-    uid: ++s.uidUnit, id, cell, charge, blocked: false, weakened: 0, sunlit: false,
+    uid: ++s.uidUnit, id, cell, charge, sp: spec.spSkill && s.spOn ? sp : 0, blocked: false, weakened: 0, sunlit: false,
     stats: { ...spec.base }, buffAttackSpeed: 0, buffDamage: 0, shielded: false, dodge: 0, kills: 0, damageDealt: 0,
     spec, level, classIndex: classIndexOf(spec.classId), rarityIndex: unitRarityIndex(id), unitIndex: UNIT_INDEX[id],
     recoverAt: 0, searchAfter: 0, attackCount: 0, coinAt: 0,
-    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, ricochet: 0, removed: false,
+    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, ricochet: 0, spCheckAt: 0, removed: false,
   };
   const coin = spec.aura.coinRain;
   unit.coinAt = coin ? s.time + coin.every : 0;
   return unit;
+}
+
+/** A molt or an awakening keeps the skill gauge's ratio when both the old cat and the new one have a skill (otherwise the new one starts as any new cat). */
+function keepGauge(from: SimUnit, to: SimUnit): void {
+  if (from.spec.spSkill && to.spec.spSkill) to.sp = from.sp;
 }
 
 function noteRarity(s: Sim, unit: SimUnit): void {
@@ -265,10 +276,21 @@ export function recomputeStats(s: Sim): void {
   }
 }
 
+/** The cats that have a skill, in cell order: the skills' pass walks this short list instead of all 25 cells every tick. */
+function collectSkillCats(s: Sim): void {
+  const list = s.spCats;
+  list.length = 0;
+  for (let c = 0; c < CELL_COUNT; c++) {
+    const u = s.units[c];
+    if (u && u.spec.spSkill) list.push(u);
+  }
+}
+
 /** Synergies first (stats read the tiers), then stats. Call after any change to the board or its modifiers. */
 export function refresh(s: Sim): void {
   updateSynergy(s);
   recomputeStats(s);
+  collectSkillCats(s);
 }
 
 export function classOwned(s: Sim, classId: ClassId): boolean[] {
@@ -469,7 +491,7 @@ export function cmdDrop(s: Sim, from: number, to: number): Fail | null {
   a.removed = true;
   other.removed = true;
   s.units[from] = null;
-  const result = makeUnit(s, id, to, MERGE_START_CHARGE);
+  const result = makeUnit(s, id, to, MERGE_START_CHARGE, SP_START_MERGE);
   s.units[to] = result;
   noteRarity(s, result);
   s.merges++;
@@ -521,6 +543,7 @@ export function cmdMolt(s: Sim, cell: number, classId: ClassId): Fail | null {
   s.molts++;
   unit.removed = true;
   const result = makeUnit(s, UNIT_GRID[classId][unit.rarityIndex] as UnitId, cell, MERGE_START_CHARGE);
+  keepGauge(unit, result);
   s.units[cell] = result;
   refresh(s);
   if (s.ev.has('molt')) s.ev.emit('molt', { from: unit, result, cell });
@@ -546,6 +569,7 @@ export function cmdAwaken(s: Sim, cell: number): Fail | null {
   addPurr(s, -AWAKEN_COST, 'awaken');
   unit.removed = true;
   const result = makeUnit(s, mythicOf(unit.id) as UnitId, cell, MERGE_START_CHARGE);
+  keepGauge(unit, result);
   s.units[cell] = result;
   noteRarity(s, result);
   s.awakenings++;

@@ -22,7 +22,8 @@ const nearD2: number[] = [];
 const chosen: SimEnemy[] = [];
 const points: StrikePoint[] = [];
 
-function areaOf(s: Sim, u: SimUnit): number {
+/** How much wider than its base a cat's areas are (the toys that widen areas, the level-10 perk). Also read by the star archer's burst. */
+export function areaOf(s: Sim, u: SimUnit): number {
   return 1 + (s.fx.areaScale ?? 0) + u.perk.radius;
 }
 

@@ -5,6 +5,7 @@
 import { debugExpose } from '@/core/debug';
 import { setLang } from '@/core/i18n';
 import { scenes } from '@/core/scene';
+import { skillsOn } from '@/core/skillSwitch';
 import { BootScene } from '@/scenes/BootScene';
 import { BattleScene, setBattleCreatedHook } from '@/scenes/BattleScene';
 import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type RelicId, type UnitId } from '@/game';
@@ -41,6 +42,8 @@ export function runFromQuery(params: URLSearchParams): RunConfig {
         training: {},
         relicPool: [...RELIC_IDS],
       },
+      // The same switch as every real run: `?sp=1` / `?sp=0` or the constant (core/skillSwitch.ts).
+      sp: skillsOn(params),
     },
     rugSkin: params.get('rug') ?? DEFAULT_RUG,
     fxTheme: params.get('fx') ?? 'fx_default',

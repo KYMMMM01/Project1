@@ -7,6 +7,7 @@ import { t } from '@/core/i18n';
 import { CC_IMMUNE_AFTER, PULL_IMMUNE_AFTER } from './balance';
 import { tilesText } from './lengthText';
 import { unitClass, unitRarity } from './roster';
+import { spSkillOfUnit } from './spSkills';
 import type { AttackSpec, PerkKey, PerkSpec, UnitAura, UnitSpec } from './types';
 import './strings';
 import './stringsGame';
@@ -207,10 +208,13 @@ function breaksArmor(attack: AttackSpec): boolean {
 function build(id: UnitId): UnitSpec {
   const d = DEFS[id];
   const [damage, interval, range, crit, critMult] = d.row;
+  // The skill is on the definition only when its row is built: a ring is never shown for a skill that does nothing.
+  const sp = spSkillOfUnit(id);
   return {
     id,
     classId: unitClass(id),
     rarity: unitRarity(id),
+    ...(sp ? { spSkill: { id: sp.id, rank: sp.rank, cooldown: sp.cooldown, nameKey: sp.nameKey } } : {}),
     damageType: d.type,
     nameKey: `unit.${id}.name`,
     descKey: `unit.${id}.desc`,

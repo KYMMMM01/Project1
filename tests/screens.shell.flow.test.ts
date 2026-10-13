@@ -174,6 +174,33 @@ describe('a tutorial the app was killed in', () => {
   });
 });
 
+describe('resuming a saved run keeps the skills setting it began with', () => {
+  /** The init of the battle scene the flow builds for the pending record when the player chooses to continue. */
+  async function resumedInit(init: Record<string, unknown>): Promise<{ sp?: boolean } & Record<string, unknown>> {
+    h.state.runs = 3;
+    h.state.pending = { init: { mode: 'chapter', chapter: 1, stake: 0, seed: 1, ...init }, snapshot: { wave: 4 } };
+    h.continuePrompt.mockResolvedValue(true);
+    await flow.offerContinue();
+    const make = h.scenes.goto.mock.calls.at(-1)?.[0] as unknown as () => { run: { init: { sp?: boolean } & Record<string, unknown> } };
+    return make().run.init;
+  }
+
+  it('plays a run saved before the skills existed (no sp in its init) without them, whatever the switch says now', async () => {
+    const init = await resumedInit({});
+    expect(init.sp).toBe(false);
+    expect(init.seed).toBe(1);
+  });
+
+  it('keeps the setting a run was saved with, on or off', async () => {
+    expect((await resumedInit({ sp: true })).sp).toBe(true);
+    expect((await resumedInit({ sp: false })).sp).toBe(false);
+  });
+
+  it('does it for every mode a run can be saved in', async () => {
+    for (const mode of ['chapter', 'daily', 'endless', 'gold']) expect((await resumedInit({ mode })).sp, mode).toBe(false);
+  });
+});
+
 describe('giving up a run', () => {
   it('flies the paid currency to the bar and opens no sheet that asks to claim it again', async () => {
     h.state.runs = 3;

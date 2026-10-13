@@ -22,6 +22,7 @@ import { synergyTier } from '../data/classes';
 import { budgetMult } from '../data/enemies';
 import { modifierSpec } from '../data/modifiers';
 import { BASE_UNIT_IDS } from '../data/roster';
+import { SP_START_RESTORE } from '../data/spSkills';
 import { stakeRules } from '../data/stakes';
 import { trainingBonus } from '../data/training';
 import type { ModifierSpec, RelicFx, StakeRules, SynergyTier } from '../data/types';
@@ -45,6 +46,9 @@ import { updateHazards } from './hazards';
 import type { LuckTotals } from './odds';
 import type { SnapData } from './snapshot';
 import { updateSpecials } from './specials';
+import { updateSpSkills } from './spSkills';
+import { runLater, type LaterItem } from './sp/later';
+import type { SpRunner } from './sp/run';
 import { Streams } from './streams';
 import { TUTORIAL_SCRIPT } from './tutorial';
 import type { HazardBatch, SimEnemy, SimProjectile, SimUnit, SimZone } from './types';
@@ -94,6 +98,8 @@ export class Sim implements BattleApi {
   get specialCell(): SpecialCellId {
     return this.cellSpec.id;
   }
+  /** The cats' skills are on (`init.sp` absent or true). When false the whole skill pass is skipped. */
+  readonly spOn: boolean;
 
   // ── configuration derived from the init ──
   readonly mode: BattleInit['mode'];
@@ -191,6 +197,22 @@ export class Sim implements BattleApi {
   feederAt = 0;
   starAt = 0;
 
+  // ── skills (nothing here is saved: a restored run starts with all of it empty) ──
+  /** The cats on the board that have a skill, in cell order; rebuilt by `refresh` (board.ts) after every change to the board. */
+  readonly spCats: SimUnit[] = [];
+  /** The delayed list (`sp/later.ts`) and the number of items ever put on it. */
+  readonly later: LaterItem[] = [];
+  laterSeq = 0;
+  /** The running bodies of the tiger's charge and the star archer's lap (`sp/run.ts`) and the number of runs ever started. */
+  readonly runners: SpRunner[] = [];
+  runSeq = 0;
+  /** Bit i set: the skill `SP_SKILL_IDS[i]` was cast in this run (the next cast is not the first). */
+  spSeen = 0;
+  /** Whether the cast in progress is the first of its skill (worked out by the pass, read by `announceCast`). */
+  spFirst = false;
+  /** Time before which no other rank 5 skill may cast. */
+  spRank5Until = 0;
+
   // ── wave machine ──
   stage: 'run' | 'clearing' | 'between' = 'run';
   stageTimer = 0;
@@ -217,6 +239,7 @@ export class Sim implements BattleApi {
     this.init = init;
     this.events = this.ev;
     this.mode = init.mode;
+    this.spOn = init.sp !== false;
     this.chapter = clampInt(init.chapter, 1, CHAPTER_COUNT);
     this.stake = clampInt(init.stake, 0, 5);
     this.endless = init.mode === 'endless';
@@ -308,7 +331,7 @@ export class Sim implements BattleApi {
     for (let c = 0; c < CELL_COUNT; c++) {
       const id = d.units[c];
       if (id) {
-        const u = makeUnit(this, id, c, 0.5);
+        const u = makeUnit(this, id, c, 0.5, SP_START_RESTORE);
         this.units[c] = u;
       }
     }
@@ -430,6 +453,8 @@ export class Sim implements BattleApi {
     updateBoss(this);
     updateEnemies(this);
     updateUnits(this);
+    if (this.later.length > 0) runLater(this);
+    if (this.spOn) updateSpSkills(this);
     updateProjectiles(this);
     updateZones(this);
     updateSpecials(this);
