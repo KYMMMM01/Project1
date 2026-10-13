@@ -1,0 +1,17 @@
+{
+  "name": "냥이 수비대 (Meow Guard)",
+  "short_name": "냥이 수비대",
+  "description": "뽑고, 합치고, 집을 지켜라! 고양이 합성 디펜스.",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf3e2",
+  "theme_color": "#c48f50",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
