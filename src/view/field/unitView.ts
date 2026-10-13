@@ -13,6 +13,8 @@ import { BADGE_BITS, BADGE_KINDS, BUFF_SLOT, bitOf, type BadgeKind } from './buf
 import { releaseSeconds, weaponStyle } from '@/view/weapons';
 import { breathe, coilPose, makePose, releasePose } from './motion';
 import { unitTint } from './policy';
+import type { SpRingView } from './spRing';
+import { RING_AT, SHRUG_RISE, SHRUG_SCALE } from './spRingMath';
 
 /** The cats and what hangs from their height were drawn for cells 112 px tall; `fit` brings a measure of that drawing to this board's cell height. */
 const fit = (px: number): number => Math.round((px * CELL_H) / 112);
@@ -81,6 +83,12 @@ export class UnitView {
   holdUntil = 0;
   /** A finger is down on this unit. */
   pressed = false;
+  /** The skill ring round the class sticker (null until the field gives this view a cat that has a skill; never made in a battle without skills). */
+  spRing: SpRingView | null = null;
+  /** A ring this view wore and put by (its cat was replaced by one without a skill): kept to put on again, not made again. */
+  private spareRing: SpRingView | null = null;
+  /** 0..1: how far the cat is into its shrug after a cast. Set by the field's rings, read when the pose is built. */
+  shrug = 0;
 
   private readonly deco = new Container();
   private readonly shadow: Sprite;
@@ -223,6 +231,8 @@ export class UnitView {
     });
     this.newUntil = 0;
     if (this.newTag) this.newTag.visible = false;
+    this.shrug = 0;
+    this.spRing?.reset();
     this.badge.scale.set(1);
     this.badge.alpha = 1;
     this.root.alpha = 1;
@@ -238,6 +248,35 @@ export class UnitView {
     this.root.position.set(this.x, this.y);
     this.root.zIndex = this.y;
     this.sprite.scale.set(this.spriteScale * this.facing, this.spriteScale);
+  }
+
+  /**
+   * Put the skill ring round the class sticker (the sticker steps to the ring's place: above the rank tag's rounded end and inside the
+   * cell), or take it off again and put the sticker back where every other cat wears it. Only a battle with skills ever calls this.
+   */
+  attachRing(ring: SpRingView | null): void {
+    if (this.spRing && this.spRing !== ring) {
+      this.spRing.root.visible = false;
+      this.spareRing = this.spRing;
+    }
+    if (ring && ring === this.spareRing) this.spareRing = null;
+    this.spRing = ring;
+    this.shrug = 0;
+    if (!ring) {
+      this.badge.position.set(CLASS_AT.x, CLASS_AT.y);
+      return;
+    }
+    if (ring.root.parent !== this.root) this.root.addChildAt(ring.root, this.root.getChildIndex(this.badge) + 1);
+    ring.root.position.set(RING_AT.x, RING_AT.y);
+    ring.root.visible = true;
+    ring.bind(this.badge);
+    ring.reset();
+    this.badge.position.set(RING_AT.x, RING_AT.y);
+  }
+
+  /** The ring this view wears or has worn and put by, to be put on again (null: it never had one). */
+  get ringKept(): SpRingView | null {
+    return this.spRing ?? this.spareRing;
   }
 
   homeX(cell: number): number {
@@ -329,7 +368,7 @@ export class UnitView {
     if (this.attackT >= 0) releasePose(this.spec, this.attackT, this.coil0, pose);
     else if (this.coil > 0) coilPose(this.spec, this.coil, pose);
     else breathe(time, this.phase, 1 - 0.5 * this.weak, pose);
-    let k = (1 - 0.06 * this.press) * (1 + 0.12 * this.lift) * (1 + 0.022 * this.select * Math.sin(time * 7));
+    let k = (1 - 0.06 * this.press) * (1 + 0.12 * this.lift) * (1 + 0.022 * this.select * Math.sin(time * 7)) * (1 + SHRUG_SCALE * this.shrug);
     // A lifted sticker tilts the way it is being pulled and leans a little to one side.
     this.lean = damp(this.lean, this.dragging ? clamp((this.dragX - this.x) * 0.004, -0.12, 0.12) : 0, 0.05, dt);
     let rot = (-0.16 * this.blocked - 0.07 * this.weak + pose.rot) * this.facing + this.lift * (0.07 * this.facing + this.lean);
@@ -362,7 +401,7 @@ export class UnitView {
     this.rig.rotation = rot;
     const lunge = LUNGE_PX * pose.lunge;
     const sellRise = this.exit === 'sell' ? -26 * this.exitK : 0;
-    this.rig.position.set(this.dirX * lunge, this.dirY * lunge * 0.6 - 3 * this.select - 16 * this.lift + sellRise - pose.rise);
+    this.rig.position.set(this.dirX * lunge, this.dirY * lunge * 0.6 - 3 * this.select - 16 * this.lift + sellRise - pose.rise - SHRUG_RISE * this.shrug);
     this.sprite.scale.x = this.spriteScale * this.facing;
     this.root.alpha = fade;
 

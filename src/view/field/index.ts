@@ -1,4 +1,5 @@
 import { Container } from 'pixi.js';
+import { debugExpose } from '@/core/debug';
 import { Fx } from '@/fx';
 import { BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT } from '@/game/geometry';
 import type { BattleContext, BattleLayout, FieldPart } from '../context';
@@ -57,6 +58,8 @@ export function createField(ctx: BattleContext): FieldPart {
   lift.position.set(ctx.layout.fieldX, ctx.layout.fieldY);
   layers.overlay.addChild(lift);
   const units = new UnitViews(env, layers.units, lift);
+  // QA: which full rings pulse right now (only a battle with skills has rings).
+  if (units.rings) debugExpose('spRings', { pulsing: () => units.rings?.pulsing() ?? [] });
   const enemies = new EnemyViews(env, layers.enemies);
   const spares = new FieldWarmup(battle, enemies, ground);
   const shots = new Projectiles(env, layers.projectiles);
@@ -144,6 +147,7 @@ export function createField(ctx: BattleContext): FieldPart {
       shots.destroy();
       enemies.destroy();
       units.destroy();
+      if (units.rings) debugExpose('spRings', null);
       lift.destroy({ children: true });
       preview.destroy();
       cells.destroy();

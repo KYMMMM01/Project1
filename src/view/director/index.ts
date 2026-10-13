@@ -11,6 +11,7 @@ import { mountDeaths } from './deaths';
 import { mountFlow } from './flow';
 import { mountGrowth } from './growth';
 import { MusicService } from './music';
+import { mountSp } from './sp';
 import { Stage, type Bus } from './stage';
 
 /**
@@ -34,6 +35,8 @@ export function createDirector(ctx: BattleContext): DirectorPart {
   mountGrowth(stage, bus, banners, music, currency);
   mountBoss(stage, bus, banners, music);
   mountFlow(stage, bus, banners, music);
+  // The cats' skills (nothing is made unless the battle plays with them).
+  mountSp(stage, bus);
   stage.addFrame((dt) => {
     currency.update();
     banners.update(dt);

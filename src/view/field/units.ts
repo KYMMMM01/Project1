@@ -14,6 +14,7 @@ import { MERGE_SECONDS, MOLT_SECONDS, QUICK_REVEAL_WINDOW, REVEAL_DELAY, REVEAL_
 import { receivedMask } from './buffMath';
 import { hopArc } from './motion';
 import { liftsAboveHud } from './policy';
+import { SpRings } from './spRings';
 import { UnitView, type ExitMode } from './unitView';
 
 /** A recycled view rests this long before reuse, so a juice tween that is still finishing cannot touch its next owner. */
@@ -43,6 +44,8 @@ export class UnitViews {
   /** Summons whose cat has no view yet: where the sticker is tossed from (scene space) and why the cat came. */
   private readonly arriving = new Map<number, { source: SummonSource; x: number; y: number }>();
   private readonly arrivals: Arrivals;
+  /** The skill rings; only a battle that plays with skills has them (`BattleApi.spOn`), otherwise nothing of them is made. */
+  readonly rings: SpRings | null;
 
   constructor(
     private readonly env: FieldEnv,
@@ -52,6 +55,7 @@ export class UnitViews {
     this.layer.sortableChildren = true;
     this.pool = new Pool<UnitView>(() => new UnitView(env.art, env.battle.specialCell));
     this.arrivals = new Arrivals(env, env.ctx.layers.overlay, env.ctx.layers.fxFront);
+    this.rings = env.battle.spOn ? new SpRings(env) : null;
     const ev = env.battle.events;
     this.offs.push(
       ev.on('summon', (e) => this.onSummon(e)),
@@ -78,7 +82,9 @@ export class UnitViews {
   update(dt: number, selected: number | null): void {
     const { battle, buffs } = this.env;
     const time = this.env.time;
+    const rings = this.rings;
     this.frame++;
+    rings?.begin(dt);
     for (let cell = 0; cell < CELL_COUNT; cell++) {
       const u = battle.units[cell];
       if (!u) continue;
@@ -86,6 +92,7 @@ export class UnitViews {
       if (!v) v = this.create(u, 'pop');
       v.mark = this.frame;
       v.step(dt, time, u, cell === selected, receivedMask(buffs.at(cell)));
+      rings?.tick(v, u);
       this.seat(v);
       this.syncSwirl(v, u);
       if (v.awaiting) this.checkReveal(v);
@@ -117,6 +124,7 @@ export class UnitViews {
   private create(u: UnitState, mode: 'pop' | 'hidden'): UnitView {
     const v = this.pool.get();
     v.assign(u, this.env.art);
+    this.rings?.attach(v, u);
     v.mark = this.frame;
     v.awaiting = false;
     v.holdUntil = 0;
@@ -352,6 +360,7 @@ export class UnitViews {
   destroy(): void {
     for (const off of this.offs) off();
     this.offs.length = 0;
+    this.rings?.destroy();
     this.arriving.clear();
     this.arrivals.destroy();
     for (const v of this.live) {

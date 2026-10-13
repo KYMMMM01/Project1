@@ -55,6 +55,8 @@ export const Gate = {
   hazardBuzz: 10,
   hitShake: 11,
   bossShake: 12,
+  /** The skills' scenes (`sp/`): one camera nudge per cast at most. */
+  spShake: 13,
   count: 14,
 } as const;
 

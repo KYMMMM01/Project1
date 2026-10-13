@@ -41,6 +41,24 @@ describe('awakeningPlan', () => {
     expect(p.total).toBeCloseTo(1.6 * 0.7, 5);
     expect(p.lines).toBe(0);
   });
+
+  it('a tempo plays the whole banner that many times as fast, keeps every beat in order and keeps the speed lines', () => {
+    const normal = awakeningPlan(true, false);
+    for (const tempo of [1.25, 1.5, 2]) {
+      const p = awakeningPlan(true, false, tempo);
+      expect(p.total).toBeCloseTo(normal.total / tempo, 9);
+      expect(p.impact).toBeCloseTo(normal.impact / tempo, 9);
+      expect(p.impact + p.slideIn).toBeLessThan(p.exitAt);
+      expect(p.exitAt + p.exit).toBeCloseTo(p.total, 9);
+      expect(p.lines).toBe(normal.lines);
+    }
+    // A tempo below 1 or none at all is the banner as it is; reduced motion keeps dropping the lines and is shortened further by a tempo.
+    expect(awakeningPlan(true, false, 0.5)).toEqual(normal);
+    expect(awakeningPlan(true, false, 1)).toEqual(normal);
+    const calm = awakeningPlan(true, true, 1.5);
+    expect(calm.lines).toBe(0);
+    expect(calm.total).toBeLessThan(awakeningPlan(true, true).total);
+  });
 });
 
 describe('banner and dim curves', () => {

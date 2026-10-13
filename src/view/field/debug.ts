@@ -8,7 +8,7 @@ import { scenes } from '@/core/scene';
 import { skillsOn } from '@/core/skillSwitch';
 import { BootScene } from '@/scenes/BootScene';
 import { BattleScene, setBattleCreatedHook } from '@/scenes/BattleScene';
-import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type RelicId, type UnitId } from '@/game';
+import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, unitSpec, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type RelicId, type UnitId } from '@/game';
 import { createBot } from '@/game/sim/bots';
 import { spawnEnemy, killEnemy, removeEnemy } from '@/game/sim/enemies';
 import { scheduleHazard } from '@/game/sim/hazards';
@@ -145,6 +145,74 @@ export function installBattleDebug(scene: BattleScene): void {
     /** Pick toy `id` as if the player had chosen it (its effect, its marks on the board and the shelf's icon follow). */
     relic(id: RelicId): void {
       gainRelic(need(), id);
+    },
+    // ── the cats' skills (use with `?sp=1`; docs/handoff/skills1_view.md, "Debug helpers") ──
+    /** Stand cat `id` on `cell` (whatever stood there is replaced) with its skill gauge at `gauge` 0..1 (default: the start value, a half). */
+    put(cell: number, id: UnitId, gauge?: number): void {
+      const s = need();
+      s.units[cell] = makeUnit(s, id, cell, 0, gauge === undefined ? undefined : Math.min(1, Math.max(0, gauge)));
+      refresh(s);
+    },
+    /** Set the gauge of the skill cat on `cell` to `value` 0..1. A full gauge casts in the next tick when the skill's own condition holds, and waits full until it does. */
+    gauge(cell: number, value: number): void {
+      const u = need().units[cell];
+      if (!u) throw new Error(`no cat on cell ${cell}`);
+      if (!u.spec.spSkill) throw new Error(`${u.id} has no skill`);
+      u.sp = Math.min(1, Math.max(0, value));
+      u.spCheckAt = 0;
+    },
+    /** Set the gauge of every skill cat on the board at once. */
+    gaugeAll(value: number): void {
+      for (const u of need().units) {
+        if (!u || !u.spec.spSkill) continue;
+        u.sp = Math.min(1, Math.max(0, value));
+        u.spCheckAt = 0;
+      }
+    },
+    /** The cats with a skill, in cell order: plain data (cell, id, uid, gauge, cooldown in seconds, blocked). */
+    skillCats(): Array<{ cell: number; id: UnitId; uid: number; sp: number; cooldown: number; blocked: boolean }> {
+      const out: Array<{ cell: number; id: UnitId; uid: number; sp: number; cooldown: number; blocked: boolean }> = [];
+      for (const u of b.units) {
+        const def = u ? unitSpec(u.id).spSkill : undefined;
+        if (u && def) out.push({ cell: u.cell, id: u.id, uid: u.uid, sp: u.sp, cooldown: def.cooldown, blocked: u.blocked });
+      }
+      return out;
+    },
+    /** A crowd of `n` sturdy `id` enemies in a row on the road, `gap` px apart from `from` px of road (they do not die in a screenshot: `hp` times the base health). */
+    crowd(n = 16, id: EnemyId = 'cucumber', from = 120, gap = 30, hp = 60): void {
+      const s = need();
+      for (let i = 0; i < n; i++) spawnEnemy(s, id, from + i * gap, s.baseHp() * hp, false);
+    },
+    /** An elite (`spray`, `firecracker`) with a wall of health at `from` px of road. */
+    elite(id: EnemyId = 'spray', from = 200, hp = 400): void {
+      const s = need();
+      spawnEnemy(s, id, from, s.baseHp() * hp, false);
+    },
+    /** A boss (`boss_blender` ...) at `from` px of road with the sim's usual boss health. */
+    boss(id: EnemyId = 'boss_blender', from = 200): void {
+      const s = need();
+      spawnEnemy(s, id, from, s.baseHp(), false, s.baseHp() * 400);
+    },
+    /** Hold the battle (pause reason 'user') or let it run again. */
+    hold(on = true): void {
+      scene.ctx.setPaused('user', on);
+    },
+    /**
+     * Run `seconds` of the whole battle frame by frame (1/60 s each: the simulation, the field, the director, the effects) while it is held,
+     * and hold it again: for a screenshot of the exact moment of a cast. Without `hold(true)` first it just plays on.
+     */
+    step(seconds: number, frame = 1 / 60): void {
+      const held = scene.pauseReasons().includes('user');
+      if (held) scene.ctx.setPaused('user', false);
+      for (let t = 0; t < seconds - 1e-9; t += frame) scene.update(frame);
+      if (held) scene.ctx.setPaused('user', true);
+    },
+    /** What the stage rule did and which rings pulse (QA): casts shown and lost, runs in flight, the cats whose rings pulse now in the order they became full. */
+    spState(): { shown: number; lost: number; runs: number; pulsing: number[] } {
+      const dir = (window as unknown as { __dbg?: { spStage?: { stats(): { shown: number; lost: number; runs: number } } } }).__dbg?.spStage;
+      const stats = dir ? dir.stats() : { shown: 0, lost: 0, runs: 0 };
+      const rings = (window as unknown as { __dbg?: { spRings?: { pulsing(): number[] } } }).__dbg?.spRings;
+      return { ...stats, pulsing: rings ? rings.pulsing() : [] };
     },
     /** `hp` scales the health (a strip of one weapon needs an enemy that is still there at the end). */
     spawn(id: EnemyId, count = 1, from = 220, hp = 1): void {

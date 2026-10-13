@@ -5,7 +5,7 @@ import type { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
 import { TAU, clamp01, lighten, mixColor } from '@/core/math';
 import { PaperLabel } from '@/ui/paper';
-import { Color, Dim, Rarity } from '@/ui/theme';
+import { Color, Dim, MIN_FONT, Rarity } from '@/ui/theme';
 import { label } from '@/ui/text';
 import { backOutS } from './curves';
 import { Hue } from './palette';
@@ -34,13 +34,16 @@ export interface CutInPlan {
   lines: number;
 }
 
-/** The full cut-in is 1.6 s, the repeat version 0.8 s (guide 2.2.3); reduced motion shortens and drops the lines. */
-export function awakeningPlan(short: boolean, reduced: boolean): CutInPlan {
-  const k = reduced ? REDUCED.time : 1;
+/**
+ * The full cut-in is 1.6 s, the repeat version 0.8 s (guide 2.2.3); reduced motion shortens and drops the lines. `tempo` (1 = as is) plays
+ * the whole banner that many times as fast: a skill's cut-in at 2x and 3x speed, where 0.8 real seconds would cover 2.4 seconds of battle.
+ */
+export function awakeningPlan(short: boolean, reduced: boolean, tempo = 1): CutInPlan {
+  const k = (reduced ? REDUCED.time : 1) / Math.max(1, tempo);
   const plan: CutInPlan = short
     ? { dimIn: 0.08, impact: 0.14, slideIn: 0.16, exitAt: 0.62, exit: 0.18, total: 0.8, lines: 16 }
     : { dimIn: 0.12, impact: 0.3, slideIn: 0.22, exitAt: 1.38, exit: 0.22, total: 1.6, lines: 28 };
-  if (!reduced) return plan;
+  if (!reduced && tempo <= 1) return plan;
   return {
     dimIn: plan.dimIn * k,
     impact: plan.impact * k,
@@ -48,7 +51,7 @@ export function awakeningPlan(short: boolean, reduced: boolean): CutInPlan {
     exitAt: plan.exitAt * k,
     exit: plan.exit * k,
     total: plan.total * k,
-    lines: 0,
+    lines: reduced ? 0 : plan.lines,
   };
 }
 
@@ -74,12 +77,37 @@ export interface AwakeningOpts {
   color?: number;
   /** Small line above the name, already translated ("MYTHIC", "수호신"). */
   tag?: string;
+  /** Font size of the name label (default NAME_SIZE): a long name starts smaller (see `nameSizeFor`) so that it is not cut with an ellipsis. */
+  nameSize?: number;
+  /**
+   * The banner takes no taps: a press that starts while it plays goes through to what is under it, and a tap does not skip it. For a banner
+   * that arrives uninvited in the middle of a gesture (a skill's first cast), where the awakening's own banner follows the player's own action.
+   */
+  passThrough?: boolean;
+  /** Plays the banner this many times as fast (default 1; see `awakeningPlan`). */
+  tempo?: number;
   /** Fired at the flash: swap the awakened unit in behind the banner. */
   onImpact?: () => void;
   /** Vibrate (Android) at the flash. Default true. */
   haptics?: boolean;
   /** Screen effects used for the flash. Default the shared instance. */
   screen?: ScreenFx;
+}
+
+/** The name label: this size on paper at most this wide (26 px of paper on each side), its text shrinking to 0.7 before an ellipsis cuts it. */
+export const NAME_SIZE = 58;
+const NAME_MAX_W = 380;
+const NAME_PAD = 26;
+const NAME_MIN_SCALE = 0.7;
+
+/**
+ * The size a name starts at: `widthAtBase` is the name's width in px at NAME_SIZE. A name the label can shrink to fit keeps NAME_SIZE; a longer one
+ * ("The Tiger Has Arrived!") starts small enough that the label's own shrink (never below 0.7) fits it, instead of being cut with "...".
+ */
+export function nameSizeFor(widthAtBase: number): number {
+  const room = (NAME_MAX_W - 2 * NAME_PAD) / NAME_MIN_SCALE;
+  if (!(widthAtBase > room)) return NAME_SIZE;
+  return Math.max(MIN_FONT, Math.floor((NAME_SIZE * room) / widthAtBase));
 }
 
 /** Banner geometry in design px. */
@@ -114,7 +142,7 @@ export class AwakeningCutIn {
 
   play(portrait: Texture, name: string, o: AwakeningOpts = {}): FxSequence {
     this.run?.finish();
-    const plan = awakeningPlan(o.short === true, fxSettings.reducedMotion);
+    const plan = awakeningPlan(o.short === true, fxSettings.reducedMotion, o.tempo ?? 1);
     const run: Run = new Run(this.lineSprites, portrait, name, plan, o, () => {
       if (this.run === run) this.run = null;
     });
@@ -233,7 +261,7 @@ class Run {
     this.portrait.position.set(190, -14);
     this.banner.addChild(this.portrait);
 
-    this.nameText = new PaperLabel({ text: name, size: 58, paper: Color.paperLight, maxWidth: 380, minWidth: 220, torn: 'ends' });
+    this.nameText = new PaperLabel({ text: name, size: o.nameSize ?? NAME_SIZE, paper: Color.paperLight, maxWidth: NAME_MAX_W, minWidth: 220, torn: 'ends' });
     this.nameText.position.set(520, 26);
     this.banner.addChild(this.nameText);
     this.tagText = label(o.tag ?? '', { size: 30, onArt: true });
@@ -241,7 +269,7 @@ class Run {
     this.tagText.visible = o.tag !== undefined && o.tag !== '';
     this.banner.addChild(this.tagText);
 
-    this.hit.eventMode = 'static';
+    this.hit.eventMode = o.passThrough ? 'none' : 'static';
     this.hit.alpha = 0;
     this.hit.on('pointerdown', () => this.skip());
     this.layer.addChild(this.hit);
