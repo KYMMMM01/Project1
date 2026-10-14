@@ -138,22 +138,25 @@ function lcg(seed: number): () => number {
 
 describe('the tiger and the star archer carry their skills', () => {
   it('puts a rank 5 skill on each cat, registers the handlers and starts the gauge at 50%', () => {
-    expect(unitDef('w_tiger').spSkill).toEqual({ id: 'charge', rank: 5, cooldown: 34, nameKey: 'sp.charge.name' });
+    expect(unitDef('w_tiger').spSkill).toEqual({ id: 'charge', rank: 5, cooldown: 30, nameKey: 'sp.charge.name' });
     expect(unitDef('r_star').spSkill).toEqual({ id: 'lap', rank: 5, cooldown: 26, nameKey: 'sp.lap.name' });
     expect(SP_HANDLERS.charge).toBe(charge);
     expect(SP_HANDLERS.lap).toBe(lap);
-    expect(CH).toMatchObject({ built: true, dist: 1100, speed: 1000, leap: 0.3, power: 1.2, ignoreDefence: true, weights: [1, 2, 3], minWeight: 3 });
+    expect(CH).toMatchObject({ built: true, dist: 1100, speed: 1000, leap: 0.3, power: 1.2, ignoreDefence: true, weights: [1, 2, 3], minWeight: 3, crowd: 8 });
     expect(LP).toMatchObject({ built: true, speed: 2000, extra: 100, power: 0.8, pool: 12.8, burst: { pct: 0.25, radius: 90 }, minEnemies: 4 });
     const sim = arena();
     const tiger = put(sim, MIDDLE, 'w_tiger');
     const archer = put(sim, 6, 'r_star');
     expect(tiger.sp).toBe(0.5);
     expect(archer.sp).toBe(0.5);
-    advance(sim, 16.9);
-    expect(tiger.sp).toBeLessThan(1);
+    // Half of each one's own cooldown from the 50% they start at (the archer's 26 s fills first, the tiger's 30 s after it).
+    advance(sim, LP.cooldown / 2 - 0.1);
+    expect(archer.sp).toBeLessThan(1);
     advance(sim, 0.3);
-    expect(tiger.sp).toBe(1);
     expect(archer.sp).toBe(1);
+    expect(tiger.sp).toBeLessThan(1);
+    advance(sim, (CH.cooldown - LP.cooldown) / 2);
+    expect(tiger.sp).toBe(1);
   });
 
   it('fills the gauges with nothing to do and waits full: a tiger casts when a stretch worth the run appears, the archer at the fourth enemy', () => {
@@ -565,7 +568,7 @@ describe('The Tiger Has Arrived!', () => {
           }
         }
         if (sum < 3) continue;
-        if (!best || (focus && !bestFocus) || (focus === bestFocus && sum > best.weight)) {
+        if (!best || sum > best.weight || (sum === best.weight && focus && !bestFocus)) {
           best = { front: f, weight: sum };
           bestFocus = focus;
         }
@@ -588,7 +591,7 @@ describe('The Tiger Has Arrived!', () => {
     }
   });
 
-  it('breaks a tie by skill order, and prefers a stretch with an enemy inside the laser\'s dot', () => {
+  it('breaks a tie by the laser\'s dot and then by skill order: the dot decides only between equally heavy stretches', () => {
     const sim = arena();
     put(sim, MIDDLE, 'w_tiger');
     // Two packs of three, 1,200 px apart: the front enemy that is first in skill order (the one that has gone farthest) wins.
@@ -597,10 +600,15 @@ describe('The Tiger Has Arrived!', () => {
     expect(chooseStretch(sim.enemies)).toBe(true);
     expect(chosen.front).toBe(b[2]);
     expect(skillBefore(b[2]!, a[2]!)).toBe(true);
-    // The laser's dot on the lighter pack: the pack with the focused enemy is chosen, when it is worth the run.
+    // The laser's dot on the other pack of the same weight: the pack with the focused enemy is chosen.
     a[1]!.focused = true;
     expect(chooseStretch(sim.enemies)).toBe(true);
     expect(chosen.front).toBe(a[2]);
+    // One more enemy in the pack without the dot: the heavier stretch wins over the dot (the owner: where the enemies are thickest).
+    const extra = pinned(sim, 1280);
+    expect(chooseStretch(sim.enemies)).toBe(true);
+    expect([chosen.front, chosen.weight]).toEqual([b[2], 4]);
+    extra.dead = true;
     // A focused enemy alone is not worth the run: the heavy stretch still wins.
     clearEnemies(sim);
     const lone = pinned(sim, 1800);
@@ -610,7 +618,7 @@ describe('The Tiger Has Arrived!', () => {
     expect(chosen.front!.travelled).toBe(140);
   });
 
-  it('runs the stretch under the laser\'s dot when the player has put it on one worth the run', () => {
+  it('runs the thickest stretch even when the laser\'s dot is on a thinner one', () => {
     const sim = arena();
     const w = watch(sim);
     // Nine cucumbers at the start of the road, and a smaller pack of four farther on, whose front is at 1400.
@@ -621,12 +629,60 @@ describe('The Tiger Has Arrived!', () => {
     tiger.sp = 1;
     expect(chooseStretch(sim.enemies)).toBe(true);
     expect(chosen.front!.travelled).toBe(400);
-    // The dot on the second pack (the laser is the player's own control): its stretch is the one the tiger runs.
+    // The dot on the second pack: the tiger still runs through the nine (the owner's rule: where the enemies are thickest).
     expect(sim.setLaser(pack[1]!.x, pack[1]!.y)).toBeNull();
     advance(sim, 0.1);
     expect(pack[1]!.focused).toBe(true);
     expect(w.casts).toHaveLength(1);
-    expect(castData(w).startPath).toBeCloseTo(1400, 9);
+    expect(castData(w).startPath).toBeCloseTo(400, 9);
+  });
+
+  it('waits for a crowd of eight while the wave is still sending enemies out, and takes the best stretch once everything is out', () => {
+    const coming = (sim: Sim): void => {
+      // One enemy the wave has not sent yet (far in the future): the wave is still coming out.
+      sim.spawnIds.push('cucumber');
+      sim.spawnTimes.push(1e9);
+    };
+    const sim = arena();
+    const w = watch(sim);
+    coming(sim);
+    const tiger = put(sim, MIDDLE, 'w_tiger');
+    tiger.charge = -1e9;
+    tiger.sp = 1;
+    // Five stragglers: worth a run by `minWeight`, but a crowd may still come. The gauge stays full.
+    [100, 130, 160, 190, 220].forEach((p) => pinned(sim, p));
+    advance(sim, 2);
+    expect(w.casts).toHaveLength(0);
+    expect(tiger.sp).toBe(1);
+    // Three more make eight: it runs within the 0.2 s of its next look.
+    [250, 280, 310].forEach((p) => pinned(sim, p));
+    advance(sim, 0.25);
+    expect(w.casts).toHaveLength(1);
+    expect(castData(w).startPath).toBeCloseTo(310, 9);
+
+    // The same five with nothing more to come: it runs at once.
+    const done = arena();
+    const wd = watch(done);
+    const t2 = put(done, MIDDLE, 'w_tiger');
+    t2.charge = -1e9;
+    t2.sp = 1;
+    [100, 130, 160, 190, 220].forEach((p) => pinned(done, p));
+    advance(done, 0.25);
+    expect(wd.casts).toHaveLength(1);
+
+    // A boss alone while its escort is still coming out: wait; once the escort is out and gone, the boss alone is worth the run.
+    const boss = arena();
+    const wb = watch(boss);
+    coming(boss);
+    const t3 = put(boss, MIDDLE, 'w_tiger');
+    t3.charge = -1e9;
+    t3.sp = 1;
+    pinned(boss, 500, 'boss_vacuum');
+    advance(boss, 1);
+    expect(wb.casts).toHaveLength(0);
+    boss.spawnIdx = boss.spawnIds.length;
+    advance(boss, 0.25);
+    expect(wb.casts).toHaveLength(1);
   });
 
   it('announces the run to the view: where it starts, which way, how far, how fast and when', () => {

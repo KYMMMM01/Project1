@@ -83,6 +83,12 @@ export interface SpChargeRow extends SpRowBase<'charge'> {
   weights: readonly [normal: number, elite: number, boss: number];
   /** The cast waits until the best stretch weighs at least this much. */
   minWeight: number;
+  /**
+   * While the wave is still sending enemies out, the tiger waits for a stretch that weighs at least this much (the owner, 2026-10-14: the
+   * charge belongs where the enemies are thickest; with `minWeight` alone a full gauge ran at the first three stragglers and the bots'
+   * charges touched about two enemies each). Once the wave has sent everything, the best stretch of at least `minWeight` will do.
+   */
+  crowd: number;
 }
 
 /** Starlight Lap: one silver arrow once round the road with the flow. */
@@ -337,8 +343,8 @@ export const SP_ROWS: SpRows = {
     built: true, // cut
   },
   charge: {
-    id: 'charge', unit: 'w_tiger', rank: 5, cooldown: 34, nameKey: 'sp.charge.name',
-    dist: 1100, speed: 1000, leap: 0.3, power: 1.2, ignoreDefence: true, weights: [1, 2, 3], minWeight: 3,
+    id: 'charge', unit: 'w_tiger', rank: 5, cooldown: 30, nameKey: 'sp.charge.name',
+    dist: 1100, speed: 1000, leap: 0.3, power: 1.2, ignoreDefence: true, weights: [1, 2, 3], minWeight: 3, crowd: 8,
     built: true, // charge
   },
   clones: {

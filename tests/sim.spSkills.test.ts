@@ -150,9 +150,9 @@ describe('the skill data', () => {
       // The cat's definition carries what the row says.
       expect(unitDef(row.unit).spSkill?.cooldown, `${id} definition`).toBe(row.cooldown);
     }
-    // The owner's values of 2026-10-14, from the lead's proposal after the step-1 bot report: the shove 18 -> 12 s, the lap 34 -> 26 s,
-    // the charge and the wanted shot at their starting 34 s and 24 s.
-    expect(['shove', 'charge', 'lap', 'wanted'].map((id) => SP_ROWS[id as 'shove'].cooldown)).toEqual([12, 34, 26, 24]);
+    // The owner's values of 2026-10-14: the shove 18 -> 12 s and the lap 34 -> 26 s (the lead's proposal after the step-1 bot report), the
+    // charge 34 -> 30 s (his own, after playing it), the wanted shot at its starting 24 s.
+    expect(['shove', 'charge', 'lap', 'wanted'].map((id) => SP_ROWS[id as 'shove'].cooldown)).toEqual([12, 30, 26, 24]);
   });
 
   it('has a name for every built skill in Korean and in English, and the cat\'s definition points at it (the name bubble reads it)', () => {
@@ -197,7 +197,7 @@ describe('the skill data', () => {
       const units = await import('@/game/data/units');
       expect(units.unitDef('r_gunner').spSkill?.cooldown).toBe(20);
       expect(units.unitDef('w_viking').spSkill?.cooldown).toBe(11);
-      expect(units.unitDef('w_tiger').spSkill?.cooldown).toBe(34);
+      expect(units.unitDef('w_tiger').spSkill?.cooldown).toBe(30);
     } finally {
       vi.resetModules();
     }

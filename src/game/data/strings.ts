@@ -211,7 +211,7 @@ addStrings('ko', {
   'relic.golden_catnip.name': '황금 캣닢',
   'relic.golden_catnip.desc': '모든 직업 시너지 효과 +{a}%',
   'relic.royal_crown.name': '왕관 장난감',
-  'relic.royal_crown.desc': '전설·신화 고양이의 피해 +{a}%',
+  'relic.royal_crown.desc': '대왕·수호신 고양이의 피해 +{a}%',
   'relic.hourglass.name': '모래시계',
   'relic.hourglass.desc': '보스 제한 시간 +{a}초, 적이 조금 더 천천히 몰려와요',
 });
@@ -413,7 +413,7 @@ addStrings('en', {
   'relic.golden_catnip.name': 'Golden Catnip',
   'relic.golden_catnip.desc': 'Every class synergy bonus +{a}%',
   'relic.royal_crown.name': 'Toy Crown',
-  'relic.royal_crown.desc': 'Legendary and mythic cats deal +{a}% damage',
+  'relic.royal_crown.desc': 'King and Guardian cats deal +{a}% damage',
   'relic.hourglass.name': 'Hourglass',
   'relic.hourglass.desc': 'Boss time limit +{a} s; enemies arrive a little slower',
 });

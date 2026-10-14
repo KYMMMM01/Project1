@@ -104,7 +104,7 @@ const ko: Record<string, string> = {
   'meta.offer.start_snack': '출발 간식',
   'meta.snack.fish': '생선 +{n}',
   'meta.snack.purr': '골골 +{n}',
-  'meta.snack.rare_summon': '첫 소환은 희귀 이상',
+  'meta.snack.rare_summon': '첫 소환은 동네 등급 이상',
   'meta.treat.title': '오늘의 간식',
   'meta.treat.slot': '간식 {n}',
 
@@ -244,7 +244,7 @@ const en: Record<string, string> = {
   'meta.offer.start_snack': 'Pre-run snack',
   'meta.snack.fish': '+{n} fish',
   'meta.snack.purr': '+{n} purr',
-  'meta.snack.rare_summon': 'First summon is rare or better',
+  'meta.snack.rare_summon': 'First summon is Street rank or better',
   'meta.treat.title': "Today's Treat",
   'meta.treat.slot': 'Treat {n}',
 

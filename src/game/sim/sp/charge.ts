@@ -7,8 +7,11 @@
  *  - Reach: the whole field (rank 5).
  *  - The stretch is `dist` px of road, measured back from an enemy that is its front. Its weight is the sum of what stands in it: an
  *    ordinary enemy 1, an elite 2, a boss 3 (`weights`). Only a stretch that weighs at least `minWeight` is worth the run (so one elite is
- *    not, an elite and a cucumber are, a boss alone is). Among those, a stretch that holds an enemy inside the laser's dot comes first,
- *    then the heavier one, then the one whose front is first in skill order (elites and bosses, longest on the road, lower uid).
+ *    not, an elite and a cucumber are, a boss alone is). Among those the HEAVIEST wins (the owner, 2026-10-14: the charge goes where the
+ *    enemies are thickest); between equally heavy ones a stretch that holds an enemy inside the laser's dot comes first, then the one
+ *    whose front is first in skill order (elites and bosses, longest on the road, lower uid).
+ *  - When: while the wave is still sending enemies out the tiger waits, gauge full, for a stretch of at least `crowd` (8); once
+ *    everything is out, the best stretch of at least `minWeight` will do. So it no longer runs at the first three stragglers.
  *    The loop is circular: a stretch may reach across the seam of the road coordinate.
  *  - The tiger lands where the front enemy stood when it was cast and the run starts `leap` seconds later (18 ticks); enemies keep walking
  *    meanwhile, so the first tick of the run also covers `LAND_REACH` px in front of the landing spot (the farthest an enemy can walk in
@@ -72,7 +75,7 @@ export function chooseStretch(enemies: readonly SimEnemy[]): boolean {
       if ((order[j] as SimEnemy).focused) focused = true;
     }
     if (sum < ROW.minWeight) continue;
-    if (chosen.front === null || (focused && !bestFocused) || (focused === bestFocused && sum > chosen.weight)) {
+    if (chosen.front === null || sum > chosen.weight || (sum === chosen.weight && focused && !bestFocused)) {
       chosen.front = order[i] as SimEnemy;
       chosen.weight = sum;
       bestFocused = focused;
@@ -83,7 +86,9 @@ export function chooseStretch(enemies: readonly SimEnemy[]): boolean {
 
 export const charge: SpHandler = {
   ready(s) {
-    return chooseStretch(s.enemies);
+    if (!chooseStretch(s.enemies)) return false;
+    // A crowd is worth the run at once; a thinner stretch only when the wave has nothing more to send (no crowd is coming).
+    return chosen.weight >= ROW.crowd || s.spawnIdx >= s.spawnIds.length;
   },
 
   cast(s, u) {
