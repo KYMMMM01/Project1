@@ -103,18 +103,18 @@ afterEach(() => {
 describe('Knock It Off, the data', () => {
   it('has the design appendix\'s cells and is built: the frost queen carries the skill and its handler is registered', () => {
     expect(ROW).toMatchObject({
-      id: 'knock', unit: 'm_frost', rank: 4, cooldown: 24, radius: 260, knot: 130, slowed: 3.0, frozen: 5.0, minChilled: 2, built: true,
+      id: 'knock', unit: 'm_frost', rank: 4, cooldown: 20, radius: 260, knot: 130, slowed: 3.0, frozen: 5.0, minChilled: 2, built: true,
     });
-    expect(unitDef('m_frost').spSkill).toEqual({ id: 'knock', rank: 4, cooldown: 24, nameKey: 'sp.knock.name' });
+    expect(unitDef('m_frost').spSkill).toEqual({ id: 'knock', rank: 4, cooldown: 20, nameKey: 'sp.knock.name' });
     expect(SP_HANDLERS.knock).toBe(knock);
   });
 
-  it('fills the frost queen\'s gauge in 24 s, from the 50% a cat starts at in 12 s', () => {
+  it('fills the frost queen\'s gauge in its own cooldown (20 s, the owner\'s value), from the 50% a cat starts at in half of it', () => {
     const sim = arena();
     const u = put(sim, 0, 'm_frost');
     expect(u.sp).toBe(0.5);
     u.charge = -1e6;
-    advance(sim, 11.8);
+    advance(sim, ROW.cooldown / 2 - 0.2);
     expect(u.sp).toBeLessThan(1);
     advance(sim, 0.4);
     expect(u.sp).toBeGreaterThanOrEqual(1 - 1e-9);
@@ -203,7 +203,8 @@ describe('when the glass falls', () => {
     const log = tape(sim, ['spCast']);
     advance(sim, 0.25);
     expect(log).toHaveLength(1);
-    expect(u.sp).toBeLessThan(0.01);
+    // Back at 0 at the cast: it cannot have refilled by more than the time that has passed.
+    expect(u.sp).toBeLessThan(0.25 / ROW.cooldown + 1e-9);
   });
 });
 
@@ -640,7 +641,7 @@ describe('what happens around the cast', () => {
     expect(u.cell).toBe(7);
     expect(u.sp).toBe(0.5);
     const log = tape(sim, ['spCast']);
-    advance(sim, 12.1);
+    advance(sim, ROW.cooldown / 2 + 0.1);
     expect(log).toHaveLength(1);
     expect(u.sp).toBeLessThan(0.01);
     expect(sim.enemies.every((e) => e.slow === 0)).toBe(true);

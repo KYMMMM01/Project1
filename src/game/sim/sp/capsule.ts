@@ -356,6 +356,18 @@ function inTheAir(s: Sim): boolean {
   return false;
 }
 
+/**
+ * Every other lucky cat on the board takes the caster's gauge (0, or the fish capsule's refund). The first cat whose gauge fills casts for all
+ * of them; a cat later in tile order that was full in the same tick finds its gauge emptied and does not cast.
+ */
+function shareGauge(s: Sim, caster: SimUnit): void {
+  for (let c = 0; c < CELL_COUNT; c++) {
+    const other = s.units[c];
+    if (other === null || other === caster || other.id !== caster.id) continue;
+    other.sp = caster.sp;
+  }
+}
+
 // ───────────────────────────── the skill ─────────────────────────────
 
 export const capsule: SpHandler = {
@@ -371,6 +383,8 @@ export const capsule: SpHandler = {
     // The fish line gives half the gauge back: the frame has just set it to 0 and this runs in the same tick.
     const refund = kind === 'fish' && ROW.fishRefund > 0;
     if (kind === 'fish') u.sp = ROW.fishRefund;
+    // One gauge for the board (`sharedGauge`): every other lucky cat starts over with the caster, so several cats give one stream of capsules.
+    if (ROW.sharedGauge) shareGauge(s, u);
     announceCast(s, u, {
       skill: 'capsule', data: { kind, inner, at: s.time, openDelay: ROW.openDelay, moreDelay: ROW.moreDelay, refund },
     });

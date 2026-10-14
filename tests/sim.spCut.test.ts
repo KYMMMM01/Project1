@@ -102,17 +102,17 @@ function cutOn(id: EnemyId, d: number): number {
 describe('Already Cut, the data', () => {
   it("has the design appendix's cells and is built: the samurai carries the skill and its handler is registered", () => {
     expect(ROW).toMatchObject({
-      id: 'cut', unit: 'w_samurai', rank: 4, cooldown: 24, half: 225, max: 10, fuse: 1.2, power: 1.4, reaim: 150, minEnemies: 2, built: true,
+      id: 'cut', unit: 'w_samurai', rank: 4, cooldown: 20, half: 225, max: 10, fuse: 1.2, power: 1.4, reaim: 150, minEnemies: 2, built: true,
     });
-    expect(unitDef('w_samurai').spSkill).toEqual({ id: 'cut', rank: 4, cooldown: 24, nameKey: 'sp.cut.name' });
+    expect(unitDef('w_samurai').spSkill).toEqual({ id: 'cut', rank: 4, cooldown: 20, nameKey: 'sp.cut.name' });
     expect(SP_HANDLERS.cut).toBe(cut);
   });
 
-  it("fills the samurai's gauge in 24 s, from the 50% a cat starts at in 12 s", () => {
+  it("fills the samurai's gauge in its own cooldown (20 s, the owner's value), from the 50% a cat starts at in half of it", () => {
     const sim = arena();
     const u = put(sim, 0, 'w_samurai');
     expect(u.sp).toBe(0.5);
-    advance(sim, 11.8);
+    advance(sim, ROW.cooldown / 2 - 0.2);
     expect(u.sp).toBeLessThan(1);
     advance(sim, 0.4);
     expect(u.sp).toBeGreaterThanOrEqual(1 - 1e-9);

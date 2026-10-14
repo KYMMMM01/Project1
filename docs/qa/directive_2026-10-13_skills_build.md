@@ -51,6 +51,9 @@ Step 1 is done and committed (simulation `0231f06`, view `1558287`): the frame, 
 23. The bard's jam session may fill the lucky cat's gauge (the design's recommendation: keep, measure, and exclude the cat only if it proves too rich). The measurement of step 2 must report it.
 24. The step-1 skills are not to be changed while the eight are added (their rules, numbers and scenes), except where a new skill needs a hook; say so in the hand-off.
 
+25. **After the step-2 bot report the owner decided four things** (2026-10-14, to the lead's questions: "1. 일단 그대로  권장대로 ㄱㄱ"). (a) Difficulty stays as it is for now: no enemy number is raised although twelve skills lift the bots' win rate from 49.6% to 57.1%. (b) **Several lucky cats give one stream of capsules**: when a lucky cat casts, every other lucky cat on the board starts its gauge over with it (data cell `sharedGauge true`). The lead had described this to the owner as "only one capsule at a time however many lucky cats"; the knob built earlier (`oneAtATime`) only spaced capsules in the air and did not reduce their number, so the gauge is shared instead. (c) Cooldowns: the samurai's cut 24 -> **20 s**, the frost queen's knock 24 -> **20 s**; the other six step-2 skills stay at their starting values. (d) The ninja's clones' shuriken roll crits like the ninja's own (a known exception to "skills do not roll crits").
+26. The view of step 2 must show a second lucky cat's ring emptying together with the caster's (it follows from the unit state; nothing to build beyond the ring that exists).
+
 ## Working rules for every agent
 
 - Shared working tree: several agents edit at once. Use the Edit tool on your own files only; never `git stash`, `git checkout`, `git reset`, `git clean` or commit. If you must touch a file another agent owns, make the smallest edit and say so in your hand-off.

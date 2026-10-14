@@ -298,6 +298,13 @@ export interface SpCapsuleRow extends SpRowBase<'capsule'> {
    * capsule is still in the air (on the delayed list), so there are never two at once. A cast that waits has no roll and no refund yet.
    */
   oneAtATime: boolean;
+  /**
+   * One capsule gauge for the whole board (the owner's choice of 2026-10-14, after the bots showed lucky cats multiplying in the endless mode:
+   * a capsule pays purr, purr awakens another lucky cat, and ten cats dropped ten capsules a cooldown). true = when a lucky cat casts, every
+   * other lucky cat on the board starts its gauge over with it (at 0, or at `fishRefund` when the capsule was the fish capsule), so the board
+   * gets one stream of capsules however many lucky cats stand on it. false = every cat has its own stream (the design's first reading).
+   */
+  sharedGauge: boolean;
 }
 
 /** The rows of the skills that have one (all twelve; a row whose `built` is false belongs to a skill that does not work yet). */
@@ -325,7 +332,7 @@ export const SP_ROWS: SpRows = {
     built: true, // shove
   },
   cut: {
-    id: 'cut', unit: 'w_samurai', rank: 4, cooldown: 24, nameKey: 'sp.cut.name',
+    id: 'cut', unit: 'w_samurai', rank: 4, cooldown: 20, nameKey: 'sp.cut.name',
     half: 225, max: 10, fuse: 1.2, power: 1.4, reaim: 150, minEnemies: 2,
     built: true, // cut
   },
@@ -356,7 +363,7 @@ export const SP_ROWS: SpRows = {
     built: true, // cloud
   },
   knock: {
-    id: 'knock', unit: 'm_frost', rank: 4, cooldown: 24, nameKey: 'sp.knock.name',
+    id: 'knock', unit: 'm_frost', rank: 4, cooldown: 20, nameKey: 'sp.knock.name',
     radius: 260, knot: 130, slowed: 3.0, frozen: 5.0, minChilled: 2,
     built: true, // knock
   },
@@ -400,7 +407,7 @@ export const SP_ROWS: SpRows = {
       fish: { color: 'pink', mark: 'none' }, purr: { color: 'pink', mark: 'heart' }, partner: { color: 'sky', mark: 'paws' },
       more: { color: 'pink', mark: 'smallCapsule' }, toy: { color: 'gold', mark: 'star' }, guardian: { color: 'rainbow', mark: 'bands' },
     },
-    fullBoardFish: false, fullBoardFishPurr: 1, fullBoardPartnerFloor: false, bardTargetsCapsule: true, rollsFrom: 'combat', oneAtATime: false,
+    fullBoardFish: false, fullBoardFishPurr: 1, fullBoardPartnerFloor: false, bardTargetsCapsule: true, rollsFrom: 'combat', oneAtATime: false, sharedGauge: true,
     built: true, // capsule: `sim/sp/capsule.ts`
   },
 };

@@ -57,7 +57,7 @@ describe('Lucky Capsule, the data', () => {
       id: 'capsule', unit: 't_lucky', rank: 5, cooldown: 34, weights: { fish: 30, purr: 25, partner: 25, more: 10, toy: 7, guardian: 3 },
       moreWeights: { partner: 25, toy: 7, guardian: 3 }, openDelay: 1.2, moreDelay: 1.0, fish: 1, purr: 2, fishRefund: 0.5,
       fallbackPurr: { partner: 3, toy: 5, guardian: 10 }, tutorial: { toyPurr: 5, guardianPurr: 10 }, built: true,
-      fullBoardFish: false, fullBoardFishPurr: 1, fullBoardPartnerFloor: false, bardTargetsCapsule: true, oneAtATime: false,
+      fullBoardFish: false, fullBoardFishPurr: 1, fullBoardPartnerFloor: false, bardTargetsCapsule: true, oneAtATime: false, sharedGauge: true,
     });
     expect(unitDef('t_lucky').spSkill).toEqual({ id: 'capsule', rank: 5, cooldown: 34, nameKey: 'sp.capsule.name' });
     expect(SP_HANDLERS.capsule).toBe(capsule);
@@ -697,7 +697,67 @@ describe('the More! capsule', () => {
 // ───────────────────────────── several lucky cats ─────────────────────────────
 
 describe('several lucky cats', () => {
+  it('share one gauge (the owner\'s rule): when one casts, the others start over with it, at 0 or at the fish capsule\'s half, and do not cast', () => {
+    expect(ROW.sharedGauge).toBe(true);
+    const sim = arena();
+    const a = lucky(sim, 11);
+    const b = lucky(sim, 13);
+    const c = lucky(sim, 3, 0.9);
+    const casts = castTimes(sim);
+    const spy = vi.spyOn(sim.rng.combat, 'next');
+    spy.mockReturnValueOnce(BAND.purr);
+    advance(sim, TICK);
+    // The cat in the lower tile casts; the full one after it and the nearly full one before it are emptied with it. One roll, one capsule.
+    expect(casts).toHaveLength(1);
+    expect(spy.mock.calls).toHaveLength(1);
+    for (const u of [a, b, c]) expect(u.sp).toBeLessThan((2 * TICK) / ROW.cooldown + 1e-12);
+    // Nothing follows after the 1.2 s gap of rank 5 skills either: there is no second full gauge.
+    advance(sim, 3);
+    expect(casts).toHaveLength(1);
+    // A fish capsule gives the half back to all of them.
+    a.sp = 1;
+    b.sp = 0.2;
+    c.sp = 0.7;
+    spy.mockReturnValueOnce(BAND.fish);
+    advance(sim, TICK);
+    expect(casts).toHaveLength(2);
+    for (const u of [a, b, c]) {
+      expect(u.sp).toBeGreaterThanOrEqual(ROW.fishRefund);
+      expect(u.sp).toBeLessThan(ROW.fishRefund + (2 * TICK) / ROW.cooldown + 1e-12);
+    }
+  });
+
+  it('give the board one stream of capsules: three lucky cats cast as often as one', () => {
+    const count = (cells: number[]): number => {
+      const sim = arena();
+      for (const cell of cells) lucky(sim, cell, 0.5);
+      const casts = castTimes(sim);
+      // No fish capsule, so no refund shortens a wait: half a cooldown to the first, then one every cooldown.
+      vi.spyOn(sim.rng.combat, 'next').mockReturnValue(BAND.purr);
+      advance(sim, ROW.cooldown * 3.5 + 1);
+      return casts.length;
+    };
+    expect(count([12])).toBe(4);
+    expect(count([3, 12, 21])).toBe(4);
+    // With the rule off each cat has its own stream: 4 + 3 + 3 (the 1.2 s spacing of rank 5 skills moves the second and the third cat back by
+    // 1.2 s and 2.4 s, so their fourth capsules fall just past the window).
+    turn(ROW, 'sharedGauge', false);
+    expect(count([3, 12, 21])).toBe(10);
+  });
+
+  it('leaves a cat of another kind alone: only lucky cats share the gauge', () => {
+    const sim = arena();
+    lucky(sim, 11);
+    const tiger = put(sim, 12, 'w_tiger', 0);
+    tiger.sp = 0.6;
+    vi.spyOn(sim.rng.combat, 'next').mockReturnValueOnce(BAND.purr);
+    advance(sim, TICK);
+    expect(tiger.sp).toBeGreaterThanOrEqual(0.6);
+  });
+
   it('cast one after the other: the later cat waits with its gauge full for the 1.2 s gap of rank 5 skills, without rolling or refunding yet', () => {
+    // Each cat with its own stream of capsules (the design's first reading): the shared gauge is switched off for this test.
+    turn(ROW, 'sharedGauge', false);
     const sim = arena();
     const a = lucky(sim, 11);
     const b = lucky(sim, 13);
@@ -721,6 +781,8 @@ describe('several lucky cats', () => {
   });
 
   it('open in the order of their times, a small capsule of one among the capsules of the other (time, then the order they were put in)', () => {
+    // Each cat with its own stream of capsules (the design's first reading): the shared gauge is switched off for this test.
+    turn(ROW, 'sharedGauge', false);
     const sim = arena();
     const a = lucky(sim, 11);
     const b = lucky(sim, 13);
@@ -735,6 +797,8 @@ describe('several lucky cats', () => {
   });
 
   it('does not stop at the first with the knob oneAtATime off, and waits with it on until the capsule in the air has opened', () => {
+    // Each cat with its own stream of capsules (the design's first reading): the shared gauge is switched off for this test.
+    turn(ROW, 'sharedGauge', false);
     const off = arena();
     lucky(off, 11);
     lucky(off, 13);

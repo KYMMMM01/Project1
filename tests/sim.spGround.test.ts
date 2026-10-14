@@ -42,15 +42,16 @@ describe('the rows of the eight remaining skills', () => {
     expect(EIGHT.map((id) => SP_RANK_OF[id])).toEqual([4, 3, 3, 4, 5, 3, 4, 5]);
   });
 
-  it('gives every skill a cooldown in its own cell, positive and never above the owner\'s 34 s, starting at the rank\'s 18 / 24 / 34', () => {
+  it('gives every skill a cooldown in its own cell, positive and never above the owner\'s 34 s: the rank\'s 18 / 24 / 34 to start with, and 20 s for the cut and the knock by the owner\'s word', () => {
     for (const id of SP_SKILL_IDS) {
       const row = SP_ROWS[id];
       expect(row.cooldown, `${id} cooldown`).toBeGreaterThan(0);
       expect(row.cooldown, `${id} cooldown`).toBeLessThanOrEqual(34);
     }
-    // The starting values (the lead proposes one per skill after the bots have measured; this line is the one to edit then).
-    expect(EIGHT.map((id) => SP_ROWS[id].cooldown)).toEqual([24, 18, 18, 24, 34, 18, 24, 34]);
-    for (const id of EIGHT) expect(SP_ROWS[id].cooldown, id).toBe(SP_COOLDOWN[SP_ROWS[id].rank]);
+    // The owner settled two of the eight on 2026-10-14 from the step-2 bot report (the cut and the knock waited 37 to 41 s between casts at
+    // 24 s): both 20 s. The other six stay at the rank's starting value.
+    expect(EIGHT.map((id) => SP_ROWS[id].cooldown)).toEqual([20, 18, 18, 20, 34, 18, 24, 34]);
+    for (const id of EIGHT) if (id !== 'cut' && id !== 'knock') expect(SP_ROWS[id].cooldown, id).toBe(SP_COOLDOWN[SP_ROWS[id].rank]);
   });
 
   it('carries every number of the design appendix under the appendix\'s names', () => {

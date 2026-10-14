@@ -520,7 +520,7 @@ describe('the guardian capsule', () => {
     guardianOpens(sim, cat);
     expect(sim.units[6]!.id).toBe('w_tiger');
     expect(seen).toHaveLength(1);
-    expect(seen[0]![0]).toBeCloseTo(0.42 + 1.2 / 24, 2);
+    expect(seen[0]![0]).toBeCloseTo(0.42 + 1.2 / SP_ROWS.cut.cooldown, 2);
     expect(seen[0]![1]).toBe(seen[0]![0]);
   });
 
