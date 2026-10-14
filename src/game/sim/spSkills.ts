@@ -18,6 +18,8 @@ import { TICK } from '../data/balance';
 import { SP_RANK5_GAP, SP_RECHECK } from '../data/spSkills';
 import { SP_SKILL_IDS } from '../api';
 import type { Sim } from './sim';
+import { stepClones } from './sp/clones';
+import { stepClouds } from './sp/cloud';
 import { SP_HANDLERS } from './sp/registry';
 import { stepRunners } from './sp/run';
 import type { SimUnit } from './types';
@@ -64,6 +66,10 @@ function tryCast(s: Sim, u: SimUnit): boolean {
 export function updateSpSkills(s: Sim): void {
   // The running bodies of earlier casts first: a cast of this tick starts to move in the next one.
   if (s.runners.length > 0) stepRunners(s);
+  // The ninja's clones: those whose time is up (or whose ninja is gone) leave. Their throws happen in the ninja's volleys (`updateUnits`).
+  if (s.cloners.length > 0) stepClones(s);
+  // The storm cat's clouds: they follow their hosts and drop their bolts whether or not the cat is still there.
+  if (s.clouds.length > 0) stepClouds(s);
   // Only the cats that have a skill (a short list in cell order, kept by `refresh`), not all 25 cells.
   const cats = s.spCats;
   for (let i = 0; i < cats.length; i++) {

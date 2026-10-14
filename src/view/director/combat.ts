@@ -69,6 +69,8 @@ UNIT_IDS.forEach((id, i) => {
 
 const KIND_INDEX: Record<StatusKind, number> = {
   slow: 0, stun: 1, freeze: 2, burn: 3, poison: 4, bleed: 5, armor_break: 6, vulnerable: 7,
+  // The alchemist's fish: 8 to 11 are the sub-ids below, so it takes the next free one (the scene is the view workflow's).
+  fish: 12,
 };
 /** KeyedGate sub-ids beyond the status kinds. */
 const SUB_SHIELD = 8;

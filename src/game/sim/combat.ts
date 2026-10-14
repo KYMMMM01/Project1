@@ -7,6 +7,7 @@ import type { AttackSpec, HitEffect } from '../data/types';
 import { addFish } from './economy';
 import { applyStatus, damageEnemy, pullEnemy } from './enemies';
 import type { Sim } from './sim';
+import { followVolley } from './sp/clones';
 import type { SimEnemy, SimProjectile, SimUnit, SimZone } from './types';
 
 const CELL_X = new Float64Array(CELL_COUNT);
@@ -180,15 +181,20 @@ function pickTarget(s: Sim, u: SimUnit): SimEnemy | null {
 // ───────────────────────────── attacks ─────────────────────────────
 
 function newProjectile(): SimProjectile {
-  return { uid: 0, unitId: 'w_paw', x: 0, y: 0, angle: 0, targetUid: 0, src: null as unknown as SimUnit, target: null, damage: 0, speed: 0, tx: 0, ty: 0 };
+  return { uid: 0, unitId: 'w_paw', x: 0, y: 0, angle: 0, targetUid: 0, src: null as unknown as SimUnit, target: null, damage: 0, speed: 0, tx: 0, ty: 0, ghost: false };
 }
 
-function launch(s: Sim, u: SimUnit, target: SimEnemy): void {
+/**
+ * Throws `u`'s shot at `target` from the centre of `cell` (its own tile). A `ghost` shot is a ninja clone's (Surprise Clones, `sp/clones.ts`):
+ * the ninja's damage and credit from the clone's tile, announced by `cloneThrow` instead of `attack` so the ninja does not swing again.
+ */
+export function launch(s: Sim, u: SimUnit, target: SimEnemy, cell: number = u.cell, ghost = false): SimProjectile {
   const p = s.projPool.pop() ?? newProjectile();
   p.uid = ++s.uidProj;
   p.unitId = u.id;
-  p.x = CELL_X[u.cell] as number;
-  p.y = CELL_Y[u.cell] as number;
+  p.ghost = ghost;
+  p.x = CELL_X[cell] as number;
+  p.y = CELL_Y[cell] as number;
   p.tx = target.x;
   p.ty = target.y;
   p.angle = Math.atan2(p.ty - p.y, p.tx - p.x);
@@ -198,7 +204,8 @@ function launch(s: Sim, u: SimUnit, target: SimEnemy): void {
   p.damage = u.stats.damage;
   p.speed = u.spec.projectileSpeed;
   s.projectiles.push(p);
-  emitAttack(s, u, target, p);
+  if (!ghost) emitAttack(s, u, target, p);
+  return p;
 }
 
 /** Damage and effects of a landed single shot, a ninja star or a splash shell. */
@@ -319,6 +326,8 @@ function fireMulti(s: Sim, u: SimUnit, target: SimEnemy, attack: Extract<AttackS
       impact(s, u, e, e.x, e.y, u.stats.damage);
     }
   }
+  // The ninja's clones throw along with the volley, at enemies the volley is not on (Surprise Clones).
+  if (u.clone.length > 0) followVolley(s, u, chosen, launch);
 }
 
 function fireChain(s: Sim, u: SimUnit, target: SimEnemy, attack: Extract<AttackSpec, { shape: 'chain' }>): void {

@@ -139,7 +139,7 @@ function lcg(seed: number): () => number {
 describe('the tiger and the star archer carry their skills', () => {
   it('puts a rank 5 skill on each cat, registers the handlers and starts the gauge at 50%', () => {
     expect(unitDef('w_tiger').spSkill).toEqual({ id: 'charge', rank: 5, cooldown: 34, nameKey: 'sp.charge.name' });
-    expect(unitDef('r_star').spSkill).toEqual({ id: 'lap', rank: 5, cooldown: 34, nameKey: 'sp.lap.name' });
+    expect(unitDef('r_star').spSkill).toEqual({ id: 'lap', rank: 5, cooldown: 26, nameKey: 'sp.lap.name' });
     expect(SP_HANDLERS.charge).toBe(charge);
     expect(SP_HANDLERS.lap).toBe(lap);
     expect(CH).toMatchObject({ built: true, dist: 1100, speed: 1000, leap: 0.3, power: 1.2, ignoreDefence: true, weights: [1, 2, 3], minWeight: 3 });

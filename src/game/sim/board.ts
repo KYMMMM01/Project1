@@ -1,5 +1,7 @@
 /** The 5x5 board: summoning, merging, molting, awakening, selling, upgrades and the stat recompute. */
-import { CLASS_IDS, UNIT_IDS, type ClassId, type Fail, type OddsRow, type PityInfo, type RarityId, type UnitId } from '../api';
+import {
+  CLASS_IDS, UNIT_IDS, type ClassId, type Fail, type OddsRow, type PityInfo, type RarityId, type SummonSource, type UnitId,
+} from '../api';
 import { CELL_COUNT, auraCells, cellCenterX, cellCenterY, cellRow, isEdgeCell, neighbors4 } from '../geometry';
 import {
   AWAKEN_COST, AWAKEN_MIN_TIER, CLASS_UPGRADE_BONUS, CLASS_UPGRADE_COSTS, DODGE_CAP, HAZARD_RECOVER, LEVEL_DAMAGE_STEP,
@@ -14,6 +16,7 @@ import { unitSpec } from '../data/units';
 import { addFish, addPurr } from './economy';
 import { ODDS_RARITIES, addLuck, computeOdds, pityBonus, rollRarity } from './odds';
 import type { Sim } from './sim';
+import { endClones, vacateSeat } from './sp/clones';
 import type { PerkTotals, SimUnit } from './types';
 
 const UNIT_INDEX = Object.fromEntries(UNIT_IDS.map((id, i) => [id, i])) as Record<UnitId, number>;
@@ -72,7 +75,7 @@ export function makeUnit(s: Sim, id: UnitId, cell: number, charge: number, sp: n
     stats: { ...spec.base }, buffAttackSpeed: 0, buffDamage: 0, shielded: false, dodge: 0, kills: 0, damageDealt: 0,
     spec, level, classIndex: classIndexOf(spec.classId), rarityIndex: unitRarityIndex(id), unitIndex: UNIT_INDEX[id],
     recoverAt: 0, searchAfter: 0, attackCount: 0, coinAt: 0,
-    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, ricochet: 0, spCheckAt: 0, removed: false,
+    perk: perkTotals(spec.perks, level), armorIgnore: 0, statusMult: 1, ricochet: 0, spCheckAt: 0, removed: false, clone: [],
   };
   const coin = spec.aura.coinRain;
   unit.coinAt = coin ? s.time + coin.every : 0;
@@ -105,9 +108,13 @@ function nthEmpty(s: Sim, k: number): number {
   return -1;
 }
 
-/** Puts a new unit on `cell` and announces it. Does not refresh stats: callers do once they are done. */
-function placeUnit(s: Sim, id: UnitId, cell: number, source: 'button' | 'choice' | 'relic' | 'twin' | 'script'): SimUnit {
+/**
+ * Puts a new unit on `cell` and announces it. Does not refresh stats: callers do once they are done. Exported for the skills: the lucky cat's
+ * partner capsule calls it with the source 'skill', and the ninja's clones step aside from the tile it fills (docs/handoff/skills2_sim.md).
+ */
+export function placeUnit(s: Sim, id: UnitId, cell: number, source: SummonSource): SimUnit {
   const unit = makeUnit(s, id, cell, MERGE_START_CHARGE);
+  vacateSeat(s, cell);
   s.units[cell] = unit;
   noteRarity(s, unit);
   s.summonedUnits++;
@@ -465,6 +472,7 @@ export function cmdDrop(s: Sim, from: number, to: number): Fail | null {
     s.units[to] = a;
     s.units[from] = null;
     a.cell = to;
+    vacateSeat(s, to);
     refresh(s);
     if (s.ev.has('move')) s.ev.emit('move', { unit: a, from, to });
     return null;
@@ -490,6 +498,8 @@ export function cmdDrop(s: Sim, from: number, to: number): Fail | null {
   const id = jumped ? (mergeResultOf(next) as UnitId) : next;
   a.removed = true;
   other.removed = true;
+  endClones(s, a, 'merged');
+  endClones(s, other, 'merged');
   s.units[from] = null;
   const result = makeUnit(s, id, to, MERGE_START_CHARGE, SP_START_MERGE);
   s.units[to] = result;
@@ -514,6 +524,7 @@ export function cmdSell(s: Sim, cell: number): Fail | null {
   if (!unit) return 'empty_cell';
   const value = sellValueOf(s, cell);
   unit.removed = true;
+  endClones(s, unit, 'sold');
   s.units[cell] = null;
   refresh(s);
   addFish(s, value.fish, 'sell', cellCenterX(cell), cellCenterY(cell));
@@ -542,6 +553,7 @@ export function cmdMolt(s: Sim, cell: number, classId: ClassId): Fail | null {
   addPurr(s, -cost, 'molt');
   s.molts++;
   unit.removed = true;
+  endClones(s, unit, 'molted');
   const result = makeUnit(s, UNIT_GRID[classId][unit.rarityIndex] as UnitId, cell, MERGE_START_CHARGE);
   keepGauge(unit, result);
   s.units[cell] = result;
@@ -550,23 +562,32 @@ export function cmdMolt(s: Sim, cell: number, classId: ClassId): Fail | null {
   return null;
 }
 
-export function awakenCheck(s: Sim, cell: number): Fail | null {
-  const g = guard(s);
-  if (g) return g;
-  if (!Number.isInteger(cell) || cell < 0 || cell >= CELL_COUNT) return 'invalid_cell';
+/** Can the cat in `cell` be awakened, whatever the purr and the phase (`awakenCheck` adds those)? A valid cell is the caller's. */
+export function awakenable(s: Sim, cell: number): Fail | null {
   const unit = s.units[cell];
   if (!unit) return 'empty_cell';
   if (unit.rarityIndex !== 3) return 'not_legendary';
   if ((s.tier[unit.classIndex] as number) < AWAKEN_MIN_TIER) return 'synergy_too_low';
+  return null;
+}
+
+export function awakenCheck(s: Sim, cell: number): Fail | null {
+  const g = guard(s);
+  if (g) return g;
+  if (!Number.isInteger(cell) || cell < 0 || cell >= CELL_COUNT) return 'invalid_cell';
+  const fail = awakenable(s, cell);
+  if (fail) return fail;
   if (s.purr < AWAKEN_COST) return 'not_enough_purr';
   return null;
 }
 
-export function cmdAwaken(s: Sim, cell: number): Fail | null {
-  const fail = awakenCheck(s, cell);
-  if (fail) return fail;
+/**
+ * The legendary in `cell` becomes its mythic. `free` skips the purr (the lucky cat's guardian capsule): the event then carries `free: true`.
+ * The caller has checked `awakenable` (and the purr when it is not free).
+ */
+export function awakenUnit(s: Sim, cell: number, free: boolean): SimUnit {
   const unit = s.units[cell] as SimUnit;
-  addPurr(s, -AWAKEN_COST, 'awaken');
+  if (!free) addPurr(s, -AWAKEN_COST, 'awaken');
   unit.removed = true;
   const result = makeUnit(s, mythicOf(unit.id) as UnitId, cell, MERGE_START_CHARGE);
   keepGauge(unit, result);
@@ -574,8 +595,33 @@ export function cmdAwaken(s: Sim, cell: number): Fail | null {
   noteRarity(s, result);
   s.awakenings++;
   refresh(s);
-  if (s.ev.has('awaken')) s.ev.emit('awaken', { from: unit, result, cell });
+  if (s.ev.has('awaken')) s.ev.emit('awaken', free ? { from: unit, result, cell, free: true } : { from: unit, result, cell });
+  return result;
+}
+
+export function cmdAwaken(s: Sim, cell: number): Fail | null {
+  const fail = awakenCheck(s, cell);
+  if (fail) return fail;
+  awakenUnit(s, cell, false);
   return null;
+}
+
+/**
+ * The cat in `cell` (a common, rare or epic one) grows one rank where it stands, with no merge: the lucky cat's partner capsule when the board
+ * has no empty tile (docs/design_skills_v2.md 3.12.2). Copied from the molt: the old cat is removed, the result is a new cat with the usual
+ * start (attack gauge half) whose skill gauge keeps the ratio when both cats have a skill. `merges` does not go up. Its ninja's clones go.
+ */
+export function promoteUnit(s: Sim, cell: number): SimUnit {
+  const unit = s.units[cell] as SimUnit;
+  unit.removed = true;
+  endClones(s, unit, 'gone');
+  const result = makeUnit(s, mergeResultOf(unit.id) as UnitId, cell, MERGE_START_CHARGE);
+  keepGauge(unit, result);
+  s.units[cell] = result;
+  noteRarity(s, result);
+  refresh(s);
+  if (s.ev.has('promote')) s.ev.emit('promote', { from: unit, result, cell });
+  return result;
 }
 
 export function classUpgradeCostOf(s: Sim, classId: ClassId): number {

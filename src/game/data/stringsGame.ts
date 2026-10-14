@@ -28,11 +28,19 @@ addStrings('ko', {
   'unit.t_alch.skill': '주변 {a} 안에 구름을 {b}초 동안 깔아 적이 받는 피해를 {c}% 늘리고 독을 입혀요.',
   'unit.t_lucky.skill': '모든 고양이의 공격 속도 +{a}%. {b}초마다 동전 비가 모든 적을 때려요.',
 
-  // the cats' skills (the name over the cat the first time it casts; step 1 of docs/design_skills_v2.md)
+  // the cats' skills (the name over the cat the first time it casts; all twelve of docs/design_skills_v2.md section 2, in the table's order; the eight of step 2 are not built yet)
   'sp.shove.name': '방패 밀치기',
+  'sp.cut.name': '이미 베었다냥',
   'sp.charge.name': '진짜 호랑이 납신다!',
-  'sp.lap.name': '별빛 한 바퀴',
+  'sp.clones.name': '깜짝 분신술',
   'sp.wanted.name': '현상수배! 한 방!',
+  'sp.lap.name': '별빛 한 바퀴',
+  'sp.cloud.name': '졸졸 먹구름',
+  'sp.knock.name': '톡, 와장창!',
+  'sp.meteor.name': '운석 쿵!',
+  'sp.jam.name': '다 같이 합주!',
+  'sp.fish.name': '생선으로 변해라!',
+  'sp.capsule.name': '복 뽑기 한 판!',
 
   // level perks
   'perk.range': '사거리 +{a}%',
@@ -149,9 +157,17 @@ addStrings('en', {
   'unit.t_lucky.skill': 'Every cat attacks {a}% faster. Every {b} s a coin rain hits every enemy.',
 
   'sp.shove.name': 'Shield Shove',
+  'sp.cut.name': 'Already Cut',
   'sp.charge.name': 'The Tiger Has Arrived!',
-  'sp.lap.name': 'Starlight Lap',
+  'sp.clones.name': 'Surprise Clones',
   'sp.wanted.name': 'Wanted: One Shot!',
+  'sp.lap.name': 'Starlight Lap',
+  'sp.cloud.name': 'Tagalong Cloud',
+  'sp.knock.name': 'Knock It Off!',
+  'sp.meteor.name': 'Meteor Drop',
+  'sp.jam.name': 'Jam Session!',
+  'sp.fish.name': 'Turn Into Fish!',
+  'sp.capsule.name': 'Lucky Capsule!',
 
   'perk.range': 'Range +{a}%',
   'perk.damage': 'Damage +{a}%',

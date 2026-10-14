@@ -9,6 +9,7 @@ import {
 } from '../data/balance';
 import { COUNTER_RELICS, RELIC_FX_KEYS, relicSpec } from '../data/relics';
 import { RARITIES, RELIC_RARITY } from '../data/roster';
+import { SP_ROWS } from '../data/spSkills';
 import { GOLD_DUNGEON_BOSS_HP, GOLD_DUNGEON_BOSS_LIMIT } from '../data/goldDungeon';
 import { actFeatures, actOf, waveEntries } from '../data/waves';
 import { openSummonOffer, placeRandomCommon, refresh } from './board';
@@ -18,6 +19,8 @@ import { addFish, addPurr, earnFish } from './economy';
 import { removeEnemy, spawnEnemy } from './enemies';
 import { luckShare } from './odds';
 import { captureSnapshot } from './snapshot';
+import { capsuleRng, capsuleToyOk, dropCapsules } from './sp/capsule';
+import { endAllClones } from './sp/clones';
 import { TUTORIAL_PICK_WAVE, tutorialWaveStart } from './tutorial';
 import type { Sim } from './sim';
 import type { SimEnemy } from './types';
@@ -95,6 +98,8 @@ export function gainRelic(s: Sim, id: RelicId): void {
   if (fx.feederEvery) s.feederAt = s.time + fx.feederEvery;
   if (fx.starEvery) s.starAt = s.time + fx.starEvery;
   if (fx.laserDuration || fx.laserCooldownCut) refreshLaser(s);
+  // A toy that adds to the limit of an elite or a boss, gained while one is being fought (the lucky cat's toy capsule), counts for that fight too.
+  if (fx.bossTime && s.stage === 'run' && s.waveKind !== 'normal') s.waveDuration += fx.bossTime;
   if (fx.sunCells) {
     const added = sunCountOf(s) - before;
     const next = [...s.sunbeams, ...drawCells(s, added, s.sunbeams)];
@@ -106,28 +111,47 @@ export function gainRelic(s: Sim, id: RelicId): void {
   if (s.ev.has('relicGain')) s.ev.emit('relicGain', { relic: id });
 }
 
-function rarityRow(act: number): readonly number[] {
-  return RELIC_RARITY_WEIGHTS[act <= 2 ? 0 : act <= 4 ? 1 : 2] as readonly number[];
+function rarityRowIndex(act: number): number {
+  return act <= 2 ? 0 : act <= 4 ? 1 : 2;
 }
 
-/** Draws a relic offer for the shop after `act` was cleared. `avoid` are the ones on the table now (reroll). */
-function rollRelicOffer(s: Sim, act: number, avoid: readonly RelicId[]): RelicId[] {
-  const rng = s.rng.toy;
+function rarityRow(act: number): readonly number[] {
+  return RELIC_RARITY_WEIGHTS[rarityRowIndex(act)] as readonly number[];
+}
+
+/**
+ * The row the lucky cat's toy capsule draws its rarity from: the shop's row of the stage being played (`rowKnob` 'act'; 'actMinusOne' = the row
+ * of the shop already passed), never lower than `floorRow` (1 = the row of stages 3 and 4: no common toys that way, and the first stages'
+ * shop row [70, 30, 0, 0] is never used).
+ */
+function capsuleRarityRow(act: number): readonly number[] {
+  const pick = SP_ROWS.capsule.toyPick;
+  const index = Math.max(rarityRowIndex(pick.rowKnob === 'act' ? act : act - 1), pick.floorRow);
+  return RELIC_RARITY_WEIGHTS[index] as readonly number[];
+}
+
+/**
+ * Draws a relic offer for the shop after `act` was cleared. `avoid` are the ones on the table now (reroll). `capsule`: the offer of a lucky
+ * cat's toy capsule instead, in the middle of a wave: drawn from the `combat` stream (so the shop's own `toy` stream keeps its order and the
+ * tunnel's draws stay where they were), no slot kept for a toy that answers the next stage, no common toys, the capsule's rarity row.
+ */
+function rollRelicOffer(s: Sim, act: number, avoid: readonly RelicId[], capsule = false): RelicId[] {
+  const rng = capsule ? capsuleRng(s, 'toy') : s.rng.toy;
   const owned = new Set<RelicId>(s.relics);
-  let pool = s.relicPool.filter((r) => !owned.has(r));
+  let pool = s.relicPool.filter((r) => !owned.has(r) && (!capsule || capsuleToyOk(r)));
   const count = s.relicChoices;
   if (avoid.length > 0 && pool.filter((r) => !avoid.includes(r)).length >= count) pool = pool.filter((r) => !avoid.includes(r));
   const picks: RelicId[] = [];
 
   const counters: RelicId[] = [];
-  for (const feature of actFeatures(s.scriptChapter, act + 1)) {
+  for (const feature of capsule ? [] : actFeatures(s.scriptChapter, act + 1)) {
     for (const r of COUNTER_RELICS[feature] ?? []) if (pool.includes(r) && !counters.includes(r)) counters.push(r);
   }
   if (counters.length > 0 && count > 1) picks.push(rng.pick(counters));
 
   const byRarity: RelicId[][] = [[], [], [], []];
   for (const r of pool) if (!picks.includes(r)) byRarity[RARITIES.indexOf(RELIC_RARITY[r])]?.push(r);
-  const row = rarityRow(act);
+  const row = capsule ? capsuleRarityRow(act) : rarityRow(act);
   while (picks.length < count) {
     let weights = row.map((w, i) => ((byRarity[i] as RelicId[]).length > 0 ? w : 0));
     if (weights.every((w) => w <= 0)) weights = byRarity.map((l) => l.length);
@@ -145,11 +169,34 @@ function openRelicOffer(s: Sim, act: number): boolean {
   const options = rollRelicOffer(s, act, []);
   if (options.length === 0) return false;
   s.offerAct = act;
-  s.pending = { kind: 'relic', options, freeRerolls: s.freeRerolls, paidRerollUsed: s.paidRerollUsed, picksLeft: s.relicPicks };
+  s.pending = { kind: 'relic', options, freeRerolls: s.freeRerolls, paidRerollUsed: s.paidRerollUsed, picksLeft: s.relicPicks, source: 'stage' };
   s.phase = 'choice';
   s.resumePhase = 'wave';
   if (s.ev.has('relicOffer')) s.ev.emit('relicOffer', { options, freeRerolls: s.freeRerolls, picksLeft: s.relicPicks });
   return true;
+}
+
+/**
+ * The end of a tick: a lucky cat's toy capsule that opened in it (`Sim.capsuleToys`, one per capsule) gets its pick, one at a time. Not done
+ * where the capsule opened (the middle of the tick) because the wave machine further on in the same tick moves the phase and the stage and
+ * would trample a pick opened before it. The pick is one toy, no reroll, no common toy, drawn from the `combat` stream; closing it hands the
+ * run back to the wave (`resumePhase` is set here: a run resumed from a wave-start save has never opened a pick, and its value is 'prep').
+ * No toy of the allowed kinds left (another capsule took the last one first): purr instead. Only called in the wave phase.
+ */
+export function openCapsuleToy(s: Sim): void {
+  const row = SP_ROWS.capsule;
+  s.capsuleToys--;
+  const options = rollRelicOffer(s, s.act, [], true);
+  if (options.length === 0) {
+    addPurr(s, row.fallbackPurr.toy, 'skill');
+    return;
+  }
+  const picksLeft = Math.min(row.toyPick.picks, options.length);
+  const freeRerolls = row.toyPick.reroll ? s.freeRerolls : 0;
+  s.pending = { kind: 'relic', options, freeRerolls, paidRerollUsed: row.toyPick.reroll ? s.paidRerollUsed : true, picksLeft, source: 'capsule' };
+  s.phase = 'choice';
+  s.resumePhase = row.toyPick.resumePhase;
+  if (s.ev.has('relicOffer')) s.ev.emit('relicOffer', { options, freeRerolls, picksLeft, source: 'capsule' });
 }
 
 export function cmdPickRelic(s: Sim, index: number): Fail | null {
@@ -163,6 +210,11 @@ export function cmdPickRelic(s: Sim, index: number): Fail | null {
   gainRelic(s, id);
   if (pending.picksLeft > 0 && pending.options.length > 0) return null;
   s.pending = null;
+  if (pending.source === 'capsule') {
+    // A pick a toy capsule opened in the middle of a wave: the wave goes on where it was; its stage and timers are not touched.
+    s.phase = s.resumePhase;
+    return null;
+  }
   s.phase = 'wave';
   s.stage = 'between';
   s.stageTimer = NEXT_WAVE_DELAY;
@@ -173,6 +225,8 @@ export function cmdRerollRelics(s: Sim, paid: boolean): Fail | null {
   if (s.phase === 'won' || s.phase === 'lost') return 'not_in_battle';
   const pending = s.pending;
   if (s.phase !== 'choice' || !pending || pending.kind !== 'relic') return 'not_available';
+  // The capsule's pick has no reroll (this command reads the run's counters, not the pending copy of them, so zeros in the copy are not enough).
+  if (pending.source === 'capsule' && !SP_ROWS.capsule.toyPick.reroll) return 'not_available';
   if (paid) {
     if (s.mode === 'daily') return 'not_available';
     if (s.paidRerollUsed) return 'already_used';
@@ -181,7 +235,7 @@ export function cmdRerollRelics(s: Sim, paid: boolean): Fail | null {
   }
   if (paid) s.paidRerollUsed = true;
   else s.freeRerolls--;
-  const options = rollRelicOffer(s, s.offerAct, pending.options);
+  const options = pending.source === 'capsule' ? rollRelicOffer(s, s.act, pending.options, true) : rollRelicOffer(s, s.offerAct, pending.options);
   pending.options = options;
   pending.freeRerolls = s.freeRerolls;
   pending.paidRerollUsed = s.paidRerollUsed;
@@ -317,12 +371,15 @@ export function buildStats(s: Sim): RunStats {
 }
 
 function win(s: Sim): void {
+  // The capsules still in the air never open (a defeat keeps them: a revive lets the field go on exactly as it stood).
+  dropCapsules(s);
   s.phase = 'won';
   s.pending = null;
   if (s.ev.has('victory')) s.ev.emit('victory', { stats: buildStats(s) });
 }
 
 export function lose(s: Sim, reason: 'overrun' | 'boss_timeout'): void {
+  endAllClones(s, 'end');
   s.phase = 'lost';
   s.lossReason = reason;
   s.pending = null;
@@ -330,6 +387,7 @@ export function lose(s: Sim, reason: 'overrun' | 'boss_timeout'): void {
 }
 
 function completeAct(s: Sim): void {
+  endAllClones(s, 'stage');
   if (!s.endless && s.wave >= s.totalWaves) {
     win(s);
     return;

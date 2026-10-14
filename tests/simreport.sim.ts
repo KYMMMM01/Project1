@@ -158,7 +158,8 @@ describe('balance report', () => {
 
   it('fish income by source, synergy bot', () => {
     if (!wanted('income')) return;
-    const SOURCES: CurrencyReason[] = ['kill', 'wave', 'boss', 'act', 'call', 'unit', 'relic', 'income', 'sell'];
+    // 'skill': the lucky cat's fish capsules (zero with the skills off); left out, the column sums would miss them.
+    const SOURCES: CurrencyReason[] = ['kill', 'wave', 'boss', 'act', 'call', 'unit', 'relic', 'skill', 'income', 'sell'];
     const rows: (string | number)[][] = [];
     for (const chapter of CHAPTERS) {
       const level = RECOMMENDED_LEVEL[chapter - 1] as number;

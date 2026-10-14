@@ -52,6 +52,8 @@ export const ST_BLEED = 32;
 export const ST_BREAK = 64;
 export const ST_VULN = 128;
 export const ST_HASTE = 256;
+/** The alchemist's fish (Turn Into Fish!): in the mask so that `statusStep` runs and ends it; not in `ST_MAGIC` (elites and bosses are no burst targets anyway). */
+export const ST_FISH = 512;
 export const ST_DOT = ST_BURN | ST_POISON | ST_BLEED;
 /** The statuses the mages' third synergy step looks for on an enemy that falls. */
 export const ST_MAGIC = ST_SLOW | ST_FREEZE | ST_BURN | ST_POISON | ST_VULN;
@@ -91,6 +93,12 @@ export interface SimEnemy extends EnemyState {
    * together. It stops at `SP_ROWS.wanted.pool` x `maxHp`. Plain enemies never carry any.
    */
   bountyTaken: number;
+  /**
+   * The alchemist's big flask (Turn Into Fish!, `transmuteSpecial` in `enemies.ts`): when the fish status ends, and when the same elite or
+   * boss may be turned again (`fishUntil` + the lock, so it also holds while the status runs). 0 = never. Elites and bosses only.
+   */
+  fishUntil: number;
+  fishLockUntil: number;
   burnDps: number;
   burnUntil: number;
   burnSrc: SimUnit | null;
@@ -130,6 +138,8 @@ export interface SimProjectile {
   /** Where the target was last seen. */
   tx: number;
   ty: number;
+  /** A shuriken thrown by one of the ninja's clones (Surprise Clones): rewritten on every use of the pooled object. */
+  ghost: boolean;
 }
 
 export type ZoneAttack = Extract<AttackSpec, { shape: 'frost' | 'void' | 'brew' }>;

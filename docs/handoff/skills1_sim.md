@@ -67,9 +67,9 @@ interface SpWantedData { mode: 'bite'|'small'; targetUid; x; y; share; taken; po
 
 Each row also has `id, unit, rank, cooldown, nameKey, built`.
 
-* `shove` (viking, rank 3): `cooldown 18, push 160, slide 0.35, thump 0.25, eliteFactor 0.35, bossFactor 0.2, window 3, minTravelled 30`
+* `shove` (viking, rank 3): `cooldown 12 (the owner's value of 2026-10-14; it started at 18), push 160, slide 0.35, thump 0.25, eliteFactor 0.35, bossFactor 0.2, window 3, minTravelled 30`
 * `charge` (tiger, rank 5): `cooldown 34, dist 1100, speed 1000, leap 0.3, power 1.2, ignoreDefence true, weights [1,2,3], minWeight 3`
-* `lap` (star archer, rank 5): `cooldown 34, speed 2000, extra 100, power 0.8, pool 12.8, burst {pct 0.25, radius 90}, minEnemies 4`
+* `lap` (star archer, rank 5): `cooldown 26 (the owner's value of 2026-10-14; it started at 34), speed 2000, extra 100, power 0.8, pool 12.8, burst {pct 0.25, radius 90}, minEnemies 4`
 * `wanted` (gunner, rank 4): `cooldown 24, bite 0.06, pool 0.12, ignoreCap true, ignoreDefence true, small 0.2, hold 'nextWaveSpecial'`
 * gauge: `SP_START_NEW / MERGE / RESTORE` 0.5 each (three constants so each can be flipped alone, a test holds them apart), `SP_RECHECK` 0.2, `SP_RANK5_GAP` 1.2.
 * **Cooldown is each row's own cell** (decision 1): the gauge reads `UnitDef.spSkill.cooldown`, which `data/units.ts` takes from the row. `SP_COOLDOWN {3:18, 4:24, 5:34}` is only the record of where the rows started and nothing reads it. A test holds every row to `0 < cooldown <= 34` (the owner's ceiling) and checks that the gauge and the definition follow a row's number.

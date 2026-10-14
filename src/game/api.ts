@@ -78,7 +78,10 @@ export type EnemyTrait =
   | 'elite'
   | 'boss';
 
-export type StatusKind = 'slow' | 'stun' | 'freeze' | 'burn' | 'poison' | 'bleed' | 'armor_break' | 'vulnerable';
+export type StatusKind =
+  | 'slow' | 'stun' | 'freeze' | 'burn' | 'poison' | 'bleed' | 'armor_break' | 'vulnerable'
+  /** The alchemist's transmutation of an elite or a boss (Turn Into Fish!): walks at a quarter of its speed for a few seconds. NOT a slow: it is not `EnemyState.slow`. */
+  | 'fish';
 
 export type BossAbilityId =
   | 'enrage' // boss_cucumber: faster as health drops
@@ -274,6 +277,12 @@ export interface UnitState {
   dodge: number;
   kills: number;
   damageDealt: number;
+  /**
+   * The ninja's clones that are standing right now (Surprise Clones, `SpClonesData`): empty for every other cat, for a ninja that has cast
+   * none, and in a battle played without skills. Owned by the simulation: read it, never write it. A clone is not a cat: it is not in
+   * `BattleApi.units`, takes no tile and counts for nothing, it is a few numbers hung on its ninja.
+   */
+  clone: CloneState[];
 }
 
 export interface EnemyState {
@@ -304,11 +313,23 @@ export interface EnemyState {
   focused: boolean;
   /** Bosses/elites: true once below half health. */
   enraged: boolean;
+  /**
+   * True while the alchemist's big flask keeps this elite or boss a fish (Turn Into Fish!, `SpFishData.big`): it walks at a quarter of its
+   * speed and keeps everything else (health, abilities, the damage cap). It is not `slow` and not a stun. It turns false by itself, and the
+   * event `fishEnd` says so at that moment.
+   */
+  fish: boolean;
   /** Seconds since spawn (drives walk animation phase). */
   age: number;
 }
 
 export interface ProjectileState {
+  /**
+   * True for a shuriken thrown by one of the ninja's clones (Surprise Clones): paint it pale blue. It is the ninja's shuriken in every other
+   * way (`unitId` is `r_ninja`, the damage and the kill are the ninja's) and it starts from the clone's tile centre. No `attack` event
+   * announces it: the `cloneThrow` event does, with this very object.
+   */
+  readonly ghost?: boolean;
   readonly uid: number;
   /** Which unit type fired it — the renderer picks the sprite/trail from this. */
   readonly unitId: UnitId;
@@ -359,7 +380,11 @@ export type BattlePhase = 'prep' | 'wave' | 'choice' | 'won' | 'lost';
 
 export type PendingChoice =
   | { kind: 'summon'; options: UnitId[] }
-  | { kind: 'relic'; options: RelicId[]; freeRerolls: number; paidRerollUsed: boolean; picksLeft: number };
+  /**
+   * `source` says who opened the toy pick: the end of a stage (absent or 'stage': the shop, with its rerolls) or a lucky cat's toy capsule
+   * ('capsule': opened in the middle of a wave, one pick, no reroll, no common toys; closing it lets the wave go on where it was).
+   */
+  | { kind: 'relic'; options: RelicId[]; freeRerolls: number; paidRerollUsed: boolean; picksLeft: number; source?: 'stage' | 'capsule' };
 
 export interface OddsRow<K extends string> {
   key: K;
@@ -434,13 +459,18 @@ export type DropAction = 'move' | 'swap' | 'merge' | 'none';
 
 // ───────────────────────────── events ─────────────────────────────
 
-export type SummonSource = 'button' | 'choice' | 'relic' | 'twin' | 'script';
+export type SummonSource =
+  | 'button' | 'choice' | 'relic' | 'twin' | 'script'
+  /** A cat a skill put on the board (the lucky cat's partner capsule). No sticker is tossed from the button; the arrival ring and the "NEW" tag are the same. */
+  | 'skill';
 
 export type CurrencyReason =
   | 'start' | 'kill' | 'wave' | 'call' | 'act' | 'boss' | 'sell' | 'relic' | 'unit'
   | 'summon' | 'upgrade' | 'awaken' | 'molt'
   /** The steady trickle of fish while a wave runs (`incomePerSecond()`): one whole fish at a time, with no place on the field. */
-  | 'income';
+  | 'income'
+  /** Fish or purr a skill paid out (the lucky cat's fish and purr capsules): an icon flies from where the capsule opened, like any other gain. */
+  | 'skill';
 
 export interface StrikePoint {
   x: number;
@@ -554,12 +584,297 @@ export interface SpWantedData {
   closed: boolean;
 }
 
-/** What a cast tells the view, one member per built skill. The next agents add theirs. */
+// ── Step 2: the payloads of the eight skills built after the first four ──
+//
+// Each type below says what its skill's scene needs (who, where, when, how many) and what the simulation really knows; the table of every
+// event is in docs/handoff/skills2_sim.md. The scenes are built from these shapes: renaming or removing a field breaks them. Times are
+// `BattleApi.time` (simulation seconds), positions are field px.
+
+/** One enemy a cut line was drawn on: who, and where it stood when the line was drawn. */
+export interface SpCutMark {
+  uid: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Already Cut (samurai, 3.2): a white afterimage crosses `half` px of road either side of the anchor enemy, thin lines are drawn on up to
+ * `max` enemies, and `fuse` seconds later every line opens at once (the `hit`s of the cut come then, at the enemy's place of that moment).
+ */
+export interface SpCutData {
+  /**
+   * Names the cast in its `cutOpen` (unique in the battle, counting up from 1). Two samurai of rank 4 may cast in the same tick (no gap), so
+   * `at` alone does not tell their lines apart.
+   */
+  cutId: number;
+  /** The enemy the stretch is measured from (first in skill order), and its road coordinate in [0, PATH_LENGTH). */
+  anchorUid: number;
+  anchorPath: number;
+  /** Road coordinates of the two ends of the stretch (anchor -/+ `half`, wrapped into [0, PATH_LENGTH)): the afterimage crosses from `fromPath` to `toPath` along the flow. */
+  fromPath: number;
+  toPath: number;
+  /** `BattleApi.time` of the cast, and the seconds until every line opens (the cut lands at `at + fuse`). */
+  at: number;
+  fuse: number;
+  /**
+   * The marked enemies, at most `max`, closest to the anchor along the road first (the anchor itself first of all). `x`, `y` is where each
+   * stood at the cast; the line follows the enemy (read its public state by `uid`). Two samurai may name the same enemy: draw one line.
+   */
+  marks: SpCutMark[];
+}
+
+/**
+ * One line of a cut as it opens (`cutOpen`). `uid` is the enemy the line was drawn on at the cast. `kind` says what the cut then did:
+ * `cut` it cut that enemy, `moved` the enemy had died meanwhile and the line moved to `to`, the nearest living enemy within `reaim` px of
+ * the dead one's last place that carried no line, `lost` the enemy had died and there was no such neighbour (`to` is 0, nothing is cut).
+ */
+export interface SpCutLine {
+  uid: number;
+  kind: 'cut' | 'moved' | 'lost';
+  to: number;
+  /** Where the line's own enemy stood as the lines opened (the place it died, for a dead one). */
+  x: number;
+  y: number;
+  /** Where the cut lands: `x`, `y` for a `cut`, the receiving enemy's place for a `moved`, `x`, `y` again for a `lost` line. */
+  toX: number;
+  toY: number;
+}
+
+/**
+ * One clone of a ninja that is standing now (`UnitState.clone`). `index` is the clone's number in the cast that made it (the position in
+ * `SpClonesData.seats`, and the `index` of every follow-up event), so a clone that is gone from the list does not renumber the other.
+ */
+export interface CloneState {
+  index: number;
+  /**
+   * The tile it stands on, or -1 when it is overlapped on its ninja's own tile: such a clone moves with the ninja (read `UnitState.cell`)
+   * and is drawn behind it. A standing clone never moves by itself; it goes to -1 when a cat takes its tile (`cloneStep`).
+   */
+  cell: number;
+  /** Throws it still has (the cast gives it `SpClonesData.throws`; it goes at 0). One is spent for every volley of the ninja it follows. */
+  left: number;
+  /** `BattleApi.time` from which it follows volleys (the cast plus `arrive`), and the latest `BattleApi.time` it stays. */
+  readyAt: number;
+  until: number;
+}
+
+/** Why a clone went: it threw its last shuriken, the time ran out, a new cast replaced it, or its ninja was merged / sold / molted / is gone, the stage or the battle ended. */
+export type CloneEndReason = 'done' | 'timeout' | 'replaced' | 'merged' | 'sold' | 'molted' | 'gone' | 'stage' | 'end';
+
+/** One seat of a clone: the tile it stands on (the ninja's own tile when `stacked`), and that tile's centre. */
+export interface SpCloneSeat {
+  cell: number;
+  /** True when no empty tile was left: this clone stands overlapped on the ninja's tile. */
+  stacked: boolean;
+  x: number;
+  y: number;
+}
+
+/**
+ * Surprise Clones (ninja, 3.4): a puff, and `seats.length` pale blue clones leap to the nearest empty tiles (or stack on the ninja). Each
+ * throws one shuriken along with every volley of the ninja, `throws` times, then goes with a second puff.
+ */
+export interface SpClonesData {
+  /**
+   * One entry per clone, in the order they were seated (nearest tile first); the position is the clone's `index`. A `stacked` seat is on the
+   * ninja's own tile (`cell` is the ninja's): the clone puffs out of the ninja and settles behind it. The ninja's old clones, if it still
+   * had any, were sent away with a `cloneEnd` (reason 'replaced') just before this event.
+   */
+  seats: SpCloneSeat[];
+  /** Throws each clone has left at the cast. */
+  throws: number;
+  /** Seconds the leap to the seat takes; the first volley a clone follows is after it. */
+  arrive: number;
+  /** `BattleApi.time` of the cast: the clones land at `at + arrive` and stay until `at + life` at the latest. */
+  at: number;
+  /**
+   * The longest a clone stays, seconds from the cast (it usually goes sooner, on its last throw). Time the picture by `BattleApi.time`:
+   * it stands still under a choice popup, like the clones do.
+   */
+  life: number;
+}
+
+/**
+ * Tagalong Cloud (storm cat, 3.7): a small black cloud pops out of the cat's hat, flies to `hostUid` and follows that enemy for `life`
+ * seconds, dropping a bolt on it every `every` seconds (the first one `every` seconds after the cast). If the host dies it hops to a near
+ * enemy, or goes. The follow-up events `cloudBolt`, `cloudHop` and `cloudEnd` carry `cloudId`; between them the cloud sits on the host
+ * (`EnemyState` x, y of `hostUid`, the one the last hop named).
+ */
+export interface SpCloudData {
+  /** Names the cloud in follow-up events (unique in the battle, counting up from 1). */
+  cloudId: number;
+  hostUid: number;
+  /** Where the host stood at the cast (the cloud flies there from the cat's hat). */
+  hostX: number;
+  hostY: number;
+  /** `BattleApi.time` of the cast, the seconds it lasts, the seconds between bolts and how many bolts that is. */
+  at: number;
+  life: number;
+  every: number;
+  bolts: number;
+  /** Radius round the host a bolt's splash reaches, and how far from a fallen host the cloud may hop, px (for the picture). */
+  splashRadius: number;
+  hopRadius: number;
+}
+
+/** One enemy a shard of glass flies to: who, where it stood, and whether it was frozen (5 D) or only slowed (3 D). */
+export interface SpKnockShard {
+  uid: number;
+  x: number;
+  y: number;
+  frozen: boolean;
+}
+
+/**
+ * Knock It Off! (frost queen, 3.8): the glass falls where the chilled enemies are thickest (`impactX`, `impactY`), breaks, and a shard
+ * flies into every slowed or frozen enemy within `radius`, whose chill is spent as the shard hits.
+ */
+export interface SpKnockData {
+  /** The glass lands on the enemy the cast chose (where it stood at the cast); the cast's own `x`, `y` is the cat's tile, where it falls from. */
+  impactX: number;
+  impactY: number;
+  /** Radius around the impact the shards reach, px. */
+  radius: number;
+  /**
+   * One shard each, in skill order (the order the damage is dealt in); `x`, `y` is where the enemy stood at the cast and `frozen` whether it
+   * was frozen then (5 D) or only slowed (3 D). The damage and the loss of the chill are done at the cast, in this same tick: the `hit`s follow
+   * the `spCast` at once and an enemy that survived has `slow` 0 and `frozen` false from then on. The glass's fall (0.5 s in the design) is only
+   * the picture's time: the view keeps the ice sticker on the shards' enemies and queues their numbers until the shard lands.
+   */
+  shards: SpKnockShard[];
+}
+
+/**
+ * Meteor Drop (cosmo cat, 3.9): the field darkens and a red circle grows for `warn` seconds where the enemies will be, then the meteor
+ * lands: the inner ring (`innerRadius`) at once, the outer one (`outerRadius`) `outerDelay` later, and a crater burns for `craterLife`.
+ */
+export interface SpMeteorData {
+  /**
+   * Names the meteor in its follow-up events `meteorLand` (both rings) and `craterEnd` (unique in the battle, counting up from 1). Two cosmo
+   * cats' meteors can be alive together, and with the laser on both fall on the same dot, so the place alone does not tell them apart.
+   */
+  meteorId: number;
+  /** Where it lands: the point where the enemies, a second on, weigh most; the laser's dot (as it is at the cast) when the laser is on. */
+  impactX: number;
+  impactY: number;
+  /** True when the meteor was aimed at the laser's dot (the player's one control). */
+  onLaser: boolean;
+  /** `BattleApi.time` of the cast and the seconds of warning: the meteor lands at `at + warn`. */
+  at: number;
+  warn: number;
+  innerRadius: number;
+  outerRadius: number;
+  outerDelay: number;
+  craterRadius: number;
+  craterLife: number;
+}
+
+/** One golden note: the cat it lands on, and what it does there. */
+export interface SpJamNote {
+  /** The cat's `UnitState.uid` and its tile. */
+  uid: number;
+  cell: number;
+  /** `gauge`: the cat's skill ring jumps by `SpJamData.fill`. `attack`: the cat makes one ordinary attack at once (no skill of its own to fill). */
+  kind: 'gauge' | 'attack';
+  /**
+   * The cat's skill gauge before the note and after it (`UnitState.sp` already shows `after` when the event arrives, so a ring that waits for
+   * the note to land holds `before` until then). Both 0 for an `attack` note: that cat has no gauge.
+   */
+  before: number;
+  after: number;
+}
+
+/**
+ * Jam Session! (bard, 3.10): the lute is strummed and `notes.length` golden notes (at most four) fly to different cats at the same time.
+ * `notes` are in the order the notes were handed out: the `gauge` notes first (lowest gauge first, ties to the lower tile), then the `attack`
+ * notes (the nearest cat to the bard first). The bard itself never gets one. Everything is applied when the event is emitted; an `attack` note
+ * has no event of its own: the cat's ordinary `attack` follows in the next tick (its attack gauge was topped up by one).
+ */
+export interface SpJamData {
+  notes: SpJamNote[];
+  /** Share of the gauge a `gauge` note adds (0.2). */
+  fill: number;
+}
+
+/** One enemy a flask flies to. */
+export interface SpFishTarget {
+  uid: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Turn Into Fish! (alchemist, 3.11): up to five flasks. The big one (when an elite or boss is in reach and at least three cats can hit it)
+ * turns that enemy into a fish for `seconds` (boss 4, elite 2.5); the small ones turn the weakest ordinary enemies into fish that fly
+ * to the counter (their `enemyDie` carries the reward).
+ *
+ * Order of one cast: `spCast`; then the big one's `status` (kind 'fish', duration = `seconds`) and, `seconds` later, its `fishEnd`; then,
+ * for each small one in the order of `small`, `fish` (the reward, reason 'kill', at the enemy's place) and `enemyDie` (with `transmuted`
+ * true and no `hit` before it). Positions are where the enemies stood at the cast (the flasks fly there).
+ */
+export interface SpFishData {
+  /** The elite or boss the big flask turns into a fish, or null (no elite or boss that may be turned, or fewer than three cats can hit it). */
+  big: (SpFishTarget & {
+    boss: boolean;
+    /** Seconds it stays a fish, and the seconds after that during which the same enemy cannot be turned again (the crossed-out fish bone). */
+    seconds: number;
+    lock: number;
+    /** How many cats can hit it right now (the alchemist among them): at least `SP_ROWS.fish.reachMin`. */
+    cats: number;
+  }) | null;
+  /** The weakest ordinary enemies, in the order the flasks fly (4 with a big flask, 5 without; fewer if the field has fewer to give). */
+  small: SpFishTarget[];
+}
+
+/** The six kinds of a capsule, in the order the odds row rolls them: the colour of the capsule is its kind. */
+export const SP_CAPSULE_KINDS = ['fish', 'purr', 'partner', 'more', 'toy', 'guardian'] as const;
+export type SpCapsuleKind = (typeof SP_CAPSULE_KINDS)[number];
+
+/**
+ * Lucky Capsule! (lucky cat, 3.12): a capsule drops on the cat's head, bounces twice and opens `openDelay` seconds later. The kind is
+ * rolled AT THE CAST, so the capsule's colour and mark are known while it falls. `more` opens a second, smaller capsule (`inner`: partner,
+ * toy or guardian, never fish and never `more` again) `moreDelay` seconds after.
+ */
+export interface SpCapsuleData {
+  kind: SpCapsuleKind;
+  /** The small capsule inside a `more` capsule; null for every other kind. */
+  inner: SpCapsuleKind | null;
+  /** `BattleApi.time` of the cast, and the seconds until the capsule opens (the prize comes at `at + openDelay`). */
+  at: number;
+  openDelay: number;
+  /** For a `more` capsule: the seconds from its opening to the opening of the small capsule inside (it opens at `at + openDelay + moreDelay`). Always present. */
+  moreDelay: number;
+  /**
+   * True for a fish capsule: the cat's gauge went back to `fishRefund` (half) and not to 0 IN THE CAST TICK, so the ring (`UnitState.sp`, already
+   * at the refunded value when this event arrives) should show a bounce back to half when the capsule opens.
+   */
+  refund: boolean;
+}
+
+/**
+ * What an opened capsule did (`BattleEvents['capsuleOpen'].result`): `fish` a summon price of fish; `purr` its purr; `seat` a twin of one of the
+ * player's cats now stands on a tile next to the original (`summon` event, source 'skill'); `promote` there was no empty tile and the original
+ * grew one rank where it stands (`promote` event); `more` the small capsule inside opens a second later; `toy` the toy pick opens at the end of
+ * this tick (`relicOffer` with `source: 'capsule'`); `awaken` a legendary awakened for free (`awaken` event with `free: true`); `fallback` the
+ * capsule had nothing to give and paid purr instead (the partner's 3, the toy's 5, the guardian's 10, or the 1 of a fish capsule on a full board
+ * when that knob is on): the picture shows the promise failing, with hearts instead.
+ */
+export type SpCapsuleResult = 'fish' | 'purr' | 'seat' | 'promote' | 'more' | 'toy' | 'awaken' | 'fallback';
+
+/** What a cast tells the view, one member per skill. A member exists as soon as the skill's data type does; `SpSkillDef` says which skills are built. */
 export type SpPayload =
   | { skill: 'shove'; data: SpShoveData }
+  | { skill: 'cut'; data: SpCutData }
   | { skill: 'charge'; data: SpChargeData }
+  | { skill: 'clones'; data: SpClonesData }
+  | { skill: 'wanted'; data: SpWantedData }
   | { skill: 'lap'; data: SpLapData }
-  | { skill: 'wanted'; data: SpWantedData };
+  | { skill: 'cloud'; data: SpCloudData }
+  | { skill: 'knock'; data: SpKnockData }
+  | { skill: 'meteor'; data: SpMeteorData }
+  | { skill: 'jam'; data: SpJamData }
+  | { skill: 'fish'; data: SpFishData }
+  | { skill: 'capsule'; data: SpCapsuleData };
 
 export interface SpCastCommon {
   /** The cat that cast (still on the board at this point; it may be sold during the scene). */
@@ -607,7 +922,8 @@ export interface BattleEvents {
   merge: { consumed: [UnitState, UnitState]; result: UnitState; cell: number; fromCell: number; jumped: boolean };
   /** A unit changed class at the same rarity. */
   molt: { from: UnitState; result: UnitState; cell: number };
-  awaken: { from: UnitState; result: UnitState; cell: number };
+  /** `free` is present (true) only for the lucky cat's guardian capsule: no purr was spent, and the picture uses the short cut-in. The key is absent from the player's own awakenings. */
+  awaken: { from: UnitState; result: UnitState; cell: number; free?: true };
   sell: { unit: UnitState; cell: number; fish: number; purr: number };
 
   /** A unit started an attack. `projectile` is set for travelling shots. */
@@ -661,9 +977,101 @@ export interface BattleEvents {
    * it can give (0.12, all gunners together).
    */
   bite: { unit: UnitState; enemy: EnemyState; amount: number; share: number; taken: number; pool: number; killed: boolean };
+  // ── Step 2: follow-up events of the eight skills built after the first four (the cast itself is `spCast`): cut, clones, cloud, meteor, fish,
+  // capsule. The frost queen's knock and the bard's jam need none: everything they do is in their cast.
+  /**
+   * The lines of a cut open, all at once, in the tick `SpCutData.at + fuse` (a tick later at most, and later still when the fall is due in a
+   * wave pause: nothing runs in `prep`, so it opens in the first tick of the next wave). Emitted BEFORE the cut's `hit`s so the scene can
+   * flash first. `lines` has one entry per mark of the cast, in the order of `SpCutData.marks`; a `moved` or `lost` line says so (a dead
+   * enemy's line moves to a near one, or goes out). `unit` may have been sold: the cut opens anyway. `at` = the cast's time; `cutId` is the
+   * `SpCutData.cutId` of the cast the lines belong to (pair them by it, not by `at`).
+   */
+  cutOpen: { cutId: number; unit: UnitState; at: number; lines: SpCutLine[] };
+  /**
+   * A clone of `unit` (the ninja; `CloneState.index` `index`) threw its shuriken along with the ninja's volley, aimed at `targetUid` (an
+   * enemy the ninja is not aiming at). Emitted in the tick of the volley, after the ninja's own `attack` events. `projectile` is the
+   * shuriken in flight (`ghost` true, `unitId` 'r_ninja', starting at the tile's centre). `cell` is the tile it was thrown from (the ninja's
+   * own when the clone is `stacked`; then the picture starts the shuriken from the clone's drawn spot), (`x`, `y`) that tile's centre.
+   * `left` is how many throws the clone has after this volley; at 0 it goes and a `cloneEnd` (reason 'done') follows at once. A volley with
+   * nobody to aim at makes no event and spends nothing. No `attack` event is sent for a clone's throw (the ninja must not swing again).
+   */
+  cloneThrow: { unit: UnitState; index: number; cell: number; stacked: boolean; x: number; y: number; targetUid: number; left: number; projectile: ProjectileState };
+  /**
+   * A cat took the tile a clone stood on (a summon, a twin, a gift, a cat dropped onto the empty tile, a partner capsule), or the ninja
+   * itself was dropped onto it: the clone hops back to its ninja's tile and stays there overlapped (`CloneState.cell` is -1 from now on).
+   * `from` is the tile it left, (`x`, `y`) its centre; `to` is the ninja's tile. Emitted before the event of the cat that took the tile
+   * (`summon`, `move`). Draw the hop in about 0.2 s of `BattleApi.time`; the clone keeps its throws.
+   */
+  cloneStep: { unit: UnitState; index: number; from: number; to: number; x: number; y: number };
+  /**
+   * A clone went (puff, and a leaf if the reason is 'done'). `cell` is the tile it stood on (-1: it was overlapped on the ninja), (`x`, `y`)
+   * the centre of the tile the picture is on. `unit` may be a cat that was just merged, sold or molted (`removed`). Every clone ends with
+   * exactly one `cloneEnd`, also when the stage or the battle ends (they are all sent away in the tick it
+   * happens: reason 'stage' before `actClear`, and before `victory` when it was the last stage; reason 'end' before `defeat`). A cast that finds the ninja's old clones still there sends them away first (reason 'replaced').
+   */
+  cloneEnd: { unit: UnitState; index: number; cell: number; x: number; y: number; reason: CloneEndReason };
+  /**
+   * A bolt of a tagalong cloud (`SpCloudData.cloudId`) falls on its host `hostUid`, standing at (`x`, `y`). `index` counts from 1 up to
+   * `bolts`. `points` are the OTHER enemies the splash reaches (within `splashRadius` of the host, in skill order, where they stand; may be
+   * empty). Emitted before the bolt's `hit`s (the host's first, then the splash victims'); if the bolt fells the host, `enemyDie` comes
+   * between, and a `cloudHop` or `cloudEnd` follows the last `hit`. `unit` may have been sold.
+   */
+  cloudBolt: { cloudId: number; unit: UnitState; hostUid: number; x: number; y: number; index: number; bolts: number; points: StrikePoint[] };
+  /** The cloud's host fell (or left the field): the cloud moves from enemy `fromUid` (last seen at `fromX`, `fromY`) to the near enemy `toUid`. */
+  cloudHop: { cloudId: number; fromUid: number; fromX: number; fromY: number; toUid: number; toX: number; toY: number };
+  /**
+   * The cloud goes: `time` = its life is over, `lost` = the host fell and no enemy was within `hopRadius`. (`hostUid`, `x`, `y`) is the last
+   * host and where it was. `bolts` = how many bolts fell in all. Not emitted when the battle ends first. The cloud goes in the tick of its
+   * last bolt, after that bolt's `hit`s.
+   */
+  cloudEnd: { cloudId: number; reason: 'time' | 'lost'; hostUid: number; x: number; y: number; bolts: number };
+  /**
+   * A ring of the meteor lands: `inner` at `SpMeteorData.at + warn` (the meteor itself comes down: flash, shake), `outer` `outerDelay`
+   * seconds later (the shock ring). (`x`, `y`) is the impact, `radius` the ring's size in px (grown by the cat's area bonuses, equal to the
+   * radii of the cast payload). `points` are the enemies the ring touches, where they stand, in skill order (may be empty). Emitted BEFORE the
+   * ring's `hit`s. The inner landing also starts the crater (its first burn is applied in the same tick, after the inner ring's damage).
+   * `meteorId` is the `SpMeteorData.meteorId` of the cast the ring belongs to.
+   */
+  meteorLand: { meteorId: number; unit: UnitState; ring: 'inner' | 'outer'; x: number; y: number; radius: number; points: StrikePoint[] };
+  /**
+   * The crater's `SpMeteorData.craterLife` seconds are over (4 s after the inner landing): the scorch fades. The burn already stopped
+   * refreshing. `meteorId` names the meteor (and so its crater and its radius).
+   */
+  craterEnd: { meteorId: number; unit: UnitState; x: number; y: number; radius: number };
+  /**
+   * The alchemist's big flask wore off: this elite or boss is no fish any more (`EnemyState.fish` is false already) and is locked against
+   * the flask for `lock` more seconds (the crossed-out fish bone). Emitted by the enemy's own status step, so it comes at the start of the
+   * tick `SpFishData.big.seconds` after the cast (give or take a tick). Not emitted when the enemy dies as a fish: its `enemyDie` ends it.
+   */
+  fishEnd: { enemy: EnemyState; lock: number };
+  /**
+   * A lucky cat's capsule opens (`SpCapsuleData.openDelay` after the cast; the small capsule of a `more` capsule `moreDelay` after that, `small`
+   * true). `kind` is what the capsule was promised to be (its colour and mark are `SP_ROWS.capsule.marks[kind]`), `result` what it did, decided
+   * at this very moment. (`x`, `y`) is the opening spot: the lucky cat's tile centre when it cast (the cat may have moved or been sold since).
+   * `inner` is the kind of the small capsule inside a `more` capsule (null otherwise). `purr` is the purr it pays itself (the `purr` result and
+   * every `fallback`), 0 otherwise; the fish a `fish` capsule pays arrive as a `fish` event (reason 'skill'; a fraction of a fish waits for the next).
+   * `cell` and `origin`: for `seat` the tile the twin takes and the tile of the original it is the twin of; for `promote` the tile of the cat
+   * that grows (in both); for `awaken` the awakening cat's tile (in `cell`); -1 otherwise. Emitted BEFORE the events of the prize (`fish`, `purr`,
+   * `summon`, `promote`, `awaken`, `relicOffer`), all in the same tick, so the picture can open the lid first and let the prize come out of it.
+   */
+  capsuleOpen: {
+    kind: SpCapsuleKind; small: boolean; inner: SpCapsuleKind | null; x: number; y: number; result: SpCapsuleResult;
+    cell: number; origin: number; purr: number;
+  };
+  /**
+   * A cat grew one rank where it stands, with no merge (the partner capsule on a full board): `from` is removed, `result` stands in `cell`
+   * (the next rank of the same line, `mergeResultOf`). Not a `merge`: nothing was consumed, `merges` does not go up. A player dragging the
+   * cat should let go. The skill gauge's ratio is kept when both cats have a skill; the attack gauge starts at half like any new cat.
+   */
+  promote: { from: UnitState; result: UnitState; cell: number };
 
   enemySpawn: { enemy: EnemyState };
-  enemyDie: { enemy: EnemyState; x: number; y: number; fish: number; purr: number; killer: UnitState | null };
+  /**
+   * `transmuted` is present (true) only when an alchemist's small flask turned the enemy into a fish (Turn Into Fish!): it is NOT a kill in the
+   * sense of the passive (no split, no burst, no harvest, no `hit` before it), so a scene should show smoke and a fish flying to the counter
+   * (`fish` is the reward, doubled) and not the usual fall. The key is absent from every other death.
+   */
+  enemyDie: { enemy: EnemyState; x: number; y: number; fish: number; purr: number; killer: UnitState | null; transmuted?: true };
   bossAbility: { enemy: EnemyState; ability: BossAbilityId; duration: number };
   /** Cells that will become hazardous after `delay` seconds (telegraph). */
   hazardWarn: { cells: number[]; kind: HazardKind; delay: number };
@@ -681,7 +1089,8 @@ export interface BattleEvents {
   waveStart: { wave: number; act: number; kind: WaveKind; duration: number };
   waveEnd: { wave: number; fish: number; called: boolean };
   actClear: { act: number; purr: number; fish: number };
-  relicOffer: { options: RelicId[]; freeRerolls: number; picksLeft: number };
+  /** `source` is present ('capsule') only when a lucky cat's toy capsule opened the pick in the middle of a wave (`BattleApi.pending.source` says the same). */
+  relicOffer: { options: RelicId[]; freeRerolls: number; picksLeft: number; source?: 'capsule' };
   relicGain: { relic: RelicId };
 
   fish: { total: number; delta: number; reason: CurrencyReason; x?: number; y?: number };

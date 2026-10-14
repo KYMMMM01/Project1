@@ -64,6 +64,8 @@ export interface PrintOptions {
   setup?: (s: Sim) => void;
   /** Called with every decision step (every 0.25 s) before the bot acts. */
   watch?: (s: Sim) => void;
+  /** More events to put into the hash besides `FINGERPRINT_EVENTS` (the skills' own: `spCast`, `cloudBolt` ...). Absent = the old fingerprint exactly. */
+  extraEvents?: readonly (keyof BattleEvents)[];
 }
 
 /** Plays a bot run to its end (or `maxSeconds`) the way `playRun` does and fingerprints it. */
@@ -73,7 +75,7 @@ export function fingerprintRun(init: BattleInit, policy: BotPolicy, options: Pri
   options.setup?.(b);
   let h = 0x811c9dc5;
   let events = 0;
-  for (const type of FINGERPRINT_EVENTS) {
+  for (const type of [...FINGERPRINT_EVENTS, ...(options.extraEvents ?? [])]) {
     b.events.on(type, (p) => {
       events++;
       h = fold(fold(h, type), write(p));

@@ -39,8 +39,8 @@ import { BattleEmitter } from './emitter';
 import { incomeRate, updateIncome } from './economy';
 import { updateEnemies } from './enemies';
 import {
-  buildStats, callBonusOf, canReviveNow, cmdCallNext, cmdPickRelic, cmdRerollRelics, cmdRevive, initSun, markSun, rebuildFx, revealSun, startWave,
-  targetKilled, updateAlarms, updateWave,
+  buildStats, callBonusOf, canReviveNow, cmdCallNext, cmdPickRelic, cmdRerollRelics, cmdRevive, initSun, markSun, openCapsuleToy, rebuildFx,
+  revealSun, startWave, targetKilled, updateAlarms, updateWave,
 } from './flow';
 import { updateHazards } from './hazards';
 import type { LuckTotals } from './odds';
@@ -49,6 +49,7 @@ import { updateSpecials } from './specials';
 import { updateSpSkills } from './spSkills';
 import { runLater, type LaterItem } from './sp/later';
 import type { SpRunner } from './sp/run';
+import type { SpCloud } from './sp/cloud';
 import { Streams } from './streams';
 import { TUTORIAL_SCRIPT } from './tutorial';
 import type { HazardBatch, SimEnemy, SimProjectile, SimUnit, SimZone } from './types';
@@ -206,6 +207,13 @@ export class Sim implements BattleApi {
   /** The running bodies of the tiger's charge and the star archer's lap (`sp/run.ts`) and the number of runs ever started. */
   readonly runners: SpRunner[] = [];
   runSeq = 0;
+  /** The storm cat's tagalong clouds on the field (`sp/cloud.ts`), in the order they were cast, and the number ever made. */
+  readonly clouds: SpCloud[] = [];
+  cloudSeq = 0;
+  /** The ninjas that have clones standing now (`sp/clones.ts`; the clones themselves are `SimUnit.clone`), in the order they cast. */
+  readonly cloners: SimUnit[] = [];
+  /** Toy capsules of the lucky cat that opened and wait for the end of their tick to open their pick (`sp/capsule.ts`, `openCapsuleToy` in `flow.ts`). */
+  capsuleToys = 0;
   /** Bit i set: the skill `SP_SKILL_IDS[i]` was cast in this run (the next cast is not the first). */
   spSeen = 0;
   /** Whether the cast in progress is the first of its skill (worked out by the pass, read by `announceCast`). */
@@ -460,6 +468,8 @@ export class Sim implements BattleApi {
     updateSpecials(this);
     updateWave(this);
     if (this.phase === 'wave') updateAlarms(this);
+    // The toy picks of the lucky cat's capsules open last: the wave machine above moves the phase and the stage and would trample one opened earlier.
+    if (this.capsuleToys > 0 && this.phase === 'wave') openCapsuleToy(this);
   }
 
   // ── commands ──

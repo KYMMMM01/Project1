@@ -7,7 +7,8 @@ import type { SimUnit } from '../types';
  *
  * A handler lives in its own file under `sim/sp/`, is exported once and listed in `sim/sp/registry.ts`; its row in `data/spSkills.ts`
  * says `built: true` last. Nothing in a handler may use `Math.random`; the only random stream a skill may draw from is `combat`, and
- * only where `docs/design_skills_v2.md` says so. Skills never roll crits.
+ * only where `docs/design_skills_v2.md` says so. A skill's own damage never rolls a crit; the one thing that does is the ninja's clone
+ * shuriken, which is the ninja's own shuriken (design 3.4.3 no. 21: it rolls its crit and ricochet like any shuriken of the ninja).
  */
 export interface SpHandler {
   /**

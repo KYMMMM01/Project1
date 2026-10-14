@@ -6,12 +6,13 @@ import {
   HASTE_CAP, LASER_VULNERABLE, PULL_BOSS_FACTOR, PULL_ELITE_FACTOR, PULL_IMMUNE_AFTER, SLOW_CAP, TICK, VULNERABLE_CAP,
 } from '../data/balance';
 import { BOSS_SPECS, enemySpec } from '../data/enemies';
+import { SP_ROWS } from '../data/spSkills';
 import { addPurr, chefHarvest, earnFish } from './economy';
 import { pulseEnemy } from './hazards';
 import type { Sim } from './sim';
 import { queueShatter } from './specials';
 import {
-  ST_BLEED, ST_BREAK, ST_BURN, ST_DOT, ST_FREEZE, ST_HASTE, ST_MAGIC, ST_POISON, ST_SLOW, ST_STUN, ST_VULN,
+  ST_BLEED, ST_BREAK, ST_BURN, ST_DOT, ST_FISH, ST_FREEZE, ST_HASTE, ST_MAGIC, ST_POISON, ST_SLOW, ST_STUN, ST_VULN,
   type SimEnemy, type SimUnit, type SimZone,
 } from './types';
 
@@ -27,11 +28,11 @@ export function spawnEnemy(s: Sim, id: EnemyId, travelled: number, baseHp: numbe
   const e: SimEnemy = {
     uid: ++s.uidEnemy, id, travelled, x: 0, y: 0, angle: 0, hp, maxHp: hp, shield, maxShield: shield, slow: 0,
     stunned: false, frozen: false, burning: false, poisoned: false, bleeding: false, armorBroken: false,
-    vulnerable: false, hasted: false, focused: false, enraged: false, age: 0,
+    vulnerable: false, hasted: false, focused: false, enraged: false, fish: false, age: 0,
     spec, index: s.enemies.length, baseHp, speed: spec.speed, target, dead: false, mark: 0,
     isBoss: spec.traits.includes('boss'), isElite: spec.traits.includes('elite'),
     mask: 0, slowUntil: 0, stunUntil: 0, freezeUntil: 0, ccImmuneUntil: 0, slowImmuneUntil: 0, pullUid: 0, pullImmuneUntil: 0,
-    shoveLeft: 0, shoveStep: 0, shoveImmuneUntil: 0, bountyTaken: 0,
+    shoveLeft: 0, shoveStep: 0, shoveImmuneUntil: 0, bountyTaken: 0, fishUntil: 0, fishLockUntil: 0,
     burnDps: 0, burnUntil: 0, burnSrc: null, poisonDps: 0, poisonUntil: 0, poisonSrc: null,
     bleedDps: 0, bleedUntil: 0, bleedSrc: null, breakAmount: 0, breakUntil: 0, vulnAmount: 0, vulnUntil: 0,
     hasteAmount: 0, hasteUntil: 0, dotAt: 0,
@@ -163,6 +164,26 @@ export function applyStatus(s: Sim, e: SimEnemy, kind: StatusKind, amount: numbe
   }
 }
 
+/**
+ * The alchemist's big flask (Turn Into Fish!, docs/design_skills_v2.md 3.11 and 4.4.1): turns an elite or a boss into a fish for `seconds`,
+ * during which it walks at `SP_ROWS.fish.fishSpeed` of its speed (`updateEnemies`), and locks it against the flask for `lock` more seconds after.
+ *
+ * It is NOT a slow, and so it does not go through `applyStatus`: the cap on the slow of elites and bosses (`rules.specialSlowCap`, lower at
+ * every butler level), the enemy's resistance, the pills' and the vaccine's immunity, the mages' longer statuses and the toys' stronger slows
+ * do not touch it, and neither does the stun / freeze immunity window. The fish keeps everything else: health, armour, damage allowance,
+ * abilities, rage. Returns false (and does nothing) for an enemy that is not an elite or a boss, is dead, or is still a fish or locked.
+ */
+export function transmuteSpecial(s: Sim, e: SimEnemy, seconds: number, lock: number): boolean {
+  const now = s.time;
+  if (e.dead || (!e.isBoss && !e.isElite) || now < e.fishLockUntil || !(seconds > 0)) return false;
+  e.fishUntil = now + seconds;
+  e.fishLockUntil = e.fishUntil + (lock > 0 ? lock : 0);
+  e.fish = true;
+  e.mask |= ST_FISH;
+  announce(s, e, 'fish', seconds);
+  return true;
+}
+
 function applyHaste(e: SimEnemy, amount: number, until: number): void {
   if ((e.mask & ST_HASTE) === 0 || amount > e.hasteAmount) e.hasteAmount = amount;
   if (until > e.hasteUntil) e.hasteUntil = until;
@@ -202,6 +223,11 @@ function statusStep(s: Sim, e: SimEnemy, now: number): boolean {
   if ((m & ST_HASTE) && now >= e.hasteUntil) {
     e.hasted = false;
     m &= ~ST_HASTE;
+  }
+  if ((m & ST_FISH) && now >= e.fishUntil) {
+    e.fish = false;
+    m &= ~ST_FISH;
+    if (s.ev.has('fishEnd')) s.ev.emit('fishEnd', { enemy: e, lock: Math.max(0, e.fishLockUntil - now) });
   }
   if (m & ST_DOT) {
     if (now >= e.dotAt) {
@@ -348,6 +374,25 @@ export function killEnemy(s: Sim, e: SimEnemy, killer: SimUnit | null): void {
   if (e.target) s.onTargetKilled(e);
 }
 
+/**
+ * The alchemist's small flask (Turn Into Fish!, docs/design_skills_v2.md 3.11): the enemy is taken off the field by a path of its own and is
+ * NOT killed in the passive's sense. It leaves no children (a balloon does not split), sets off nothing (no death burst, no chef's harvest,
+ * no mage shatter) and no `hit` precedes its `enemyDie` (which says `transmuted`). It still counts as a kill (`Sim.kills`, the killer's
+ * `kills`) and pays its fish `bountyMult` times through `earnFish` (so the daily "rich" rule and a kill-fish bonus apply as for any kill),
+ * reason 'kill', from where it stood. Only an ordinary enemy may be given: an elite or a boss is turned by `transmuteSpecial`, never removed,
+ * and a wave's target must die by damage (`onTargetKilled`). Returns false when it did nothing.
+ */
+export function transmuteEnemy(s: Sim, e: SimEnemy, killer: SimUnit | null, bountyMult: number): boolean {
+  if (e.dead || e.target || e.isBoss || e.isElite) return false;
+  e.hp = 0;
+  removeEnemy(s, e);
+  s.kills++;
+  if (killer) killer.kills++;
+  const fish = earnFish(s, e.spec.bounty * (1 + s.killFishBonus) * bountyMult, 'kill', e.x, e.y);
+  if (s.ev.has('enemyDie')) s.ev.emit('enemyDie', { enemy: e, x: e.x, y: e.y, fish, purr: 0, killer, transmuted: true });
+  return true;
+}
+
 // ───────────────────────────── per-tick update ─────────────────────────────
 
 function applyAuras(s: Sim, now: number): void {
@@ -430,7 +475,9 @@ export function updateEnemies(s: Sim): void {
       if (bonus > haste) haste = bonus;
     }
     if (haste > HASTE_CAP) haste = HASTE_CAP;
-    e.travelled += e.speed * (1 - e.slow) * (1 + haste) * nap * TICK;
+    // The alchemist's fish walks at a share of its speed, on top of every other factor (a slow, a haste, the nap blanket, the rage). Multiplying
+    // by exactly 1 changes no number, so a battle with no fish plays as before.
+    e.travelled += e.speed * (1 - e.slow) * (1 + haste) * nap * (e.fish ? SP_ROWS.fish.fishSpeed : 1) * TICK;
     pathPoint(e.travelled, point);
     e.x = point.x;
     e.y = point.y;

@@ -62,15 +62,25 @@ const restores: Array<() => void> = [];
 function lend(id: UnitId, def: SpSkillDef, handler: SpHandler = IDLE): void {
   const spec = unitSpec(id);
   const before = spec.spSkill;
-  const handlers = SP_HANDLERS as Record<string, SpHandler | undefined>;
+  const handlers = SP_HANDLERS as Record<string, SpHandler | null | undefined>;
   const had = handlers[def.id];
   spec.spSkill = def;
   handlers[def.id] = handler;
   restores.push(() => {
     if (before) spec.spSkill = before;
     else delete spec.spSkill;
-    if (had) handlers[def.id] = had;
+    // Put back exactly what was there: since step 2 the registry lists all twelve skills, a skill that is not built with a `null`.
+    if (had !== undefined) handlers[def.id] = had;
     else delete handlers[def.id];
+  });
+}
+/** Takes a cat's skill away from its definition for the length of a test (a cat that has none: the skill is built but this test wants a plain one). */
+function stripSkill(id: UnitId): void {
+  const spec = unitSpec(id);
+  const before = spec.spSkill;
+  delete spec.spSkill;
+  restores.push(() => {
+    if (before) spec.spSkill = before;
   });
 }
 afterEach(() => {
@@ -127,10 +137,12 @@ describe('the skill data', () => {
       expect(row.rank).toBe(SP_RANK_OF[id]);
       expect(spRowOf(id)).toBe(row);
     }
-    expect(spRowOf('cut')).toBeNull();
+    // Step 2 gave every skill its row (the ground work, tests/sim.spGround.test.ts) and built the other eight (one test file each): all twelve rows exist and are built.
+    expect(spRowOf('cut')).toBe(SP_ROWS.cut);
+    expect(spRowOf('cut')?.built).toBe(true);
   });
 
-  it('keeps the cooldown in each row\'s own cell: positive and never longer than the owner\'s 34 s, with the rank\'s 18 / 24 / 34 as the starting values', () => {
+  it('keeps the cooldown in each row\'s own cell: positive and never longer than the owner\'s 34 s, and the four step-1 skills at the values the owner settled', () => {
     for (const id of ['shove', 'charge', 'lap', 'wanted'] as const) {
       const row = SP_ROWS[id];
       expect(row.cooldown, `${id} cooldown`).toBeGreaterThan(0);
@@ -138,8 +150,9 @@ describe('the skill data', () => {
       // The cat's definition carries what the row says.
       expect(unitDef(row.unit).spSkill?.cooldown, `${id} definition`).toBe(row.cooldown);
     }
-    // The starting values (the lead proposes a cooldown per skill after the bots have measured: this line is the one to edit then).
-    expect(['shove', 'charge', 'lap', 'wanted'].map((id) => SP_ROWS[id as 'shove'].cooldown)).toEqual([18, 34, 34, 24]);
+    // The owner's values of 2026-10-14, from the lead's proposal after the step-1 bot report: the shove 18 -> 12 s, the lap 34 -> 26 s,
+    // the charge and the wanted shot at their starting 34 s and 24 s.
+    expect(['shove', 'charge', 'lap', 'wanted'].map((id) => SP_ROWS[id as 'shove'].cooldown)).toEqual([12, 34, 26, 24]);
   });
 
   it('has a name for every built skill in Korean and in English, and the cat\'s definition points at it (the name bubble reads it)', () => {
@@ -164,7 +177,10 @@ describe('the skill data', () => {
         }
       }
       for (const [id, pair] of Object.entries(names)) expect(pair[0], id).not.toBe(pair[1]);
-      expect(Object.keys(names).sort()).toEqual(['charge', 'lap', 'shove', 'wanted']);
+      // All twelve skills are built, so all twelve names were checked (`names` is filled only for built rows: the list below is not true by construction).
+      expect(SP_SKILL_IDS.every((id) => spRowOf(id)?.built), 'every skill is built').toBe(true);
+      expect(Object.keys(names).sort()).toEqual([...SP_SKILL_IDS].sort());
+      for (const id of ['charge', 'lap', 'shove', 'wanted']) expect(names[id], id).toBeDefined();
     } finally {
       setLang(original);
       if (hadDocument === undefined) delete g.document;
@@ -192,7 +208,7 @@ describe('the skill data', () => {
     const withSkill = allUnitDefs().filter((d) => d.spSkill).map((d) => d.id);
     expect(withSkill.slice().sort()).toEqual(built.slice().sort());
     expect(built).toContain('w_viking');
-    expect(unitDef('w_viking').spSkill).toEqual({ id: 'shove', rank: 3, cooldown: 18, nameKey: 'sp.shove.name' });
+    expect(unitDef('w_viking').spSkill).toEqual({ id: 'shove', rank: 3, cooldown: 12, nameKey: 'sp.shove.name' });
     expect(spSkillOfUnit('w_viking')).toBe(SP_ROWS.shove);
     for (const row of [SP_ROWS.charge, SP_ROWS.lap, SP_ROWS.wanted]) {
       expect(unitDef(row.unit).spSkill !== undefined, row.id).toBe(row.built);
@@ -214,7 +230,7 @@ describe('the gauge', () => {
     expect(put(sim, 0, 'w_viking').sp).toBe(SP_START_NEW);
     expect(SP_START_NEW).toBe(0.5);
     expect(put(sim, 1, 'w_paw').sp).toBe(0);
-    expect(put(sim, 2, 'w_samurai').sp).toBe(0);
+    expect(put(sim, 2, 'w_sword').sp).toBe(0); // was `w_samurai` until its skill was built in step 2: any cat of rank 1 or 2 stays without one
   });
 
   it('fills by TICK / cooldown, by simulation time only: attack speed, weakening and a bell next to it do not change it', () => {
@@ -222,7 +238,7 @@ describe('the gauge', () => {
     const a = put(plain, 0, 'w_viking');
     a.sp = 0;
     advance(plain, 3);
-    expect(a.sp).toBeCloseTo(3 / 18, 6);
+    expect(a.sp).toBeCloseTo(3 / SP_ROWS.shove.cooldown, 6);
 
     const busy = arena();
     const b = put(busy, 0, 'w_viking');
@@ -232,13 +248,13 @@ describe('the gauge', () => {
     busy.statsDirty = true;
     advance(busy, 3);
     expect(b.buffAttackSpeed).toBeGreaterThan(0);
-    expect(b.sp).toBeCloseTo(3 / 18, 6);
+    expect(b.sp).toBeCloseTo(3 / SP_ROWS.shove.cooldown, 6);
   });
 
-  it('takes 9 s from a start of 50% to a full gauge (18 s cooldown)', () => {
+  it('takes half its cooldown from a start of 50% to a full gauge (the viking: 6 s of its 12)', () => {
     const sim = arena();
     const u = put(sim, 0, 'w_viking');
-    advance(sim, 8.9);
+    advance(sim, SP_ROWS.shove.cooldown / 2 - 0.1);
     expect(u.sp).toBeLessThan(1);
     advance(sim, 0.2);
     expect(u.sp).toBe(1);
@@ -271,7 +287,7 @@ describe('the gauge', () => {
     expect(u.sp).toBe(0.2);
     advance(sim, 0.2);
     expect(u.sp).toBeGreaterThan(0.2);
-    expect(u.sp).toBeLessThan(0.2 + 0.2 / 18 + 1e-9);
+    expect(u.sp).toBeLessThan(0.2 + 0.2 / SP_ROWS.shove.cooldown + 1e-9);
   });
 
   it('is kept by moving and by swapping', () => {
@@ -297,14 +313,20 @@ describe('the gauge', () => {
     expect(made?.id).toBe('w_viking');
     expect(made?.sp).toBe(SP_START_MERGE);
     expect(SP_START_MERGE).toBe(0.5);
-    // Two vikings merge into a samurai, whose skill is not built: no gauge.
+    // Two vikings merge into a samurai, whose skill was built in step 2: it starts at the merge value whatever the vikings had.
     const v1 = put(sim, 2, 'w_viking');
     const v2 = put(sim, 3, 'w_viking');
     v1.sp = 0.9;
     v2.sp = 0.1;
     expect(sim.drop(2, 3)).toBeNull();
     expect(sim.units[3]?.id).toBe('w_samurai');
-    expect(sim.units[3]?.sp).toBe(0);
+    expect(sim.units[3]?.sp).toBe(SP_START_MERGE);
+    // Two paws merge into a sword, a cat without a skill: no gauge.
+    put(sim, 4, 'w_paw');
+    put(sim, 5, 'w_paw');
+    expect(sim.drop(4, 5)).toBeNull();
+    expect(sim.units[5]?.id).toBe('w_sword');
+    expect(sim.units[5]?.sp).toBe(0);
   });
 
   it('keeps the ratio through a molt when the new cat has a skill, and starts the cat of a plain one as a new cat', () => {
@@ -316,7 +338,9 @@ describe('the gauge', () => {
     expect(sim.molt(0, 'mage')).toBeNull();
     expect(sim.units[0]?.id).toBe('m_storm');
     expect(sim.units[0]?.sp).toBe(0.37);
-    // A cat with a skill molting into one without: nothing to keep.
+    // A cat with a skill molting into one without: nothing to keep. (The ninja got its skill in step 2 and every epic cat is getting one, so
+    // the ninja plays "the cat without a skill" with its skill taken away for this test.)
+    stripSkill('r_ninja');
     const second = put(sim, 1, 'w_viking');
     second.sp = 0.8;
     expect(sim.molt(1, 'ranger')).toBeNull();
@@ -418,7 +442,7 @@ describe('the cast', () => {
     const sim = arena();
     const u = put(sim, 0, 'w_viking');
     pinned(sim, 200);
-    u.sp = 1 - 0.5 * (TICK / 18);
+    u.sp = 1 - 0.5 * (TICK / SP_ROWS.shove.cooldown);
     const casts = record(sim, 'spCast');
     sim.step(TICK);
     expect(casts).toHaveLength(1);
@@ -1072,7 +1096,7 @@ describe('the shove', () => {
     expect(e.travelled - after).toBeCloseTo(70 * 1, 0);
   });
 
-  it('casts again after the 18 s of the gauge, on enemies whose window is over', () => {
+  it('casts again once the gauge has filled a second time, on enemies whose window is over', () => {
     const sim = arena();
     const u = fullViking(sim, 0);
     const e = pinned(sim, 200);
@@ -1080,7 +1104,7 @@ describe('the shove', () => {
     sim.step(TICK);
     advance(sim, 4);
     expect(casts).toHaveLength(1);
-    expect(u.sp).toBeCloseTo(4 / 18, 2);
+    expect(u.sp).toBeCloseTo(4 / SP_ROWS.shove.cooldown, 2);
     // The window is over by now (3 s): the next full gauge pushes the same enemy again, from where it stands.
     expect(e.travelled).toBeCloseTo(40, 6);
     u.sp = 1;

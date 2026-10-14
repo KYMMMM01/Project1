@@ -30,7 +30,9 @@ describe('director palette', () => {
       expect(SHOOT_CUE[id].style).toMatch(/^(shot|swing|cast)$/);
     }
     for (const id of CLASS_IDS) expect(CLASS_COLOR[id]).toBeTypeOf('number');
-    expect(Object.keys(STATUS_COLOR)).toHaveLength(8);
+    // The eight statuses of the enemies and the alchemist's fish (Turn Into Fish!, skills step 2): one colour for every kind in `StatusKind`.
+    expect(Object.keys(STATUS_COLOR)).toHaveLength(9);
+    expect(STATUS_COLOR.fish).toBeTypeOf('number');
     // The six abilities of the chapter bosses and the chest's coin spill (2026-10-12).
     expect(Object.keys(ABILITY_CAPTION)).toHaveLength(7);
   });

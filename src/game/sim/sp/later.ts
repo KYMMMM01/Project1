@@ -11,7 +11,7 @@
 import type { Sim } from '../sim';
 import type { SimEnemy, SimUnit } from '../types';
 
-/** The kinds of delayed things. The first three are the step-2 skills' (reserved); `probe` is for tests. */
+/** The kinds of delayed things. The first three are the samurai's cut, the cosmo cat's meteor and the lucky cat's capsule; `probe` is for tests. */
 export type LaterKind = 'cut' | 'meteor' | 'capsule' | 'probe';
 
 export interface LaterItem {

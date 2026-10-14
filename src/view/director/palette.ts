@@ -67,6 +67,8 @@ export const STATUS_COLOR: Readonly<Record<StatusKind, number>> = {
   bleed: Color.berry,
   armor_break: Color.paperDim,
   vulnerable: mixColor(Color.berry, Color.paperLight, 0.3),
+  // The alchemist's fish (Turn Into Fish!): the pink of its smoke. The scene itself is the view workflow's.
+  fish: mixColor(Color.berry, Color.paperLight, 0.5),
 };
 
 /** Face colour of damage-over-time numbers. */
