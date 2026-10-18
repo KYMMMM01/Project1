@@ -11,6 +11,7 @@ import { unitDef } from '@/game';
 import type { UnitState } from '@/game/api';
 import { motion } from '@/ui';
 import type { FieldEnv } from './env';
+import { ringHeld } from './ringHold';
 import { SpRingView, spRingArt, type RingLook, type SpRingArt } from './spRing';
 import {
   FLASH_SECONDS, PULSE_MAX, PULSE_PERIOD, PulseClock, PulseRoster, RING_FULL, SHRUG_SECONDS, momentK, pulseWave, ringFrame, ringMarkOf, shrugCurve,
@@ -75,7 +76,8 @@ export class SpRings {
     const at = this.castAt.get(u.uid);
     const calm = motion.reduced;
     v.shrug = !calm && at !== undefined ? shrugCurve(momentK(battle.time, at, SHRUG_SECONDS)) : 0;
-    const frame = ringFrame(u.sp);
+    // A scene may hold the ring at an older value until its picture lands (`ringHold.ts`: the fish capsule's refund springs back at the lid).
+    const frame = ringFrame(ringHeld(u.uid) ?? u.sp);
     const look = this.look;
     look.frame = frame;
     look.blocked = u.blocked;
@@ -86,6 +88,7 @@ export class SpRings {
     look.mark = ringMarkOf(skill.id, u, battle, calm);
     look.calm = calm;
     look.low = fxSettings.tier === 'low';
+    look.trick = unitDef(u.id).classId === 'trickster';
     ring.draw(look, this.dt);
   }
 

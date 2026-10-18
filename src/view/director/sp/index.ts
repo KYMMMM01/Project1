@@ -8,12 +8,21 @@
  *      the simulation carries on after a revive: `survivesDefeat`) and when the director goes.
  * Mounted only when the battle plays with skills (`BattleApi.spOn`): with them off nothing here exists and no listener is added.
  *
+ * SCENES ARE BUILT ON THEIR SKILL'S FIRST CAST, not at battle start (twelve of them would put their layers, pools and listeners on every
+ * board, though most boards never cast half of the skills). The first cast of a skill in a battle is the one the stage rule never drops (`SpCastEvent.first`,
+ * counted per simulation, and a director belongs to exactly one), so the cast that builds a scene is also the cast that is shown to it: a scene
+ * that listens to `spCast` itself (the ninja's, to seat clones whose cast lost) has not subscribed yet when that very event is delivered, and does
+ * not need to. Follow-up events (`spRunHit`, `bite`, a scene's own `cutOpen`...) only ever follow a cast, so they never find a scene missing.
+ * The scenes made so far are `scenes` (what the QA hook and the tests read); a scene's factory that throws is logged and that skill shows no
+ * picture for the rest of the battle (its ring, bubble and cut-in are not affected).
+ *
  * THE VIEW FAILS ALONE. The simulation emits `spCast` in the middle of a rule (after the gauge is spent, before the damage), and an emitter does not
  * catch: a throw in a picture (a missing texture, a canvas that is not there, a payload a later skill brings) would unwind through `Sim.tick` and
  * leave the cast half done. So every call into a scene or the intro is guarded here: the error is logged (`console.error`, which
  * `window.__errors` records), and a scene that threw is switched off for the rest of the battle.
  */
 import { debugExpose } from '@/core/debug';
+import { clearRingHolds } from '../../field/ringHold';
 import type { SpCastEvent } from '@/game';
 import type { Bus, Stage } from '../stage';
 import { SpIntro } from './intro';
@@ -27,6 +36,7 @@ type SceneMap = Partial<Record<SpSkillName, SpScene<SpSkillName>>>;
 export interface SpStaging {
   rule: StageRule;
   intro: SpIntro;
+  /** The scenes MADE so far (a skill's scene is built on its first cast): empty at mount. */
   scenes: SceneMap;
 }
 
@@ -39,11 +49,10 @@ export function mountSp(stage: Stage, on: Bus): SpStaging | null {
   const rule = new StageRule();
   const intro = new SpIntro(env);
   const scenes: SceneMap = {};
-  for (const id of Object.keys(SCENES) as SpSkillName[]) {
-    const make = SCENES[id] as SpSceneFactory<SpSkillName> | undefined;
-    if (make) scenes[id] = make(env);
-  }
-  const list = Object.values(scenes) as SpScene<SpSkillName>[];
+  /** The scenes in the order they were made: what `update` and `clear` walk. */
+  const list: SpScene<SpSkillName>[] = [];
+  /** Skills whose scene factory threw: no second try in this battle. */
+  const failed = new Set<SpSkillName>();
 
   /** Runs whose cast was shown: the follow-up events of a run whose cast lost are dropped. */
   const runs = new Set<number>();
@@ -68,15 +77,33 @@ export function mountSp(stage: Stage, on: Bus): SpStaging | null {
       }
     }
   };
-  /** The scene of a skill when it exists and has not broken. */
+  /** The scene of a skill when it has been made and has not broken (it never makes one: the follow-up events of a cast find the scene the cast made). */
   const sceneOf = (id: SpSkillName): SpScene<SpSkillName> | undefined => {
     const s = scenes[id];
     return s && !broken.has(s) ? s : undefined;
   };
+  /** The scene of a skill, made now if this is its first cast. A skill with no registry entry (or a factory that threw) has none. */
+  const sceneFor = (id: SpSkillName): SpScene<SpSkillName> | undefined => {
+    if (!scenes[id] && !failed.has(id)) {
+      const make = SCENES[id] as SpSceneFactory<SpSkillName> | undefined;
+      if (make) {
+        try {
+          const s = make(env);
+          scenes[id] = s;
+          list.push(s);
+        } catch (err) {
+          failed.add(id);
+          console.error(`[skills] ${id} scene failed to start`, err);
+        }
+      }
+    }
+    return sceneOf(id);
+  };
 
   on('spCast', (e: SpCastEvent) => {
-    // A skill with no scene (its data is in before its picture is) takes no slot of the stage rule and shows no effect.
-    const scene = sceneOf(e.skill);
+    // A skill with no scene (its data is in before its picture is) takes no slot of the stage rule and shows no effect. The first cast of a
+    // skill builds its scene, whether or not the stage rule then lets this cast show (the first one always does).
+    const scene = sceneFor(e.skill);
     const show = scene !== undefined && rule.admit(stage.now, e.first);
     if (e.first) guarded('intro', () => intro.first(e));
     if (e.skill === 'wanted') wantedShown = show;
@@ -131,10 +158,13 @@ export function mountSp(stage: Stage, on: Bus): SpStaging | null {
     clear();
     for (const s of list) guarded('destroy', () => s.destroy());
     guarded('intro destroy', () => intro.destroy());
+    // The gauge a ring shows in place of the cat's own is module state keyed by a unit's uid, and the next battle numbers its units from 1 again: a
+    // hold a scene failed to let go of must not outlive its battle and show a stranger's gauge on a cat of the next one.
+    clearRingHolds();
     debugExpose('spStage', null);
   });
   debugExpose('spStage', {
-    stats: () => ({ shown: rule.shown, lost: rule.lost, runs: runs.size, broken: broken.size }),
+    stats: () => ({ shown: rule.shown, lost: rule.lost, runs: runs.size, broken: broken.size, made: list.length }),
     scenes,
     rule,
     intro,

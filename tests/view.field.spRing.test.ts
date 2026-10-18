@@ -22,6 +22,7 @@ import {
   RING_OUTER, RING_R, RING_STEPS, RING_W, SHRUG_SECONDS, momentK, pulseWave, ringClearance, ringExtent, ringFrame, ringMarkOf, shrugCurve,
 } from '@/view/field/spRingMath';
 import { SpRings } from '@/view/field/spRings';
+import { clearRingHolds, holdRing, releaseRing } from '@/view/field/ringHold';
 import { CELL_MARK_AT, CLASS_AT, FEET_DY, RANK_AT, UnitView } from '@/view/field/unitView';
 import { UnitViews } from '@/view/field/units';
 
@@ -255,6 +256,7 @@ describe('the ring as a view', () => {
     flash: new Texture(),
     glow: new Texture(),
     holster: new Texture(),
+    trick: new Texture(),
   };
   const look = (over: Partial<RingLook> = {}): RingLook => ({ frame: 5, blocked: false, pulsing: false, wave: 0, flash: -1, mark: null, calm: false, low: false, ...over });
   const parts = (v: SpRingView): { glow: Sprite; body: Sprite; flash: Sprite; mark: Sprite } => {
@@ -537,6 +539,19 @@ describe('the rings of a board', () => {
     u.sp = 1;
     w.frame();
     expect(tex()).not.toBe(half);
+  });
+
+  it('gives a trickster\'s full ring the brown-edged frame and every other class the gold one (the trickster\'s sticker is the gold\'s own mustard)', () => {
+    const w = world(true);
+    w.battle.units[0] = cat(1, 't_bard', 0, 1);
+    w.battle.units[1] = cat(2, 'w_viking', 1, 1);
+    w.battle.units[2] = cat(3, 't_bard', 2, 0.5);
+    w.frame();
+    const art = spRingArt();
+    expect(body(w.ring(1) as SpRingView).texture).toBe(art.trick);
+    expect(body(w.ring(2) as SpRingView).texture).toBe(art.frames[RING_FULL]);
+    // An arc is the same for a trickster: only a full ring differs.
+    expect(body(w.ring(3) as SpRingView).texture).toBe(art.frames[12]);
   });
 
   it('follows the cat: it is inside the cat\'s own view, so a move of the view carries it', () => {
@@ -854,5 +869,115 @@ describe('SpRings alone', () => {
     rings.destroy();
     expect(b.listeners).toBe(0);
     expect(rings.pulsing()).toEqual([]);
+  });
+});
+
+describe('the gauge a scene holds on a ring (`ringHold.ts`)', () => {
+  beforeEach(() => {
+    stubCanvas();
+    setFxSettings({ tier: 'mid', reducedMotion: false });
+    motion.reduced = false;
+    clearRingHolds();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    motion.reduced = false;
+    clearRingHolds();
+  });
+
+  const body = (v: SpRingView): Sprite => v.root.children[1] as Sprite;
+
+  it('shows the held value in place of the cat\'s own while a scene holds it, and the cat\'s own again once it is let go', () => {
+    const w = world(true);
+    w.battle.units[0] = cat(1, 'w_viking', 0, 0.5);
+    w.frame();
+    const ring = w.ring(1) as SpRingView;
+    const sheet = spRingArt();
+    expect(body(ring).texture).toBe(sheet.frames[12]);
+    // The fish capsule's refund: the simulation wrote the half already, the ring shows empty until the lid springs it back.
+    holdRing(1, 0);
+    w.frame();
+    expect(body(ring).texture).toBe(sheet.frames[0]);
+    holdRing(1, 1);
+    w.frame();
+    expect(body(ring).texture).toBe(sheet.frames[RING_FULL]);
+    // Another cat's hold changes nothing here.
+    releaseRing(1);
+    holdRing(99, 0);
+    w.frame();
+    expect(body(ring).texture).toBe(sheet.frames[12]);
+  });
+
+  it('leaves a ring alone when nothing is held (the cat\'s own gauge, as it always was)', () => {
+    const w = world(true);
+    const u = cat(1, 'w_viking', 0, 0);
+    w.battle.units[0] = u;
+    w.frame();
+    const ring = w.ring(1) as SpRingView;
+    for (const sp of [0.3, 0.6, 0.9]) {
+      u.sp = sp;
+      w.frame();
+      expect(body(ring).texture).toBe(spRingArt().frames[Math.floor(sp * RING_STEPS)]);
+    }
+  });
+});
+
+describe('the ring sheet has room for every frame it cuts', () => {
+  it('lays the trickster\'s closed ring inside the canvas (a sheet one row short would cut it from outside, and the ring would be empty)', () => {
+    const create = stubCanvas();
+    // A fresh sheet: the module keeps the first one made, so look at the canvas the first test of this file made, through its textures.
+    const a = spRingArt();
+    const canvas = (a.trick.source as unknown as { resource: { width: number; height: number } }).resource;
+    expect(canvas.height).toBeGreaterThan(0);
+    for (const t of [...a.frames, a.flash, a.glow, a.holster, a.trick]) {
+      expect(t.frame.x + t.frame.width, t.label).toBeLessThanOrEqual(canvas.width / 3 + 1e-6);
+      expect(t.frame.y + t.frame.height, t.label).toBeLessThanOrEqual(canvas.height / 3 + 1e-6);
+    }
+    vi.unstubAllGlobals();
+    void create;
+  });
+});
+
+describe('the lucky cat\'s partner arrives from the sky', () => {
+  beforeEach(() => {
+    stubCanvas();
+    setFxSettings({ tier: 'mid', reducedMotion: false });
+    motion.reduced = false;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    motion.reduced = false;
+  });
+
+  /** A summon of this source, then the frame that makes the cat's view; returns what the arrivals were asked to do. */
+  function summoned(source: 'skill' | 'button' | 'choice'): { drop: number; toss: number; ring: number } {
+    const w = world(true);
+    const arrivals = (w.views as unknown as { arrivals: { drop: (...a: unknown[]) => void; toss: (...a: unknown[]) => void; ring: (...a: unknown[]) => void } }).arrivals;
+    const calls = { drop: 0, toss: 0, ring: 0 };
+    arrivals.drop = () => void calls.drop++;
+    arrivals.toss = () => void calls.toss++;
+    arrivals.ring = () => void calls.ring++;
+    // The NEW tag needs a font; what it looks like is not what these tests are about.
+    vi.spyOn(UnitView.prototype, 'markNew').mockImplementation(() => undefined);
+    const u = cat(7, 'w_paw', 6);
+    w.battle.units[6] = u;
+    w.battle.events.emit('summon', { unit: u, source });
+    w.frame();
+    return calls;
+  }
+
+  it('falls straight down for a summon of source skill (a gift from above), with no toss from the summon button', () => {
+    expect(summoned('skill')).toEqual({ drop: 1, toss: 0, ring: 0 });
+  });
+
+  it('is tossed from the button for the player\'s own summon and from the pick\'s sheet for a pick, as it always was', () => {
+    expect(summoned('button')).toEqual({ drop: 0, toss: 1, ring: 0 });
+    expect(summoned('choice')).toEqual({ drop: 0, toss: 1, ring: 0 });
+  });
+
+  it('under reduced motion lands at once (just the ring), whatever the source', () => {
+    motion.reduced = true;
+    expect(summoned('skill')).toEqual({ drop: 0, toss: 0, ring: 1 });
   });
 });

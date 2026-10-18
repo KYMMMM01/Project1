@@ -19,6 +19,9 @@ const spies = vi.hoisted(() => ({
   intro: { first: vi.fn(), update: vi.fn(), clear: vi.fn(), destroy: vi.fn() },
   scene: { cast: vi.fn(), runHit: vi.fn(), runBurst: vi.fn(), runEnd: vi.fn(), bite: vi.fn(), update: vi.fn(), clear: vi.fn(), destroy: vi.fn() },
   made: [] as string[],
+  /** Skills whose factory should throw, and how many times each factory was asked. */
+  fail: new Set<string>(),
+  attempts: {} as Record<string, number>,
 }));
 vi.mock('@/view/director/sp/intro', () => ({
   SpIntro: class {
@@ -35,6 +38,8 @@ vi.mock('@/view/director/sp/scenes', () => ({
       return { ...spies.scene };
     },
     charge: () => {
+      spies.attempts.charge = (spies.attempts.charge ?? 0) + 1;
+      if (spies.fail.has('charge')) throw new Error('no texture');
       spies.made.push('charge');
       // The tiger's scene has a run in flight that the simulation carries on after a revive: a defeat does not clear it.
       return { ...spies.scene, survivesDefeat: true };
@@ -267,6 +272,8 @@ describe('the skills\' dispatcher', () => {
     vi.stubGlobal('window', { __dbg: {} });
     for (const group of [spies.intro, spies.scene]) for (const fn of Object.values(group)) fn.mockClear();
     spies.made.length = 0;
+    spies.fail.clear();
+    spies.attempts = {};
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -281,14 +288,59 @@ describe('the skills\' dispatcher', () => {
     expect(spies.intro.first).not.toHaveBeenCalled();
   });
 
-  it('makes the scenes of the registry and hands each cast to the scene of its skill, once the stage rule lets it through', () => {
+  it('builds a scene on the first cast of its skill and not before, and hands each cast to the scene of its skill, once the stage rule lets it through', () => {
     const h = harness(true);
-    mountSp(h.stage, h.on);
-    expect(spies.made.sort()).toEqual(['charge', 'shove', 'wanted']);
+    const staging = mountSp(h.stage, h.on);
+    // Nothing is built at mount: three scenes (and in the real registry twelve) would be empty layers, pools and listeners on every board.
+    expect(spies.made).toEqual([]);
+    expect(Object.keys(staging?.scenes ?? {})).toEqual([]);
     const e = cast('shove', false);
     h.battle.events.emit('spCast', e);
+    expect(spies.made).toEqual(['shove']);
     expect(spies.scene.cast).toHaveBeenCalledTimes(1);
     expect(spies.scene.cast).toHaveBeenCalledWith(e);
+    // A second cast of the same skill makes nothing more; another skill makes its own, and only its own.
+    h.stage.now += 1;
+    h.battle.events.emit('spCast', cast('shove', false));
+    expect(spies.made).toEqual(['shove']);
+    h.battle.events.emit('spCast', cast('wanted', true));
+    expect(spies.made).toEqual(['shove', 'wanted']);
+    expect(Object.keys(staging?.scenes ?? {}).sort()).toEqual(['shove', 'wanted']);
+  });
+
+  it('builds the scene of a cast that LOST the stage rule too (a scene that follows the simulation\'s state must exist), and the lost cast shows nothing', () => {
+    const h = harness(true);
+    const staging = mountSp(h.stage, h.on);
+    h.stage.now = 4;
+    h.battle.events.emit('spCast', cast('shove', true));
+    h.stage.now = 4.05;
+    // Inside the gap and not marked first: the charge scene is built (the cast is the first this director sees of it) and shows nothing.
+    h.battle.events.emit('spCast', cast('charge', false, { runId: 1 }));
+    expect(spies.made).toEqual(['shove', 'charge']);
+    expect(spies.scene.cast).toHaveBeenCalledTimes(1);
+    expect(staging?.rule.lost).toBe(1);
+  });
+
+  it('a factory that throws costs its skill the picture and nothing else: logged once, not asked again, no slot spent, the intro still shown', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const h = harness(true);
+    const staging = mountSp(h.stage, h.on);
+    spies.fail.add('charge');
+    expect(() => h.battle.events.emit('spCast', cast('charge', true, { runId: 1 }))).not.toThrow();
+    expect(err).toHaveBeenCalledTimes(1);
+    expect(spies.intro.first).toHaveBeenCalledTimes(1);
+    expect(spies.scene.cast).not.toHaveBeenCalled();
+    expect(staging?.rule.shown).toBe(0);
+    h.stage.now += 1;
+    h.battle.events.emit('spCast', cast('charge', false, { runId: 2 }));
+    expect(spies.attempts.charge).toBe(1);
+    expect(err).toHaveBeenCalledTimes(1);
+    // The other skills are untouched, and the failed one's run events find no scene.
+    h.battle.events.emit('spCast', cast('shove', false));
+    expect(spies.scene.cast).toHaveBeenCalledTimes(1);
+    expect(() => h.battle.events.emit('spRunHit', { runId: 1, skill: 'charge', enemy: {} as EnemyState, x: 0, y: 0, head: 0 })).not.toThrow();
+    expect(spies.scene.runHit).not.toHaveBeenCalled();
+    err.mockRestore();
   });
 
   it('drops the effect of a cast that comes inside the gap and shows it again after, by REAL time', () => {
@@ -375,8 +427,15 @@ describe('the skills\' dispatcher', () => {
     const h = harness(true);
     mountSp(h.stage, h.on);
     expect(h.frames).toHaveLength(1);
+    // Before any cast there is no scene to give a frame to (the intro has its own).
     h.battle.time = 0.5;
     (h.frames[0] as (dt: number) => void)(1 / 60);
+    expect(spies.scene.update).not.toHaveBeenCalled();
+    expect(spies.intro.update).toHaveBeenLastCalledWith(1 / 60, 0.5);
+    h.battle.events.emit('spCast', cast('shove', true));
+    h.battle.time = 1;
+    (h.frames[0] as (dt: number) => void)(1 / 60);
+    expect(spies.scene.update).toHaveBeenCalledTimes(1);
     expect(spies.scene.update).toHaveBeenLastCalledWith(1 / 60, 0.5);
     expect(spies.intro.update).toHaveBeenLastCalledWith(1 / 60, 0.5);
     (h.frames[0] as (dt: number) => void)(1 / 60);
@@ -386,6 +445,15 @@ describe('the skills\' dispatcher', () => {
   it('cuts everything off on victory and on defeat, and frees everything when the director goes', () => {
     const h = harness(true);
     mountSp(h.stage, h.on);
+    // A victory before anything has cast has no scene to cut off; then all three skills cast once.
+    h.battle.events.emit('victory', {} as BattleEvents['victory']);
+    expect(spies.scene.clear).not.toHaveBeenCalled();
+    spies.intro.clear.mockClear();
+    h.battle.events.emit('spCast', cast('shove', true));
+    h.stage.now += 1;
+    h.battle.events.emit('spCast', cast('charge', true, { runId: 1 }));
+    h.stage.now += 1;
+    h.battle.events.emit('spCast', cast('wanted', true));
     h.battle.events.emit('victory', {} as BattleEvents['victory']);
     expect(spies.scene.clear).toHaveBeenCalledTimes(3);
     expect(spies.intro.clear).toHaveBeenCalledTimes(1);
@@ -417,12 +485,13 @@ describe('the skills\' dispatcher', () => {
     expect(spies.scene.cast).toHaveBeenCalledTimes(1);
     h.battle.events.emit('spCast', cast('charge', false, { runId: 4 }));
     expect(spies.scene.cast).toHaveBeenCalledTimes(2);
-    // Its frame is not asked for any more either (two scenes are left to update).
+    // Its frame is not asked for any more either (one scene is left to update: the tiger's, built by its first cast).
     spies.scene.update.mockClear();
     (h.frames[0] as (dt: number) => void)(1 / 60);
-    expect(spies.scene.update).toHaveBeenCalledTimes(2);
+    expect(spies.scene.update).toHaveBeenCalledTimes(1);
     h.destroy();
-    expect(spies.scene.destroy).toHaveBeenCalledTimes(3);
+    // The broken scene is still destroyed with the director, and only the two that were ever built.
+    expect(spies.scene.destroy).toHaveBeenCalledTimes(2);
     err.mockRestore();
   });
 
@@ -433,10 +502,13 @@ describe('the skills\' dispatcher', () => {
     const boom = (): never => {
       throw new Error('boom');
     };
+    // The shove is built first and stays whole, so there is a scene left to give a frame to when the gunner's breaks.
+    h.battle.events.emit('spCast', cast('shove', true));
+    h.stage.now += 1;
     spies.intro.first.mockImplementationOnce(boom);
     expect(() => h.battle.events.emit('spCast', cast('wanted', true, { mode: 'bite' }))).not.toThrow();
     // The intro threw, the picture did not care.
-    expect(spies.scene.cast).toHaveBeenCalledTimes(1);
+    expect(spies.scene.cast).toHaveBeenCalledTimes(2);
     spies.scene.bite.mockImplementationOnce(boom);
     expect(() => h.battle.events.emit('bite', { amount: 1 } as BattleEvents['bite'])).not.toThrow();
     spies.intro.update.mockImplementationOnce(boom);

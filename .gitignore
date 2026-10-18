@@ -10,6 +10,8 @@ coverage/
 art/*.log
 art/tests/_*.png
 .shots/
+# vitest reporter output (--reporter=json and friends)
+.vitest/
 
 # patch video outputs and the owner-supplied music (not redistributable)
 video/*.mp3

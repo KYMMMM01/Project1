@@ -38,6 +38,7 @@ import { setFxSettings } from '@/fx/settings';
 import type { BattleEvents, EnemyState, SpCastEvent, UnitState } from '@/game/api';
 import { PATH_LENGTH, cellCenterX, cellCenterY, pathPoint, wrapPath } from '@/game/geometry';
 import { mountSp } from '@/view/director/sp';
+import { lazyLive } from './lazyScene';
 import { BODY_SCALE, GHOST_KEEP, MERGE_AGE, MERGE_DIST, makeCharge } from '@/view/director/sp/charge';
 import { NIGHT_ALPHA, makeLap } from '@/view/director/sp/lap';
 import { bodyX } from '@/view/field/policy';
@@ -1076,8 +1077,7 @@ describe('the two scenes behind the dispatcher', () => {
   it('routes the cast, the hits, the burst and the end of a run to the scene of its skill, and only for a run whose cast was shown', () => {
     const m = mount();
     viewOf(m.a, tigerUnit());
-    const charge = m.staging?.scenes.charge as unknown as { live(): { runs: number; stomps: number; bodies: Array<{ id: number; phase: string }> } };
-    expect(charge).toBeDefined();
+    const charge = lazyLive<{ runs: number; stomps: number; bodies: Array<{ id: number; phase: string }> }>(m.staging, 'charge');
     m.a.events.emit('spCast', tigerCast(m.a.battle.time, 1, 700) as never);
     // A second cast in the same quarter second loses to the stage rule: its run shows nothing of its own.
     m.a.events.emit('spCast', tigerCast(m.a.battle.time, 2, 1500, tigerUnit(8, 13)) as never);
@@ -1099,8 +1099,8 @@ describe('the two scenes behind the dispatcher', () => {
     for (const end of ['victory'] as const) {
       const m = mount();
       viewOf(m.a, tigerUnit());
-      const charge = m.staging?.scenes.charge as unknown as { live(): { runs: number; stomps: number; prints: number } };
-      const lap = m.staging?.scenes.lap as unknown as { live(): { runs: number; stars: number; night: number } };
+      const charge = lazyLive<{ runs: number; stomps: number; prints: number }>(m.staging, 'charge');
+      const lap = lazyLive<{ runs: number; stars: number; night: number }>(m.staging, 'lap');
       m.a.events.emit('spCast', tigerCast(m.a.battle.time, 1, 700) as never);
       for (let i = 0; i < 20; i++) m.tick();
       m.a.stage.now += 1;
@@ -1127,8 +1127,8 @@ describe('the two scenes behind the dispatcher', () => {
     const m = mount();
     viewOf(m.a, tigerUnit());
     type ChargeLive = { runs: number; stomps: number; bodies: Array<{ id: number; phase: string; x: number; y: number }> };
-    const charge = m.staging?.scenes.charge as unknown as { live(): ChargeLive };
-    const lap = m.staging?.scenes.lap as unknown as { live(): { runs: number; stars: number; night: number; heads: Array<{ x: number; y: number }> } };
+    const charge = lazyLive<ChargeLive>(m.staging, 'charge');
+    const lap = lazyLive<{ runs: number; stars: number; night: number; heads: Array<{ x: number; y: number }> }>(m.staging, 'lap');
     m.a.events.emit('spCast', tigerCast(m.a.battle.time, 1, 700) as never);
     for (let i = 0; i < 30; i++) m.tick();
     m.a.stage.now += 1;

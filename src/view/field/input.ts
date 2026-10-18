@@ -298,8 +298,10 @@ export class FieldInput {
 
   /** Per frame: cancel a drag that a popup or choice interrupted, keep the sell tag and range ring in step. */
   update(dt: number): void {
-    if (this.pointerId !== -1 && this.blocked()) this.abort();
     const { battle } = this.env;
+    if (this.pointerId !== -1 && this.blocked()) this.abort();
+    // The cat in the hand was replaced where it stands (the lucky cat's partner capsule promoted it, or its guardian capsule awakened it): let go.
+    else if (this.pointerId !== -1 && this.dragFrom !== null && this.view && battle.units[this.dragFrom]?.uid !== this.view.uid) this.abort();
     const selected = this.ctx.selected;
     // The ring follows what is held, else what is selected, else what a finger is pressing.
     const shown = this.dragFrom ?? selected ?? (this.pointerId !== -1 && this.mode === 'unit' ? this.pressCell : null);

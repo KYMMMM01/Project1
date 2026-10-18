@@ -65,6 +65,18 @@ describe('a banner that takes no taps (a skill\'s cut-in arrives in the middle o
     expect(cut.playing).toBe(false);
   });
 
+  it('with `passThrough` the whole banner is out of the hit test (its dim covers the screen, and Pixi lets any visible sprite swallow a press), and by default it is not', () => {
+    const normal = new AwakeningCutIn();
+    normal.play(Texture.WHITE, 'name', { short: true, screen: screen as never, haptics: false });
+    expect((game.overlayLayer.children[0] as Container).eventMode).not.toBe('none');
+    normal.destroy();
+    const cut = new AwakeningCutIn();
+    cut.play(Texture.WHITE, 'name', { short: true, screen: screen as never, haptics: false, passThrough: true });
+    const layer = game.overlayLayer.children[0] as Container;
+    expect(layer.eventMode).toBe('none');
+    cut.destroy();
+  });
+
   it('with `passThrough` the press goes through to what is under it and a tap does not skip it', () => {
     const cut = new AwakeningCutIn();
     cut.play(Texture.WHITE, 'name', { short: true, screen: screen as never, haptics: false, passThrough: true });

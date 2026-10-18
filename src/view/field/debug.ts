@@ -8,9 +8,9 @@ import { scenes } from '@/core/scene';
 import { skillsOn } from '@/core/skillSwitch';
 import { BootScene } from '@/scenes/BootScene';
 import { BattleScene, setBattleCreatedHook } from '@/scenes/BattleScene';
-import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, TICK, unitSpec, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type RelicId, type UnitId } from '@/game';
+import { BASE_UNIT_IDS, CHAPTERS, MAX_STAKE, RELIC_IDS, SP_CAPSULE_KINDS, SP_ROWS, TICK, unitSpec, type BattleApi, type BattleMode, type EnemyId, type HazardKind, type RelicId, type SpCapsuleKind, type UnitId } from '@/game';
 import { createBot } from '@/game/sim/bots';
-import { spawnEnemy, killEnemy, removeEnemy } from '@/game/sim/enemies';
+import { applyStatus, spawnEnemy, killEnemy, removeEnemy } from '@/game/sim/enemies';
 import { scheduleHazard } from '@/game/sim/hazards';
 import { makeUnit, refresh } from '@/game/sim/board';
 import { addFish, addPurr } from '@/game/sim/economy';
@@ -20,6 +20,9 @@ import { audio } from '@/audio';
 import { warm } from '@/fx';
 import type { RunConfig } from '../context';
 import { DEFAULT_RUG } from './rugSkins';
+
+/** The real odds of the lucky cat's capsule, kept while the debug hook `capsule(kind)` has them rewritten. */
+let capsuleOdds: { weights: typeof SP_ROWS.capsule.weights; moreWeights: typeof SP_ROWS.capsule.moreWeights } | null = null;
 
 const MODES: readonly BattleMode[] = ['tutorial', 'chapter', 'daily', 'endless', 'gold'];
 
@@ -188,10 +191,47 @@ export function installBattleDebug(scene: BattleScene): void {
       const s = need();
       spawnEnemy(s, id, from, s.baseHp() * hp, false);
     },
-    /** A boss (`boss_blender` ...) at `from` px of road with the sim's usual boss health. */
-    boss(id: EnemyId = 'boss_blender', from = 200): void {
+    /** A boss (`boss_blender` ...) at `from` px of road with the sim's usual boss health. `strip`: the HUD's boss strip shows it too, as it does a wave's own boss (the alchemist's fish chip lives there). */
+    boss(id: EnemyId = 'boss_blender', from = 200, strip = false): void {
       const s = need();
-      spawnEnemy(s, id, from, s.baseHp(), false, s.baseHp() * 400);
+      const e = spawnEnemy(s, id, from, s.baseHp(), false, s.baseHp() * 400);
+      if (strip) s.boss = e;
+    },
+    /**
+     * Chill enemies for the frost queen's knock: from the `from`-th enemy on the field (spawn order) the first `frozen` are frozen and the next
+     * `slowed` slowed, for `seconds` (the real status, as a blizzard would give it; a boss never freezes). Returns how many were visited.
+     */
+    chill(frozen = 3, slowed = 6, seconds = 30, from = 0): number {
+      const s = need();
+      let n = 0;
+      for (const e of s.enemies.slice(from)) {
+        if (n < frozen) applyStatus(s, e, 'freeze', 1, seconds, null);
+        else if (n < frozen + slowed) applyStatus(s, e, 'slow', 0.4, seconds, null);
+        else break;
+        n++;
+      }
+      return n;
+    },
+    /**
+     * Fix the kind of the lucky cat's NEXT capsules (and, for a One More!, the kind of the small capsule inside it): the odds row is rewritten for it
+     * and stays so until `capsule()` is called with no argument, which puts the real odds back. Stage the rest through the board (`put`, `board`) and
+     * the gauge: the fallbacks are real ones (a partner with no cat to twin: a board of lucky cats only; a guardian with no King to awaken: the same; a
+     * toy with every toy owned: `relicAll()`), and a full board makes the partner promote a cat where it stands.
+     */
+    capsule(kind?: SpCapsuleKind, inner: 'partner' | 'toy' | 'guardian' = 'partner'): void {
+      const row = SP_ROWS.capsule;
+      capsuleOdds ??= { weights: { ...row.weights }, moreWeights: { ...row.moreWeights } };
+      if (!kind) {
+        row.weights = capsuleOdds.weights;
+        row.moreWeights = capsuleOdds.moreWeights;
+        return;
+      }
+      row.weights = Object.fromEntries(SP_CAPSULE_KINDS.map((k) => [k, k === kind ? 100 : 0])) as typeof row.weights;
+      row.moreWeights = { partner: inner === 'partner' ? 1 : 0, toy: inner === 'toy' ? 1 : 0, guardian: inner === 'guardian' ? 1 : 0 };
+    },
+    /** Give every toy there is (the toy capsule then has nothing left to offer and pays purr instead). */
+    relicAll(): void {
+      for (const id of RELIC_IDS) gainRelic(need(), id);
     },
     /** Hold the battle (pause reason 'user') or let it run again. */
     hold(on = true): void {

@@ -112,7 +112,7 @@ describe('the rows of the eight remaining skills', () => {
     expect(row.fishRefund).toBeLessThan(1);
     // The mean interval between capsules the design works out: cooldown x (1 - 0.30 x refund) = 28.9 s.
     expect(row.cooldown * (1 - (row.weights.fish / 100) * row.fishRefund)).toBeCloseTo(28.9, 5);
-    expect(SP_CAPSULE_KINDS.map((k) => row.marks[k].color)).toEqual(['pink', 'pink', 'sky', 'pink', 'gold', 'rainbow']);
+    expect(SP_CAPSULE_KINDS.map((k) => row.marks[k].color)).toEqual(['pink', 'pink', 'mint', 'pink', 'gold', 'rainbow']);
     expect(SP_CAPSULE_KINDS.map((k) => row.marks[k].mark)).toEqual(['none', 'heart', 'paws', 'smallCapsule', 'star', 'bands']);
   });
 

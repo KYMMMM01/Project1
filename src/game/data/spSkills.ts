@@ -291,7 +291,7 @@ export interface SpCapsuleRow extends SpRowBase<'capsule'> {
   /** In the tutorial the toy and the guardian lines pay purr instead (the lessons react to the real events). */
   tutorial: { toyPurr: number; guardianPurr: number };
   /** The colour and the mark of each capsule, for the view (the mark is what tells the three pink ones apart at 40 px). */
-  marks: Readonly<Record<SpCapsuleKind, { color: 'pink' | 'sky' | 'gold' | 'rainbow'; mark: 'none' | 'heart' | 'paws' | 'smallCapsule' | 'star' | 'bands' }>>;
+  marks: Readonly<Record<SpCapsuleKind, { color: 'pink' | 'mint' | 'gold' | 'rainbow'; mark: 'none' | 'heart' | 'paws' | 'smallCapsule' | 'star' | 'bands' }>>;
   /** Knobs the design describes and did NOT switch on: a full board turns a fish capsule into purr 1; a common as the best partner on a full board pays purr 3; the bard may also fill the lucky cat's gauge (true = it may); the rolls come from the `combat` stream (the other option is a hash of seed, wave and the cast's order in the wave). */
   fullBoardFish: boolean;
   /** The purr a fish capsule pays instead of its fish when `fullBoardFish` is on and the board has no empty tile (design 3.12.9: +1). */
@@ -410,7 +410,7 @@ export const SP_ROWS: SpRows = {
     guardianPick: { safe: true, order: ['stepDesc', 'classOrder', 'lowerCell'], free: true, eventFree: true },
     tutorial: { toyPurr: 5, guardianPurr: 10 },
     marks: {
-      fish: { color: 'pink', mark: 'none' }, purr: { color: 'pink', mark: 'heart' }, partner: { color: 'sky', mark: 'paws' },
+      fish: { color: 'pink', mark: 'none' }, purr: { color: 'pink', mark: 'heart' }, partner: { color: 'mint', mark: 'paws' }, // mint green, not the design's sky blue: the ninja's clones are already sky blue (view, step 2)
       more: { color: 'pink', mark: 'smallCapsule' }, toy: { color: 'gold', mark: 'star' }, guardian: { color: 'rainbow', mark: 'bands' },
     },
     fullBoardFish: false, fullBoardFishPurr: 1, fullBoardPartnerFloor: false, bardTargetsCapsule: true, rollsFrom: 'combat', oneAtATime: false, sharedGauge: true,

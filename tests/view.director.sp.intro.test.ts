@@ -27,6 +27,8 @@ import { BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT, cellCenterX, cellCenterY } from 
 import { FEET_DY } from '@/view/field/unitView';
 import { BUBBLE_FLOOR, BUBBLE_LIFE, CUTIN_TEMPO, CUTIN_WAIT, SpIntro, bubbleSpot, cutInTempo } from '@/view/director/sp/intro';
 import { CUTIN_QUEUE } from '@/view/director/sp/stageRule';
+import { game } from '@/core/game';
+import { stageHeldFor } from '@/view/staging';
 import type { SpEnv } from '@/view/director/sp/types';
 
 const DT = 1 / 60;
@@ -251,11 +253,12 @@ describe('the first cast of a rank 5 skill: the cut-in', () => {
     const { intro, numbers, awakening } = make();
     intro.first(tiger());
     expect(awakening).toHaveBeenCalledTimes(1);
-    // The archer casts for the first time while the tiger's banner is up: it waits (and shows no bubble: the banner will say its name).
+    // The archer casts for the first time while the tiger's banner is up: its banner waits, and its name stands over the cat now, because the
+    // picture it announces starts at once and the banner trails it.
     intro.first(star());
     expect(awakening).toHaveBeenCalledTimes(1);
-    expect(intro.pending()).toEqual({ bubbles: 0, waiting: 1 });
-    expect(numbers.children.length).toBe(0);
+    expect(intro.pending()).toEqual({ bubbles: 1, waiting: 1 });
+    expect(numbers.children.length).toBe(1);
     // The banner is still up: nothing starts.
     run(intro, 0.5, 1);
     expect(awakening).toHaveBeenCalledTimes(1);
@@ -304,23 +307,24 @@ describe('the first cast of a rank 5 skill: the cut-in', () => {
     cut.playing = true;
     for (let i = 0; i < CUTIN_QUEUE; i++) intro.first(tiger(i + 3));
     expect(intro.pending().waiting).toBe(CUTIN_QUEUE);
-    expect(numbers.children.length).toBe(0);
+    // Each banner that waits has its bubble up already.
+    expect(numbers.children.length).toBe(CUTIN_QUEUE);
     intro.first(star());
     expect(intro.pending().waiting).toBe(CUTIN_QUEUE);
-    expect(numbers.children.length).toBe(1);
+    expect(numbers.children.length).toBe(CUTIN_QUEUE + 1);
     expect(awakening).not.toHaveBeenCalled();
   });
 
-  it('gives up on a banner that has waited too long and shows the bubble in its place', () => {
+  it('gives up on a banner that has waited too long (its bubble was up when it joined the queue and is gone again by then)', () => {
     const { intro, numbers, awakening } = make();
     cut.playing = true;
     intro.first(star());
+    expect(numbers.children.length).toBe(1);
     run(intro, CUTIN_WAIT - 0.2, 1);
     expect(intro.pending().waiting).toBe(1);
-    expect(numbers.children.length).toBe(0);
     run(intro, 0.4, 1);
     expect(intro.pending().waiting).toBe(0);
-    expect(numbers.children.length).toBe(1);
+    expect(numbers.children.length).toBe(0);
     expect(awakening).not.toHaveBeenCalled();
   });
 
@@ -334,5 +338,50 @@ describe('the first cast of a rank 5 skill: the cut-in', () => {
     intro.update(DT, DT);
     expect(awakening).not.toHaveBeenCalled();
     expect(numbers.children.length).toBe(0);
+  });
+});
+
+describe('the banners hold the stage for a full screen that the same cast opens', () => {
+  // A hold is module state that only ever grows: each test starts well past the ones before it.
+  let epoch = 1000;
+  beforeEach(() => {
+    epoch += 100;
+    game.time = epoch;
+    cut.playing = false;
+  });
+
+  it('holds it for the banner that plays and for every banner that waits behind it, one banner\'s length each', () => {
+    const { intro } = make();
+    expect(stageHeldFor()).toBe(0);
+    intro.first(tiger());
+    expect(stageHeldFor()).toBeCloseTo(0.8, 6);
+    intro.first(star());
+    expect(stageHeldFor()).toBeCloseTo(1.6, 6);
+    // Real time passes: the hold runs down with it.
+    game.time += 0.5;
+    expect(stageHeldFor()).toBeCloseTo(1.1, 6);
+  });
+
+  it('counts a banner at the speed the game runs at (1.5 times as fast at 3x)', () => {
+    const { intro } = make({ speed: 3 });
+    intro.first(tiger());
+    expect(stageHeldFor()).toBeCloseTo(0.8 / CUTIN_TEMPO[3], 6);
+  });
+
+  it('holds nothing for a skill below rank 5, which shows no banner', () => {
+    const { intro } = make();
+    intro.first(cast('r_gunner', 6, 'wanted'));
+    expect(stageHeldFor()).toBe(0);
+  });
+
+  it('takes back the share of a banner that was given up: the chain ends where it would without it', () => {
+    const { intro } = make();
+    const chainEnd = (): number => (intro as unknown as { chainEnd: number }).chainEnd;
+    cut.playing = true;
+    intro.first(star());
+    expect(chainEnd()).toBeCloseTo(game.time + 0.8, 6);
+    run(intro, CUTIN_WAIT + 0.2, 1);
+    expect(intro.pending().waiting).toBe(0);
+    expect(chainEnd()).toBeCloseTo(game.time, 6);
   });
 });

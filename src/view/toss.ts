@@ -7,6 +7,9 @@ import type { SummonSource } from '@/game/api';
 /** Seconds from the press to the landing: fast enough to feel instant, slow enough to follow with the eye. */
 export const TOSS_SECONDS = 0.26;
 
+/** Seconds the lucky cat's partner (a summon of source 'skill') takes to fall straight down onto its tile from the sky. */
+export const SKILL_DROP_SECONDS = 0.32;
+
 /** The ring on the landing cell shows this long (the "NEW" tag stays much longer, see `NEW_TAG_SECONDS`). */
 export const LAND_RING_SECONDS = 0.7;
 
@@ -19,6 +22,7 @@ export const NEW_TAG_SECONDS = 2;
  */
 export function tossFor(source: SummonSource, reduced: boolean): number {
   if (reduced) return 0;
+  if (source === 'skill') return SKILL_DROP_SECONDS;
   return source === 'button' || source === 'script' || source === 'choice' ? TOSS_SECONDS : 0;
 }
 

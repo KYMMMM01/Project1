@@ -200,7 +200,11 @@ export class RelicScreen {
     const act = this.env.battle.act;
     // The tutorial's first toy choice says what toys are in the line under the title.
     const line = this.env.lessonOn('toys') ? topicTeach('toys') : p && p.picksLeft > 1 ? t('hud.relic.many', { n: p.picksLeft }) : t('hud.relic.one');
-    const texts: [string, string] = [t('hud.relic.cleared', { act }), line];
+    // A lucky cat's toy capsule opens this screen in the middle of a wave: its heading is the capsule's cry, not "stage cleared", and the line under it names the skill.
+    const texts: [string, string] =
+      p?.source === 'capsule'
+        ? [`${t('sp.capsule.toy.a')} ${t('sp.capsule.toy.b')}`, t('sp.capsule.name')]
+        : [t('hud.relic.cleared', { act }), line];
     const w = this.scaffold.contentWidth;
     let head = this.head;
     if (!head) {
@@ -462,6 +466,12 @@ export class RelicScreen {
   private buildReroll(p: RelicPending): void {
     const bar = this.scaffold.actionBar;
     const { battle, sandbox } = this.env;
+    // A toy capsule's pick cannot be rerolled (the simulation refuses it too): no reroll row at all, and the next stage's pick builds its own again.
+    if (p.source === 'capsule') {
+      if (this.rerollSig !== 'capsule') bar.removeChildren().forEach((c) => c.destroy({ children: true }));
+      this.rerollSig = 'capsule';
+      return;
+    }
     const free = p.freeRerolls;
     const paidUsed = p.paidRerollUsed || battle.init.mode === 'daily';
     const route = free > 0 || paidUsed || sandbox || this.env.tutorial ? 'none' : offerRoute(ads.status('relic_reroll').reason, false);

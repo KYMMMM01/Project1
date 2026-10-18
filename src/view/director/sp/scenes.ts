@@ -12,10 +12,26 @@ import { makeShove } from './shove';
 import { makeCharge } from './charge';
 import { makeLap } from './lap';
 import { makeWanted } from './wanted';
+import { makeCut } from './cut';
+import { makeMeteor } from './meteor';
+import { makeClones } from './clones';
+import { makeCloud } from './cloud';
+import { makeKnock } from './knock';
+import { makeJam } from './jam';
+import { makeFish } from './fish';
+import { makeCapsule } from './capsule';
 
 export const SCENES: { [K in SpSkillName]?: SpSceneFactory<K> } = {
   shove: makeShove,
   charge: makeCharge, // TIGER (charge.ts): the leap, the 1.5x body on the road, stomps and paw prints, the roar, the walk back.
   lap: makeLap, // STAR ARCHER (lap.ts): the night, the arrow's lap, a star per spRunHit, a burst per spRunBurst.
   wanted: makeWanted,
+  cut: makeCut, // SAMURAI (cut.ts): the afterimage, a thin line on each marked enemy, the sheath click and the gashes (cutOpen).
+  meteor: makeMeteor, // COSMO CAT (meteor.ts): the dusk, the red circle, the falling fireball, the two rings, the crater (meteorLand, craterEnd).
+  clones: makeClones, // NINJA (clones.ts): leaf and puff, two pale clones hop onto tiles, a pale shuriken per volley, they fade, "pop" and a leaf; they step aside for a cat.
+  cloud: makeCloud, // STORM CAT (cloud.ts): the grumpy cloud pops out of the hat, rides its host, a bolt per cloudBolt, hops, fizzles.
+  knock: makeKnock, // FROST QUEEN (knock.ts): the stare, the paw, the glass, the shards, the ice held until each shard lands (and its number, numberHold.ts).
+  jam: makeJam, // BARD (jam.ts): the strum, four golden notes in a fan, a ring that holds its old gauge until its note lands and then climbs, a note sticker on a cat that attacks.
+  fish: makeFish, // ALCHEMIST (fish.ts): the flasks, pink smoke, the big fish with the boss's face and its chip, small flasks that turn weak enemies into fish for the counter (fishHold.ts).
+  capsule: makeCapsule, // LUCKY CAT (capsule.ts): the capsule falls wearing its colour and mark, bounces, splits open (capsuleOpen) into the prize; the ring springs back after a fish capsule.
 };

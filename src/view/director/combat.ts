@@ -36,6 +36,7 @@ import {
 } from './defs';
 import { DOT_NUMBER_COLOR, SHIELD_COLOR, SHOOT_CUE, STATUS_COLOR, STATUS_SFX, UNIT_COLOR } from './palette';
 import { Gate, enemyInfo, type Bus, type EnemyInfo, type Stage } from './stage';
+import { numberHoldsOf } from './sp/numberHold';
 import { Hue } from '@/fx/palette';
 import { Color } from '@/ui/theme';
 
@@ -106,8 +107,19 @@ export function mountCombat(stage: Stage, on: Bus): void {
   const plain: NumberOpts = { target };
   const tinted: NumberOpts = { target, color: 0 };
 
-  /** Show a number above `en`: merged with what is already showing for it, and placed, shed or kept by the numbers' own rules. */
+  /**
+   * A number the frost queen's glass is still on its way to (`sp/knock.ts` holds the enemy's numbers until its shard lands) waits and is shown
+   * by `holds.say` when it lands; with no hold up (always, with skills off) this is one length check.
+   */
+  const holds = numberHoldsOf(stage.ctx.battle);
+  holds.say = (en, value, style, color) => sayNow(en, enemyInfo(en.id), value, style, color);
   function say(en: EnemyState, info: EnemyInfo, value: number, style: NumStyle, color?: number): void {
+    if (holds.defer(en, value, style, color, stage.ctx.battle.time)) return;
+    sayNow(en, info, value, style, color);
+  }
+
+  /** Show a number above `en`: merged with what is already showing for it, and placed, shed or kept by the numbers' own rules. */
+  function sayNow(en: EnemyState, info: EnemyInfo, value: number, style: NumStyle, color?: number): void {
     target.uid = en.uid;
     target.x = bodyX(en.x, info.size);
     target.y = en.y;

@@ -597,6 +597,23 @@ describe('what the view is told', () => {
     expect(log.slice(1).map((x) => (x.payload as unknown as BattleEvents['hit']).enemy.uid)).toEqual([a.uid, b.uid]);
   });
 
+  it('delivers the cast while the shard enemies are still on the field and still chilled (the view draws their ice from that state; the damage and the spending follow)', () => {
+    const sim = arena();
+    const u = queen(sim, 6);
+    const a = slowed(sim, 330);
+    const b = frozen(sim, 300);
+    const during: Array<{ listed: boolean; chilled: boolean }> = [];
+    sim.events.on('spCast', (e) => {
+      if (e.skill !== 'knock') return;
+      for (const x of [a, b]) during.push({ listed: sim.enemies.includes(x), chilled: isChilled(x) });
+    });
+    fire(sim, u);
+    expect(during).toEqual([{ listed: true, chilled: true }, { listed: true, chilled: true }]);
+    // ...and by the end of the tick the chill is spent.
+    expect(isChilled(a)).toBe(false);
+    expect(isChilled(b)).toBe(false);
+  });
+
   it('marks only the first cast of the skill in the run', () => {
     const sim = arena();
     const u = queen(sim);

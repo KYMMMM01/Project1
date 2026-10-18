@@ -516,3 +516,53 @@ describe('the toy screen, folded away to read the board', () => {
     expect((scaffoldOf(s) as unknown as Container).scale.x).toBe(1);
   });
 });
+
+describe('the toy screen a lucky cat\'s toy capsule opens', () => {
+  beforeEach(() => {
+    kit.bags.length = 0;
+    kit.drawn.length = 0;
+    kit.hides.length = 0;
+    kit.reduced = false;
+    kit.layer.removeChildren();
+  });
+
+  const capsuleOffer = (): unknown => ({ kind: 'relic', options: ['common:a', 'rare:b', 'epic:c'], freeRerolls: 1, picksLeft: 1, paidRerollUsed: false, source: 'capsule' });
+  const headOf = (s: RelicScreen): { act: { text: string }; line: { text: string } } => (s as unknown as { head: { act: { text: string }; line: { text: string } } }).head;
+
+  it('wears the capsule\'s cry as its heading and the skill\'s name under it, and offers no reroll (even with free ones to spare)', () => {
+    const e = env();
+    e.battle.pending = capsuleOffer();
+    const s = new RelicScreen(e as never, undefined, true);
+    s.open();
+    advance(0.2);
+    expect(headOf(s).act.text).toBe('sp.capsule.toy.a sp.capsule.toy.b');
+    expect(headOf(s).line.text).toBe('sp.capsule.name');
+    expect(scaffoldOf(s).actionBar.children).toHaveLength(0);
+  });
+
+  it('gives the next stage\'s pick its own heading and its reroll row back', () => {
+    const e = env();
+    e.battle.pending = capsuleOffer();
+    const s = new RelicScreen(e as never, undefined, true);
+    s.open();
+    advance(0.2);
+    e.battle.pending = null;
+    s.render();
+    kit.hides.forEach((h) => h());
+    e.battle.pending = offer(['common:x', 'rare:y', 'epic:z'], 2);
+    s.open();
+    advance(0.2);
+    expect(headOf(s).act.text).toContain('hud.relic.cleared');
+    expect(scaffoldOf(s).actionBar.children.length).toBeGreaterThan(0);
+  });
+
+  it('a pick of an ordinary stage keeps its reroll row and its "stage cleared" heading', () => {
+    const e = env();
+    e.battle.pending = offer(['common:a', 'rare:b', 'epic:c'], 1);
+    const s = new RelicScreen(e as never, undefined, true);
+    s.open();
+    advance(0.2);
+    expect(headOf(s).act.text).toContain('hud.relic.cleared');
+    expect(scaffoldOf(s).actionBar.children.length).toBeGreaterThan(0);
+  });
+});

@@ -159,7 +159,9 @@ export class UnitViews {
   private arrive(v: UnitView, u: UnitState, source: SummonSource, x: number, y: number, delay: number): void {
     const lead = tossFor(source, motion.reduced);
     const rarity = unitRarity(u.id);
-    if (lead > 0) this.arrivals.toss(x, y, u.cell, rarity, () => this.arrivals.ring(u.cell, rarity));
+    // The lucky cat's partner falls straight from the sky; every other toss leaves the summon button (or the pick's sheet).
+    if (lead > 0 && source === 'skill') this.arrivals.drop(u.cell, rarity, () => this.arrivals.ring(u.cell, rarity));
+    else if (lead > 0) this.arrivals.toss(x, y, u.cell, rarity, () => this.arrivals.ring(u.cell, rarity));
     else this.arrivals.ring(u.cell, rarity);
     const from = this.env.time + lead + delay;
     v.markNew(from, from + NEW_TAG_SECONDS);

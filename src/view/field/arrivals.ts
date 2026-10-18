@@ -4,11 +4,13 @@ import { Pool } from '@/core/pool';
 import { Ease, type Tween } from '@/core/tween';
 import { Color, drawDashedRect, motion, Rarity, type RarityId } from '@/ui';
 import { CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
-import { LAND_RING_SECONDS, TOSS_SECONDS, tossLift, tossPoint, tossScale, type TossPoint } from '../toss';
+import { LAND_RING_SECONDS, SKILL_DROP_SECONDS, TOSS_SECONDS, tossLift, tossPoint, tossScale, type TossPoint } from '../toss';
 import type { FieldEnv } from './env';
 
 const RING_W = CELL_W - 12;
 const RING_H = CELL_H - 12;
+/** How far above its cell (scene px) a partner's sticker starts its fall. */
+const DROP_FROM = 330;
 
 /** A dashed ring in two parts: a cream rim under it so it reads on every mat, and the dashes (white, tinted per rarity). */
 class LandingRing {
@@ -85,6 +87,40 @@ export class Arrivals {
         s.position.set(at.x, at.y);
         s.scale.set(tossScale(k));
         s.rotation = spin * (1 - k);
+      },
+      onComplete: () => {
+        this.flying.delete(run);
+        this.tokens.release(s);
+        onLand();
+      },
+    });
+    this.flying.set(run, s);
+  }
+
+  /**
+   * The lucky cat's partner (a summon of source 'skill'): a sticker of this rarity falls straight down from the sky onto `cell` (no arc, no
+   * spin: the toss from the button is the player's own action, this one is a gift from above), stretched on the way and squashed on the
+   * landing; `onLand` runs on the landing frame.
+   */
+  drop(cell: number, rarity: RarityId, onLand: () => void): void {
+    const { ctx, art } = this.env;
+    const x1 = ctx.toSceneX(cellCenterX(cell));
+    const y1 = ctx.toSceneY(cellCenterY(cell)) - 8;
+    const y0 = y1 - DROP_FROM;
+    const s = this.tokens.get();
+    s.texture = art.toss[rarity];
+    s.position.set(x1, y0);
+    s.scale.set(1.3);
+    s.rotation = 0;
+    this.sceneLayer.addChild(s);
+    audio.play('whoosh', { volume: 0.22, pitch: 1.5 });
+    const run = ctx.ui.run({
+      duration: SKILL_DROP_SECONDS,
+      ease: Ease.cubicIn,
+      onUpdate: (k) => {
+        s.position.set(x1, y0 + (y1 - y0) * k);
+        // Long and thin while it falls, round again as it arrives.
+        s.scale.set(1.3 * (1 - 0.18 * (1 - k)), 1.3 * (1 + 0.22 * (1 - k)));
       },
       onComplete: () => {
         this.flying.delete(run);

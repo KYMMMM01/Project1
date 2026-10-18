@@ -8,6 +8,7 @@ import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
 import type { FieldArt } from './art';
 import type { FieldEnv } from './env';
 import { castLook, castSeconds, projectileLook, rankSize, rankTrail, type ProjectileLook } from './projectileLooks';
+import { GHOST_SKY, GHOST_SKY_LIGHT, ghostShuriken, takeGhostStart } from './ghosts';
 
 const SPIN_FLIP_RATE = 14;
 /** Seconds a shot takes to settle from its stretched launch shape. */
@@ -53,6 +54,10 @@ class ShotView {
   private lastY = 0;
   private heading = 0;
   private shedAt = 0;
+  /** A clone's shuriken (Surprise Clones): pale blue, and drawn starting `offX / offY` px off the simulation's tile centre until the launch is over. */
+  private ghost = false;
+  private offX = 0;
+  private offY = 0;
 
   constructor(
     shadow: FieldArt['shadow'],
@@ -72,7 +77,7 @@ class ShotView {
     layers.bodies.addChild(this.body);
   }
 
-  configure(uid: number, unitId: UnitId, look: ProjectileLook, x: number, y: number, angle: number, time: number): void {
+  configure(uid: number, unitId: UnitId, look: ProjectileLook, x: number, y: number, angle: number, time: number, ghost = false): void {
     this.uid = uid;
     this.unitId = unitId;
     this.look = look;
@@ -87,7 +92,15 @@ class ShotView {
     this.rank = rankSize(unitId);
     this.trail = rankTrail(unitId);
     const texture = paint(look.paint);
-    this.body.texture = texture;
+    // A clone's shuriken is the pale-blue copy of the steel one (a tint of the original where the copy cannot be baked).
+    const pale = ghost ? ghostShuriken(texture) : null;
+    this.body.texture = pale ?? texture;
+    this.body.tint = ghost && !pale ? GHOST_SKY_LIGHT : 0xffffff;
+    this.body.alpha = ghost ? 0.92 : 1;
+    this.ghost = ghost;
+    const start = ghost ? takeGhostStart(uid) : null;
+    this.offX = start ? start.dx : 0;
+    this.offY = start ? start.dy : 0;
     this.bodyW = look.size * this.rank;
     this.body.visible = true;
     this.shadow.visible = look.lob > 0;
@@ -96,7 +109,7 @@ class ShotView {
     const s = look.streak;
     this.streak.visible = s !== null;
     if (s) {
-      this.streak.tint = s.color;
+      this.streak.tint = ghost ? GHOST_SKY : s.color;
       const t = this.streak.texture;
       this.streak.scale.set((s.length * this.rank) / Math.max(1, t.width), (s.width * this.rank) / Math.max(1, t.height));
     }
@@ -112,8 +125,10 @@ class ShotView {
       const span = Math.max(40, Math.hypot(tx - this.x0, ty - this.y0));
       arc = Math.sin(Math.PI * Math.min(1, Math.hypot(x - this.x0, y - this.y0) / span));
     }
-    const bx = x;
-    const by = y - look.lob * arc;
+    // A clone's shuriken starts off the tile's centre (its stacked body is drawn to one side) and slides onto the simulation's line over the launch.
+    const slide = this.ghost && !calm ? 1 - clamp01((time - this.born) / LAUNCH) : 0;
+    const bx = x + this.offX * slide;
+    const by = y - look.lob * arc + this.offY * slide;
     // The picture turns along the path it really took (the tangent of the arc), not the simulation's straight line.
     if (Math.hypot(bx - this.lastX, by - this.lastY) > 0.6) this.heading = Math.atan2(by - this.lastY, bx - this.lastX);
     else if (this.lastX === this.x0 && this.lastY === this.y0) this.heading = angle;
@@ -306,7 +321,7 @@ export class Projectiles {
       this.aim(p, this.target);
       if (!v) {
         v = this.pool.get();
-        v.configure(p.uid, p.unitId, projectileLook(p.unitId), p.x, p.y, p.angle, time);
+        v.configure(p.uid, p.unitId, projectileLook(p.unitId), p.x, p.y, p.angle, time, p.ghost === true);
         this.byUid.set(p.uid, v);
         this.live.push(v);
       }

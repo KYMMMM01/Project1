@@ -270,6 +270,10 @@ class Run {
     this.banner.addChild(this.tagText);
 
     this.hit.eventMode = o.passThrough ? 'none' : 'static';
+    // The whole layer, not just the hit area: Pixi's hit test lets any visible display object that lies under the press (the dim is the size of the
+    // screen) swallow it, whatever its own mode, so a banner that "takes no taps" must be pruned from the test altogether or the HUD's buttons
+    // (the pause button was seen dead; the summon and the speed button lie under the same layer) stay dead for as long as it plays.
+    if (o.passThrough) this.layer.eventMode = 'none';
     this.hit.alpha = 0;
     this.hit.on('pointerdown', () => this.skip());
     this.layer.addChild(this.hit);

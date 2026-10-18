@@ -29,6 +29,7 @@ import {
 } from '@/ui';
 import type { HudEnv } from './env';
 import { enemyPortrait } from './kit';
+import { FishChip } from '../fishArt';
 import { DamageWindow, killTone, type KillTone } from './killEstimate';
 import { topRects, type Rect } from './layoutMath';
 import type { TopBar } from './TopBar';
@@ -71,6 +72,15 @@ export class BossBar {
   /** Made when the first bite is shown: a battle without skills never paints the poster's pictures or adds a child to the strip. */
   private marks: BiteMarks | null = null;
   private lastHeld = 0;
+  /**
+   * The alchemist's fish (docs/design_skills_v2.md 3.11): a chip on the portrait's lower corner that is pink with a ring that shrinks while the boss is a fish, and
+   * a crossed-out fish bone with a ring that counts the lock down while it cannot be turned again. Made when the first fish is announced.
+   */
+  private fishChip: FishChip | null = null;
+  private fishUntil = 0;
+  private fishSeconds = 1;
+  private lockUntil = 0;
+  private lockSeconds = 1;
   private boss: EnemyState | null = null;
   /** The boss just died: the strip lingers for the death staging and must not restart for it. */
   private finishing = false;
@@ -120,6 +130,15 @@ export class BossBar {
         this.pending.add(share, taken, pool, taken >= pool - 1e-9);
         // A bite the scene holds the bar for drops when the cork lands (the held health changes then); one nobody holds drops now.
         if (this.holds.heldOf(enemy.uid, b.time) === 0) this.hpDirty = true;
+      });
+    }
+    // Only a battle with skills has fish to announce.
+    if (b.spOn) {
+      env.on(b.events, 'status', ({ enemy, kind, duration }) => {
+        if (kind === 'fish' && enemy === this.boss) this.fishBegins(duration);
+      });
+      env.on(b.events, 'fishEnd', ({ enemy, lock }) => {
+        if (enemy === this.boss) this.fishEnds(lock);
       });
     }
     env.on(b.events, 'enemyDie', ({ enemy }) => {
@@ -236,6 +255,66 @@ export class BossBar {
     this.pending.reset();
     this.marks?.reset();
     this.lastHeld = 0;
+    this.forgetFish();
+  }
+
+  /** The boss is a fish for `duration` seconds: the pink chip pops on the portrait's corner. */
+  private fishBegins(duration: number): void {
+    if (!this.shown) return;
+    const now = this.env.battle.time;
+    this.fishUntil = now + duration;
+    this.fishSeconds = Math.max(0.001, duration);
+    this.lockUntil = 0;
+    const chip = (this.fishChip ??= new FishChip());
+    if (!chip.root.parent) this.root.addChild(chip.root);
+    this.placeFish();
+    chip.set('fish', 1);
+    chip.root.visible = true;
+    chip.root.alpha = 1;
+    if (motion.reduced) {
+      chip.root.scale.set(1);
+      return;
+    }
+    chip.root.scale.set(0.2);
+    this.bag.runKeyed(chip.root, { duration: 0.22, ease: Ease.backOut, onUpdate: (k) => chip.root.scale.set(0.2 + 0.8 * k), onComplete: () => chip.root.scale.set(1) });
+  }
+
+  /** It wore off: the chip becomes the crossed-out fish bone and counts the lock down. */
+  private fishEnds(lock: number): void {
+    if (!this.fishChip || !this.shown) return;
+    const now = this.env.battle.time;
+    this.fishUntil = 0;
+    this.lockSeconds = Math.max(0.001, lock);
+    this.lockUntil = lock > 0 ? now + lock : 0;
+    if (this.lockUntil === 0) this.forgetFish();
+    else this.fishChip.set('lock', 1);
+  }
+
+  private forgetFish(): void {
+    this.fishUntil = 0;
+    this.lockUntil = 0;
+    if (this.fishChip) {
+      this.bag.killKeyed(this.fishChip.root);
+      this.fishChip.root.visible = false;
+    }
+  }
+
+  /** The chip sits on the portrait's lower-right corner: clear of the padlock on its upper one, of the eggs under it and of the name and the bar. */
+  private placeFish(): void {
+    this.fishChip?.root.position.set(34, this.rect.h / 2 + 26);
+  }
+
+  /** The chip's ring follows the battle clock: it stands still under a popup and runs 2x and 3x with the game. */
+  private updateFish(now: number): void {
+    const chip = this.fishChip;
+    if (!chip || !chip.root.visible) return;
+    if (this.fishUntil > 0 && now < this.fishUntil) {
+      chip.set('fish', (this.fishUntil - now) / this.fishSeconds);
+    } else if (this.lockUntil > 0 && now < this.lockUntil) {
+      chip.set('lock', (this.lockUntil - now) / this.lockSeconds);
+    } else {
+      this.forgetFish();
+    }
   }
 
   /** The cork landed (or nothing held the bar): the bites the bar was told of fall out of it now. */
@@ -259,6 +338,8 @@ export class BossBar {
     this.boss = null;
     this.finishing = true;
     this.mark.clear();
+    // A fish that dies as a fish takes its chip with it: the ring would stand frozen beside the dead boss's name for the whole linger.
+    this.forgetFish();
     // The director stages the death; the strip lingers for it and then leaves.
     this.bag.call(1.4, () => this.hide(true));
   }
@@ -298,6 +379,7 @@ export class BossBar {
     this.hp.position.set(TEXT_X + (w - TEXT_X - RIGHT_PAD) / 2, HP_Y);
     this.sticker?.position.set(6, h / 2 - 2);
     this.marks?.layout(6, h - 8, h / 2 - 8);
+    this.placeFish();
     this.nameT.position.set(TEXT_X, ROW_Y);
     this.defT.position.set(TEXT_X + DEF_INSET, HP_Y);
     this.mark.position.set(this.timer.x + this.timer.w / 2 - this.rect.x, this.timer.y + this.timer.h / 2 - this.rect.y);
@@ -375,6 +457,7 @@ export class BossBar {
       this.hp.setValue(this.hpFraction(), true);
     }
     if (!this.boss) return;
+    this.updateFish(b.time);
     if (held === 0 && this.pending.count > 0) this.showBites();
     // An armour break cuts both numbers for as long as it lasts: the line turns mustard meanwhile.
     if (this.boss.armorBroken !== this.lastBroken) {
@@ -406,6 +489,7 @@ export class BossBar {
   destroy(): void {
     this.bag.killAll();
     this.marks?.destroy();
+    this.fishChip?.destroy();
     this.root.destroy({ children: true });
   }
 }

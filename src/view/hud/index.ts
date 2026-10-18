@@ -30,7 +30,7 @@ import { LaserTeach } from './laserTeach';
 import { ClassSheet } from './popups/ClassSheet';
 import { PauseMenu, type PauseAction } from './popups/PauseMenu';
 import { SummonPickPopup } from './popups/SummonPickPopup';
-import { stageHeldFor } from '@/view/staging';
+import { relicOfferWait } from '@/view/staging';
 import { info } from '../info';
 import { findTwins } from './planMath';
 import { canOpenPause, REVIVE_MIN_WAVES, revealFlags, type RevealKey } from './policy';
@@ -224,9 +224,10 @@ class Hud implements HudPart {
     env.on(ctx.events, 'drag', ({ from }) => (this.dragging = from !== null));
     env.on(ctx.events, 'finished', ({ victory }) => this.onFinished(victory));
     env.on(battle.events, 'summonOffer', ({ options }) => this.openPick(options));
-    env.on(battle.events, 'relicOffer', () => {
-      // The boss-defeated banner that this offer follows gets to finish first; the field is frozen under it meanwhile.
-      const wait = stageHeldFor();
+    env.on(battle.events, 'relicOffer', (e) => {
+      // The boss-defeated banner that this offer follows gets to finish first; the field is frozen under it meanwhile. A lucky cat's toy capsule
+      // follows no boss banner: its screen waits for the skills' banners that are still playing or queued, and then for the capsule's lid (capsuleToyWait).
+      const wait = relicOfferWait(e.source);
       if (wait > 0 && !this.relic?.isOpen) ctx.ui.call(wait, () => this.showRelics());
       else this.showRelics();
     });

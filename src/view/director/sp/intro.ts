@@ -1,8 +1,11 @@
 /**
  * What the first cast of a skill in a run shows besides its scene, once per skill per run: a rank 5 skill shows its CUT-IN (the awakening's
  * banner in its short form, 0.8 s) and every other skill its NAME BUBBLE (the skill's name on a paper label over the cat). The banner already
- * says the name, so a rank 5 cast shows no bubble on top of it; a banner that could not be shown (its queue is full, or it waited too long)
- * leaves the bubble in its place. Both are exempt from the stage rule (`stageRule.ts`): the dispatcher only calls them for a cast whose
+ * says the name, so a rank 5 cast shows no bubble on top of it; a banner that could not be shown (its queue is full) leaves the bubble in its place,
+ * and so does a banner that has to WAIT for the ones before it: the scene starts at once and the banner trails it by up to a second or more at 3x, so
+ * the bubble names the skill over the cat while it happens and the banner follows. The stage is held for the whole chain of banners
+ * (`holdStage`) so that the full screen a cast opens (the lucky cat's toy pick) comes up after them, not under or before its own banner.
+ * Both are exempt from the stage rule (`stageRule.ts`): the dispatcher only calls them for a cast whose
  * `first` flag is set, and the simulation sets that flag once per skill.
  *
  * The bubble is timed by the battle's clock with a floor in real time (`span.ts`): about 0.8 s at 1x, never shorter than 0.6 s at 3x (a three
@@ -17,14 +20,16 @@
 import { Container, Graphics } from 'pixi.js';
 import { tex } from '@/core/assets';
 import { t } from '@/core/i18n';
-import { awakeningCutIn, NAME_SIZE, nameSizeFor } from '@/fx';
+import { awakeningCutIn, awakeningPlan, fxSettings, NAME_SIZE, nameSizeFor } from '@/fx';
 import { unitClass, unitDef } from '@/game';
 import type { SpCastEvent, UnitId } from '@/game';
 import { BOARD_W, BOARD_X, BOARD_Y, cellCenterX, cellCenterY } from '@/game/geometry';
+import { game } from '@/core/game';
 import { Ease } from '@/core/tween';
 import { PaperLabel } from '@/ui/paper';
 import { label } from '@/ui/text';
 import { Color } from '@/ui/theme';
+import { holdStage } from '../../staging';
 import { FEET_DY } from '../../field/unitView';
 import { CLASS_COLOR } from '../palette';
 import { Age } from './span';
@@ -44,7 +49,7 @@ const TAIL = 15;
 const RISE = 10;
 const POP_MAX = 1.1;
 const MAX_LIVE = 4;
-/** A queued cut-in that has waited this long (real seconds) is given up and its skill shows the bubble instead. */
+/** A queued cut-in that has waited this long (real seconds) is given up (its bubble was shown when it joined the queue). */
 export const CUTIN_WAIT = 3;
 /** The cut-in plays this many times as fast at 2x and at 3x speed. */
 export const CUTIN_TEMPO = { 1: 1, 2: 1.25, 3: 1.5 } as const;
@@ -105,6 +110,8 @@ interface Waiting {
 export class SpIntro {
   private readonly live: Bubble[] = [];
   private readonly waiting: Waiting[] = [];
+  /** Real time (`game.time`) by which every banner that plays or waits will have played (each for its full length): what a full screen that follows waits for. */
+  private chainEnd = 0;
 
   constructor(private readonly env: SpEnv) {}
 
@@ -113,9 +120,29 @@ export class SpIntro {
     const plan = introFor(unitDef(e.unit.id).spSkill?.rank, this.waiting.length);
     if (plan.bubble) this.bubble(e.skill, e.unit.id, e.unit.cell);
     if (!plan.cutIn) return;
+    this.reserve(this.bannerLength());
     // An awakening's banner (or an earlier skill's) is never cut short: this one waits its turn.
-    if (awakeningCutIn.playing || this.waiting.length > 0) this.waiting.push({ skill: e.skill, unitId: e.unit.id, cell: e.unit.cell, wait: 0 });
-    else this.cutIn(e.skill, e.unit.id);
+    if (awakeningCutIn.playing || this.waiting.length > 0) {
+      this.waiting.push({ skill: e.skill, unitId: e.unit.id, cell: e.unit.cell, wait: 0 });
+      // It will come after the picture it announces (the cast's scene starts at once; the banner trails the ones before it by up to a second or
+      // more): the name stands over the cat now, the way it does for a skill below rank 5, and the banner follows.
+      this.bubble(e.skill, e.unit.id, e.unit.cell);
+    } else this.cutIn(e.skill, e.unit.id);
+  }
+
+  /** How long a skill's banner plays, in real seconds, at the speed the game runs now. */
+  private bannerLength(): number {
+    return awakeningPlan(true, fxSettings.reducedMotion, cutInTempo(this.env.ctx.speed)).total;
+  }
+
+  /**
+   * A banner of `seconds` has been taken on (playing now, or in the queue): the stage is held for the whole chain, so that a full screen the same
+   * cast opens (the lucky cat's toy pick) waits for it instead of coming up while its own banner is still to come (`staging.ts`, `capsuleToyWait`).
+   */
+  private reserve(seconds: number): void {
+    const now = game.time;
+    this.chainEnd = Math.max(this.chainEnd, now) + seconds;
+    holdStage(this.chainEnd - now);
   }
 
   private bubble(skill: SpCastEvent['skill'], unitId: UnitId, cell: number): void {
@@ -183,7 +210,8 @@ export class SpIntro {
       const w = this.waiting[i] as Waiting;
       if (w.wait <= CUTIN_WAIT) continue;
       this.waiting.splice(i, 1);
-      this.bubble(w.skill, w.unitId, w.cell);
+      // Its bubble was shown when it joined the queue; the banner it will not get is no longer waited for.
+      this.chainEnd = Math.max(game.time, this.chainEnd - this.bannerLength());
     }
     if (this.waiting.length > 0 && !awakeningCutIn.playing) {
       const next = this.waiting.shift() as Waiting;
@@ -195,6 +223,7 @@ export class SpIntro {
   clear(): void {
     while (this.live.length > 0) this.drop(this.live[0] as Bubble);
     this.waiting.length = 0;
+    this.chainEnd = 0;
   }
 
   destroy(): void {

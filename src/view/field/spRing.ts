@@ -21,11 +21,18 @@ const RES = 3;
 /** One cell of the sheet, design px: the halo (radius 25) is the widest thing in it. */
 const CELL = 56;
 const COLS = 7;
-const ROWS = 4;
+const ROWS = 5;
 const FLASH_FRAME = RING_FULL + 1;
 const GLOW_FRAME = RING_FULL + 2;
 /** The closed ring of a gunner that is saving its shot (teal, no halo): a full gauge that is NOT ready. */
 const HOLSTER_FRAME = RING_FULL + 3;
+/**
+ * The closed ring of a TRICKSTER (the bard, the alchemist, the lucky cat). Their class sticker is the mustard the gold ring is made of, so the ready ring
+ * (gold, with darker gold edges) melted into the sticker it surrounds: only a white hairline set them apart (checked on the real screen, step-1 review E13).
+ * This one has dark brown edges, like the ink of the rest of the art, so the ring is a clear line on the sticker inside it and on the paper outside; the other
+ * three classes keep the gold ring they have.
+ */
+const TRICK_FRAME = RING_FULL + 4;
 
 /** The grey a stopped cat's ring is tinted. */
 const STOPPED_TINT = 0xb9b0a2;
@@ -48,6 +55,8 @@ export interface SpRingArt {
   glow: Texture;
   /** The teal closed ring a holstered gunner wears instead of the gold one. */
   holster: Texture;
+  /** The closed ring of a trickster: gold between brown edges. */
+  trick: Texture;
 }
 
 function css(color: number, alpha = 1): string {
@@ -84,10 +93,10 @@ function paintArc(ctx: Ctx, cx: number, cy: number, frac: number): void {
   ctx.stroke();
 }
 
-/** The closed ring of a full gauge: gold with darker edges, a cream rim, and a white hairline just inside it. */
-function paintFull(ctx: Ctx, cx: number, cy: number): void {
+/** The closed ring of a full gauge: gold with darker edges, a cream rim, and a white hairline just inside it. `trick`: the edges are the brown of the ink. */
+function paintFull(ctx: Ctx, cx: number, cy: number, trick = false): void {
   ring(ctx, cx, cy, RING_R, RING_W + 2 * RING_RIM, css(Color.paperLight));
-  ring(ctx, cx, cy, RING_R, RING_W, css(Color.mustardDark));
+  ring(ctx, cx, cy, RING_R, RING_W, css(trick ? Color.ink : Color.mustardDark));
   ring(ctx, cx, cy, RING_R, RING_W - 1.8, css(Color.mustard));
   ring(ctx, cx, cy, RING_R - RING_W / 2 - 1.5, 1.1, css(0xffffff));
 }
@@ -123,7 +132,7 @@ export function spRingArt(): SpRingArt {
   if (!ctx) throw new Error('spRing: 2D canvas unavailable');
   ctx.scale(RES, RES);
   const at = (i: number): { x: number; y: number } => ({ x: (i % COLS) * CELL, y: Math.floor(i / COLS) * CELL });
-  for (let i = 0; i <= HOLSTER_FRAME; i++) {
+  for (let i = 0; i <= TRICK_FRAME; i++) {
     const { x, y } = at(i);
     const cx = x + CELL / 2;
     const cy = y + CELL / 2;
@@ -131,7 +140,8 @@ export function spRingArt(): SpRingArt {
     else if (i === RING_FULL) paintFull(ctx, cx, cy);
     else if (i === FLASH_FRAME) paintFlash(ctx, cx, cy);
     else if (i === GLOW_FRAME) paintGlow(ctx, cx, cy);
-    else paintHolster(ctx, cx, cy);
+    else if (i === HOLSTER_FRAME) paintHolster(ctx, cx, cy);
+    else paintFull(ctx, cx, cy, true);
   }
   const source = new CanvasSource({ resource: canvas, resolution: RES, autoGarbageCollect: false });
   const cut = (i: number, label: string): Texture => {
@@ -140,7 +150,7 @@ export function spRingArt(): SpRingArt {
   };
   const frames: Texture[] = [];
   for (let i = 0; i <= RING_FULL; i++) frames.push(cut(i, `sp_ring_${i}`));
-  art = { frames, flash: cut(FLASH_FRAME, 'sp_ring_flash'), glow: cut(GLOW_FRAME, 'sp_ring_glow'), holster: cut(HOLSTER_FRAME, 'sp_ring_holster') };
+  art = { frames, flash: cut(FLASH_FRAME, 'sp_ring_flash'), glow: cut(GLOW_FRAME, 'sp_ring_glow'), holster: cut(HOLSTER_FRAME, 'sp_ring_holster'), trick: cut(TRICK_FRAME, 'sp_ring_trick') };
   return art;
 }
 
@@ -244,6 +254,8 @@ export interface RingLook {
   calm: boolean;
   /** Low quality tier: no halo, no swell, a flash that only blinks. */
   low: boolean;
+  /** The cat is a trickster: its closed ring has brown edges (`TRICK_FRAME`). Absent = false. */
+  trick?: boolean;
 }
 
 /**
@@ -308,10 +320,11 @@ export class SpRingView {
     // A full gauge that is being saved wears the teal closed ring: no halo, no swell, so it cannot be read as "ready".
     const holster = full && look.mark === 'holstered';
 
-    const shown = holster ? HOLSTER_FRAME : look.frame;
+    const trick = full && look.trick === true;
+    const shown = holster ? HOLSTER_FRAME : trick ? TRICK_FRAME : look.frame;
     if (shown !== this.frame) {
       this.frame = shown;
-      this.body.texture = holster ? this.sheet.holster : (this.sheet.frames[look.frame] as Texture);
+      this.body.texture = holster ? this.sheet.holster : trick ? this.sheet.trick : (this.sheet.frames[look.frame] as Texture);
     }
     if (look.blocked !== this.tinted) {
       this.tinted = look.blocked;

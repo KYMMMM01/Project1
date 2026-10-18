@@ -137,15 +137,20 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   });
 
   on('awaken', (e) => {
-    awakenCount++;
+    // The lucky cat's guardian capsule awakens a cat for free (`e.free`): always the short banner, never the slow motion, and it does not use up
+    // the long first banner that the player's own first awakening gets.
+    if (!e.free) awakenCount++;
     const id = e.result.id;
     const x = cellCenterX(e.cell);
     const y = cellCenterY(e.cell) - 10;
-    const short = awakenCount > 1;
+    const short = e.free === true || awakenCount > 1;
     if (!short) stage.slow(0.25, 400);
     stage.direct('awaken', 0.9);
     fx.awakening(tex(`unit_${id}`), t(`unit.${id}.name`), {
       short,
+      // A free awakening arrives uninvited, in the middle of whatever the player is doing, like a skill's own banner: it takes no taps, so the
+      // pause, speed and summon buttons under it stay alive. The player's own awakening follows his action and still takes the tap that skips it.
+      passThrough: e.free === true,
       tag: t('rarity.mythic'),
       color: CLASS_COLOR[unitClass(id)],
       onImpact: () => {

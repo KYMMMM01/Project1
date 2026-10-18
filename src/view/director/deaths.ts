@@ -10,6 +10,7 @@ import { Trauma } from '@/fx';
 import type { EnemyState } from '@/game';
 import type { BannerService } from './banners';
 import type { CurrencyService } from './currency';
+import { fishHoldsOf } from './sp/fishHold';
 import { DUCK_BY_TIER, FrameBudget } from './policy';
 import type { MusicService } from './music';
 import { SHIELD_COLOR } from './palette';
@@ -31,11 +32,19 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
   const fx = stage.fx;
   const puffs = new FrameBudget(8);
 
-  on('fish', (e) => currency.onFish(e));
+  // The alchemist's small flasks (`sp/fish.ts`) turn the weakest enemies into fish in the cast's own tick: their reward, and their death, wait for the flask
+  // that is still in the air. With nothing expected (always, with skills off) `hold` answers false on its first line and `staged` after one length check.
+  const fishHolds = fishHoldsOf(ctx.battle);
+  fishHolds.fire = (e) => currency.onFish(e);
+  on('fish', (e) => {
+    if (!fishHolds.hold(e)) currency.onFish(e);
+  });
   on('purr', (e) => currency.onPurr(e));
 
   on('enemyDie', (e) => {
     const en = e.enemy;
+    // A weak enemy the alchemist's flask is on its way to turns into a fish with the scene's own puff, not the ordinary death.
+    if (e.transmuted && fishHolds.staged(en.uid)) return;
     const info = enemyInfo(en.id);
     const removed = e.killer === null && e.fish === 0 && e.purr === 0;
     if (removed) {
