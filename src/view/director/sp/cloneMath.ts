@@ -60,7 +60,21 @@ export const STACK_LEAN = 0.22;
  * to stand on, and on a full, busy board two pale bodies at 45% beside the ninja were a sliver (the player-eye review of step 2). Only the picture's own opacity;
  * `cloneAlpha` stays what the row says.
  */
-export const STACK_ALPHA_BOOST = 1.5;
+export const STACK_ALPHA_BOOST = 1.8;
+
+/**
+ * The painted PAIR (two clones shoulder to shoulder, one picture) that stands behind a ninja whose two clones are both stacked: how big it is drawn next
+ * to a single clone (the picture's figures are a little smaller than a lone clone's, and each has to be seen round the ninja's body), and how far up
+ * its feet stand (design px; up is negative: a row further back on the rug, so the heads show over the ninja's shoulders). Found on the real screen.
+ */
+export const PAIR_SCALE = 1.1;
+export const PAIR_RAISE = 40;
+
+/** The feet of the pair: the ninja's feet (and the row's own small lift), straight behind it and raised by `PAIR_RAISE`. */
+export function pairFeet(ninjaX: number, ninjaY: number, look: CloneLook, out: { x: number; y: number }): void {
+  out.x = ninjaX;
+  out.y = ninjaY + look.stackOffset.y - PAIR_RAISE;
+}
 
 /** Where a stacked clone's feet are from its ninja's feet: the row's offset (design px, up is negative) times the spread, to the left or the right. */
 export function stackOffset(side: -1 | 1, look: CloneLook): { dx: number; dy: number } {

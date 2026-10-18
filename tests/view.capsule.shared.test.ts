@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SP_CAPSULE_KINDS, SP_ROWS } from '@/game';
 import '@/game/data/stringsGame';
 import { setLang, t } from '@/core/i18n';
-import { CAPSULE_COLOR, RAINBOW, capsuleArt, capsuleLook, resetCapsuleArt } from '@/view/capsuleArt';
+import { tex } from '@/core/assets';
+import { CAPSULE_COLOR, RAINBOW, capsuleArt, capsuleKeys, capsuleLook, resetCapsuleArt } from '@/view/capsuleArt';
 import { GHOST_SKY } from '@/view/field/ghosts';
 import { clearRingHolds, holdRing, releaseRing, ringHeld, ringHolds } from '@/view/field/ringHold';
 import { LINE_HAS_B, LINE_IDS } from '@/view/director/sp/capsuleMath';
@@ -10,6 +11,11 @@ import { SCENES } from '@/view/director/sp/scenes';
 import { makeCapsule } from '@/view/director/sp/capsule';
 import { CAPSULE_TOY_WAIT } from '@/view/staging';
 import { LAND_RING_SECONDS, SKILL_DROP_SECONDS, TOSS_SECONDS, tossFor } from '@/view/toss';
+
+vi.mock('@/core/assets', async (original) => {
+  const { stubTex } = await import('./textureStub');
+  return { ...(await original<typeof import('@/core/assets')>()), tex: stubTex };
+});
 
 /** Hue in degrees of a 0xRRGGBB colour. */
 function hue(c: number): number {
@@ -147,16 +153,21 @@ describe('the capsules\' looks', () => {
     expect(SP_ROWS.capsule.marks.partner.color).toBe('mint');
   });
 
-  it('paints a lid for each kind, one shared base, and the glyphs, once', () => {
+  it('finds a lid and a base of the owner\'s pictures for each kind (six of each, every one its own file) and paints the three glyphs, once', () => {
     const a = capsuleArt();
     expect(new Set(SP_CAPSULE_KINDS.map((k) => a.lids[k])).size).toBe(6);
-    expect(a.base).toBeDefined();
+    expect(new Set(SP_CAPSULE_KINDS.map((k) => a.bases[k])).size).toBe(6);
+    for (const k of SP_CAPSULE_KINDS) {
+      expect(a.lids[k]).toBe(tex(capsuleKeys(k).lid));
+      expect(a.bases[k]).toBe(tex(capsuleKeys(k).base));
+    }
+    expect(a.question).toBeDefined();
     expect(capsuleArt()).toBe(a);
   });
 
-  it('the partner\'s mint stays apart from the clones\' sky blue, the toy\'s gold and the pinks, and is a hue of its own', () => {
+  it('the partner\'s mint (read off the owner\'s picture) stays apart from the sky blue of the clones\' pale shuriken, the toy\'s gold and the pinks, and is a hue of its own', () => {
     const mint = CAPSULE_COLOR.mint;
-    expect(apart(mint, GHOST_SKY)).toBeGreaterThan(70);
+    expect(apart(mint, GHOST_SKY)).toBeGreaterThan(45);
     expect(apart(mint, CAPSULE_COLOR.gold)).toBeGreaterThan(40);
     expect(apart(mint, CAPSULE_COLOR.pink)).toBeGreaterThan(90);
     // A green: more green than red or blue.

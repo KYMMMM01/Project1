@@ -15,7 +15,10 @@ vi.mock('@/audio', () => ({
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   audio: { play: () => undefined },
 }));
-vi.mock('@/core/assets', async (original) => ({ ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: () => Texture.WHITE }));
+vi.mock('@/core/assets', async (original) => {
+  const { stubTex } = await import('./textureStub');
+  return { ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: stubTex };
+});
 vi.mock('@/view/field/art', () => ({ fieldArt: () => ({ shadow: Texture.WHITE }) }));
 vi.mock('@/view/director/sp/intro', () => ({
   SpIntro: class {
@@ -37,10 +40,11 @@ import { SP_ROWS } from '@/game';
 import { CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
 import { mountSp } from '@/view/director/sp';
 import { lazyLive } from './lazyScene';
-import { resetCloneArt } from '@/view/director/sp/cloneArt';
+import { cloneArt, resetCloneArt } from '@/view/director/sp/cloneArt';
+import { tex } from '@/core/assets';
 import {
-  ALPHA_FLOOR, FADE, FADE_STEP, HEAD_LEAF, HOP, LAND, LEAF_FALL, OUT, STACK_ALPHA_BOOST, STACK_LEAN, STACK_SPREAD, STEP, WOBBLE,
-  cloneAlpha, headLeaf, hopAt, hopHeight, isLite, landSquash, leafFall, stackFeet, stackOffset, stackSide, wobbleRot,
+  ALPHA_FLOOR, FADE, FADE_STEP, HEAD_LEAF, HOP, LAND, LEAF_FALL, OUT, PAIR_RAISE, PAIR_SCALE, STACK_ALPHA_BOOST, STACK_LEAN, STACK_SPREAD, STEP, WOBBLE,
+  cloneAlpha, headLeaf, hopAt, hopHeight, isLite, landSquash, leafFall, pairFeet, stackFeet, stackOffset, stackSide, wobbleRot,
   type CloneLook,
 } from '@/view/director/sp/cloneMath';
 import { makeClones } from '@/view/director/sp/clones';
@@ -537,72 +541,124 @@ describe('the clones\' scene', () => {
       return r;
     }
 
-    it('puts one on each side of the ninja, up a little, as the row says (spread wider), and sorts them just behind it', () => {
+    type Body = { index: number; pair: string; mate: unknown; sprite: Sprite; shadow: Sprite; root: Container; rig: Container; side: number; phase: string };
+    const bodiesOf = (r: Rig): Body[] => (r.scene as unknown as { bodies: Body[] }).bodies;
+
+    it('draws the two as ONE painted pair behind the ninja (the lower number wears it, the other draws nothing), raised a little, sorted just behind it', () => {
       const r = stackedRig();
       expect(live(r)).toMatchObject({ bodies: 2, stacked: 2, standing: 0 });
       const ninja = feet(NINJA);
-      const [a, b] = live(r).list as [Live['list'][number], Live['list'][number]];
-      expect([a.side, b.side].sort()).toEqual([-1, 1]);
-      for (const c of [a, b]) {
-        expect(c.cell).toBe(-1);
-        expect(c.x).toBeCloseTo(ninja.x + c.side * LOOK.stackOffset.x * STACK_SPREAD, 3);
-        expect(c.y).toBeCloseTo(ninja.y + LOOK.stackOffset.y, 3);
-      }
-      const bodies = (r.scene as unknown as { bodies: Array<{ root: Container }> }).bodies;
-      for (const b2 of bodies) expect(b2.root.zIndex).toBeCloseTo((r.views.get(5) as Container).zIndex - 0.5, 6);
+      const [lead, mate] = bodiesOf(r).slice().sort((a, b) => a.index - b.index) as [Body, Body];
+      expect(lead.pair).toBe('lead');
+      expect(mate.pair).toBe('mate');
+      expect(lead.sprite.texture).toBe(tex('fx_clone_pair'));
+      expect(lead.sprite.alpha).toBeGreaterThan(0.3);
+      // The mate is still a body (the simulation's numbers and events are followed all the same) but nothing of it shows.
+      expect(mate.sprite.alpha).toBe(0);
+      expect(mate.shadow.alpha).toBe(0);
+      const at = {} as { x: number; y: number };
+      pairFeet(ninja.x, ninja.y, LOOK, at);
+      const l = live(r).list.find((c) => c.index === lead.index) as Live['list'][number];
+      expect(l.x).toBeCloseTo(at.x, 3);
+      expect(l.y).toBeCloseTo(at.y, 3);
+      expect(at.y).toBeLessThan(ninja.y + LOOK.stackOffset.y);
+      expect(at.y).toBeCloseTo(ninja.y + LOOK.stackOffset.y - PAIR_RAISE, 6);
+      for (const b of [lead, mate]) expect(b.root.zIndex).toBeCloseTo((r.views.get(5) as Container).zIndex - 0.5, 6);
     });
 
-    it('is fainter than a standing clone, as the row says, and leans out from the ninja', () => {
+    it('is fainter than a standing clone, as the row says (the picture draws it more opaque, STACK_ALPHA_BOOST: the pair as the more opaque of its two) and does not lean', () => {
       const r = stackedRig();
-      // The row says 45%; the picture draws a stacked clone a step more opaque (STACK_ALPHA_BOOST), never less than the row and never past 1.
-      for (const c of live(r).list) expect(c.alpha).toBeCloseTo(Math.min(1, LOOK.stackOffset.alpha * STACK_ALPHA_BOOST), 2);
+      const [lead] = bodiesOf(r).slice().sort((a, b) => a.index - b.index) as [Body];
+      expect(lead.sprite.alpha).toBeCloseTo(Math.min(1, LOOK.stackOffset.alpha * STACK_ALPHA_BOOST), 2);
       expect(STACK_ALPHA_BOOST).toBeGreaterThan(1);
-      const bodies = (r.scene as unknown as { bodies: Array<{ side: number; rig: Container; sprite: Sprite }> }).bodies;
-      for (const b of bodies) {
-        expect(Math.sign(b.rig.rotation)).toBe(b.side);
-        expect(Math.abs(b.rig.rotation)).toBeGreaterThan(STACK_LEAN * 0.7);
-      }
+      expect(lead.rig.rotation).toBe(0);
     });
 
-    it('is a bit smaller than a standing clone, by the row\'s scale', () => {
+    it('is drawn a little bigger than a lone clone, by PAIR_SCALE, from the same file scale', () => {
+      const r = stackedRig();
+      const [lead] = bodiesOf(r).slice().sort((a, b) => a.index - b.index) as [Body];
+      const art = cloneArt();
+      expect(Math.abs(lead.sprite.scale.y)).toBeCloseTo(art.scale * PAIR_SCALE, 0);
+      expect(Math.abs(lead.sprite.scale.y) / art.scale).toBeGreaterThan(1.05);
+    });
+
+    it('makes a lone stacked clone (its mate on a tile of its own) a single clone at its side, a bit smaller than a standing one, leaning out', () => {
       const r = rig();
       shown(r, castOf(r, [seat(7), seat(NINJA, true)]));
       run(r, 0.6);
-      const bodies = (r.scene as unknown as { bodies: Array<{ cell: number; sprite: Sprite }> }).bodies;
-      const standing = bodies.find((b) => b.cell === 7) as { sprite: Sprite };
-      const stacked = bodies.find((b) => b.cell === -1) as { sprite: Sprite };
+      const bodies = bodiesOf(r) as unknown as Array<Body & { cell: number }>;
+      const standing = bodies.find((b) => b.cell === 7) as Body;
+      const stacked = bodies.find((b) => b.cell === -1) as Body;
+      expect(stacked.pair).toBe('none');
+      expect(stacked.sprite.texture).toBe(tex('fx_clone'));
       expect(Math.abs(stacked.sprite.scale.y) / Math.abs(standing.sprite.scale.y)).toBeCloseTo(LOOK.stackOffset.scale, 2);
+      expect(Math.sign(stacked.rig.rotation)).toBe(stacked.side);
+      expect(Math.abs(stacked.rig.rotation)).toBeGreaterThan(STACK_LEAN * 0.6);
+      expect(stacked.sprite.alpha).toBeCloseTo(Math.min(1, LOOK.stackOffset.alpha * STACK_ALPHA_BOOST), 2);
+      const o = live(r).list.find((c) => c.cell === -1) as Live['list'][number];
+      expect(o.x).toBeCloseTo(feet(NINJA).x + stacked.side * LOOK.stackOffset.x * STACK_SPREAD, 3);
+      expect(o.y).toBeCloseTo(feet(NINJA).y + LOOK.stackOffset.y, 3);
     });
 
-    it('slides out from behind the ninja (no arc) over the leap', () => {
+    it('breaks the pair into two singles at the ninja\'s sides when one of the two goes, and the one that stays goes on', () => {
+      const r = stackedRig();
+      expect(bodiesOf(r).filter((b) => b.pair === 'lead')).toHaveLength(1);
+      endOf(r, 0, 'timeout');
+      run(r, 0.05);
+      const left = bodiesOf(r).find((b) => b.index === 1 && b.phase !== 'out') as Body;
+      expect(left.pair).toBe('none');
+      expect(left.sprite.texture).toBe(tex('fx_clone'));
+      const l = live(r).list.find((c) => c.index === 1) as Live['list'][number];
+      expect(l.x).toBeCloseTo(feet(NINJA).x + left.side * LOOK.stackOffset.x * STACK_SPREAD, 3);
+    });
+
+    it('draws the pair once both are behind the ninja, not while one is still hopping over (a cat took its tile)', () => {
+      const r = rig();
+      shown(r, castOf(r, [seat(NINJA, true), seat(7)]));
+      run(r, 0.6);
+      expect(bodiesOf(r).every((b) => b.pair === 'none')).toBe(true);
+      // The clone on tile 7 is told to step aside: it hops over and stands behind the ninja, and then the two are a pair.
+      r.ninja.clone = r.ninja.clone.map((c) => (c.index === 1 ? { ...c, cell: -1 } : c));
+      r.battle.events.emit('cloneStep', { unit: r.ninja, index: 1, cell: -1, x: cellCenterX(NINJA), y: cellCenterY(NINJA) } as never);
+      run(r, 0.05);
+      expect(bodiesOf(r).every((b) => b.pair === 'none')).toBe(true);
+      run(r, 0.6);
+      expect(bodiesOf(r).filter((b) => b.pair === 'lead')).toHaveLength(1);
+      expect(bodiesOf(r).filter((b) => b.pair === 'mate')).toHaveLength(1);
+    });
+
+    it('slides out from behind the ninja (no arc) over the leap, to the pair\'s raised place', () => {
       const r = rig();
       shown(r, castOf(r, [seat(NINJA, true), seat(NINJA, true)]));
       run(r, 0.05);
       const early = live(r).list.map((c) => c.y);
-      const base = feet(NINJA).y + LOOK.stackOffset.y;
+      const base = feet(NINJA).y + LOOK.stackOffset.y - PAIR_RAISE;
       // With no arc the feet go straight to their height: never above it by more than the leap's own slide.
       for (const y of early) expect(y).toBeGreaterThanOrEqual(base - 1);
     });
 
-    it('goes where the ninja goes: moved, dragged to another cell, it carries its clones with it', () => {
+    it('goes where the ninja goes: moved, dragged to another cell, it carries its pair with it', () => {
       const r = stackedRig();
       const view = r.views.get(5) as Container;
       view.position.x += 120;
       view.zIndex = view.y;
       run(r, 1 / 60);
-      for (const c of live(r).list) expect(c.x).toBeCloseTo(view.x + c.side * LOOK.stackOffset.x * STACK_SPREAD, 3);
+      const [lead] = bodiesOf(r).slice().sort((a, b) => a.index - b.index) as [Body];
+      const l = live(r).list.find((c) => c.index === lead.index) as Live['list'][number];
+      expect(l.x).toBeCloseTo(view.x, 3);
     });
 
     it('hides while its ninja is held in a finger or being sold, and comes back when it is put down', () => {
       const r = stackedRig();
       const view = r.views.get(5) as Container;
-      const was = (live(r).list[0] as Live['list'][number]).alpha;
+      const [lead] = bodiesOf(r).slice().sort((a, b) => a.index - b.index) as [Body];
+      const was = lead.sprite.alpha;
       view.zIndex = 100000;
       run(r, 0.6);
-      expect((live(r).list[0] as Live['list'][number]).alpha).toBeLessThan(0.05);
+      expect(lead.sprite.alpha).toBeLessThan(0.05);
       view.zIndex = view.y;
       run(r, 0.8);
-      expect((live(r).list[0] as Live['list'][number]).alpha).toBeCloseTo(was, 1);
+      expect(lead.sprite.alpha).toBeCloseTo(was, 1);
     });
 
     it('one stacked and one standing: the stacked one takes the side of its own number', () => {
@@ -890,16 +946,24 @@ describe('the clones\' scene', () => {
       }
     }
 
-    it('draws the first ten bodies as figures and the rest as an outline only (the row\'s figure cap)', () => {
+    it('draws the first ten bodies at full strength and the rest fainter (the row\'s figure cap)', () => {
       const r = rig();
       many(r, 7);
       const l = live(r);
       expect(l.bodies).toBe(14);
       expect(l.full).toBe(10);
       expect(l.lite).toBe(4);
-      const bodies = (r.scene as unknown as { bodies: Array<{ lite: boolean; sprite: Sprite; rim: Sprite; leaf: Sprite }> }).bodies;
-      // With no baked outline (no canvas here) a lite body still shows its picture, so the clone is not lost.
-      for (const b of bodies.filter((x) => x.lite)) expect(b.leaf.visible).toBe(false);
+      run(r, 0.6);
+      const bodies = (r.scene as unknown as { bodies: Array<{ lite: boolean; stacked: boolean; sprite: Sprite }> }).bodies.filter((b) => !b.stacked);
+      const full = bodies.filter((b) => !b.lite);
+      const lite = bodies.filter((b) => b.lite);
+      expect(lite.length).toBeGreaterThan(0);
+      // The picture of a lite body is still there (the clone is not lost), just quieter than a full one.
+      for (const b of lite) {
+        expect(b.sprite.visible).toBe(true);
+        expect(b.sprite.alpha).toBeGreaterThan(0);
+        expect(b.sprite.alpha).toBeLessThan(Math.min(...full.map((f) => f.sprite.alpha)) + 1e-9);
+      }
     });
 
     it('never makes more than 24 bodies and 8 leaves however many casts come, and reuses them', () => {
@@ -924,7 +988,7 @@ describe('the clones\' scene', () => {
   });
 
   describe('what a clone is not', () => {
-    it('has no rank band, no sticker, no badge: a body is a shadow, its art, its outline and a leaf, none of which takes a touch', () => {
+    it('has no rank band, no sticker, no badge: a body is a shadow and its painted picture, neither of which takes a touch', () => {
       const r = rig();
       shown(r, castOf(r));
       const bodies = (r.scene as unknown as { bodies: Array<{ root: Container; eventMode: string }> }).bodies;
@@ -932,9 +996,9 @@ describe('the clones\' scene', () => {
       for (const b of bodies) {
         expect(b.root.eventMode).toBe('none');
         expect(b.root.interactiveChildren).toBe(false);
-        // The shadow and the rig (the outline, the body, the leaf): nothing else.
+        // The shadow and the rig (the picture, which carries its own leaf and outline): nothing else.
         expect(b.root.children).toHaveLength(2);
-        expect((b.root.children[1] as Container).children).toHaveLength(3);
+        expect((b.root.children[1] as Container).children).toHaveLength(1);
         expect(b.root.label).toBe('sp-clone');
       }
     });
@@ -1012,7 +1076,7 @@ describe('the clones\' scene', () => {
   });
 
   describe('the real picture', () => {
-    it('paints the leaf once on a 2D canvas the first time it is needed, and the pale body when the art can be drawn', async () => {
+    it('paints the leaf once on a 2D canvas the first time it is needed and finds the owner\'s clone and pair, drawn at one scale', async () => {
       const ctx = new Proxy({}, { get: () => () => undefined, set: () => true });
       const made: unknown[] = [];
       vi.stubGlobal('document', {
@@ -1029,8 +1093,9 @@ describe('the clones\' scene', () => {
       expect(a.leaf.width).toBe(28);
       expect(made.length).toBeGreaterThanOrEqual(1);
       expect(cloneArt()).toBe(a);
-      // The bake of the body needs a picture the canvas can draw: the one-pixel stand-in is tinted instead.
-      expect(a.bodyTinted).toBe(true);
+      expect(a.body).toBe(tex('fx_clone'));
+      expect(a.pair).toBe(tex('fx_clone_pair'));
+      expect(a.body).not.toBe(a.pair);
       expect(a.height).toBeGreaterThan(60);
       expect(a.height).toBeLessThan(120);
     });

@@ -9,7 +9,10 @@ vi.mock('@/audio', () => ({
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   audio: { play: () => undefined },
 }));
-vi.mock('@/core/assets', async (original) => ({ ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: () => Texture.WHITE }));
+vi.mock('@/core/assets', async (original) => {
+  const { stubTex } = await import('./textureStub');
+  return { ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: stubTex };
+});
 vi.mock('@/fx', async (original) => ({
   ...(await original<typeof import('@/fx')>()),
   fxTex: () => ({ id: 'disc', texture: Texture.WHITE, w: 256, h: 256, ax: 0.5, ay: 0.5 }),
@@ -20,7 +23,8 @@ import { Emitter } from '@/core/events';
 import { Trauma } from '@/fx';
 import { setFxSettings } from '@/fx/settings';
 import type { BattleApi, BattleEvents, SpMeteorData, StrikePoint, UnitState } from '@/game/api';
-import { DUSK_ALPHA, DUSK_LABEL, FALL_ANGLE, FALL_BATTLE, FALL_DIST, FALL_REAL, PULSE_EVERY, makeMeteor, resetRim, rimArt } from '@/view/director/sp/meteor';
+import { DUSK_ALPHA, DUSK_LABEL, FALL_ANGLE, FALL_BATTLE, FALL_DIST, FALL_REAL, FLASH_KEY, PULSE_EVERY, RING_KEY, ROCK_KEY, makeMeteor, resetRim, rimArt } from '@/view/director/sp/meteor';
+import { tex } from '@/core/assets';
 import { NIGHT_LABEL, type SpEnv } from '@/view/director/sp/types';
 import { Gate, type Stage } from '@/view/director/stage';
 
@@ -289,6 +293,30 @@ describe('the cosmo cat\'s meteor: the landing, the shock and the crater', () =>
     expect(s.live().dusk).toBe(0);
   });
 
+  it('lands as the painted flash and the painted blast ring (one sprite each, no tint of the old rings), and the ring spreads to the radius it is told', () => {
+    const s = build();
+    s.scene.cast(cast(s));
+    const t0 = s.battle.time;
+    land(s, 'inner');
+    const landing = (s.scene as unknown as { landings: { list: Array<{ burst: Sprite }> } }).landings.list[0] as { burst: Sprite };
+    const wave = (s.scene as unknown as { waves: { list: Array<{ ring: Sprite }> } }).waves.list[0] as { ring: Sprite };
+    expect(landing.burst.texture).toBe(tex(FLASH_KEY));
+    expect(wave.ring.texture).toBe(tex(RING_KEY));
+    expect(wave.ring.visible).toBe(true);
+    // The picture's outer edge (0.45 of the file's width from its middle) is on the radius: the sprite is 1/0.45 of it across (a one-pixel stand-in texture here).
+    run(s, t0, 0.3);
+    expect(wave.ring.scale.x).toBeCloseTo(90 / 0.45, 3);
+    expect(wave.ring.position.x).toBe(IMPACT.x);
+    expect(wave.ring.position.y).toBe(IMPACT.y);
+    // It fades as it spreads and is gone after its span.
+    const mid = wave.ring.alpha;
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(0.95);
+    run(s, t0, 0.8);
+    expect(wave.ring.visible).toBe(false);
+    expect(landing.burst.visible).toBe(false);
+  });
+
   it('sends the shock out 0.25 s later: a ring to the outer radius and a ring of dust, and a softer sound', () => {
     const s = build();
     s.scene.cast(cast(s));
@@ -400,6 +428,24 @@ describe('the cosmo cat\'s meteor: the landing, the shock and the crater', () =>
     expect(s.live().dusk).toBe(0);
     s.scene.cast(cast(s, 5));
     expect(s.live().warns).toHaveLength(1);
+  });
+
+  it('falls as the owner\'s painted rock: one sprite, head to the right and tail to the left, so the fall\'s angle turns it along its way, and it grows as it nears', () => {
+    const s = build();
+    const t0 = s.battle.time;
+    s.scene.cast(cast(s));
+    run(s, t0, 1 - FALL_BATTLE + 0.1);
+    const w = (s.scene as unknown as { warns: Array<{ head: Container }> }).warns[0] as { head: Container };
+    expect(w.head.children).toHaveLength(1);
+    const rock = w.head.children[0] as Sprite;
+    expect(rock.texture).toBe(tex(ROCK_KEY));
+    // The container is turned by the angle of the fall (the picture is drawn along +x), the sprite itself is not turned again.
+    expect(w.head.rotation).toBeCloseTo(FALL_ANGLE, 9);
+    expect(rock.rotation).toBe(0);
+    const early = rock.scale.x;
+    run(s, t0, 0.98);
+    expect(rock.scale.x).toBeGreaterThan(early);
+    expect(w.head.rotation).toBeCloseTo(FALL_ANGLE, 9);
   });
 
   it('draws what it is told from the events and numbers alone: nothing of the simulation is touched', () => {

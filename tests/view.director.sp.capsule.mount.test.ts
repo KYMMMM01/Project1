@@ -8,7 +8,10 @@ vi.mock('@/audio', () => ({
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   audio: { play: () => undefined },
 }));
-vi.mock('@/core/assets', async (original) => ({ ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: () => Texture.WHITE }));
+vi.mock('@/core/assets', async (original) => {
+  const { stubTex } = await import('./textureStub');
+  return { ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: stubTex };
+});
 vi.mock('@/fx', async (original) => ({
   ...(await original<typeof import('@/fx')>()),
   fxTex: () => ({ id: 'beam', texture: Texture.WHITE, w: 64, h: 256, ax: 0.5, ay: 0.5 }),

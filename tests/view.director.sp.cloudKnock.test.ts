@@ -8,7 +8,10 @@ vi.mock('@/audio', () => ({
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   audio: { play: () => undefined },
 }));
-vi.mock('@/core/assets', async (original) => ({ ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: () => Texture.WHITE }));
+vi.mock('@/core/assets', async (original) => {
+  const { stubTex } = await import('./textureStub');
+  return { ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: stubTex };
+});
 vi.mock('@/fx', async (original) => ({
   ...(await original<typeof import('@/fx')>()),
   fxTex: () => ({ id: 'disc', texture: Texture.WHITE, w: 64, h: 64, ax: 0.5, ay: 0.5 }),
@@ -21,9 +24,10 @@ import { Emitter } from '@/core/events';
 import { setFxSettings } from '@/fx/settings';
 import { enemyDef } from '@/game';
 import type { BattleApi, BattleEvents, EnemyId, EnemyState, SpKnockShard, UnitState } from '@/game/api';
-import { cloudArt } from '@/view/cloudArt';
+import { CLOUD_FACE_KEY, CLOUD_H, CLOUD_K, cloudArt } from '@/view/cloudArt';
+import { tex } from '@/core/assets';
 import { mountCombat } from '@/view/director/combat';
-import { makeCloud } from '@/view/director/sp/cloud';
+import { BOLT_AXIS, makeCloud } from '@/view/director/sp/cloud';
 import { makeKnock } from '@/view/director/sp/knock';
 import { NUMBER_HOLD_MAX, NumberHolds, numberHoldsOf } from '@/view/director/sp/numberHold';
 import type { SpEnv, SpScene } from '@/view/director/sp/types';
@@ -662,7 +666,7 @@ describe('Tagalong Cloud (the storm cat)', () => {
 
   const info = enemyInfo('cucumber');
   /** Where a cloud sits on a cucumber: just above its health bar. */
-  const ride = (e: EnemyState): { x: number; y: number } => ({ x: bodyX(e.x, info.size), y: e.y - info.top + 6 - (cloudArt() ? 52 * 0.95 : 0) / 2 });
+  const ride = (e: EnemyState): { x: number; y: number } => ({ x: bodyX(e.x, info.size), y: e.y - info.top + 6 - CLOUD_H / 2 });
 
   function field(n = 3): Rig {
     const r = rig(1, true);
@@ -722,13 +726,16 @@ describe('Tagalong Cloud (the storm cat)', () => {
     // One spark on each OTHER enemy of the splash, and none on the host itself.
     const splash = r.stage.fx.ps.burst.mock.calls.filter((c) => (c[0] as { prio: number; count: number }).count === 3);
     expect(splash.map((c) => c[1])).toEqual([440, 480]);
-    // The bolt starts at the cloud's belly and ends on the host.
-    const b = (s as unknown as { bolts: { list: Array<{ sprite: { x: number; y: number; rotation: number; visible: boolean } }> } }).bolts.list[0] as {
-      sprite: { x: number; y: number; rotation: number; visible: boolean };
-    };
+    // The bolt starts at the cloud's belly and the line from the top of its zig-zag to its tip ends on the host (the picture leans, so the file's own
+    // vertical is not what is laid along the fall).
+    type Spr = { x: number; y: number; rotation: number; visible: boolean; texture: unknown; scale: { x: number; y: number } };
+    const b = (s as unknown as { bolts: { list: Array<{ sprite: Spr }> } }).bolts.list[0] as { sprite: Spr };
     expect(b.sprite.visible).toBe(true);
+    expect(b.sprite.texture).toBe(tex('fx_cloud_bolt'));
     expect(b.sprite.x).toBeCloseTo(live(s).list[0]?.x ?? 0, 6);
-    expect(Math.atan2(41 - b.sprite.y, 400 - b.sprite.x)).toBeCloseTo(b.sprite.rotation, 6);
+    const v = { x: (BOLT_AXIS.tipX - BOLT_AXIS.topX) * b.sprite.scale.x, y: (BOLT_AXIS.tipY - BOLT_AXIS.topY) * b.sprite.scale.y };
+    const turned = { x: v.x * Math.cos(b.sprite.rotation) - v.y * Math.sin(b.sprite.rotation), y: v.x * Math.sin(b.sprite.rotation) + v.y * Math.cos(b.sprite.rotation) };
+    expect(Math.atan2(turned.y, turned.x)).toBeCloseTo(Math.atan2(41 - b.sprite.y, 400 - b.sprite.x), 6);
     r.run(s as never, 0.6);
     expect(live(s).bolts).toBe(0);
     expect(live(s).list[0]?.mood).toBe('grumpy');
@@ -1055,9 +1062,27 @@ describe('Tagalong Cloud (the storm cat)', () => {
     }
   });
 
-  it('paints its pictures once, in code: one body and five faces', () => {
-    expect(cloudArt()).toBe(cloudArt());
-    expect(Object.keys(cloudArt().faces).sort()).toEqual(['grumpy', 'sad', 'sigh', 'startled', 'zap']);
+  it('finds its pictures: a face for each of five moods (the owner\'s set has three: startled wears the grumpy one and sad the sigh with its tear) and the bolt', () => {
+    const a = cloudArt();
+    expect(Object.keys(a.faces).sort()).toEqual(['grumpy', 'sad', 'sigh', 'startled', 'zap']);
+    expect(new Set(Object.values(a.faces)).size).toBe(3);
+    for (const [mood, key] of Object.entries(CLOUD_FACE_KEY)) expect(a.faces[mood as keyof typeof a.faces]).toBe(tex(key));
+    expect(a.bolt).toBe(tex('fx_cloud_bolt'));
+  });
+
+  it('draws a cloud as one picture, the mood\'s own, centred on its body at the size the files were made for', () => {
+    const r = field();
+    const s = makeCloud(r.env);
+    cast(s);
+    r.run(s as never, 0.6);
+    const c = (s as unknown as { clouds: Array<{ root: Container }> }).clouds[0] as { root: Container };
+    expect(c.root.children).toHaveLength(1);
+    const pic = c.root.children[0] as unknown as { texture: unknown; anchor: { x: number; y: number }; scale: { x: number } };
+    expect(pic.texture).toBe(tex('fx_cloud_grumpy'));
+    expect([pic.anchor.x, pic.anchor.y]).toEqual([0.5, 0.5]);
+    expect(pic.scale.x).toBeCloseTo(CLOUD_K, 6);
+    bolt(r);
+    expect(pic.texture).toBe(tex('fx_cloud_zap'));
   });
 
   it('enemy sizes are the game\'s own (a boss\'s cloud sits higher than a cucumber\'s)', () => {

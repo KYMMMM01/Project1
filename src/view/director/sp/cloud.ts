@@ -10,14 +10,14 @@
  *   0.10  it flies to the host along a small arc, homing on where the host is each frame (0.24 s), then it SITS on the host's health bar
  *         and follows it for as long as the cloud lives: it trots (a bounce about every third of a second), leans into the walk, and lags
  *         a little behind the enemy so that it seems to chase it; it is drawn from the host's own place, never from where the cat stood;
- *   0.40, 0.80 ... (every `cloudBolt`)  a bolt falls from the cloud's belly onto the host (the painted yellow bolts, flickering for 0.22 s),
+ *   0.40, 0.80 ... (every `cloudBolt`)  a bolt falls from the cloud's belly onto the host (the owner's yellow bolt, flickering for 0.22 s),
  *         a star flashes where it lands, a ring of the splash's size runs out, a spark on each OTHER enemy the splash reaches (`points`);
  *         the cloud squeezes its eyes shut and squashes for a moment; the sound climbs a little with each bolt;
  *   (a `cloudHop`)  the cloud jumps from the fallen host to the new one over an arc, startled (0.22 s), and lands grumpy;
  *   (a `cloudEnd`)  it fizzles: it sighs (or, `lost`, looks sad with a tear), shrinks and floats up and away over half a second, a puff and a
  *         few drops of rain fall from it.
  *
- * The cloud is a picture painted in code (`cloudArt.ts`: a body and five faces). The pieces are pooled (at most six clouds, which is the
+ * The cloud is the owner's painted picture (`cloudArt.ts`: one file per face, centred on the body, and the bolt). The pieces are pooled (at most six clouds, which is the
  * simulation's own cap, and a dozen bolts); the puffs, sparks and drops are the particle pool's (priority 1 and 0), a lower quality tier gets
  * fewer; under reduced motion the cloud fades in, glides, does not bob, lean, squash or arc, its bolt does not flicker and nothing shakes.
  * A cast the stage rule dropped shows no cloud, and its follow-up events find nobody to draw them. A cloud whose events never came ends by
@@ -30,10 +30,10 @@ import { Ease } from '@/core/tween';
 import type { EmitDef } from '@/fx';
 import { Light } from '@/fx/light';
 import { Hue } from '@/fx/palette';
-import { BOLT_IDS, paint } from '@/fx/paint';
+import { paint } from '@/fx/paint';
 import type { BattleEvents, EnemyState } from '@/game';
 import { FIELD_W } from '@/game/geometry';
-import { CLOUD_BODY, CLOUD_H, cloudArt, type CloudArt, type CloudMood } from '../../cloudArt';
+import { CLOUD_ANCHOR, CLOUD_BODY, CLOUD_H, CLOUD_K, cloudArt, type CloudArt, type CloudMood } from '../../cloudArt';
 import { bodyX } from '../../field/policy';
 import { enemyInfo } from '../stage';
 import { SpritePiece, Pieces } from './runPieces';
@@ -52,8 +52,8 @@ const FLICKER = 0.055;
 /** The most clouds at once (the simulation's own cap) and bolts (about two alive per cloud). */
 const CLOUDS = 6;
 const BOLTS = 14;
-/** How big a cloud is drawn, as a share of its picture (72 x 52 design px). */
-const SIZE = 0.95;
+/** How big a cloud is drawn, as a share of its picture (`CLOUD_K` design px a pixel of the file: the body is about 72 x 50 design px). */
+const SIZE = 1;
 /** How far above the cat's tile the hat is, and how far the cloud rises out of it. */
 const HAT_RISE = 50;
 const POP_RISE = 16;
@@ -116,8 +116,8 @@ interface Spot {
 /** One cloud: its body and face, where it is, what it is doing, and whose head it sits on. */
 class Cloud {
   readonly root = new Container();
-  readonly body: Sprite;
-  readonly face: Sprite;
+  /** The picture: the face's file, centred on the body (a mood changes its texture). */
+  readonly pic: Sprite;
   on = false;
   id = 0;
   mode: Mode = 'ride';
@@ -150,27 +150,39 @@ class Cloud {
   alpha = 1;
 
   constructor(art: CloudArt) {
-    this.body = new Sprite(art.body);
-    this.face = new Sprite(art.faces.grumpy);
-    this.body.anchor.set(0.5);
-    this.face.anchor.set(0.5);
-    this.root.addChild(this.body, this.face);
+    this.pic = new Sprite(art.faces.grumpy);
+    this.pic.anchor.set(CLOUD_ANCHOR);
+    this.pic.scale.set(CLOUD_K);
+    this.root.addChild(this.pic);
     this.root.eventMode = 'none';
     this.root.visible = false;
   }
 }
 
-/** One bolt: the painted zig-zag stretched from the cloud's belly to the host. */
+/**
+ * Where the bolt's picture runs from and to, as shares of its file: from the top of the zig-zag to its tip (the picture leans, so the line between them
+ * is what is laid along the fall, not the file's own vertical).
+ */
+export const BOLT_AXIS = { topX: 0.74, topY: 0.02, tipX: 0.29, tipY: 0.98 } as const;
+/**
+ * Where a bolt starts, as a share of the cloud's height below its middle: on the lower edge of the belly. The bolt is drawn over the cloud (`overClouds`),
+ * so it covers the little bolt that hangs out of the zap face's own picture and goes on from there to the host.
+ */
+const BOLT_FROM = 0.4;
+/** The share of the file's width the bolt's own body fills (the rest is its white edge). */
+const BOLT_BODY = 0.94;
+
+/** One bolt: the owner's yellow zig-zag stretched from the cloud's belly to the host. */
 class Bolt extends SpritePiece {
-  /** Which of the six painted bolts it starts with. */
+  /** Which way it starts flickering (the picture is mirrored every flicker step). */
   seed = 0;
   /** From the cloud's belly to the host, as they were when it fell. */
   x0 = 0;
   y0 = 0;
   x1 = 0;
   y1 = 0;
-  constructor(parent: Container) {
-    super(parent, paint('bolt_0'), 0, 0.5);
+  constructor(parent: Container, texture: Texture) {
+    super(parent, texture, BOLT_AXIS.topX, BOLT_AXIS.topY);
   }
 }
 
@@ -189,8 +201,8 @@ class CloudScene implements SpScene<'cloud'> {
   constructor(private readonly env: SpEnv) {
     this.front = env.ctx.layers.fxFront;
     this.bolts = new Pieces<Bolt>(() => {
-      const b = new Bolt(this.front);
-      this.under(b.sprite);
+      const b = new Bolt(this.front, (this.art ??= cloudArt()).bolt);
+      this.overClouds(b.sprite);
       return b;
     }, BOLTS);
     const ev = env.battle.events;
@@ -252,7 +264,7 @@ class CloudScene implements SpScene<'cloud'> {
     const calm = stage.reduced;
     // The bolt falls from the cloud's belly onto the host where it is NOW (the event's own place).
     const x0 = c.x;
-    const y0 = c.y + (CLOUD_H * SIZE) * 0.3;
+    const y0 = c.y + (CLOUD_H * SIZE) * BOLT_FROM;
     const x1 = e.x;
     const y1 = e.y - 4;
     const b = this.bolts.take();
@@ -499,26 +511,35 @@ class CloudScene implements SpScene<'cloud'> {
   }
 
   private mood(c: Cloud, m: CloudMood): void {
-    if (c.mood === m && c.face.texture === this.art?.faces[m]) return;
+    if (c.mood === m && c.pic.texture === this.art?.faces[m]) return;
     c.mood = m;
-    if (this.art) c.face.texture = this.art.faces[m] as Texture;
+    if (this.art) c.pic.texture = this.art.faces[m] as Texture;
   }
 
   // ── bolts ──
 
-  /** Stretch a bolt picture from the cloud to the host: as long as the fall, as thick as about two fifths of it (between 24 and 46 px), flickering. */
+  /**
+   * Lay a bolt picture along the fall from the cloud to the host: its top-to-tip line as long as the fall, as thick as about half of it (between 26 and 50
+   * px), flickering (mirrored and a touch fatter on every other step; a calm bolt does not flicker).
+   */
   private dress(b: Bolt, k: number, calm: boolean): void {
     const dx = b.x1 - b.x0;
     const dy = b.y1 - b.y0;
     const len = Math.max(14, Math.hypot(dx, dy));
     const s = b.sprite;
     const step = calm ? 0 : Math.floor(b.age.real / FLICKER);
-    const texture = paint(BOLT_IDS[(b.seed + step) % BOLT_IDS.length] as (typeof BOLT_IDS)[number]);
-    s.texture = texture;
+    const flip = (b.seed + step) % 2 === 1;
+    const tw = Math.max(1, s.texture.width);
+    const th = Math.max(1, s.texture.height);
+    const thick = Math.min(50, Math.max(26, len * 0.5)) * (flip ? 1.1 : 1);
+    const sy = (len * 1.05) / (th * (BOLT_AXIS.tipY - BOLT_AXIS.topY));
+    const sx = thick / (tw * BOLT_BODY);
+    const mirror = flip ? -1 : 1;
     s.position.set(b.x0, b.y0);
-    s.rotation = Math.atan2(dy, dx);
-    const thick = Math.min(46, Math.max(24, len * 0.44));
-    s.scale.set((len * 1.05) / Math.max(1, texture.width), thick / Math.max(1, texture.height));
+    s.scale.set(sx * mirror, sy);
+    // The picture leans: turn it so that its top-to-tip line, not the file's own vertical, points at the host.
+    const axis = Math.atan2((BOLT_AXIS.tipY - BOLT_AXIS.topY) * th * sy, (BOLT_AXIS.tipX - BOLT_AXIS.topX) * tw * sx * mirror);
+    s.rotation = Math.atan2(dy, dx) - axis;
     s.alpha = 1 - Math.max(0, Math.min(1, (k - 0.45) / 0.55));
   }
 
@@ -530,6 +551,19 @@ class CloudScene implements SpScene<'cloud'> {
   private under(node: Container | Sprite): void {
     const night = this.front.getChildByLabel(NIGHT_LABEL);
     this.front.addChildAt(node, night ? this.front.getChildIndex(night) + 1 : 0);
+  }
+
+  /**
+   * Put a bolt over every cloud (a cloud made later goes under, at the bottom, so it stays under): the bolt is a sticker laid over the cloud's belly and
+   * hides the little bolt of the zap face, which is only the start of it.
+   */
+  private overClouds(node: Sprite): void {
+    let top = -1;
+    for (const c of this.clouds) {
+      if (c.root.parent === this.front) top = Math.max(top, this.front.getChildIndex(c.root));
+    }
+    if (top < 0) this.under(node);
+    else this.front.addChildAt(node, top + 1);
   }
 
   // ── pool and lookups ──

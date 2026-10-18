@@ -6,12 +6,12 @@
  *   1. THE WARNING (the cast, `warn` = 1 s). The screen dims gently (a warm dusk, never a flash) and a RED CIRCLE grows on the spot: a flat translucent
  *      disc at the inner radius inside a dashed rim that turns, with a faint thin ring at the outer radius for the wide, weaker blow. It is drawn at once
  *      and grows by the battle's clock, so at 3x it simply grows three times as fast. In its last moments the meteor itself comes down out of the sky
- *      (the cat's own `shot_fire` fireball, big, with a streak behind it, growing as it nears) and a shadow grows under it on the ground; it reaches the
+ *      (the owner's painted rock with its flame tail, `fx_meteor_rock`, turned along its fall and growing as it nears) and a shadow grows under it on the ground; it reaches the
  *      circle exactly at the landing event, at any game speed (the fall takes at least a fifth of a real second where the warning allows).
- *   2. THE LANDING (`meteorLand` `inner`). A cream flash disc and a paper starburst, a ring in flame colour that spreads over the inner radius, sparks,
+ *   2. THE LANDING (`meteorLand` `inner`). A cream flash disc and the painted flash (`fx_meteor_flash`), the painted blast ring (`fx_meteor_ring`) that spreads over the inner radius, sparks,
  *      chips of dark paper and a pillar of smoke, ember sparks on every enemy the ring touches, a nudge of the camera, one screen flash through the
  *      existing guard and the boom; the dusk lifts. The crater begins in the same breath.
- *   3. THE SHOCK (`meteorLand` `outer`, 0.25 s later). A big thin ring sweeps out to the outer radius with a ring of dust at its edge.
+ *   3. THE SHOCK (`meteorLand` `outer`, 0.25 s later). The blast ring sweeps out again to the outer radius with a ring of dust at its edge.
  *   4. THE CRATER (`craterEnd` ends it). The painted scorch (`mark_scorch`, existing art) pops onto the road, an ember glow breathes under it every 0.5 s,
  *      the burn's own tick, and sparks and a wisp of smoke rise on each beat; in its last 0.6 s the glow dims; at `craterEnd` the scorch fades away.
  *
@@ -23,6 +23,7 @@
  * place, the crater is still. Low tier: no chips and no smoke, fewer sparks, no crater sparks. Nothing here moves an enemy or a cat.
  */
 import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
+import { tex } from '@/core/assets';
 import { TAU, clamp01, lerp, lighten } from '@/core/math';
 import { Ease, type Tween } from '@/core/tween';
 import { Trauma, fxTex, paint, screenFx, type EmitDef } from '@/fx';
@@ -53,8 +54,23 @@ export const FALL_DIST = 460;
 /** The fall takes this many battle seconds at 1x and at least this many REAL seconds at any speed (never more than the warning). */
 export const FALL_BATTLE = 0.36;
 export const FALL_REAL = 0.22;
-/** The fireball is this many px across at the landing. */
+/** The rock is this many px across at the landing. */
 const BALL = 120;
+/** The pictures: the rock (head to the right, flame tail to the left, so it is turned by the fall's angle), the landing flash and the blast ring. */
+export const ROCK_KEY = 'fx_meteor_rock';
+export const FLASH_KEY = 'fx_meteor_flash';
+export const RING_KEY = 'fx_meteor_ring';
+/** Where the rock's middle is in its file (shares of the width and of the height) and how many px of the file it is across. */
+const ROCK_AT = { x: 0.695, y: 0.655 } as const;
+const ROCK_PX = 150;
+/**
+ * Where the blast ring's outer edge is in its file: the puffs reach this share of the file's width from the centre. The sprite is laid so that this edge is
+ * on the ring's radius (the damage's edge), so the ring's puffs spread INSIDE the circle that was warned and the picture does not swell past it.
+ */
+const RING_EDGE = 0.45;
+/** The most opaque a ring is: the inner blow's, and the outer one's (the wide, weaker blow is quieter, so that a ring 400 px across does not bury the board). */
+const RING_ALPHA_INNER = 0.95;
+const RING_ALPHA_OUTER = 0.6;
 /** [battle seconds, real floor] of each picture. */
 const LAND: Span = [0.34, 0.22];
 const WAVE_INNER: Span = [0.4, 0.26];
@@ -143,6 +159,16 @@ export function resetRim(): void {
   rimTexture = null;
 }
 
+/** A centred sprite of a painted picture. */
+function painted(parent: Container, key: string): Sprite {
+  const s = new Sprite(tex(key));
+  s.anchor.set(0.5);
+  s.eventMode = 'none';
+  s.visible = false;
+  parent.addChild(s);
+  return s;
+}
+
 /** A centred sprite of an atlas shape. */
 function atlas(parent: Container, id: Parameters<typeof fxTex>[0], tint: number): Sprite {
   const s = new Sprite(fxTex(id).texture);
@@ -217,7 +243,7 @@ interface Known {
   warn: number;
 }
 
-/** The warning of one meteor: the circle, its rim, the thin outer ring, the shadow, and the falling fireball. */
+/** The warning of one meteor: the circle, its rim, the thin outer ring, the shadow, and the falling rock. */
 class Warn {
   on = false;
   id = 0;
@@ -230,7 +256,7 @@ class Warn {
   /** 0..1 how far the warning has got, and 0..1 how far the fall (QA and tests). */
   k = 0;
   p = 0;
-  /** Where the fireball is drawn (QA and tests). */
+  /** Where the rock is drawn (QA and tests). */
   headX = 0;
   headY = 0;
   whistle: Tween | null = null;
@@ -240,8 +266,7 @@ class Warn {
   private readonly fill: Sprite;
   private readonly reach: Sprite;
   private readonly rim: Sprite;
-  private readonly streak: Sprite;
-  private readonly ball: Sprite;
+  private readonly rock: Sprite;
 
   constructor(circles: Container, heads: Container) {
     this.shadow = atlas(this.circle, 'disc', Color.shadow);
@@ -254,17 +279,11 @@ class Warn {
     this.circle.eventMode = 'none';
     this.circle.visible = false;
     circles.addChild(this.circle);
-    const st = fxTex('streak');
-    this.streak = new Sprite(st.texture);
-    this.streak.anchor.set(1, 0.5);
-    this.streak.tint = Hue.ember;
-    this.ball = new Sprite(paint('shot_fire'));
-    // The fireball's picture has the ball at its right end and the flames behind it, pointing along +x.
-    this.ball.anchor.set(0.78, 0.52);
-    for (const s of [this.streak, this.ball]) {
-      s.eventMode = 'none';
-      this.head.addChild(s);
-    }
+    this.rock = new Sprite(tex(ROCK_KEY));
+    // The rock's picture has the rock at its right end and the flames behind it, pointing along +x.
+    this.rock.anchor.set(ROCK_AT.x, ROCK_AT.y);
+    this.rock.eventMode = 'none';
+    this.head.addChild(this.rock);
     this.head.eventMode = 'none';
     this.head.visible = false;
     heads.addChild(this.head);
@@ -305,7 +324,7 @@ class Warn {
     this.reach.alpha = 0.16 + 0.14 * k;
   }
 
-  /** The fireball and its shadow at fall progress `p` (0 = in the sky, 1 = on the circle). */
+  /** The rock and its shadow at fall progress `p` (0 = in the sky, 1 = on the circle). */
   drawFall(p: number): void {
     this.p = p;
     const on = p > 0;
@@ -321,11 +340,7 @@ class Warn {
     this.head.position.set(this.headX, this.headY);
     this.head.rotation = FALL_ANGLE;
     this.head.alpha = Math.min(1, p * 5);
-    this.ball.scale.set(((BALL / 0.48) * near) / Math.max(1, this.ball.texture.width));
-    const len = (200 + 220 * p) * near;
-    this.streak.scale.set(len / 256, (34 * near) / 7.74);
-    this.streak.x = -(BALL * 0.24 * near);
-    this.streak.alpha = 0.55;
+    this.rock.scale.set((BALL * near) / ROCK_PX);
     across(this.shadow, (28 + 74 * p * p) * 2 * (this.inner / 90) * 0.6);
     this.shadow.alpha = 0.34 * p;
   }
@@ -345,7 +360,7 @@ class Warn {
   }
 }
 
-/** The flash of a landing: a cream disc and a paper starburst. */
+/** The flash of a landing: a cream disc and the painted flash. */
 class Landing extends Piece {
   readonly flash: Sprite;
   readonly burst: Sprite;
@@ -355,7 +370,7 @@ class Landing extends Piece {
   constructor(parent: Container) {
     super();
     this.flash = atlas(parent, 'disc', Hue.cream);
-    this.burst = atlas(parent, 'starburst', Hue.sun);
+    this.burst = painted(parent, FLASH_KEY);
   }
   hide(): void {
     this.on = false;
@@ -368,28 +383,26 @@ class Landing extends Piece {
   }
 }
 
-/** A ring that sweeps out over the ground: a thick soft one and a thin bright one riding it. */
+/** A ring that sweeps out over the ground: the painted blast ring (a puffy cream ring of dust and sparks). */
 class Wave extends Piece {
-  readonly thick: Sprite;
-  readonly thin: Sprite;
+  readonly ring: Sprite;
   x = 0;
   y = 0;
   from = 20;
   radius = 90;
   tint: number = Hue.fire;
+  /** How opaque it is at its most. */
+  peak = RING_ALPHA_INNER;
   constructor(parent: Container) {
     super();
-    this.thick = atlas(parent, 'ringThick', Hue.fire);
-    this.thin = atlas(parent, 'ring', Hue.cream);
+    this.ring = painted(parent, RING_KEY);
   }
   hide(): void {
     this.on = false;
-    this.thick.visible = false;
-    this.thin.visible = false;
+    this.ring.visible = false;
   }
   destroy(): void {
-    this.thick.destroy();
-    this.thin.destroy();
+    this.ring.destroy();
   }
 }
 
@@ -608,7 +621,7 @@ class MeteorScene implements SpScene<'meteor'> {
     l.flash.visible = !calm;
     l.burst.visible = true;
     this.drawLanding(l, 0, calm);
-    this.wave(e.x, e.y, r, Hue.fire, WAVE_INNER, calm);
+    this.wave(e.x, e.y, r, Hue.fire, WAVE_INNER, calm, 20, RING_ALPHA_INNER);
     const ps = stage.fx.ps;
     const scale = r / 90;
     ps.burst(LAND_SPARKS, e.x, e.y, { scale, count: detail === 0 ? 0.5 : 1 });
@@ -629,7 +642,7 @@ class MeteorScene implements SpScene<'meteor'> {
     const detail = stage.detail;
     const calm = stage.reduced;
     const r = e.radius || known.outer;
-    this.wave(e.x, e.y, r, Hue.sun, WAVE_OUTER, calm, known.inner);
+    this.wave(e.x, e.y, r, Hue.sun, WAVE_OUTER, calm, known.inner, RING_ALPHA_OUTER);
     if (detail > 0 && !calm) stage.fx.ps.burst(OUTER_DUST, e.x, e.y + 4, { scale: r / 200, count: detail === 1 ? 0.6 : 1, delay: 0.12 });
     this.embers(e.points, detail === 2 ? 1 : 0);
     stage.play(stage.rules.heavyHit, 'imp_m_cosmo', 0.55, 0.9, 0.04);
@@ -644,7 +657,7 @@ class MeteorScene implements SpScene<'meteor'> {
     }
   }
 
-  private wave(x: number, y: number, radius: number, color: number, span: Span, calm: boolean, from = 20): void {
+  private wave(x: number, y: number, radius: number, color: number, span: Span, calm: boolean, from: number, peak: number): void {
     const w = this.waves.take();
     w.start(span[0], span[1]);
     w.x = x;
@@ -652,10 +665,10 @@ class MeteorScene implements SpScene<'meteor'> {
     w.radius = radius;
     w.from = from;
     w.tint = color;
-    w.thick.tint = color;
-    w.thin.tint = lighten(color, 0.6);
-    w.thick.visible = true;
-    w.thin.visible = true;
+    w.peak = peak;
+    // The ring is cream dust: a breath of the ring's colour (flame for the first, sun for the second), so the two still tell apart.
+    w.ring.tint = lighten(color, 0.72);
+    w.ring.visible = true;
     this.drawWave(w, 0, calm);
   }
 
@@ -688,19 +701,16 @@ class MeteorScene implements SpScene<'meteor'> {
     l.flash.alpha = 0.8 * (1 - Ease.quadIn(clamp01(k * 1.4)));
     l.burst.position.set(l.x, l.y);
     across(l.burst, l.radius * 2.6 * (0.45 + 0.55 * pop));
-    l.burst.rotation = calm ? 0 : k * 0.5;
+    l.burst.rotation = calm ? 0 : k * 0.25;
     l.burst.alpha = 0.95 * (1 - k * k);
   }
 
   private drawWave(w: Wave, k: number, calm: boolean): void {
     const grow = calm ? 1 : Ease.cubicOut(clamp01(k * 1.6));
     const r = calm ? w.radius : lerp(w.from, w.radius, grow);
-    w.thick.position.set(w.x, w.y);
-    across(w.thick, (r * 256) / 104);
-    w.thick.alpha = 0.55 * (1 - k) * (1 - k);
-    w.thin.position.set(w.x, w.y);
-    across(w.thin, (r * 1.05 * 256) / 110);
-    w.thin.alpha = 0.95 * (1 - k * k);
+    w.ring.position.set(w.x, w.y);
+    across(w.ring, r / RING_EDGE);
+    w.ring.alpha = w.peak * (1 - k * k);
   }
 
   update(dt: number, battleDt: number): void {

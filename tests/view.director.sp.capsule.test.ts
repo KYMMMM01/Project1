@@ -10,7 +10,10 @@ vi.mock('@/audio', () => ({
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   audio: { play: () => undefined },
 }));
-vi.mock('@/core/assets', async (original) => ({ ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: () => Texture.WHITE }));
+vi.mock('@/core/assets', async (original) => {
+  const { stubTex } = await import('./textureStub');
+  return { ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: stubTex };
+});
 vi.mock('@/fx', async (original) => ({
   ...(await original<typeof import('@/fx')>()),
   fxTex: () => ({ id: 'beam', texture: Texture.WHITE, w: 64, h: 256, ax: 0.5, ay: 0.5 }),
@@ -44,7 +47,7 @@ vi.mock('@/ui/paper', async (original) => ({
 
 import { Emitter } from '@/core/events';
 import { setFxSettings } from '@/fx/settings';
-import { RAINBOW, capsuleArt, capsuleLook } from '@/view/capsuleArt';
+import { RAINBOW, SHELL_ANCHOR, SHELL_K, capsuleArt, capsuleLook } from '@/view/capsuleArt';
 import type { BattleApi, BattleEvents, SpCapsuleKind, SpCapsuleResult, SpCastEvent, UnitState } from '@/game';
 import { SP_ROWS } from '@/game';
 import { CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
@@ -208,19 +211,27 @@ describe('the fall of a capsule', () => {
     expect(flights(r)[0]?.y).not.toBe(before.y);
   });
 
-  it('wears the lid of its kind (colour and mark) and shows the second shell only on a One More!', () => {
+  it('wears the painted lid and base of its kind, the two halves of one shell drawn at the same place and size', () => {
     const art = capsuleArt();
     const kinds: SpCapsuleKind[] = ['fish', 'purr', 'partner', 'more', 'toy', 'guardian'];
     const seen = new Set<unknown>();
     for (const k of kinds) {
       const r = rig();
       r.cast(k, { refund: false, inner: k === 'more' ? 'toy' : null });
-      const [, , peek, lid] = (r.front.children[0] as Container).children as unknown as Array<{ visible: boolean; texture: Texture; y: number }>;
+      const shell = r.front.children[0] as Container;
+      // Two sprites and nothing else (the picture of a shell carries its own mark and, on a One More!, its small capsule).
+      expect(shell.children).toHaveLength(2);
+      const [base, lid] = shell.children as unknown as Array<{ texture: Texture; x: number; y: number; scale: { x: number; y: number }; anchor: { x: number; y: number } }>;
       expect(lid?.texture).toBe(art.lids[k]);
+      expect(base?.texture).toBe(art.bases[k]);
       seen.add(lid?.texture);
-      expect(peek?.visible).toBe(k === 'more');
-      // The second shell shows because the lid sits a little high.
-      expect(lid?.y).toBe(k === 'more' ? -4 : 0);
+      // The seam's middle is the middle of both files, so one anchor and one scale put them together.
+      expect(lid?.anchor.x).toBe(SHELL_ANCHOR);
+      expect(lid?.anchor.y).toBe(SHELL_ANCHOR);
+      expect(base?.anchor.y).toBe(SHELL_ANCHOR);
+      expect([lid?.x, lid?.y, base?.x, base?.y]).toEqual([0, 0, 0, 0]);
+      expect(lid?.scale.x).toBeCloseTo(SHELL_K, 6);
+      expect(base?.scale.x).toBeCloseTo(SHELL_K, 6);
     }
     // Six distinct looks (colour and mark), so no kind is told apart by hue alone.
     expect(seen.size).toBe(6);
@@ -243,7 +254,7 @@ describe('the opening', () => {
     r.run(1.2);
     r.open('fish', 'fish');
     expect(flights(r)[0]?.state).toBe('open');
-    const lid = (r.front.children[0] as Container).children[3] as Container;
+    const lid = (r.front.children[0] as Container).children[1] as Container;
     r.run(0.1);
     expect(Math.abs(lid.x)).toBeGreaterThan(5);
     expect(lid.y).toBeLessThan(0);
@@ -595,7 +606,7 @@ describe('clean-up, quality and failure', () => {
     const bursts = r.stage.fx.ps.burst.mock.calls.map((c) => (c[0] as { tex?: string }).tex);
     expect(bursts).not.toContain('confetti');
     expect(bursts).not.toContain('heart');
-    const lid = (r.front.children[0] as Container).children[3] as Container;
+    const lid = (r.front.children[0] as Container).children[1] as Container;
     r.run(0.1);
     expect(lid.x).toBe(0);
     expect(lid.alpha).toBeLessThan(1);

@@ -1,0 +1,229 @@
+#!/usr/bin/env python
+"""Skill art candidates (2026-10-18): the ninja's clones, the samurai's cut, the lucky cat's capsules, the storm cat's cloud,
+the cosmo cat's meteor. Candidates only: nothing here is wired into the game; the owner picks from art/skills_v1/_sheet.png.
+
+    python art/skills_v1/build_jobs.py   -> art/skills_v1/jobs.json  (for tools/gen_image.py --batch --out-dir art/skills_v1)
+
+Every job attaches one or two approved images as rendering references (like art/dungeon_v1/build_jobs.py). The sheet jobs
+(capsules, clouds, cut, meteor) draw several pieces of ONE candidate in a strict grid so the set shares one drawing hand;
+compose_sheet.py cuts them apart again for the comparison sheet.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+OUT = ROOT / "art" / "skills_v1"
+
+STYLE = (
+    "Style: 2D cartoon sticker illustration with a thick outline (dark brown unless the subject says otherwise) and a clean white sticker border around each piece. "
+    "MATTE finish: flat colours with at most one soft shadow tone per shape, NO glossy highlights, NO specular shine, "
+    "NO strong gradients, NO rim light, NO sparkle or glitter effects, NO glow; slightly muted, natural colours (never neon). "
+    "Simple large bold shapes that still read when shrunk to about 50 pixels. NO tiny dots, NO speckle, NO dense repeated pattern, "
+    "NO fine detail. Cute and friendly, never scary or gross."
+)
+BG = (
+    "Background: genuinely transparent background (alpha) outside the white sticker borders; no checkerboard pattern, no frame, "
+    "no ground, no cast shadow."
+)
+END = "Constraints: no text, no letters, no numbers, no watermark, nothing cropped, nothing touching the image edge."
+GRID_NOTE = (
+    "each piece fully inside its own cell, filling about 70 percent of it, generous empty space around it, "
+    "nothing touching another piece, a cell border or the image edge"
+)
+
+
+def job(name: str, ref: list[str], ref_note: str, asset: str, subject: str, comp: str, extra_style: str = "") -> dict:
+    prompt = (
+        f"Use case: stylized-concept\nAsset type: {asset}\nSubject: {subject}\n{STYLE}"
+        f"{(' ' + extra_style) if extra_style else ''}\nComposition: {comp}\n{BG}\n{END}"
+    )
+    return {"name": name, "ref": ref, "ref_note": ref_note, "prompt": prompt}
+
+
+# ---------------------------------------------------------------------------------------------------------------- 1. clones
+CLONE_REF = ["art/units_v2/unit_r_ninja.png", "art/units_v2/unit_w_paw.png"]
+CLONE_NOTE = (
+    "Image 1 is the approved NINJA CAT of our game: the clone must be a copy of exactly this cat (same head shape, ears, headband "
+    "with a metal plate, scarf, cape and cute face style). Image 2 is another approved cat of the same game and a RENDERING "
+    "reference only: match its line weight, matte colouring and sticker border. Draw the new subject described below."
+)
+CLONE_LOOK = (
+    "The whole copy is painted in a pale, washed, see-through-looking sky-blue (about #BFE4F7) with one slightly deeper blue "
+    "(about #8CC4E8) as the only shadow tone, headband, scarf and cape included (the headband plate a lighter blue-white); the outline "
+    "is a thick medium steel-blue ink line instead of dark brown; nothing in this copy is black or green except the one leaf. "
+    "A single small clean GREEN leaf shape sits on the top of its head between the ears, slightly tilted. Face: two solid deep-blue dot "
+    "eyes, short brows, a small friendly mouth; cute, never scary. No sword, no shuriken, no props."
+)
+CLONES = {
+    "clone_a": (
+        "a ghostly CLONE of the ninja cat from image 1, standing upright and facing the viewer. Instead of feet the body ends in a soft "
+        "wavy smoky wisp. It is a slightly clumsy copy: the head tilted a few degrees and one arm raised a little crooked. " + CLONE_LOOK
+    ),
+    "clone_b": (
+        "a clumsy CLONE of the ninja cat from image 1 that is losing its balance: it still has two little feet, one foot lifted, "
+        "leaning to one side with both arms flapping out for balance, the head tilted, the mouth a small wobbly round 'o' of surprise. " + CLONE_LOOK
+    ),
+    "clone_c": (
+        "a small chubby CLONE of the ninja cat from image 1 drawn extra cute: a big round head (about 60 percent of the total height) on a "
+        "tiny body with stubby arms, the cape hanging like a little ghost sheet that ends in a wavy smoky hem with no feet, a sleepy smug "
+        "smile, the head tilted a little. " + CLONE_LOOK
+    ),
+}
+PAIR_COMMON = (
+    "TWO ghostly clones of the ninja cat from image 1 in ONE picture, standing one BEHIND the other. The front clone is whole. The back clone "
+    "is slightly smaller and even paler than the front one and partly hidden by it, but its whole head with BOTH ears, its leaf and both eyes "
+    "stay clearly visible. Each clone wears its own green leaf on its head. The pair must read as TWO cats even when shrunk to a 54 by 48 pixel "
+    "thumbnail: two clearly separate head silhouettes with ears, bold simple shapes, minimal detail inside the bodies, the bodies ending in "
+    "soft wavy smoky hems with no feet. "
+) + (
+    "Both copies are painted in a pale, washed, see-through-looking sky-blue (about #BFE4F7), the back one even paler, with one slightly deeper blue "
+    "(about #8CC4E8) as the only shadow tone, headbands, scarves and capes included (the headband plates a lighter blue-white); the outlines are thick "
+    "medium steel-blue ink lines instead of dark brown; nothing in either copy is black, grey or green except the two leaves, so NO black fur and NO green clothes. "
+    "Faces: two solid deep-blue dot eyes, short brows, a small friendly mouth; cute, never scary. No sword, no shuriken, no props. "
+)
+PAIRS = {
+    "pair_a": PAIR_COMMON + "Arrangement: a diagonal stagger, the back clone peeks out over the front clone's LEFT shoulder, a little higher than it, both facing the viewer.",
+    "pair_b": PAIR_COMMON + "Arrangement: shoulder to shoulder, the two overlap a little, both leaning toward each other with their heads tilted together; the back clone is on the RIGHT and a little lower-turned, as if peeking round the front one.",
+}
+
+# ---------------------------------------------------------------------------------------------------------------- 2. cut
+CUT_REF = ["art/raw/fx_burst_slash.png", "art/units_v2/unit_w_samurai.png"]
+CUT_NOTE = (
+    "Image 1 is an approved effect sticker of our game (a cream slash with an ink outline): copy its line weight and flat cream colouring. "
+    "Image 2 is the approved samurai cat, a RENDERING reference only: match its sticker border and matte colouring but do NOT draw a cat or a "
+    "sword. Draw only the effect pieces described below."
+)
+CUT_COMMON = (
+    "TWO separate effect stickers side by side in a strict grid of 2 columns by 1 row, one centred in each cell, each drawn perfectly HORIZONTAL "
+    "(left to right) so a game can rotate it. They are put on top of enemy characters of any colour to show a sword cut, so they use only "
+    "paper-cream (about #FFF3D6) fills, a thick dark brown-black ink outline and an ink-dark gap: a playful PAPER CUT, like a slit in a sticker, never "
+    "bloody. LEFT cell = the cut line when the enemy has just been marked (thin, quiet); RIGHT cell = the same cut after it opens into a gash (bigger, "
+    "bolder). "
+)
+CUTS = {
+    "cut_a": CUT_COMMON + (
+        "Design A (paper slit): LEFT = a razor-thin pointed almond slit, very slightly curved, cream with an ink edge, about 6 times longer than wide. "
+        "RIGHT = the same slit torn open: a fat pointed almond with a dark ink-brown gap in the middle between two thick curled paper lips in cream "
+        "(the lips curl outward like peeling sticker paper), and behind it a small flat pale-cream paper starburst of a few short spikes."
+    ),
+    "cut_b": CUT_COMMON + (
+        "Design B (blade swoosh): LEFT = one graceful long curved crescent streak that tapers to sharp points at both ends, cream with an ink edge, "
+        "with one small flat four-point glint shape at its middle. RIGHT = the same crescent opened wide into two curved cream lips with an ink-dark gap "
+        "between them, three small flat cream paper shards flying off its edges."
+    ),
+    "cut_c": CUT_COMMON + (
+        "Design C (torn paper): LEFT = a thin zigzag crack line with small teeth along both edges, cream with an ink edge. "
+        "RIGHT = ripped open: a narrow rip about 4 times longer than wide, tapering to a sharp point at both ends; its two cream lips have only four or five "
+        "BIG irregular jagged notches each (not an even zigzag, no regular teeth), a thin ink-dark gap between them, and a small torn-paper flap curled back at each "
+        "end. It must NOT look like a mouth with teeth or a zipper: it is one ripped slit."
+    ),
+}
+
+# ---------------------------------------------------------------------------------------------------------------- 3. capsules
+CAP_REF = ["art/raw/icon_capsule.png", "art/raw/icon_purr.png"]
+CAP_NOTE = (
+    "Image 1 is our current capsule icon (a round two-tone capsule): keep that idea of a pink top half, a cream bottom half and a band, but do NOT copy its "
+    "star and draw the NEW set described below. Image 2 is another approved icon of the game and a RENDERING reference only: match its line weight, matte "
+    "pink and sticker border."
+)
+CAP_COMMON = (
+    "SIX toy capsules (gacha capsules) as ONE matching set in a strict grid of 3 columns by 2 rows, one capsule centred in each cell, reading order left to "
+    "right then top to bottom. All six are EXACTLY the same shape, size, angle and drawing: {shape}. The top half is coloured, the bottom half is warm "
+    "cream-white (about #F6EBD3) with one very pale beige shadow tone, and a DARK BROWN band (about #5A3E36, the seam where the two halves join, the same dark brown on all six, NEVER the colour of the top half) runs round the middle. "
+    "The six differ only in colour and in the white mark on the top half, so a player can tell them apart by the mark as well as by the colour:\n"
+    "1. plain soft pink top (about #F28AA5), NO mark at all.\n"
+    "2. the same soft pink top with ONE white heart in the middle of it.\n"
+    "3. mint green top (about #7FD6B1) with TWO white cat paw prints on it (each a big pad and four toe beans), side by side, one slightly higher.\n"
+    "4. the same soft pink top, and ONE small mini-capsule (a pink and cream copy about 40 percent of its size) peeking out from behind its upper-right "
+    "edge, tilted, half hidden behind the big one.\n"
+    "5. warm gold top (about #F0B93A) with ONE white five-point star with rounded corners in the middle of it.\n"
+    "6. a RAINBOW top: five flat curved bands (red, orange, yellow, green, blue) following the curve of the top half like a rainbow, no other mark.\n"
+    "The marks are big, bold and simple (they fill about half of the top half) and clean white; no other decoration."
+)
+CAPS = {
+    "capsule_a": CAP_COMMON.format(shape="a perfectly round ball seen straight from the side with the band exactly horizontal, the band about a tenth of the height"),
+    "capsule_b": CAP_COMMON.format(shape="a chubby round ball tilted about 18 degrees to the right, with a fat dark-brown band (about a sixth of the height) and the marks drawn even bigger (about 60 percent of the top half)"),
+    "capsule_c": CAP_COMMON.format(shape="an upright pill or egg shape, taller than wide (about 1 to 1.3), standing on its end, with the band across the middle (about a tenth of the height)"),
+}
+
+# ---------------------------------------------------------------------------------------------------------------- 4. cloud
+CLOUD_REF = ["art/units_v2/unit_m_storm.png", "art/enemies_v2/enemy_cucumber.png"]
+CLOUD_NOTE = (
+    "Image 1 is the approved storm cat of our game: it has a small grumpy dark grey cloud (on its staff and floating beside it); draw that small cloud in its own "
+    "right, in the same slate-grey colouring and face style (do NOT draw the cat). Image 2 is an approved enemy of the same game and a RENDERING reference only: "
+    "match its line weight, matte colouring, sticker border and the way its face is drawn with solid black dot eyes and short thick brows."
+)
+CLOUD_COMMON = (
+    "FOUR separate pieces in a strict grid of 2 columns by 2 rows, one centred in each cell, reading order left to right then top to bottom. The star is a small "
+    "GRUMPY DARK STORM CLOUD with a face, drawn in a flat dark slate blue-grey (about #5D6980) with one darker slate belly shadow tone (about #444E63), "
+    "face drawn ON the cloud's body (solid black dot eyes, short thick brows, simple mouth), so it reads clearly at 34 pixels. Cloud body: {body}. "
+    "The same cloud in four poses:\n"
+    "1. GRUMPY: half-lidded dot eyes, thick brows slanting down toward the middle, a flat sulky frown.\n"
+    "2. ZAPPING: wide eyes with sharp angled brows, a small open mouth, and ONE small chunky yellow lightning bolt shooting down out of its underside.\n"
+    "3. SIGHING: droopy brows, eyes shut as two downward arcs, a small sad mouth, a little pale puff of breath beside it and ONE blue raindrop falling from it.\n"
+    "4. the little BOLT alone: one small chunky flat yellow lightning bolt (a bold zig-zag with only two kinks) with a cream highlight stripe, pointing down, no cloud."
+)
+CLOUDS = {
+    "cloud_a": CLOUD_COMMON.format(body="the classic cartoon storm cloud: three round puffy lumps along the top and a bumpy bottom edge"),
+    "cloud_b": CLOUD_COMMON.format(body="a round fluffy smoke-ball with two small pointed cat ears on top of it (a storm cat's pet cloud), a bumpy bottom edge"),
+    "cloud_c": CLOUD_COMMON.format(body="a wide, flat-bottomed pouty cloud shaped like a loaf with two round bumps on top, two darker-slate round cheek patches under the eyes"),
+}
+
+# ---------------------------------------------------------------------------------------------------------------- 5. meteor
+MET_REF = ["art/raw/fx_shot_fire.png", "art/units_v2/unit_m_cosmo.png"]
+MET_NOTE = (
+    "Image 1 is the approved fireball sprite of our game (it is the stand-in for the meteor): copy its line weight, flat flame shapes and the way the head is on "
+    "the RIGHT with the flame tail to the LEFT. Image 2 is the approved cosmo cat, a RENDERING reference only for its navy and gold colouring and its matte "
+    "sticker style: do NOT draw a cat."
+)
+MET_COMMON = (
+    "THREE separate effect pieces in a strict grid of 3 columns by 1 row, one centred in each cell, each filling its cell. The set is a cute falling METEOR and "
+    "its landing. {design}\n"
+    "LEFT = the burning meteor in flight, drawn horizontal: the head on the RIGHT and a short flat flame tail trailing to the LEFT (three or four flame tongues).\n"
+    "MIDDLE = the soft landing flash: a SOFT, flat, roundish burst (a scalloped cloud-edged disc with a smaller paler disc inside it and a few short stubby rays), "
+    "NOT a sharp spiky explosion.\n"
+    "RIGHT = the impact ring: a flat round ring band seen from straight above, empty and see-through in the middle, a scalloped outer edge, thick ink outline on both "
+    "edges of the band, cream fill with one beige shadow tone."
+)
+METS = {
+    "meteor_a": MET_COMMON.format(design=(
+        "Design A (rocky): the meteor is a lumpy grey-brown rock ball with three or four LARGE shallow craters (no small dots) and a warm orange and yellow flame tail; "
+        "the flash is cream-yellow.")),
+    "meteor_b": MET_COMMON.format(design=(
+        "Design B (cute face): the meteor is a round warm-brown rock with a tiny cute surprised face (two black dot eyes, a small round open mouth, two soft pink cheek "
+        "ovals) and a bright orange and yellow flame tail; the flash is cream-yellow with two or three small flat star shapes around it.")),
+    "meteor_c": MET_COMMON.format(design=(
+        "Design C (cosmic): the meteor is a lumpy navy-violet rock with two or three LARGE flat gold star shapes on it (no small dots) and a golden-yellow and orange "
+        "flame tail; the flash is pale gold-cream.")),
+}
+
+
+def main() -> None:
+    jobs: list[dict] = []
+    for k, v in CLONES.items():
+        jobs.append(job(k, CLONE_REF, CLONE_NOTE, "mobile game skill-effect sprite shown small (about 55 px tall)",
+                        v, "full body, facing the viewer, centred, generous padding, no ground shadow", ""))
+    for k, v in PAIRS.items():
+        jobs.append(job(k, CLONE_REF, CLONE_NOTE, "mobile game skill-effect sprite shown tiny (54 by 48 px)",
+                        v, "the two clones together fill the picture, centred, generous padding, no ground shadow", ""))
+    for k, v in CUTS.items():
+        jobs.append(job(k, CUT_REF, CUT_NOTE, "mobile game skill-effect sticker sheet, each piece shown about 70 px long",
+                        v, GRID_NOTE))
+    for k, v in CAPS.items():
+        jobs.append(job(k, CAP_REF, CAP_NOTE, "mobile game skill-effect icon set, each capsule shown about 40 px",
+                        v, GRID_NOTE))
+    for k, v in CLOUDS.items():
+        jobs.append(job(k, CLOUD_REF, CLOUD_NOTE, "mobile game skill-effect sprite sheet, the cloud shown about 34 px",
+                        v, GRID_NOTE))
+    for k, v in METS.items():
+        jobs.append(job(k, MET_REF, MET_NOTE, "mobile game skill-effect sprite sheet, the meteor shown about 120 px",
+                        v, GRID_NOTE))
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "jobs.json").write_text(json.dumps(jobs, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{len(jobs)} jobs -> {OUT / 'jobs.json'}")
+
+
+if __name__ == "__main__":
+    main()

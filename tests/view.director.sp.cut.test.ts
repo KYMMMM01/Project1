@@ -8,7 +8,10 @@ vi.mock('@/audio', () => ({
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   audio: { play: () => undefined },
 }));
-vi.mock('@/core/assets', async (original) => ({ ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: () => Texture.WHITE }));
+vi.mock('@/core/assets', async (original) => {
+  const { stubTex } = await import('./textureStub');
+  return { ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: stubTex };
+});
 vi.mock('@/fx', async (original) => ({
   ...(await original<typeof import('@/fx')>()),
   fxTex: () => ({ id: 'streak', texture: Texture.WHITE, w: 256, h: 16, ax: 0, ay: 0.5 }),
@@ -18,7 +21,8 @@ import { Emitter } from '@/core/events';
 import { setFxSettings } from '@/fx/settings';
 import type { BattleApi, BattleEvents, EnemyId, EnemyState, SpCutData, UnitState } from '@/game/api';
 import { PATH_LENGTH, cellCenterX, cellCenterY, pathPoint } from '@/game/geometry';
-import { BLINK_KEEP, LINES_LIVE, ORPHAN_REAL, TILT, afterimageTexture, makeCut, resetAfterimage } from '@/view/director/sp/cut';
+import { BLINK_KEEP, GASH_KEY, LINES_LIVE, LINE_KEY, ORPHAN_REAL, TILT, afterimageTexture, makeCut, resetAfterimage } from '@/view/director/sp/cut';
+import { tex } from '@/core/assets';
 import type { SpEnv } from '@/view/director/sp/types';
 import type { Stage } from '@/view/director/stage';
 
@@ -275,6 +279,49 @@ describe('the samurai\'s cut: the lines open', () => {
     expect(look()).not.toEqual(before);
   });
 
+  it('draws a waiting line as the owner\'s painted line (and nothing else of its own), a little bigger as the click comes, with the gash held back', () => {
+    const s = build(2);
+    s.enemy(1, 300);
+    s.scene.cast(cut(s, 1, [1]));
+    for (let i = 0; i < 20; i++) s.tick(1 / 60);
+    const root = roots(s).find((c) => c.visible) as Container;
+    const [wait, gash] = root.children as Sprite[];
+    expect(wait?.texture).toBe(tex(LINE_KEY));
+    expect(gash?.texture).toBe(tex(GASH_KEY));
+    expect(wait?.visible).toBe(true);
+    expect(gash?.visible).toBe(false);
+    const early = (wait as Sprite).scale.y;
+    // Along the line's own axis (the root is tilted), its height following the file's proportions.
+    expect((wait as Sprite).scale.x).toBeGreaterThan(0);
+    for (let i = 0; i < 40; i++) s.tick(1 / 60);
+    expect((wait as Sprite).scale.y).toBeGreaterThan(early);
+  });
+
+  it('opens a line into its gash: the slit flares, the painted gash grows out of it and the line gives way, then both are gone', () => {
+    const s = build(2);
+    const uids = marked(s, 1);
+    const e = s.battle.enemies[0] as EnemyState;
+    open(s, 1, [line(uids[0] as number, e.x, e.y)]);
+    const root = roots(s).find((c) => c.visible) as Container;
+    const [wait, gash] = root.children as Sprite[];
+    const seen: Array<{ line: number; gash: number; gashH: number }> = [];
+    for (let i = 0; i < 40; i++) {
+      s.tick(1 / 60);
+      seen.push({ line: wait?.visible ? wait.alpha : 0, gash: gash?.visible ? gash.alpha : 0, gashH: gash?.visible ? gash.scale.y / gash.scale.x : 0 });
+    }
+    // The gash fills in while the line fades out, and its height grows from a slit to its full picture.
+    const mid = seen.find((x) => x.gash > 0.3) as { line: number; gash: number; gashH: number };
+    expect(mid).toBeDefined();
+    expect(mid.gashH).toBeLessThan(1);
+    expect(Math.max(...seen.map((x) => x.gashH))).toBeCloseTo(1, 1);
+    expect(seen.some((x) => x.line > 0.5)).toBe(true);
+    expect(seen[seen.length - 1]?.line).toBe(0);
+    // And it is over after its time.
+    for (let i = 0; i < 120; i++) s.tick(1 / 60);
+    expect(s.live().lines).toHaveLength(0);
+    expect(gash?.visible).toBe(false);
+  });
+
   it('opens EVERY line in the same frame, each at its enemy, and the tile clicks once', () => {
     const s = build(1);
     const uids = marked(s, 6);
@@ -464,12 +511,12 @@ describe('the samurai\'s cut: reduced motion, the low tier and the pools', () =>
     open(s, 1, [line(1, e.x, e.y)]);
     expect(s.fx.ps.burst).not.toHaveBeenCalled();
     s.tick(1 / 60);
-    const gash = roots(s).find((c) => c.visible) as Container;
-    const lips = gash.children.filter((c) => c instanceof Sprite && c.visible) as Sprite[];
-    // The gap is its full width from the first frame: the two lips are apart.
-    const ys = lips.map((l) => l.position.y).sort((a, b) => a - b);
-    expect(ys.length).toBeGreaterThanOrEqual(2);
-    expect((ys[ys.length - 1] as number) - (ys[0] as number)).toBeGreaterThan(4);
+    const root = roots(s).find((c) => c.visible) as Container;
+    const [wait, gash] = root.children as Sprite[];
+    // The painted gash is open at its full height from the first frame (no growing), and the waiting line has gone.
+    expect(gash?.visible).toBe(true);
+    expect(gash?.scale.y).toBeCloseTo(gash?.scale.x ?? 0, 9);
+    expect(wait?.visible).toBe(false);
   });
 
   it('on the low tier the open throws no sparks, the afterimage has no ink shadow, and fewer lines are kept', () => {

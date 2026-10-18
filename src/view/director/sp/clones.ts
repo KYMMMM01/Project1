@@ -1,9 +1,10 @@
 /**
  * Surprise Clones, the ninja's scene (docs/design_skills_v2.md 3.4, 3.4.1 to 3.4.4): the ninja puts a leaf on its head, a round puff of smoke
- * goes "pop", and two pale sky-blue, see-through ninjas hop onto the nearest empty tiles (or, when the board is full, slide out from behind the
- * ninja and stand there, a little to each side). Each time the ninja throws, each clone throws one sky-blue shuriken of its own and grows a
- * step fainter (55, 47, 39, 31 %); after the fourth it goes with a puff and one leaf drifting down. A cat that takes a clone's tile does not
- * wait: the clone steps aside ("oops") and stands behind its ninja.
+ * goes "pop", and two dark lilac-indigo, see-through ninjas (the owner's painted clone, `cloneArt.ts`) hop onto the nearest empty tiles (or, when the
+ * board is full, slide out from behind the ninja and stand there: both together as the painted PAIR, two clones shoulder to shoulder, the rear one
+ * fainter, one picture on the ninja's tile, a little raised so that they stand behind it). Each time the ninja throws, each clone throws one pale blue
+ * shuriken of its own and grows a step fainter (55, 47, 39, 31 %); after the fourth it goes with a puff and one leaf drifting down. A cat that takes a
+ * clone's tile does not wait: the clone steps aside ("oops") and stands behind its ninja.
  *
  * What the simulation says and what is drawn. A clone is not a cat: it is a few numbers on its ninja (`UnitState.clone`) and four events
  * (`cloneThrow`, `cloneStep`, `cloneEnd`, and the `spCast` that seats them). The picture reads exactly those: the bodies are made from the
@@ -21,7 +22,7 @@
  *
  * Time. Every motion is timed by the battle's clock with a floor in real seconds (`span.ts`), so a clone freezes mid-hop under a popup and at
  * 3x (0.3 s of leap is 0.1 s) keeps its real floor. Reduced motion: no hop, no stumble, no leaf, no puff; a clone fades in and out in place.
- * Low tier: fewer puffs and no shockwave (the outline stays: it is what makes a pale body readable). A figure cap (the row's `figureCap`, 10) bounds the full bodies; the rest are a thin outline only.
+ * Low tier: fewer puffs and no shockwave. A figure cap (the row's `figureCap`, 10) bounds the full bodies; the rest are drawn fainter (`LITE_ALPHA`).
  */
 import { Container, Sprite } from 'pixi.js';
 import { TAU, clamp01, damp, lighten } from '@/core/math';
@@ -38,7 +39,7 @@ import { Age } from './span';
 import { cloneArt, type CloneArt } from './cloneArt';
 import {
   FADE, HEAD_LEAF, HOP, LAND, LEAF_FALL, OUT, STEP, WOBBLE,
-  STACK_ALPHA_BOOST, STACK_LEAN, cloneAlpha, headLeaf, hopAt, hopHeight, isLite, landSquash, leafFall, stackFeet, stackOffset, stackSide, wobbleRot,
+  PAIR_SCALE, STACK_ALPHA_BOOST, STACK_LEAN, cloneAlpha, headLeaf, hopAt, hopHeight, isLite, landSquash, leafFall, pairFeet, stackFeet, stackOffset, stackSide, wobbleRot,
   type CloneLook,
 } from './cloneMath';
 import type { SpCastOf, SpEnv, SpScene, SpSceneFactory } from './types';
@@ -59,10 +60,15 @@ const LEAF_W = 19;
 /** The ninja puts its leaf on. Its own slot of the pool. */
 const THROW_SOUND_GAP = 0.12;
 
-/** The line round a clone: a clear sky blue, because a white line vanishes on the cream paper and the sunbeam tile alike. */
-const RIM_COLOR = 0x7ec8ff;
 /** The shadow under a clone: the kit's shadow tone washed toward the sky, so the clone has a blue ground mark where a cat has a brown one. */
 const SHADOW_COLOR = 0x6f9fd0;
+
+/** A body beyond the figure cap is drawn this much fainter (it was an outline only before the clone had its own painted picture). */
+const LITE_ALPHA = 0.6;
+/** A throw lifts the clone's opacity by this much for a moment (it was a flash of the clone's outline). */
+const FLASH_ALPHA = 0.25;
+/** The pair's shadow is this much wider than a clone's. */
+const PAIR_SHADOW = 1.4;
 
 const POOF: EmitDef = {
   tex: 'smoke', prio: 1, count: 6, life: [0.28, 0.42], shape: { type: 'ring', r: 8 }, dir: 'out', speed: [16, 38], drag: 3.2,
@@ -95,9 +101,7 @@ interface Spot {
 class Clone {
   readonly root = new Container();
   readonly shadow: Sprite;
-  readonly rim = new Sprite();
   readonly sprite = new Sprite();
-  readonly leaf = new Sprite();
   private readonly rig = new Container();
   on = false;
   /** Which cast made it (the ninja, the clone's number in the cast, the cast's time): a cast told twice makes one body. */
@@ -105,8 +109,15 @@ class Clone {
   index = 0;
   castAt = 0;
   loud = false;
-  /** Beyond the figure cap: only the outline is drawn. */
+  /** Beyond the figure cap: drawn fainter. */
   lite = false;
+  /**
+   * Both of a ninja's clones stand behind it: the lower number ('lead') draws the painted pair, the other ('mate') draws nothing (it still lives, so
+   * the simulation's numbers and its events are followed all the same). Decided every frame (`pairUp`); 'none' is a clone on its own.
+   */
+  pair: 'none' | 'lead' | 'mate' = 'none';
+  /** The other clone of the pair (set with `pair`). */
+  mate: Clone | null = null;
   /** The tile it stands on, or -1 when it stands behind its ninja (on the ninja's own tile), and which side it peeks out on then. */
   cell = -1;
   side: -1 | 1 = 1;
@@ -137,7 +148,7 @@ class Clone {
   seed = 0;
   /** The clumsy one (the second) stumbles on landing, and wears its leaf upside down. */
   clumsy = false;
-  /** How far the outline is flashed bright (a throw), and real seconds the ninja's state has not listed this clone. */
+  /** How far the clone is flashed brighter (a throw), and real seconds the ninja's state has not listed this clone. */
   flash = 0;
   orphan = 0;
   /** A quiet exit: a plain fade, no puff (the stage or the battle ended, or the clone was lost). */
@@ -151,10 +162,8 @@ class Clone {
     this.shadow = new Sprite(shadowTex);
     this.shadow.anchor.set(0.5);
     this.shadow.position.y = 1;
-    this.rim.anchor.set(0.5);
     this.sprite.anchor.set(0.5, 1);
-    this.leaf.anchor.set(0.18, 0.82);
-    this.rig.addChild(this.rim, this.sprite, this.leaf);
+    this.rig.addChild(this.sprite);
     this.root.addChild(this.shadow, this.rig);
     this.root.eventMode = 'none';
     this.root.interactiveChildren = false;
@@ -340,20 +349,14 @@ class ClonesScene implements SpScene<'clones'> {
     return c;
   }
 
-  /** Put the pictures on a body that is starting: the pale art (tinted where it could not be baked), the outline, the shadow, its leaf. */
+  /** Put the pictures on a body that is starting: the painted clone and the shadow. */
   private dress(c: Clone, art: CloneArt): void {
     c.sprite.texture = art.body;
-    c.sprite.tint = art.bodyTinted ? GHOST_SKY_LIGHT : 0xffffff;
-    c.rim.texture = art.rim ?? art.body;
-    c.rim.tint = RIM_COLOR;
-    c.rim.visible = art.rim !== null;
+    c.sprite.tint = 0xffffff;
     c.shadow.tint = SHADOW_COLOR;
-    c.leaf.texture = art.leaf;
-    c.leaf.tint = art.leafTinted ? 0x7dba5c : 0xffffff;
-    c.leaf.scale.set(LEAF_W / Math.max(1, art.leaf.width));
-    c.sprite.visible = !c.lite || art.rim === null;
-    c.leaf.visible = !c.lite && !this.env.stage.reduced;
-    c.leaf.rotation = c.clumsy ? 0 : Math.PI * 0.86;
+    c.pair = 'none';
+    c.mate = null;
+    c.sprite.visible = true;
     c.sprite.alpha = 0;
   }
 
@@ -532,6 +535,7 @@ class ClonesScene implements SpScene<'clones'> {
     if (battleDt > 0) this.idle += dt;
     this.byUid.clear();
     for (const u of battle.units) if (u && u.clone.length > 0) this.byUid.set(u.uid, u);
+    this.pairUp();
     for (const c of this.bodies) {
       if (!c.on) continue;
       c.move.tick(battleDt, dt);
@@ -581,9 +585,10 @@ class ClonesScene implements SpScene<'clones'> {
     let lx = 0;
     let ly = 0;
     let fade = 1;
-    const bodyK = stacked ? this.look.stackOffset.scale : 1;
+    const pair = c.pair === 'lead';
+    const bodyK = pair ? PAIR_SCALE : stacked ? this.look.stackOffset.scale : 1;
     c.size = damp(c.size, bodyK, 0.06, dt);
-    c.lean = calm ? 0 : damp(c.lean, stacked ? c.side * STACK_LEAN : 0, 0.07, dt);
+    c.lean = calm || pair ? 0 : damp(c.lean, stacked ? c.side * STACK_LEAN : 0, 0.07, dt);
     c.facing = calm ? c.facingTo : damp(c.facing, c.facingTo, 0.04, dt);
     switch (c.phase) {
       case 'in': {
@@ -689,24 +694,60 @@ class ClonesScene implements SpScene<'clones'> {
     c.flash = damp(c.flash, 0, 0.05, dt);
     this.shape(c, fade);
     c.setRig(sx, sy, rot + c.lean, lx, ly);
-    // The sprite's own look: the facing flips it, the size shrinks a stacked one, the outline and the shadow follow the opacity.
+    // The sprite's own look: the picture (one clone, or the pair), the facing flips it, the size shrinks a stacked one, the shadow follows the opacity.
+    c.sprite.texture = pair ? art.pair : art.body;
     const scale = art.scale * c.size;
     c.sprite.scale.set(scale * c.facing, scale);
-    c.rim.scale.set(scale * c.facing, scale);
-    c.rim.position.y = -(art.height * c.size) / 2;
-    c.leaf.position.set(c.facing * art.height * 0.025 * c.size, -art.height * HEAD_AT * c.size);
-    c.shadow.scale.set(0.92 * c.size);
-    c.shadow.alpha = Math.min(0.42, 0.62 * c.alpha) * fade;
+    c.shadow.scale.set(0.92 * c.size * (pair ? PAIR_SHADOW : 1));
+    c.shadow.alpha = c.pair === 'mate' ? 0 : Math.min(0.42, 0.62 * Math.max(c.alpha, c.mate && pair ? c.mate.alpha : 0)) * fade;
   }
 
-  /** The opacity of every piece of a body for this frame (`fade` is the phase's own: a hop fading in, a pop fading out). */
+  /**
+   * The opacity of a body for this frame (`fade` is the phase's own: a hop fading in, a pop fading out). A throw lifts it for a moment; a body beyond
+   * the figure cap is fainter; the pair is as opaque as the more opaque of its two clones and its mate draws nothing.
+   */
   private shape(c: Clone, fade: number): void {
-    const a = c.alpha * fade;
-    c.sprite.alpha = c.stacked ? Math.min(1, a * STACK_ALPHA_BOOST) : a;
-    // The outline is the thing that stays sharp as the body fades: it falls off half as fast, and a throw flashes it.
-    c.rim.alpha = Math.min(1, (0.55 + 0.45 * a + 0.4 * c.flash) * Math.min(1, fade * 1.4));
-    c.leaf.alpha = Math.min(1, a * 1.6);
-    if (c.lite) c.rim.alpha *= 0.9;
+    if (c.pair === 'mate') {
+      c.sprite.alpha = 0;
+      return;
+    }
+    const lead = c.pair === 'lead' && c.mate !== null;
+    const own = lead ? Math.max(c.alpha, (c.mate as Clone).alpha) : c.alpha;
+    const flash = lead ? Math.max(c.flash, (c.mate as Clone).flash) : c.flash;
+    const a = own * fade;
+    let alpha = c.stacked ? Math.min(1, a * STACK_ALPHA_BOOST) : a;
+    alpha = Math.min(1, alpha + FLASH_ALPHA * flash * Math.min(1, fade));
+    c.sprite.alpha = c.lite ? alpha * LITE_ALPHA : alpha;
+  }
+
+  /**
+   * A ninja whose two clones both stand behind it is drawn with ONE picture, the painted pair: the lower-numbered clone ('lead') wears it and the other
+   * ('mate') draws nothing, so the two figures never depend on two offsets lining up. A clone that is leaving while the other stays, one that is still
+   * hopping behind the ninja ('step') and a lone stacked clone are drawn as single clones at the ninja's sides.
+   */
+  private pairUp(): void {
+    for (const c of this.bodies) {
+      c.pair = 'none';
+      c.mate = null;
+    }
+    for (const a of this.bodies) {
+      if (!a.on || !a.stacked || a.pair !== 'none') continue;
+      let mate: Clone | null = null;
+      let n = 0;
+      for (const o of this.bodies) {
+        if (o === a || !o.on || !o.stacked || o.uid !== a.uid) continue;
+        mate = o;
+        n++;
+      }
+      if (n !== 1 || !mate) continue;
+      if (a.phase === 'step' || mate.phase === 'step' || (a.phase === 'out') !== (mate.phase === 'out')) continue;
+      const lead = a.index < mate.index ? a : mate;
+      const other = lead === a ? mate : a;
+      lead.pair = 'lead';
+      lead.mate = other;
+      other.pair = 'mate';
+      other.mate = lead;
+    }
   }
 
   /** Where the clone's feet are meant to be: its own tile, or behind its ninja. */
@@ -718,7 +759,8 @@ class ClonesScene implements SpScene<'clones'> {
     }
     const view = this.env.ctx.unitView(c.uid);
     if (view) {
-      stackFeet(view.x, view.y, c.side, this.look, out);
+      if (c.pair === 'lead') pairFeet(view.x, view.y, this.look, out);
+      else stackFeet(view.x, view.y, c.side, this.look, out);
       c.lastX = out.x;
       c.lastY = out.y;
       return out;

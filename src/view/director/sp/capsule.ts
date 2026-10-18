@@ -8,8 +8,8 @@
  *         capsule's ring is HELD at empty (the simulation already wrote the half refund) so that it can spring back at the lid;
  *   0.5   the first landing and a thud, a squash; 0.7 the second, smaller; then it rests and rocks, harder and harder, until the lid goes. The
  *         six kinds are told apart by their colour and mark AND by the beat of the fall (the purr capsule is light and quick, the One More!
- *         heavy and rattling with a second shell showing in the gap, the toy falls from a high whistle with glints, the guardian glides down
- *         slowly and the board is washed with bands of colour while it comes);
+ *         heavy and rattling, the toy falls from a high whistle with glints, the guardian glides down slowly and the board is washed with
+ *         bands of colour while it comes);
  *   1.20  the opening (`capsuleOpen`): the lid springs off to one side and spins away, the base settles and fades, a ring and bits of shell
  *         go out, a paper line pops over the cat (the wording table, two lines), and by what the prize is (`result`):
  *           fish     the fish fly to the counter (the currency director, from the lid) and the ring SPRINGS from empty to half with a small
@@ -27,7 +27,8 @@
  *           fallback the promise fails: the shell opens EMPTY and something small and funny floats out of it (a question mark for the
  *                    buddy, a hollow star for the toy, a sleepy "z z" for the guardian) and hearts, as many as the purr, come out instead.
  *
- * The capsule and its pieces are painted in code (`capsuleArt.ts`) and the board, ring and counters are the ones that exist; the scene listens
+ * The shells are the owner's painted pictures (`capsuleArt.ts`: a lid and a base per kind, cut from one picture along its band; only the three
+ * glyphs of an empty capsule are still painted in code) and the board, ring and counters are the ones that exist; the scene listens
  * to `capsuleOpen` and `promote` itself (the dispatcher routes only the cast). A cast the stage rule dropped shows no capsule and its opening
  * finds nobody to open (`pairOpening`), so it shows nothing of ours: the prize itself is the simulation's and the field's. A defeat does not
  * tear a capsule down (`survivesDefeat`): the simulation keeps the capsules in the air for a revive and the picture, timed by the battle's
@@ -44,7 +45,7 @@ import { unitClass, unitRarity, type BattleEvents, type SpCapsuleKind, type Unit
 import { BOARD_H, BOARD_W, BOARD_X, BOARD_Y, CELL_COUNT, cellCenterX, cellCenterY } from '@/game/geometry';
 import { PaperLabel } from '@/ui/paper';
 import { Color } from '@/ui/theme';
-import { CAPSULE_PICS, BASE_ANCHOR, LID_ANCHOR, RAINBOW, capsuleArt, capsuleLook, type CapsuleArt } from '../../capsuleArt';
+import { RAINBOW, SHELL_ANCHOR, SHELL_K, capsuleArt, capsuleLook, type CapsuleArt } from '../../capsuleArt';
 import { holdRing, releaseRing } from '../../field/ringHold';
 import { FEET_DY, unitSpriteScale } from '../../field/unitView';
 import { CAPSULE_TOY_WAIT, stageHeldFor } from '../../staging';
@@ -82,8 +83,6 @@ const POPS = 2;
 /** How far a stamp's paws are from the line between the two cats, and the delay of the second (battle seconds). */
 const PAW_GAP = 12;
 const PAW_LATE = 0.09;
-/** The lid's resting lift on a One More!, so the second shell shows in the gap. */
-const PEEK_LIFT = 4;
 /** The rainbow wash over the board while a guardian capsule falls. */
 const WASH_ALPHA = 0.14;
 
@@ -147,8 +146,6 @@ type State = 'air' | 'open' | 'roll' | 'wait' | 'gone';
 class Flight implements Pending {
   readonly root = new Container();
   readonly base = new Sprite();
-  readonly mouth = new Sprite();
-  readonly peek = new Sprite();
   readonly lid = new Sprite();
   on = false;
   seq = 0;
@@ -193,16 +190,12 @@ class Flight implements Pending {
   readonly pose: Pose = newPose();
 
   constructor(art: CapsuleArt) {
-    this.base.texture = art.base;
-    this.base.anchor.set(BASE_ANCHOR.x, BASE_ANCHOR.y);
-    this.mouth.texture = art.mouth;
-    this.mouth.anchor.set(0.5);
-    this.mouth.visible = false;
-    this.peek.texture = art.peek;
-    this.peek.anchor.set(0.5, (CAPSULE_PICS.peekH - 3) / CAPSULE_PICS.peekH);
-    this.peek.visible = false;
-    this.lid.anchor.set(LID_ANCHOR.x, LID_ANCHOR.y);
-    this.root.addChild(this.base, this.mouth, this.peek, this.lid);
+    // The two halves lie on the same canvas with the seam's middle at its middle: one anchor, drawn at the same place, they are the whole shell.
+    this.base.texture = art.bases.fish;
+    this.base.anchor.set(SHELL_ANCHOR);
+    this.lid.texture = art.lids.fish;
+    this.lid.anchor.set(SHELL_ANCHOR);
+    this.root.addChild(this.base, this.lid);
     this.root.eventMode = 'none';
     this.root.visible = false;
   }
@@ -456,20 +449,18 @@ class CapsuleScene implements SpScene<'capsule'> {
     if (!stage.reduced) stage.play(stage.rules.zone, 'whoosh', 0.3, beat.whistle, 0.04);
   }
 
-  /** Put the right lid on a flight and show or hide the second shell. */
+  /** Put the right halves on a flight. */
   private dress(f: Flight, kind: SpCapsuleKind): void {
     const art = (this.art ??= capsuleArt());
     f.lid.texture = art.lids[kind];
-    f.base.texture = art.base;
-    f.mouth.visible = false;
-    f.peek.visible = kind === 'more';
-    f.lid.position.set(0, kind === 'more' ? -PEEK_LIFT : 0);
+    f.base.texture = art.bases[kind];
+    f.lid.position.set(0, 0);
     f.lid.alpha = 1;
     f.lid.rotation = 0;
-    f.lid.scale.set(1);
+    f.lid.scale.set(SHELL_K);
     f.base.alpha = 1;
     f.base.position.set(0, 0);
-    f.base.scale.set(1);
+    f.base.scale.set(SHELL_K);
     f.root.rotation = 0;
   }
 
@@ -514,8 +505,6 @@ class CapsuleScene implements SpScene<'capsule'> {
     f.real = e.result === 'toy';
     f.life = f.real ? CAPSULE_TOY_WAIT : OPEN[0];
     f.floor = f.real ? CAPSULE_TOY_WAIT : OPEN[1];
-    f.mouth.visible = true;
-    f.mouth.alpha = 1;
     const scale = f.small ? SMALL_SCALE : 1;
     const hue = capsuleLook(f.kind).hue;
     const colors = tints(f.kind);
@@ -593,8 +582,6 @@ class CapsuleScene implements SpScene<'capsule'> {
     s.side = big.side;
     s.age.reset();
     this.dress(s, kind);
-    s.lid.position.set(0, 0);
-    s.peek.visible = false;
     s.root.visible = true;
     big.child = s;
     this.place(s);
@@ -934,17 +921,15 @@ class CapsuleScene implements SpScene<'capsule'> {
           base.alpha = 1 - k2;
         } else {
           const lp = lidPose(k2, f.side, newPose());
-          lid.position.set(lp.dx, lp.dy - (f.kind === 'more' && !f.small ? PEEK_LIFT : 0));
+          lid.position.set(lp.dx, lp.dy);
           lid.rotation = lp.rot;
-          lid.scale.set(lp.sx, lp.sy);
+          lid.scale.set(SHELL_K * lp.sx, SHELL_K * lp.sy);
           lid.alpha = lidAlpha(k2);
           const bp = basePose(k2, newPose());
           base.position.set(bp.dx, bp.dy);
-          base.scale.set(bp.sx, bp.sy);
+          base.scale.set(SHELL_K * bp.sx, SHELL_K * bp.sy);
           base.alpha = baseAlpha(k2);
         }
-        f.mouth.alpha = base.alpha;
-        f.peek.alpha = base.alpha;
         break;
       }
     }
@@ -960,8 +945,6 @@ class CapsuleScene implements SpScene<'capsule'> {
     f.on = f.stage === 'inside';
     f.state = 'gone';
     f.root.visible = false;
-    f.mouth.visible = false;
-    f.peek.visible = false;
   }
 
   /** A capsule whose opening never came goes quietly. */
@@ -972,8 +955,6 @@ class CapsuleScene implements SpScene<'capsule'> {
     f.on = false;
     f.state = 'gone';
     f.root.visible = false;
-    f.mouth.visible = false;
-    f.peek.visible = false;
     if (f.child) f.child.on = false;
   }
 
@@ -1175,8 +1156,6 @@ class CapsuleScene implements SpScene<'capsule'> {
       f.state = 'gone';
       f.stage = 'done';
       f.root.visible = false;
-      f.mouth.visible = false;
-      f.peek.visible = false;
       f.child = null;
     }
     for (const s of this.springs) releaseRing(s.uid);

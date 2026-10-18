@@ -1,12 +1,9 @@
 /**
- * The look of the ninja's clones (docs/design_skills_v2.md 3.4) that the field and the director share, drawn from art the game already has
- * (decision 20: no new image file):
+ * What the ninja's clones (docs/design_skills_v2.md 3.4) share between the field and the director. The clone's own body is the owner's painted
+ * picture now (`director/sp/cloneArt.ts`); what is left here is the clones' shuriken:
  *
- *  - `paleCopy` bakes a pale, sky-blue copy of an existing picture on a 2D canvas, once: the cat's art with its colours washed toward the sky
- *    (a clone is "a tone paler" than its ninja) and the steel shuriken the same way. A multiply tint cannot make a dark cat pale, so a tint
- *    would have given a dark blue cat; the bake can.
- *  - `rimOf` bakes the thin bright line round a picture's outline (the picture grown by `width` px in twelve directions, the picture itself
- *    cut out of it), so the clone has "an outline that stays sharp" however faint its body gets.
+ *  - `paleCopy` bakes a pale, sky-blue copy of an existing picture on a 2D canvas, once: the steel shuriken washed toward the sky. A multiply tint
+ *    cannot make a dark picture pale; the bake can.
  *  - the launch offsets of a clone's shuriken: the simulation starts every shuriken at the CENTRE of its tile; a clone that is stacked on its
  *    ninja is drawn a few px to one side, so its shuriken is drawn starting there and settling onto the simulation's line in the first frames
  *    (the picture only; `cloneThrow` tells the director, the projectile layer reads it).
@@ -18,7 +15,7 @@ import { CanvasSource, Texture } from 'pixi.js';
 
 /** The sky of the paper kit's sky washi tape (`TapeColors.sky`): what a clone is washed toward. */
 export const GHOST_SKY = 0x9acbea;
-/** The brighter sky of the same tape's mark: the clone's outline and its shuriken's streak. */
+/** The brighter sky of the same tape's mark: the clone's shuriken's streak. */
 export const GHOST_SKY_LIGHT = 0xeaf6ff;
 
 const css = (c: number, a: number): string => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`;
@@ -102,39 +99,6 @@ export function paleCopy(src: Texture, key: string, o: PaleOpts): Texture | null
     return t;
   } catch {
     // A bitmap that was closed, a canvas the browser refuses: the caller tints the original instead.
-    return null;
-  }
-}
-
-/** The rim of `src`: its outline grown by `width` baked px, the picture cut out. The texture is `2 * pad` bigger than the original each way, so centre it. */
-export function rimOf(src: Texture, key: string, width: number, scale: number): { texture: Texture; pad: number } | null {
-  const have = baked.get(key);
-  const pad = Math.ceil(width) + 1;
-  if (have) return { texture: have, pad };
-  try {
-    const img = drawable(src);
-    if (!img || src.width < 2 || src.height < 2) return null;
-    const w = Math.max(2, Math.round(src.width * scale));
-    const h = Math.max(2, Math.round(src.height * scale));
-    const sil = canvasOf(w, h);
-    const out = canvasOf(w + pad * 2, h + pad * 2);
-    if (!sil || !out) return null;
-    // A white silhouette of the picture ...
-    drawAll(sil.ctx, img, src, 0, 0, w, h);
-    sil.ctx.globalCompositeOperation = 'source-in';
-    sil.ctx.fillStyle = '#ffffff';
-    sil.ctx.fillRect(0, 0, w, h);
-    // ... grown in twelve directions, then the silhouette itself taken out: a line round the figure.
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      out.ctx.drawImage(sil.canvas, pad + Math.cos(a) * width, pad + Math.sin(a) * width);
-    }
-    out.ctx.globalCompositeOperation = 'destination-out';
-    out.ctx.drawImage(sil.canvas, pad, pad);
-    const t = textureOf(out.canvas, `ghost_${key}`);
-    baked.set(key, t);
-    return { texture: t, pad };
-  } catch {
     return null;
   }
 }

@@ -5,12 +5,12 @@
  *   1. THE AFTERIMAGE (the cast). The samurai on its tile blinks out for a moment and a flat cream afterimage of it (the cat's own art cut out
  *      to one shape, baked once) dashes along the stretch of road, `fromPath` to `toPath` (450 px, with the flow, round corners and over the seam),
  *      trailing a ribbon of cream paper that fades from the back. The enemies never feel it.
- *   2. THE THIN LINES. As the afterimage passes a marked enemy a small flash goes off on it and it is left with ONE thin cut line (an ink-edged
- *      cream slit across its body). The line rides the enemy by `uid` (it is the simulation's public enemy list, looked up once a frame), a little
+ *   2. THE THIN LINES. As the afterimage passes a marked enemy a small flash goes off on it and it is left with ONE thin cut line (the owner's
+ *      painted line, `fx_cut_line`: a jagged cream slit with a glint at its start). The line rides the enemy by `uid` (it is the simulation's public enemy list, looked up once a frame), a little
  *      stronger for the last quarter of the fuse. An enemy that dies before the lines open leaves its line hanging where it died, faint: the line
  *      has not found a new owner yet. Two samurai that mark one enemy share one line (design 4.5); both cuts still land and both open.
  *   3. THE SHEATH CLICK (`cutOpen`, the fuse is over). A ring and a spark of cream at the samurai's tile and `imp_w_samurai`, and EVERY line opens
- *      at the same moment: the slit flares white-hot, then gapes (an ink-dark almond between two cream lips, with a paper starburst behind it) and fades. What the event says
+ *      at the same moment: the slit flares, then gapes (the owner's painted gash, `fx_cut_gash`: a dark gap between two torn paper lips, with shards round it) and fades. What the event says
  *      about each line is what is drawn: `cut` opens where it is; `moved` (its enemy died meanwhile) hops as a thin comet from the dead one's last
  *      place to the neighbour it passed to, and that neighbour is cut; `lost` fizzles where it hung. The numbers are the simulation's `hit`s, which
  *      follow the event in the same tick.
@@ -58,15 +58,15 @@ export const LINES_LIVE = [12, 24, 36] as const;
 const LINES_POOL = 36;
 const DASHES = 3;
 const HOPS_POOL = 12;
-/** The waiting line: the ink under it and the cream line on it, in design px. */
-export const WAIT_INK = 7.4;
-export const WAIT_LINE = 3.6;
+/** The pictures of a line and of a gash, and how wide each is drawn next to the `length` and `openLength` the enemy's size gives (the pictures have a glint and a taper at their ends). */
+export const LINE_KEY = 'fx_cut_line';
+export const GASH_KEY = 'fx_cut_gash';
+const LINE_W = 1.2;
+const GASH_W = 1.25;
 /** The last share of the fuse in which the lines tighten (a hint that the click is coming). */
 const WARN_FROM = 0.75;
 /** px of road between two points of the ribbon. */
 const RIBBON_STEP = 30;
-/** The streak shape is this many px tall at its fullest. */
-const STREAK_H = 7.74;
 
 const SPARKS: EmitDef = {
   tex: 'spark', prio: 0, count: 3, life: [0.14, 0.26], speed: [120, 300], spread: 0.45, drag: 4, alignVel: true, stretch: 0.002, size: [16, 26], sizeEnd: [5, 8],
@@ -127,23 +127,22 @@ function artOf(view: Container | null): Sprite | null {
   return s instanceof Sprite ? s : null;
 }
 
-/** One streak sprite, centred, flat and tapered (the atlas's `streak`); `length` and `thick` in design px. */
-function streak(parent: Container, tint: number): Sprite {
-  const s = fxTex('streak');
-  const sp = new Sprite(s.texture);
+/** A painted picture of the scene, centred and kept off the touch. */
+function picture(parent: Container, key: string): Sprite {
+  const sp = new Sprite(tex(key));
   sp.anchor.set(0.5, 0.5);
-  sp.tint = tint;
   sp.eventMode = 'none';
   sp.visible = false;
   parent.addChild(sp);
   return sp;
 }
 
-/** Lay a streak along the root's x axis: `length` px long, `thick` px at its fullest, `dy` px off the middle. */
-function lay(sp: Sprite, length: number, thick: number, dy: number, alpha: number): void {
-  sp.visible = alpha > 0.01 && thick > 0.05;
+/** Lay a picture along the root's x axis: `width` px wide (its own height follows, times `stretch`), `dy` px off the middle. */
+function lay(sp: Sprite, width: number, stretch: number, dy: number, alpha: number): void {
+  sp.visible = alpha > 0.01 && width > 0.5 && stretch > 0.02;
   sp.position.set(0, dy);
-  sp.scale.set(length / 256, thick / STREAK_H);
+  const k = width / Math.max(1, sp.texture.width);
+  sp.scale.set(k, k * stretch);
   sp.alpha = alpha;
 }
 
@@ -303,8 +302,8 @@ class Dash {
 type MarkState = 'off' | 'wait' | 'open' | 'out';
 
 /**
- * One line: a thin cut (an ink almond with a cream almond on it) that rides its enemy, then a gash (an ink almond between two cream lips, a paper
- * crescent and a flash) once it opens. Pooled; a line is also made, already open, for a cut with no line to open (a shared or cleared line).
+ * One line: a thin cut (the painted line) that rides its enemy, then a gash (the painted gash and a flash) once it opens. Pooled; a line is also made,
+ * already open, for a cut with no line to open (a shared or cleared line).
  */
 class Mark {
   state: MarkState = 'off';
@@ -317,7 +316,6 @@ class Mark {
   size = 56;
   length = 60;
   openLength = 56;
-  gape = 8;
   /** The dash that marked it and how far across the stretch it must be to show; `shown` once it has. */
   dash: Dash | null = null;
   dashSeq = 0;
@@ -336,9 +334,8 @@ class Mark {
   private nicking = false;
   readonly root = new Container();
   private readonly flash: Sprite;
-  private readonly inner: Sprite;
-  private readonly lipA: Sprite;
-  private readonly lipB: Sprite;
+  private readonly line: Sprite;
+  private readonly gash: Sprite;
 
   constructor(parent: Container) {
     this.flash = new Sprite(fxTex('starburst').texture);
@@ -346,9 +343,8 @@ class Mark {
     this.flash.eventMode = 'none';
     this.flash.visible = false;
     this.flash.tint = Hue.sun;
-    this.inner = streak(this.root, Color.inkDeep);
-    this.lipA = streak(this.root, Hue.cream);
-    this.lipB = streak(this.root, Hue.cream);
+    this.line = picture(this.root, LINE_KEY);
+    this.gash = picture(this.root, GASH_KEY);
     this.root.addChild(this.flash);
     this.root.rotation = TILT;
     this.root.eventMode = 'none';
@@ -383,7 +379,6 @@ class Mark {
     this.size = size;
     this.length = clamp(size * 1.2, 40, 130);
     this.openLength = clamp(size * 1.05, 36, 120);
-    this.gape = clamp(size * 0.12, 4.5, 9);
   }
 
   /** The line is drawn on its enemy for the first time: a small flash. */
@@ -427,10 +422,9 @@ class Mark {
     const faint = this.orphan ? 0.5 : 1;
     const t = (calm ? 0 : warn) * 0.7;
     this.root.position.set(this.x, this.y);
-    // Thick enough to read on a phone (1 design px is 0.625 px at 450 wide: the ink is 4.5 px, the cream 2.3 px): the marked road must look different from the unmarked one for the whole fuse.
-    lay(this.inner, this.length * (0.92 + 0.08 * warn), (WAIT_INK + 2.2 * t) * (this.orphan ? 0.8 : 1), 0, 0.92 * faint);
-    lay(this.lipA, this.length * (0.92 + 0.08 * warn), (WAIT_LINE + 1.2 * t) * (this.orphan ? 0.8 : 1), 0, faint);
-    this.lipB.visible = false;
+    // Big enough to read on a phone (1 design px is 0.625 px at 450 wide): the marked road must look different from the unmarked one for the whole fuse; it swells a little as the click comes.
+    lay(this.line, this.length * LINE_W * (0.92 + 0.08 * warn), (1 + 0.5 * t) * (this.orphan ? 0.8 : 1), 0, faint);
+    this.gash.visible = false;
     if (this.nicking) {
       this.nick.tick(battleDt, dt);
       const k = this.nick.k(NICK[0], NICK[1]);
@@ -446,21 +440,18 @@ class Mark {
     } else this.flash.visible = false;
   }
 
-  /** The gash: a white-hot flare along the slit, then it splits (a dark gap between two bright lips), holds and fades. Returns false when it is over. */
+  /** The gash: the slit flares (the line, bigger and brighter), then it splits (the painted gash opens out of it), holds and fades. Returns false when it is over. */
   drawOpen(dt: number, battleDt: number, calm: boolean, detail: number): boolean {
     this.age.tick(battleDt, dt);
     const k = this.age.k(OPEN[0], OPEN[1]);
     if (k >= 1) return false;
     const hot = calm ? 0 : 1 - clamp01((k - 0.04) / 0.14);
     const u = calm ? 1 : Ease.cubicOut(clamp01((k - 0.06) / 0.2));
-    const gap = this.gape * u;
-    // The dark of the gash is brief (it hid the packed road for 0.3 s): the lips fade from the start of the second half, the ink earlier.
-    const alpha = k < 0.35 ? 1 : 1 - (k - 0.35) / 0.65;
-    const length = this.openLength;
+    // The dark of the gash is brief (it hid the packed road for 0.3 s): it fades from the start of the second half, a little faster than a line would.
+    const alpha = k < 0.35 ? 1 : (1 - (k - 0.35) / 0.65) ** 1.4;
     this.root.position.set(this.x, this.y);
-    lay(this.inner, length, gap + 3, 0, 0.62 * alpha * alpha * (1 - hot));
-    lay(this.lipA, length, 3.4 + 7 * hot, gap / 2, alpha);
-    lay(this.lipB, length, 3.4 + 7 * hot, -gap / 2, alpha);
+    lay(this.line, this.length * LINE_W * (1 + 0.15 * hot), 1 + 0.9 * hot, 0, (1 - u) * alpha);
+    lay(this.gash, this.openLength * GASH_W * (0.8 + 0.2 * u), 0.3 + 0.7 * u, 0, u * alpha);
     const f = calm ? 1 : clamp01(k / 0.3);
     this.flash.visible = !calm && detail > 0 && f < 1;
     if (this.flash.visible) {
@@ -477,9 +468,8 @@ class Mark {
     const k = this.age.k(OUT[0], OUT[1]);
     if (k >= 1) return false;
     this.root.position.set(this.x, this.y);
-    lay(this.inner, this.length * (1 - k), 3.2, 0, 0.5 * (1 - k));
-    lay(this.lipA, this.length * (1 - k), 1.6, 0, 0.6 * (1 - k));
-    this.lipB.visible = false;
+    lay(this.line, this.length * LINE_W * (1 - k), 1 - 0.4 * k, 0, 0.6 * (1 - k));
+    this.gash.visible = false;
     return true;
   }
 
@@ -490,9 +480,8 @@ class Mark {
     this.nicking = false;
     this.root.visible = false;
     this.flash.visible = false;
-    this.inner.visible = false;
-    this.lipA.visible = false;
-    this.lipB.visible = false;
+    this.line.visible = false;
+    this.gash.visible = false;
   }
 
   destroy(): void {

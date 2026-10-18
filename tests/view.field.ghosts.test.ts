@@ -25,7 +25,6 @@ import {
   ghostStartsPending,
   noteGhostStart,
   paleCopy,
-  rimOf,
   takeGhostStart,
 } from '@/view/field/ghosts';
 import { Projectiles } from '@/view/field/projectiles';
@@ -80,7 +79,6 @@ describe('the pale copy of a picture', () => {
     recordingDocument();
     // A one-pixel white texture has no resource the canvas can draw.
     expect(paleCopy(Texture.WHITE, 'none2', { fill: GHOST_SKY, strength: 0.5, keep: 0, lift: 0, scale: 0.5 })).toBeNull();
-    expect(rimOf(Texture.WHITE, 'none3', 3, 0.5)).toBeNull();
     expect(ghostShuriken(Texture.WHITE)).toBeNull();
   });
 
@@ -113,24 +111,6 @@ describe('the pale copy of a picture', () => {
     expect(a.height).toBe(48);
   });
 
-  it('bakes the rim as the silhouette grown in twelve directions with the silhouette itself cut out, padded so the line fits', () => {
-    const rec = recordingDocument();
-    const src = drawableTexture(100, 80);
-    const r = rimOf(src, 'rim-test', 3, 1) as { texture: Texture; pad: number };
-    expect(r).not.toBeNull();
-    expect(r.pad).toBe(4);
-    expect(r.texture.width).toBe(100 + 8);
-    expect(r.texture.height).toBe(80 + 8);
-    // The silhouette: the picture, then white over it, only where it has pixels.
-    expect(rec.calls[0]).toMatchObject({ op: 'drawImage' });
-    expect([rec.calls[1]?.op, ...(rec.calls[1]?.args.slice(0, 3) ?? [])]).toEqual(['fillRect', 'source-in', 1, '#ffffff']);
-    const grown = rec.calls.filter((c) => c.op === 'drawImage' && c.args[0] === 'source-over' && c.args.length === 6);
-    expect(grown.length).toBe(12);
-    const cut = rec.calls[rec.calls.length - 1] as Call;
-    expect([cut.op, cut.args[0]]).toEqual(['drawImage', 'destination-out']);
-    expect(rimOf(src, 'rim-test', 3, 1)?.texture).toBe(r.texture);
-  });
-
   it('survives a bitmap the browser refuses to draw: the bake answers null and nothing throws', () => {
     vi.stubGlobal('document', {
       createElement: () => ({
@@ -146,7 +126,6 @@ describe('the pale copy of a picture', () => {
     });
     const src = drawableTexture(100, 80);
     expect(paleCopy(src, 'pale-closed', { fill: GHOST_SKY, strength: 0.5, keep: 0, lift: 0, scale: 0.5 })).toBeNull();
-    expect(rimOf(src, 'rim-closed', 3, 0.5)).toBeNull();
   });
 });
 
