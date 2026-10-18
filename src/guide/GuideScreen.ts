@@ -15,7 +15,7 @@ import { illustration } from './Illustration';
 import { guideProgress, type GuideProgress } from './progress';
 import './strings';
 import { topicFull, topicTeach, topicTitle } from './text';
-import { SECTIONS, topicDef, topicsOf, type HomePoint, type SectionId, type TopicId, type TryControl, type TryTab } from './topics';
+import { SECTIONS, bookHasSkills, topicDef, topicsOf, type HomePoint, type SectionId, type TopicId, type TryControl, type TryTab } from './topics';
 
 /** What the caller can do for the "try it" button: a battle points at a control, the home screen goes to a tab (and points at `point` there). */
 export interface GuideHost {
@@ -57,6 +57,8 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
   // The "new" stickers read what has been taught: a first look before the save has been read rebuilds when it arrives.
   if (!progress.ready) void progress.load().then(() => (page ? showPage(page) : showList()));
   const host = opts.host ?? {};
+  // The skills' topic is in the book only while skills are on (decision 30), or when a card of a battle that plays with them opens it by name (topics.ts).
+  const skills = bookHasSkills(opts.topic);
   const scaffold = new ScreenScaffold({ title: t('guide.title'), onBack: () => back(), scroll: true, actionBarHeight: BAR_H });
   game.popupLayer.addChild(scaffold);
   const bag = new TweenBag();
@@ -127,7 +129,7 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
     // A dot on the tab that still has pages nobody has read.
     const cell = (w - 12) / SECTIONS.length;
     SECTIONS.forEach((id, i) => {
-      if (id === section || !topicsOf(id).some((d) => !progress.isSeen(d.id))) return;
+      if (id === section || !topicsOf(id, skills).some((d) => !progress.isSeen(d.id))) return;
       const dot = new Graphics().circle(0, 0, 10).fill(Color.berry).circle(0, 0, 10).stroke({ color: Color.paperLight, width: 3 });
       dot.position.set(-w / 2 + 6 + cell * (i + 1) - 18, -TAB_H / 2 + 10);
       scaffold.actionBar.addChild(dot);
@@ -141,7 +143,7 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
     const w = scaffold.contentWidth;
     const heading = new PaperLabel({ text: t(`guide.sectionLong.${section}`), size: 32, paper: Color.teal, padX: 28, padY: 8, seed: 11 });
     heading.position.set(heading.width / 2 + 8, 36);
-    const left = progress.unread().length;
+    const left = progress.unread(skills).length;
     const caption = uiLabel(left > 0 ? t('guide.unread', { n: left }) : t('guide.allRead'), { size: 24, color: Color.inkSoft, anchorX: 1 });
     caption.position.set(w - 8, 36);
     scaffold.content.addChild(heading, caption);
@@ -153,7 +155,7 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
       scaffold.content.addChild(again);
       y += REPLAY_H + ROW_GAP;
     }
-    for (const def of topicsOf(section)) {
+    for (const def of topicsOf(section, skills)) {
       const r = row(def.id, w);
       r.position.set(w / 2, y + ROW_H / 2);
       scaffold.content.addChild(r);
@@ -212,7 +214,7 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
 
   function buildPageBar(id: TopicId): void {
     const def = topicDef(id);
-    const same = topicsOf(def.section);
+    const same = topicsOf(def.section, skills);
     const at = same.findIndex((d) => d.id === id);
     const bar = scaffold.actionBar;
     const w = scaffold.contentWidth;

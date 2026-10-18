@@ -32,6 +32,7 @@ import { foldPose } from '../peekMath';
 import { PeekDock } from '../PeekDock';
 import { recommendPick } from '../policy';
 import { Hand } from '../Hand';
+import { withSkillText } from '../spTell';
 
 const W = PICK.w;
 const SCALE = PICK.scale;
@@ -126,12 +127,14 @@ export class SummonPickPopup extends Popup<void> {
         next.position.set(0, 256);
         card.addChild(lead, next);
       }
-      this.offs.push(attachTooltip(card, () => ({ title: t(def.nameKey), text: def.skillText() })));
+      // With skills on the hold also tells the skill the cat comes with (its name, how often, what it does), after the ability line.
+      this.offs.push(attachTooltip(card, () => ({ title: t(def.nameKey), text: withSkillText(id, def.skillText(), env.battle.spOn) })));
       c.addChild(card);
       this.cards.push(card);
     });
 
-    const tip = uiLabel(t('hud.pick.tip'), { size: 24, color: Color.inkSoft, wrap: W - 80 });
+    // In a battle with the new skills the hold shows the skill too, and "skill" in English is then the new thing (src/game/data/spTexts.ts).
+    const tip = uiLabel(t(env.battle.spOn ? 'sp.pick.tip' : 'hud.pick.tip'), { size: 24, color: Color.inkSoft, wrap: W - 80 });
     tip.position.set(W / 2, h - 46);
     c.addChild(tip);
     this.body.addChild(panel);

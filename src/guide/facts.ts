@@ -13,6 +13,7 @@ import {
   SUMMON_CAP, SUMMON_GRADE_COSTS, SUMMON_ODDS, SUMMON_STEP, SUN_CELLS, SYNERGY_TIER_AT,
 } from '@/game/data/balance';
 import { specialCellName, specialCellText } from '@/game/data/cells';
+import { spGuideFacts } from '@/game/data/spTexts';
 import { classDef } from '@/game/data/classes';
 import { BOSS_SPECS, ENEMY_SPECS } from '@/game/data/enemies';
 import { MODIFIER_IDS } from '@/game/data/modifiers';
@@ -115,6 +116,8 @@ const BUILDERS: Partial<Record<TopicId, () => Facts>> = {
   class_sheet: () => ({ a: SYNERGY_TIER_AT[0] as number, c: SYNERGY_TIER_AT[2] as number, kitten: rarityName(RARITIES[0] as RarityId) }),
   class_upgrade: () => ({ bonus: pct(CLASS_UPGRADE_BONUS), costs: list(CLASS_UPGRADE_COSTS), max: CLASS_UPGRADE_COSTS.length }),
   pick3: () => ({ every: OFFER_EVERY, options: OFFER_OPTIONS }),
+  // The rank words and the shares of the skills' page are the skills' own (src/game/data/spTexts.ts).
+  sp_skill: spGuideFacts,
   purr: () => ({ elite: ELITE_PURR, boss: BOSS_PURR, act: ACT_PURR, molt: moltPrices(), awaken: AWAKEN_COST }),
   molt: () => ({ prices: moltPrices(), limit: MOLT_LIMIT }),
   awaken: () => ({ tier: AWAKEN_MIN_TIER, kinds: SYNERGY_TIER_AT[AWAKEN_MIN_TIER - 1] as number, cost: AWAKEN_COST }),

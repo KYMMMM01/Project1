@@ -225,6 +225,9 @@ export const SHEET = {
   info: 22,
   infoSlot: 76,
   infoGap: 8,
+  /** The skill ring on the photo's lower left corner (skills on): its size against the ring on the board (1 = the board's, in design px), and how far in from the photo's left and bottom edges its centre stands. */
+  ring: 1.2,
+  ringIn: 19,
 } as const;
 
 export interface SheetBoxes {
@@ -273,6 +276,17 @@ export function sheetSkillInfo(w: number, h: number): { centre: Point; r: number
     slot: { x: centre.x - SHEET.infoSlot / 2, y: top, w: SHEET.infoSlot, h: Math.min(SHEET.infoSlot, b.well.y - top) },
     lineX: centre.x + r + SHEET.infoGap,
   };
+}
+
+/**
+ * Where the skill ring of the selected cat stands (only in a battle with skills): on the photo's lower LEFT corner, the far corner from the "i" sticker
+ * on the lower right, so the two never meet and the photo (which opens the skill's bubble) stays the one big target. `centre` is in the sheet's own
+ * coordinates and `scale` is the ring's size against the one on the board (`RING_OUTER` x `scale` is its radius). It laps the photo's corner by about
+ * 3 px, as the class sticker laps a cat's cell, and ends above the well that says what the cat becomes.
+ */
+export function sheetSkillRing(w: number, h: number): { centre: Point; scale: number } {
+  const b = sheetBoxes(w, h);
+  return { centre: { x: b.photo.x + SHEET.ringIn, y: b.photo.y + b.photo.h - SHEET.ringIn }, scale: SHEET.ring };
 }
 
 // ───────────────────────── the laser button ─────────────────────────

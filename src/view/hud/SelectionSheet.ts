@@ -10,7 +10,7 @@ import { fmt, fmtPct } from '@/core/format';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
 import { drawBuffMark } from '@/fx';
-import { AWAKEN_MIN_TIER, classDef, tilesText, unitClass, unitDef, type Fail, type UnitState } from '@/game';
+import { AWAKEN_MIN_TIER, classDef, tilesText, unitClass, unitDef, type ClassId, type Fail, type UnitState } from '@/game';
 import {
   backOut,
   Button,
@@ -30,15 +30,18 @@ import {
 } from '@/ui';
 import { info } from '../info';
 import { BuffBoard, buffFacts, chipsFit, withOwnWard, type BuffFact } from '../field/buffMath';
-import { SHEET, sheetBoxes, sheetSkillInfo, type Rect } from './layoutMath';
+import { SHEET, sheetBoxes, sheetSkillInfo, sheetSkillRing, type Rect } from './layoutMath';
 import type { HudEnv } from './env';
 import { BuildPlanView } from './BuildPlanView';
 import { CLASS_ACCENT, CLASS_ICON, CLASS_TAPE, tapArea, unitPhoto } from './kit';
 import { moltRefusal, moltState } from './moltMath';
 import { MoltPicker } from './popups/MoltPicker';
+import { SheetRing } from './SheetRing';
+import { hasSkillText, withSkillText } from './spTell';
 
-/** Seconds a cat's full skill text stays up (it is the longest line a bubble carries). */
+/** Seconds a cat's full ability text stays up (it is the longest line a bubble carries), and when the skill's block follows it. */
 const SKILL_FOR = 8;
+const SKILL_FOR_WITH_SKILL = 14;
 /** The sticker on a buff chip (the board's badge, half width), and the space between the chips. */
 const CHIP_R = 11;
 const CHIP_GAP = 8;
@@ -86,6 +89,8 @@ export class SelectionSheet {
   private rect: Rect = { x: 12, y: 6, w: 696, h: 270 };
   private accent: number = Color.kraftDark;
   private fullSkill = '';
+  /** The skill ring of the selected cat (only in a battle with skills, for a cat that has one). */
+  private ring: SheetRing | null = null;
   /** What the card currently shows: it is rebuilt only when this changes, not on every fish tick. */
   private shownKey = '';
   private buttonsKey = '';
@@ -111,6 +116,8 @@ export class SelectionSheet {
     for (const type of ['fish', 'purr', 'synergy', 'merge', 'molt', 'awaken', 'move', 'swap', 'sell', 'upgrade', 'summon'] as const) {
       env.on(b.events, type, () => (this.dirty = true));
     }
+    // The ring flashes when the selected cat casts. Nothing listens in a battle without skills.
+    if (b.spOn) env.on(b.events, 'spCast', (e) => this.ring?.cast(e.unit.uid, b.time));
     // The tutorial brings the molt and awaken buttons in; the row of buttons re-centres around them.
     env.on(env.revealed, 'reveal', ({ key }) => {
       if (key !== 'molt' && key !== 'awaken') return;
@@ -258,6 +265,7 @@ export class SelectionSheet {
     this.accent = rar.dark;
     this.drawBg();
     for (const ch of this.dynamic.removeChildren()) ch.destroy({ children: true });
+    this.ring = null;
     const d = this.dynamic;
 
     const box = sheetBoxes(this.rect.w, this.rect.h);
@@ -296,18 +304,22 @@ export class SelectionSheet {
     stat('target', tilesText(u.stats.range));
     this.buffChips(d, facts, u.dodge, sx, EDGE + STATS_Y, textRight);
 
+    // With skills on, a cat that has one also wears the skill's ring on its photo, and the "i" bubble carries the skill's name and line after the ability line.
+    const hasSkill = hasSkillText(u.id, b.spOn);
     this.fullSkill = def.skillText();
+    const bubbleText = withSkillText(u.id, this.fullSkill, b.spOn);
     const skill = uiLabel(this.fullSkill, { size: 24, color: Color.inkSoft, anchorX: 0, align: 'left' });
     const lineW = box.content.x + box.content.w - TEXT_X;
     this.fitLine(skill, lineW);
     skill.position.set(TEXT_X, EDGE + SKILL_Y);
     let skillInfo: Container | null = null;
-    if (skill.text !== this.fullSkill) {
+    if (skill.text !== this.fullSkill || hasSkill) {
       // A cut line says so with an "i" sticker at its head, on the photo's corner and a sheet's width away from the close button. The sticker's
       // slot, the photo and the line itself all open the full text; the line's band stays off the stats row above and the well below.
+      // A cat with a skill has the sticker whether or not its ability line is cut: the sheet's one line is full, so the skill rides in the bubble.
       const at = sheetSkillInfo(this.rect.w, this.rect.h);
       const open = (): void => {
-        info.tap(`skill:${def.id}`, skill, { title: t(def.nameKey), text: this.fullSkill }, { seconds: SKILL_FOR });
+        info.tap(`skill:${def.id}`, skill, { title: t(def.nameKey), text: bubbleText }, { seconds: hasSkill ? SKILL_FOR_WITH_SKILL : SKILL_FOR });
       };
       skill.text = this.fullSkill;
       const cutW = box.content.x + box.content.w - at.lineX;
@@ -330,12 +342,23 @@ export class SelectionSheet {
       skillInfo = sticker;
     }
     d.addChild(skill);
+    if (hasSkill) this.addRing(d, u, def.classId);
 
     const plan = new BuildPlanView(this.env, u, box.well.w);
     plan.position.set(box.well.x, box.well.y);
     d.addChild(plan);
     // The sticker lies over the photo's corner and laps the well's edge by a pixel, so it goes on last (its touch slot stops at the well).
     if (skillInfo) d.addChild(skillInfo);
+  }
+
+  /** The ring of the selected cat on the photo's lower left corner, over the photo (it opens the same bubble as the photo does: it takes no taps). */
+  private addRing(into: Container, u: UnitState, classId: ClassId): void {
+    const at = sheetSkillRing(this.rect.w, this.rect.h);
+    const ring = new SheetRing(this.env.battle, classId, at.scale);
+    ring.root.position.set(at.centre.x, at.centre.y);
+    ring.tick(u, this.env.battle, 0);
+    into.addChild(ring.root);
+    this.ring = ring;
   }
 
   /**
@@ -452,7 +475,12 @@ export class SelectionSheet {
     this.dirty = true;
   }
 
-  update(): void {
+  /** Once a frame (`dt` real seconds): the ring turns with the gauge, whether or not anything else about the sheet changed. */
+  update(dt = 0): void {
+    if (this.ring && this.cell !== null) {
+      const u = this.unit();
+      if (u) this.ring.tick(u, this.env.battle, dt);
+    }
     if (!this.dirty) return;
     this.dirty = false;
     if (this.cell === null) return;

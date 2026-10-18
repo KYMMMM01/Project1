@@ -21,6 +21,7 @@ import { DodgeStickers } from './DodgeSticker';
 import type { Weighted } from './bubbleMath';
 import { watchCodex } from './codexWatch';
 import { watchEncounters } from './encounterWatch';
+import { RingWatch } from './ringWatch';
 import { EnvImpl } from './env';
 import { HintBubble } from './HintBubble';
 import { encounterCard, Hints, onScreen } from './hints';
@@ -88,6 +89,8 @@ class Hud implements HudPart {
   private bottom!: BottomPanel;
   private tutorial: Tutorial | null = null;
   private guide: LaserGuide | null = null;
+  /** Asks for the card of the cats' skills the first time a ring is nearly full (null until the HUD is built; it does nothing in a battle without skills). */
+  private rings: RingWatch | null = null;
   private readonly progress: GuideProgress;
   private card!: LessonBubble;
   private dodges!: DodgeStickers;
@@ -210,6 +213,7 @@ class Hud implements HudPart {
     this.bottom.actions.overChips(() => this.tutorial?.noteRect ?? null, () => this.card.rect, () => this.tutorial?.cheerRect ?? null, () => this.bottom.classRowRect());
     // The laser's guided first use: a normal run starts it by itself, the tutorial run when its laser lesson begins.
     this.guide = new LaserGuide(env, () => this.boundsRect(this.bottom.actions.laserRing), !lessons, () => this.avoidList());
+    this.rings = new RingWatch(env);
     this.bottom.actions.onExplained = () => this.guide?.explained();
     watchEncounters(env, {
       gauge: this.top.gauge, waveLabel: this.top.waveLabel, previewLayer: this.top.previewLayer, boss: this.boss.root, chips: this.bottom.classes.root,
@@ -270,6 +274,7 @@ class Hud implements HudPart {
     this.tutorial = null;
     this.guide?.destroy();
     this.guide = null;
+    this.rings = null;
     this.hints.bind(null);
     info.canOpen = null;
     info.bind(null);
@@ -777,6 +782,7 @@ class Hud implements HudPart {
     this.bottom.update(dt);
     this.dodges.update(dt);
     this.tutorial?.update(dt);
+    this.rings?.update(dt);
     if (this.twinsFrames > 0) this.pointAtTwins();
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.
     if (this.pick && !this.pick.picking && this.env.battle.pending?.kind !== 'summon') this.pick.close();

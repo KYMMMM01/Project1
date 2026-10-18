@@ -10,7 +10,7 @@ import { Emitter } from '@/core/events';
 import { SaveStore } from '@/core/save';
 import { ENEMY_IDS, RELIC_IDS, type EnemyId, type RelicId } from '@/game/api';
 import { badgeCount, closeVisit, hasSticker, openVisit, type MarkSets } from './codexMarks';
-import { TOPIC_IDS, isTopicId, type TopicId } from './topics';
+import { isTopicId, shownTopicIds, type TopicId } from './topics';
 
 interface Saved {
   taught: string[];
@@ -214,9 +214,12 @@ export class GuideProgress {
     this.events.emit('change', { id: null });
   }
 
-  /** Topics never taught and never read: the guidebook's "new" stickers. */
-  unread(): TopicId[] {
-    return TOPIC_IDS.filter((id) => !this.isSeen(id));
+  /**
+   * Topics never taught and never read: the guidebook's "new" stickers. Only the topics the guidebook lists count (`skills` is the app's switch:
+   * the skills' topic is neither listed nor counted while it is off, so the public build's numbers stay what they were).
+   */
+  unread(skills?: boolean): TopicId[] {
+    return shownTopicIds(skills).filter((id) => !this.isSeen(id));
   }
 
   private persist(): void {

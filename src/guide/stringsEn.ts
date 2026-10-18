@@ -150,6 +150,12 @@ export const EN: Record<string, string> = {
   'guide.move_swap.full':
     'Drag a cat onto an empty cell to move it. Drop it on a different cat to swap places, or on an identical one to merge.\nYou can also tap a cat to pick it and then tap the cell. Moving your best cats to sunny cells and the outer ring pays off.',
 
+  // Cat skills (spGuideFacts() in src/game/data/spTexts.ts fills the numbers and the rank names; shown only while skills are on)
+  'guide.sp_skill.title': 'Cat skills',
+  'guide.sp_skill.teach': 'When the ring by a cat is full, it casts a skill. No tapping.',
+  'guide.sp_skill.full':
+    'Cats from {rank} up each have one skill. The ring beside a cat is its skill ring: it fills bit by bit while the cat stands there, and when it is full the cat casts its skill.\nSkills cast by themselves, no tapping. A full ring with nothing to aim at waits, full, and casts the moment a target shows up. After a cast the ring starts over.\nHow long a ring takes to fill is different for every skill. Read it on the cat screen, or tap a cat and then the i sticker on its card.\nA ring goes along when you move or swap a cat. Merge two cats and the new cat\'s ring starts at {merge}%. Sell a cat and its ring goes too.\nTurn on the laser and point it: many skills aim there first, and the {cosmo}\'s meteor lands right on the dot.\n{below} cats have no skill yet. They get one at {rank}.',
+
   // ── Battlefield ──
   'guide.sun.title': 'Special tiles',
   'guide.sun.teach': 'Drag a cat onto the {cell} to get its bonus!',

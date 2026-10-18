@@ -5,6 +5,7 @@ import {
   ACT_LENGTH, AWAKEN_COST, BASE_FISH_PER_SECOND, CHAPTER_WAVES, LASER_COOLDOWN, LASER_DURATION, MOLT_COSTS, OFFER_EVERY, SELL_FISH, START_FISH, SUMMON_BASE, SUMMON_STEP, SUN_CELLS,
 } from '@/game/data/balance';
 import { SPECIAL_CELL_IDS } from '@/game/api';
+import { SP_START_MERGE } from '@/game/data/spSkills';
 import { specialCellName, specialCellText } from '@/game/data/cells';
 import { CHAPTERS } from '@/game/data/roster';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
@@ -31,7 +32,7 @@ describe('guide topics', () => {
     expect(new Set(TOPIC_IDS).size).toBe(TOPIC_IDS.length);
     for (const s of SECTIONS) expect(topicsOf(s).length, s).toBeGreaterThan(0);
     for (const id of [
-      'summon', 'summon_grade', 'pity', 'merge', 'class_lines', 'classes', 'synergy', 'class_sheet', 'class_upgrade', 'pick3', 'purr', 'molt', 'awaken',
+      'summon', 'summon_grade', 'pity', 'merge', 'class_lines', 'classes', 'synergy', 'class_sheet', 'class_upgrade', 'pick3', 'sp_skill', 'purr', 'molt', 'awaken',
       'sell', 'move_swap', 'sun', 'hazards', 'laser', 'call_wave', 'speed', 'toys', 'toy_reroll', 'elite', 'boss', 'lose_gauge', 'lose_boss', 'continue',
       'acts', 'stakes', 'cards', 'wild_cards', 'chests', 'missions', 'daily_chest', 'calendar', 'pass', 'patrol', 'sweep', 'daily_challenge', 'weekly_cup',
       'endless', 'backup_code',
@@ -134,6 +135,21 @@ describe('guide topics', () => {
       setLang(lang);
       expect(topicFull('trait_warded').join(' ')).toMatch(lang === 'ko' ? /방어 깎기와 방어 무시는 마법 저항도/ : /cut the ward as well/);
       expect(topicFull('trait_armored').join(' ')).toMatch(lang === 'ko' ? /방어 깎기와 방어 무시/ : /armour ignore/i);
+    }
+  });
+
+  it('says what the lesson on the skill ring says (directive decision 29), and names the ranks and the shares from the game’s own data', () => {
+    setLang('ko');
+    expect(topicTitle('sp_skill')).toBe('고양이 스킬');
+    expect(topicTeach('sp_skill')).toBe('고양이 옆 동그라미가 가득 차면 스킬을 써요. 누르지 않아도 돼요.');
+    expect(factsOf('sp_skill')).toMatchObject({ rank: t('rarity.epic'), merge: SP_START_MERGE * 100 });
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      const page = topicFull('sp_skill').join(' ');
+      expect(page, lang).toContain(t('rarity.epic'));
+      expect(page, lang).toContain(`${t('rarity.common')} · ${t('rarity.rare')}`);
+      expect(page, lang).toContain(`${SP_START_MERGE * 100}%`);
+      expect(page, lang).toContain(t('unit.m_cosmo.name'));
     }
   });
 

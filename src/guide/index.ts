@@ -7,5 +7,6 @@ export { illustration } from './Illustration';
 export { CODEX_KEYS, GuideProgress, guideProgress, isCodexKey, type CodexKey } from './progress';
 export { topicFull, topicTeach, topicTitle } from './text';
 export {
-  SECTIONS, TOPICS, TOPIC_IDS, isTopicId, topicDef, topicsOf, type Art, type HomePoint, type SectionId, type TopicDef, type TopicId, type TryControl, type TryTab,
+  SECTIONS, SKILL_TOPICS, TOPICS, TOPIC_IDS, bookHasSkills, isTopicId, shownTopicIds, topicDef, topicShown, topicsOf, type Art, type HomePoint, type SectionId, type TopicDef, type TopicId, type TryControl,
+  type TryTab,
 } from './topics';

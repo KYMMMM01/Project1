@@ -7,8 +7,10 @@ import { Container, Graphics, Sprite } from 'pixi.js';
 import { hasTex, tex } from '@/core/assets';
 import { mixColor } from '@/core/math';
 import { cacheStatic, Color, currencyIcon, drawDashedInset, drawIcon, paperSeed, paperShape, Rarity, type IconName } from '@/ui';
-import { SPECIAL_CELL_IDS, relicDef, type SpecialCellId, type UnitId } from '@/game';
-import { enemyPortrait, relicIcon } from '@/view/hud/kit';
+import { SPECIAL_CELL_IDS, relicDef, unitClass, type SpecialCellId, type UnitId } from '@/game';
+import { spRingArt } from '@/view/field/spRing';
+import { RING_OUTER, ringFrame } from '@/view/field/spRingMath';
+import { CLASS_ACCENT, CLASS_ICON, enemyPortrait, relicIcon } from '@/view/hud/kit';
 import type { Art } from './topics';
 
 const isSpecialCell = (id: string): id is SpecialCellId => (SPECIAL_CELL_IDS as readonly string[]).includes(id);
@@ -122,6 +124,44 @@ function catsArt(art: Extract<Art, { k: 'cats' }>, box: number, small: boolean):
   return c;
 }
 
+/**
+ * A cat's photo with its skill ring on the lower left corner, where the board puts it (`RING_AT`), `gauge` full: the board's own ring, cut from the board's own frame
+ * sheet (painted once, here as there). A page that cannot paint the sheet (no canvas) shows the photo alone.
+ */
+function ringArt(art: Extract<Art, { k: 'ring' }>, box: number): Container {
+  const c = new Container();
+  const side = box * 0.8;
+  const frame = new Graphics();
+  frame.roundRect(-side / 2, -side / 2, side, side, side * 0.18).fill(mixColor(Rarity.epic.light, Color.paper, 0.5));
+  frame.roundRect(-side / 2, -side / 2, side, side, side * 0.18).stroke({ color: Color.kraftDark, width: 2.5 });
+  cacheStatic(frame);
+  c.addChild(frame);
+  const cat = sticker(`unit_${art.cat}`, side * 0.92);
+  c.addChild(cat ?? drawIcon('paw', side * 0.6));
+  try {
+    const sprite = new Sprite(spRingArt().frames[ringFrame(art.gauge)]);
+    sprite.anchor.set(0.5);
+    // The ring is the sheet's cell with room for the halo: its drawn disc is `2 x RING_OUTER` of the cell's 56 design px; `k` is a design px of the board in this picture.
+    const across = side * 0.46;
+    const k = across / (2 * RING_OUTER);
+    sprite.scale.set(k);
+    const at = { x: -side / 2 + across * 0.62, y: side / 2 - across * 0.62 };
+    sprite.position.set(at.x, at.y);
+    // The class sticker the ring goes round, as the board draws it: a cream-rimmed disc in the class's colour with its glyph (a ring on its own would be a hoop).
+    const classId = unitClass(art.cat);
+    const badge = new Graphics();
+    badge.circle(0, 0, 16 * k).fill(Color.paperLight);
+    badge.circle(0, 0, 13.5 * k).fill(CLASS_ACCENT[classId]);
+    badge.position.set(at.x, at.y);
+    const glyph = drawIcon(CLASS_ICON[classId], 16 * k, Color.paperLight);
+    glyph.position.set(at.x, at.y);
+    c.addChild(badge, glyph, sprite);
+  } catch {
+    // no canvas: the photo stands alone
+  }
+  return c;
+}
+
 /** Builds the picture of a topic on a paper tile of `size` x `size`. */
 export function illustration(art: Art, size: number): Container {
   const root = new Container();
@@ -140,6 +180,9 @@ export function illustration(art: Art, size: number): Container {
       break;
     case 'cats':
       root.addChild(catsArt(art, inner, size < 160));
+      break;
+    case 'ring':
+      root.addChild(ringArt(art, inner));
       break;
     case 'foe':
       root.addChild(enemyPortrait(art.id, inner * 0.8));

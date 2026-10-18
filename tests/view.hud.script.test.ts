@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { TopicId } from '@/guide';
 import {
-  emptyCounts, RELAXED_PATIENCE, revealedBy, STEP_IDS, STEPS, TUTORIAL_SUMMONS, TutorialScript, type CountKey, type ScriptEvent, type StepDef, type World,
+  emptyCounts, RELAXED_PATIENCE, revealedBy, STEP_IDS, STEPS, stepsFor, TUTORIAL_SUMMONS, TutorialScript, type CountKey, type ScriptEvent, type StepDef, type World,
 } from '@/view/hud/tutorialScript';
 
 function world(over: Partial<World> = {}): World {
   return {
     phase: 'wave', wave: 1, waveKind: 'normal', pending: null, busy: false, cats: 3, empties: 17, twins: false, enemies: 4, targetAlive: false,
     fish: 20, purr: 0, moltCost: 1, gradeCost: 60, classCost: 60, maxTier: 0, sun: 0, laserReady: true, laserGuided: false, laserHold: false, callBonus: -1,
-    selected: false, king: false, kingSelected: false, counts: emptyCounts(), ...over,
+    selected: false, king: false, kingSelected: false, ringNear: false, counts: emptyCounts(), ...over,
   };
 }
 
@@ -24,6 +24,7 @@ const MOMENT: Record<string, { at: Partial<World>; act?: (w: World) => World }> 
   classes: { at: {}, act: (w) => bump(w, 'sheetClose') },
   acts: { at: { wave: 2 } },
   pick3: { at: { wave: 3, pending: 'summon', busy: true }, act: (w) => bump(w, 'pick') },
+  sp_skill: { at: { wave: 3, ringNear: true } },
   synergy: { at: { wave: 3, maxTier: 1 } },
   sun: { at: { wave: 3, sun: 4 }, act: (w) => bump(w, 'sunMove') },
   laser: { at: { wave: 3, enemies: 3 }, act: (w) => ({ ...w, laserGuided: true }) },
@@ -41,12 +42,14 @@ const MOMENT: Record<string, { at: Partial<World>; act?: (w: World) => World }> 
 };
 
 describe('the tutorial lesson plan', () => {
-  it('teaches the owner\'s order: summon, merge, the enemy gauge, classes, the pick, sun, laser, elite, purr, toys, molt, upgrades, call, speed, sell, awaken, boss', () => {
+  it('teaches the owner\'s order: summon, merge, the enemy gauge, classes, the pick, the skill ring, sun, laser, elite, purr, toys, molt, upgrades, call, speed, sell, awaken, boss', () => {
     expect(STEP_IDS).toEqual([
-      'summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'synergy', 'sun', 'laser', 'elite', 'purr', 'toys', 'molt', 'summon_grade',
+      'summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'sp_skill', 'synergy', 'sun', 'laser', 'elite', 'purr', 'toys', 'molt', 'summon_grade',
       'class_upgrade', 'call_wave', 'speed', 'sell', 'awaken', 'boss',
     ]);
     expect(new Set(STEP_IDS).size).toBe(STEP_IDS.length);
+    // 20 lessons before the cats had skills, 21 with the skills' one
+    expect(STEPS).toHaveLength(21);
   });
 
   it('brings each hidden control in with the lesson that explains it, and only once', () => {
@@ -196,7 +199,7 @@ describe('the tutorial lesson plan', () => {
   });
 
   it('lets the elite cut in on a lesson that is still going, which is dropped', () => {
-    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'synergy', 'sun']));
+    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'sp_skill', 'synergy', 'sun']));
     const w = world({ wave: 3, enemies: 3 });
     expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:laser']);
     const elite = world({ wave: 4, waveKind: 'elite', targetAlive: true, enemies: 3 });
@@ -241,7 +244,7 @@ describe('the battle stands still while a lesson waits for the player', () => {
   });
 
   it('ends a timed note by the real clock while it holds the battle still', () => {
-    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3']));
+    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'sp_skill']));
     const w = world({ wave: 3, maxTier: 1 });
     expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:synergy']);
     const synergy = STEPS.find((s) => s.id === 'synergy') as StepDef;
@@ -251,7 +254,7 @@ describe('the battle stands still while a lesson waits for the player', () => {
   });
 
   it('counts no time for a lesson while a popup or a card holds the clock', () => {
-    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3']));
+    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'sp_skill']));
     const w = world({ wave: 3, maxTier: 1 });
     script.update(w, 0.1, false);
     expect(script.update(w, 100, true)).toEqual([]);
@@ -293,5 +296,104 @@ describe('the awakening lesson', () => {
     const script = new TutorialScript(taughtBefore);
     const w = world({ wave: 8, king: true, waveKind: 'boss', targetAlive: true });
     expect(kinds(script.update(w, 0.1, false))).toEqual(['drop:awaken', 'begin:boss']);
+  });
+});
+
+describe('the lesson on the skill ring beside a cat', () => {
+  const sp = STEPS.find((s) => s.id === 'sp_skill') as StepDef;
+  const before = new Set<TopicId>(STEP_IDS.slice(0, STEP_IDS.indexOf('sp_skill')));
+
+  it('comes right after the pick of three and before the lessons that follow it, and brings in no control', () => {
+    expect(STEP_IDS.indexOf('sp_skill')).toBe(STEP_IDS.indexOf('pick3') + 1);
+    expect(STEP_IDS.indexOf('synergy')).toBe(STEP_IDS.indexOf('sp_skill') + 1);
+    expect(sp.reveal).toEqual([]);
+    expect(sp.target(world())).toBe('ring');
+  });
+
+  it('is a read-only note that holds the battle like the other read-only notes, and is not a popup or a cut-in', () => {
+    expect(sp.ok).toBe(true);
+    expect(sp.holds(world({ ringNear: true }))).toBe(true);
+    expect(sp.popup).toBe(false);
+    expect(sp.urgent).toBe(false);
+    expect(sp.timed).toBe(0);
+    expect(sp.skill).toBe(true);
+    // the other lessons are not about the skills
+    expect(STEPS.filter((s) => s.skill).map((s) => s.id)).toEqual(['sp_skill']);
+  });
+
+  it('waits for a ring that is nearly full, and for a calm board: never over the pick of three or a popup', () => {
+    expect(sp.when(world())).toBe(false);
+    expect(sp.when(world({ ringNear: true }))).toBe(true);
+    expect(sp.when(world({ ringNear: true, pending: 'summon' }))).toBe(false);
+    expect(sp.when(world({ ringNear: true, pending: 'relic' }))).toBe(false);
+    expect(sp.when(world({ ringNear: true, busy: true }))).toBe(false);
+    expect(sp.when(world({ ringNear: true, phase: 'won' }))).toBe(false);
+    expect(sp.when(world({ ringNear: true, phase: 'lost' }))).toBe(false);
+    const script = new TutorialScript(before);
+    expect(script.update(world({ wave: 3 }), 0.1, false)).toEqual([]);
+    expect(script.active).toBeNull();
+    expect(kinds(script.update(world({ wave: 3, ringNear: true }), 0.1, false))).toEqual(['begin:sp_skill']);
+  });
+
+  it('is the only lesson on screen: the next waits for "got it", then begins', () => {
+    const script = new TutorialScript(before);
+    const w = world({ wave: 3, ringNear: true, maxTier: 1 });
+    expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:sp_skill']);
+    // the synergy lesson's moment has come, but it does not begin while the ring note is up
+    expect(script.update(w, 400, false)).toEqual([]);
+    expect(script.active?.id).toBe('sp_skill');
+    script.tapOk();
+    expect(kinds(script.update(w, 0.1, false))).toEqual(['done:sp_skill', 'begin:synergy']);
+  });
+
+  it('is dropped, not taught late, once wave 3 is over if no ring got there, and the lessons behind it go on', () => {
+    const script = new TutorialScript(before);
+    // in wave 3 it waits for its ring, and the lessons behind it wait for it
+    expect(script.update(world({ wave: 3, maxTier: 1 }), 0.1, false)).toEqual([]);
+    expect(script.active).toBeNull();
+    expect(kinds(script.update(world({ wave: 4, maxTier: 1 }), 0.1, false))).toEqual(['drop:sp_skill', 'begin:synergy']);
+  });
+
+  it('never holds up the elite lesson of wave 4: it is out of the way before that wave begins its first lesson', () => {
+    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'synergy', 'sun', 'laser']));
+    const elite = world({ wave: 4, waveKind: 'elite', targetAlive: true });
+    expect(kinds(script.update(elite, 0.1, false))).toEqual(['drop:sp_skill', 'begin:elite']);
+  });
+
+  it('lets the elite and the boss cut in on it, as on any other lesson', () => {
+    const script = new TutorialScript(before);
+    script.update(world({ wave: 3, ringNear: true }), 0.1, false);
+    expect(script.active?.id).toBe('sp_skill');
+    const elite = world({ wave: 4, waveKind: 'elite', targetAlive: true, ringNear: true });
+    expect(kinds(script.update(elite, 0.1, false))).toEqual(['drop:sp_skill', 'begin:elite']);
+  });
+
+  it('is not taught again to a player who was taught it, and a restarted tutorial teaches it again', () => {
+    const taught = new Set<TopicId>([...before, 'sp_skill']);
+    const script = new TutorialScript(taught);
+    expect(kinds(script.update(world({ wave: 3, ringNear: true, maxTier: 1 }), 0.1, false))).toEqual(['begin:synergy']);
+    expect(new TutorialScript(before).remaining.map((s) => s.id)).toContain('sp_skill');
+  });
+
+  it('is in the plan of a battle with skills only: without them the plan, its count and its order are the 20 lessons there always were', () => {
+    expect(stepsFor(true)).toBe(STEPS);
+    const plain = stepsFor(false);
+    expect(plain).toHaveLength(20);
+    expect(plain.map((s) => s.id)).toEqual(STEP_IDS.filter((id) => id !== 'sp_skill'));
+    expect(plain.some((s) => s.skill)).toBe(false);
+    // a script on that plan never mentions the lesson, even with a ring nearly full, and goes from the pick to the synergy as before
+    const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts']), plain);
+    const w = world({ wave: 3, pending: 'summon', busy: true, ringNear: true });
+    expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:pick3']);
+    const after = bump({ ...w, pending: null, busy: false, maxTier: 1 }, 'pick');
+    expect(kinds(script.update(after, 0.1, false))).toEqual(['done:pick3', 'begin:synergy']);
+    expect(script.remaining.map((s) => s.id)).not.toContain('sp_skill');
+    expect(script.update(world({ wave: 9, ringNear: true }), 5, false).map((e) => e.step.id)).not.toContain('sp_skill');
+  });
+
+  it('counts the lessons left without it when skills are off (the skip button and the last-lesson rule go by that count)', () => {
+    const left = (skills: boolean): number => new TutorialScript(new Set<TopicId>(), stepsFor(skills)).remaining.filter((s) => s.id !== 'boss').length;
+    expect(left(true)).toBe(left(false) + 1);
+    expect(left(false)).toBe(19);
   });
 });

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { GuideProgress, migrateHints } from '@/guide/progress';
-import { TOPIC_IDS } from '@/guide/topics';
+import { SKILL_TOPICS, TOPIC_IDS } from '@/guide/topics';
 
 describe('guide progress', () => {
   it('starts with every topic new and counts the unread ones down as they are taught or read', () => {
     const p = new GuideProgress(false);
-    expect(p.unread()).toHaveLength(TOPIC_IDS.length);
+    // every topic of the book: the skills' one counts only while skills are on (the next test)
+    expect(p.unread(true)).toHaveLength(TOPIC_IDS.length);
     p.markTaught('merge');
     p.markRead('laser');
     expect(p.isTaught('merge')).toBe(true);
@@ -13,8 +14,25 @@ describe('guide progress', () => {
     expect(p.isSeen('merge')).toBe(true);
     expect(p.isSeen('laser')).toBe(true);
     expect(p.isTaught('laser')).toBe(false);
-    expect(p.unread()).toHaveLength(TOPIC_IDS.length - 2);
-    expect(p.unread()).not.toContain('merge');
+    expect(p.unread(true)).toHaveLength(TOPIC_IDS.length - 2);
+    expect(p.unread(true)).not.toContain('merge');
+  });
+
+  it('counts the topic on cat skills as new only while skills are on, so the public build keeps the numbers it had', () => {
+    expect(SKILL_TOPICS).toEqual(['sp_skill']);
+    const p = new GuideProgress(false);
+    expect(p.unread(false)).toHaveLength(TOPIC_IDS.length - SKILL_TOPICS.length);
+    expect(p.unread(false)).not.toContain('sp_skill');
+    expect(p.unread(true)).toContain('sp_skill');
+    // no switch given: the app's own (off in a test, where there is no page and no URL)
+    expect(p.unread()).toEqual(p.unread(false));
+    // taught by the lesson or read in the book, it is no longer new
+    p.markTaught('sp_skill');
+    expect(p.unread(true)).not.toContain('sp_skill');
+    expect(p.unread(true)).toHaveLength(TOPIC_IDS.length - 1);
+    const q = new GuideProgress(false);
+    q.markRead('sp_skill');
+    expect(q.unread(true)).not.toContain('sp_skill');
   });
 
   it('tells its listeners what changed, once per topic', () => {
@@ -46,7 +64,7 @@ describe('guide progress', () => {
     expect(p.isRead('sun')).toBe(true);
     expect(p.isRead('laser')).toBe(true);
     expect(p.isSeen('merge')).toBe(false);
-    expect(p.unread()).toHaveLength(TOPIC_IDS.length - 2);
+    expect(p.unread(true)).toHaveLength(TOPIC_IDS.length - 2);
     expect(seen).toEqual([null]);
     // Nothing left to forget: no second announcement.
     p.resetTaught();

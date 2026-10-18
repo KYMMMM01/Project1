@@ -57,6 +57,15 @@ Step 1 is done and committed (simulation `0231f06`, view `1558287`): the frame, 
 27. **The tiger's charge, after the owner played it** (2026-10-14: "호랑이 돌격 쿨타임 30초로 줄이고 돌진을 적이 많이 몰려있는 곳에 해야하는데 이상한줄에서 하는데?"): cooldown 34 -> **30 s**; the heaviest stretch wins and the laser's dot only breaks ties; while a wave is still sending enemies out the tiger waits for a stretch of weight 8 (`crowd`), and takes the best stretch of weight 3 only once everything is out. This is the one change to a step-1 skill's rule during step 2 (decision 24 gives way to the owner's word).
 28. **Rank names in every text are the game's own: 꼬마 · 동네 · 골목대장 · 대왕 · 수호신 (Kitten, Street, Alley Boss, King, Guardian).** The owner found "전설·신화 고양이" in a toy's text (fixed, with one more of the kind in the starting snacks). Never write 일반 · 희귀 · 영웅 · 전설 · 신화 or common · rare · epic · legendary · mythic in anything a player reads.
 
+## Step 3 (started 2026-10-18): telling the player
+
+Steps 1 and 2 are committed and deployed with the switch off (`51372e9`): twelve skills, their rings and scenes. Step 3 makes a player who has never heard of skills understand them: what the ring means, what each cat's skill does, that it casts itself.
+
+29. **Where it is told** (design v1 sections 2.3, 5 and 6; v2 section 5.3): the selection sheet (the same ring on the photo corner, turning live; the ⓘ bubble gets the skill's name and one line after the passive line), the cat screen (one card for the skill: name, line, cooldown in seconds, and the rank it comes with), the 3-pick summon's tooltip, one tutorial lesson (a short read-only bubble the first time a ring is nearly full: "고양이 옆 동그라미가 가득 차면 스킬을 써요. 누르지 않아도 돼요."), one guide topic, and the name bubble that already exists. Nothing new on the battle HUD beyond that.
+30. **Everything of step 3 follows the switch**: with skills off (the public build today) none of it appears anywhere, in battle or at home, so testers see exactly today's game; with `?sp=1` (and later `SKILLS_ON`) all of it appears. One function decides it, the one the app already uses for battles.
+31. **Words**: Korean first, warm and short like the game's other lines, numbers filled from the rows' own cells through the strings' arguments (never typed into the text), rank names only 꼬마 · 동네 · 골목대장 · 대왕 · 수호신 (decision 28); the cats' existing passive line stays "특기" in Korean; in English the existing passive label becomes "Ability" and the new thing is "Skill" (design v1 question 5). Each skill's line says what the player sees happen, not internal mechanics; the capsule's line names its six prizes in plain words. Run `npm run font` after the texts.
+32. No new image files; the lesson count test and every test that counts texts are updated honestly, not loosened.
+
 ## Working rules for every agent
 
 - Shared working tree: several agents edit at once. Use the Edit tool on your own files only; never `git stash`, `git checkout`, `git reset`, `git clean` or commit. If you must touch a file another agent owns, make the smallest edit and say so in your hand-off.

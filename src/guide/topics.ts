@@ -4,6 +4,7 @@
  * every number in them comes from facts.ts, so the tutorial bubble, the first-encounter card and the guidebook
  * can never disagree with the game.
  */
+import { skillsOn } from '@/core/skillSwitch';
 import type { EnemyId, RelicId, SpecialCellId, UnitId } from '@/game';
 import type { IconName } from '@/ui';
 
@@ -14,6 +15,8 @@ export type SectionId = (typeof SECTIONS)[number];
 export type Art =
   | { k: 'icon'; name: IconName }
   | { k: 'cats'; ids: readonly UnitId[]; arrows?: boolean }
+  /** A cat's photo with its skill ring on the corner, `gauge` (0..1) full, as the board draws it. */
+  | { k: 'ring'; cat: UnitId; gauge: number }
   | { k: 'foe'; id: EnemyId }
   | { k: 'toy'; id: RelicId }
   | { k: 'cell'; cell: SpecialCellId | 'wet' | 'zap'; cat?: UnitId }
@@ -64,6 +67,7 @@ const T = <const I extends string>(id: I, section: SectionId, art: Art, tryIt?: 
 const ico = (name: IconName): Art => ({ k: 'icon', name });
 const cats = (...ids: UnitId[]): Art => ({ k: 'cats', ids, arrows: ids.length > 1 });
 const foe = (id: EnemyId): Art => ({ k: 'foe', id });
+const ring = (cat: UnitId, gauge: number): Art => ({ k: 'ring', cat, gauge });
 
 export const TOPIC_LIST = [
   // ── start ──
@@ -82,6 +86,8 @@ export const TOPIC_LIST = [
   T('class_sheet', 'team', ico('class_mage'), { control: 'chips' }),
   T('class_upgrade', 'team', ico('arrow_up'), { control: 'chips' }),
   T('pick3', 'team', cats('r_archer', 'w_viking', 'm_storm')),
+  // The cats' skills exist only while the switch is on (`SKILL_TOPICS`): the guidebook lists nothing of them otherwise.
+  T('sp_skill', 'team', ring('w_viking', 0.75), { tab: 'cats', point: 'cats.cards' }),
   T('purr', 'team', ico('purr'), { control: 'purr' }),
   T('molt', 'team', ico('molt')),
   T('awaken', 'team', cats('w_samurai', 'w_tiger')),
@@ -147,6 +153,33 @@ export function isTopicId(id: string): id is TopicId {
   return BY_ID.has(id);
 }
 
-export function topicsOf(section: SectionId): TopicDef[] {
-  return TOPICS.filter((t) => t.section === section);
+/**
+ * The topics that exist only while the cats' skills are on (docs/qa/directive_2026-10-13_skills_build.md, decision 30): with the switch off the
+ * guidebook lists none of them, counts none as unread and offers none through "next" and "back", so the public build reads exactly as it did.
+ * They stay in `TOPICS` and `TOPIC_IDS` (every id the save may hold, every string the tests check).
+ */
+export const SKILL_TOPICS: readonly TopicId[] = ['sp_skill'];
+
+/** Whether a topic is part of the guidebook now: every topic is, except the skills' while `skills` (the app's switch) is off. */
+export function topicShown(id: TopicId, skills: boolean = skillsOn()): boolean {
+  return skills || !SKILL_TOPICS.includes(id);
+}
+
+/**
+ * Whether a visit to the guidebook lists the skills' topic: the app's switch (`on`), or the visit opens on that very topic. A lesson card in a battle that
+ * plays with skills offers "more in the guidebook" even when the page's switch says otherwise (a saved run keeps the setting it started with): then the book
+ * lists the topic for that visit, so its page has its neighbours and its "new" sticker is counted.
+ */
+export function bookHasSkills(open?: TopicId, on: boolean = skillsOn()): boolean {
+  return on || (open !== undefined && !topicShown(open, false));
+}
+
+/** The topics the guidebook lists, in order. */
+export function shownTopicIds(skills: boolean = skillsOn()): TopicId[] {
+  return TOPIC_IDS.filter((id) => topicShown(id, skills));
+}
+
+/** The topics of one section the guidebook lists (see `SKILL_TOPICS`). */
+export function topicsOf(section: SectionId, skills: boolean = skillsOn()): TopicDef[] {
+  return TOPICS.filter((t) => t.section === section && topicShown(t.id, skills));
 }

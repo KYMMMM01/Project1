@@ -2,6 +2,7 @@ import { Container, Graphics, type Text } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
 import { haptic } from '@/core/haptics';
+import { skillsOn } from '@/core/skillSwitch';
 import { fmt } from '@/core/format';
 import { t } from '@/core/i18n';
 import { lerp } from '@/core/math';
@@ -15,13 +16,14 @@ import type { UnitView } from '@/meta/economy';
 import { MAX_LEVEL } from '@/meta/data/economy';
 import type { BaseUnitId } from '@/meta/types';
 import {
-  Button, cacheStatic, Color, confirmDialog, countUpValue, drawDashedLine, drawIcon, drawPaperFace, motion, paperShape,
-  popIn, ProgressBar, ScreenScaffold, toast, TweenBag, uiLabel,
+  Button, cacheStatic, Color, confirmDialog, countUpValue, drawDashedLine, drawIcon, drawPaperFace, fitLabel, motion, paperShape,
+  popIn, ProgressBar, Rarity, ScreenScaffold, toast, TweenBag, uiLabel,
 } from '@/ui';
 import { PAGE_TOP, paperPage, stampIn, stampMark, type PaperPage } from '../shop/paperBits';
 import { services } from '../contract';
 import { getShell } from '../shop/context';
 import { cardProgress, lineSentence } from './collection';
+import { skillCardOf } from './skillCard';
 import { LineRow } from './LineRow';
 import { UnitHero } from './UnitHero';
 import { deltaText, isImprovement, isUnitId, perkRows, STAT_KEYS, statText, unitStatsAt, type StatBlock, type StatKey } from './unitStats';
@@ -136,6 +138,9 @@ class UnitScreen {
     y += this.linePage(W, y) + 6;
     y += this.statsPage(W, y) + 6;
     y += this.skillPage(W, y) + 6;
+    // The card for the cat's skill exists only with skills on and only for a cat that has one: with them off every page keeps today's place.
+    const card = this.spPage(W, y);
+    if (card > 0) y += card + 6;
     y += this.perksPage(W, y) + 6;
     this.cardsTop = y;
     this.cardsPage(W, y, false);
@@ -194,9 +199,49 @@ class UnitScreen {
 
   private skillPage(W: number, y: number): number {
     const text = uiLabel(unitDef(this.unit).skillText(), { size: 28, wrap: W - 64, lineHeight: 38, anchorX: 0, anchorY: 0, align: 'left' });
-    const page = paperPage(W, text.height + 14, t('cats.unit.skill'), 'mustard');
+    // With the new skills on, the ordinary line is the "Ability" (the card for the skill itself says "Skill"); with them off the label is today's.
+    const card = skillCardOf(this.unit, skillsOn());
+    // A cat below the first rank with a skill says when it gets one, under its ability line (a kitten is not a lesser cat, it is an earlier one).
+    const later = card?.kind === 'later' ? uiLabel(card.text, { size: 26, color: Color.inkSoft, wrap: W - 64, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left' }) : null;
+    const laterY = text.height + 10;
+    const page = paperPage(W, text.height + 14 + (later ? later.height + 10 : 0), t(card ? 'sp.label.ability' : 'cats.unit.skill'), 'mustard');
     text.position.set(30, PAGE_TOP + 8);
     page.content.addChild(text);
+    if (later) {
+      later.position.set(30, PAGE_TOP + 8 + laterY);
+      page.content.addChild(later);
+    }
+    return this.place(page, y);
+  }
+
+  /**
+   * The card of the cat's skill: its name with the rank it comes with, its one line (every figure from the skill's own row), and under it how often it
+   * casts. Height 0 (nothing is built) when skills are off or the cat has none.
+   */
+  private spPage(W: number, y: number): number {
+    const card = skillCardOf(this.unit, skillsOn());
+    if (card?.kind !== 'skill') return 0;
+    const sk = card.texts;
+    const rar = Rarity[card.rarity];
+    const rank = uiLabel(sk.rank, { size: 24, color: Color.inkDeep });
+    const chipW = Math.ceil(rank.width) + 28;
+    const chip = new Container();
+    chip.addChild(paperShape({ w: chipW, h: 38, kind: 'pill', fill: rar.color, edge: rar.dark, shadow: 3, grain: false }), rank);
+    const name = uiLabel(sk.name, { size: 32, anchorX: 0, align: 'left' });
+    fitLabel(name, W - 60 - chipW - 16, 32, 0.7);
+    const desc = uiLabel(sk.desc, { size: 28, wrap: W - 64, lineHeight: 38, anchorX: 0, anchorY: 0, align: 'left' });
+    const meta = uiLabel(sk.meta, { size: 26, color: Color.inkSoft, anchorX: 0, align: 'left' });
+    const clock = drawIcon('clock', 26);
+    const nameY = PAGE_TOP + 22;
+    const descY = nameY + 30;
+    const metaY = descY + desc.height + 24;
+    const page = paperPage(W, metaY - PAGE_TOP + 20, sk.label, 'purple');
+    name.position.set(30, nameY);
+    chip.position.set(W - 30 - chipW / 2, nameY);
+    desc.position.set(30, descY);
+    clock.position.set(30 + 13, metaY);
+    meta.position.set(30 + 32, metaY);
+    page.content.addChild(name, chip, desc, clock, meta);
     return this.place(page, y);
   }
 

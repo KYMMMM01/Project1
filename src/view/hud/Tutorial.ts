@@ -29,10 +29,11 @@ import { bottomRects, laserFace, LASER_SPOT, type Point, type Rect, SKIP_FACE, S
 import { findTwins } from './planMath';
 import { firstCat, kingCell, shadeCat, sunLanding, twinPair, weakestCat } from './pawTarget';
 import { REVEAL_KEYS, type RevealKey } from './policy';
+import { nearRingCell, ringBox, ringCat } from './ringSpot';
 import { MEASURE_EVERY, SpotSettle, windowMoved } from './spotMath';
 import { FIRST_SUMMON_AFTER, NUDGE_FOR, nudgeDue } from './tutorialFlow';
 import {
-  emptyCounts, HOLD_LIMIT, STEP_IDS, TUTORIAL_SUMMONS, TutorialScript, type CountKey, type ScriptEvent, type StepDef, type Target, type World,
+  emptyCounts, HOLD_LIMIT, STEP_IDS, stepsFor, TUTORIAL_SUMMONS, TutorialScript, type CountKey, type ScriptEvent, type StepDef, type Target, type World,
 } from './tutorialScript';
 
 /** How long the clock runs after a summon tap so the new kitten can pop in before the next prompt. */
@@ -150,13 +151,14 @@ export class Tutorial {
   ) {
     this.layout = env.layout();
     this.skipped = skipped;
-    this.script = new TutorialScript(new Set(STEP_IDS.filter((id) => env.progress.isTaught(id))));
+    // A battle without skills is taught the plan without the skills' lesson: its lessons, their count and their order are what they always were.
+    this.script = new TutorialScript(new Set(STEP_IDS.filter((id) => env.progress.isTaught(id))), stepsFor(env.battle.spOn));
     if (skipped) this.script.stop();
     this.countLeft();
     this.world = {
       phase: 'prep', wave: 0, waveKind: 'normal', pending: null, busy: false, cats: 0, empties: CELL_COUNT, twins: false, enemies: 0, targetAlive: false,
       fish: 0, purr: 0, moltCost: 1, gradeCost: -1, classCost: -1, maxTier: 0, sun: 0, laserReady: false, laserGuided: false, laserHold: false, callBonus: -1, selected: false,
-      king: false, kingSelected: false, counts: this.counts,
+      king: false, kingSelected: false, ringNear: false, counts: this.counts,
     };
 
     const parent = env.ctx.layers.overlay;
@@ -283,6 +285,7 @@ export class Tutorial {
     const king = kingCell(b.units, (c) => b.canAwaken(c) === null, ctx.selected ?? -1);
     w.king = king >= 0;
     w.kingSelected = king >= 0 && ctx.selected === king;
+    w.ringNear = b.spOn && nearRingCell(b.units) >= 0;
     return w;
   }
 
@@ -538,6 +541,18 @@ export class Tutorial {
       this.cat = target === 'king' ? kingCell(b.units, (c) => b.canAwaken(c) === null, this.lastCat) : target === 'weakcat' ? weakestCat(b.units, this.lastCat) : firstCat(b.units);
       this.lastCat = this.cat;
       this.rect = this.cat >= 0 ? cellRect(this.cat) : NO_RECT;
+    } else if (target === 'ring') {
+      // The skill ring beside the cat: cut from the field's own maths for the ring (ringSpot.ts), so a pulsing or flashing ring does not move the window.
+      this.cat = ringCat(b.units, this.lastCat);
+      this.lastCat = this.cat;
+      if (this.cat < 0) {
+        this.rect = NO_RECT;
+        return;
+      }
+      const f = ringBox(this.cat);
+      const x0 = ctx.toSceneX(f.x);
+      const y0 = ctx.toSceneY(f.y);
+      this.rect = { x: x0, y: y0, w: ctx.toSceneX(f.x + f.w) - x0, h: ctx.toSceneY(f.y + f.h) - y0 };
     } else if (target === 'sun') {
       let box: Rect | null = null;
       for (const c of b.sunbeams) box = box ? unionOf(box, cellRect(c)) : cellRect(c);
