@@ -18,14 +18,14 @@ describe('guide progress', () => {
     expect(p.unread(true)).not.toContain('merge');
   });
 
-  it('counts the topic on cat skills as new only while skills are on, so the public build keeps the numbers it had', () => {
+  it('counts the topic on cat skills as new only while skills are on (a run started with ?sp=0 keeps the old numbers)', () => {
     expect(SKILL_TOPICS).toEqual(['sp_skill']);
     const p = new GuideProgress(false);
     expect(p.unread(false)).toHaveLength(TOPIC_IDS.length - SKILL_TOPICS.length);
     expect(p.unread(false)).not.toContain('sp_skill');
     expect(p.unread(true)).toContain('sp_skill');
-    // no switch given: the app's own (off in a test, where there is no page and no URL)
-    expect(p.unread()).toEqual(p.unread(false));
+    // no switch given: the app's own (on since 2026-10-18, also in a test where there is no page and no URL)
+    expect(p.unread()).toEqual(p.unread(true));
     // taught by the lesson or read in the book, it is no longer new
     p.markTaught('sp_skill');
     expect(p.unread(true)).not.toContain('sp_skill');

@@ -4,14 +4,14 @@
  * battle (`Profile.prepareRun` for the chapters, the daily challenge, endless mode, the gold dungeon and the tutorial, and the debug
  * battle route). A run keeps the value it started with: a saved run carries it in its own init.
  *
- *  - `SKILLS_ON` is the default. It stays `false` until all twelve skills are in, so testers on the public build keep playing the game they
- *    know.
+ *  - `SKILLS_ON` is the default. It was `false` while the skills were built; the owner switched it on for the testers on 2026-10-18 ("켜고")
+ *    once all twelve, their scenes and their texts were in.
  *  - The URL parameter `sp=1` / `sp=0` overrides it, with or without the debug flag, so the owner can preview with `?sp=1` and compare.
  *    Anything else (`sp=`, `sp=2`, `sp=on`) is ignored.
  */
 import type { BattleInit } from '@/game/api';
 
-export const SKILLS_ON = false;
+export const SKILLS_ON = true;
 
 /** `sp=1` -> true, `sp=0` -> false, anything else -> null (the constant decides). */
 export function spParam(params: URLSearchParams): boolean | null {

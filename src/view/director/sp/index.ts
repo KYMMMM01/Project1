@@ -23,7 +23,7 @@
  */
 import { debugExpose } from '@/core/debug';
 import { clearRingHolds } from '../../field/ringHold';
-import type { SpCastEvent } from '@/game';
+import { unitDef, type SpCastEvent } from '@/game';
 import type { Bus, Stage } from '../stage';
 import { SpIntro } from './intro';
 import { SCENES } from './scenes';
@@ -104,7 +104,8 @@ export function mountSp(stage: Stage, on: Bus): SpStaging | null {
     // A skill with no scene (its data is in before its picture is) takes no slot of the stage rule and shows no effect. The first cast of a
     // skill builds its scene, whether or not the stage rule then lets this cast show (the first one always does).
     const scene = sceneFor(e.skill);
-    const show = scene !== undefined && rule.admit(stage.now, e.first);
+    // Rank 5 casts are always drawn (the owner, 2026-10-18: "수호신 스킬은 항상 그려"), like the first cast of any skill.
+    const show = scene !== undefined && rule.admit(stage.now, e.first || unitDef(e.unit.id).spSkill?.rank === 5);
     if (e.first) guarded('intro', () => intro.first(e));
     if (e.skill === 'wanted') wantedShown = show;
     if (!scene || !show) return;

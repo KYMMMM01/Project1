@@ -86,7 +86,7 @@ describe('the stage rule', () => {
     expect(r.admit(0.3, false)).toBe(true);
   });
 
-  it('never drops the first cast of a skill, whatever was shown a moment ago, and it takes the slot like any shown cast', () => {
+  it('never drops an exempt cast (the first of a skill, and every rank 5 cast), whatever was shown a moment ago, and it takes the slot like any shown cast', () => {
     const r = new StageRule();
     expect(r.admit(5, false)).toBe(true);
     expect(r.admit(5.01, true)).toBe(true);

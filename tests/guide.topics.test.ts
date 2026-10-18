@@ -48,19 +48,19 @@ describe('the topic on cat skills', () => {
     expect(shownTopicIds(true)).toEqual([...TOPIC_IDS]);
     // every other topic is in the book either way, in the same order, so the book reads as it did
     for (const id of TOPIC_IDS) if (!SKILL_TOPICS.includes(id)) expect(topicShown(id, false), id).toBe(true);
-    // no switch given: the app's own, which is off in a test (no page, no URL)
-    expect(topicsOf('team').map((d) => d.id)).toEqual(topicsOf('team', false).map((d) => d.id));
-    expect(topicShown('sp_skill')).toBe(false);
+    // no switch given: the app's own, which is on since 2026-10-18 (also in a test: no page, no URL)
+    expect(topicsOf('team').map((d) => d.id)).toEqual(topicsOf('team', true).map((d) => d.id));
+    expect(topicShown('sp_skill')).toBe(true);
   });
 
-  it('follows the URL parameter the battles follow: sp=1 puts it in the book, sp=0 and no parameter leave it out', () => {
+  it('follows the URL parameter the battles follow: sp=1 and no parameter put it in the book, sp=0 leaves it out', () => {
     vi.stubGlobal('location', { search: '?sp=1' });
     expect(topicShown('sp_skill')).toBe(true);
     expect(topicsOf('team').map((d) => d.id)).toContain('sp_skill');
     vi.stubGlobal('location', { search: '?sp=0' });
     expect(topicShown('sp_skill')).toBe(false);
     vi.stubGlobal('location', { search: '' });
-    expect(topicShown('sp_skill')).toBe(false);
+    expect(topicShown('sp_skill')).toBe(true);
   });
 
   it('is listed for a visit that opens on it even with the switch off (the "more" of a card in a run that plays with skills), and for no other visit', () => {
@@ -68,7 +68,7 @@ describe('the topic on cat skills', () => {
     expect(bookHasSkills('merge', false)).toBe(false);
     expect(bookHasSkills('sp_skill', false)).toBe(true);
     expect(bookHasSkills(undefined, true)).toBe(true);
-    expect(bookHasSkills()).toBe(false);
+    expect(bookHasSkills()).toBe(true);
     // and then the page has its neighbours: "next" and "back" find it in its section
     const team = topicsOf('team', bookHasSkills('sp_skill', false)).map((d) => d.id);
     expect(team.indexOf('sp_skill')).toBe(team.indexOf('pick3') + 1);

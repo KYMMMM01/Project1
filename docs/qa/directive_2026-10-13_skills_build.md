@@ -66,6 +66,15 @@ Steps 1 and 2 are committed and deployed with the switch off (`51372e9`): twelve
 31. **Words**: Korean first, warm and short like the game's other lines, numbers filled from the rows' own cells through the strings' arguments (never typed into the text), rank names only 꼬마 · 동네 · 골목대장 · 대왕 · 수호신 (decision 28); the cats' existing passive line stays "특기" in Korean; in English the existing passive label becomes "Ability" and the new thing is "Skill" (design v1 question 5). Each skill's line says what the player sees happen, not internal mechanics; the capsule's line names its six prizes in plain words. Run `npm run font` after the texts.
 32. No new image files; the lesson count test and every test that counts texts are updated honestly, not loosened.
 
+## Step 4 and after (2026-10-18)
+
+The owner, after step 3: "켜고 패치 노트랑 영상은 괜찮아 1. 수호신 스킬은 항상 그려 2. 시간은 굳이 안보여줘도 돼 3. 그림 그려 그러는김에 이펙트 연출 부분 전체적으로 폴리싱해봐 특히 타격음/효과음 쪽 좀 더 손보면 괜찮을거 같다는 테스터들 평가가 있었음 4. 그리고 튜토리얼쪽 버그가 꽤 많이 나는거 같아 난잡하다 해야 할까 한번 확인해봐".
+
+33. **`SKILLS_ON` is true** ("켜고"): testers play with the twelve skills. No patch notes and no patch video for it ("패치 노트랑 영상은 괜찮아"). A run saved before the switch keeps the setting it started with.
+34. **Every rank 5 cast is drawn** ("수호신 스킬은 항상 그려"): the stage rule exempts rank 5 casts like first casts (`StageRule.admit(now, exempt)`).
+35. **No timer on the boss as a fish** ("시간은 굳이 안보여줘도 돼").
+36. **Next work, in this order of the owner's list**: real art for the skills (candidate sheet first, his standing rule), a polish of the effects across the game with the hit sounds and sound effects first (the testers' comment), and a look at the tutorial, which he finds buggy and messy.
+
 ## Working rules for every agent
 
 - Shared working tree: several agents edit at once. Use the Edit tool on your own files only; never `git stash`, `git checkout`, `git reset`, `git clean` or commit. If you must touch a file another agent owns, make the smallest edit and say so in your hand-off.

@@ -1074,24 +1074,27 @@ describe('the two scenes behind the dispatcher', () => {
     return { a, staging, tick, destroy: () => disposers.reverse().forEach((d) => d()) };
   }
 
-  it('routes the cast, the hits, the burst and the end of a run to the scene of its skill, and only for a run whose cast was shown', () => {
+  it('routes the cast, the hits, the burst and the end of a run to the scene of its skill: a second tiger in the same quarter second is drawn too (rank 5 is always drawn)', () => {
     const m = mount();
     viewOf(m.a, tigerUnit());
     const charge = lazyLive<{ runs: number; stomps: number; bodies: Array<{ id: number; phase: string }> }>(m.staging, 'charge');
     m.a.events.emit('spCast', tigerCast(m.a.battle.time, 1, 700) as never);
-    // A second cast in the same quarter second loses to the stage rule: its run shows nothing of its own.
+    // A second tiger casts in the same quarter second: a rank 5 cast never loses to the stage rule, so its run is drawn as well.
     m.a.events.emit('spCast', tigerCast(m.a.battle.time, 2, 1500, tigerUnit(8, 13)) as never);
     for (let i = 0; i < 40; i++) m.tick();
     m.a.events.emit('spRunHit', hitOf(1, 'charge', enemy(1)));
     m.a.events.emit('spRunHit', hitOf(2, 'charge', enemy(2, 'cucumber', 900, 200)));
-    expect(charge.live().runs).toBe(1);
-    expect(charge.live().stomps).toBe(1);
-    // The shown run ends: the scene hears it; the dropped run's end is not forwarded.
+    expect(charge.live().runs).toBe(2);
+    expect(charge.live().stomps).toBe(2);
+    // A hit of a run the scene never saw is not forwarded.
+    m.a.events.emit('spRunHit', hitOf(7, 'charge', enemy(3, 'cucumber', 1200, 200)));
+    expect(charge.live().stomps).toBe(2);
+    // Both runs end: the scene hears both.
     m.a.events.emit('spRunEnd', { runId: 2, skill: 'charge', unit: tigerUnit(8, 13), hits: 1 });
     m.a.events.emit('spRunEnd', { runId: 1, skill: 'charge', unit: tigerUnit(), hits: 1 });
     for (let i = 0; i < 20; i++) m.tick();
-    expect(charge.live().runs).toBe(1);
     expect(charge.live().bodies.find((b) => b.id === 1)?.phase).not.toBe('run');
+    expect(charge.live().bodies.find((b) => b.id === 2)?.phase).not.toBe('run');
     m.destroy();
   });
 

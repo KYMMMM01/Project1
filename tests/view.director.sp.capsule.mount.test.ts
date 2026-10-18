@@ -111,20 +111,20 @@ describe('the lucky cat\'s scene behind the real dispatcher', () => {
     expect(r.scene.live().pops).toBe(1);
   });
 
-  it('shows nothing for a capsule that lost the stage rule (a second cast within a quarter of a real second), and its opening does nothing', () => {
+  it('draws a second capsule cast within a quarter of a real second too (a rank 5 skill is always drawn, the owner\'s rule), and each opening finds its own capsule', () => {
     const r = rig();
     r.events.emit('spCast', cast(3, 'purr'));
     r.stage.now = 0.1;
     r.events.emit('spCast', cast(3.1, 'fish'));
-    expect(r.scene.live().flights).toHaveLength(1);
-    // The fish capsule that lost holds no ring either.
-    expect(ringHeld(7)).toBeUndefined();
-    // Its opening comes first? No: the purr capsule opens first, at 4.2; the lost fish capsule's at 4.3 finds nobody.
+    expect(r.scene.live().flights).toHaveLength(2);
+    expect(r.staging?.rule.lost ?? 0).toBe(0);
+    // The fish capsule is shown, so it holds its cat's ring empty until its lid opens, like any shown fish capsule.
+    expect(ringHeld(7)).toBe(0);
     r.battle.time = 4.2;
     r.events.emit('capsuleOpen', open('purr', 'purr'));
     r.battle.time = 4.3;
     r.events.emit('capsuleOpen', open('fish', 'fish'));
-    expect(r.scene.live().pops).toBe(1);
+    expect(r.scene.live().pops).toBe(2);
   });
 
   it('shows the first cast of the skill whatever the stage says (the cut-in and the picture), and hands the dispatcher\'s intro its cast', () => {

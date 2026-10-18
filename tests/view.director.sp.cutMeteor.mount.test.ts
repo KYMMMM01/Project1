@@ -130,19 +130,22 @@ describe('the samurai\'s and the cosmo cat\'s scenes behind the real dispatcher'
     expect(r.cutScene.live().lines.every((l) => l.state === 'wait')).toBe(true);
   });
 
-  it('shows a meteor and lands it on the events of that meteor, and a meteor that lost the rule stays unseen', () => {
+  it('shows every meteor, even a second one within a quarter of a real second (a rank 5 skill is always drawn), and lands each on its own events', () => {
     const r = rig();
     r.events.emit('spCast', castMeteor(1, 3));
     expect(r.meteorScene.live().warns).toHaveLength(1);
     r.stage.now = 0.05;
     r.events.emit('spCast', castMeteor(2, 3));
-    expect(r.meteorScene.live().warns).toHaveLength(1);
+    expect(r.meteorScene.live().warns).toHaveLength(2);
     const land = (meteorId: number): void =>
       r.events.emit('meteorLand', { meteorId, unit: unit('m_cosmo', 12), ring: 'inner', x: 400, y: 300, radius: 90, points: [] });
     land(2);
-    expect(r.meteorScene.live().craters).toHaveLength(0);
-    land(1);
     expect(r.meteorScene.live().craters).toHaveLength(1);
+    land(1);
+    expect(r.meteorScene.live().craters).toHaveLength(2);
+    // A meteor id the scene never saw still lands nothing.
+    land(9);
+    expect(r.meteorScene.live().craters).toHaveLength(2);
   });
 
   it('is cleared by victory and by defeat, and its frame runs through the dispatcher\'s own hook', () => {

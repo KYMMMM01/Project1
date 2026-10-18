@@ -19,10 +19,10 @@ afterEach(() => {
 });
 
 describe('the switch', () => {
-  it('is off in the shipped build: the constant is false and a page without the parameter plays without skills', () => {
-    expect(SKILLS_ON).toBe(false);
-    expect(skillsOn(params(''))).toBe(false);
-    expect(skillsOn()).toBe(false);
+  it('is on in the shipped build since the owner switched it on (2026-10-18): a page without the parameter plays with skills', () => {
+    expect(SKILLS_ON).toBe(true);
+    expect(skillsOn(params(''))).toBe(true);
+    expect(skillsOn()).toBe(true);
   });
 
   it('is overridden by sp=1 and sp=0, with or without the debug flag, and by nothing else', () => {
@@ -69,9 +69,9 @@ describe('every way the app starts a battle', () => {
     return out;
   }
 
-  it('hands every mode of a real run the switch\'s value: off by default', async () => {
+  it('hands every mode of a real run the switch\'s value: on by default', async () => {
     const inits = await initsOf();
-    for (const mode of MODES) expect(inits[mode]?.sp, mode).toBe(false);
+    for (const mode of MODES) expect(inits[mode]?.sp, mode).toBe(true);
   });
 
   it('hands every mode sp: true under ?sp=1 and sp: false under ?sp=0, and the run keeps it in its pending record', async () => {
@@ -97,7 +97,8 @@ describe('every way the app starts a battle', () => {
   });
 
   it('builds the debug battle route\'s init with the same switch', () => {
-    expect(runFromQuery(params('scene=battle')).init.sp).toBe(false);
+    expect(runFromQuery(params('scene=battle')).init.sp).toBe(true);
+    expect(runFromQuery(params('scene=battle&sp=0')).init.sp).toBe(false);
     expect(runFromQuery(params('scene=battle&sp=1')).init.sp).toBe(true);
     expect(runFromQuery(params('scene=battle&mode=gold&sp=0')).init.sp).toBe(false);
   });
@@ -135,8 +136,8 @@ describe('the balance report\'s switch', () => {
     expect(spFromEnv({ SIM_SP: '1' })).toEqual({ sp: true });
     expect(spFromEnv({})).toEqual({ sp: SKILLS_ON });
     expect(spFromEnv({ SIM_SP: '' })).toEqual({ sp: SKILLS_ON });
-    // The shipped build has them off, and so does the report by default: its numbers stay comparable with the documented ones.
-    expect(spFromEnv({})).toEqual({ sp: false });
+    // The shipped build has them on (since 2026-10-18), and so does the report by default: it plays the game the players have.
+    expect(spFromEnv({})).toEqual({ sp: true });
   });
 
   it('refuses a value that is neither 0 nor 1 instead of quietly playing with skills', () => {
@@ -163,7 +164,7 @@ describe('the balance report\'s switch', () => {
       spy.mockRestore();
       vi.unstubAllEnvs();
     }
-    expect(written[0]).toContain('== A title [skills off] ==');
+    expect(written[0]).toContain('== A title [skills on] ==');
     expect(written[1]).toContain('== Another [skills on] ==');
   });
 });

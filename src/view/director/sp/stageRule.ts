@@ -4,8 +4,9 @@
  * the ring flash, which the field draws for every cast whatever the stage says. Real time, not battle time, because what the rule protects is
  * the screen and the ears: at 3x speed the casts come three times as often and the picture must not.
  *
- * The first cast of a skill in a run is exempt: it is always shown, with its name bubble and (rank 5) its cut-in, and it takes the slot like
- * any shown cast, so an ordinary cast right after it is the one that loses. A lost cast takes nothing.
+ * Exempt, always shown: the first cast of a skill in a run (with its name bubble and, rank 5, its cut-in) and EVERY cast of a rank 5 skill
+ * (the owner, 2026-10-18: "수호신 스킬은 항상 그려": a guardian's cast is the board's big moment and must never pass without a picture). An
+ * exempt cast takes the slot like any shown cast, so an ordinary cast right after it is the one that loses. A lost cast takes nothing.
  */
 export const STAGE_GAP = 0.25;
 
@@ -17,9 +18,9 @@ export class StageRule {
 
   constructor(private readonly gap = STAGE_GAP) {}
 
-  /** `now` in real seconds; `first` true for the first cast of this skill in the run. Returns whether the cast's effect is shown. */
-  admit(now: number, first: boolean): boolean {
-    if (!first && now - this.last < this.gap - 1e-9) {
+  /** `now` in real seconds; `exempt` true for the first cast of a skill in the run and for every rank 5 cast. Returns whether it is shown. */
+  admit(now: number, exempt: boolean): boolean {
+    if (!exempt && now - this.last < this.gap - 1e-9) {
       this.lost++;
       return false;
     }
