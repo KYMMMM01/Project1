@@ -445,7 +445,7 @@ describe('text', () => {
 
   it('leaves Korean counts alone, whatever the count', () => {
     setLang('ko');
-    expect(describeBundle({ wild: { rare: 1 } })).toEqual(['만능 카드(동네) 1장']);
+    expect(describeBundle({ wild: { rare: 1 } })).toEqual(['동네 만능 카드 1장']);
     expect(featureHint('cats')).toBe('1판을 마치면 열려요.');
   });
 });

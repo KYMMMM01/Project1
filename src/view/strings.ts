@@ -1,7 +1,7 @@
 import { addStrings } from '@/core/i18n';
 
 addStrings('ko', {
-  'view.sell': '팔기',
+  'view.sell': '판매',
   'view.new': 'NEW',
   'view.laser.mark': '이 근처 적부터 공격해요',
   'view.laser.locked': '붙었어요! 계속 따라가요',

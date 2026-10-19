@@ -148,7 +148,7 @@ describe('the confirmation popup: the buy button is inert for the first moments'
     const { popup, buy, title } = open('gold', 10);
     expect(buy.enabled).toBe(false);
     expect(buy.opts.disabledMark).toBe('none');
-    expect(buy.opts.label).toBe('사기');
+    expect(buy.opts.label).toBe('구매하기');
     expect(buy.opts.sublabel).toBe('5,000');
     expect(title).toBe('금 상자 10개를 살까요?');
     expect(popup.closed).toEqual([]);

@@ -23,7 +23,7 @@ addStrings('ko', {
   'battle.chest.ready': '열 수 있어요!',
   'battle.chest.wait': '다음 상자까지 {time}',
   'battle.chest.open': '열기',
-  'battle.chest.openAll': '한번에 열기 ({n})',
+  'battle.chest.openAll': '모두 열기 ({n})',
   'battle.chest.waiting': '상자 {n}개가 기다려요',
 
   'battle.treat.title': '오늘의 간식',
@@ -42,10 +42,10 @@ addStrings('ko', {
   'battle.dungeon.title': '골드 던전',
   'battle.dungeon.tier': '{n}단계',
   'battle.dungeon.entries': '입장 {n}',
-  'battle.dungeon.reward': '최대 {n} 골드',
+  'battle.dungeon.reward': '최대 {n}골드',
   'battle.dungeon.best': '최고 {gold}골드 · {waves}웨이브 · {kills}마리',
   'battle.dungeon.none': '아직 기록이 없어요',
-  'battle.dungeon.chest': '그중 보물상자 {n}',
+  'battle.dungeon.chest': '그중 보물상자 {n}골드',
   'battle.dungeon.play': '입장',
   'battle.dungeon.ad': '광고 입장',
   'battle.dungeon.buy': '무료 입장을 다 썼어요.',
@@ -93,7 +93,7 @@ addStrings('en', {
   'battle.chest.openAll': 'Open all ({n})',
   'battle.chest.waiting': '{n} chests waiting',
 
-  'battle.treat.title': "Today's treats",
+  'battle.treat.title': "Today's Treat",
   'battle.treat.watch': 'Ad',
 
   'battle.daily.title': 'Daily Challenge',
@@ -104,7 +104,7 @@ addStrings('en', {
   'battle.daily.cup': 'Weekly cup: {score} pts',
   'battle.daily.cup.next': 'Next prize at {need} pts',
   'battle.daily.cup.done': 'Every prize is yours to take!',
-  'battle.cup.claim': 'Cup prize',
+  'battle.cup.claim': 'Claim cup prize',
 
   'battle.dungeon.title': 'Gold Dungeon',
   'battle.dungeon.tier': 'Tier {n}',
@@ -123,10 +123,10 @@ addStrings('en', {
   'battle.endless.best': 'Best: wave {n}',
   'battle.endless.week': 'This week: wave {n}',
   'battle.endless.play': 'Play',
-  'battle.endless.claim': 'Weekly prize',
+  'battle.endless.claim': 'Claim weekly prize',
 
   'battle.sweep.title': 'Sweep',
-  'battle.sweep.tickets': '{n} tickets',
+  'battle.sweep.tickets': 'Tickets: {n}',
   'battle.sweep.target': '{chapter} · Butler {n}',
   'battle.sweep.go': 'Sweep',
   'battle.sweep.done': 'Swept! XP +{xp}',

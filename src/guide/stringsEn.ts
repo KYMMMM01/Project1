@@ -36,7 +36,7 @@ export const EN: Record<string, string> = {
   'guide.ok': 'Got it',
   'guide.skip': 'Skip',
   'guide.skip.title': 'Skip the tutorial?',
-  'guide.skip.body': 'The lessons stop and the run goes on as an easy one. Read anything you missed in the guidebook in Settings.',
+  'guide.skip.body': 'The lessons stop and you carry on with an easy run. Anything you missed is in the guidebook under Settings.',
   'guide.skip.yes': 'Skip',
   'guide.skip.no': 'Keep going',
   'guide.skip.note': 'The guidebook is in Settings, and in the pause menu.',
@@ -58,12 +58,12 @@ export const EN: Record<string, string> = {
   'guide.summon.title': 'Fish and summoning',
   'guide.summon.teach': 'Spend fish to call a cat. Tap it!',
   'guide.summon.full':
-    'Tap Summon to pay fish and get a random cat. A run starts with {start} fish.\nThe first summon costs {first} fish, every summon after it costs {step} more, up to {cap}. Hold the button to keep summoning.\nFish come from defeating enemies and clearing waves, and while a wave runs {rate} more arrive every second by themselves. When the board is full you cannot summon, so merge or sell.',
+    'Tap Summon to pay fish and get a random cat. A run starts with {start} fish.\nThe first summon costs {first} fish, every summon after it costs {step} more, up to {cap}. Hold the button to keep summoning.\nFish come from defeating enemies and clearing waves, and while a wave is on, {rate} fish also arrive every second on their own. When the board is full you cannot summon, so merge or sell.',
 
   'guide.summon_grade.title': 'Summon grade and odds',
   'guide.summon_grade.teach': 'Tap to raise the grade: better cats show up more.',
   'guide.summon_grade.full':
-    'Raising the summon grade makes rarer cats more likely for the same price. There are {top} grades and each step costs fish: {costs}.\nThe first grade rolls {odds1}. The top grade rolls {oddsTop}.\nTap the round % button to see the real odds of your next summon.',
+    'Raising the summon grade makes better cats more likely for the same price. There are {top} grades and each step costs fish: {costs}.\nFirst grade odds: {odds1}\nTop grade odds: {oddsTop}\nTap the round % button to see the real odds of your next summon.',
 
   'guide.pity.title': 'Pity (bonus odds)',
   'guide.pity.teach': 'After a dry spell your odds creep up.',
@@ -73,12 +73,12 @@ export const EN: Record<string, string> = {
   'guide.merge.title': 'Merging',
   'guide.merge.teach': 'Drag a cat onto its twin: next rank!',
   'guide.merge.full':
-    'Drag one cat onto an identical one and they become a single cat of the next rank in the same class. For example two {a} become {b}.\nThe ranks go Kitten, Street, Alley Boss, King. Kings do not merge, they awaken.\nWhile you drag, cats you can merge with are marked and a bubble shows what you would get.',
+    'Drag one cat onto an identical one and they become a single cat of the next rank in the same class. For example: {a} + {a} = {b}.\nThe ranks go Kitten, Street, Alley Boss, King. Kings do not merge, they awaken.\nWhile you drag, cats you can merge with are marked and a bubble shows what you would get.',
 
   'guide.class_lines.title': 'Class lines',
   'guide.class_lines.teach': 'Every class has a fixed line of ranks.',
   'guide.class_lines.full':
-    'Merging always moves along the same class line.\nWarrior: {warrior}\nRanger: {ranger}\nMage: {mage}\nTrickster: {trickster}\nThe last step, the Guardian, is never merged: awaken a King. To change lines, use molting.',
+    'Merging always moves along the same class line.\nWarrior: {warrior}\nRanger: {ranger}\nMage: {mage}\nTrickster: {trickster}\nThe last step, the Guardian, cannot be merged: awaken a King instead. To change lines, use molting.',
 
   'guide.acts.title': 'Stages and waves',
   'guide.acts.teach': '{actLen} waves make a stage. Each stage ends with rewards.',
@@ -109,12 +109,12 @@ export const EN: Record<string, string> = {
   'guide.synergy.title': 'Synergy',
   'guide.synergy.teach': 'More kinds of one class, more power. The {kitten} rank does not count.',
   'guide.synergy.full':
-    'When {a}, {b} or {c} different cats of one class stand on the board, synergy turns on step by step. The {kitten} rank does not count and several copies of the same cat are one kind, so the last step needs the {guardian} too.\nThe damage bonus goes to the cats of that class only; side effects such as armour ignore, crit and status duration go to every cat.\nWarrior: {warrior}\nRanger: {ranger}\nMage: {mage}\nTrickster: {trickster}\n(Each line gives the bonus of the first, second and third step.)\nAt {c} kinds every class also gets an ability.\n{warriorAbility}\n{rangerAbility}\n{mageAbility}\n{tricksterAbility}',
+    'When {a}, {b} or {c} different cats of one class stand on the board, synergy turns on step by step. The {kitten} rank does not count and several copies of the same cat are one kind, so the last step needs the {guardian} too.\nThe damage bonus goes to the cats of that class only; extra bonuses such as armour ignore, crit and status duration go to every cat.\nWarrior: {warrior}\nRanger: {ranger}\nMage: {mage}\nTrickster: {trickster}\n(Each line gives the bonus of the first, second and third step.)\nAt {c} kinds every class also gets a special ability.\n{warriorAbility}\n{rangerAbility}\n{mageAbility}\n{tricksterAbility}',
 
   'guide.class_sheet.title': 'The class sheet',
   'guide.class_sheet.teach': 'Tap a class chip to see everything about it.',
   'guide.class_sheet.full':
-    'Tap a class chip to open its line. Ranks you own are lit photos, missing ones are dashed slots. The small dots on the chip are the ranks that count toward synergy, so the dot of the {kitten} rank never lights.\nAn arrow takes the class colour when a merge or an awakening is possible.\nBelow it you see how many kinds are missing for the next synergy step, the bonus of each step (from {a} kinds up to {c}) and the ability that turns on at {c} kinds.',
+    'Tap a class chip to open its line. Ranks you own are lit photos, missing ones are dashed slots. The small dots on the chip are the ranks that count toward synergy, so the dot of the {kitten} rank never lights.\nAn arrow takes the class colour when a merge or an awakening is possible.\nBelow it you see how many kinds are missing for the next synergy step, the bonus of each step (from {a} kinds up to {c}) and the special ability that turns on at {c} kinds.',
 
   'guide.class_upgrade.title': 'Class upgrade',
   'guide.class_upgrade.teach': 'Tap a class chip to upgrade the whole class.',
@@ -127,14 +127,14 @@ export const EN: Record<string, string> = {
     'Every {every} summons you see {options} cats and keep one. Kittens never appear here.\nUnder each card it says what the cat merges into. A new kind of a class you already own brings you closer to synergy.\nThe paw marks under the board show how far away the next pick is.',
 
   'guide.purr.title': 'Purr',
-  'guide.purr.teach': 'Purr is the rare material for molting and awakening.',
+  'guide.purr.teach': 'Purr is the precious material for molting and awakening.',
   'guide.purr.full':
     'Purr is the happy sound of your cats, collected. You spend it on molting and awakening.\nAn elite pays {elite}, a boss {boss}, and each cleared stage {act}. Selling an Alley Boss or better returns some too.\nMolting costs a different amount for each rank ({molt}); awakening costs {awaken}.',
 
   'guide.molt.title': 'Molting',
   'guide.molt.teach': 'Tap a cat, then molt it into another class.',
   'guide.molt.full':
-    'Tap a cat, press Molt and choose a class. The rank stays, the class changes.\nPurr cost grows with the rank of the cat ({prices}). It works {limit} times per run, and a guardian cannot molt. Use it when a pair is one cat short, or a synergy is one kind short.',
+    'Tap a cat, press Molt and choose a class. The rank stays, the class changes.\nPurr cost grows with the rank of the cat ({prices}). It works {limit} times per run, and a Guardian cannot molt. Use it when a pair is one cat short, or a synergy is one kind short.',
 
   'guide.awaken.title': 'Awakening and Guardians',
   'guide.awaken.teach': 'A King that gathers purr becomes a Guardian.',
@@ -147,9 +147,9 @@ export const EN: Record<string, string> = {
     'Tap a cat and press Sell, or drag it onto the sell strip, to get fish back.\nKitten {f1} · Street {f2} · Alley Boss {f3} · King {f4} · Guardian {f5} fish. From Alley Boss up you also get purr: {purr} in that order.\nWhen the board is full, selling a weak cat makes room for a new one.',
 
   'guide.move_swap.title': 'Moving and swapping',
-  'guide.move_swap.teach': 'Drag a cat to an empty cell, or onto another to swap.',
+  'guide.move_swap.teach': 'Drag a cat to an empty tile, or onto another to swap.',
   'guide.move_swap.full':
-    'Drag a cat onto an empty cell to move it. Drop it on a different cat to swap places, or on an identical one to merge.\nYou can also tap a cat to pick it and then tap the cell. Moving your best cats to sunny cells and the outer ring pays off.',
+    'Drag a cat onto an empty tile to move it. Drop it on a different cat to swap places, or on an identical one to merge.\nYou can also tap a cat to pick it and then tap the tile. Moving your best cats to special tiles and the outer ring pays off.',
 
   // Cat skills (spGuideFacts() in src/game/data/spTexts.ts fills the numbers and the rank names; shown only while skills are on)
   'guide.sp_skill.title': 'Cat skills',
@@ -163,10 +163,10 @@ export const EN: Record<string, string> = {
   'guide.sun.full':
     'Every chapter has its own special tile, {cells} of them on the board. A cat standing on one gets its bonus.\n{kinds}\nThe special tiles move to new places whenever a stage ends, so move your strong cats in. Tap an empty special tile to see what it does; a cat standing on one wears the tile\'s badge.',
 
-  'guide.hazards.title': 'Cell hazards',
-  'guide.hazards.teach': 'Cats on a soaked or zapped cell cannot attack.',
+  'guide.hazards.title': 'Tile hazards',
+  'guide.hazards.teach': 'Cats on a soaked or zapped tile cannot attack.',
   'guide.hazards.full':
-    'Some enemies and bosses soak cells with water or strike them with lightning. A cat there cannot attack until it ends.\nWater lasts {wet} seconds, lightning {zap}. The cell flashes {warn} seconds before, so move your cat to another cell in time.\nA bell cat and the cats right around it sometimes dodge them.',
+    'Some enemies and bosses soak tiles with water or strike them with lightning. A cat there cannot attack until the effect ends.\nWater lasts {wet} seconds, lightning {zap}. The tile flashes {warn} seconds before, so move your cat to another tile in time.\nA bell cat and the cats right around it sometimes dodge them.',
 
   'guide.laser.title': 'Laser pointer',
   'guide.laser.teach': 'Drop a dot: cats hit nearby enemies first. It sticks to bosses.',
@@ -201,7 +201,7 @@ export const EN: Record<string, string> = {
   'guide.stakes.title': 'Butler levels',
   'guide.stakes.teach': 'Clear a chapter to unlock a harder level.',
   'guide.stakes.full':
-    'Clearing a chapter unlocks the next butler level. Each level adds a rule on top of the lower ones (the top is level {max}) and raises rewards by {reward}% per level.\nFirst: {s1} {c1}\nSecond: {s2} {c2}\nThird: {s3} {c3}\nFourth: {s4} {c4}\nFifth: {s5} {c5}\nEvery level includes the rules of the lower ones. Only how well elites and bosses resist control is replaced by that level\'s numbers.',
+    'Clearing a chapter unlocks the next butler level. Each level adds a rule on top of the lower ones (the top is level {max}) and raises rewards by {reward}% per level.\nFirst level: {s1} {c1}\nSecond level: {s2} {c2}\nThird level: {s3} {c3}\nFourth level: {s4} {c4}\nFifth level: {s5} {c5}\nEvery level includes the rules of the lower ones. Only how well elites and bosses resist control is replaced by that level\'s numbers.',
 
   // ── Enemies ──
   'guide.elite.title': 'Elites',
@@ -225,14 +225,14 @@ export const EN: Record<string, string> = {
     'Every {every} seconds it whips up a whirl for {dur} seconds and every enemy on the path moves {speed}% faster.\nThe enemies rush in together then. Slowing magic and wide attacks hold the line.',
 
   'guide.boss_bath.title': 'Boss: {name}',
-  'guide.boss_bath.teach': '{name} floods your cells.',
+  'guide.boss_bath.teach': '{name} floods your tiles.',
   'guide.boss_bath.full':
-    'Every {every} seconds it sends out {count} water drops, and every {soak} seconds it soaks {cells} cells for {dur} seconds. Cats on a soaked cell cannot attack.\nA flashing cell is about to be soaked. Move important cats out in time.',
+    'Every {every} seconds it sends out {count} water drops, and every {soak} seconds it soaks {cells} tiles for {dur} seconds. Cats on a soaked tile cannot attack.\nA flashing tile is about to be soaked. Move important cats out in time.',
 
   'guide.boss_cloud.title': 'Boss: {name}',
-  'guide.boss_cloud.teach': '{name} blocks cells with lightning.',
+  'guide.boss_cloud.teach': '{name} blocks tiles with lightning.',
   'guide.boss_cloud.full':
-    'Every {every} seconds it strikes a block of four cells. Cats on them cannot attack for {dur} seconds.\nThe strike area flashes first. Step your strongest cats aside.',
+    'Every {every} seconds it strikes a block of four tiles. Cats on them cannot attack for {dur} seconds.\nThe strike area flashes first. Step your strongest cats aside.',
 
   'guide.boss_needle.title': 'Boss: {name}',
   'guide.boss_needle.teach': '{name} shrugs off slows and heals itself.',
@@ -288,7 +288,7 @@ export const EN: Record<string, string> = {
   'guide.cards.title': 'Cat cards and levels',
   'guide.cards.teach': 'Collect cards to make a cat stronger.',
   'guide.cards.full':
-    'Collecting cat cards raises a cat\'s level. Each level adds {dmg}% damage, up to level {max}.\nLevelling costs cards and gold. The first level needs {first} cards, the last {last}, and rarer cats need fewer.\nOpen the Cats tab and tap the cat you want to grow.',
+    'Collecting cat cards raises a cat\'s level. Each level adds {dmg}% damage, up to level {max}.\nLevelling costs cards and gold. The first level needs {first} cards, the last {last}, and higher-rank cats need fewer.\nOpen the Cats tab and tap the cat you want to grow.',
 
   'guide.wild_cards.title': 'Wild cards',
   'guide.wild_cards.teach': 'A card that works for any cat of its rank.',
@@ -298,7 +298,7 @@ export const EN: Record<string, string> = {
   'guide.chests.title': 'Chests and odds',
   'guide.chests.teach': 'Chests give cat cards. All odds are public.',
   'guide.chests.full':
-    'A wooden chest holds {woodCards} cards, a silver one {silverCards} and a gold one {goldCards}.\nOdds per card, wooden: {wood}\nSilver: {silver}\nGold: {gold}\nA silver chest always holds at least {silverGuarantee} Alley Boss or better, a gold one at least {goldGuarantee} Kings.\nOnce in every {every} gold chests, a chest adds {bonus} extra cards of your lowest-level King (pity). Tap the % button on a chest to check any time. A silver chest costs {silverGems} gems, a gold one {goldGems}.',
+    'A wooden chest holds {woodCards} cards, a silver one {silverCards} and a gold one {goldCards}.\nOdds per card:\nWooden chest: {wood}\nSilver chest: {silver}\nGold chest: {gold}\nA silver chest always holds at least {silverGuarantee} Alley Boss or better, a gold one at least {goldGuarantee} Kings.\nOnce in every {every} gold chests, a chest adds {bonus} extra cards of your lowest-level King (pity). Tap the % button on a chest to check any time. A silver chest costs {silverGems} gems, a gold one {goldGems}.',
 
   'guide.free_chest.title': 'Free chest',
   'guide.free_chest.teach': 'A free chest piles up as time passes.',
@@ -335,7 +335,7 @@ export const EN: Record<string, string> = {
   'guide.sweep.full':
     'For a chapter you have cleared, spend a sweep ticket to get its rewards without playing. They are {pay}% of what a win pays.\nYou gain {tickets} tickets a day and can keep {stock}.',
 
-  'guide.daily_challenge.title': 'Daily challenge',
+  'guide.daily_challenge.title': 'Daily Challenge',
   'guide.daily_challenge.teach': 'A new rule set to try every day.',
   'guide.daily_challenge.full':
     'Once a day everyone gets the same run: a short challenge of {waves} waves.\nEvery cat starts at level {level} and the rules are mixed from {rules} variants. It opens after you clear a chapter.\nThe first win pays {chest} silver chest.',
@@ -345,18 +345,18 @@ export const EN: Record<string, string> = {
   'guide.weekly_cup.full':
     'All the waves you reach in a week of daily challenges are added up. Going all the way every day gives the best score, {best}.\nReaching {t1}, {t2} and {t3} points each pays a better chest.',
 
-  'guide.gold_dungeon.title': 'Gold dungeon',
+  'guide.gold_dungeon.title': 'Gold Dungeon',
   'guide.gold_dungeon.teach': 'A short run where catching coins pays gold.',
   'guide.gold_dungeon.full':
     'A short run of {waves} waves. Only gold coins come, and a coin chest walks in during the last wave.\nYou are paid for every wave you get past and every coin you catch, and beating the chest pays a big lump on top. Entries per day: {free}.\nTiers open as you clear chapters, and a higher tier pays more gold.',
 
-  'guide.endless.title': 'Endless mode',
+  'guide.endless.title': 'Endless Mode',
   'guide.endless.teach': 'See how long you last against endless waves.',
   'guide.endless.full':
-    'It opens after you clear chapter {chapter}. The waves never end, and past wave {after} enemies get {growth}% tougher every wave.\nReaching wave {w1}, {w2} and {w3} pays rewards.',
+    'It opens after you clear chapter {chapter}. The waves never end, and past wave {after} enemies get {growth}% tougher every wave.\nReaching waves {w1}, {w2} and {w3} pays rewards.',
 
-  'guide.backup_code.title': 'Meow code (backup)',
+  'guide.backup_code.title': 'Meow Code (backup)',
   'guide.backup_code.teach': 'One line of text carries your progress to a new device.',
   'guide.backup_code.full':
-    'In Settings, make a Meow code and your whole progress becomes one line of text. Write it down, then load it on another device to carry on.\nThe code is not stored on any server. Make a fresh one before you switch devices and never show it to anyone.',
+    'In Settings, make a Meow Code and your whole progress becomes one line of text. Write it down, then load it on another device to carry on.\nThe code is not stored on any server. Make a fresh one before you switch devices and never show it to anyone.',
 };

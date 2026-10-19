@@ -116,13 +116,13 @@ describe('the one line of each skill', () => {
     { id: 'lap', change: () => cell(SP_ROWS.lap, 'speed', 1000), ko: '한 바퀴(2.4초)', en: 'in 2.4 s' },
     { id: 'cloud', change: () => cell(SP_ROWS.cloud, 'life', 4.8), ko: '4.8초 동안 번개를 12번', en: 'for 4.8 s, dropping 12 bolts' },
     { id: 'knock', change: () => cell(SP_ROWS.knock, 'radius', 300), ko: '파편이 3칸 안', en: 'within 3 tiles' },
-    { id: 'knock', change: () => cell(SP_ROWS.knock, 'slowed', 2), ko: '느린 적 2배', en: 'for 2x or 5x' },
-    { id: 'knock', change: () => cell(SP_ROWS.knock, 'frozen', 4), ko: '언 적 4배', en: 'for 3x or 4x' },
+    { id: 'knock', change: () => cell(SP_ROWS.knock, 'slowed', 2), ko: '느린 적은 2배', en: 'for 2x or 5x' },
+    { id: 'knock', change: () => cell(SP_ROWS.knock, 'frozen', 4), ko: '언 적은 4배', en: 'for 3x or 4x' },
     { id: 'meteor', change: () => cell(SP_ROWS.meteor, 'warn', 1.5), ko: '1.5초 동안 자라난', en: 'grows for 1.5 s' },
     { id: 'meteor', change: () => cell(SP_ROWS.meteor.outer, 'radius', 300), ko: '3칸 안을 때리고', en: 'all within 3 tiles' },
     { id: 'meteor', change: () => cell(SP_ROWS.meteor.crater, 'life', 6), ko: '6초 동안 타올라요', en: 'burning for 6 s' },
     { id: 'jam', change: () => cell(SP_ROWS.jam, 'targets', 3), ko: '음표 3개', en: 'Sends out 3 golden notes' },
-    { id: 'jam', change: () => cell(SP_ROWS.jam, 'fill', 0.25), ko: '그 동그라미를 25% 채워요', en: 'fills 25% of the emptiest' },
+    { id: 'jam', change: () => cell(SP_ROWS.jam, 'fill', 0.25), ko: '그 게이지를 25% 채워요', en: 'fills 25% of the emptiest' },
     { id: 'fish', change: () => cell(SP_ROWS.fish.fishTime, 'boss', 5), ko: '보스 5초', en: 'boss 5 s' },
     { id: 'fish', change: () => cell(SP_ROWS.fish.fishTime, 'elite', 3), ko: '정예 3초', en: 'elite 3 s' },
     { id: 'fish', change: () => cell(SP_ROWS.fish.smallTargets, 'withBig', 5), ko: '플라스크 6개를 던져요', en: 'Throws 6 flasks' },
@@ -157,12 +157,14 @@ describe('the one line of each skill', () => {
   it('says what the owner asked it to say', () => {
     setLang('ko');
     expect(spTexts('charge').desc).toContain('가장 많이 몰린');
-    expect(spTexts('capsule').desc).toMatch(/복고양이가 여럿이어도 동그라미는 같이 써요/);
+    expect(spTexts('capsule').desc).toMatch(/복고양이가 여럿이어도 스킬 게이지는 같이 써요/);
+    expect(spTexts('jam').desc).toMatch(/음표마다 스킬 게이지가 가장 덜 찬 고양이를 골라 그 게이지를/);
     expect(spTexts('wanted').desc).toContain('보스·정예 웨이브 전에는 총을 아껴요');
     expect(spTexts('shove').desc).toContain('보스·정예는 조금만 밀려요');
     setLang('en');
     expect(spTexts('charge').desc).toContain('where enemies are thickest');
-    expect(spTexts('capsule').desc).toContain('Several lucky cats share one ring');
+    expect(spTexts('capsule').desc).toContain('Several lucky cats share one skill gauge');
+    expect(spTexts('jam').desc).toContain('of the emptiest skill gauge');
     expect(spTexts('wanted').desc).toContain('Holds its fire before a boss or elite wave');
     expect(spTexts('shove').desc).toContain('Bosses and elites hardly budge');
   });
@@ -194,7 +196,8 @@ describe('the one line of each skill', () => {
   });
 
   it('uses no internal term a player would not know, and none of the old grade names', () => {
-    const banned = { ko: /대상|광역|연쇄|반경|게이지|쿨타임|SP/, en: /radius|\bpx\b|gauge|cooldown|\bSP\b|\btargets?\b/i } as const;
+    // The ring beside a skill cat is the "skill gauge" (the copy style's terms table); the names it used to have are the banned ones now.
+    const banned = { ko: /대상|광역|연쇄|반경|동그라미|고리|쿨타임|SP/, en: /radius|\bpx\b|\brings?\b|cooldown|\bSP\b|\btargets?\b/i } as const;
     for (const lang of LANGS) {
       setLang(lang);
       for (const id of SP_SKILL_IDS) {

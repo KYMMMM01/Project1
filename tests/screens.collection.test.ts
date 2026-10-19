@@ -128,16 +128,16 @@ describe('class lines', () => {
     }
   });
 
-  it('says in plain words what a cat becomes, with the right Korean particles', () => {
+  it('says in plain words what a cat becomes, with no particle written for both cases', () => {
     setLang('ko');
     const say = (id: Parameters<typeof lineSentence>[0]) => {
       const s = lineSentence(id);
       return t(s.key, { a: t(`unit.${s.a}.name`), b: t(`unit.${s.b}.name`) });
     };
-    expect(say('w_sword')).toBe('검사냥 둘을 합치면 바이킹냥이 돼요.');
-    expect(say('w_samurai')).toBe('사무라이냥은 각성하면 호랑이 장군이 돼요.');
-    expect(say('w_tiger')).toBe('사무라이냥을 각성하면 호랑이 장군이 돼요.');
-    expect(say('r_gunner')).toBe('총잡이냥은 각성하면 별빛 사수가 돼요.');
+    expect(say('w_sword')).toBe('검사냥 둘을 합치면 바이킹냥 한 마리가 돼요.');
+    expect(say('w_samurai')).toBe('사무라이냥 한 마리가 각성하면 호랑이 장군 한 마리가 돼요.');
+    expect(say('w_tiger')).toBe('사무라이냥 한 마리가 각성하면 호랑이 장군 한 마리가 돼요.');
+    expect(say('r_gunner')).toBe('총잡이냥 한 마리가 각성하면 별빛 사수 한 마리가 돼요.');
     vi.stubGlobal('document', { documentElement: {} });
     setLang('en');
     const s = lineSentence('m_snow');

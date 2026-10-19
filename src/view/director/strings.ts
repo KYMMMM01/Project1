@@ -6,7 +6,7 @@ addStrings('ko', {
   'director.bossIncoming': '{name} 등장!',
   'director.eliteIncoming': '{name} 출현!',
   'director.bossDefeated': '보스 격파!',
-  'director.eliteDefeated': '대장 격파!',
+  'director.eliteDefeated': '정예 격파!',
   'director.actClear': '스테이지 {act} 클리어!',
   'director.callNext': '다음 웨이브 호출!',
   'director.victory': '승리!',
@@ -22,8 +22,8 @@ addStrings('ko', {
   'director.ability.lightning': '번개가 떨어져요!',
   'director.ability.vaccinate': '약효 발동! 느려지지 않아요',
   'director.ability.spill': '금화가 쏟아져요!',
-  'director.hazard.wet': '젖은 칸은 공격할 수 없어요',
-  'director.hazard.zap': '번개 맞은 칸은 쉬어요',
+  'director.hazard.wet': '젖은 칸의 고양이는 공격할 수 없어요',
+  'director.hazard.zap': '번개 맞은 칸의 고양이는 잠시 쉬어요',
 });
 
 addStrings('en', {
@@ -48,6 +48,6 @@ addStrings('en', {
   'director.ability.lightning': 'Lightning incoming!',
   'director.ability.vaccinate': 'Vaccinated! Slows are ignored',
   'director.ability.spill': 'Coins are spilling out!',
-  'director.hazard.wet': 'Wet cells cannot attack',
-  'director.hazard.zap': 'Zapped cells rest',
+  'director.hazard.wet': 'Cats on wet tiles cannot attack',
+  'director.hazard.zap': 'Cats on zapped tiles rest',
 });

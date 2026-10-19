@@ -116,13 +116,13 @@ describe('the battle bubble of an enemy', () => {
 
   it('prints the armour and ward line of an enemy that has armour only, and a slow resistance line when there is some', () => {
     setLang('ko');
-    expect(lines('cucumber')).toContain('방어 8% · 저항 0%');
+    expect(lines('cucumber')).toContain('방어 8% · 마법 저항 0%');
     expect(lines('cucumber').some((l) => l.includes('둔화 저항'))).toBe(false);
-    expect(lines('drop')).toContain('방어 5% · 저항 0%');
+    expect(lines('drop')).toContain('방어 5% · 마법 저항 0%');
     expect(lines('drop')).toContain('둔화 저항 30%');
-    expect(lines('clock')).toContain('방어 10% · 저항 0%');
+    expect(lines('clock')).toContain('방어 10% · 마법 저항 0%');
     expect(lines('clock')).toContain('둔화 저항 30%');
-    expect(lines('roomba')).toContain('방어 35% · 저항 0%');
+    expect(lines('roomba')).toContain('방어 35% · 마법 저항 0%');
     expect(lines('roomba')).toContain('둔화 저항 20%');
     setLang('en');
     expect(lines('drop')).toContain('Armour 5% · Ward 0%');
@@ -143,8 +143,8 @@ describe('the battle bubble of an enemy', () => {
 
   it('leaves the elites and bosses with their old defence line and no slow line, and a bare enemy with neither', () => {
     setLang('ko');
-    expect(lines('boss_vacuum')).toContain('방어 35% · 저항 10%');
-    expect(lines('spray')).toContain('방어 20% · 저항 20%');
+    expect(lines('boss_vacuum')).toContain('방어 35% · 마법 저항 10%');
+    expect(lines('spray')).toContain('방어 20% · 마법 저항 20%');
     for (const id of ['boss_vacuum', 'spray', 'boss_needle']) expect(lines(id as EnemyId).some((l) => l.includes('둔화 저항')), id).toBe(false);
     expect(lines('firecracker').some((l) => l.includes('방어') || l.includes('둔화 저항'))).toBe(false);
   });

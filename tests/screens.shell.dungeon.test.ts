@@ -145,7 +145,7 @@ describe('the words', () => {
     expect(t('battle.dungeon.entries', { n: '1/1' })).toBe('입장 1/1');
     expect(t('battle.dungeon.tier', { n: 3 })).toBe('3단계');
     // The chest's share is part of the maximum and of the pay shown beside it, so it is worded as "of it" and never as "+n".
-    expect(t('battle.dungeon.chest', { n: '456' })).toBe('그중 보물상자 456');
+    expect(t('battle.dungeon.chest', { n: '456' })).toBe('그중 보물상자 456골드');
     expect(t('shell.pre.gold.rules.chest', { n: '456' })).toBe('보물상자를 쓰러뜨리면 골드를 456 더 줘요.');
     expect(t('hud.res.dungeonBonus', { n: '456' })).toBe('그중 보물상자 456 골드');
     setLang('en');

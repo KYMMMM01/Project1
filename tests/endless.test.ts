@@ -43,10 +43,10 @@ describe('endless mode: the name', () => {
     expect(topicTitle('endless')).toBe('무한 모드');
   });
 
-  it('stays Endless mode in English', () => {
+  it('stays Endless Mode in English, the same capitals everywhere', () => {
     setLang('en');
-    for (const key of NAME_KEYS) expect(t(key), key).toMatch(/^Endless [Mm]ode$/);
-    expect(topicTitle('endless')).toBe('Endless mode');
+    for (const key of NAME_KEYS) expect(t(key), key).toBe('Endless Mode');
+    expect(topicTitle('endless')).toBe('Endless Mode');
     setLang('ko');
   });
 
