@@ -47,6 +47,13 @@ export class LaserGuideFlow {
     this.clock = 0;
   }
 
+  /** The lesson that owns the guide went away before the guide was done (cut in on by an urgent one, or given up on): back to waiting, or over for good. */
+  stand(again: boolean): void {
+    if (this.step !== 'press' && this.step !== 'place') return;
+    this.step = again ? 'wait' : 'done';
+    this.clock = 0;
+  }
+
   /** The dot went down, from the guide's own pointing or on the player's own initiative. */
   onDot(): void {
     if (this.step !== 'press' && this.step !== 'place') return;

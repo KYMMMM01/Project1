@@ -47,7 +47,8 @@ export const EN: Record<string, string> = {
   'guide.end.go': 'See results',
   'guide.tut.count': '({n}/{total})',
   'guide.tut.sheet': 'Your ranks and synergy steps are here. Close it when you are done.',
-  'guide.tut.pickRec': 'The card with tape is the pick we suggest.',
+  'guide.tut.pick': 'Pick one of three. It comes again every {every} summons.',
+  'guide.tut.pickRec': 'Take the one marked "{tag}".',
   'guide.cheer.0': 'Nice!',
   'guide.cheer.1': 'Well done!',
   'guide.cheer.2': 'Purr-fect!',
@@ -152,9 +153,9 @@ export const EN: Record<string, string> = {
 
   // Cat skills (spGuideFacts() in src/game/data/spTexts.ts fills the numbers and the rank names; shown only while skills are on)
   'guide.sp_skill.title': 'Cat skills',
-  'guide.sp_skill.teach': 'When the ring by a cat is full, it casts a skill. No tapping.',
+  'guide.sp_skill.teach': 'When its skill gauge is full, a cat casts a skill. No tapping.',
   'guide.sp_skill.full':
-    'Cats from {rank} up each have one skill. The ring beside a cat is its skill ring: it fills bit by bit while the cat stands there, and when it is full the cat casts its skill.\nSkills cast by themselves, no tapping. A full ring with nothing to aim at waits, full, and casts the moment a target shows up. After a cast the ring starts over.\nHow long a ring takes to fill is different for every skill. Read it on the cat screen, or tap a cat and then the i sticker on its card.\nA ring goes along when you move or swap a cat. Merge two cats and the new cat\'s ring starts at {merge}%. Sell a cat and its ring goes too.\nTurn on the laser and point it: many skills aim there first, and the {cosmo}\'s meteor lands right on the dot.\n{below} cats have no skill yet. They get one at {rank}.',
+    'Cats from {rank} up each have one skill. The gauge that fills beside a cat is its skill gauge: it fills bit by bit while the cat stands there, and when it is full the cat casts its skill.\nSkills cast by themselves, no tapping. A full gauge with nothing to aim at waits, full, and casts the moment a target shows up. After a cast the gauge starts over.\nHow long a gauge takes to fill is different for every skill. Read it on the cat screen, or tap a cat and then the i sticker on its card.\nA gauge goes along when you move or swap a cat. Merge two cats and the new cat\'s gauge starts at {merge}%. Sell a cat and its gauge goes too.\nTurn on the laser and point it: many skills aim there first, and the {cosmo}\'s meteor lands right on the dot.\n{below} cats have no skill yet. They get one at {rank}.',
 
   // ── Battlefield ──
   'guide.sun.title': 'Special tiles',

@@ -25,7 +25,9 @@ import { bestRimPose, dragPrefer, FROM_BELOW, iconSpots, type Keep, pawBounds, t
 import { unitPortrait } from './kit';
 import { LessonBubble } from './LessonBubble';
 import { LessonFx } from './LessonFx';
-import { bottomRects, laserFace, LASER_SPOT, type Point, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, spotRadius, spotWindow, topRects } from './layoutMath';
+import {
+  bottomRects, currencyTop, laserFace, LASER_SPOT, type Point, type Rect, SKIP_FACE, SKIP_H, SKIP_W, skipRect, spotRadius, spotWindow, topRects, trimBelow,
+} from './layoutMath';
 import { findTwins } from './planMath';
 import { firstCat, kingCell, shadeCat, sunLanding, twinPair, weakestCat } from './pawTarget';
 import { REVEAL_KEYS, type RevealKey } from './policy';
@@ -53,6 +55,15 @@ const UNSEEN_LIMIT = 6;
 /** Seconds the clock runs after the awakening so the guardian can arrive on screen before the next lesson holds it again. */
 const AWAKEN_BREATH = 1.6;
 
+/**
+ * What a rebuilt HUD (a language switch rebuilds every label) hands on to the new tutorial view: the plan with its progress (the lesson on screen, the ones
+ * done or given up on) and what the player has done so far, so a switch in the middle of a lesson neither restarts it nor teaches an old one again.
+ */
+export class TutorialKeep {
+  script: TutorialScript | null = null;
+  readonly counts: Record<CountKey, number> = emptyCounts();
+}
+
 /** What the HUD lends the tutorial: where its controls are and the summon button's breathing. */
 export interface TutorialHost {
   /** Scene-space rectangle of a control or of the top-row feature a target names; null when it is not on screen. */
@@ -68,6 +79,10 @@ export interface TutorialHost {
   laserHolds(): boolean;
   /** The guided first use of the laser should run now. */
   startLaserGuide(): void;
+  /** The purr that has been won and is still flying to the counter is counted now (the lesson on the counter begins: it must not read nought under the note). */
+  settlePurr(): void;
+  /** The laser lesson is over without the guide being done: the guide goes with it (`again`: the lesson comes back after an urgent one, and arms it anew). */
+  endLaserGuide(again: boolean): void;
   /** What the "nice!" sticker must keep off, weighed for it: controls and writing first, then cats, the lane last. */
   stickerKeep(): readonly Keep[];
   /** The column the summon result chips use above the summon button (scene space): a sticker keeps off it. */
@@ -82,7 +97,7 @@ const NO_RECT: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
 export class Tutorial {
   readonly script: TutorialScript;
-  private readonly counts = emptyCounts();
+  private readonly counts: Record<CountKey, number>;
   private readonly world: World;
   private readonly board: Array<UnitId | null> = new Array<UnitId | null>(CELL_COUNT).fill(null);
   private readonly layer = new Container();
@@ -119,6 +134,8 @@ export class Tutorial {
   private idle = 0;
   private nudgeLeft = 0;
   private nudges = 0;
+  /** The nudge on screen is the one before the first summon ("tap Summon to begin"), not the one for fish that pile up. */
+  private nudgeFirst = false;
   private rect: Rect = NO_RECT;
   /** The spotlight's window as last drawn. */
   private hole: Rect = NO_RECT;
@@ -143,16 +160,23 @@ export class Tutorial {
   private destroyed = false;
   /** The lesson that has just been done and has a sticker coming (placed at the end of the frame's events). */
   private cheerFor: StepDef | null = null;
+  /** The lesson whose window, note and paw are on screen (or on their way). */
+  private lit: StepDef | null = null;
 
   constructor(
     private readonly env: EnvImpl,
     private readonly host: TutorialHost,
     skipped: boolean,
+    keep: TutorialKeep = new TutorialKeep(),
   ) {
     this.layout = env.layout();
     this.skipped = skipped;
+    this.counts = keep.counts;
     // A battle without skills is taught the plan without the skills' lesson: its lessons, their count and their order are what they always were.
-    this.script = new TutorialScript(new Set(STEP_IDS.filter((id) => env.progress.isTaught(id))), stepsFor(env.battle.spOn));
+    // A HUD that was rebuilt in the middle of the lessons goes on with the plan it had.
+    this.script = keep.script ?? new TutorialScript(new Set(STEP_IDS.filter((id) => env.progress.isTaught(id))), stepsFor(env.battle.spOn));
+    keep.script = this.script;
+    this.lit = this.script.active;
     if (skipped) this.script.stop();
     this.countLeft();
     this.world = {
@@ -168,6 +192,8 @@ export class Tutorial {
       const b = new Container();
       b.eventMode = 'static';
       b.visible = false;
+      // A tap on the dim answers: the note shakes, so the game does not look frozen.
+      b.on('pointerdown', () => this.note.shake());
       this.blockers.push(b);
     }
     this.layer.addChild(this.dim, ...this.blockers, this.ring, this.hand);
@@ -190,13 +216,21 @@ export class Tutorial {
 
     this.listen();
     env.lessonOf = () => this.script.active?.id ?? null;
+    env.lessonLeft = (topic) => this.script.has(topic);
     env.noteTo = (key) => this.bump(key);
+  }
+
+  /** The HUD was rebuilt in the middle of a lesson: the new view picks it up where it was (the laser's guide is armed again). */
+  resume(): void {
+    if (this.script.active?.id === 'laser') this.host.startLaserGuide();
   }
 
   // ───────────────────────── what the player does ─────────────────────────
 
   private bump(key: CountKey): void {
     this.counts[key]++;
+    // The player is at it: the time a lesson may wait for them starts over with every step they take (three summons are not one wait).
+    this.heldFor = 0;
   }
 
   private listen(): void {
@@ -252,7 +286,8 @@ export class Tutorial {
     w.wave = b.wave;
     w.waveKind = b.waveKind;
     w.pending = b.pending ? b.pending.kind : null;
-    w.busy = this.env.modalCount > 0;
+    // The pause menu (or a screen opened from it) counts as a popup: no lesson begins or shows its note under it.
+    w.busy = this.env.modalCount > 0 || this.env.userPause;
     let cats = 0;
     for (let i = 0; i < CELL_COUNT; i++) {
       const u = b.units[i];
@@ -297,6 +332,7 @@ export class Tutorial {
     // Once the run is decided only the staging is left: the lessons put everything away and let go of the clock.
     if (this.env.battle.phase === 'won' || this.env.battle.phase === 'lost') {
       this.endVisuals();
+      this.endNudge();
       this.showSkip(false);
       return;
     }
@@ -312,7 +348,8 @@ export class Tutorial {
     }
     w.twins = this.twinsKnown;
     this.breath = Math.max(0, this.breath - dt);
-    const heldByOthers = this.env.ctx.paused && !this.held;
+    // The clock is held by something else when it is paused and the lesson is not what holds it, or when the player's own pause is on top of the lesson's.
+    const heldByOthers = this.env.ctx.paused && (!this.held || this.env.userPause);
     const events = this.script.update(w, dt, heldByOthers);
     for (let i = 0; i < events.length; i++) this.handle(events[i] as ScriptEvent);
     // The sticker is placed once the next lesson's controls have arrived (they are in the same batch): it lands on none of them.
@@ -340,17 +377,31 @@ export class Tutorial {
     if (e.kind === 'begin') {
       for (const key of e.step.reveal) this.arrive(key);
       if (id === 'laser') this.host.startLaserGuide();
+      if (id === 'purr') this.host.settlePurr();
+      this.lit = e.step;
       this.resetLook();
       this.lastTarget = '';
       this.measure = 0;
       return;
     }
-    this.endVisuals();
+    // A lesson that never began (its moment passed while another was up, or none was) has nothing on screen to put away.
+    if (e.step === this.lit) {
+      this.lit = null;
+      // The kitten of the last summon is still popping in: the beat after the tap is kept for it.
+      this.endVisuals(e.kind === 'done' && id === 'summon');
+    }
+    if (e.kind === 'drop') {
+      // The laser's guide is the lesson's: it goes with it. A topic the tutorial gave up on is the cards' again (a cut-in lesson comes back, and keeps it).
+      if (id === 'laser') this.host.endLaserGuide(e.again === true);
+      if (!e.again) this.env.hints.giveUp(id);
+    }
     if (e.kind === 'done') {
       this.env.progress.markTaught(id);
       this.cheerFor = e.step;
       // The guardian arrives on the field's own time: the clock runs on for a moment before the next lesson may hold it again.
       if (id === 'awaken') this.breath = AWAKEN_BREATH;
+      // The sheet of the cat the lesson used (molt, sell, awaken) closes with it, so the next note and the result are not under a sheet with Sell in reach.
+      if (id === 'molt' || id === 'sell' || id === 'awaken') this.env.ctx.select(null);
     }
   }
 
@@ -383,8 +434,8 @@ export class Tutorial {
     this.fx.celebrate(t(`guide.cheer.${w.wave % 4}`), (cw, ch) => cheerSpot({ target, home: { x: l.w / 2, y: l.h * 0.4 }, w: cw, h: ch, bounds, keep }));
   }
 
-  /** The spotlight, the hand and the note go away; the clock is released unless something else holds it. */
-  private endVisuals(): void {
+  /** The spotlight, the hand and the note go away; the clock is released unless something else holds it (`keepBreath`: the beat after a summon stays). */
+  private endVisuals(keepBreath = false): void {
     this.resetLook();
     this.layer.visible = false;
     for (const b of this.blockers) b.visible = false;
@@ -393,7 +444,7 @@ export class Tutorial {
     this.handOn = false;
     this.host.pulse(false);
     this.setHold(false);
-    this.breath = 0;
+    if (!keepBreath) this.breath = 0;
     info.close(true, NUDGE);
   }
 
@@ -428,6 +479,14 @@ export class Tutorial {
       this.nudge(dt, w);
       return;
     }
+    // A lesson the player let go unanswered has given the screen back: no note, no window, no paw, and the clock runs. It is given up on soon;
+    // the nudge points at the summon button meanwhile (before the first summon, or when fish pile up).
+    if (this.script.relaxed) {
+      this.hush();
+      this.setHold(false);
+      this.nudge(dt, w);
+      return;
+    }
     this.endNudge();
     // A popup carries its own lesson, and the laser's guided first use is the laser's own.
     const away = step.popup || step.id === 'laser';
@@ -444,7 +503,8 @@ export class Tutorial {
     // A hold only makes sense while there is something on screen to point at, and never for ever, except for a note that waits for its
     // "got it" and has nothing else to wait for: a player who ignores an action lesson is let go.
     this.setHold(step.holds(w) && !step.popup && this.breath <= 0 && !this.skipAsked && this.rect.w > 0 && !this.script.relaxed);
-    if (this.held) {
+    // The wait does not run under the player's own pause.
+    if (this.held && !this.env.userPause) {
       this.heldFor += dt;
       if (this.heldFor > HOLD_LIMIT && !step.ok) this.script.relax();
     }
@@ -481,7 +541,9 @@ export class Tutorial {
     this.measure = MEASURE_EVERY;
     this.lastTarget = target;
     this.aim(target);
-    const hole = this.rect.w <= 0 ? NO_RECT : target === 'laser' ? spotWindow(this.rect, LASER_SPOT, 2, this.layout) : spotWindow(this.rect, MARGIN, HOLE_GRID, this.layout);
+    let hole = this.rect.w <= 0 ? NO_RECT : target === 'laser' ? spotWindow(this.rect, LASER_SPOT, 2, this.layout) : spotWindow(this.rect, MARGIN, HOLE_GRID, this.layout);
+    // The chips' window stops where the counters under them begin.
+    if (target === 'chips' && hole.w > 0) hole = trimBelow(hole, currencyTop(this.layout));
     const blocking = step.holds(w) && !step.popup && !this.script.relaxed;
     const text = this.textOf(step, w);
     const noteLook = `${step.id}|${text}|${this.layout.w}|${this.layout.h}`;
@@ -522,8 +584,8 @@ export class Tutorial {
     this.pair = null;
     this.cat = -1;
     this.sunTo = -1;
-    // The chips and the summon row give way to a selection sheet: a lesson that points at them closes it first.
-    if ((target === 'chips' || target === 'summon' || target === 'grade' || target === 'call' || target === 'speed') && ctx.selected !== null) ctx.select(null);
+    // The chips and the summon row give way to a selection sheet: a lesson that points at them closes it first (not one the player has been let go of).
+    if (!this.script.relaxed && (target === 'chips' || target === 'summon' || target === 'grade' || target === 'call' || target === 'speed') && ctx.selected !== null) ctx.select(null);
     const cellRect = (cell: number): Rect => ({
       x: ctx.toSceneX(cellCenterX(cell)) - CELL_W / 2, y: ctx.toSceneY(cellCenterY(cell)) - CELL_H / 2, w: CELL_W, h: CELL_H,
     });
@@ -571,6 +633,8 @@ export class Tutorial {
   private textOf(step: StepDef, w: World): string {
     const base = topicTeach(step.id);
     if (step.id === 'summon') return `${base} ${t('guide.tut.count', { n: Math.min(this.counts.summon, TUTORIAL_SUMMONS), total: TUTORIAL_SUMMONS })}`;
+    // The elite is won with cats, and a first run has three: the lesson says where the fish should go (the guidebook's page and the card of a later run do not).
+    if (step.id === 'elite') return `${base} ${t('hud.tut.elite')}`;
     // The awakening: first the king is tapped, then the button; the cost is the game's own.
     if (step.id === 'awaken') return t(w.kingSelected ? 'hud.tut.awaken.go' : 'hud.tut.awaken.pick', { cost: this.env.battle.awakenCost() });
     return base;
@@ -784,6 +848,12 @@ export class Tutorial {
     if (!due || this.carrying) return;
     this.nudges++;
     this.nudgeLeft = waiting ? 1e9 : NUDGE_FOR;
+    this.nudgeFirst = waiting;
+    this.placeNudge();
+  }
+
+  /** The paw and its words at the summon button, where it lies now (laid again after a resize moved the button). */
+  private placeNudge(): void {
     const r = this.host.rectOf('summon');
     if (!r) return;
     // The button lies at the bottom of the screen: the paw reaches in from where there is room, off the line of words over the button.
@@ -800,7 +870,7 @@ export class Tutorial {
     this.host.pulse(true);
     this.nudgeMark.clear().rect(0, 0, r.w, r.h).fill({ color: Color.paper, alpha: 0.01 });
     this.nudgeMark.position.set(r.x, r.y);
-    info.show(NUDGE, this.nudgeMark, { text: t(waiting ? 'guide.skip.start' : 'hud.tut.more') }, { sticky: true, prefer: 'above' });
+    info.show(NUDGE, this.nudgeMark, { text: t(this.nudgeFirst ? 'guide.skip.start' : 'hud.tut.more') }, { sticky: true, prefer: 'above' });
   }
 
   private endNudge(): void {
@@ -906,10 +976,17 @@ export class Tutorial {
     return this.script.active !== null && !this.skipped;
   }
 
+  /** A lesson holds the clock for the player's gesture right now. */
+  get holding(): boolean {
+    return this.held;
+  }
+
   resize(l: BattleLayout): void {
     this.layout = l;
     this.resetLook();
     this.placeSkip();
+    // The nudge's paw and words are tied to the summon button, which has moved: they are laid again beside it.
+    if (this.nudgeHand.visible) this.placeNudge();
   }
 
   destroy(): void {

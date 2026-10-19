@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { hasString, setLang, t } from '@/core/i18n';
 import '@/game/data/strings';
+import '@/view/hud/strings';
 import {
   ACT_LENGTH, AWAKEN_COST, BASE_FISH_PER_SECOND, CHAPTER_WAVES, LASER_COOLDOWN, LASER_DURATION, MOLT_COSTS, OFFER_EVERY, SELL_FISH, START_FISH, SUMMON_BASE, SUMMON_STEP, SUN_CELLS,
 } from '@/game/data/balance';
@@ -141,7 +142,7 @@ describe('guide topics', () => {
   it('says what the lesson on the skill ring says (directive decision 29), and names the ranks and the shares from the game’s own data', () => {
     setLang('ko');
     expect(topicTitle('sp_skill')).toBe('고양이 스킬');
-    expect(topicTeach('sp_skill')).toBe('고양이 옆 동그라미가 가득 차면 스킬을 써요. 누르지 않아도 돼요.');
+    expect(topicTeach('sp_skill')).toBe('스킬 게이지가 가득 차면 스킬을 써요. 누르지 않아도 돼요.');
     expect(factsOf('sp_skill')).toMatchObject({ rank: t('rarity.epic'), merge: SP_START_MERGE * 100 });
     for (const lang of ['ko', 'en'] as const) {
       setLang(lang);
@@ -150,6 +151,21 @@ describe('guide topics', () => {
       expect(page, lang).toContain(`${t('rarity.common')} · ${t('rarity.rare')}`);
       expect(page, lang).toContain(`${SP_START_MERGE * 100}%`);
       expect(page, lang).toContain(t('unit.m_cosmo.name'));
+      // the copy style's one word for the ring round a skill cat's class sticker: "skill gauge" (the tutorial's note and the guidebook page agree)
+      const words = `${topicTeach('sp_skill')} ${page}`;
+      expect(words, lang).toContain(lang === 'ko' ? '스킬 게이지' : 'skill gauge');
+      expect(words, lang).not.toMatch(lang === 'ko' ? /동그라미|이\(가\)/ : /\bring\b/i);
+    }
+  });
+
+  it("words the tutorial's pick of three for what the player sees: the free first pick, how often it comes again, and the marker the card wears", () => {
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      const sub = `${t('guide.tut.pick', { every: OFFER_EVERY })} ${t('guide.tut.pickRec', { tag: t('hud.recommend') })}`;
+      expect(sub, lang).toContain(String(OFFER_EVERY));
+      expect(sub, lang).toContain(t('hud.recommend'));
+      expect(sub, lang).not.toMatch(/\{|\}/);
+      expect(sub, lang).not.toMatch(lang === 'ko' ? /테이프/ : /tape/i);
     }
   });
 

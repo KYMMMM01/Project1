@@ -4,8 +4,11 @@
 export const NUDGE_AFTER = 5;
 export const NUDGE_FOR = 5;
 export const NUDGE_MAX = 3;
-/** Until the board holds this many cats the nudge keeps coming back: a player who only did the scripted steps loses on wave 4 with fish unspent. */
-export const NUDGE_CATS = 6;
+/**
+ * Until the board holds this many cats the nudge keeps coming back (a player who only did the scripted steps has three cats and a pick when the elite of wave 4 comes,
+ * and loses it with fish unspent: with the nudge going quiet at six cats, 17 of 500 seeds were lost that way, with eight 5 of 500).
+ */
+export const NUDGE_CATS = 8;
 /** In the prep before the first summon (a skipped tutorial waits there for the button) the nudge comes this soon. */
 export const FIRST_SUMMON_AFTER = 1.5;
 
@@ -13,6 +16,11 @@ export const FIRST_SUMMON_AFTER = 1.5;
 export function nudgeDue(idle: number, nudges: number, cats: number): boolean {
   if (idle < NUDGE_AFTER) return false;
   return cats < NUDGE_CATS || nudges < NUDGE_MAX;
+}
+
+/** The sell strip is closed to a dragged cat while a lesson holds the clock, except in the lesson about selling itself (a drag there is the lesson's own answer). */
+export function sellLocked(holding: boolean, topic: string | null): boolean {
+  return holding && topic !== 'sell';
 }
 
 /** The two cells holding the same unit, preferring the pair that sits closest together; null when there is none. */

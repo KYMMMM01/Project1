@@ -97,6 +97,11 @@ export interface StepDef {
   urgent: boolean;
   /** The lesson is about the cats' skills: it is in the plan only for a battle that plays with them (`stepsFor`), so a battle without them is taught exactly as it always was. */
   skill: boolean;
+  /**
+   * True (the usual case) when a lesson whose moment has not come yet lets the lessons behind it begin first. False for the lessons that open the run in a fixed order
+   * (the summons, the merge, the gauge, the classes, the acts, the pick of three and the skill ring): the ones behind them wait for them, as they always did.
+   */
+  defer: boolean;
 }
 
 const calm = (w: World): boolean => !w.busy && w.pending === null && (w.phase === 'wave' || w.phase === 'prep');
@@ -104,7 +109,7 @@ const never = Infinity;
 const since = (key: CountKey) => (w: World, from: Counts): boolean => w.counts[key] > from[key];
 
 function step(def: Partial<StepDef> & Pick<StepDef, 'id' | 'when' | 'target' | 'done'>): StepDef {
-  return { reveal: [], holds: () => false, ok: false, timed: 0, patience: never, staleAt: never, popup: false, urgent: false, skill: false, ...def };
+  return { reveal: [], holds: () => false, ok: false, timed: 0, patience: never, staleAt: never, popup: false, urgent: false, skill: false, defer: true, ...def };
 }
 
 /** A lesson that has held the clock for this long (real seconds) lets go of it and waits this many more game seconds before it is dropped. */
@@ -114,32 +119,36 @@ export const RELAXED_PATIENCE = 20;
 /** Summons the first lesson asks for. */
 export const TUTORIAL_SUMMONS = 3;
 
-/** In the order they are taught. A lesson begins only when the one before it is over (done, or dropped). */
+/**
+ * In the order they are taught. The opening lessons (`defer: false`) begin only when the one before them is over (done, or dropped). From the skill ring on, a lesson
+ * whose moment has not come does not hold up the ones behind it: what the player's own choices decide (a class pick that gives no synergy yet, a sun cell that has not
+ * come) must never keep the elite, the toys and the upgrades from being taught.
+ */
 export const STEPS: readonly StepDef[] = [
   step({
-    id: 'summon', when: () => true, target: () => 'summon', done: (w, from) => w.counts.summon - from.summon >= TUTORIAL_SUMMONS, holds: () => true,
+    id: 'summon', defer: false, when: () => true, target: () => 'summon', done: (w, from) => w.counts.summon - from.summon >= TUTORIAL_SUMMONS, holds: () => true,
   }),
   step({
-    id: 'merge', when: (w) => calm(w) && w.twins, target: () => 'pair', done: since('merge'), holds: () => true, patience: 45, staleAt: 3,
+    id: 'merge', defer: false, when: (w) => calm(w) && w.twins, target: () => 'pair', done: since('merge'), holds: () => true, patience: 45, staleAt: 3,
   }),
   step({
-    id: 'lose_gauge', when: (w) => calm(w) && w.phase === 'wave' && w.enemies >= 2, target: () => 'gauge', done: () => false, holds: () => true, ok: true, staleAt: 3,
+    id: 'lose_gauge', defer: false, when: (w) => calm(w) && w.phase === 'wave' && w.enemies >= 2, target: () => 'gauge', done: () => false, holds: () => true, ok: true, staleAt: 3,
   }),
   step({
-    id: 'classes', reveal: ['chips'], when: (w) => calm(w) && w.phase === 'wave', target: () => 'chips', done: since('sheetClose'), holds: () => true, staleAt: 3,
+    id: 'classes', defer: false, reveal: ['chips'], when: (w) => calm(w) && w.phase === 'wave', target: () => 'chips', done: since('sheetClose'), holds: () => true, staleAt: 3,
   }),
   step({
-    id: 'acts', reveal: ['preview'], when: (w) => calm(w) && w.wave >= 2, target: () => 'wave', done: () => false, holds: () => true, ok: true, staleAt: 3,
+    id: 'acts', defer: false, reveal: ['preview'], when: (w) => calm(w) && w.wave >= 2, target: () => 'wave', done: () => false, holds: () => true, ok: true, staleAt: 3,
   }),
   step({
-    id: 'pick3', reveal: ['tracker'], when: (w) => w.pending === 'summon', target: () => 'cat', done: since('pick'), popup: true,
+    id: 'pick3', defer: false, reveal: ['tracker'], when: (w) => w.pending === 'summon', target: () => 'cat', done: since('pick'), popup: true,
   }),
   // The cats' skills (docs/qa/directive_2026-10-13_skills_build.md, decision 29): the pick of three has just given an Alley Boss, whose ring starts half full, so the ring
   // is nearly full 0.2 of its cooldown (2.4 to 3.6 s) into the wave. A read-only note on that ring, holding the clock like the other notes. It comes before the lessons after
   // it, which wait those few seconds, and its moment is wave 3 alone: from wave 4 on (the elite's wave) it is dropped, so it can never keep a later lesson waiting
   // (a lesson that waits for its moment holds up every lesson behind it) when the ring never got there (the cat was sold at once).
   step({
-    id: 'sp_skill', when: (w) => calm(w) && w.ringNear, target: () => 'ring', done: () => false, holds: () => true, ok: true, staleAt: 4, skill: true,
+    id: 'sp_skill', defer: false, when: (w) => calm(w) && w.ringNear, target: () => 'ring', done: () => false, holds: () => true, ok: true, staleAt: 4, skill: true,
   }),
   step({
     id: 'synergy', when: (w) => calm(w) && w.maxTier >= 1, target: () => 'chips', done: () => false, holds: () => true, timed: 4.5, staleAt: 7,
@@ -159,7 +168,7 @@ export const STEPS: readonly StepDef[] = [
     id: 'purr', reveal: ['purr'], when: (w) => calm(w) && w.counts.purrGain >= 1, target: () => 'purr', done: () => false, holds: () => true, ok: true, staleAt: 7,
   }),
   step({
-    id: 'toys', when: (w) => w.pending === 'relic', target: () => 'cat', done: since('relic'), popup: true,
+    id: 'toys', when: (w) => w.pending === 'relic', target: () => 'cat', done: since('relic'), popup: true, staleAt: 6,
   }),
   step({
     id: 'molt', reveal: ['molt'], when: (w) => calm(w) && w.phase === 'wave' && w.wave >= 5 && w.purr >= w.moltCost && w.cats >= 1,
@@ -209,13 +218,15 @@ export function revealedBy(taught: ReadonlySet<TopicId>): RevealKey[] {
 export type ScriptEvent =
   | { kind: 'begin'; step: StepDef }
   | { kind: 'done'; step: StepDef; how: 'action' | 'ok' | 'timer' }
-  | { kind: 'drop'; step: StepDef };
+  /** `again`: an urgent lesson cut in on this one, which is put back and begins again after it (the topic is not given up). */
+  | { kind: 'drop'; step: StepDef; again?: boolean };
 
 export class TutorialScript {
   /** What the last `update` produced; reused every frame, so read it before the next call. */
   private readonly events: ScriptEvent[] = [];
   active: StepDef | null = null;
-  private next = 0;
+  /** Plan positions of the lessons that are over (done, or given up on); every other lesson of the plan is still to come, whenever its moment brings it. */
+  private readonly over = new Set<number>();
   private activeIndex = -1;
   private from: Counts = emptyCounts();
   private clock = 0;
@@ -243,14 +254,29 @@ export class TutorialScript {
     this.okTapped = true;
   }
 
-  get finished(): boolean {
-    return this.stopped || (this.active === null && this.nextIndex() >= this.steps.length);
+  /** The lesson at plan position `i` has not been taught, done or given up on (the active one counts as to come). */
+  private toCome(i: number): boolean {
+    return !this.over.has(i) && !this.taught.has((this.steps[i] as StepDef).id);
   }
 
-  /** Every lesson still to come (the active one included): what a skip leaves untaught. */
+  get finished(): boolean {
+    if (this.stopped) return true;
+    if (this.active) return false;
+    for (let i = 0; i < this.steps.length; i++) if (this.toCome(i)) return false;
+    return true;
+  }
+
+  /** The lesson is the active one or still to come: the run will still teach it (a popup may say so in its own words). */
+  has(topic: TopicId): boolean {
+    for (let i = 0; i < this.steps.length; i++) if ((this.steps[i] as StepDef).id === topic) return this.toCome(i);
+    return false;
+  }
+
+  /** Every lesson still to come (the active one first): what a skip leaves untaught. */
   get remaining(): StepDef[] {
-    const out = this.steps.filter((s, i) => i >= this.next && !this.taught.has(s.id));
-    return this.active && !out.includes(this.active) ? [this.active, ...out] : out;
+    const out: StepDef[] = this.active ? [this.active] : [];
+    for (let i = 0; i < this.steps.length; i++) if (this.toCome(i) && !(this.active && i === this.activeIndex)) out.push(this.steps[i] as StepDef);
+    return out;
   }
 
   /** The lessons stop for good. */
@@ -258,13 +284,37 @@ export class TutorialScript {
     const left = this.remaining;
     this.stopped = true;
     this.active = null;
+    this.activeIndex = -1;
     return left;
   }
 
-  private nextIndex(): number {
-    let i = this.next;
-    while (i < this.steps.length && this.taught.has((this.steps[i] as StepDef).id)) i++;
-    return i;
+  /** The lessons whose moment has passed are given up on, wherever they stand in the plan. */
+  private dropStale(w: World, out: ScriptEvent[]): void {
+    for (let i = 0; i < this.steps.length; i++) {
+      const s = this.steps[i] as StepDef;
+      if (this.toCome(i) && w.wave >= s.staleAt) {
+        this.over.add(i);
+        out.push({ kind: 'drop', step: s });
+      }
+    }
+  }
+
+  /**
+   * The lesson that begins now, or -1. An urgent lesson (the elite, the boss) whose moment is now comes first. Otherwise the first lesson of the plan whose moment has
+   * come: the lessons before it that are still waiting for theirs are passed over when they defer (`StepDef.defer`), and hold it up when they do not.
+   */
+  private nextLesson(w: World): number {
+    for (let i = 0; i < this.steps.length; i++) {
+      const s = this.steps[i] as StepDef;
+      if (s.urgent && this.toCome(i) && s.when(w)) return i;
+    }
+    for (let i = 0; i < this.steps.length; i++) {
+      if (!this.toCome(i)) continue;
+      const s = this.steps[i] as StepDef;
+      if (s.when(w)) return i;
+      if (!s.defer) break;
+    }
+    return -1;
   }
 
   /** `held`: the clock is held (a lesson or a popup is waiting), so patience does not run. */
@@ -272,31 +322,29 @@ export class TutorialScript {
     const out = this.events;
     out.length = 0;
     if (this.stopped) return out;
-    for (let guard = 0; guard < this.steps.length + 1; guard++) {
+    for (let guard = 0; guard < 3 * this.steps.length + 4; guard++) {
       if (!this.active) {
-        this.next = this.nextIndex();
-        const s = this.steps[this.next];
-        if (!s) return out;
-        if (w.wave >= s.staleAt) {
-          out.push({ kind: 'drop', step: s });
-          this.next++;
-          continue;
-        }
-        if (!s.when(w)) return out;
-        this.active = s;
-        this.activeIndex = this.next;
+        this.dropStale(w, out);
+        const i = this.nextLesson(w);
+        if (i < 0) return out;
+        const next = this.steps[i] as StepDef;
+        this.active = next;
+        this.activeIndex = i;
         this.from = { ...w.counts };
         this.clock = 0;
         this.okTapped = false;
         this.relaxedFlag = false;
-        out.push({ kind: 'begin', step: s });
+        out.push({ kind: 'begin', step: next });
       }
       const s = this.active;
+      // An urgent lesson cuts in on the one in progress. That one is put back, not lost: it begins again after the urgent one unless its moment has passed.
       const cut = s.urgent ? -1 : this.urgentAhead(w);
       if (cut >= 0) {
-        out.push({ kind: 'drop', step: s });
+        const again = w.wave < s.staleAt;
+        out.push({ kind: 'drop', step: s, again });
+        if (!again) this.over.add(this.activeIndex);
         this.active = null;
-        this.next = cut;
+        this.activeIndex = -1;
         continue;
       }
       if (w.wave >= s.staleAt && !s.popup) {
@@ -331,11 +379,11 @@ export class TutorialScript {
     return out;
   }
 
-  /** The index of an urgent lesson further down the plan whose moment is now, or -1. */
+  /** The position of an urgent lesson (other than the active one) whose moment is now, or -1. */
   private urgentAhead(w: World): number {
-    for (let i = this.activeIndex + 1; i < this.steps.length; i++) {
+    for (let i = 0; i < this.steps.length; i++) {
       const s = this.steps[i] as StepDef;
-      if (s.urgent && !this.taught.has(s.id) && w.wave < s.staleAt && s.when(w)) return i;
+      if (i !== this.activeIndex && s.urgent && this.toCome(i) && w.wave < s.staleAt && s.when(w)) return i;
     }
     return -1;
   }
@@ -349,7 +397,8 @@ export class TutorialScript {
   }
 
   private finish(): void {
+    this.over.add(this.activeIndex);
     this.active = null;
-    this.next++;
+    this.activeIndex = -1;
   }
 }

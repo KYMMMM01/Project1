@@ -39,7 +39,10 @@ export class LessonBubble {
   private box: Rect | null = null;
   private readonly bag = new TweenBag();
   private readonly exitBag = new TweenBag();
+  private readonly shakeBag = new TweenBag();
   private readonly leaving = new Set<Container>();
+  /** Where the bubble's body stands (x), the line a shake swings about. */
+  private baseX = 0;
 
   constructor(
     private readonly env: HudEnv,
@@ -113,15 +116,34 @@ export class LessonBubble {
     }
 
     view.position.set(fit.x + fit.tailX, fit.above ? fit.y + h + fit.tail : fit.y - fit.tail);
+    this.baseX = view.x;
     this.layer.addChild(view);
     this.view = view;
     this.box = { x: fit.x, y: fit.y, w: W, h };
     if (pop && !motion.reduced) popIn(this.bag, view, { from: 0.7, duration: 0.18, overshoot: 2 });
   }
 
+  /** A touch landed on the dim round the lit window (it takes none): the bubble shakes a little, so the game does not look frozen. */
+  shake(): void {
+    const view = this.view;
+    if (!view || view.destroyed || motion.reduced) return;
+    this.shakeBag.killAll();
+    const x0 = this.baseX;
+    this.shakeBag.run({
+      duration: 0.32,
+      onUpdate: (k) => {
+        view.x = x0 + Math.sin(k * Math.PI * 6) * 12 * (1 - k);
+      },
+      onComplete: () => {
+        view.x = x0;
+      },
+    });
+  }
+
   hide(animate = true): void {
     const view = this.view;
     this.bag.killAll();
+    this.shakeBag.killAll();
     this.view = null;
     this.box = null;
     if (!view || view.destroyed) return;
@@ -150,6 +172,7 @@ export class LessonBubble {
   destroy(): void {
     this.hide(false);
     this.exitBag.killAll();
+    this.shakeBag.killAll();
     for (const v of this.leaving) v.destroy({ children: true });
     this.leaving.clear();
   }

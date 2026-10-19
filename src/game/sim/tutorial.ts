@@ -16,9 +16,17 @@ import type { Sim } from './sim';
 
 /**
  * The first three summons are free and fixed: two twins to merge and a ranger to start a second class. The ranger is a rare one: the
- * kitten rank does not count toward a synergy (v1.4), so the epic of the scripted pick-of-three completes two kinds for either class.
+ * kitten rank does not count toward a synergy (v1.4), so an epic of the warrior's or the ranger's class from the scripted pick-of-three completes two kinds. The pick offers
+ * three of the four classes, so a card of another class gives no synergy yet: the lessons do not wait for one (`StepDef.defer` in view/hud/tutorialScript.ts).
  */
 export const TUTORIAL_SCRIPT: readonly UnitId[] = ['w_paw', 'w_paw', 'r_archer'];
+
+/**
+ * Extra seconds the tutorial's one elite gets over the normal limit. The tutorial gives a new player three cats and a pick, not the board of a run that has summoned for
+ * forty seconds, and the lesson that points at the fish asks for more cats only in words: with the limit of a normal run, 13 of 300 seeds were lost at the elite
+ * by a player who did what they were told (and a lost first run is a counted run, so the tutorial is not offered again); with this much more, 1 of 500.
+ */
+export const TUTORIAL_ELITE_EXTRA_TIME = 10;
 
 /** The wave that opens the scripted pick-of-three (the sim's `pickSummon` brings the sunbeams once it is answered). */
 export const TUTORIAL_PICK_WAVE = 3;

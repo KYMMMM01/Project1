@@ -77,6 +77,18 @@ export class LaserGuide {
     this.armed = true;
   }
 
+  /**
+   * The tutorial's laser lesson is over before the guide was: the guide goes with it. It is put away at once (the spotlight, the paw and the words), and
+   * `again` (an urgent lesson cut in on it) waits for the lesson to arm it anew, otherwise it is over for this run. A guide already showing the marks finishes itself.
+   */
+  stand(again: boolean): void {
+    this.armed = false;
+    if (this.flow.step === 'see') return;
+    this.flow.stand(again);
+    stopAim();
+    this.hide();
+  }
+
   /** The player has been explained the laser (the card closed any way) or pressed the button to aim: on to placing the dot. */
   explained(): void {
     this.flow.onCardClosed();
