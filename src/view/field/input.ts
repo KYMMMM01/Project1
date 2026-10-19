@@ -121,7 +121,7 @@ export class FieldInput {
       } else {
         this.mode = 'cell';
       }
-    } else if (area === 'walkway') {
+    } else if (area === 'walkway' && !this.ctx.locks.laser) {
       this.mode = 'laser';
       this.aim(x, y, true);
     } else {
@@ -233,7 +233,10 @@ export class FieldInput {
     const action = over >= 0 && over !== from ? battle.dropAction(from, over) : null;
     const decision = decideRelease(from, over, sell, action);
     this.endDragState();
-    if (decision.kind === 'sell') {
+    if (decision.kind === 'sell' && this.ctx.locks.sell) {
+      // A lesson that holds the clock is about something else: the strip does not take the cat (the head-shake of a refused drop, then it springs home).
+      this.units.refuse(from);
+    } else if (decision.kind === 'sell') {
       this.ctx.command('sell', () => battle.sell(from), from);
     } else if (decision.kind === 'drop') {
       this.ctx.command('drop', () => battle.drop(from, decision.to), from);

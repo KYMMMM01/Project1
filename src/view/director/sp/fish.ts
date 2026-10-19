@@ -299,8 +299,7 @@ class FishScene implements SpScene<'fish'> {
       this.holds.expect(s.uid, s.x, s.y, battle.time + FISH_HOLD_MAX);
       this.throwFlask(false, s.uid, s.x, s.y, sx, sy, i++, calm, this.find(s.uid));
     }
-    stage.play(stage.rules.big, 'atk_t_alch', 0.7, 0.8, 0.03);
-    stage.play(stage.rules.zone, 'whoosh', 0.3, 1.3, 0.05);
+    stage.play(stage.rules.skill, 'sp_flask_toss', 0.9, 1, 0.03, stage.panOf(sx));
   }
 
   private throwFlask(big: boolean, uid: number, x: number, y: number, sx: number, sy: number, i: number, calm: boolean, en: EnemyState | null): void {
@@ -381,9 +380,13 @@ class FishScene implements SpScene<'fish'> {
         stage.fx.fleck(paint('burst_puff'), t.ex, t.ey, { life: 0.3, size: info * 0.85, sizeEnd: info * 1.25, color: FISH_PINK_LIGHT, alpha: 0.95, fadeAt: 0.35 });
         stage.shake(Trauma.t1, Gate.spShake, 0.3);
       }
-      stage.play(stage.rules.big, 'foe_glass_hit', 0.7, 0.8, 0.03);
-      stage.play(stage.rules.zone, 'molt', 0.7, 0.72, 0.03);
-      if (f) this.pop(f);
+      // The flask breaks in a "pa" of glass and a "pong" of pink smoke (`sp_flask_pop`), and a beat later the fish says "boing" (`sp_fish_boing`).
+      const pan = stage.panOf(t.ex);
+      stage.play(stage.rules.skill, 'sp_flask_pop', 1, 1, 0.02, pan);
+      if (f) {
+        this.pop(f);
+        stage.play(stage.rules.skill, 'sp_fish_boing', 0.9, 1, 0.03, pan, 0.09);
+      }
       return;
     }
     if (!calm) stage.fx.ps.burst(POOF_SMALL, t.ex, t.ey, { scale: Math.max(0.8, info / 56), count: kids });
@@ -391,8 +394,7 @@ class FishScene implements SpScene<'fish'> {
       stage.fx.ps.burst(GLASS, t.ex, t.ey - 4, { scale: 0.7, count: 0.6 });
       stage.fx.fleck(paint('burst_puff'), t.ex, t.ey, { life: 0.24, size: info * 0.7, sizeEnd: info * 1.05, color: FISH_PINK_LIGHT, alpha: 0.9, fadeAt: 0.35 });
     }
-    stage.play(stage.rules.hit, 'foe_glass_hit', 0.34, 1.25, 0.05);
-    stage.play(stage.rules.zone, 'molt', 0.32, 1.4, 0.05);
+    stage.play(stage.rules.skill, 'sp_flask_mini', 0.9, 1, 0.08, stage.panOf(t.ex), stage.stagger('flask', 0.06));
     this.holds.release(t.uid);
   }
 
@@ -536,7 +538,7 @@ class FishScene implements SpScene<'fish'> {
       stage.fx.ps.burst(POOF, x, y, { scale: Math.max(0.8, f.size / 80), count: stage.detail === 0 ? 0.5 : 0.8 });
       stage.fx.fleck(paint('burst_puff'), x, y, { life: 0.26, size: f.size * 0.8, sizeEnd: f.size * 1.2, color: FISH_PINK_LIGHT, alpha: 0.9, fadeAt: 0.35 });
     }
-    if (loud && f.loud) stage.play(stage.rules.zone, 'molt', 0.55, 1.15, 0.04);
+    if (loud && f.loud) stage.play(stage.rules.skill, 'sp_fish_back', 0.9, 1, 0.04, stage.panOf(x));
     f.mode = 'back';
     f.age.reset();
     f.lockUntil = battle.time + f.lock;

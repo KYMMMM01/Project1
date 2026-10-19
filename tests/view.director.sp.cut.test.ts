@@ -57,7 +57,7 @@ interface Scene {
 
 function build(detail: 0 | 1 | 2 = 1, reduced = false): Scene {
   const fx = { ps: { burst: vi.fn() }, shockwave: vi.fn(), dustPuff: vi.fn() };
-  const stage = { play: vi.fn(), later: vi.fn(), shake: vi.fn(), detail, reduced, fx, rules: { big: {}, strike: {}, zone: {} } };
+  const stage = { play: vi.fn(), later: vi.fn(), shake: vi.fn(), detail, reduced, fx, panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, big: {}, strike: {}, zone: {} } };
   const front = new Container();
   const back = new Container();
   const events = new Emitter<BattleEvents>();
@@ -235,11 +235,11 @@ describe('the samurai\'s cut: the cast', () => {
     expect(s.art.alpha).toBe(1);
   });
 
-  it('plays the cast\'s sound through the stage\'s rule and puffs dust at the tile', () => {
+  it('plays the afterimage\'s own swish through the skill\'s rule and puffs dust at the tile', () => {
     const s = build(1);
     s.enemy(1, 200);
     s.scene.cast(cut(s, 1, [1]));
-    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.big, 'atk_w_samurai', expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.skill, 'sp_dash', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
     expect(s.fx.dustPuff).toHaveBeenCalledTimes(1);
   });
 });
@@ -337,7 +337,13 @@ describe('the samurai\'s cut: the lines open', () => {
     // The sheath click: a ring at the samurai's tile and its sound, once.
     expect(s.fx.shockwave).toHaveBeenCalledTimes(1);
     expect(s.fx.shockwave.mock.calls[0]?.[0]).toBe(cellCenterX(2));
-    expect(s.stage.play.mock.calls.filter((c) => c[1] === 'imp_w_samurai')).toHaveLength(1);
+    // ...a click of the sword going home, and the "chaeng" of every line at once, a hair behind it (once each; the "chaeng" is fuller the more lines open).
+    expect(s.stage.play.mock.calls.filter((c) => c[1] === 'sp_sheath')).toHaveLength(1);
+    const clash = s.stage.play.mock.calls.filter((c) => c[1] === 'sp_cut_clash');
+    expect(clash).toHaveLength(1);
+    expect(clash[0]?.[0]).toBe(s.stage.rules.skill);
+    expect(clash[0]?.[2]).toBeGreaterThan(0.95);
+    expect(clash[0]?.[6]).toBeCloseTo(0.04, 3);
   });
 
   it('gapes, holds and is gone: nothing of it is left after its time, and the same pieces serve the next cut', () => {

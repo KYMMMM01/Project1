@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SfxId } from '@/audio/api';
 import { AudioEngine } from '@/audio/engine';
+import type { AudioGraph } from '@/audio/graph';
 import { MusicPlayer } from '@/audio/music';
+import { seedAudio } from '@/audio/random';
+import type { Recipe } from '@/audio/recipe';
 import { Inst } from '@/audio/scores';
+import { SOUNDS, sfxIndexOf } from '@/audio/sounds';
 import { game } from '@/core/game';
 
 /**
@@ -17,7 +22,7 @@ vi.mock('@/audio/bake', async (orig) => {
     bakeVariant: (...args: Parameters<typeof real.bakeVariant>) =>
       baking.mode === 'fake'
         ? new Promise((resolve) => {
-            baking.jobs.push({ key: args[1], variant: args[2], land: () => resolve({ buffer: { length: 2400, numberOfChannels: 1, duration: 0.05 } }) });
+            baking.jobs.push({ key: args[1], variant: args[2], land: () => resolve({ buffer: { length: 2400, numberOfChannels: 1, duration: 0.05, variant: args[2] } }) });
           })
         : real.bakeVariant(...args),
   };
@@ -67,7 +72,21 @@ type FakeNode = Record<string, unknown>;
 
 /** Any property that is read before being written is an AudioParam (gain, frequency, Q, ...). */
 function makeNode(params: Record<string, FakeParam>, extra: FakeNode = {}): FakeNode {
-  const target: FakeNode = { connect: (n: unknown) => n, disconnect: () => undefined, start: () => undefined, stop: () => undefined, ...params, ...extra };
+  const to: unknown[] = [];
+  const target: FakeNode = {
+    __to: to,
+    connect: (n: unknown) => {
+      to.push(n);
+      return n;
+    },
+    disconnect: () => {
+      to.length = 0;
+    },
+    start: () => undefined,
+    stop: () => undefined,
+    ...params,
+    ...extra,
+  };
   return new Proxy(target, {
     get(t, p) {
       if (typeof p === 'symbol' || p === 'then') return t[p as string];
@@ -133,7 +152,7 @@ class FakeContext {
     this.made.set(kind, (this.made.get(kind) ?? 0) + 1);
     const params: Record<string, FakeParam> = {};
     if (gain !== undefined) params.gain = new FakeParam(gain);
-    const node = makeNode(params, extra);
+    const node = makeNode(params, { context: this, ...extra });
     const list = this.nodes.get(kind) ?? [];
     list.push(node);
     this.nodes.set(kind, list);
@@ -179,11 +198,14 @@ const fakeWindow = {
 };
 const listenerCount = (): number => [...windowListeners.values()].reduce((n, s) => n + s.size, 0);
 const fire = (type: string): void => {
-  for (const fn of [...(windowListeners.get(type) ?? [])]) fn();
+  // (a listener gets the event, whose type tells a tap's touchend / click from a pointer event)
+  for (const fn of [...(windowListeners.get(type) ?? [])]) (fn as (e: { type: string }) => void)({ type });
 };
 const flush = async (): Promise<void> => {
   await vi.advanceTimersByTimeAsync(0);
 };
+
+const recipeOfId = (id: SfxId): Recipe => SOUNDS[sfxIndexOf(id)]?.recipe as Recipe;
 
 let engine: AudioEngine;
 const ctxOf = (): FakeContext => FakeContext.instances[FakeContext.instances.length - 1] as FakeContext;
@@ -305,17 +327,37 @@ describe('AudioEngine lifecycle', () => {
     expect(engine.unlocked).toBe(true);
   });
 
-  it('does not stack resume calls while one is hanging, and retries after the timeout', async () => {
+  it('does not stack resume calls from pointer events while one is hanging, and retries after the timeout', async () => {
     engine.init();
     const ctx = ctxOf();
     ctx.hangResume = new Promise<void>(() => undefined);
     fire('pointerdown');
     fire('pointerup');
-    fire('click');
+    fire('pointerdown');
     expect(ctx.resumeCalls).toBe(1);
     await vi.advanceTimersByTimeAsync(1600);
     fire('pointerdown');
     expect(ctx.resumeCalls).toBe(2);
+  });
+
+  it('a tap that ends in a click or a touchend resumes inside that event even while the pointerdown attempt hangs (the first tap of a phone counts)', async () => {
+    engine.init();
+    const ctx = ctxOf();
+    ctx.hangResume = new Promise<void>(() => undefined);
+    fire('pointerdown');
+    expect(ctx.resumeCalls).toBe(1);
+    // a touch screen does not count the pointerdown as a gesture: the touchend does
+    fire('touchend');
+    expect(ctx.resumeCalls).toBe(2);
+    fire('click');
+    expect(ctx.resumeCalls).toBe(3);
+    // the context runs once the browser lets it: later taps cost nothing
+    ctx.hangResume = null;
+    ctx.setState('running');
+    fire('touchend');
+    fire('click');
+    fire('pointerdown');
+    expect(ctx.resumeCalls).toBe(3);
   });
 
   it('nests setMuted and never goes negative', () => {
@@ -718,9 +760,72 @@ describe('AudioEngine priming', () => {
     expect(baking.jobs.map((j) => j.variant)).toEqual([1]);
   });
 
+  it('stopAll() cuts every voice that is sounding, frees what the limiter held and lets the music duck go', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    const ctx = ctxOf();
+    for (const id of ['hit_light', 'hit_heavy'] as const) while (engine.primeStep({ sfx: id }) > 0) continue;
+    await landAll();
+    engine.play('hit_light');
+    engine.play('hit_heavy');
+    expect(engine.stats().sfxActive).toBe(2);
+    const ramps = (): number => ctx.params.filter((p) => p.of('linearRampToValueAtTime').some((c) => c.args[0] === 0)).length;
+    const before = ramps();
+    expect(engine.stopAll()).toBe(2);
+    // each voice fades to 0 within a few ms (the same cut the combat table uses) ...
+    expect(ramps()).toBe(before + 2);
+    // ... the limiter forgets them, so the next play is not refused for a voice that no longer sounds ...
+    expect(engine.stats().sfxActive).toBe(0);
+    engine.play('hit_light');
+    expect(engine.stats().sfxPlayed).toBe(3);
+    expect(engine.stats().sfxDropped.gap + engine.stats().sfxDropped.perId + engine.stats().sfxDropped.bucket).toBe(0);
+    // ... and a second stop with nothing sounding is harmless.
+    engine.stopAll();
+    expect(engine.stopAll()).toBe(0);
+  });
+
+  it('wake() resumes inside a tap even while an earlier attempt hangs (a touch’s pointerdown is not a gesture), touching the output once', async () => {
+    engine.init();
+    const ctx = ctxOf();
+    ctx.hangResume = new Promise<void>(() => undefined);
+    fire('pointerdown');
+    expect(ctx.resumeCalls).toBe(1);
+    // the touch's pointer events are held back by the hanging attempt, as before (its touchend and click wake the engine themselves: see above) ...
+    fire('pointerup');
+    expect(ctx.resumeCalls).toBe(1);
+    // ... and wake() is how a page that wants the first tap to count gets through
+    const sources = ctx.count('createBufferSource');
+    engine.wake();
+    expect(ctx.resumeCalls).toBe(2);
+    expect(ctx.count('createBufferSource')).toBe(sources + 1);
+    ctx.hangResume = null;
+    ctx.setState('running');
+    // a running context is left alone
+    engine.wake();
+    expect(ctx.resumeCalls).toBe(2);
+  });
+
+  it('wake() before init, without WebAudio or on a closed context does nothing and never throws', async () => {
+    expect(() => engine.wake()).not.toThrow();
+    engine.init();
+    const ctx = ctxOf();
+    ctx.resume = () => {
+      throw new Error('closed');
+    };
+    expect(() => engine.wake()).not.toThrow();
+  });
+
+  it('stopAll() before init, or without WebAudio, does nothing', () => {
+    expect(engine.stopAll()).toBe(0);
+    vi.stubGlobal('window', { ...fakeWindow, AudioContext: undefined });
+    engine.init();
+    expect(engine.stopAll()).toBe(0);
+  });
+
   it('reports the memory budget it keeps', () => {
     engine.init();
-    expect(engine.stats().budgetKB).toBe(13672);
+    expect(engine.stats().budgetKB).toBe(16602);
     expect(engine.stats().evicted).toBe(0);
   });
 });
@@ -874,5 +979,205 @@ describe('music transitions and hand-overs', () => {
       expect(engine.stats().music?.playing, id).toBe(id);
       expect(engine.stats().music?.track, id).toBe(id);
     }
+  });
+});
+
+describe('AudioEngine mix: the buses, the hush of the fight, the variants in turn, the stream of chance', () => {
+  beforeEach(() => {
+    baking.mode = 'fake';
+    baking.jobs.length = 0;
+    seedAudio();
+  });
+  afterEach(() => {
+    baking.mode = 'real';
+  });
+
+  const landAll = async (): Promise<void> => {
+    for (let guard = 0; guard < 20 && baking.jobs.length > 0; guard++) {
+      for (const job of baking.jobs.splice(0)) job.land();
+      await flush();
+    }
+  };
+  /** An engine that runs, with these sounds baked in every variant. */
+  const ready = async (ids: readonly SfxId[]): Promise<FakeContext> => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    for (const id of ids) while (engine.primeStep({ sfx: id }) > 0) continue;
+    await landAll();
+    return ctxOf();
+  };
+  const graphOf = (): AudioGraph => (engine as unknown as { graph: AudioGraph }).graph;
+  const toOf = (node: unknown): unknown[] => (node as { __to: unknown[] }).__to;
+  /** The sources that play a baked sound (not the silent one of the unlock), by the variant they play. */
+  const playedVariants = (ctx: FakeContext): number[] =>
+    (ctx.nodes.get('createBufferSource') ?? [])
+      .map((n) => (n.buffer as { variant?: unknown } | undefined)?.variant)
+      .filter((v): v is number => typeof v === 'number');
+
+  it('builds the master chain: three effect buses, the fight\'s one through its own dip, all into the effects bus, then master, limiter, soft clip and out', async () => {
+    await ready([]);
+    const g = graphOf();
+    expect(toOf(g.fightBus)).toEqual([g.fightDuck]);
+    expect(toOf(g.fightDuck)).toEqual([g.sfxBus]);
+    expect(toOf(g.skillBus)).toEqual([g.sfxBus]);
+    expect(toOf(g.uiBus)).toEqual([g.sfxBus]);
+    expect(toOf(g.sfxBus)).toEqual([g.master]);
+    expect(toOf(g.limiter)).toEqual([g.softClip]);
+    expect(toOf(g.softClip)).toEqual([ctxOf().destination]);
+    expect((g.softClip as unknown as { curve: Float32Array }).curve).toBeInstanceOf(Float32Array);
+  });
+
+  it('plays every sound through the bus of its family: a weapon through the fight, a skill\'s signature through the skills, a click through the interface', async () => {
+    const ctx = await ready(['imp_w_sword', 'sp_cut_clash', 'ui_click']);
+    const g = graphOf();
+    for (const id of ['imp_w_sword', 'sp_cut_clash', 'ui_click'] as const) {
+      ctx.currentTime += 1;
+      engine.play(id);
+    }
+    expect(engine.stats().sfxPlayed).toBe(3);
+    const pans = ctx.nodes.get('createStereoPanner') ?? [];
+    expect(pans).toHaveLength(3);
+    expect(pans.map((p) => toOf(p)[0])).toEqual([g.fightBus, g.skillBus, g.uiBus]);
+  });
+
+  it('moves a pooled voice to the bus of the next sound it plays', async () => {
+    const ctx = await ready(['imp_w_sword', 'ui_click']);
+    const g = graphOf();
+    ctx.currentTime += 1;
+    engine.play('imp_w_sword');
+    const voice = (ctx.nodes.get('createStereoPanner') ?? [])[0] as FakeNode;
+    expect(toOf(voice)).toEqual([g.fightBus]);
+    // the sound ends: its source says so, and the voice is free for the next one
+    const src = (ctx.nodes.get('createBufferSource') ?? []).find((n) => typeof (n.buffer as { variant?: unknown } | undefined)?.variant === 'number') as FakeNode;
+    (src.onended as () => void)();
+    ctx.currentTime += 1;
+    engine.play('ui_click');
+    expect(ctx.nodes.get('createStereoPanner')).toHaveLength(1);
+    expect(toOf(voice)).toEqual([g.uiBus]);
+  });
+
+  it('dips the fight bus (and the music) when a signature sounds, and does not when a weapon does', async () => {
+    const ctx = await ready(['sp_tiger_roar', 'imp_w_sword']);
+    const g = graphOf();
+    const dip = g.fightDuck.gain as unknown as FakeParam;
+    const music = g.duckGain.gain as unknown as FakeParam;
+    ctx.currentTime = 10;
+    engine.play('imp_w_sword');
+    expect(dip.calls).toHaveLength(0);
+    ctx.currentTime = 11;
+    engine.play('sp_tiger_roar');
+    const roar = recipeOfId('sp_tiger_roar');
+    expect(roar.hush).toBeDefined();
+    const floor = 10 ** (-(roar.hush as { db: number }).db / 20);
+    expect(dip.of('cancelScheduledValues')).toHaveLength(1);
+    expect(dip.of('setTargetAtTime')[0]?.args).toEqual([floor, 11, 0.005]);
+    expect(dip.of('setTargetAtTime')[1]?.args).toEqual([1, 11 + (roar.hush as { seconds: number }).seconds, 0.085]);
+    // the music dips under the same moment, by the recipe's own depth
+    expect(roar.duck).toBeDefined();
+    expect(music.of('setTargetAtTime')[0]?.args[0]).toBeCloseTo(1 - (roar.duck as { depth: number }).depth, 6);
+  });
+
+  it('joins the dips of two big moments that overlap: the deeper floor wins, and the end is the later one', async () => {
+    const ctx = await ready(['sp_tiger_roar', 'boss_roar']);
+    const dip = graphOf().fightDuck.gain as unknown as FakeParam;
+    ctx.currentTime = 20;
+    engine.play('sp_tiger_roar');
+    ctx.currentTime = 20.2;
+    engine.play('boss_roar');
+    const targets = dip.of('setTargetAtTime');
+    expect(targets).toHaveLength(4);
+    const a = recipeOfId('sp_tiger_roar').hush as { db: number; seconds: number };
+    const b = recipeOfId('boss_roar').hush as { db: number; seconds: number };
+    expect(targets[2]?.args[0]).toBeCloseTo(10 ** (-Math.max(a.db, b.db) / 20), 9);
+    expect(targets[3]?.args[1]).toBeCloseTo(Math.max(20 + a.seconds, 20.2 + b.seconds), 9);
+  });
+
+  it('starts a dip at the time of a delayed sound, not before it', async () => {
+    const ctx = await ready(['sp_tiger_roar']);
+    const dip = graphOf().fightDuck.gain as unknown as FakeParam;
+    ctx.currentTime = 30;
+    engine.play('sp_tiger_roar', { delay: 0.25 });
+    expect(dip.of('setTargetAtTime')[0]?.args[1]).toBeCloseTo(30.25, 9);
+  });
+
+  it('lets stop-all give the fight bus back at once', async () => {
+    const ctx = await ready(['sp_tiger_roar']);
+    const dip = graphOf().fightDuck.gain as unknown as FakeParam;
+    ctx.currentTime = 40;
+    engine.play('sp_tiger_roar');
+    ctx.currentTime = 40.1;
+    engine.stopAll();
+    const last = dip.of('setTargetAtTime').slice(-1)[0];
+    expect(last?.args).toEqual([1, 40.1, 0.03]);
+    expect(dip.of('cancelScheduledValues').slice(-1)[0]?.args[0]).toBe(40.1);
+  });
+
+  it('takes the baked variants of a sound in turn, the same one never twice in a row, from the very first play', async () => {
+    const ctx = await ready(['imp_w_sword']);
+    for (let i = 0; i < 7; i++) {
+      ctx.currentTime += 0.3;
+      engine.play('imp_w_sword');
+    }
+    expect(playedVariants(ctx)).toEqual([0, 1, 2, 0, 1, 2, 0]);
+  });
+
+  it('starts at the second variant when only the first was baked when it played (the first use of a sound)', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await flush();
+    const ctx = ctxOf();
+    engine.play('imp_w_sword');
+    (baking.jobs.splice(0)[0] as { land: () => void }).land();
+    await flush();
+    await landAll();
+    for (let i = 0; i < 3; i++) {
+      ctx.currentTime += 0.3;
+      engine.play('imp_w_sword');
+    }
+    expect(playedVariants(ctx)).toEqual([0, 1, 2, 0]);
+  });
+
+  it('gives the same pitch and level to the same sounds when the stream of chance starts from the same seed, and other ones from another', async () => {
+    const run = async (seed: number): Promise<number[]> => {
+      engine.dispose();
+      FakeContext.instances.length = 0;
+      engine = new AudioEngine();
+      const ctx = await ready(['imp_w_sword']);
+      engine.seed(seed);
+      for (let i = 0; i < 6; i++) {
+        ctx.currentTime += 0.3;
+        engine.play('imp_w_sword');
+      }
+      return (ctx.nodes.get('createBufferSource') ?? [])
+        .filter((n) => typeof (n.buffer as { variant?: unknown } | undefined)?.variant === 'number')
+        .map((n) => (n.playbackRate as FakeParam).value);
+    };
+    const a = await run(11);
+    const b = await run(11);
+    const c = await run(12);
+    expect(a).toHaveLength(6);
+    expect(a).toEqual(b);
+    expect(a).not.toEqual(c);
+    // a weapon's impact is detuned by 4 % at most
+    for (const r of a) expect(Math.abs(r - 1)).toBeLessThanOrEqual(0.04 + 1e-9);
+    expect(new Set(a).size).toBeGreaterThan(3);
+  });
+
+  it('does not let a sound start closer than its gap to its own last start, nor more than its voices at once', async () => {
+    const ctx = await ready(['imp_w_sword', 'imp_r_star']);
+    // three of the same weapon in one instant: one is heard (the gap of an impact is 50 ms)
+    ctx.currentTime = 50;
+    for (let i = 0; i < 3; i++) engine.play('imp_w_sword');
+    expect(engine.stats().sfxPlayed).toBe(1);
+    expect(engine.stats().sfxDropped.gap).toBe(2);
+    // the star archer's ping is spaced wider still: 60 ms later is too soon, 80 ms is not
+    engine.play('imp_r_star');
+    ctx.currentTime = 50.06;
+    engine.play('imp_r_star');
+    expect(engine.stats().sfxDropped.gap).toBe(3);
+    ctx.currentTime = 50.08;
+    engine.play('imp_r_star');
+    expect(engine.stats().sfxPlayed).toBe(3);
   });
 });

@@ -30,6 +30,30 @@ export function unitSounds(id: UnitId): SfxId[] {
   return [attackSfx(id).id, impactSfx(id).id];
 }
 
+/**
+ * What a cat's skill plays, by the cat (the sounds of `sfx-skills.ts`, the ones of its scene in the order the scene needs them), so that the first cast does not
+ * wait for a bake on a slow phone. A rank 5 cat's first cast also plays the cut-in. Only a battle with skills on asks for them (`BattleWarmup`).
+ */
+export const SKILL_SOUNDS: Partial<Record<UnitId, readonly SfxId[]>> = {
+  w_viking: ['sp_shield_slam', 'sp_dust_wedge'],
+  w_samurai: ['sp_dash', 'sp_sheath', 'sp_cut_clash'],
+  w_tiger: ['sp_cutin', 'sp_tiger_roar', 'sp_tiger_land', 'sp_stomp', 'sp_tiger_roar_end'],
+  r_ninja: ['sp_smoke_pop', 'sp_clone_hop', 'sp_clone_throw', 'sp_clone_vanish'],
+  r_gunner: ['sp_poster_slap', 'sp_cork_pop', 'sp_poster_hole', 'sp_seal_stamp'],
+  r_star: ['sp_cutin', 'sp_night_hush', 'sp_arrow_whoosh', 'sp_star_ping'],
+  m_storm: ['sp_cloud_pop', 'sp_thunder_tick', 'sp_cloud_hop', 'sp_cloud_sigh'],
+  m_frost: ['sp_glass_tap', 'sp_glass_shatter', 'sp_shard_hit'],
+  m_cosmo: ['sp_cutin', 'sp_meteor_warn', 'sp_meteor_whistle', 'sp_meteor_boom', 'sp_meteor_ring'],
+  t_bard: ['sp_strum', 'sp_note'],
+  t_alch: ['sp_flask_toss', 'sp_flask_pop', 'sp_fish_boing', 'sp_flask_mini', 'sp_fish_back'],
+  t_lucky: ['sp_cutin', 'sp_capsule_fall', 'sp_capsule_bounce', 'sp_capsule_rattle', 'sp_capsule_pop', 'sp_prize_fish', 'sp_prize_partner', 'sp_prize_more', 'sp_prize_toy', 'sp_prize_guardian'],
+};
+
+/** The sounds of a cat's skill (none for a cat without one). */
+export function skillSounds(id: UnitId): readonly SfxId[] {
+  return SKILL_SOUNDS[id] ?? [];
+}
+
 /** What an enemy answers a hit with and how it dies, plus the cues its own rule plays (a healer's heal, a shield's break, a dryer's weakening). */
 export function enemySounds(id: EnemyId): SfxId[] {
   const spec = enemySpec(id);

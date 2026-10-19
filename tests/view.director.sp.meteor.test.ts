@@ -65,7 +65,7 @@ interface Scene {
 
 function build(detail: 0 | 1 | 2 = 1, reduced = false): Scene {
   const fx = { ps: { burst: vi.fn() }, shockwave: vi.fn() };
-  const stage = { play: vi.fn(), later: vi.fn(() => ({ kill: vi.fn() })), shake: vi.fn(), detail, reduced, fx, rules: { big: {}, zone: {}, heavyHit: {} } };
+  const stage = { play: vi.fn(), later: vi.fn(() => ({ kill: vi.fn() })), shake: vi.fn(), detail, reduced, fx, panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, big: {}, zone: {}, heavyHit: {} } };
   const back = new Container();
   const front = new Container();
   const events = new Emitter<BattleEvents>();
@@ -233,7 +233,7 @@ describe('the cosmo cat\'s meteor: the warning', () => {
   it('plays the cast\'s sound and starts the whistle of the sky with the fall, on the battle\'s clock (which waits under a popup)', () => {
     const s = build();
     s.scene.cast(cast(s));
-    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.big, 'atk_m_cosmo', expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.skillTick, 'sp_meteor_warn', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
     expect(s.stage.later).toHaveBeenCalledTimes(1);
     // The whistle begins where the fall does: 1 s warning minus the 0.36 s fall = after 0.64 battle seconds.
     expect(s.stage.later.mock.calls[0]?.[0]).toBeCloseTo(0.64, 6);
@@ -275,7 +275,7 @@ describe('the cosmo cat\'s meteor: the landing, the shock and the crater', () =>
     expect(live.craters).toEqual([{ id: 1, phase: 'burn' }]);
     expect(s.stage.shake).toHaveBeenCalledWith(Trauma.t2, Gate.spShake, expect.any(Number));
     expect(flash).toHaveBeenCalledTimes(1);
-    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.big, 'explosion', expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.skill, 'sp_meteor_boom', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
     // Sparks at the impact and ember sparks on the three enemies the ring touched.
     const at = s.fx.ps.burst.mock.calls.filter((c) => c[1] === IMPACT.x && c[2] === IMPACT.y);
     expect(at.length).toBeGreaterThanOrEqual(1);
@@ -327,7 +327,7 @@ describe('the cosmo cat\'s meteor: the landing, the shock and the crater', () =>
     const dust = s.fx.ps.burst.mock.calls.filter((c) => (c[0] as { tex: string }).tex === 'smoke');
     expect(dust).toHaveLength(1);
     expect((dust[0]?.[3] as { scale: number }).scale).toBeCloseTo(1, 9);
-    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.heavyHit, 'imp_m_cosmo', expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.skill, 'sp_meteor_ring', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
   });
 
   it('keeps the crater until its end event, beats on the burn\'s own half second, dims in its last 0.6 s and fades away at the end', () => {

@@ -214,7 +214,8 @@ describe('the first cast of a rank 5 skill: the cut-in', () => {
     intro.first(tiger());
     expect(awakening).toHaveBeenCalledTimes(1);
     expect(numbers.children.length).toBe(0);
-    expect(direct).toHaveBeenCalledWith('awaken', expect.any(Number));
+    // The banner has a short fanfare of its own, not the awakening's second-long one: the skill's sound follows at once and must not be buried.
+    expect(direct).toHaveBeenCalledWith('sp_cutin', expect.any(Number));
   });
 
   it('is the short banner with the mythic tag, takes no taps and fits its name', () => {

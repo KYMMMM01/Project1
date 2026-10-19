@@ -566,7 +566,7 @@ describe('the shield shove\'s scene', () => {
     env: SpEnv;
     scene: ReturnType<typeof makeShove>;
     fx: { ps: { burst: ReturnType<typeof vi.fn> }; shockwave: ReturnType<typeof vi.fn> };
-    stage: { play: ReturnType<typeof vi.fn>; later: ReturnType<typeof vi.fn>; shake: ReturnType<typeof vi.fn>; detail: 0 | 1 | 2; reduced: boolean; rules: { big: object; zone: object } };
+    stage: { play: ReturnType<typeof vi.fn>; later: ReturnType<typeof vi.fn>; shake: ReturnType<typeof vi.fn>; detail: 0 | 1 | 2; reduced: boolean; panOf: () => number; rules: Record<string, object> };
     back: Container;
     front: Container;
     enemies: EnemyState[];
@@ -574,7 +574,7 @@ describe('the shield shove\'s scene', () => {
 
   function build(detail: 0 | 1 | 2 = 1): Scene {
     const fx = { ps: { burst: vi.fn() }, shockwave: vi.fn() };
-    const stage = { play: vi.fn(), later: vi.fn(), shake: vi.fn(), detail, reduced: false, fx, rules: { big: {}, zone: {} } };
+    const stage = { play: vi.fn(), later: vi.fn(), shake: vi.fn(), detail, reduced: false, fx, panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, big: {}, zone: {} } };
     const back = new Container();
     const front = new Container();
     const enemies: EnemyState[] = [];
@@ -721,7 +721,7 @@ describe('the shield shove\'s scene', () => {
   it('has a sound and a nudge of the camera, rationed: the sound goes through the stage\'s rule and the nudge through its own gate; none under reduced motion', () => {
     const s = build(1);
     s.scene.cast(event(crowd(s, 3)));
-    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.big, 'hit_heavy', expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(s.stage.play).toHaveBeenCalledWith(s.stage.rules.skill, 'sp_shield_slam', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
     expect(s.stage.shake).toHaveBeenCalledWith(Trauma.t1, Gate.spShake, expect.any(Number));
     const calm = build(1);
     calm.stage.reduced = true;

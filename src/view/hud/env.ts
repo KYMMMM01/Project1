@@ -76,6 +76,10 @@ export class EnvImpl implements HudEnv {
   codexAt: ((foe: EnemyId) => void) | null = null;
   /** The tutorial's answers, set while one is running. */
   lessonOf: (() => TopicId | null) | null = null;
+  /** The run still means to teach this topic (it is the lesson on screen or one still to come). */
+  lessonLeft: ((topic: TopicId) => boolean) | null = null;
+  /** The pause menu, the guidebook or the settings are open over the battle (set by the HUD). */
+  userPaused: (() => boolean) | null = null;
   noteTo: ((key: CountKey) => void) | null = null;
   readonly revealed = new Emitter<{ reveal: { key: RevealKey; fresh: boolean } }>();
   readonly skipChanged = new Emitter<{ change: null }>();
@@ -152,7 +156,12 @@ export class EnvImpl implements HudEnv {
   }
 
   lessonOn(topic: TopicId): boolean {
-    return this.tutorial && !this.progress.skipped && !this.progress.isTaught(topic);
+    return this.tutorial && !this.progress.skipped && !this.progress.isTaught(topic) && (this.lessonLeft?.(topic) ?? true);
+  }
+
+  /** The player opened the pause menu (or a screen from it): a lesson's clock stands still, and its note gives way. */
+  get userPause(): boolean {
+    return this.userPaused?.() ?? false;
   }
 
   note(key: CountKey): void {
@@ -174,6 +183,8 @@ export class EnvImpl implements HudEnv {
     this.explainAt = null;
     this.codexAt = null;
     this.lessonOf = null;
+    this.lessonLeft = null;
+    this.userPaused = null;
     this.noteTo = null;
     for (const off of this.offs.splice(0)) off();
     if (this.holds > 0) {

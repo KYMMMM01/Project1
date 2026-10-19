@@ -12,7 +12,7 @@ import type { VoiceRule } from './voices';
  * Loudness family. Normalisation brings every baked buffer to its family's target: UI is the quietest,
  * shots and hits stay a texture under the rest, rewards and the big battle moments are the loudest.
  */
-export type Cat = 'ui' | 'tick' | 'fire' | 'hit' | 'swing' | 'impact' | 'foe' | 'combat' | 'reward' | 'big' | 'finale' | 'stinger';
+export type Cat = 'ui' | 'tick' | 'fire' | 'hit' | 'swing' | 'impact' | 'foe' | 'combat' | 'reward' | 'big' | 'finale' | 'stinger' | 'skill' | 'skillTick';
 
 export const CAT_TARGET: Record<Cat, { peak: number; rms: number }> = {
   ui: { peak: 0.2, rms: 0.034 },
@@ -29,9 +29,15 @@ export const CAT_TARGET: Record<Cat, { peak: number; rms: number }> = {
   finale: { peak: 0.5, rms: 0.08 },
   big: { peak: 0.7, rms: 0.115 },
   stinger: { peak: 0.74, rms: 0.12 },
+  // The cats' skills (sfx-skills.ts): the signature of a cast (the roar, the clash of two blades, the boom) is a moment of its own, a notch under the big
+  // tier; what goes on while the skill runs (a star, a bolt, a hoofbeat, a shard) is a texture that sits between the weapon sounds and the signature.
+  skill: { peak: 0.62, rms: 0.1 },
+  skillTick: { peak: 0.34, rms: 0.05 },
 };
 
 export interface Variant {
+  /** Which variant this is, 0 for the nominal design: a recipe may pick a different recorded layer per variant (`files[i % n]`). Absent means 0. */
+  i?: number;
   /** Multiplicative jitter around 1 (1 +/- amount) for variants 1+, exactly 1 for variant 0 (the nominal design). */
   j(amount: number): number;
 }
@@ -55,12 +61,32 @@ export interface Recipe {
   /** Music dip the engine starts together with this sound: the awakening takes the room for a moment. */
   duck?: { depth: number; seconds: number };
   /**
+   * The fight gives way to this sound: the weapons' and the enemies' bus is `db` decibels down for `seconds` from its start (hush.ts), so that a
+   * skill's signature, a boss's cry or the awakening is heard through the crowd. Only big moments have one; a hit never does.
+   */
+  hush?: { db: number; seconds: number };
+  /**
+   * An old version of a sound, kept only so that the sound board can play "지금" next to "새것" (`sfx-before.ts`): never baked ahead, not counted
+   * in the bank's budget, not part of any family or check, and nothing in the game plays it.
+   */
+  legacy?: true;
+  /**
+   * The text the variant noise is seeded from, when it is not the sound's own key: an old version kept for the sound board (`legacy`) bakes with the seed of the sound
+   * it was, so that "지금" is the very sound the game played, grain for grain, and not another roll of the same recipe.
+   */
+  seed?: string;
+  /**
    * Combat voice priority (0 default): when the cap on simultaneous combat voices is full, a sound may take the place of the
    * oldest voice of equal or lower priority, and at 2 and above it also skips the per-window thinning. 1 heavy hits, 2 crits,
    * killing blows and deaths, 3 a boss's death.
    */
   prio?: number;
   rule?: Partial<VoiceRule>;
+  /**
+   * Recorded layers the recipe lays under its synthesis (ids of `samples.ts`, `<pack>/<file>`). The bake waits for them to load (or fail)
+   * before it renders; a recipe has to be a whole sound without them.
+   */
+  needs?: readonly string[];
   build(s: Synth, v: Variant): void;
 }
 

@@ -164,8 +164,7 @@ class JamScene implements SpScene<'jam'> {
     this.strum(e.x, e.y, lx, ly, calm, detail);
 
     // The sound: the bard's own strummed chord, lower and fuller than its ordinary shot, then the same chord an octave up a hair later.
-    stage.play(stage.rules.big, 'atk_t_bard', 0.9, 0.78, 0.02);
-    stage.laterReal(0.05, () => stage.play(stage.rules.zone, 'atk_t_bard', 0.42, 1.56, 0.02));
+    stage.play(stage.rules.skill, 'sp_strum', 0.95, 1, 0.02, stage.panOf(e.x));
 
     const lanes = d.notes.length;
     let turn = 0;
@@ -311,7 +310,7 @@ class JamScene implements SpScene<'jam'> {
         stage.fx.fleck(paint('burst_star'), at.x, at.y, { life: 0.22, size: 30, sizeEnd: 54, rot: n.step, color: Hue.sun, fadeAt: 0.4 });
         stage.fx.ps.burst(LAND_SPARKS, at.x, at.y, { count: detail === 0 ? 0.5 : 1 });
       }
-      stage.playStep(stage.rules.coinTick, 'imp_t_bard', ding, 0.5);
+      stage.playStep(stage.rules.skill, 'sp_note', ding, 0.8, 1, stage.panOf(at.x), stage.stagger('note', 0.055));
       return;
     }
     const at = this.headSpot(n.uid, n.cell, this.spot);
@@ -322,7 +321,7 @@ class JamScene implements SpScene<'jam'> {
     s.sprite.visible = true;
     this.stickerLook(s, 0, calm);
     if (!calm) stage.fx.ps.burst(LAND_SPARKS, at.x, at.y + 6, { count: detail === 0 ? 0.5 : 1 });
-    stage.playStep(stage.rules.coinTick, 'imp_t_bard', ding, 0.5);
+    stage.playStep(stage.rules.skill, 'sp_note', ding, 0.8, 1, stage.panOf(at.x), stage.stagger('note', 0.055));
   }
 
   /** Let go of the ring of `uid`, but only if the picture on it is still ours (a fish capsule's hold on the same cat is not ours to drop). */

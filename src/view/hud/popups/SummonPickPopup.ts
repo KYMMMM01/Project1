@@ -6,8 +6,7 @@ import { Container, type DestroyOptions } from 'pixi.js';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { classDef, unitClass, unitDef, unitRarity, type UnitId } from '@/game';
-import { topicTeach } from '@/guide';
+import { classDef, OFFER_EVERY, unitClass, unitDef, unitRarity, type UnitId } from '@/game';
 import {
   attachTooltip,
   CardFrame,
@@ -85,7 +84,7 @@ export class SummonPickPopup extends Popup<void> {
     const panel = new Panel({ width: W, height: h, title: t('hud.pick.title'), torn: 'bottom', tape: 'pink' });
     const c = panel.content;
     // The tutorial's pick carries its lesson in the sub line: what the pick is, and which card to take.
-    const sub = uiLabel(guide ? `${topicTeach('pick3')} ${t('guide.tut.pickRec')}` : t('hud.pick.sub'), { size: 26, color: guide ? Color.ink : Color.inkSoft, wrap: W - 80, lineHeight: 34 });
+    const sub = uiLabel(guide ? `${t('guide.tut.pick', { every: OFFER_EVERY })} ${t('guide.tut.pickRec', { tag: t('hud.recommend') })}` : t('hud.pick.sub'), { size: 26, color: guide ? Color.ink : Color.inkSoft, wrap: W - 80, lineHeight: 34 });
     sub.position.set(W / 2, PICK.subY);
     c.addChild(sub);
     if (!guide) c.addChild(this.peekToggle());

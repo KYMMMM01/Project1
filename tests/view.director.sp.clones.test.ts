@@ -274,7 +274,7 @@ function viewOf(r: Rig, u: UnitState): Container {
 
 function rig(opts: { detail?: 0 | 1 | 2; reduced?: boolean; scene?: boolean } = {}): Rig {
   const fx = { ps: { burst: vi.fn() }, shockwave: vi.fn() };
-  const stage = { now: 0, detail: opts.detail ?? 2, reduced: opts.reduced ?? false, fx, play: vi.fn(), rules: { zone: {}, shoot: {} } };
+  const stage = { now: 0, detail: opts.detail ?? 2, reduced: opts.reduced ?? false, fx, play: vi.fn(), panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, zone: {}, shoot: {} } };
   const units = new Container();
   const front = new Container();
   const views = new Map<number, Container>();
@@ -365,7 +365,7 @@ describe('the clones\' scene', () => {
       expect(live(r).leaves).toBe(0);
     });
 
-    it('a cast the rule let through also puffs a ring of smoke at the ninja\'s feet, puts a leaf on its head, and plays the one existing poof sound', () => {
+    it('a cast the rule let through also puffs a ring of smoke at the ninja\'s feet, puts a leaf on its head, and plays the smoke\'s own pop (the skill\'s signature, never thinned)', () => {
       const r = rig();
       shown(r, castOf(r));
       expect(live(r).bodies).toBe(2);
@@ -378,7 +378,7 @@ describe('the clones\' scene', () => {
       expect(y).toBeGreaterThan(cellCenterY(NINJA));
       expect(r.stage.fx.shockwave).toHaveBeenCalledTimes(1);
       expect(live(r).leaves).toBe(1);
-      expect(r.stage.play).toHaveBeenCalledWith(expect.anything(), 'molt', expect.any(Number), expect.any(Number), expect.any(Number));
+      expect(r.stage.play).toHaveBeenCalledWith(r.stage.rules.skill, 'sp_smoke_pop', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
     });
 
     it('makes the pair once however the two tellings come, in either order', () => {
@@ -448,6 +448,20 @@ describe('the clones\' scene', () => {
         const body = view.bodies.find((b) => b.cell === c.cell) as { root: Container };
         expect(body.root.zIndex).toBeCloseTo(feet(c.cell).y - 0.3, 6);
       }
+    });
+
+    it('lands with a soft "tup" of its own for each clone (a pale one, never thinned: a cast that was shown is heard), and with none of it for a clone of a cast that lost the stage', () => {
+      const r = rig();
+      shown(r, castOf(r));
+      r.stage.play.mockClear();
+      run(r, 0.4);
+      const hops = r.stage.play.mock.calls.filter((c) => c[1] === 'sp_clone_hop');
+      expect(hops).toHaveLength(2);
+      expect(hops.every((c) => c[0] === r.stage.rules.skill)).toBe(true);
+      const q = rig();
+      q.battle.events.emit('spCast', castOf(q));
+      run(q, 0.4);
+      expect(q.stage.play).not.toHaveBeenCalled();
     });
 
     it('fades in over the first third of the leap and then holds the row\'s standing opacity', () => {
@@ -716,18 +730,19 @@ describe('the clones\' scene', () => {
       expect(JSON.stringify([r.battle.units.map((u) => u && [u.uid, u.cell]), r.battle.enemies])).toBe(before);
     });
 
-    it('plays the ninja\'s throw sound at a lower volume and a higher pitch, once per volley (not once per clone), and only for a cast that was shown', () => {
+    it('plays the clone\'s own throw sound (a ghost of the ninja\'s, never thinned by the fight\'s rules), once per volley (not once per clone), and only for a cast that was shown', () => {
       const r = rig();
       shown(r, castOf(r));
       run(r, 0.5);
       r.stage.play.mockClear();
       throwOf(r, 0);
       throwOf(r, 1);
-      const plays = r.stage.play.mock.calls.filter((c) => c[1] === 'atk_r_ninja');
+      const plays = r.stage.play.mock.calls.filter((c) => c[1] === 'sp_clone_throw');
       expect(plays).toHaveLength(1);
-      const [, , volume, pitch] = plays[0] as [unknown, string, number, number];
-      expect(volume).toBeLessThan(0.5);
-      expect(pitch).toBeGreaterThan(1);
+      expect(plays[0]?.[0]).toBe(r.stage.rules.skill);
+      const [, , volume] = plays[0] as [unknown, string, number];
+      expect(volume).toBeLessThanOrEqual(1);
+      expect(volume).toBeGreaterThan(0);
       const q = rig();
       q.battle.events.emit('spCast', castOf(q));
       run(q, 0.5);
@@ -847,7 +862,7 @@ describe('the clones\' scene', () => {
       r.stage.play.mockClear();
       endOf(r, 0, 'done');
       expect(r.stage.fx.ps.burst).toHaveBeenCalledTimes(1);
-      expect(r.stage.play).toHaveBeenCalledWith(expect.anything(), 'whoosh', expect.any(Number), expect.any(Number), expect.any(Number));
+      expect(r.stage.play).toHaveBeenCalledWith(r.stage.rules.skillTick, 'sp_clone_vanish', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
       expect(live(r).leaves).toBe(1);
       expect((live(r).list.find((c) => c.index === 0) as Live['list'][number]).phase).toBe('out');
       run(r, OUT[0] + 0.05);

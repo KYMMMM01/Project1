@@ -8,6 +8,7 @@
  */
 import type { SfxId } from './api';
 import { body, clack, snap } from './foley';
+import { crack, thud } from './hitkit';
 import { bell, kalimba, knock, mallet, paper, pluck, puff, shake, stamp, thump, whoosh, type Recipe } from './recipe';
 import { hz } from './theory';
 
@@ -139,7 +140,7 @@ export const COMBAT_RECIPES = {
   },
   hit_heavy: {
     cat: 'hit',
-    trim: 4,
+    trim: 6,
     len: 0.2,
     ms: [60, 220],
     lp: 6500,
@@ -148,32 +149,35 @@ export const COMBAT_RECIPES = {
     prio: 1,
     rule: { maxVoices: 2, minGap: 0.09, falloff: 0.15 },
     build(s, v) {
-      // The weight under a heavy blow, a killing blow or a hit on a boss. It rides on the weapon's own impact and never replaces it:
-      // a low drop through 170 to 80 Hz with a little saturation (the body), a closing low-passed slap, a woody crack and a bite.
+      // The weight under a heavy blow, a killing blow or a hit on a boss. It rides on the weapon's own impact and never replaces it: a drop through 320 to 120 Hz driven so
+      // that its harmonics sit where a phone plays (300 to 1200 Hz), the low body under it (150 to 70 Hz), a closing low-passed slap, a woody knock and the crack on top.
       const p = v.j(0.06);
-      body(s, 0, 170 * p, 80, 0.14, 1, 0.4);
-      s.noise({ dur: 0.07, v: 0.6, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200, f2: 600, sw: 0.06 } });
+      thud(s, 0, 320 * p, 120, 0.14, 1, 0.7, 150);
+      body(s, 0, 150 * p, 70, 0.12, 0.6, 0.3);
+      s.noise({ dur: 0.06, v: 0.6, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200, f2: 600, sw: 0.05 } });
       clack(s, 0, 420 * p, 0.35, 0.04);
-      snap(s, 0, 0.45, 3400, 0.012);
+      crack(s, 0, 2.6, 3000);
     },
   },
   crit: {
     cat: 'hit',
-    trim: 3,
+    trim: 6.5,
     len: 0.18,
     ms: [40, 200],
     lp: 7500,
     variants: 3,
     rate: 0.03,
     prio: 2,
-    rule: { maxVoices: 3, minGap: 0.09, falloff: 0.1 },
+    rule: { maxVoices: 2, minGap: 0.09, falloff: 0.1 },
     build(s, v) {
-      // The crit layer, always played together with the weapon's own impact (never in place of it, so a crit is the same weapon with
-      // more): a bright crack at 4.2 kHz, a ping (a sine at 2.4 kHz and its fifth, quickly gone) and a low body underneath.
+      // The crit layer, always played together with the weapon's own impact (never in place of it, so a crit is the same weapon with more): a bright crack at 4.3 kHz, a ping
+      // (a sine at 2.4 kHz with 3.6 and 4.8 kHz above it, gone in 70 ms) and a body underneath that a phone plays.
       const p = v.j(0.03);
-      snap(s, 0, 1, 4200 * p, 0.014);
-      s.tone({ f: 2400 * p, dur: 0.13, v: 0.45, a: 0.002, d: 0.11, s: 0.01 });
-      s.tone({ f: 3600 * p, dur: 0.07, v: 0.2, a: 0.002, s: 0.01 });
+      crack(s, 0, 1.6, 4300 * p, 0.014);
+      s.tone({ f: 2400 * p, dur: 0.09, v: 0.5, a: 0.002, d: 0.08, s: 0.01 });
+      s.tone({ f: 3600 * p, dur: 0.06, v: 0.3, a: 0.002, d: 0.05, s: 0.01 });
+      s.tone({ f: 4800 * p, dur: 0.04, v: 0.08, a: 0.002, d: 0.035, s: 0.01 });
+      thud(s, 0, 360 * p, 140, 0.09, 0.7, 0.6, 150);
       body(s, 0, 150 * p, 80, 0.1, 0.8, 0.3);
     },
   },
@@ -181,16 +185,18 @@ export const COMBAT_RECIPES = {
     cat: 'combat',
     trim: 3,
     len: 0.7,
-    ms: [200, 650],
+    ms: [150, 650],
     variants: 2,
     rule: { maxVoices: 3, minGap: 0.12, falloff: 0.1 },
     build(s, v) {
-      // A paper bag popped: a noise burst through a closing low-pass (the bang), a brown whump and a sine drop for the
-      // weight, and a flutter of confetti settling after it. No fireball, nothing above 4 kHz that matters.
+      // A paper bag popped: a noise burst through a closing low-pass (the bang), a brown whump, a drop whose harmonics reach a phone for the weight (380 to 110 Hz), the crack of
+      // the paper and a flutter of confetti settling after it. No fireball, nothing above 4 kHz that matters.
       const p = v.j(0.08);
-      s.noise({ dur: 0.3, v: 1.2, a: 0.003, s: 0.01, filter: { t: 'lowpass', f: 3600 * p, f2: 500, sw: 0.18, q: 0.7 } });
+      s.noise({ dur: 0.3, v: 1.1, a: 0.003, s: 0.01, filter: { t: 'lowpass', f: 3600 * p, f2: 500, sw: 0.18, q: 0.7 } });
       s.noise({ kind: 'brown', dur: 0.3, v: 0.15, a: 0.005, s: 0.01, filter: { t: 'lowpass', f: 700, f2: 250, sw: 0.25 } });
-      s.tone({ f: 220 * p, f2: 110, sw: 0.15, dur: 0.22, v: 0.35, a: 0.004, sat: 0.3 });
+      thud(s, 0, 380 * p, 110, 0.22, 0.9, 0.8, 140);
+      body(s, 0, 170 * p, 60, 0.22, 0.6, 0.3);
+      crack(s, 0, 1.4, 2800, 0.02);
       s.noise({ at: 0.04, dur: 0.3, v: 0.18, a: 0.02, s: 0.05, trem: { rate: 30, depth: 0.9 }, filter: { t: 'bandpass', f: 3600, q: 0.7 } });
     },
   },
@@ -263,33 +269,42 @@ export const COMBAT_RECIPES = {
   },
   boss_warning: {
     cat: 'big',
-    trim: -3,
+    trim: -5.5,
     len: 1.55,
     ms: [800, 1450],
+    // the fight gives way to the roll of the drum for a moment (hush.ts)
+    duck: { depth: 0.3, seconds: 1 },
+    hush: { db: 2.5, seconds: 0.9 },
     build(s) {
       // A low mallet roll, no siren: nine felt-mallet hits on a big box that speed up and swell, then one deep hit.
       // A wooden knock rides on every hit and saturation puts harmonics above the 150 Hz fundamental, so a phone speaker can still play the roll.
       let t = 0;
       for (let k = 0; k < 9; k++) {
         thump(s, 150, 105, t, 0.14, 0.25 + k * 0.05, 0.06, 0.4);
+        thud(s, t, 280, 150, 0.1, 0.2 + k * 0.04, 0.5, 140);
         knock(s, 300, t, 0.5 + k * 0.04, 0.05);
         t += 0.125 - k * 0.008;
       }
       thump(s, 130, 70, t + 0.02, 0.5, 0.8, 0.25, 0.4);
       knock(s, 260, t + 0.02, 0.8, 0.12);
+      thud(s, t + 0.02, 260, 100, 0.4, 0.5, 0.7, 130);
       s.noise({ dur: 0.9, v: 0.15, a: 0.5, s: 0.5, filter: { t: 'lowpass', f: 400 }, kind: 'brown' });
     },
   },
   boss_roar: {
     cat: 'big',
-    trim: -1,
+    trim: -3.5,
     len: 1.2,
     ms: [700, 1250],
+    duck: { depth: 0.35, seconds: 0.9 },
+    hush: { db: 3, seconds: 0.6 },
     build(s) {
       // A big drum hit and a low upright-bass note that sags a fourth (262 to 196 Hz) with a slow vibrato, over a rumble of
       // brown noise and a rustle of paper. It is a heavy footstep, not a growl.
       thump(s, 140, 60, 0, 0.6, 0.9, 0.35, 0.4);
       s.tone({ w: 'triangle', f: 262, f2: 196, sw: 0.5, dur: 0.75, v: 0.6, a: 0.04, s: 0.6, r: 0.2, vib: { rate: 5, cents: 25, delay: 0.15 }, filter: { t: 'lowpass', f: 900 } });
+      // a mid growl a phone can play: the same fall (330 to 200 Hz) driven so that its harmonics sit at 400 to 1200 Hz
+      s.tone({ w: 'triangle', f: 330, f2: 200, sw: 0.5, dur: 0.7, v: 0.4, a: 0.04, s: 0.6, r: 0.2, sat: 0.6, filter: { t: 'highpass', f: 220, q: 0.6 } });
       s.noise({ kind: 'brown', dur: 0.9, v: 0.3, a: 0.08, s: 0.3, filter: { t: 'lowpass', f: 500, f2: 250, sw: 0.8 } });
       s.noise({ kind: 'pink', at: 0.05, dur: 0.8, v: 0.3, a: 0.1, s: 0.3, trem: { rate: 20, depth: 0.5 }, filter: [{ t: 'highpass', f: 300 }, { t: 'bandpass', f: 900, f2: 500, sw: 0.7, q: 0.8 }] });
     },
@@ -298,6 +313,8 @@ export const COMBAT_RECIPES = {
     cat: 'big',
     len: 1.4,
     ms: [800, 1400],
+    duck: { depth: 0.4, seconds: 1 },
+    hush: { db: 3, seconds: 0.8 },
     build(s) {
       // A tower of cardboard collapsing: a big felt thud, a crumple of crackling noise that closes down, a cascade of
       // wooden knocks falling in pitch and a last soft thump when the last box lands.

@@ -83,9 +83,10 @@ export class Hints {
   private release: (() => void) | null = null;
   /**
    * While set, only these topics may ask for a card (the tutorial run teaches the rest itself). The filter ends the
-   * moment the lessons do: a player who skips them mid-run gets every card from then on, in that same run.
+   * moment the lessons do: a player who skips them mid-run gets every card from then on, in that same run. A lesson that is given up on
+   * (`giveUp`) hands its topic back to the cards, so a topic is never left with neither.
    */
-  only: ReadonlySet<HintId> | null = null;
+  only: Set<HintId> | null = null;
 
   constructor(private readonly progress: GuideProgress) {}
 
@@ -122,6 +123,11 @@ export class Hints {
     }
     if (this.live && !this.live.onSelection) this.interrupt();
     this.queue.unshift({ id, target, also, onSelection });
+  }
+
+  /** The tutorial gave up on the lesson of `id` (the player ignored it, or its moment passed): the topic may ask for its card from now on. */
+  giveUp(id: HintId): void {
+    this.only?.add(id);
   }
 
   /** The player did what the lesson is about: it is done for good, on screen or waiting. */

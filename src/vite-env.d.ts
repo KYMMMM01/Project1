@@ -9,4 +9,6 @@ interface ImportMetaEnv {
   readonly VITE_TERMS_URL?: string;
   /** Support contact: a web page or a mailto: address. */
   readonly VITE_SUPPORT_URL?: string;
+  /** 'off' leaves the sound board route (`?scene=sounds`) out of the build; delete `dist/soundboard/` as well. */
+  readonly VITE_SOUNDBOARD?: string;
 }

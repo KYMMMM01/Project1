@@ -13,7 +13,7 @@ import { AREA_PICTURES, DISC_KINDS, PAINT_IDS, fxVignette, paintKey, numberFontT
 import { mergeResultOf, type BattleApi, type UnitId } from '@/game';
 import { waveNeeds, type WaveNeeds } from './field/warmPlan';
 import { warmGlyphs } from './glyphs';
-import { LATER_SOUNDS, LATER_STINGERS, START_SOUNDS, unitSounds, waveSounds } from './soundPlan';
+import { LATER_SOUNDS, LATER_STINGERS, START_SOUNDS, skillSounds, unitSounds, waveSounds } from './soundPlan';
 
 /**
  * Picture families a battle may show that are not tied to the next two waves: every kind of enemy and boss (an elite or a modifier may bring
@@ -125,9 +125,13 @@ export class BattleWarmup {
     }
   }
 
-  /** A cat's release and impact sounds now, and those of the cat two of its kind merge into a little later (the next thing the board is likely to need). */
+  /**
+   * A cat's release and impact sounds now (and the sounds of its skill, in a battle with skills on, a little after: its first cast has to be heard),
+   * and those of the cat two of its kind merge into a little later (the next thing the board is likely to need).
+   */
   private warmUnit(id: UnitId, prio: number): void {
     for (const sfx of unitSounds(id)) warmSfx(sfx, prio);
+    if (this.battle.spOn) for (const sfx of skillSounds(id)) warmSfx(sfx, WARM_PRIO.next);
     const next = mergeResultOf(id);
     if (next) for (const sfx of unitSounds(next)) warmSfx(sfx, WARM_PRIO.next);
   }

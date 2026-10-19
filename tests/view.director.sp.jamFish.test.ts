@@ -75,9 +75,11 @@ interface Rig {
     reduced: boolean;
     play: ReturnType<typeof vi.fn>;
     playStep: ReturnType<typeof vi.fn>;
+    panOf: () => number;
+    stagger: () => number;
     laterReal: ReturnType<typeof vi.fn>;
     shake: ReturnType<typeof vi.fn>;
-    rules: object;
+    rules: Record<string, object>;
     fx: { ps: { burst: ReturnType<typeof vi.fn> }; shockwave: ReturnType<typeof vi.fn>; fleck: ReturnType<typeof vi.fn> };
   };
   battle: { spOn: boolean; time: number; enemies: EnemyState[]; units: UnitState[]; events: Emitter<BattleEvents> };
@@ -111,7 +113,7 @@ function rig(detail: 0 | 1 | 2 = 1, reduced = false): Rig {
     playStep: vi.fn(),
     laterReal: vi.fn(),
     shake: vi.fn(),
-    rules: { zone: {}, big: {}, hit: {}, coinTick: {} },
+    panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, zone: {}, big: {}, hit: {}, coinTick: {} },
     fx: { ps: { burst: vi.fn() }, shockwave: vi.fn(), fleck: vi.fn() },
   };
   r.front = new Container();
@@ -240,9 +242,9 @@ describe('the bard\'s scene', () => {
     expect(ringHeld(2)).toBe(0.2);
     expect(ringHeld(3)).toBe(0.45);
     expect(ringHeld(4)).toBeUndefined();
-    // The strum sounds as a chord: the bard's own strummed shot, low and full, and the same an octave up a hair later.
-    expect(r.stage.play).toHaveBeenCalledWith(expect.anything(), 'atk_t_bard', expect.any(Number), expect.closeTo(0.78, 2), expect.any(Number));
-    expect(r.stage.laterReal).toHaveBeenCalledTimes(1);
+    // The strum sounds as a chord: the lute's own strum (the signature, never thinned), one sound that carries its octave sparkle inside.
+    expect(r.stage.play).toHaveBeenCalledWith(r.stage.rules.skill, 'sp_strum', expect.any(Number), expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(r.stage.laterReal).not.toHaveBeenCalled();
     expect(r.stage.fx.shockwave).toHaveBeenCalledTimes(1);
   });
 
@@ -277,8 +279,10 @@ describe('the bard\'s scene', () => {
     const { r, scene } = jamWorld();
     scene.cast(chord());
     r.run(scene as never, 0.8);
-    const dings = r.stage.playStep.mock.calls.filter((c) => c[1] === 'imp_t_bard');
+    const dings = r.stage.playStep.mock.calls.filter((c) => c[1] === 'sp_note');
     expect(dings).toHaveLength(4);
+    // never thinned (a bunch that lands together is spread into a quick run instead)
+    expect(dings.every((c) => c[0] === r.stage.rules.skill)).toBe(true);
     expect(new Set(dings.map((c) => c[2])).size).toBe(4);
     // A ping (ring) and a star per ring that climbs, none for the attack notes' cats.
     expect(r.stage.fx.shockwave.mock.calls.length).toBe(1 + 2);
@@ -569,7 +573,7 @@ describe('the death director with the alchemist\'s holds', () => {
       ctx: { battle },
       fx: { dustPuff: vi.fn(), deathPuff: vi.fn(), iceShatter: vi.fn(), explosion: vi.fn(), coinBurst: vi.fn() },
       killLadder: { next: () => 0 },
-      rules: { die: {}, eliteDie: {} },
+      panOf: () => 0, panOfField: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, die: {}, eliteDie: {} },
       playStep: vi.fn(),
       play: vi.fn(),
       addFrame: vi.fn(),
@@ -700,8 +704,9 @@ describe('the alchemist\'s scene', () => {
     expect(w.live().held).toBe(0);
     expect(w.r.enemies.children.every((c) => !c.visible)).toBe(true);
     const sounds = w.r.stage.play.mock.calls.map((c) => c[1]);
-    expect(sounds.filter((s) => s === 'foe_glass_hit').length).toBeGreaterThanOrEqual(5);
-    expect(sounds).toContain('molt');
+    // The big flask's pop and each small flask's own little one.
+    expect(sounds.filter((s) => s === 'sp_flask_mini').length + sounds.filter((s) => s === 'sp_flask_pop').length).toBeGreaterThanOrEqual(5);
+    expect(sounds).toContain('sp_flask_pop');
   });
 
   it('turns the boss into a fish when the big flask lands: its own picture is put away, the fish and its chip are drawn on the enemy\'s own body', () => {
@@ -751,7 +756,9 @@ describe('the alchemist\'s scene', () => {
     expect(w.live().fish[0]).toMatchObject({ mode: 'back' });
     // Pink smoke and a plink on the way out.
     const sounds = w.r.stage.play.mock.calls.map((c) => c[1]);
-    expect(sounds.filter((s) => s === 'molt').length).toBeGreaterThanOrEqual(2);
+    expect(sounds).toContain('sp_flask_pop');
+    expect(sounds).toContain('sp_fish_boing');
+    expect(sounds).toContain('sp_fish_back');
     // It rocks for a moment, then stands still again.
     w.r.run(w.scene as never, 0.2);
     expect(view.sprite.rotation).not.toBe(0);

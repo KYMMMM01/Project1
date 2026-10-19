@@ -13,6 +13,8 @@ addStrings('ko', {
   'hud.gauge': '{n} / {cap}',
   'hud.overflow': '넘쳤어요! {s}초',
   'hud.est': '예상 {s}초',
+  'hud.est.short': '{s}초',
+  'hud.est.farShort': '99초 이상',
   'hud.est.wait': '계산 중',
   'hud.est.none': '예상 불가',
   'hud.est.far': '예상 99초 이상',
@@ -188,6 +190,7 @@ addStrings('ko', {
 
   // tutorial
   'hud.tut.more': '생선이 넉넉해요! 고양이를 더 불러요!',
+  'hud.tut.elite': '생선으로 고양이를 더 불러요!',
   'hud.tut.awaken.pick': '골골이 모였어요! 대왕 고양이는 골골 {cost}개로 수호신이 돼요. 대왕을 눌러 봐요!',
   'hud.tut.awaken.go': '각성 버튼을 눌러요! 수호신은 가장 강한 고양이예요.',
 
@@ -255,6 +258,8 @@ addStrings('en', {
   'hud.gauge': '{n} / {cap}',
   'hud.overflow': 'Overrun! {s}s',
   'hud.est': 'Est. {s}s',
+  'hud.est.short': '{s}s',
+  'hud.est.farShort': '99s+',
   'hud.est.wait': 'Est. ?',
   'hud.est.none': 'No damage',
   'hud.est.far': 'Est. 99s+',
@@ -416,6 +421,7 @@ addStrings('en', {
   'hud.res.retry': 'Try again',
 
   'hud.tut.more': 'Fish ready! Summon more cats!',
+  'hud.tut.elite': 'Spend your fish on more cats!',
   'hud.tut.awaken.pick': 'Purr is ready! A King becomes a Guardian for {cost} purr. Tap the King!',
   'hud.tut.awaken.go': 'Tap Awaken! A Guardian is your strongest cat.',
 

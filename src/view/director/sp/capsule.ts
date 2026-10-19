@@ -35,6 +35,7 @@
  * clock, stands still with them; a victory drops them (no opening ever comes).
  */
 import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
+import type { SfxId } from '@/audio';
 import { tex } from '@/core/assets';
 import { t } from '@/core/i18n';
 import { TAU, darken, lighten } from '@/core/math';
@@ -446,7 +447,7 @@ class CapsuleScene implements SpScene<'capsule'> {
       }
     }
     const beat = BEATS[d.kind];
-    if (!stage.reduced) stage.play(stage.rules.zone, 'whoosh', 0.3, beat.whistle, 0.04);
+    if (!stage.reduced) stage.play(stage.rules.skill, 'sp_capsule_fall', 0.85, beat.whistle / 1.9, 0.04, stage.panOf(e.x));
   }
 
   /** Put the right halves on a flight. */
@@ -591,17 +592,21 @@ class CapsuleScene implements SpScene<'capsule'> {
   /** Each kind's opening sound, from the sounds the game has. */
   private openSound(f: Flight, e: BattleEvents['capsuleOpen']): void {
     const { stage } = this.env;
-    const r = stage.rules.big;
+    const r = stage.rules.skill;
     const small = f.small ? 1.25 : 1;
+    const pan = stage.panOf(f.px);
+    // The shell opens (the latch, the lid's pop: `sp_capsule_pop`) and the prize says what it is a beat later; the bigger the prize, the louder.
+    stage.play(r, 'sp_capsule_pop', 0.9, small, 0.03, pan);
+    const prize = (id: SfxId, volume: number, pitch = 1): void => void stage.play(r, id, volume, pitch * small, 0.03, pan, 0.07);
     switch (e.result) {
-      case 'fish': stage.play(r, 'chest_open', 0.5, 1.15 * small, 0.04); break;
-      case 'purr': stage.play(r, 'purr', 0.55, 1 * small, 0.04); break;
+      case 'fish': prize('sp_prize_fish', 0.9); break;
+      case 'purr': prize('purr', 0.8); break;
       case 'seat':
-      case 'promote': stage.play(r, 'star', 0.55, 1.05 * small, 0.03); break;
-      case 'more': stage.play(r, 'chest_open', 0.45, 0.8, 0.04); break;
-      case 'toy': stage.play(r, 'level_up', 0.6, 1 * small, 0.02); break;
-      case 'awaken': stage.play(r, 'summon_legendary', 0.55, 1, 0.02); break;
-      default: stage.play(r, 'gamble_fail', 0.4, 1.1 * small, 0.03);
+      case 'promote': prize('sp_prize_partner', 0.9); break;
+      case 'more': prize('sp_prize_more', 0.9); break;
+      case 'toy': prize('sp_prize_toy', 1); break;
+      case 'awaken': prize('sp_prize_guardian', 1.05); break;
+      default: prize('gamble_fail', 0.6);
     }
   }
 
@@ -845,12 +850,17 @@ class CapsuleScene implements SpScene<'capsule'> {
     const [a, b] = landings(beat);
     if (f.heard < 1 && k >= a) {
       f.heard = 1;
-      stage.play(stage.rules.zone, 'place', 0.42, beat.thud, 0.03);
+      stage.play(stage.rules.skill, 'sp_capsule_bounce', 0.9, beat.thud, 0.03, stage.panOf(f.px));
       stage.fx.ps.burst(DUST_PUFF, f.px, f.py + 30, { count: stage.detail === 0 ? 0.4 : 0.7, scale: 0.7 });
     }
     if (f.heard < 2 && k >= b) {
       f.heard = 2;
-      stage.play(stage.rules.zone, 'place', 0.3, beat.thud * 1.18, 0.03);
+      stage.play(stage.rules.skill, 'sp_capsule_bounce', 0.65, beat.thud * 1.18, 0.03, stage.panOf(f.px));
+    }
+    // After the second bounce the capsule rests and rocks until the lid goes: the prize rattles in its shell (a heavier rattle for the One More!).
+    if (f.heard < 3 && k >= b + beat.hop2[0]) {
+      f.heard = 3;
+      stage.play(stage.rules.skill, 'sp_capsule_rattle', beat.rattle > 0 ? 1 : 0.8, 1, 0.04, stage.panOf(f.px));
     }
     // The toy trails glints on its way down.
     if (f.kind === 'toy' && k < a && stage.detail > 0 && Math.floor(k * 60) % 3 === 0) {

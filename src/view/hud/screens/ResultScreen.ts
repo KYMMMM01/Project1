@@ -360,8 +360,21 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const count = uiLabel(`×${fmt(tile.count)}`, { size: 32 });
     count.position.set(0, 32);
     const nameKey = tile.kind === 'chest' ? `hud.res.chest.${tile.id}` : tile.kind === 'card' ? `unit.${tile.id}.name` : tile.kind === 'wild' ? `rarity.${tile.id}` : `hud.res.r.${tile.kind}`;
-    const name = uiLabel(t(nameKey), { size: 24, color: Color.inkSoft });
-    name.position.set(0, 60);
+    const nameText = t(nameKey);
+    let name = uiLabel(nameText, { size: 24, color: Color.inkSoft });
+    if (name.width > TILE - 12) {
+      // A name that is too long for one line (a "Wooden chest", a long cat's name) goes on two lines, and the picture and the count make room for it
+      // (it used to be cut: "Wooden ch...").
+      name.destroy();
+      name = uiLabel(nameText, { size: 24, color: Color.inkSoft, wrap: TILE - 12, align: 'center', lineHeight: 26 });
+      art.scale.set(0.74);
+      art.position.set(0, -46);
+      count.scale.set(0.9);
+      count.position.set(0, 4);
+      name.position.set(0, 46);
+    } else {
+      name.position.set(0, 60);
+    }
     fitLabel(name, TILE - 12, 24, 0.8);
     box.addChild(art, count, name);
     return box;

@@ -14,7 +14,8 @@ import { bakeVariant } from './bake';
 import { BANK_BUDGET_MB } from './bank';
 import { gainToDb } from './envelopes';
 import { BOSS_DEATHS, FAMILIES, FOE_DEATHS, FOE_HITS, IMPACTS, RELEASES, type Family } from './families';
-import { createGraph } from './graph';
+import { busNode, createGraph } from './graph';
+import { Hush } from './hush';
 import { MusicPlayer } from './music';
 import { CAT_TARGET } from './recipe';
 import { SOUNDS, sfxIndexOf, type SoundDef } from './sounds';
@@ -53,6 +54,10 @@ export interface ReportRow {
   /** Share of the first ~21 ms between 2 and 6 kHz (the bite of a contact) and of the whole energy between 80 and 200 Hz (the body under it). */
   snapFrac: number;
   bodyFrac: number;
+  /** The plain bite (2.5 to 6 kHz in the first 21 ms), the share of the energy a phone can play (250 Hz and up) and how long the blow takes to fall to a tenth of its peak (ms). */
+  biteFrac: number;
+  phoneFrac: number;
+  fallMs: number;
   /** Fingerprint of the nominal variant, for the distinctness checks. */
   sig: Signature;
   /** Decoded size of every variant at the report's sample rate, in bytes (float32 PCM). */
@@ -152,6 +157,9 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
     attackMs: round(mean((s) => s.attackMs), 1),
     snapFrac: round(mean((s) => s.snapFrac), 2),
     bodyFrac: round(mean((s) => s.bodyFrac), 2),
+    biteFrac: round(mean((s) => s.biteFrac), 3),
+    phoneFrac: round(mean((s) => s.phoneFrac), 2),
+    fallMs: Math.round(max((s) => s.fallMs)),
     sig: (all[0] as SoundStats).sig,
     bytes,
     gainDb: round(gainDb, 1),
@@ -246,6 +254,16 @@ function combatChecks(rows: readonly ReportRow[]): Check[] {
   const rels = RELEASES.map(get);
   const mean = (list: readonly ReportRow[], f: (x: ReportRow) => number) => list.reduce((a, x) => a + f(x), 0) / list.length;
   check('every impact has a crisp start (A-weighted 2-6 kHz share of its first 20 ms >= 0.05)', imps.every((x) => x.snapFrac >= 0.05), imps.filter((x) => x.snapFrac < 0.05).map((x) => `${x.id} ${x.snapFrac}`).join(', ') || 'all');
+  // The hit pass of 2026-10-19 (docs/qa/sound_audit_2026-10-18.md, 13): a hit begins with a crack, a phone can play it, it does not ring on, and what a blow adds to it is bigger.
+  check('every impact begins with a crack (the plain share of its first 20 ms between 2.5 and 6 kHz >= 0.05)', imps.every((x) => x.biteFrac >= 0.05), imps.map((x) => `${x.id.slice(4)} ${x.biteFrac}`).join(', '));
+  check('the crit layer has the biggest crack of all (>= 0.15) and the heavy layer has one (>= 0.05)', get('crit').biteFrac >= 0.15 && get('hit_heavy').biteFrac >= 0.05, `crit ${get('crit').biteFrac}, heavy ${get('hit_heavy').biteFrac}`);
+  const top = new Set(LINES.map((l) => `imp_${l[4]}`));
+  check('an impact falls to a tenth of its peak in 60 ms (the top rank of a line in 80 ms)', imps.every((x) => x.fallMs <= (top.has(x.id) ? 80 : 60)), imps.map((x) => `${x.id.slice(4)} ${x.fallMs}`).join(', '));
+  check('a phone can play most of every impact (the share at 250 Hz and up >= 0.35, the heavy hitters included)', imps.every((x) => x.phoneFrac >= 0.35) && get('hit_heavy').phoneFrac >= 0.35, imps.filter((x) => x.phoneFrac < 0.35).map((x) => `${x.id.slice(4)} ${x.phoneFrac}`).join(', ') || `heavy ${get('hit_heavy').phoneFrac}`);
+  check('the crit and the heavy layer have a body a phone plays too (>= 0.35 at 250 Hz and up)', get('crit').phoneFrac >= 0.35 && get('hit_heavy').phoneFrac >= 0.35, `crit ${get('crit').phoneFrac}, heavy ${get('hit_heavy').phoneFrac}`);
+  check('every cat\'s release is lighter than its landing (200 ms loudness at most 95 % of it): the release is the lighter half of the pair', RELEASES.every((id, i) => get(id).loudRms <= (imps[i] as ReportRow).loudRms * 0.95), RELEASES.map((id, i) => `${id.slice(4)} ${round(get(id).loudRms / (imps[i] as ReportRow).loudRms, 2)}`).join(', '));
+  const hits = FOE_HITS.map(get);
+  check('what an enemy answers with is in the band of what it is made of: no two answers share a centroid within 12 %, the hard ones (plastic, tin, glass) have a crack', hits.every((x, i) => hits.every((y, j) => i === j || Math.abs(Math.log(x.centroidHz / y.centroidHz)) > 0.12)) && ['plastic', 'tin', 'glass'].every((m) => get(`foe_${m}_hit`).biteFrac >= 0.05), hits.map((x) => `${x.id.slice(4, -4)} ${x.centroidHz}`).join(', '));
   const heavy = ['imp_w_viking', 'imp_w_tiger', 'imp_m_cosmo', 'imp_m_fire', 'imp_m_storm', 'imp_r_gunner'];
   check('the heavy hitters carry a low body (80-200 Hz share >= 0.1)', heavy.every((id) => get(id).bodyFrac >= 0.1), heavy.map((id) => `${id.slice(4)} ${get(id).bodyFrac}`).join(', '));
   check('impacts are louder than releases, releases louder than the UI', mean(imps, (x) => x.peak) > mean(rels, (x) => x.peak) && mean(rels, (x) => x.peak) > get('ui_click').peak, `${round(mean(imps, (x) => x.peak), 3)} > ${round(mean(rels, (x) => x.peak), 3)} > ${get('ui_click').peak}`);
@@ -361,7 +379,8 @@ export async function runCombatReport(sampleRate: number): Promise<CombatReport>
 export async function runReport(sampleRate: number): Promise<SoundReport> {
   const t0 = performance.now();
   const rows: ReportRow[] = [];
-  for (const def of SOUNDS) rows.push(await rowFor(def, sampleRate));
+  // (the old versions kept for the sound board are not part of the game: not measured, not in the budget)
+  for (const def of SOUNDS) if (!def.recipe.legacy) rows.push(await rowFor(def, sampleRate));
   const checks = designChecks(rows);
   const sfx = rows.filter((x) => x.kind === 'sfx');
   const stingers = rows.filter((x) => x.kind === 'stinger');
@@ -715,12 +734,14 @@ async function renderMixOnce(events: readonly MixEvent[], seconds: number, limit
     graph.limiter.threshold.value = 0;
     graph.limiter.ratio.value = 1;
     graph.limiter.knee.value = 0;
+    graph.softClip.curve = null;
   }
   const player = new MusicPlayer(ctx, graph.musicBus, graph.reverbIn);
   player.setIntensity(1);
   player.play('battle', 0.05);
   player.pump(seconds);
   player.pause();
+  const hush = new Hush();
 
   const baked = new Map<string, AudioBuffer[]>();
   const limiter = new VoiceLimiter(SOUNDS.map((d) => d.rule));
@@ -748,7 +769,8 @@ async function renderMixOnce(events: readonly MixEvent[], seconds: number, limit
     const g = ctx.createGain();
     g.gain.value = volume * scale;
     src.connect(g);
-    g.connect(graph.sfxBus);
+    g.connect(busNode(graph, def.recipe.cat));
+    if (def.recipe.hush) hush.duck(graph.fightDuck.gain, e.at, def.recipe.hush.db, def.recipe.hush.seconds);
     src.start(e.at);
     if (limiter.victim >= 0) {
       const old = seated[limiter.victim];

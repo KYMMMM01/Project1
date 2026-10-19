@@ -264,7 +264,8 @@ class ClonesScene implements SpScene<'clones'> {
       if (detail > 0) stage.fx.shockwave(nx, ny - 6, { color: GHOST_SKY, radius: 30 });
       this.headLeaf(e.unit.uid);
     }
-    stage.play(stage.rules.zone, 'molt', 0.4, 1.3, 0.04);
+    // "Pong!": the smoke the clones come out of (its own sound, `sp_smoke_pop`), heard from the ninja's side of the screen.
+    stage.play(stage.rules.skill, 'sp_smoke_pop', 1, 1, 0.03, stage.panOf(nx));
   }
 
   /** The clones of a cast (made once, however often it is told: here by the cast event and again by the dispatcher). */
@@ -396,7 +397,7 @@ class ClonesScene implements SpScene<'clones'> {
     }
     if (stage.now - this.lastThrowSound >= THROW_SOUND_GAP) {
       this.lastThrowSound = stage.now;
-      stage.play(stage.rules.shoot, 'atk_r_ninja', 0.3, 1.3, 0.05);
+      stage.play(stage.rules.skill, 'sp_clone_throw', 0.8, 1, 0.05, stage.panOf(c.x));
     }
   }
 
@@ -437,7 +438,7 @@ class ClonesScene implements SpScene<'clones'> {
       stage.fx.ps.burst(POP, c.x, c.y - art.height * 0.3 * c.size, { count: stage.detail === 0 ? 0.5 : 1 });
       if (e.reason === 'done') this.fallLeaf(c.x + c.facing * 3, c.y - art.height * HEAD_AT * c.size, c.index % 2 === 0 ? -1 : 1);
     }
-    if (e.reason === 'done' || e.reason === 'timeout') stage.play(stage.rules.zone, 'whoosh', 0.22, 2.1, 0.05);
+    if (e.reason === 'done' || e.reason === 'timeout') stage.play(stage.rules.skill, 'sp_clone_vanish', 0.9, 1, 0.05, stage.panOf(c.x), stage.stagger('vanish', 0.06));
   }
 
   private out(c: Clone, quiet: boolean): void {
@@ -456,6 +457,7 @@ class ClonesScene implements SpScene<'clones'> {
     c.act = c.clumsy ? 'wobble' : 'land';
     c.acting.reset();
     if (c.loud && !this.env.stage.reduced) this.env.stage.fx.ps.burst(DUST, c.x, c.base, { count: this.env.stage.detail === 0 ? 0.5 : 1 });
+    if (c.loud) this.env.stage.play(this.env.stage.rules.skill, 'sp_clone_hop', 0.7, 1, 0.06, this.env.stage.panOf(c.x), this.env.stage.stagger('hop', 0.06));
   }
 
   // ───────────────────────────── leaves ─────────────────────────────

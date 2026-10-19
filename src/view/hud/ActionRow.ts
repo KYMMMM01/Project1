@@ -155,6 +155,8 @@ export class ActionRow {
     });
     // The chip names the cat on the frame its sticker pops on the board (after the toss and the rarity's own charge-up).
     env.on(b.events, 'summon', ({ unit, source }) => {
+      // The tutorial's box of kittens (a dozen cats at once) is not announced one by one: the chips would pile up over the class chips and the counters. The king that comes with it is.
+      if (env.tutorial && source === 'relic' && unitRarityIndex(unit.id) === 0) return;
       const wait = tossFor(source, motion.reduced) + (REVEAL_DELAY[unitRarityIndex(unit.id)] ?? 0);
       if (wait > 0) this.bag.call(wait, () => this.chips.show(unit.id));
       else this.chips.show(unit.id);

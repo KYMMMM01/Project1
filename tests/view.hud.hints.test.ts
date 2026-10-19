@@ -122,6 +122,23 @@ describe('the first-encounter card and the bubbles on screen', () => {
     expect(shown).toEqual(['awaken', '-', 'elite']);
   });
 
+  it('hands a topic back to the cards when the tutorial gives up on its lesson (it used to be left with neither)', () => {
+    const { hints, target, shown } = setup();
+    hints.only = new Set(['awaken']);
+    hints.request('elite', target, false, true);
+    hints.update(0.1, true, false);
+    expect(shown).toEqual([]);
+    // the lesson of the elite was dropped: the card of the next request comes
+    hints.giveUp('elite');
+    hints.request('elite', target, false, true);
+    hints.update(0.1, true, false);
+    expect(shown).toEqual(['elite']);
+    // a topic the lessons still mean to teach is still left to them
+    hints.request('boss', target, false, true);
+    hints.update(30, true, false);
+    expect(shown).toEqual(['elite']);
+  });
+
   it('is asked for once: a card that is up is not asked for again, and does not blink', () => {
     const { hints, target, shown } = setup();
     hints.request('elite', target, false, true);

@@ -30,7 +30,7 @@ function rig() {
   const battle = { spOn: true, time: 0, enemies: [], units: [], events };
   const frames: Array<(dt: number) => void> = [];
   const fx = { ps: { burst: vi.fn() }, shockwave: vi.fn(), dustPuff: vi.fn() };
-  const stage = { now: 0, detail: 1, reduced: false, play: vi.fn(), later: vi.fn(), shake: vi.fn(), fx, rules: { big: {}, strike: {}, zone: {} }, ctx: { battle, layers, unitView: () => null, speed: 1 }, addFrame: (fn: (dt: number) => void) => frames.push(fn), onDestroy: (fn: () => void) => disposers.push(fn) } as unknown as Stage;
+  const stage = { now: 0, detail: 1, reduced: false, play: vi.fn(), later: vi.fn(), shake: vi.fn(), fx, panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, big: {}, strike: {}, zone: {} }, ctx: { battle, layers, unitView: () => null, speed: 1 }, addFrame: (fn: (dt: number) => void) => frames.push(fn), onDestroy: (fn: () => void) => disposers.push(fn) } as unknown as Stage;
   const bus = ((type: keyof BattleEvents, fn: never) => events.on(type, fn)) as unknown as Bus;
   return { events, on, layers, battle, stage, bus, frames, destroy: () => disposers.forEach((d) => d()) };
 }

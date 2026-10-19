@@ -37,6 +37,15 @@ export interface SoundStats {
   snapFrac: number;
   /** Share of the whole spectral energy between 80 and 200 Hz: the low body of a heavy hit (what a phone speaker can still reproduce). */
   bodyFrac: number;
+  /**
+   * The bite of a contact, plainly: the share of the energy of the first ~21 ms (not weighted by how the ear hears it) that lies between 2.5 and 6 kHz. A body of 300 to 800 Hz
+   * that carries on under a click takes most of that window, so a hit that reads as a hit measures 5 % and more here (`snapFrac` weighs the low end down and reads higher).
+   */
+  biteFrac: number;
+  /** Share of the whole spectral energy that is at 250 Hz and above: what a phone speaker plays (the small ones play almost nothing under it). */
+  phoneFrac: number;
+  /** Milliseconds from the loudest moment until the level (a 1 ms peak envelope) has fallen below a tenth of it for good: how long the blow rings. */
+  fallMs: number;
   /** What the sound looks like to a distinctness check: duration, brightness, how the brightness moves and the shape of the level. */
   sig: Signature;
 }
@@ -214,7 +223,7 @@ function spectrum(
   sampleRate: number,
   start: number,
   end: number,
-): { centroidHz: number; brightHz: number; lowFrac: number; highFrac: number; bodyFrac: number } {
+): { centroidHz: number; brightHz: number; lowFrac: number; highFrac: number; bodyFrac: number; phoneFrac: number } {
   const re = new Float64Array(FFT_SIZE);
   const im = new Float64Array(FFT_SIZE);
   const bins = FFT_SIZE / 2;
@@ -242,11 +251,13 @@ function spectrum(
   let high = 0;
   let upper = 0;
   let upperWeighted = 0;
+  let phone = 0;
   for (let k = 1; k < bins; k++) {
     const p = power[k] as number;
     const fHz = k * binHz;
     total += p;
     weighted += p * fHz;
+    if (fHz >= 250) phone += p;
     if (fHz < 200) low += p;
     if (fHz >= 80 && fHz < 200) mid += p;
     if (fHz > 4000) high += p;
@@ -255,13 +266,14 @@ function spectrum(
       upperWeighted += p * fHz;
     }
   }
-  if (total <= 0) return { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0, bodyFrac: 0 };
+  if (total <= 0) return { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0, bodyFrac: 0, phoneFrac: 0 };
   return {
     centroidHz: weighted / total,
     brightHz: upper > 0 ? upperWeighted / upper : 0,
     lowFrac: low / total,
     highFrac: high / total,
     bodyFrac: mid / total,
+    phoneFrac: phone / total,
   };
 }
 
@@ -297,6 +309,53 @@ function snapShare(ch: readonly Float32Array[], sampleRate: number, start: numbe
     if (fHz >= 2000 && fHz <= 6000) band += p;
   }
   return total > 0 ? band / total : 0;
+}
+
+/** The plain (unweighted) share of the energy in the first SNAP_FFT samples from `start` that lies between 2.5 and 6 kHz. */
+function biteShare(ch: readonly Float32Array[], sampleRate: number, start: number, end: number): number {
+  const re = new Float64Array(SNAP_FFT);
+  const im = new Float64Array(SNAP_FFT);
+  const taper = SNAP_FFT * 0.05;
+  for (let i = 0; i < SNAP_FFT; i++) {
+    let x = 0;
+    if (start + i < end) for (const c of ch) x += c[start + i] as number;
+    const edge = Math.min(i, SNAP_FFT - 1 - i);
+    re[i] = (x / ch.length) * (edge < taper ? 0.5 - 0.5 * Math.cos((Math.PI * edge) / taper) : 1);
+  }
+  fft(re, im);
+  const binHz = sampleRate / SNAP_FFT;
+  let total = 0;
+  let band = 0;
+  for (let k = 1; k < SNAP_FFT / 2; k++) {
+    const fHz = k * binHz;
+    const p = (re[k] as number) ** 2 + (im[k] as number) ** 2;
+    total += p;
+    if (fHz >= 2500 && fHz <= 6000) band += p;
+  }
+  return total > 0 ? band / total : 0;
+}
+
+/** Milliseconds from the loudest 1 ms block to the last one that is still above a tenth of it (a ring that comes back after a gap counts). */
+function fallTime(ch: readonly Float32Array[], sampleRate: number): number {
+  const block = Math.max(1, Math.round(sampleRate * 0.001));
+  const len = (ch[0] as Float32Array).length;
+  const env: number[] = [];
+  for (let i = 0; i < len; i += block) {
+    let m = 0;
+    for (const c of ch) for (let j = i; j < Math.min(len, i + block); j++) m = Math.max(m, Math.abs(c[j] as number));
+    env.push(m);
+  }
+  let peak = 0;
+  let at = 0;
+  env.forEach((m, i) => {
+    if (m > peak) {
+      peak = m;
+      at = i;
+    }
+  });
+  let last = at;
+  for (let i = at; i < env.length; i++) if ((env[i] as number) > peak * 0.1) last = i;
+  return last - at;
 }
 
 const SLICE_FFT = 256;
@@ -437,7 +496,7 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number, spectra
   }
   const n = region * ch.length;
   const window = Math.max(region, LOUD_WINDOW * sampleRate) * ch.length;
-  const spec = silent || !spectral ? { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0, bodyFrac: 0 } : spectrum(ch, sampleRate, start, end);
+  const spec = silent || !spectral ? { centroidHz: 0, brightHz: 0, lowFrac: 0, highFrac: 0, bodyFrac: 0, phoneFrac: 0 } : spectrum(ch, sampleRate, start, end);
   const mod = silent || !spectral ? { hz: 0, depth: 0 } : modulation(ch, sampleRate, start, end);
 
   const first = ch.reduce((m, c) => Math.max(m, Math.abs(c[0] as number)), 0);
@@ -462,6 +521,9 @@ export function analyse(ch: readonly Float32Array[], sampleRate: number, spectra
     modDepth: mod.depth,
     attackMs: silent ? 0 : attackTime(ch, sampleRate, start, end),
     snapFrac: silent || !spectral ? 0 : snapShare(ch, sampleRate, start, end),
+    biteFrac: silent || !spectral ? 0 : biteShare(ch, sampleRate, start, end),
+    phoneFrac: spec.phoneFrac,
+    fallMs: silent || !spectral ? 0 : fallTime(ch, sampleRate),
     sig: silent || !spectral ? { logMs: 0, logHz: 0, contour: [], env: [] } : signatureOf(ch, sampleRate, start, end, spec.centroidHz),
   };
 }

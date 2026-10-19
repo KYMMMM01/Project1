@@ -67,7 +67,7 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
     }
     const step = stage.killLadder.next(stage.now);
     const death = foeDieSfx(en.id);
-    stage.playStep(stage.rules.die, death.id, step, death.volume, death.pitch);
+    stage.playStep(stage.rules.die, death.id, step, death.volume, death.pitch, stage.panOfField(e.x));
   });
 
   function eliteDeath(en: EnemyState, info: EnemyInfo, x: number, y: number): void {

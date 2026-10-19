@@ -63,6 +63,13 @@ const MUZZLE_SHAPE: Partial<Record<UnitId, readonly [flash: number, streaks: num
   t_lucky: [0.9, 0.5],
 };
 
+/** Blows of one weapon that come within this many seconds of each other belong to one shot (`stage.volley`). */
+const VOLLEY_GAP = 0.12;
+/** How far apart, in seconds, the sounds of blows that land in the same instant start (`stage.stagger`): a quick run of blows, not one louder one. */
+const SPREAD_GAP = 0.011;
+/** Slot of a blow that no cat's weapon caused (a relic) in the volleys. */
+const RELIC_SLOT = 31;
+
 const UNIT_INDEX = {} as Record<UnitId, number>;
 UNIT_IDS.forEach((id, i) => {
   UNIT_INDEX[id] = i;
@@ -142,7 +149,9 @@ export function mountCombat(stage: Stage, on: Bus): void {
     lastAttacker = u;
     const cue = SHOOT_CUE[u.id];
     const release = attackSfx(u.id);
-    if (shootByUnit.ready(UNIT_INDEX[u.id], stage.now, 0.06)) stage.play(stage.rules.shoot, release.id, release.volume, release.pitch, 0.03);
+    if (shootByUnit.ready(UNIT_INDEX[u.id], stage.now, 0.06)) {
+      stage.play(stage.rules.shoot, release.id, release.volume, release.pitch, 0.03, stage.panOfField(cellCenterX(u.cell)));
+    }
     if (!sparks.take()) return;
     const cx = cellCenterX(u.cell);
     const cy = cellCenterY(u.cell);
@@ -179,9 +188,11 @@ export function mountCombat(stage: Stage, on: Bus): void {
       if (dealt > 0) say(en, info, dealt, 'crit');
       // A crit is the weapon's own impact with a bright crack on top (never a different weapon), and the enemy answers as usual.
       const hitCue = impactSfx(e.unitId);
-      if (stage.play(stage.rules.hit, hitCue.id, hitCue.volume, hitCue.pitch, 0.03)) answerHit(en, e.killed);
+      const pan = stage.panOfField(en.x);
+      const share = stage.volley.next(e.unitId ? UNIT_INDEX[e.unitId] : RELIC_SLOT, stage.now, VOLLEY_GAP, true);
+      if (stage.playSpread(stage.rules.hit, hitCue.id, hitCue.volume * share, hitCue.pitch, 0.03, pan, 'imp', SPREAD_GAP)) answerHit(en, e.killed, pan, share);
       const critCue = critSfx(e.unitId);
-      stage.play(stage.rules.crit, critCue.id, critCue.volume, critCue.pitch, 0.03);
+      stage.playSpread(stage.rules.crit, critCue.id, critCue.volume, critCue.pitch, 0.03, pan, 'crit', SPREAD_GAP, 2);
       stage.buzz('tap', Gate.critBuzz, 0.2);
       // A crit stops the frame for a moment: a little longer when it lands on a boss or an elite.
       stage.stop(info.big ? 36 : 26);
@@ -195,9 +206,12 @@ export function mountCombat(stage: Stage, on: Bus): void {
       const heavy = info.big || dealt >= en.maxHp * 0.08;
       const hitCue = impactSfx(e.unitId);
       const step = e.killed ? 1.25 : 1;
-      if (stage.play(heavy || e.killed ? stage.rules.heavyHit : stage.rules.hit, hitCue.id, hitCue.volume * step, hitCue.pitch, 0.03)) {
-        answerHit(en, e.killed);
-        if (heavy || e.killed) stage.direct('hit_heavy', e.killed ? 0.6 : 0.5, e.killed ? 1.15 : info.boss ? 0.8 : 1);
+      // One shot is one blow and a fading echo of it (a pierce goes through six enemies: the first is heard in full, the next two quieter, the rest not at all), unless the blow matters.
+      const pan = stage.panOfField(en.x);
+      const share = stage.volley.next(e.unitId ? UNIT_INDEX[e.unitId] : RELIC_SLOT, stage.now, VOLLEY_GAP, heavy || e.killed);
+      if (share > 0 && stage.playSpread(heavy || e.killed ? stage.rules.heavyHit : stage.rules.hit, hitCue.id, hitCue.volume * step * share, hitCue.pitch, 0.03, pan, 'imp', SPREAD_GAP)) {
+        answerHit(en, e.killed, pan, share);
+        if (heavy || e.killed) stage.direct('hit_heavy', e.killed ? 0.6 : 0.5, e.killed ? 1.15 : info.boss ? 0.8 : 1, pan, stage.stagger('heavy', SPREAD_GAP, 2));
       }
       weigh(e, info.boss, dealt);
     }
@@ -228,10 +242,10 @@ export function mountCombat(stage: Stage, on: Bus): void {
   }
 
   /** How an enemy answers a blow, by what it is made of; a killing blow gets none because its death follows. */
-  function answerHit(en: EnemyState, killed: boolean): void {
+  function answerHit(en: EnemyState, killed: boolean, pan: number, share: number): void {
     if (killed) return;
     const cue = foeHitSfx(en.id);
-    stage.direct(cue.id, cue.volume, cue.pitch);
+    stage.direct(cue.id, cue.volume * share, cue.pitch, pan, stage.stagger('foe', SPREAD_GAP));
   }
 
   /** The weapon of a cat landing as an area strike: its own impact, a step louder than a single hit. */

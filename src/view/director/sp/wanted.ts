@@ -203,7 +203,8 @@ class WantedScene implements SpScene<'wanted'> {
       s.holdCount = 1;
       this.holds.hold(d.targetUid, d.amount, battle.time);
     }
-    stage.play(stage.rules.zone, 'whoosh', 0.4, 1.4, 0.05);
+    // The poster is slapped on its target.
+    stage.play(stage.rules.skill, 'sp_poster_slap', 1, 1, 0.03, stage.panOf(s.x));
   }
 
   /**
@@ -336,7 +337,7 @@ class WantedScene implements SpScene<'wanted'> {
       s.trail.visible = true;
     }
     stage.fx.ps.burst(PUFF, s.fromX, s.fromY, { scale: 0.9, count: stage.detail === 0 ? 0.5 : 1 });
-    stage.play(stage.rules.shoot, 'atk_r_gunner', 0.8, 1.05, 0.04);
+    stage.play(stage.rules.skill, 'sp_cork_pop', 0.9, 1, 0.03, stage.panOf(s.fromX));
   }
 
   /** The cork flies from the muzzle to the poster's middle over the rest of the first span. */
@@ -379,8 +380,10 @@ class WantedScene implements SpScene<'wanted'> {
     stage.fx.ps.burst(SPARKS, px, py, { scale, count: detail === 0 ? 0.5 : 1 });
     if (detail > 0 && !calm) stage.fx.ps.burst(SCRAPS, px, py, { scale: Math.max(0.7, scale), count: detail === 1 ? 0.7 : 1 });
     stage.fx.shockwave(px, py, { color: Hue.cream, radius: s.big ? 62 : 36 });
-    stage.play(stage.rules.heavyHit, 'imp_r_gunner', 0.9, 0.95, 0.04);
-    if (s.closed) stage.play(stage.rules.big, 'hit_heavy', 0.55, 0.7, 0.03);
+    const pan = stage.panOf(s.aimX);
+    stage.play(stage.rules.skill, 'sp_poster_hole', 1, 1, 0.03, pan);
+    // The case is closed: the stamp comes down a beat after the cork is through.
+    if (s.closed) stage.play(stage.rules.skill, 'sp_seal_stamp', 0.9, 1, 0.03, pan, 0.09);
     if (s.big && !calm) stage.shake(Trauma.t1, Gate.spShake, 0.3);
   }
 

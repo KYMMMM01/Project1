@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SFX_IDS } from '@/audio';
 import { ENEMY_IDS, UNIT_IDS } from '@/game';
-import { LATER_SOUNDS, LATER_STINGERS, START_SOUNDS, enemySounds, unitSounds, waveSounds } from '@/view/soundPlan';
+import { LATER_SOUNDS, LATER_STINGERS, SKILL_SOUNDS, START_SOUNDS, enemySounds, skillSounds, unitSounds, waveSounds } from '@/view/soundPlan';
 
 describe('the sounds a battle needs', () => {
   it('lists every sound once, in one lane only', () => {
@@ -24,6 +24,24 @@ describe('the sounds a battle needs', () => {
 
   it('gives every cat its release and its impact, and nothing else', () => {
     for (const id of UNIT_IDS) expect(unitSounds(id)).toEqual([`atk_${id}`, `imp_${id}`]);
+  });
+
+  it('gives each of the twelve cats with a skill the sounds of its scene, and between them every one of the skills\' 48 sounds is ready before it is cast', () => {
+    expect(Object.keys(SKILL_SOUNDS).sort()).toEqual(['m_cosmo', 'm_frost', 'm_storm', 'r_gunner', 'r_ninja', 'r_star', 't_alch', 't_bard', 't_lucky', 'w_samurai', 'w_tiger', 'w_viking']);
+    const all = new Set<string>();
+    for (const [id, list] of Object.entries(SKILL_SOUNDS)) {
+      expect(new Set(list).size, id).toBe(list?.length);
+      for (const s of list ?? []) {
+        expect(SFX_IDS, `${id} ${s}`).toContain(s);
+        all.add(s);
+      }
+    }
+    expect([...all].sort()).toEqual(SFX_IDS.filter((x) => x.startsWith('sp_')).sort());
+    expect(skillSounds('w_paw')).toEqual([]);
+    expect(skillSounds('w_tiger')[0]).toBe('sp_cutin');
+    // the guardians (rank 5) bring the cut-in; the others do not
+    for (const id of ['w_tiger', 'r_star', 'm_cosmo', 't_lucky'] as const) expect(skillSounds(id)).toContain('sp_cutin');
+    for (const id of ['w_viking', 'w_samurai', 'r_ninja', 'r_gunner', 'm_storm', 'm_frost', 't_bard', 't_alch'] as const) expect(skillSounds(id)).not.toContain('sp_cutin');
   });
 
   it('gives every enemy its answer to a hit and its death first, then the cues its own rule plays', () => {

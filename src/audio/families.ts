@@ -44,6 +44,19 @@ export const FOE_HITS = MATERIALS.map((m): SfxId => `foe_${m}_hit`);
 export const FOE_DEATHS = DYING.map((m): SfxId => `foe_${m}_die`);
 export const BOSS_DEATHS = BOSSES.map((m): SfxId => `foe_boss_${m}`);
 
+/**
+ * The cats' skills (sfx-skills.ts) in five families by what they are made of. The windows are what the sounds measure offline (the report), with a margin: they
+ * are looser than a UI sound's on purpose (a roar is a second long, a rattle is bright), and every one of them is still a family with a character.
+ */
+const SKILL_FANFARES = ['sp_cutin', 'sp_prize_fish', 'sp_prize_partner', 'sp_prize_more', 'sp_prize_toy', 'sp_prize_guardian'] as const;
+const SKILL_VOICES = ['sp_tiger_roar', 'sp_tiger_roar_end', 'sp_cloud_sigh', 'sp_night_hush', 'sp_meteor_warn', 'sp_strum'] as const;
+const SKILL_BLOWS = [
+  'sp_shield_slam', 'sp_dust_wedge', 'sp_tiger_land', 'sp_stomp', 'sp_clone_hop', 'sp_smoke_pop', 'sp_poster_slap', 'sp_cork_pop', 'sp_poster_hole', 'sp_seal_stamp',
+  'sp_cloud_pop', 'sp_thunder_tick', 'sp_meteor_boom', 'sp_meteor_ring', 'sp_capsule_bounce',
+] as const;
+const SKILL_RINGS = ['sp_sheath', 'sp_cut_clash', 'sp_star_ping', 'sp_note', 'sp_glass_tap', 'sp_glass_shatter', 'sp_shard_hit', 'sp_flask_pop', 'sp_flask_mini', 'sp_capsule_rattle', 'sp_capsule_pop'] as const;
+const SKILL_AIR = ['sp_dash', 'sp_clone_throw', 'sp_clone_vanish', 'sp_arrow_whoosh', 'sp_cloud_hop', 'sp_meteor_whistle', 'sp_flask_toss', 'sp_fish_boing', 'sp_fish_back', 'sp_capsule_fall'] as const;
+
 export const FAMILIES: readonly Family[] = [
   { name: 'paper tap', members: ['ui_click', 'ui_back', 'pickup'], maxMs: 90, maxAttackMs: 4, centroid: [300, 1800], maxLow: 0.3, maxHigh: 0.08 },
   { name: 'paper slide', members: ['ui_tab', 'ui_popup_open', 'ui_popup_close', 'place', 'card_flip'], maxMs: 125, maxAttackMs: 40, centroid: [300, 1800], maxLow: 0.3, maxHigh: 0.1 },
@@ -101,6 +114,11 @@ export const FAMILIES: readonly Family[] = [
     maxLow: 0.3,
     maxHigh: 0.08,
   },
+  { name: 'skill fanfare and prize', members: SKILL_FANFARES, maxMs: 1000, maxAttackMs: 100, centroid: [500, 2000], maxLow: 0.2, maxHigh: 0.05 },
+  { name: 'skill voice and breath', members: SKILL_VOICES, maxMs: 1000, maxAttackMs: 100, centroid: [250, 1000], maxLow: 0.5, maxHigh: 0.05 },
+  { name: 'skill blow', members: SKILL_BLOWS, maxMs: 500, maxAttackMs: 15, centroid: [250, 1800], maxLow: 0.5, maxHigh: 0.15 },
+  { name: 'skill ring and glass', members: SKILL_RINGS, maxMs: 400, maxAttackMs: 20, centroid: [800, 3300], maxLow: 0.1, maxHigh: 0.2 },
+  { name: 'skill air and boing', members: SKILL_AIR, maxMs: 500, maxAttackMs: 80, centroid: [450, 2800], maxLow: 0.1, maxHigh: 0.2 },
   { name: 'low drum', members: ['boss_warning', 'boss_roar', 'boss_die', 'explosion', 'purr'], maxMs: 1450, maxAttackMs: 50, centroid: [100, 900], maxLow: 0.9, maxHigh: 0.05 },
   {
     name: 'fanfare',

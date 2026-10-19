@@ -109,6 +109,24 @@ export function softClipCurve(drive: number, size = 1024): Float32Array<ArrayBuf
   return out;
 }
 
+/**
+ * The last stage of the master chain (a WaveShaperNode after the limiter): the signal passes untouched up to `knee`, and above it bends smoothly
+ * (the slope is 1 where it starts, so there is no corner to hear) towards `ceiling`, which nothing reaches: even a input far past full scale comes
+ * out under it. The limiter is a compressor with an attack of 3 ms, so a very fast hit (a recorded blade that starts at full level) can get past it
+ * for a moment; this is what stops that from ever being a clip. Input beyond [-1, 1] is held at the end of the curve.
+ */
+export function ceilingCurve(ceiling = 0.944, knee = 0.6, size = 2049): Float32Array<ArrayBuffer> {
+  const room = Math.max(1e-3, ceiling - knee);
+  const out = new Float32Array(size);
+  for (let i = 0; i < size; i++) {
+    const x = (i / (size - 1)) * 2 - 1;
+    const a = Math.abs(x);
+    const y = a <= knee ? a : knee + room * Math.tanh((a - knee) / room);
+    out[i] = x < 0 ? -y : y;
+  }
+  return out;
+}
+
 /** Smoothstep on [lo, hi]; used to turn the 0..1 battle intensity into per-layer gain targets. */
 export function smoothstep(lo: number, hi: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));

@@ -1223,7 +1223,8 @@ const BEFORE_MODES: Array<{
   { name: 'endless ch2', over: { seed: 301, mode: 'endless', chapter: 2 }, level: 4, policy: 'synergy', maxSeconds: 700, hash: '8dfef24a', events: 26282, wave: 40, time: 699.517, end: 'bae7e3d3' },
   { name: 'gold dungeon ch1', over: { seed: 70004, mode: 'gold', chapter: 1 }, level: 3, policy: 'synergy', hash: '8e90ae7e', events: 2311, wave: 8, time: 138.267, end: '6383ed95' },
   { name: 'gold dungeon ch5', over: { seed: 70005, mode: 'gold', chapter: 5 }, level: 6, policy: 'merge', hash: '67406c26', events: 2580, wave: 8, time: 140.017, end: '81adadd5' },
-  { name: 'tutorial', over: { seed: 70006, mode: 'tutorial', chapter: 1 }, level: 1, policy: 'merge', hash: '66d4bef8', events: 1921, wave: 8, time: 120.2, end: '168101ca' },
+  // The tutorial row was measured again on the pre-skills tree with the one change the tutorial has had since (its elite has 10 s more, TUTORIAL_ELITE_EXTRA_TIME): 66d4bef8 / 1921 events / 120.2 s / 168101ca before it.
+  { name: 'tutorial', over: { seed: 70006, mode: 'tutorial', chapter: 1 }, level: 1, policy: 'merge', hash: 'da7dc6d4', events: 1948, wave: 8, time: 124.383, end: '551d6734' },
   { name: 'stake 5', over: { seed: 70007, mode: 'chapter', chapter: 3, stake: 5 }, level: 3, policy: 'synergy', hash: 'd8adbe9', events: 1405, wave: 4, time: 76.033, end: '2b34045d' },
 ];
 

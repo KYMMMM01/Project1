@@ -220,6 +220,28 @@ describe('the battle warm-up', () => {
       expect(order.indexOf('snd:sfx:imp_m_snow:0')).toBeLessThan(order.indexOf('snd:sfx:atk_m_fire:0'));
     });
 
+    it('asks for the sounds of a cat\'s skill when it appears in a battle with skills on, so that the first cast is heard, and not in one without', () => {
+      const on = fake({});
+      (on.b as unknown as { spOn: boolean }).spOn = true;
+      const w = new BattleWarmup(on.b as unknown as BattleApi);
+      w.update();
+      expect(warm.has('snd:sfx:sp_tiger_roar:0')).toBe(false);
+      on.b.units[2] = { id: 'w_tiger' };
+      w.update();
+      for (const id of ['sp_cutin', 'sp_tiger_roar', 'sp_tiger_land', 'sp_stomp', 'sp_tiger_roar_end']) expect(warm.has(`snd:sfx:${id}:0`), id).toBe(true);
+      // behind the cat's own release and impact
+      const order = soundOrder();
+      expect(order.indexOf('snd:sfx:imp_w_tiger:0')).toBeLessThan(order.indexOf('snd:sfx:sp_tiger_roar:0'));
+      warm.reset();
+      const off = fake({});
+      const w2 = new BattleWarmup(off.b as unknown as BattleApi);
+      w2.update();
+      off.b.units[2] = { id: 'w_tiger' };
+      w2.update();
+      expect(warm.has('snd:sfx:atk_w_tiger:0')).toBe(true);
+      expect(warm.has('snd:sfx:sp_tiger_roar:0')).toBe(false);
+    });
+
     it('notices a cat once, and again when a different cat takes its cell', () => {
       const { b } = fake({});
       const w = new BattleWarmup(b as unknown as BattleApi);

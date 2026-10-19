@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DamageWindow, killTone } from '@/view/hud/killEstimate';
 import { shakeScaleOf, volumeStep } from '@/view/hud/settingsMath';
-import { NUDGE_AFTER, NUDGE_CATS, NUDGE_MAX, findMergePair, nudgeDue } from '@/view/hud/tutorialFlow';
+import { NUDGE_AFTER, NUDGE_CATS, NUDGE_MAX, findMergePair, nudgeDue, sellLocked } from '@/view/hud/tutorialFlow';
 
 describe('kill estimate', () => {
   it('waits for 1.5 s of observation before it shows a number', () => {
@@ -81,6 +81,19 @@ describe('merge pair', () => {
     board[17] = 'w_paw';
     board[9] = 'r_sling';
     expect(findMergePair(board)).toEqual([3, 17]);
+  });
+});
+
+describe('the sell strip while a lesson holds the clock', () => {
+  it('is closed to a dragged cat, so a lesson about something else is not ended by a sale', () => {
+    expect(sellLocked(true, 'merge')).toBe(true);
+    expect(sellLocked(true, 'awaken')).toBe(true);
+    expect(sellLocked(false, 'merge')).toBe(false);
+    expect(sellLocked(false, null)).toBe(false);
+  });
+
+  it("is open in the lesson about selling: a drag to the strip is that lesson's own answer", () => {
+    expect(sellLocked(true, 'sell')).toBe(false);
   });
 });
 

@@ -82,7 +82,7 @@ function rig() {
     detail: 1,
     reduced: false,
     fx: { ps: { burst: vi.fn() }, shockwave: vi.fn(), fleck: vi.fn() },
-    rules: { big: {}, zone: {}, hit: {}, coinTick: {} },
+    panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, big: {}, zone: {}, hit: {}, coinTick: {} },
   };
   const on = ((type: keyof BattleEvents, fn: never) => {
     events.on(type, fn);

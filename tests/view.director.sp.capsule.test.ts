@@ -81,6 +81,8 @@ interface Rig {
     detail: 0 | 1 | 2;
     reduced: boolean;
     play: ReturnType<typeof vi.fn>;
+    panOf: () => number;
+    rules: Record<string, object>;
     fx: { ps: { burst: ReturnType<typeof vi.fn> }; shockwave: ReturnType<typeof vi.fn>; fleck: ReturnType<typeof vi.fn> };
   };
   front: Container;
@@ -114,6 +116,8 @@ function rig(detail: 0 | 1 | 2 = 1, reduced = false): Rig {
     detail,
     reduced,
     play: vi.fn(),
+    panOf: () => 0,
+    rules: {},
     fx: { ps: { burst: vi.fn() }, shockwave: vi.fn(), fleck: vi.fn() },
   };
   r.front = new Container();
@@ -124,7 +128,7 @@ function rig(detail: 0 | 1 | 2 = 1, reduced = false): Rig {
     ctx: { layers: { fxFront: r.front, fxBack: r.back, numbers: r.numbers } },
     battle: r.battle as unknown as BattleApi,
   } as unknown as SpEnv;
-  (env.stage as unknown as { rules: object }).rules = { zone: {}, big: {}, ui: {} };
+  (env.stage as unknown as { rules: object }).rules = { zone: {}, big: {}, ui: {}, skill: {}, skillTick: {} };
   r.scene = makeCapsule(env) as unknown as Rig['scene'];
   r.run = (seconds, speed = 1) => {
     const n = Math.round(seconds * 60);
@@ -170,6 +174,55 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   clearRingHolds();
+});
+
+describe('the sounds of a capsule', () => {
+  const ids = (r: Rig): string[] => r.stage.play.mock.calls.map((c) => c[1] as string);
+
+  it('falls with a whistle, bounces twice, rattles in its shell, and opens with a latch and a prize a beat behind it', () => {
+    const r = rig();
+    r.cast('fish');
+    expect(ids(r)).toEqual(['sp_capsule_fall']);
+    r.run(1.2);
+    expect(ids(r).filter((x) => x === 'sp_capsule_bounce')).toHaveLength(2);
+    expect(ids(r)).toContain('sp_capsule_rattle');
+    // the order: whistle, bounce, bounce, rattle
+    expect(ids(r)).toEqual(['sp_capsule_fall', 'sp_capsule_bounce', 'sp_capsule_bounce', 'sp_capsule_rattle']);
+    r.open('fish', 'fish');
+    const pop = r.stage.play.mock.calls.find((c) => c[1] === 'sp_capsule_pop');
+    const prize = r.stage.play.mock.calls.find((c) => c[1] === 'sp_prize_fish');
+    expect(pop?.[0]).toBe(r.stage.rules.skill);
+    expect(prize?.[0]).toBe(r.stage.rules.skill);
+    // the prize starts 0.07 s after the latch, on the audio clock (no timer to lose)
+    expect(prize?.[6]).toBeCloseTo(0.07, 3);
+    expect(pop?.[6] ?? 0).toBe(0);
+  });
+
+  it('says what the prize is: each kind has a sound of its own, the toy box and the guardian louder than the rest', () => {
+    const want: Array<[string, string, string, number]> = [
+      ['fish', 'fish', 'sp_prize_fish', 0.9], ['purr', 'purr', 'purr', 0.8], ['partner', 'seat', 'sp_prize_partner', 0.9], ['partner', 'promote', 'sp_prize_partner', 0.9],
+      ['more', 'more', 'sp_prize_more', 0.9], ['toy', 'toy', 'sp_prize_toy', 1], ['guardian', 'awaken', 'sp_prize_guardian', 1.05],
+    ];
+    for (const [kind, result, id, volume] of want) {
+      const r = rig();
+      r.cast(kind as SpCapsuleKind);
+      r.run(1.2);
+      r.stage.play.mockClear();
+      r.open(kind as SpCapsuleKind, result as SpCapsuleResult);
+      const call = r.stage.play.mock.calls.find((c) => c[1] === id);
+      expect(call, `${kind} / ${result}`).toBeDefined();
+      expect(call?.[2], id).toBeCloseTo(volume, 6);
+    }
+  });
+
+  it('is silent under reduced motion while it falls (no whistle, no bounce, no rattle) but still opens with its sounds', () => {
+    const r = rig(1, true);
+    r.cast('fish');
+    r.run(1.2);
+    expect(ids(r)).toEqual([]);
+    r.open('fish', 'fish');
+    expect(ids(r)).toContain('sp_capsule_pop');
+  });
 });
 
 describe('the fall of a capsule', () => {

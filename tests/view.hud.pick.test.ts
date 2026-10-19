@@ -18,6 +18,7 @@ vi.mock('@/core/haptics', () => ({ haptic: () => undefined }));
 vi.mock('@/core/i18n', () => ({ t: (k: string) => k }));
 vi.mock('@/core/tween', () => ({ Ease: new Proxy({}, { get: () => (v: number) => v }) }));
 vi.mock('@/game', () => ({
+  OFFER_EVERY: 6,
   classDef: () => ({ nameKey: 'class' }),
   unitClass: () => 'warrior',
   unitDef: (id: string) => ({ id, rarity: 'common', nameKey: `${id}.name`, classId: 'warrior', skillText: () => 'skill' }),

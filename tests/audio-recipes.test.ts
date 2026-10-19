@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { SFX_IDS } from '@/audio/api';
+import { GAME_SFX_IDS, SFX_IDS } from '@/audio/api';
 import { FAMILIES, familyOf, type SoundKey } from '@/audio/families';
 import { CAT_TARGET, type Recipe } from '@/audio/recipe';
 import { BATTLE_RECIPES } from '@/audio/sfx-battle';
+import { BEFORE_RECIPES } from '@/audio/sfx-before';
 import { CAT_RECIPES } from '@/audio/sfx-cats';
 import { COMBAT_RECIPES } from '@/audio/sfx-combat';
+import { IMPACT_RECIPES } from '@/audio/sfx-impacts';
 import { FOE_RECIPES } from '@/audio/sfx-foes';
+import { SKILL_RECIPES } from '@/audio/sfx-skills';
 import { UI_RECIPES } from '@/audio/sfx-ui';
 import {
   PRERENDER_ORDER,
@@ -14,7 +17,7 @@ import {
   stingerIndexOf,
 } from '@/audio/sounds';
 import { STINGER_DUCK, STINGER_MUFFLE, STINGER_RECIPES } from '@/audio/stingers';
-import type { FilterOpts, NoiseOpts, Send, Synth, ToneOpts } from '@/audio/synth';
+import type { FilterOpts, NoiseOpts, SampleOpts, Send, Synth, ToneOpts } from '@/audio/synth';
 import { hz } from '@/audio/theory';
 
 /**
@@ -25,6 +28,8 @@ import { hz } from '@/audio/theory';
 class FakeSynth {
   readonly tones: ToneOpts[] = [];
   readonly noises: NoiseOpts[] = [];
+  /** The recorded layers a recipe asked for (ids of the sample store). */
+  readonly samples: Array<{ id: string; o: SampleOpts }> = [];
   private seed = 1234;
   rand = (): number => {
     this.seed = (this.seed * 1664525 + 1013904223) >>> 0;
@@ -41,6 +46,13 @@ class FakeSynth {
   noise(o: NoiseOpts): void {
     this.noises.push(o);
     this.bump(o);
+  }
+
+  sample(id: string, o: SampleOpts = {}): boolean {
+    this.samples.push({ id, o });
+    // a recording is as long as the recipe lets it be (the baker cuts it at the render's end), so only its start has to fit
+    this.end = Math.max(this.end, (o.at ?? 0) + Math.min(o.dur ?? 0, 0.5));
+    return true;
   }
 
   echo(time: number, feedback: number, wet: number): Send {
@@ -61,7 +73,7 @@ class FakeSynth {
 
 function build(r: Recipe, variant: number): FakeSynth {
   const s = new FakeSynth();
-  r.build(s as unknown as Synth, { j: (a) => (variant === 0 ? 1 : 1 + (s.rand() * 2 - 1) * a) });
+  r.build(s as unknown as Synth, { i: variant, j: (a) => (variant === 0 ? 1 : 1 + (s.rand() * 2 - 1) * a) });
   return s;
 }
 
@@ -74,10 +86,10 @@ describe('sound catalogue', () => {
     expect(SOUNDS.length).toBe(SFX_IDS.length + Object.keys(STINGER_RECIPES).length);
   });
 
-  it('splits the ids across the five recipe files without gaps or overlaps', () => {
+  it('splits the ids across the eight recipe files (seven of the game, one of old versions) without gaps or overlaps', () => {
     // The compiler already proves the merge covers SFX_IDS (sounds.ts types it as Record<SfxId, Recipe>);
     // this proves no id is defined twice, which a spread would silently resolve in favour of the last file.
-    const lists = [Object.keys(UI_RECIPES), Object.keys(COMBAT_RECIPES), Object.keys(BATTLE_RECIPES), Object.keys(CAT_RECIPES), Object.keys(FOE_RECIPES)];
+    const lists = [Object.keys(UI_RECIPES), Object.keys(COMBAT_RECIPES), Object.keys(BATTLE_RECIPES), Object.keys(CAT_RECIPES), Object.keys(IMPACT_RECIPES), Object.keys(FOE_RECIPES), Object.keys(SKILL_RECIPES), Object.keys(BEFORE_RECIPES)];
     const all = lists.flat();
     expect(all.length).toBe(SFX_IDS.length);
     expect(new Set(all).size).toBe(SFX_IDS.length);
@@ -88,7 +100,8 @@ describe('sound catalogue', () => {
 
   it('has unique stable keys and a full prerender order', () => {
     expect(new Set(SOUNDS.map((d) => d.key)).size).toBe(SOUNDS.length);
-    expect([...PRERENDER_ORDER].sort((a, b) => a - b)).toEqual(SOUNDS.map((d) => d.index));
+    // (the old versions kept for the sound board are never baked ahead)
+    expect([...PRERENDER_ORDER].sort((a, b) => a - b)).toEqual(SOUNDS.filter((d) => !d.recipe.legacy).map((d) => d.index));
     // UI sounds are baked before the big moments.
     const first = SOUNDS[PRERENDER_ORDER[0] as number];
     const last = SOUNDS[PRERENDER_ORDER[PRERENDER_ORDER.length - 1] as number];
@@ -116,7 +129,7 @@ describe('sound catalogue', () => {
   });
 
   it('puts every SFX and stinger in exactly one family whose window fits its declared duration', () => {
-    const keys: SoundKey[] = [...SFX_IDS, ...(Object.keys(STINGER_RECIPES) as Array<keyof typeof STINGER_RECIPES>).map((id): SoundKey => `stinger:${id}`)];
+    const keys: SoundKey[] = [...GAME_SFX_IDS, ...(Object.keys(STINGER_RECIPES) as Array<keyof typeof STINGER_RECIPES>).map((id): SoundKey => `stinger:${id}`)];
     const seen = FAMILIES.flatMap((f) => f.members);
     expect(new Set(seen).size).toBe(seen.length);
     expect([...seen].sort()).toEqual([...keys].sort());
@@ -128,8 +141,8 @@ describe('sound catalogue', () => {
     }
     for (const fam of FAMILIES) {
       expect(fam.centroid[0]).toBeLessThan(fam.centroid[1]);
-      // The weapon and enemy sounds may carry up to 30 % of their energy above 4 kHz (the bite of a contact, a blade, a coin); nothing else may.
-      const bright = fam.members.every((m) => /^(atk_|imp_|foe_|crit$|hit_heavy$)/.test(m));
+      // The weapon and enemy sounds (and the skills' glass, steel and rattles) may carry up to 30 % of their energy above 4 kHz (the bite of a contact, a blade, a coin); nothing else may.
+      const bright = fam.members.every((m) => /^(atk_|imp_|foe_|sp_|crit$|hit_heavy$)/.test(m));
       expect(fam.maxHigh).toBeLessThanOrEqual(bright ? 0.3 : 0.1);
     }
   });
@@ -278,19 +291,19 @@ describe('recipes', () => {
     expect(STINGER_MUFFLE.defeat).toBeLessThanOrEqual(500);
   });
 
-  it('declares duration windows that cap the decoded bank under 24 MB', () => {
+  it('declares duration windows that cap the decoded bank under 30 MB', () => {
     // Node cannot render, so this bounds the bank from the declared maximum durations (which the
     // offline report enforces): mono float32 at 48 kHz, all variants. The report's measured total
-    // (about 12 MB with the weapon and enemy sounds) against its 13 MB budget is the real check;
+    // (about 16.5 MB with the weapon, enemy and skill sounds) against its 17 MB budget is the real check;
     // this only stops the windows from drifting wide.
-    const bytes = SOUNDS.reduce((n, d) => n + (d.recipe.variants ?? 1) * (d.recipe.ms[1] / 1000) * 48000 * 4, 0);
-    expect(bytes / 1e6).toBeLessThan(24);
+    const bytes = SOUNDS.filter((d) => !d.recipe.legacy).reduce((n, d) => n + (d.recipe.variants ?? 1) * (d.recipe.ms[1] / 1000) * 48000 * 4, 0);
+    expect(bytes / 1e6).toBeLessThan(30);
   });
 
   it('band-limits rapid-fire ids (below 5 kHz for the old shots, below 7.5 kHz for the weapon sounds) and keeps their level at or under the guide cap', () => {
     for (const d of SOUNDS) {
       const r = d.recipe;
-      if (!['fire', 'hit', 'swing', 'impact', 'foe'].includes(r.cat) || !r.rate) continue;
+      if (r.legacy || !['fire', 'hit', 'swing', 'impact', 'foe'].includes(r.cat) || !r.rate) continue;
       expect(r.lp, d.key).toBeLessThanOrEqual(['fire', 'hit'].includes(r.cat) && d.id !== 'hit_heavy' && d.id !== 'crit' ? 5000 : 7500);
       expect(r.lp, d.key).toBeGreaterThan(0);
     }

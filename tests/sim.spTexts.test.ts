@@ -330,7 +330,7 @@ describe('the guide topic and the lesson', () => {
 
   it('tells the lesson the way the directive words it, and keeps it to two short lines like every other lesson', () => {
     setLang('ko');
-    expect(t('guide.sp_skill.teach', spGuideFacts())).toBe('고양이 옆 동그라미가 가득 차면 스킬을 써요. 누르지 않아도 돼요.');
+    expect(t('guide.sp_skill.teach', spGuideFacts())).toBe('스킬 게이지가 가득 차면 스킬을 써요. 누르지 않아도 돼요.');
     for (const lang of LANGS) {
       setLang(lang);
       expect(t('guide.sp_skill.teach', spGuideFacts()).length, lang).toBeLessThanOrEqual(lang === 'ko' ? 40 : 72);
@@ -338,16 +338,16 @@ describe('the guide topic and the lesson', () => {
     }
   });
 
-  it('teaches the ring: it fills, a full ring waits for a target and casts by itself, the cats from Alley Boss up have one, it goes along when moved and starts at half when merged', () => {
+  it('teaches the skill gauge: it fills, a full gauge waits for a target and casts by itself, the cats from Alley Boss up have one, it goes along when moved and starts at half when merged', () => {
     setLang('ko');
     const facts = spGuideFacts();
     expect(facts).toMatchObject({ rank: '골목대장', below: '꼬마 · 동네', merge: 50, cosmo: '우주냥' });
     const ko = t('guide.sp_skill.full', facts);
-    for (const part of ['골목대장 이상', '차오르다가', '가득 찬 채로 기다렸다가', '저절로', '옮기거나 자리를 바꾸면', '50%에서 시작', '꼬마 · 동네']) expect(ko, part).toContain(part);
+    for (const part of ['골목대장 이상', '스킬 게이지', '차다가', '그대로 기다렸다가', '저절로', '옮기거나 자리를 바꾸면', '50%에서 시작', '꼬마 · 동네']) expect(ko, part).toContain(part);
     expect(ko.split('\n').length).toBeGreaterThanOrEqual(5);
     setLang('en');
     const en = t('guide.sp_skill.full', spGuideFacts());
-    for (const part of ['Cats from Alley Boss up', 'fills bit by bit', 'waits, full', 'by themselves', 'move or swap', 'starts at 50%', 'Kitten · Street']) expect(en, part).toContain(part);
+    for (const part of ['Cats from Alley Boss up', 'skill gauge', 'fills bit by bit', 'waits, full', 'by themselves', 'move or swap', 'starts at 50%', 'Kitten · Street']) expect(en, part).toContain(part);
     expect(en.split('\n').length).toBeGreaterThanOrEqual(5);
     expect(en).toContain('Cosmo Cat');
   });

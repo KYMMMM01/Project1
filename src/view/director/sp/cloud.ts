@@ -251,7 +251,7 @@ class CloudScene implements SpScene<'cloud'> {
     c.root.visible = true;
     this.place(c, 0, 0);
     stage.fx.ps.burst(HAT_PUFF, c.hatX, c.hatY + 6, { count: stage.detail === 0 ? 0.6 : 1 });
-    stage.play(stage.rules.zone, 'shoot_magic', 0.42, 1.7, 0.05);
+    stage.play(stage.rules.skill, 'sp_cloud_pop', 0.95, 1, 0.03, stage.panOf(c.hatX));
   }
 
   // ── the follow-up events (only for a cloud this scene is drawing) ──
@@ -295,7 +295,7 @@ class CloudScene implements SpScene<'cloud'> {
       stage.fx.ps.burst(SPLASH_SPARK, p.x, p.y, { count: detail === 0 ? 0.6 : 1 });
     }
     // One crackle per bolt, a little higher each time: eight bolts climb like a charging coil.
-    stage.play(stage.rules.status, 'zap', 0.36, 0.95 + Math.min(0.5, e.index * 0.05), 0.04);
+    stage.play(stage.rules.skillTick, 'sp_thunder_tick', 0.9, 1 + Math.min(0.45, e.index * 0.055), 0.03, stage.panOf(x1));
   }
 
   private onHop(e: BattleEvents['cloudHop']): void {
@@ -313,7 +313,7 @@ class CloudScene implements SpScene<'cloud'> {
     // A bolt and a hop come in one tick when the bolt fells its host: the jump is the startled one, not the zap.
     c.zapOn = false;
     this.mood(c, 'startled');
-    stage.play(stage.rules.zone, 'whoosh', 0.3, 1.8, 0.05);
+    stage.play(stage.rules.skill, 'sp_cloud_hop', 0.8, 1, 0.05, stage.panOf(c.x));
   }
 
   private onEnd(e: BattleEvents['cloudEnd']): void {
@@ -331,7 +331,7 @@ class CloudScene implements SpScene<'cloud'> {
     this.mood(c, lost ? 'sad' : 'sigh');
     stage.fx.ps.burst(FIZZ_PUFF, c.x, c.y, { count: stage.detail === 0 ? 0.5 : 1 });
     if (stage.detail > 0) stage.fx.ps.burst(DRIZZLE, c.x, c.y + 14, { count: lost ? 0.6 : 1 });
-    stage.play(stage.rules.zone, 'whoosh', 0.3, 0.75, 0.05);
+    stage.play(stage.rules.skill, 'sp_cloud_sigh', 0.9, lost ? 0.88 : 1, 0.04, stage.panOf(c.x));
   }
 
   // ── the frame ──

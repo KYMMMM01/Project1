@@ -96,6 +96,7 @@ interface Arena {
     now: number;
     detail: 0 | 1 | 2;
     reduced: boolean;
+    panOf: (x: number) => number;
     fx: { ps: { burst: ReturnType<typeof vi.fn> }; shockwave: ReturnType<typeof vi.fn>; dustPuff: ReturnType<typeof vi.fn> };
     play: ReturnType<typeof vi.fn>;
     playStep: ReturnType<typeof vi.fn>;
@@ -121,7 +122,7 @@ function arena(detail: 0 | 1 | 2 = 2): Arena {
     play: vi.fn(),
     playStep: vi.fn(),
     shake: vi.fn(),
-    rules: { big: {}, heavyHit: {}, strike: {} },
+    panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, big: {}, heavyHit: {}, strike: {} },
   };
   const back = new Container();
   const front = new Container();
@@ -467,7 +468,7 @@ describe('the tiger\'s scene', () => {
     packed.a.stage.play.mockClear();
     for (let i = 0; i < 12; i++) packed.scene.runHit(hitOf(1, 'charge', enemy(i + 1, 'cucumber', 300 + i * 2, 45)));
     expect(live(packed.scene).stomps).toBe(1);
-    expect(packed.a.stage.play.mock.calls.filter((c) => c[1] === 'imp_w_tiger').length).toBe(1);
+    expect(packed.a.stage.play.mock.calls.filter((c) => c[1] === 'sp_stomp').length).toBe(1);
     const loose = setup(2, 700);
     advance(loose.a, loose.scene, 0.5);
     for (let i = 0; i < 6; i++) loose.scene.runHit(hitOf(1, 'charge', enemy(i + 1, 'cucumber', 100 + i * 120, 45)));
@@ -575,6 +576,25 @@ describe('the tiger\'s scene', () => {
     const tile = { x: cellCenterX(TIGER_CELL), y: cellCenterY(TIGER_CELL) };
     expect(Math.hypot((arrive as { x: number }).x - tile.x, (arrive as { y: number }).y - tile.y)).toBeLessThan(Math.hypot(end.x - tile.x, end.y - tile.y));
     expect(e.data.dist).toBe(1100);
+  });
+
+  it('has its own sounds for each beat: a roar as it leaps, a landing, a hoofbeat per enemy and a short roar where the run ends, none of the fight\'s borrowed ones', () => {
+    const { a, scene } = setup(2, 700);
+    a.stage.panOf = (x: number) => x / 1000;
+    advance(a, scene, 0.5);
+    scene.runHit(hitOf(1, 'charge', enemy(1, 'cucumber', 300, 45)));
+    scene.runEnd({ runId: 1, skill: 'charge', unit: tigerUnit(), hits: 1 });
+    let guard = 0;
+    while (live(scene).runs > 0 && guard++ < 1000) frame(a, scene);
+    const calls = a.stage.play.mock.calls;
+    const ids = calls.map((c) => c[1] as string);
+    // The order of the beats: roar, landing, a hoof, the end roar.
+    expect(ids.filter((x) => ['sp_tiger_roar', 'sp_tiger_land', 'sp_stomp', 'sp_tiger_roar_end'].includes(x))).toEqual(['sp_tiger_roar', 'sp_tiger_land', 'sp_stomp', 'sp_tiger_roar_end']);
+    expect(calls.find((c) => c[1] === 'sp_tiger_roar_end')?.[0]).toBe(a.stage.rules.skill);
+    expect(calls.find((c) => c[1] === 'sp_stomp')?.[0]).toBe(a.stage.rules.skillTick);
+    // The hoof is heard from the side of the screen the enemy is on (300 / 1000), the roar from the cat's tile.
+    expect(calls.find((c) => c[1] === 'sp_stomp')?.[5]).toBeCloseTo(0.3, 6);
+    for (const id of ['atk_w_tiger', 'imp_w_tiger', 'hit_heavy', 'awaken']) expect(ids, id).not.toContain(id);
   });
 
   it('shows the roar and the walk back for about a second at 1x and for their real floors at 3x (0.6 s), by the battle clock', () => {
@@ -704,8 +724,11 @@ describe('the tiger\'s scene', () => {
     advance(a, scene, 0.4);
     expect(a.stage.shake).toHaveBeenCalledTimes(1);
     const sounds = a.stage.play.mock.calls.map((c) => c[1]);
-    expect(sounds.filter((s) => s === 'atk_w_tiger')).toHaveLength(1);
-    expect(sounds.filter((s) => s === 'imp_w_tiger')).toHaveLength(1);
+    expect(sounds.filter((s) => s === 'sp_tiger_roar')).toHaveLength(1);
+    expect(sounds.filter((s) => s === 'sp_tiger_land')).toHaveLength(1);
+    // The roar and the landing are the skill's signatures (never thinned); the hoofbeats are small sounds with a budget of their own.
+    expect(a.stage.play.mock.calls.find((c) => c[1] === 'sp_tiger_roar')?.[0]).toBe(a.stage.rules.skill);
+    expect(a.stage.play.mock.calls.find((c) => c[1] === 'sp_tiger_land')?.[0]).toBe(a.stage.rules.skill);
     void scene;
   });
 
@@ -885,6 +908,27 @@ describe('the star archer\'s scene', () => {
     // An enemy the arrow passes without a mark gets nothing: no event, no star (the pool was kept for the originals).
     expect(live(scene).stars).toBe(1);
     expect(a.stage.playStep).toHaveBeenCalledTimes(1);
+  });
+
+  it('has its own sounds: a hush as the night comes down, a whoosh in pieces along the lap that is heard from where the arrow is, a ping for every star', () => {
+    const a = arena(2);
+    a.stage.panOf = (x: number) => x / 1000;
+    const scene = lapScene(a.env);
+    scene.cast(lapCast(a.battle.time, 1, 1200) as never);
+    expect(a.stage.play.mock.calls.map((c) => c[1])).toEqual(['sp_night_hush']);
+    advance(a, scene, 1.3);
+    const whooshes = a.stage.play.mock.calls.filter((c) => c[1] === 'sp_arrow_whoosh');
+    expect(whooshes.length).toBeGreaterThanOrEqual(3);
+    expect(whooshes.length).toBeLessThanOrEqual(6);
+    expect(whooshes.every((c) => c[0] === a.stage.rules.skill)).toBe(true);
+    // The arrow runs round the board, so the sound moves from side to side with it.
+    expect(new Set(whooshes.map((c) => c[5])).size).toBeGreaterThan(1);
+    scene.runHit(hitOf(1, 'lap', enemy(1, 'cucumber', 600, 45)));
+    const ping = a.stage.playStep.mock.calls[0];
+    expect(ping?.[0]).toBe(a.stage.rules.skillTick);
+    expect(ping?.[1]).toBe('sp_star_ping');
+    expect(ping?.[5]).toBeCloseTo(0.6, 6);
+    for (const id of ['atk_r_star', 'imp_r_star', 'awaken']) expect(a.stage.play.mock.calls.map((c) => c[1])).not.toContain(id);
   });
 
   it('a lap that marks twenty enemies shows twenty stars, each at its enemy, and the sound climbs a step each time up to a ring', () => {
@@ -1175,5 +1219,9 @@ describe('the two scenes behind the dispatcher', () => {
     const stage = Object.assign(a.stage, { ctx: a.env.ctx, addFrame: vi.fn(), onDestroy: vi.fn() });
     expect(mountSp(stage as unknown as Stage, (() => undefined) as unknown as Bus)).toBeNull();
     expect(a.back.children.length + a.front.children.length).toBe(0);
+    // and no sound: nothing listens, so a cast says nothing, and the stage is never asked for one
+    a.events.emit('spCast', { skill: 'lap', unit: { uid: 1, id: 'r_star', cell: 7 }, x: 100, y: 100, data: {} } as never);
+    expect(a.stage.play).not.toHaveBeenCalled();
+    expect(a.stage.playStep).not.toHaveBeenCalled();
   });
 });

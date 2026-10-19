@@ -12,7 +12,7 @@ import type { HudEnv } from './env';
 import type { RevealKey } from './policy';
 import { tapArea } from './kit';
 import { pityVisible } from './policy';
-import { CURRENCY_ROW, FISH_X, PURR_X, incomeShown } from './incomeMath';
+import { CURRENCY_ROW, FISH_X, PURR_X, incomeShown, shownAmount } from './incomeMath';
 
 /** A flight that never lands (cancelled by a pause menu, a cap) must not leave the number short for ever. */
 const FALLBACK = 3;
@@ -51,8 +51,16 @@ class Counter {
       this.pending += delta;
       this.bag.call(FALLBACK, () => this.settle(gain, gain.left));
     } else {
-      this.pill.setAmount(total - this.pending, true);
+      this.pill.setAmount(this.shown(), true);
     }
+  }
+
+  /** Every gain in the air is counted now: the pill shows the real amount (the icons go on flying, or hang where they are while the clock is held). */
+  settleAll(): void {
+    for (const gain of this.gains) gain.left = 0;
+    this.gains.length = 0;
+    this.pending = 0;
+    this.pill.setAmount(this.total, true);
   }
 
   /** An icon touched the pill: its share of the oldest gains in the air shows now. */
@@ -71,7 +79,11 @@ class Counter {
     gain.left -= take;
     if (gain.left <= 0) this.gains.splice(this.gains.indexOf(gain), 1);
     this.pending = Math.max(0, this.pending - take);
-    this.pill.setAmount(this.total - this.pending, true);
+    this.pill.setAmount(this.shown(), true);
+  }
+
+  private shown(): number {
+    return shownAmount(this.total, this.pending);
   }
 }
 
@@ -106,8 +118,12 @@ export class CurrencyRow {
   private readonly pityBg = new Graphics();
   private readonly pitySeed = paperSeed();
   readonly odds: Button;
+  /** The purr that is still flying to its counter is counted now. */
+  settlePurr(): void {
+    this.purrCounter.settleAll();
+  }
   /** The fish a second that come in by themselves, as a small paper tag beside the fish pill ("+0.5/s"); a tap says what it is. */
-  private readonly income = new Container();
+  readonly income = new Container();
   private readonly incomeText: Text;
   private incomeKey = '';
   private pityShown = false;

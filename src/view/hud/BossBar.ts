@@ -88,6 +88,11 @@ export class BossBar {
   private hpDirty = false;
   private lastMarker = -2;
   private lastEst = '';
+  /** There is no estimate yet ("Est. ?"): the strip shows none, and the name gets its room (on a narrow screen it was cut: "King Cucum..."). */
+  private estWaiting = true;
+  /** The estimate's words in full, and shortened ("56s" for "Est. 56s"; null when there is no short form): the short one is used when the name would be cut. */
+  private estFull = '';
+  private estShort: string | null = null;
   private lastLeft = -1;
   private lastBroken = false;
   private rect: Rect;
@@ -208,7 +213,9 @@ export class BossBar {
     this.root.addChild(this.sticker);
     if (this.marks) this.root.addChild(this.marks.root);
     this.timeT.text = t('hud.secs', { s: Math.ceil(this.env.battle.waveDuration) });
-    this.estT.text = t('hud.est.wait');
+    this.estFull = t('hud.est.wait');
+    this.estShort = null;
+    this.estWaiting = true;
     this.place();
     return this.root;
   }
@@ -386,16 +393,25 @@ export class BossBar {
     this.layoutRow();
   }
 
-  /** The top row, right to left: kill estimate with its verdict, the time left with a clock, and the name in what remains. */
+  /** The top row, right to left: kill estimate with its verdict, the time left with a clock, and the name in what remains (the estimate drops its "Est." before the name is cut). */
   private layoutRow(): void {
+    if (this.placeRow(this.estFull) && this.estShort !== null && !this.estWaiting) this.placeRow(this.estShort);
+  }
+
+  /** Lays the top row with `est` as the estimate's words; true when the name had to be cut to fit. */
+  private placeRow(est: string): boolean {
     const right = this.rect.w - RIGHT_PAD;
+    this.estT.text = est;
+    this.estT.visible = !this.estWaiting;
     this.estT.position.set(right, ROW_Y);
-    const badgeX = right - this.estT.width - 22;
+    // Without an estimate the time stands where the estimate would end.
+    const badgeX = this.estWaiting ? right + 30 : right - this.estT.width - 22;
     this.estBadge?.position.set(badgeX, ROW_Y);
     this.timeT.position.set(badgeX - 30, ROW_Y);
     this.clock.position.set(badgeX - 30 - this.timeT.width - 18, ROW_Y);
     this.nameT.text = this.nameFull;
     fitLabel(this.nameT, this.clock.x - 14 - TEXT_X, 26, 0.7);
+    return this.nameT.text !== this.nameFull;
   }
 
   /** Marker on the countdown bar: the bar will have shrunk to here when the boss dies at today's rate. */
@@ -409,11 +425,16 @@ export class BossBar {
     g.poly([x - 9, h / 2 + 11, x + 9, h / 2 + 11, x, h / 2 - 1]).fill(color).stroke({ width: 3, color: Color.ink, join: 'round' });
   }
 
-  private setEst(text: string, tone: KillTone | null): void {
+  private setEst(text: string, short: string | null, tone: KillTone | null, waiting: boolean): void {
     let moved = false;
+    if (waiting !== this.estWaiting) {
+      this.estWaiting = waiting;
+      moved = true;
+    }
     if (text !== this.lastEst) {
       this.lastEst = text;
-      this.estT.text = text;
+      this.estFull = text;
+      this.estShort = short;
       moved = true;
     }
     if (tone !== this.estTone) {
@@ -483,7 +504,8 @@ export class BossBar {
       this.drawMark(frac, tone);
     }
     const text = !known ? t('hud.est.wait') : !Number.isFinite(est) ? t('hud.est.none') : est > EST_FAR ? t('hud.est.far') : t('hud.est', { s: Math.ceil(est) });
-    this.setEst(text, tone);
+    const short = !known || !Number.isFinite(est) ? null : est > EST_FAR ? t('hud.est.farShort') : t('hud.est.short', { s: Math.ceil(est) });
+    this.setEst(text, short, tone, !known);
   }
 
   destroy(): void {

@@ -13,8 +13,11 @@ import type { AudioApi, MusicId, PlayOpts, PrimeTarget, SfxId, StingerId } from 
 import { SoundBank } from './bank';
 import { offlineSupported } from './bake';
 import { duckPlan, volumeTaper } from './envelopes';
-import { MUSIC_BASE, MUSIC_LPF_OPEN, SFX_BASE, createGraph, type AudioGraph } from './graph';
+import { MUSIC_BASE, MUSIC_LPF_OPEN, SFX_BASE, busNode, createGraph, type AudioGraph } from './graph';
+import { Hush } from './hush';
 import { MusicPlayer, type MusicStats } from './music';
+import { audioRandom, audioSpread, seedAudio } from './random';
+import { sampleStore } from './samples';
 import { PRERENDER_ORDER, SOUNDS, sfxIndexOf, stingerIndexOf } from './sounds';
 import { STINGER_DUCK, STINGER_MUFFLE } from './stingers';
 import { Synth, nodeStats, resetNodeStats } from './synth';
@@ -40,13 +43,17 @@ const MUFFLE_OUT_S = 0.8;
 
 type ACtor = typeof AudioContext;
 
-/** One pooled playback chain: source -> gain -> (pan) -> sfxBus. Only the source node is created per play. */
+/** One pooled playback chain: source -> gain -> (pan) -> a bus (fight, skill or ui). Only the source node is created per play. */
 class SfxVoice {
   readonly gain: GainNode;
   readonly pan: StereoPannerNode | null;
   private src: AudioBufferSourceNode | null = null;
+  /** The bus the chain ends in now: a voice is a plain pooled chain, and goes to whichever bus the sound it plays belongs to. */
+  private dest: AudioNode;
   /** Place in the engine's combat table while this voice is a fight sound, otherwise -1. */
   slot = -1;
+  /** Set by `cut()`: the sound is on its way out (a few ms) and no longer counts as sounding. */
+  private fading = false;
 
   constructor(
     ctx: AudioContext,
@@ -54,6 +61,7 @@ class SfxVoice {
     private readonly free: SfxVoice[],
     private readonly onFree: (voice: SfxVoice) => void,
   ) {
+    this.dest = dest;
     this.gain = ctx.createGain();
     if (typeof ctx.createStereoPanner === 'function') {
       this.pan = ctx.createStereoPanner();
@@ -65,6 +73,20 @@ class SfxVoice {
     }
   }
 
+  /** Move the chain to another bus (only ever called on a voice that is idle: its last sound has ended). */
+  route(dest: AudioNode): void {
+    if (dest === this.dest) return;
+    const tail: AudioNode = this.pan ?? this.gain;
+    tail.disconnect();
+    tail.connect(dest);
+    this.dest = dest;
+  }
+
+  /** Whether a sound is sounding (or scheduled) on this voice and has not been cut. */
+  get busy(): boolean {
+    return this.src !== null && !this.fading;
+  }
+
   readonly onEnded = (): void => {
     this.src?.disconnect();
     this.src = null;
@@ -74,6 +96,7 @@ class SfxVoice {
 
   /** Fade out within a few ms and stop: the voice gives its place to a more important sound. */
   cut(ctx: AudioContext): void {
+    this.fading = true;
     const now = ctx.currentTime;
     const g = this.gain.gain;
     g.cancelScheduledValues(now);
@@ -91,6 +114,7 @@ class SfxVoice {
     src.connect(this.gain);
     src.onended = this.onEnded;
     this.src = src;
+    this.fading = false;
     src.start(when);
   }
 }
@@ -142,6 +166,8 @@ export class AudioEngine implements AudioApi {
   private music_: MusicPlayer | null = null;
   private readonly limiter = new VoiceLimiter(SOUNDS.map((d) => d.rule));
   private readonly freeVoices: SfxVoice[] = [];
+  /** Every pooled voice chain, free or sounding, so `stopAll()` can reach the ones that are playing. */
+  private readonly allVoices: SfxVoice[] = [];
   /** The voice behind every slot of the limiter's combat table, so a full table can cut the oldest quiet one. */
   private readonly combatVoices: Array<SfxVoice | null> = new Array<SfxVoice | null>(COMBAT_CAP).fill(null);
   private readonly releaseCombat = (voice: SfxVoice): void => {
@@ -149,6 +175,8 @@ export class AudioEngine implements AudioApi {
     voice.slot = -1;
   };
   private voiceCount = 0;
+  /** The dips of the fight bus (a big moment takes the room for a moment), see hush.ts. */
+  private readonly hush = new Hush();
 
   private inited = false;
   private visible = true;
@@ -216,9 +244,11 @@ export class AudioEngine implements AudioApi {
     this.bank = null;
     this.music_ = null;
     this.freeVoices.length = 0;
+    this.allVoices.length = 0;
     this.combatVoices.fill(null);
     this.voiceCount = 0;
     this.limiter.reset();
+    this.hush.reset();
     this.lastVariant.fill(-1);
     this.muteCount = 0;
     this.intensity = 0;
@@ -231,7 +261,16 @@ export class AudioEngine implements AudioApi {
     void ctx?.close().catch(() => undefined);
   }
 
-  private readonly onGesture = (): void => this.unlock();
+  /**
+   * A gesture of the page (or the game's first input). A touch screen counts neither pointerdown nor pointerup as a gesture that may start audio, only
+   * touchend and click (Chromium and WebKit alike): `unlock()` starts at the pointerdown and then keeps out of the way while that attempt hangs, so the
+   * first tap of a phone used to leave the sound off until a second one, 1.5 s later. A tap that ends in a touchend or a click therefore also goes through
+   * `wake()`, which resumes from inside that very event.
+   */
+  private readonly onGesture = (e?: Event | null): void => {
+    this.unlock();
+    if (e && (e.type === 'touchend' || e.type === 'click')) this.wake();
+  };
 
   private readonly onVisibility = ({ visible }: { visible: boolean }): void => {
     this.visible = visible;
@@ -264,9 +303,11 @@ export class AudioEngine implements AudioApi {
     this.music_.setIntensity(this.intensity);
     this.everRan = false;
     this.freeVoices.length = 0;
+    this.allVoices.length = 0;
     this.combatVoices.fill(null);
     this.voiceCount = 0;
     this.limiter.reset();
+    this.hush.reset();
     this.prerenderStarted = false;
     this.applyVolumes();
     ctx.addEventListener('statechange', () => {
@@ -289,6 +330,27 @@ export class AudioEngine implements AudioApi {
     src.connect(ctx.destination);
     src.onended = () => src.disconnect();
     src.start(0);
+  }
+
+  /**
+   * Resume from inside a tap, whatever an earlier attempt is doing (the sound board calls it on every tap; the game never needs it). `unlock()`
+   * starts at the first pointerdown, which a touch screen does not count as a gesture (Chromium waits for touchend or click, WebKit the same), and
+   * then keeps out of the way while that attempt hangs for up to `RESUME_TIMEOUT_MS`: the first tap on a phone would leave the context suspended.
+   * A second `resume()` is harmless, the promises settle together.
+   */
+  wake(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.visible || ctx.state === 'running') return;
+    try {
+      void ctx.resume().catch(() => undefined);
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      src.connect(ctx.destination);
+      src.onended = () => src.disconnect();
+      src.start(0);
+    } catch {
+      // a closed context: nothing to wake
+    }
   }
 
   /**
@@ -324,6 +386,8 @@ export class AudioEngine implements AudioApi {
     this.everRan = true;
     if (!this.prerenderStarted) {
       this.prerenderStarted = true;
+      // The recordings some recipes lay under their synthesis are read now (about half a megabyte in all); a bake that needs one waits for it.
+      void sampleStore.preload();
       if (offlineSupported()) this.bank?.enqueue(PRERENDER_ORDER);
     }
     this.syncMusic();
@@ -493,6 +557,47 @@ export class AudioEngine implements AudioApi {
     f.exponentialRampToValueAtTime(MUSIC_LPF_OPEN, hold + MUFFLE_OUT_S);
   }
 
+  /**
+   * Silence every one-shot at once (dev tooling and the sound board; the game never needs it): each sounding or scheduled voice fades out in a
+   * few ms, the limiter forgets what it was holding so the next sound is not refused for a voice that no longer sounds, and the music's duck
+   * and muffle are let go. The music itself is untouched: ask `music('none')` for that.
+   * @returns how many voices were cut
+   */
+  stopAll(): number {
+    const ctx = this.ctx;
+    const g = this.graph;
+    if (!ctx || !g) return 0;
+    let cut = 0;
+    for (const voice of this.allVoices) {
+      if (!voice.busy) continue;
+      try {
+        voice.cut(ctx);
+        cut++;
+      } catch {
+        // a source that is not started yet (a delayed one) may refuse stop(); its gain is already at 0
+      }
+    }
+    this.combatVoices.fill(null);
+    this.limiter.reset();
+    const now = ctx.currentTime;
+    this.hush.reset();
+    g.fightDuck.gain.cancelScheduledValues(now);
+    g.fightDuck.gain.setTargetAtTime(1, now, 0.03);
+    this.duckEnd = 0;
+    this.duckFloor = 1;
+    g.duckGain.gain.cancelScheduledValues(now);
+    g.duckGain.gain.setTargetAtTime(1, now, 0.03);
+    g.musicLpf.frequency.cancelScheduledValues(now);
+    g.musicLpf.frequency.setTargetAtTime(MUSIC_LPF_OPEN, now, 0.05);
+    return cut;
+  }
+
+  /** Start the sounds' stream of chance (pitch and level spread) over from `n`: the same calls then give the same sounds (random.ts). */
+  seed(n: number): void {
+    seedAudio(n);
+    this.lastVariant.fill(-1);
+  }
+
   /** Core of play/playStep/stinger. Returns true when a voice was started (or queued behind a first-use bake). */
   private playIndex(idx: number, opts: PlayOpts | undefined, pitchMul: number): boolean {
     const ctx = this.ctx;
@@ -502,10 +607,11 @@ export class AudioEngine implements AudioApi {
     if (!def) return false;
 
     let rate = clampNum(pitchMul * clampNum(opts?.pitch, 0.1, 8, 1), 0.1, 8, 1);
-    if (def.recipe.rate) rate *= 1 + (Math.random() * 2 - 1) * def.recipe.rate;
+    // (the spread is a seeded stream, not Math.random: the same fight gives the same sounds, see random.ts)
+    if (def.recipe.rate) rate *= 1 + audioSpread() * def.recipe.rate;
     let volume = clampNum(opts?.volume, 0, 4, 1);
     // +/-1 dB level jitter on the ids that repeat constantly, on top of the pitch and variant rotation.
-    if (def.recipe.rate) volume *= 1 + (Math.random() * 2 - 1) * 0.12;
+    if (def.recipe.rate) volume *= 1 + audioSpread() * 0.12;
     const pan = clampNum(opts?.pan, -1, 1, 0);
     const now = ctx.currentTime;
     const delay = clampNum(opts?.delay, 0, 30, 0);
@@ -516,7 +622,8 @@ export class AudioEngine implements AudioApi {
     if (!offlineSupported() || bank.hasFailed(idx)) return this.playLive(ctx, idx, now + delay, rate, volume, pan);
 
     // First use: bake now (tens of ms, more for the long ones) and start as soon as it resolves.
-    const patience = def.recipe.cat === 'big' || def.stinger ? MAX_DEFER_BIG_S : MAX_DEFER_S;
+    // (a skill's signature is as rare and as awaited as a big moment: the first roar of a run is worth a short wait on a slow phone, a hoofbeat is not)
+    const patience = def.recipe.cat === 'big' || def.recipe.cat === 'skill' || def.stinger ? MAX_DEFER_BIG_S : MAX_DEFER_S;
     void bank.ensure(idx).then((baked) => {
       if (ctx.state !== 'running' || this.ctx !== ctx) return;
       const late = ctx.currentTime - now;
@@ -540,22 +647,19 @@ export class AudioEngine implements AudioApi {
   ): boolean {
     const g = this.graph;
     if (!g) return false;
-    // Rotate through the baked variants, never repeating the previous one back to back.
-    let v = 0;
-    if (buffers.length > 1) {
-      const last = this.lastVariant[idx] as number;
-      v = (Math.max(0, last) + 1 + Math.floor(Math.random() * (buffers.length - 1))) % buffers.length;
-      this.lastVariant[idx] = v;
-    }
+    // The baked variants take turns, one after the other (round robin: no chance in it, and the same one never twice in a row).
+    // (even while only the first variant is baked: the one that follows is the second, so a sound that has only just been baked does not start with the same variant twice)
+    const v = buffers.length > 1 ? ((this.lastVariant[idx] as number) + 1) % buffers.length : 0;
+    this.lastVariant[idx] = v;
     const buf = buffers[v] as AudioBuffer;
     const scale = this.limiter.request(idx, when, buf.duration / rate, volume);
     if (scale <= 0) return false;
-    const voice = this.acquireVoice(ctx, g.sfxBus);
+    const voice = this.acquireVoice(ctx, busNode(g, (SOUNDS[idx] as (typeof SOUNDS)[number]).recipe.cat));
     if (!voice) return false;
     this.seatCombat(ctx, voice);
     voice.start(ctx, buf, when, rate, volume * scale, pan);
     this.played++;
-    this.duckFor(idx);
+    this.duckFor(idx, when);
     const active = this.limiter.active(ctx.currentTime);
     if (active > this.activePeak) this.activePeak = active;
     const fighting = this.limiter.combatActive(ctx.currentTime);
@@ -577,10 +681,16 @@ export class AudioEngine implements AudioApi {
 
   private acquireVoice(ctx: AudioContext, dest: AudioNode): SfxVoice | undefined {
     // Voices that ended after a context rebuild belong to the dead context: drop them.
-    for (let v = this.freeVoices.pop(); v; v = this.freeVoices.pop()) if (v.gain.context === ctx) return v;
+    for (let v = this.freeVoices.pop(); v; v = this.freeVoices.pop()) {
+      if (v.gain.context !== ctx) continue;
+      v.route(dest);
+      return v;
+    }
     if (this.voiceCount >= MAX_VOICE_OBJECTS) return undefined;
     this.voiceCount++;
-    return new SfxVoice(ctx, dest, this.freeVoices, this.releaseCombat);
+    const voice = new SfxVoice(ctx, dest, this.freeVoices, this.releaseCombat);
+    this.allVoices.push(voice);
+    return voice;
   }
 
   /** Live synthesis for browsers without OfflineAudioContext: same recipe, no normalisation pass. */
@@ -599,7 +709,7 @@ export class AudioEngine implements AudioApi {
       out.connect(p);
       dest = p;
     }
-    dest.connect(g.sfxBus);
+    dest.connect(busNode(g, def.recipe.cat));
     let lp: BiquadFilterNode | null = null;
     let head: AudioNode = out;
     if (def.recipe.lp) {
@@ -610,7 +720,7 @@ export class AudioEngine implements AudioApi {
       lp.connect(out);
       head = lp;
     }
-    const synth = new Synth(ctx, head, when, Math.random, true);
+    const synth = new Synth(ctx, head, when, audioRandom, true);
     def.recipe.build(synth, { j: () => 1 });
     synth.seal(() => {
       lp?.disconnect();
@@ -618,14 +728,20 @@ export class AudioEngine implements AudioApi {
       if (dest !== out) dest.disconnect();
     });
     this.played++;
-    this.duckFor(idx);
+    this.duckFor(idx, when);
     return true;
   }
 
-  /** A sound that takes the room (the awakening) dips the music for as long as it lasts. */
-  private duckFor(idx: number): void {
-    const d = SOUNDS[idx]?.recipe.duck;
-    if (d) this.duck(d.depth, d.seconds);
+  /**
+   * A sound that takes the room (the awakening, a skill's signature, a boss's cry) dips the music for as long as it lasts and lets the fight's own
+   * sounds give way (the fight bus, from the moment the sound starts).
+   */
+  private duckFor(idx: number, when: number): void {
+    const recipe = SOUNDS[idx]?.recipe;
+    if (!recipe) return;
+    if (recipe.duck) this.duck(recipe.duck.depth, recipe.duck.seconds);
+    const g = this.graph;
+    if (recipe.hush && g) this.hush.duck(g.fightDuck.gain, Math.max(when, this.ctx?.currentTime ?? when), recipe.hush.db, recipe.hush.seconds);
   }
 
   /** Bake these sounds now, every variant (dev tooling: a measurement must not start before the bank has what it plays). */

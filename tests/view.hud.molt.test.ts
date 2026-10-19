@@ -4,7 +4,7 @@ import { AWAKEN_COST, MOLT_COSTS, MOLT_LIMIT } from '@/game';
 import '@/game/data/strings';
 import '@/view/hud/strings';
 import { costArgs, moltRefusal, moltState } from '@/view/hud/moltMath';
-import { CURRENCY_ROW, FISH_X, PURR_X, incomeShown } from '@/view/hud/incomeMath';
+import { CURRENCY_ROW, FISH_X, PURR_X, incomeShown, shownAmount } from '@/view/hud/incomeMath';
 import { flies } from '@/view/landings';
 
 beforeAll(() => {
@@ -56,6 +56,19 @@ describe('what the molt button knows about itself', () => {
       expect(info).toContain(t('rarity.legendary'));
     });
   }
+});
+
+describe('the amount a counter shows while gains are still flying to it', () => {
+  it('is the real amount less the gains in the air', () => {
+    expect(shownAmount(90, 64)).toBe(26);
+    expect(shownAmount(90, 0)).toBe(90);
+  });
+
+  it('never reads below nought: fish spent before the pickups landed (it showed -14)', () => {
+    // 90 fish, 64 of them still flying; the player summons for 40 at once
+    expect(shownAmount(50, 64)).toBe(0);
+    expect(shownAmount(0, 10)).toBe(0);
+  });
 });
 
 describe('the income tag beside the fish pill', () => {

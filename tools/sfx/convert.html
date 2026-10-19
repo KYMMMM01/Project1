@@ -1,0 +1,153 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>sfx converter</title>
+<body style="font:14px sans-serif">
+<pre id="log">starting…</pre>
+<script type="module">
+// Runs inside headless Edge (muted; nothing here ever plays a sound). For every file the driver listed it
+//   1. decodes the Ogg Vorbis original (Edge can; iOS Safari cannot be relied on),
+//   2. mixes it to mono at 44.1 kHz and, when the decoded peak is over 0.98 (a few Ogg files decode to 1.02 .. 1.22: the encoder overshoots), turns it
+//      down to 0.98 so the 16-bit file does not clip,
+//   3. measures it (length, peak, loudness, spectral centroid),
+//   4. trims the silence in front and behind it (the front to 1 ms before the first audible sample, the back to 5 ms after the last one,
+//      with a 5 ms fade on that last stretch so the cut cannot click),
+//   5. writes it as a 16-bit PCM WAV: every browser decodes that, and a WAV has no codec delay, so the attack of a hit stays where it was
+//      recorded (AAC and MP3 start later by a decoder-dependent amount that this machine cannot measure for iOS).
+// Results go back to the driver with POST /save/... and POST /manifest.
+const logEl = document.getElementById('log');
+const say = (s) => { logEl.textContent = s; };
+const post = (path, body) => fetch(path, { method: 'POST', body });
+const event = (o) => post('/event', JSON.stringify(o));
+
+const SR = 44100;
+const cfg = await (await fetch('/config.json')).json();
+const decoder = new OfflineAudioContext(1, SR, SR);
+
+/** Mono mix of a decoded buffer (channels averaged). */
+function mono(buf) {
+  const n = buf.length;
+  const out = new Float32Array(n);
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < n; i++) out[i] += d[i];
+  }
+  if (buf.numberOfChannels > 1) for (let i = 0; i < n; i++) out[i] /= buf.numberOfChannels;
+  return out;
+}
+
+function fft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    const wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = i + k + len / 2;
+        const tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr; im[b] = im[a] - ti;
+        re[a] += tr; im[a] += ti;
+        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+      }
+    }
+  }
+}
+
+/** Trim the silence around a sound: from 1 ms before the first sample above -70 dB (of the peak) to 5 ms after the last one above -60 dB, faded out over that 5 ms. */
+function trim(x, peak) {
+  const lo = peak * Math.pow(10, -70 / 20);
+  const hi = peak * Math.pow(10, -60 / 20);
+  let a = 0; while (a < x.length && Math.abs(x[a]) < lo) a++;
+  let z = x.length - 1; while (z > a && Math.abs(x[z]) < hi) z--;
+  const start = Math.max(0, a - 44);
+  const tail = Math.round(0.005 * SR);
+  const end = Math.min(x.length, z + 1 + tail);
+  const out = x.slice(start, end);
+  for (let i = 0; i < tail && i < out.length; i++) out[out.length - 1 - i] *= i / tail;
+  return out;
+}
+
+function measure(x) {
+  let peak = 0;
+  for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > peak) peak = a; }
+  if (peak === 0) return { peak: 0, dur: 0, onset: 0, loud: 0, centroid: 0 };
+  // the audible region, as the game's own analysis (src/audio/analysis.ts `analyse`) takes it: from the first to the last sample above 0.3 % of the peak
+  const floor = peak * 0.003;
+  let first = 0; while (first < x.length && Math.abs(x[first]) < floor) first++;
+  let last = x.length - 1; while (last > first && Math.abs(x[last]) < floor) last--;
+  // the first sample that reaches 10 % of the peak: where the ear hears the sound begin
+  let onset = 0; while (onset < x.length && Math.abs(x[onset]) < peak * 0.1) onset++;
+  // loudness the way the game measures it (`loudRms`): the energy of the audible region over the region or over 200 ms, whichever is longer.
+  // The board matches a sample to the game's level with this number and the game's own rule (peak and loudness, the quieter wins).
+  let energy = 0;
+  for (let i = first; i <= last; i++) energy += x[i] * x[i];
+  const best = Math.sqrt(energy / Math.max(last - first + 1, Math.round(0.2 * SR)));
+  // spectral centroid of the 4096 samples around the onset
+  const N = 4096;
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const from = Math.max(0, onset - 256);
+  for (let i = 0; i < N; i++) re[i] = (x[from + i] ?? 0) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1)));
+  fft(re, im);
+  let num = 0, den = 0;
+  for (let k = 1; k < N / 2; k++) { const m = Math.hypot(re[k], im[k]); num += ((k * SR) / N) * m; den += m; }
+  return { peak, dur: (last - first + 1) / SR, first: first / SR, onset: onset / SR, loud: best, centroid: den > 0 ? num / den : 0 };
+}
+
+/** A RIFF/WAVE file: 16-bit PCM, one channel. */
+function wav16(x) {
+  const n = x.length;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, SR, true); v.setUint32(28, SR * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(x[i] * 32767))), true);
+  return new Uint8Array(buf);
+}
+
+const manifest = [];
+let done = 0;
+for (const f of cfg.files) {
+  try {
+    const src = new Uint8Array(await (await fetch(f.url)).arrayBuffer());
+    const buf = await decoder.decodeAudioData(src.slice().buffer);
+    const x = mono(buf);
+    let m = measure(x);
+    if (m.peak === 0) throw new Error('silent file');
+    let scaledBy = 1;
+    if (m.peak > 0.98) {
+      scaledBy = 0.98 / m.peak;
+      for (let i = 0; i < x.length; i++) x[i] *= scaledBy;
+      m = measure(x);
+    }
+    const t = trim(x, m.peak);
+    const bytes = wav16(t);
+    // read it back the way a player will: it must decode and keep its length
+    const back = await decoder.decodeAudioData(bytes.slice().buffer);
+    if (back.length !== t.length) throw new Error(`decoded ${back.length} samples, wrote ${t.length}`);
+    await post('/save/' + encodeURI(f.out), bytes);
+    manifest.push({
+      pack: f.pack, name: f.name, file: f.out, bytes: bytes.length, sr: SR,
+      ms: Math.round((t.length / SR) * 1000), peak: +m.peak.toFixed(3), loud: +m.loud.toFixed(4), hz: Math.round(m.centroid),
+      srcMs: Math.round((x.length / SR) * 1000),
+      ...(scaledBy < 1 ? { scaledBy: +scaledBy.toFixed(3) } : {}),
+    });
+  } catch (err) {
+    await event({ type: 'error', file: f.name, message: String((err && err.stack) || err) });
+    manifest.push({ pack: f.pack, name: f.name, file: f.out, error: String((err && err.message) || err) });
+  }
+  done++;
+  if (done % 25 === 0 || done === cfg.files.length) { say(`${done}/${cfg.files.length}`); await event({ type: 'progress', done, of: cfg.files.length }); }
+}
+await post('/manifest', JSON.stringify(manifest));
+window.__finished = true;
+await post('/finish', '');
+</script>

@@ -5,16 +5,18 @@
  * hitch and a sound is almost always ready before it is first heard.
  *
  * The bank holds at most `bankBudget(sampleRate)` bytes. A bake that would pass it drops the least recently played sounds first
- * (never one that is still baking, never the one that just landed); a dropped sound is simply baked again on its next use.
+ * (never one that is still baking, never the one that just landed); a dropped sound is simply baked again on its next use. The old versions kept for
+ * the sound board's "지금" (`legacy`) are outside the budget and are never dropped: the game never plays one, and the board that does must not make the
+ * sounds of the game give way to them.
  */
 import { bakeVariant } from './bake';
 import { SOUNDS } from './sounds';
 
 /**
  * The decoded-memory budget of the pre-rendered bank in decimal megabytes of mono float32 at 48 kHz: the figure the quality report
- * checks (all 140 sounds with every variant measure 13.0 of it).
+ * checks (the 140 sounds of the first passes with every variant measure 13.0 of it; the skills' signatures and their small sounds, `sfx-skills.ts`, add about 3).
  */
-export const BANK_BUDGET_MB = 14;
+export const BANK_BUDGET_MB = 17;
 
 /** The budget in bytes at a context's sample rate: the same amount of sound, so a 96 kHz device holds twice the bytes. */
 export function bankBudget(sampleRate: number): number {
@@ -31,6 +33,11 @@ interface Waiter {
   /** Wait for every variant, not just the first. */
   all: boolean;
   resolve: (buffers: AudioBuffer[] | undefined) => void;
+}
+
+/** Whether a catalogue entry is an old version kept for the sound board (not the game's: it costs the budget nothing). */
+function isLegacy(index: number): boolean {
+  return SOUNDS[index]?.recipe.legacy === true;
 }
 
 function bytesOf(buffers: readonly AudioBuffer[]): number {
@@ -186,7 +193,7 @@ export class SoundBank {
     const set = this.sets[index] ?? [];
     this.sets[index] = set;
     set.push(buffer);
-    this.held += buffer.length * buffer.numberOfChannels * 4;
+    if (!isLegacy(index)) this.held += buffer.length * buffer.numberOfChannels * 4;
     this.stamp[index] = ++this.clock;
     this.evictFor(index);
     this.settle(index);
@@ -225,7 +232,7 @@ export class SoundBank {
     while (this.held > this.budget) {
       let victim = -1;
       for (let i = 0; i < this.sets.length; i++) {
-        if (i === keep || !this.sets[i] || (this.flying[i] ?? 0) > 0) continue;
+        if (i === keep || !this.sets[i] || (this.flying[i] ?? 0) > 0 || isLegacy(i)) continue;
         if (victim < 0 || (this.stamp[i] ?? 0) < (this.stamp[victim] ?? 0)) victim = i;
       }
       if (victim < 0) return;

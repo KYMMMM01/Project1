@@ -172,7 +172,8 @@ export class SpIntro {
 
   private cutIn(skill: SpCastEvent['skill'], unitId: UnitId): void {
     const { stage } = this.env;
-    stage.direct('awaken', 0.55);
+    // The banner's own short fanfare (`sp_cutin`, half a second: the skill's sound follows at once and is not buried under the awakening's 1.2 s).
+    stage.direct('sp_cutin', 0.9);
     const name = t(`sp.${skill}.name`);
     stage.fx.awakening(tex(`unit_${unitId}`), name, {
       short: true,

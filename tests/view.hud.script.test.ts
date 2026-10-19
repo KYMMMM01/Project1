@@ -27,11 +27,11 @@ const MOMENT: Record<string, { at: Partial<World>; act?: (w: World) => World }> 
   sp_skill: { at: { wave: 3, ringNear: true } },
   synergy: { at: { wave: 3, maxTier: 1 } },
   sun: { at: { wave: 3, sun: 4 }, act: (w) => bump(w, 'sunMove') },
-  laser: { at: { wave: 3, enemies: 3 }, act: (w) => ({ ...w, laserGuided: true }) },
+  laser: { at: { wave: 3, enemies: 3, laserReady: true }, act: (w) => ({ ...w, laserGuided: true }) },
   elite: { at: { wave: 4, waveKind: 'elite', targetAlive: true } },
   purr: { at: { wave: 4, counts: { ...emptyCounts(), purrGain: 1 } } },
   toys: { at: { wave: 4, pending: 'relic', busy: true }, act: (w) => bump(w, 'relic') },
-  molt: { at: { wave: 5, purr: 3 }, act: (w) => bump(w, 'molt') },
+  molt: { at: { wave: 5, purr: 3, fish: 150, callBonus: 5 }, act: (w) => bump(w, 'molt') },
   summon_grade: { at: { wave: 5, fish: 150 }, act: (w) => bump(w, 'gradeUp') },
   class_upgrade: { at: { wave: 5, fish: 150 }, act: (w) => bump(w, 'classUp') },
   call_wave: { at: { wave: 6, callBonus: 5 }, act: (w) => bump(w, 'call') },
@@ -73,7 +73,8 @@ describe('the tutorial lesson plan', () => {
 
   it('teaches every lesson in order when the player does what each one asks', () => {
     const script = new TutorialScript();
-    let w = world();
+    // each lesson's moment is the first the world allows it: the laser is not ready before its own turn
+    let w = world({ laserReady: false });
     const log: string[] = [];
     for (const id of STEP_IDS) {
       const m = MOMENT[id] as (typeof MOMENT)[string];
@@ -204,7 +205,7 @@ describe('the tutorial lesson plan', () => {
     expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:laser']);
     const elite = world({ wave: 4, waveKind: 'elite', targetAlive: true, enemies: 3 });
     expect(kinds(script.update(elite, 0.1, false))).toEqual(['drop:laser', 'begin:elite']);
-    // the elite itself is never cut in on, and nothing before it can come back
+    // the elite itself is never cut in on, and a lesson of the opening (the merge, whose twins are back) cannot come back after its moment
     expect(script.update(world({ wave: 4, waveKind: 'elite', targetAlive: true, twins: true }), 0.1, false)).toEqual([]);
     expect(script.active?.id).toBe('elite');
   });
@@ -245,7 +246,7 @@ describe('the battle stands still while a lesson waits for the player', () => {
 
   it('ends a timed note by the real clock while it holds the battle still', () => {
     const script = new TutorialScript(new Set<TopicId>(['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'sp_skill']));
-    const w = world({ wave: 3, maxTier: 1 });
+    const w = world({ wave: 3, maxTier: 1, laserReady: false });
     expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:synergy']);
     const synergy = STEPS.find((s) => s.id === 'synergy') as StepDef;
     expect(synergy.holds(w)).toBe(true);
@@ -395,5 +396,133 @@ describe('the lesson on the skill ring beside a cat', () => {
     const left = (skills: boolean): number => new TutorialScript(new Set<TopicId>(), stepsFor(skills)).remaining.filter((s) => s.id !== 'boss').length;
     expect(left(true)).toBe(left(false) + 1);
     expect(left(false)).toBe(19);
+  });
+});
+
+const taught = (...ids: TopicId[]): Set<TopicId> => new Set<TopicId>(ids);
+const OPENING: TopicId[] = ['summon', 'merge', 'lose_gauge', 'classes', 'acts', 'pick3', 'sp_skill'];
+
+describe('a lesson whose moment has not come does not hold up the lessons behind it', () => {
+  // The player's own choices decide these: a pick of three that gives no synergy yet, a board with no special cell. The plan used to wait for them for ever.
+  it('teaches every other lesson when the pick of three gave no synergy and the board has no special cell', () => {
+    const skipped = new Set<string>(['synergy', 'sun']);
+    const script = new TutorialScript();
+    let w = world({ laserReady: false });
+    const log: string[] = [];
+    for (const id of STEP_IDS) {
+      if (skipped.has(id)) continue;
+      const m = MOMENT[id] as (typeof MOMENT)[string];
+      w = { ...w, ...m.at, maxTier: 0, sun: 0, counts: m.at.counts ?? w.counts };
+      log.push(...kinds(script.update(w, 0.1, false)));
+      if (m.act) w = m.act(w);
+      else script.tapOk();
+      log.push(...kinds(script.update(w, 0.1, false)));
+      w = { ...w, pending: null, busy: false };
+    }
+    expect(log.filter((e) => e.startsWith('begin:'))).toEqual(STEP_IDS.filter((id) => !skipped.has(id)).map((id) => `begin:${id}`));
+    expect(log.filter((e) => e.startsWith('done:'))).toEqual(STEP_IDS.filter((id) => !skipped.has(id)).map((id) => `done:${id}`));
+    // the two that never had their moment are given up on when it has passed, and nothing else is
+    expect(log.filter((e) => e.startsWith('drop:'))).toEqual(['drop:sun', 'drop:synergy']);
+    expect(script.finished).toBe(true);
+  });
+
+  it('teaches the elite of wave 4 with no synergy on the board', () => {
+    const script = new TutorialScript(taught(...OPENING));
+    const w = world({ wave: 4, waveKind: 'elite', targetAlive: true, maxTier: 0, sun: 0, laserReady: false });
+    expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:elite']);
+  });
+
+  it('teaches the toy choice with no synergy on the board, and gives it up when its offer has gone by', () => {
+    const script = new TutorialScript(taught(...OPENING, 'elite', 'purr'));
+    const offer = world({ wave: 4, pending: 'relic', busy: true, maxTier: 0, sun: 0, laserReady: false });
+    expect(kinds(script.update(offer, 0.1, false))).toEqual(['begin:toys']);
+    // the offer went by while another lesson was up: the toys do not hold up the molt, and are dropped when their wave is over
+    const late = new TutorialScript(taught(...OPENING, 'elite', 'purr'));
+    const molt = world({ wave: 5, purr: 3, maxTier: 0, sun: 0, laserReady: false });
+    expect(kinds(late.update(molt, 0.1, false))).toEqual(['begin:molt']);
+    const molted = bump(molt, 'molt');
+    expect(kinds(late.update(molted, 0.1, false))).toEqual(['done:molt', 'begin:speed']);
+    expect(kinds(late.update(bump(molted, 'speed'), 0.1, false))).toEqual(['done:speed']);
+    expect(late.remaining.map((s) => s.id)).toContain('toys');
+    expect(kinds(late.update({ ...bump(molted, 'speed'), wave: 6 }, 0.1, false))).toContain('drop:toys');
+    expect(late.remaining.map((s) => s.id)).not.toContain('toys');
+  });
+
+  it("keeps the plan's order for the lessons that are ready together", () => {
+    const script = new TutorialScript(taught(...OPENING));
+    const w = world({ wave: 3, maxTier: 1, sun: 4, enemies: 3 });
+    expect(kinds(script.update(w, 0.1, false))).toEqual(['begin:synergy']);
+    expect(kinds(script.update(w, 5, false))).toEqual(['done:synergy', 'begin:sun']);
+    expect(kinds(script.update(bump(w, 'sunMove'), 0.1, false))).toEqual(['done:sun', 'begin:laser']);
+  });
+
+  it('still holds the opening lessons in their order: the gauge waits for the merge', () => {
+    const script = new TutorialScript(taught('summon'));
+    // the gauge's moment has come (enemies on the field) but the merge, ahead of it, has not (no twins): nothing begins
+    expect(script.update(world({ twins: false, enemies: 4 }), 0.1, false)).toEqual([]);
+    expect(script.active).toBeNull();
+    expect(kinds(script.update(world({ twins: true, enemies: 4 }), 0.1, false))).toEqual(['begin:merge']);
+  });
+
+  it('gives up on every lesson whose moment has passed, wherever it stands in the plan', () => {
+    const script = new TutorialScript(taught(...OPENING.filter((id) => id !== 'sp_skill')));
+    const events = script.update(world({ wave: 7, purr: 3, laserReady: false }), 0.1, false);
+    expect(kinds(events)).toEqual(['drop:sp_skill', 'drop:synergy', 'drop:sun', 'drop:laser', 'drop:elite', 'drop:purr', 'drop:toys', 'begin:molt']);
+    expect(script.remaining.map((s) => s.id)).toEqual(['molt', 'summon_grade', 'class_upgrade', 'call_wave', 'speed', 'sell', 'awaken', 'boss']);
+  });
+
+  it('says whether the run still means to teach a lesson (what a popup may carry in its own words)', () => {
+    const script = new TutorialScript(taught('summon', 'merge'));
+    expect(script.has('pick3')).toBe(true);
+    expect(script.has('merge')).toBe(false);
+    script.update(world({ wave: 7, laserReady: false }), 0.1, false);
+    expect(script.has('toys')).toBe(false);
+    expect(script.has('boss')).toBe(true);
+    expect(new TutorialScript(taught(), stepsFor(false)).has('sp_skill')).toBe(false);
+  });
+});
+
+describe('an urgent lesson that cuts in puts the lesson in progress back', () => {
+  it('lets the laser lesson begin again after the elite, and says the drop is a put-back', () => {
+    const script = new TutorialScript(taught(...OPENING, 'synergy', 'sun'));
+    expect(kinds(script.update(world({ wave: 3, enemies: 3 }), 0.1, false))).toEqual(['begin:laser']);
+    const elite = world({ wave: 4, waveKind: 'elite', targetAlive: true, enemies: 3 });
+    const events = script.update(elite, 0.1, false);
+    expect(kinds(events)).toEqual(['drop:laser', 'begin:elite']);
+    expect(events[0]).toMatchObject({ kind: 'drop', again: true });
+    script.tapOk();
+    expect(kinds(script.update(elite, 0.1, false))).toEqual(['done:elite', 'begin:laser']);
+  });
+
+  it('does not put back a lesson whose moment has passed with it', () => {
+    const script = new TutorialScript(taught(...OPENING.filter((id) => id !== 'sp_skill')));
+    script.update(world({ wave: 3, ringNear: true }), 0.1, false);
+    expect(script.active?.id).toBe('sp_skill');
+    const events = script.update(world({ wave: 4, waveKind: 'elite', targetAlive: true, ringNear: true }), 0.1, false);
+    expect(kinds(events)).toEqual(['drop:sp_skill', 'begin:elite']);
+    expect(events[0]).toMatchObject({ again: false });
+    expect(script.remaining.map((s) => s.id)).not.toContain('sp_skill');
+  });
+
+  it('leaves the lessons it did not reach to come, instead of skipping them with the one it cut', () => {
+    // the synergy note is up and the sun and the laser are still to come when the elite arrives
+    const script = new TutorialScript(taught(...OPENING));
+    script.update(world({ wave: 3, maxTier: 1, sun: 4, enemies: 3 }), 0.1, false);
+    expect(script.active?.id).toBe('synergy');
+    const events = script.update(world({ wave: 4, waveKind: 'elite', targetAlive: true, maxTier: 1, sun: 4, enemies: 3 }), 0.1, false);
+    expect(kinds(events)).toEqual(['drop:synergy', 'begin:elite']);
+    expect(script.remaining.map((s) => s.id)).toEqual([
+      'elite', 'synergy', 'sun', 'laser', 'purr', 'toys', 'molt', 'summon_grade', 'class_upgrade', 'call_wave', 'speed', 'sell', 'awaken', 'boss',
+    ]);
+  });
+
+  it('lets the boss cut in the same way; the awakening that was up is dropped for good when its wave is over', () => {
+    const script = new TutorialScript(taught(...STEP_IDS.slice(0, STEP_IDS.indexOf('awaken'))));
+    const king = world({ wave: 7, king: true, purr: 13 });
+    expect(kinds(script.update(king, 0.1, false))).toEqual(['begin:awaken']);
+    const boss = world({ wave: 8, waveKind: 'boss', targetAlive: true, king: true, purr: 13 });
+    const events = script.update(boss, 0.1, false);
+    expect(kinds(events)).toEqual(['drop:awaken', 'begin:boss']);
+    expect(events[0]).toMatchObject({ again: false });
   });
 });

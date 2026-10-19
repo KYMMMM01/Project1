@@ -68,6 +68,15 @@ export type HudAnchor = 'fish' | 'purr' | 'enemyGauge' | 'wave' | 'summon' | 're
 
 export type PauseReason = 'user' | 'popup' | 'tutorial' | 'cutin' | 'system';
 
+/**
+ * Gestures the field keeps from the player, set by the HUD (all off outside the tutorial run): `laser` while the laser button has not been brought in (a tap on the
+ * road would fire what the player has not been shown), `sell` while a lesson holds the clock, except the lesson about selling (a cat dropped on the sell strip would end the lesson it is about).
+ */
+export interface GestureLocks {
+  laser: boolean;
+  sell: boolean;
+}
+
 export interface BattleUiEvents {
   /** Selected board cell changed (null = nothing selected). */
   select: { cell: number | null };
@@ -131,6 +140,8 @@ export interface BattleContext {
   readonly paused: boolean;
   /** The only thing holding the battle is a tutorial lesson waiting for the player's gesture: the field still takes touches (a drag, a tap on a cat). */
   readonly lessonHold: boolean;
+  /** Gestures the tutorial keeps from the field for now. */
+  readonly locks: GestureLocks;
   /** Pauses nest per reason: the battle runs only when no reason is active. */
   setPaused(reason: PauseReason, paused: boolean): void;
   /** Hit-stop: freeze the simulation and battle-time tweens for `ms` of real time (longest request wins). */

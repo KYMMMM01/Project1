@@ -34,7 +34,7 @@ import { SummonPickPopup } from './popups/SummonPickPopup';
 import { relicOfferWait } from '@/view/staging';
 import { info } from '../info';
 import { findTwins } from './planMath';
-import { canOpenPause, REVIVE_MIN_WAVES, revealFlags, type RevealKey } from './policy';
+import { canOpenPause, REVEAL_KEYS, REVIVE_MIN_WAVES, revealFlags, type RevealKey } from './policy';
 import { canOfferContinue, openContinue, type DefeatReason } from './screens/ContinueScreen';
 import { RelicScreen } from './screens/RelicScreen';
 import { warmSheets } from './sheetWarm';
@@ -42,7 +42,8 @@ import { openResult, type ResultHandle } from './screens/ResultScreen';
 import { openSettings } from './screens/SettingsScreen';
 import { ensureSettings } from './settings';
 import { TopBar } from './TopBar';
-import { Tutorial, type TutorialHost } from './Tutorial';
+import { Tutorial, TutorialKeep, type TutorialHost } from './Tutorial';
+import { sellLocked } from './tutorialFlow';
 import { revealedBy, STEP_IDS, type Target } from './tutorialScript';
 import { topRects, type Rect } from './layoutMath';
 import { unionRect } from './bubbleMath';
@@ -88,6 +89,9 @@ class Hud implements HudPart {
   private boss!: BossBar;
   private bottom!: BottomPanel;
   private tutorial: Tutorial | null = null;
+  /** What the lessons have done so far, kept when the HUD is rebuilt for another language (see `rebuild`), and the controls they have brought in. */
+  private keep = new TutorialKeep();
+  private keptReveal: RevealKey[] = [];
   private guide: LaserGuide | null = null;
   /** Asks for the card of the cats' skills the first time a ring is nearly full (null until the HUD is built; it does nothing in a battle without skills). */
   private rings: RingWatch | null = null;
@@ -147,6 +151,8 @@ class Hud implements HudPart {
       laser: () => this.guide?.flow.step ?? null,
       rectOf: (target: Target) => this.tutorialHost().rectOf(target),
       progress: this.progress,
+      /** Build the HUD again with the lessons planned afresh from what has been taught (a language switch goes on with the lessons as they are). */
+      rebuild: () => this.rebuild(false),
       /** The lessons and the first-encounter cards themselves (the QA runners count what they repaint). */
       tutorial: () => this.tutorial,
       hints: () => this.hints,
@@ -158,18 +164,29 @@ class Hud implements HudPart {
     if (!this.progress.ready) {
       void this.progress.load().then(() => {
         if (this.destroyed) return;
-        this.teardown();
-        this.build();
+        this.rebuild(false);
       });
     }
     // A language switch rebuilds every label; the handler that changed it must finish first.
     this.offLang = i18nEvents.on('change', () =>
       queueMicrotask(() => {
         if (this.destroyed) return;
-        this.teardown();
-        this.build();
+        this.rebuild(true);
       }),
     );
+  }
+
+  /**
+   * Build the HUD again. A language switch (`keepLessons`) goes on with the lessons where they were: the plan with its progress, the player's counts and the
+   * controls already brought in; the load of what the player was taught, which comes before anything has happened, starts them from the saved progress.
+   */
+  private rebuild(keepLessons: boolean): void {
+    this.teardown();
+    if (!keepLessons) {
+      this.keep = new TutorialKeep();
+      this.keptReveal = [];
+    }
+    this.build();
   }
 
   // ───────────────────────── build / teardown ─────────────────────────
@@ -179,9 +196,12 @@ class Hud implements HudPart {
     // The tutorial run starts with only what its lessons have already brought in; every other run (and a skipped tutorial) shows it all.
     const lessons = ctx.battle.init.mode === 'tutorial' && !this.progress.skipped;
     const taught = new Set<TopicId>(STEP_IDS.filter((id) => this.progress.isTaught(id)));
-    const reveal = revealFlags(lessons, revealedBy(taught));
+    // The lesson texts name this chapter's special cell (a rebuild has reset it to the sunbeam).
+    setGuideCell(ctx.battle.specialCell);
+    const reveal = revealFlags(lessons, [...revealedBy(taught), ...this.keptReveal]);
     this.env = new EnvImpl(ctx, reveal, this.progress, this.hints, this.root, this.teach);
     const env = this.env;
+    env.userPaused = () => this.pauseOpen;
     this.top = new TopBar(env);
     this.bottom = new BottomPanel(env);
     this.boss = new BossBar(env, this.top);
@@ -204,15 +224,19 @@ class Hud implements HudPart {
     env.codexAt = (foe) => this.openCodexAt(foe, false);
     watchCodex(env);
     // The tutorial run teaches its own topics (in order, as each control arrives); a card only comes for what it leaves out.
-    this.hints.only = lessons ? new Set<TopicId>(['awaken']) : null;
+    // (A rebuild keeps the set: the topics whose lessons were given up on are the cards' already.)
+    if (!lessons) this.hints.only = null;
+    else this.hints.only ??= new Set<TopicId>(['awaken']);
 
     if (env.tutorial) {
-      this.tutorial = new Tutorial(env, this.tutorialHost(), this.progress.skipped);
+      this.tutorial = new Tutorial(env, this.tutorialHost(), this.progress.skipped, this.keep);
     }
     // A result chip only lies on free paper: the note, the card, the sticker and the class chips are what it makes way for.
     this.bottom.actions.overChips(() => this.tutorial?.noteRect ?? null, () => this.card.rect, () => this.tutorial?.cheerRect ?? null, () => this.bottom.classRowRect());
     // The laser's guided first use: a normal run starts it by itself, the tutorial run when its laser lesson begins.
     this.guide = new LaserGuide(env, () => this.boundsRect(this.bottom.actions.laserRing), !lessons, () => this.avoidList());
+    // A lesson that was up when the HUD was rebuilt goes on (the laser's guide is armed again if it was the laser's).
+    this.tutorial?.resume();
     this.rings = new RingWatch(env);
     this.bottom.actions.onExplained = () => this.guide?.explained();
     watchEncounters(env, {
@@ -270,6 +294,10 @@ class Hud implements HudPart {
 
   private teardown(): void {
     setGuideCell('sun');
+    // The controls the lessons have brought in stay in when the HUD is built again.
+    this.keptReveal = REVEAL_KEYS.filter((key) => this.env.reveal[key]);
+    this.ctx.locks.laser = false;
+    this.ctx.locks.sell = false;
     this.tutorial?.destroy();
     this.tutorial = null;
     this.guide?.destroy();
@@ -302,6 +330,8 @@ class Hud implements HudPart {
     add(this.top.waveLabel, control(2));
     add(this.bottom.classes.root, control(1.5));
     add(this.bottom.currency.fish, control(1.2));
+    // The small tag with the fish a second sits beside the fish pill: a paw or a bubble is not to lie on its figure either.
+    add(this.bottom.currency.income, control(3));
     add(this.bottom.currency.purr, control(1.2));
     add(this.bottom.actions.summon, control(3));
     add(this.bottom.actions.grade, control(2));
@@ -468,6 +498,8 @@ class Hud implements HudPart {
       laserGuided: () => this.teach.guided,
       laserHolds: () => this.guide?.holdsClock ?? false,
       startLaserGuide: () => this.guide?.arm(),
+      settlePurr: () => this.bottom.currency.settlePurr(),
+      endLaserGuide: (again) => this.guide?.stand(again),
       chipColumn: () => this.bottom.actions.chipColumn(),
       restingRects: (keys) => {
         const out: Rect[] = [];
@@ -782,6 +814,9 @@ class Hud implements HudPart {
     this.bottom.update(dt);
     this.dodges.update(dt);
     this.tutorial?.update(dt);
+    // The field keeps two gestures from the player in the tutorial run: the road before the laser's button is out, the sell strip while a lesson holds the clock.
+    this.ctx.locks.laser = !this.env.reveal.laser;
+    this.ctx.locks.sell = sellLocked(this.tutorial?.holding ?? false, this.tutorial?.topic ?? null);
     this.rings?.update(dt);
     if (this.twinsFrames > 0) this.pointAtTwins();
     // A choice resolved from outside (a bot, a restored run) must not leave its popup behind.
@@ -816,6 +851,8 @@ class Hud implements HudPart {
     popups.closeAll();
     clearToasts();
     for (const reason of ['user', 'tutorial', 'popup'] as const) this.ctx.setPaused(reason, false);
+    this.ctx.locks.laser = false;
+    this.ctx.locks.sell = false;
     this.root.destroy({ children: true });
   }
 }

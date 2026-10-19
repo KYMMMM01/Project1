@@ -330,6 +330,23 @@ export function spotWindow(r: Rect, margin: number, grid: number, screen: { w: n
   return { x: cx - hw, y: cy - hh, w: hw * 2, h: hh * 2 };
 }
 
+/**
+ * A window that stops at `y`: the part below is cut off (the margin of a window round the class chips would lie on the fish and purr counters under them, which sit
+ * 6 px below the row). A window that ends above `y` already is left as it is.
+ */
+export function trimBelow(w: Rect, y: number): Rect {
+  return w.y + w.h <= y ? w : { x: w.x, y: w.y, w: w.w, h: Math.max(0, y - w.y) };
+}
+
+/** Where the fish and purr counters begin (scene y): what a window round the chips above them must stop short of. */
+export function currencyTop(l: BattleLayout): number {
+  const rows = bottomRects(l);
+  return rows.top + rows.currencyY - CURRENCY_HALF;
+}
+
+/** Half the height of the fish and purr pills. */
+const CURRENCY_HALF = 38;
+
 /** Corner radius of a spotlight window: a circle when the window is round (a button), else the usual cut-out corner. */
 export function spotRadius(w: Rect, corner: number): number {
   return Math.abs(w.w - w.h) <= 12 ? Math.min(w.w, w.h) / 2 : corner;

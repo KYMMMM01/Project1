@@ -162,12 +162,12 @@ describe('the sound bank', () => {
   });
 
   describe('memory budget', () => {
-    it('is 14 MB of decimal megabytes at 48 kHz and holds the same sound at any rate', () => {
-      expect(BANK_BUDGET_MB).toBe(14);
-      expect(bankBudget(48000)).toBe(14_000_000);
-      expect(bankBudget(96000)).toBe(28_000_000);
-      expect(bankBudget(44100)).toBe(12_862_500);
-      expect(new SoundBank(48000).limit).toBe(14_000_000);
+    it('is 17 MB of decimal megabytes at 48 kHz (14 for the first 140 sounds, 3 for the skills\' 48) and holds the same sound at any rate', () => {
+      expect(BANK_BUDGET_MB).toBe(17);
+      expect(bankBudget(48000)).toBe(17_000_000);
+      expect(bankBudget(96000)).toBe(34_000_000);
+      expect(bankBudget(44100)).toBe(15_618_750);
+      expect(new SoundBank(48000).limit).toBe(17_000_000);
     });
 
     /** Three single-variant sounds fit, a fourth does not. */
@@ -191,6 +191,23 @@ describe('the sound bank', () => {
       expect(small.get(FOUR[1] as number)).toBeUndefined();
       for (const i of [FOUR[0], FOUR[2], FOUR[3]]) expect(small.get(i as number)).toHaveLength(1);
       expect(small.bytes).toBe(3 * BYTES);
+      small.dispose();
+    });
+
+    it('does not count the old versions kept for the sound board, and never drops them', async () => {
+      const small = new SoundBank(48000, 2 * BYTES);
+      const old = sfxIndexOf('old_imp_w_sword');
+      expect(old).toBeGreaterThanOrEqual(0);
+      // three old versions land (one variant each is all the fake needs): nothing is counted, nothing is dropped
+      await bakeAll(small, [old, sfxIndexOf('old_imp_w_paw'), sfxIndexOf('old_hit_heavy')]);
+      expect(small.bytes).toBe(0);
+      expect(small.evicted).toBe(0);
+      // the game's own sounds still fill the budget and drop each other, and the old ones stay
+      await bakeAll(small, [FOUR[0] as number, FOUR[1] as number, FOUR[2] as number]);
+      expect(small.evicted).toBe(1);
+      expect(small.bytes).toBe(2 * BYTES);
+      expect(small.get(old)).toBeDefined();
+      expect(small.get(sfxIndexOf('old_hit_heavy'))).toBeDefined();
       small.dispose();
     });
 

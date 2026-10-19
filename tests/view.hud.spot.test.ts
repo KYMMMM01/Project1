@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { spotWindow, type Rect } from '@/view/hud/layoutMath';
+import { bottomRects, currencyTop, spotWindow, trimBelow, type Rect } from '@/view/hud/layoutMath';
+import { computeBattleLayout } from '@/view/layout';
 import { LAY_AGAIN, MISSING_LIMIT, SETTLE_LIMIT, SETTLE_MEASURES, shift, SpotSettle, STILL, windowMoved, type SpotPlan } from '@/view/hud/spotMath';
 
 const SCREEN = { w: 720, h: 1280 };
@@ -127,5 +128,30 @@ describe('when a lesson lays its note and its paw', () => {
   it('has nothing to clear while nothing was laid', () => {
     const settle = new SpotSettle();
     expect(settle.step(NONE)).toBe('clear');
+  });
+});
+
+describe('the window round the class chips', () => {
+  const l = computeBattleLayout(720, 1280, 0, 0);
+  const rows = bottomRects(l);
+  /** The chip row as the HUD measures it: 88 px high, centred on its row. */
+  const chips: Rect = { x: 12, y: rows.top + rows.chipsY - 44, w: 696, h: 88 };
+
+  it('ran 22 px into the fish and purr counters under the chips (the margin is the same on every side)', () => {
+    const w = spotWindow(chips, 18, 12, l);
+    expect(w.y + w.h).toBeGreaterThan(currencyTop(l) + 10);
+  });
+
+  it('stops where the counters begin, and keeps its top and sides', () => {
+    const w = spotWindow(chips, 18, 12, l);
+    const t = trimBelow(w, currencyTop(l));
+    expect(t.y + t.h).toBeLessThanOrEqual(currencyTop(l));
+    expect(t.y + t.h).toBeGreaterThanOrEqual(chips.y + chips.h);
+    expect(t).toMatchObject({ x: w.x, y: w.y, w: w.w });
+  });
+
+  it('leaves a window that already ends above the line as it is', () => {
+    const w: Rect = { x: 10, y: 100, w: 200, h: 100 };
+    expect(trimBelow(w, 500)).toBe(w);
   });
 });

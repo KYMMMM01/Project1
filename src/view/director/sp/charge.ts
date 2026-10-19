@@ -402,8 +402,8 @@ class Runner {
     this.land.reset();
     stage.fx.shockwave(this.landX, this.landY + 10, { color: CLASS_COLOR.warrior, radius: 96 });
     stage.fx.ps.burst(LAND_DUST, this.landX, this.landY + 14, { scale: 1.3, count: stage.detail === 0 ? 0.5 : 1 });
-    // Not the `big` rule: the cast's own sound used its slot 0.3 battle seconds ago, which at 3x is only 0.1 s of real time.
-    stage.play(stage.rules.heavyHit, 'imp_w_tiger', 0.9, 0.95, 0.04);
+    // The skill's own rule, not the fight's `heavyHit` (which at 3x swallowed this landing and ten of every fifteen hoofbeats).
+    stage.play(stage.rules.skill, 'sp_tiger_land', 0.9, 1, 0.03, stage.panOf(this.landX));
     if (!stage.reduced) stage.shake(Trauma.t1, Gate.spShake, 0.3);
     runPlace(this.track, this.track.at + this.track.delay, scratch);
     this.scene.print(this.landX, this.landY + 12, headingOf(this.track, scratch.angle), 1.7, 0.85);
@@ -442,6 +442,8 @@ class Runner {
     this.endX = scratch.x;
     this.endY = scratch.y;
     if (!stage.reduced) stage.fx.shockwave(this.endX, this.endY - 30, { color: CLASS_COLOR.warrior, radius: 110 });
+    // It stands at the end of the run and answers itself: one short growl.
+    stage.play(stage.rules.skill, 'sp_tiger_roar_end', 0.9, 1, 0.03, stage.panOf(this.endX));
   }
 
   private startBack(): void {
@@ -575,7 +577,8 @@ class ChargeScene implements SpScene<'charge'> {
     }
     r.begin(e);
     stage.fx.dustPuff(e.x, e.y + 24, { scale: 0.9 });
-    stage.play(stage.rules.big, 'atk_w_tiger', 0.7, 0.9, 0.04);
+    // The tiger roars as it leaps (`sp_tiger_roar`, a cartoon roar made of a throat and a breath): the sound the owner asked for.
+    stage.play(stage.rules.skill, 'sp_tiger_roar', 1, 1, 0.02, stage.panOf(e.x));
   }
 
   /** The tiger touched an enemy: a stomp at the enemy where it stood, joined to a young one nearby when the road is packed. */
@@ -608,7 +611,7 @@ class ChargeScene implements SpScene<'charge'> {
     s.stamp.visible = true;
     this.drawStomp(s, 0);
     stage.fx.ps.burst(STOMP_DUST, ex, y, { scale: Math.max(0.8, info.size / 70), count: detail === 0 ? 0.5 : 1 });
-    stage.play(stage.rules.heavyHit, 'imp_w_tiger', 0.5, 1.15, 0.06);
+    stage.play(stage.rules.skillTick, 'sp_stomp', 0.85, 1, 0.06, stage.panOf(ex));
   }
 
   runEnd(e: BattleEvents['spRunEnd']): void {

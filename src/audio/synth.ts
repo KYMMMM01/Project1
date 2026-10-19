@@ -6,6 +6,7 @@
  */
 import { Rng } from '@/core/rng';
 import { SILENCE, adsrPoints, softClipCurve } from './envelopes';
+import { sampleStore, type SampleId } from './samples';
 
 export type NoiseKind = 'white' | 'pink' | 'brown';
 
@@ -64,6 +65,28 @@ export interface ToneOpts extends Voice {
 
 export interface NoiseOpts extends Voice {
   kind?: NoiseKind;
+}
+
+/** A recorded layer (see `Synth.sample`). */
+export interface SampleOpts {
+  /** Start offset from the synth's t0, seconds. */
+  at?: number;
+  /** The files peak near 0.9, so this is the level of the layer as it is mixed with the synthesis. Default 1. */
+  v?: number;
+  /** Playback rate: 2 plays an octave up and in half the time. Default 1. */
+  rate?: number;
+  /** Start this far into the file (seconds of the file). */
+  from?: number;
+  /** Play at most this many seconds (of output); the end fades over `fade`. */
+  dur?: number;
+  /** Fade-out at the end, seconds (default 6 ms: a cut never clicks). */
+  fade?: number;
+  /** Fade-in at the start, seconds (default 0.6 ms: a recording that begins on a sample that is not zero never clicks, and the first millisecond of a hit is still there). */
+  attack?: number;
+  lp?: number;
+  hp?: number;
+  /** Extra copy of the signal into an echo / reverb bus. */
+  send?: { bus: Send; amt: number };
 }
 
 export interface Send {
@@ -370,6 +393,71 @@ export class Synth {
       this.lastSource = src;
     }
     if (stop > this.end) this.end = stop;
+  }
+
+  /**
+   * Lay a recorded sample into the mix (docs/licenses/sounds.md lists every file). Returns false, and adds nothing, when the sample has
+   * not loaded: a recipe is written so that its synthesis alone is a whole sound.
+   */
+  sample(id: SampleId, o: SampleOpts = {}): boolean {
+    const pcm = sampleStore.get(id);
+    if (!pcm) return false;
+    const ctx = this.ctx;
+    const rate = Math.max(0.1, o.rate ?? 1);
+    const from = Math.min(Math.max(0, o.from ?? 0), Math.max(0, pcm.data.length / pcm.rate - 0.002));
+    const avail = (pcm.data.length / pcm.rate - from) / rate;
+    const dur = Math.max(0.004, Math.min(o.dur ?? avail, avail));
+    const fade = Math.min(o.fade ?? 0.006, dur * 0.5);
+    const t = this.t0 + (o.at ?? 0);
+    const stop = t + dur + 0.01;
+    const buf = ctx.createBuffer(1, pcm.data.length, pcm.rate);
+    buf.getChannelData(0).set(pcm.data);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const env = this.keep(ctx.createGain());
+    const g = env.gain;
+    const attack = Math.min(o.attack ?? 0.0006, dur * 0.25);
+    g.setValueAtTime(0, t);
+    g.linearRampToValueAtTime(o.v ?? 1, t + attack);
+    g.setValueAtTime(o.v ?? 1, t + dur - fade);
+    g.linearRampToValueAtTime(0, t + dur);
+    let head: AudioNode = src;
+    if (o.hp) {
+      const f = this.keep(ctx.createBiquadFilter());
+      f.type = 'highpass';
+      f.frequency.value = o.hp;
+      f.Q.value = 0.6;
+      head.connect(f);
+      head = f;
+    }
+    if (o.lp) {
+      const f = this.keep(ctx.createBiquadFilter());
+      f.type = 'lowpass';
+      f.frequency.value = o.lp;
+      f.Q.value = 0.6;
+      head.connect(f);
+      head = f;
+    }
+    head.connect(env);
+    env.connect(this.out);
+    if (o.send) {
+      const sg = this.keep(ctx.createGain());
+      sg.gain.value = o.send.amt;
+      env.connect(sg);
+      sg.connect(o.send.bus.input);
+      this.end = Math.max(this.end, t + dur + o.send.bus.tail);
+      this.hasTail = true;
+    }
+    src.start(t, from);
+    src.stop(stop);
+    this.keep(src);
+    if (stop > this.lastSourceEnd) {
+      this.lastSourceEnd = stop;
+      this.lastSource = src;
+    }
+    if (stop > this.end) this.end = stop;
+    return true;
   }
 
   /** Feedback delay bus with a damped loop: the cheap "shimmer / sparkle trail". */

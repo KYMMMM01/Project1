@@ -1,3 +1,8 @@
+/** What a counter shows: the real amount less the gains still flying to it; spending fish that have not landed yet takes it to nought, never below. */
+export function shownAmount(total: number, pending: number): number {
+  return Math.max(0, total - pending);
+}
+
 /** The fish a second as the tag beside the fish pill shows it: at most two decimals, none when it is a whole number ("0.5", "0.65", "1", "1.3"). */
 export function incomeShown(perSecond: number): string {
   return String(Number((Math.round(perSecond * 100) / 100).toFixed(2)));

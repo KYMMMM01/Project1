@@ -321,7 +321,7 @@ class KnockScene implements SpScene<'knock'> {
 
     this.dress(t);
     this.pose(t, 0);
-    stage.play(stage.rules.zone, 'place', 0.45, 1.7, 0.05);
+    stage.play(stage.rules.skill, 'sp_glass_tap', 0.9, 1, 0.03, stage.panOf(t.gx));
   }
 
   /** Put ice on `en`: the picture of the chill it had. */
@@ -508,7 +508,7 @@ class KnockScene implements SpScene<'knock'> {
     if (detail > 0 && !calm) fx.ps.burst(REACH_RING, t.ix, t.iy, { scale: reachScale(t.radius) });
     this.crack(t);
     if (!calm) stage.shake(Trauma.t1, Gate.spShake, 0.3);
-    stage.play(stage.rules.big, 'shield_break', 0.7, 0.9, 0.04);
+    stage.play(stage.rules.skill, 'sp_glass_shatter', 1, 1, 0.02, stage.panOf(t.ix));
 
     // The shards: nearest first, a beat apart, each to its enemy (a plan entry with no enemy found, or beyond the tier's limit, has none).
     const order = t.plan.map((p, i) => ({ p, i, d: p.en ? Math.hypot(p.en.x - t.ix, p.en.y - t.iy) : 0 })).sort((a, b) => a.d - b.d || a.i - b.i);
@@ -600,11 +600,11 @@ class KnockScene implements SpScene<'knock'> {
       fx.ps.burst(CHILL_CRYSTAL, x, y, { scale: Math.max(0.7, size / 56), count });
       fx.ps.burst(CHILL_SHARD, x, y, { scale: Math.max(0.7, size / 56), count });
       if (detail > 0) fx.ps.burst(LAND_RING, x, y, { scale: Math.max(0.8, size / 56) });
-      stage.play(stage.rules.heavyHit, 'shield_break', 0.34, 1.35, 0.05);
+      stage.play(stage.rules.skill, 'sp_shard_hit', 1, 0.9, 0.05, stage.panOf(x), stage.stagger('shard', 0.05));
     } else {
       fx.fleck(paint('burst_star'), x, y, { life: 0.18, size: size * 0.5, sizeEnd: size * 1.0, rot: s.seq, color: lighten(Hue.ice, 0.6), fadeAt: 0.35 });
       fx.ps.burst(CRACK_CHIPS, x, y, { scale: Math.max(0.7, size / 56), count });
-      stage.play(stage.rules.strike, 'imp_m_frost', 0.42, 1.3, 0.05);
+      stage.play(stage.rules.skill, 'sp_shard_hit', 0.7, 1.15, 0.05, stage.panOf(x), stage.stagger('shard', 0.05));
     }
     if (s.ice) s.ice.hide();
     s.hide();

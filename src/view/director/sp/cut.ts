@@ -586,7 +586,8 @@ class CutScene implements SpScene<'cut'> {
       line.begin(m.uid, d.cutId, d, bodyX(en ? en.x : m.x, size), (en ? en.y : m.y) - size * 0.05, size, dash, clamp01(offset / dash.span), ++this.born);
     }
     stage.fx.dustPuff(e.x, e.y + 24, { scale: 0.8 });
-    stage.play(stage.rules.big, 'atk_w_samurai', 0.7, 1.05, 0.04);
+    // The afterimage tears down the road: its own swish (`sp_dash`), not the ordinary sword's.
+    stage.play(stage.rules.skill, 'sp_dash', 0.9, 1, 0.03, stage.panOf(e.x));
   }
 
   /** A cut opens: every line at once. */
@@ -637,7 +638,14 @@ class CutScene implements SpScene<'cut'> {
       stage.fx.shockwave(cx, cy + 8, { color: Hue.cream, radius: 52 });
       if (detail > 0 && !stage.reduced) stage.fx.ps.burst(CLICK_SPARKS, cx, cy - 6, { count: detail === 1 ? 0.7 : 1 });
     }
-    stage.play(stage.rules.strike, 'imp_w_samurai', 0.75, 1.2, 0.04);
+    // The sword goes home with a click (only when the samurai is still on its tile to click it) and every line opens in the same instant: "chaeng". The more
+    // lines, the fuller it sounds (at most a third louder).
+    const pan = stage.panOf(cellCenterX(u.cell));
+    let opened = 0;
+    for (const l of e.lines) if (l.kind !== 'lost') opened++;
+    const sheathed = !!on && on.uid === u.uid;
+    if (sheathed) stage.play(stage.rules.skill, 'sp_sheath', 0.9, 1, 0.03, pan);
+    stage.play(stage.rules.skill, 'sp_cut_clash', 0.95 + Math.min(0.35, opened * 0.035), 1, 0.02, pan, sheathed ? 0.04 : 0);
   }
 
   private refresh(): void {

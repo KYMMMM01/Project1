@@ -66,6 +66,9 @@ const STARS_LIVE = [18, 32, 44] as const;
 const BURSTS_LIVE = [3, 5, 8] as const;
 /** Pings of the stars climb this many steps of the scale before they start over. */
 const PING_STEPS = 8;
+/** The arrow's whoosh is played in pieces along the lap, so that it moves across the stereo field with the arrow: one piece per this many px of road covered, at least this many real seconds apart. */
+const WHOOSH_EVERY = 560;
+const WHOOSH_GAP = 0.22;
 /**
  * On a packed road (more than `DENSE_HITS` stars in the last `DENSE_WINDOW` battle seconds) the stars are drawn at `DENSE_SIZE` of their size
  * and without the cream sparkle behind them: one star a hit would otherwise run together into a gold band that hides the enemies it marks.
@@ -250,6 +253,8 @@ class Arrow {
   x = 0;
   y = 0;
   private glintedTo = 0;
+  private whooshedTo = -WHOOSH_EVERY;
+  private lastWhoosh = -1e9;
   private readonly drop = new Age();
   private readonly post = new Age();
   private readonly head = new Container();
@@ -284,6 +289,8 @@ class Arrow {
     this.phase = 'run';
     this.stars = 0;
     this.glintedTo = 0;
+    this.whooshedTo = -WHOOSH_EVERY;
+    this.lastWhoosh = -1e9;
     this.drop.reset();
     this.post.reset();
     this.head.visible = true;
@@ -323,6 +330,11 @@ class Arrow {
     const lift = calm || this.phase === 'fade' ? 0 : DROP_FROM * (1 - this.drop.k(DROP[0], DROP[1])) ** 2;
     this.x = point.x;
     this.y = point.y;
+    if (this.phase === 'run' && cov >= this.whooshedTo + WHOOSH_EVERY && stage.now - this.lastWhoosh >= WHOOSH_GAP) {
+      this.whooshedTo = cov;
+      this.lastWhoosh = stage.now;
+      stage.play(stage.rules.skill, 'sp_arrow_whoosh', 0.85, 1, 0.03, stage.panOf(point.x));
+    }
     this.head.position.set(point.x, point.y - lift);
     this.head.rotation = point.angle;
     const grow = 1 - 0.3 * fade;
@@ -430,7 +442,8 @@ class LapScene implements SpScene<'lap'> {
     bow.glint.visible = true;
     bow.streak.visible = true;
     this.drawBow(bow, 0);
-    stage.play(stage.rules.big, 'atk_r_star', 0.8, 1, 0.03);
+    // The night comes down (the arrow's own whooshes follow it along the road, in `Arrow.update`).
+    stage.play(stage.rules.skill, 'sp_night_hush', 0.9, 1, 0.02);
   }
 
   /** A star on an enemy the arrow marked, where the enemy stands. */
@@ -442,7 +455,7 @@ class LapScene implements SpScene<'lap'> {
     const dense = this.packed();
     this.star(bodyX(e.x, info.size), e.y - info.size * 0.1, clamp(info.size * 1.2, 46, 100) * (dense ? DENSE_SIZE : 1), dense);
     if (!dense) stage.fx.ps.burst(STAR_SPARK, bodyX(e.x, info.size), e.y - info.size * 0.1, { count: stage.detail === 0 ? 0 : stage.detail === 1 ? 0.7 : 1 });
-    stage.playStep(stage.rules.strike, 'imp_r_star', r.stars % PING_STEPS, 0.45);
+    stage.playStep(stage.rules.skillTick, 'sp_star_ping', r.stars % PING_STEPS, 0.8, 1, stage.panOf(bodyX(e.x, info.size)));
     r.stars++;
   }
 

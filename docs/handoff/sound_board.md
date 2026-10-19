@@ -1,0 +1,115 @@
+# Sound board hand-off (`src/soundboard`, `?scene=sounds`)
+
+The owner asked (2026-10-18, "효과음 들어볼 수 있게 툴도 만들어줘") for a page on which he can listen to every sound of the game on his phone, and, later, to hear a
+sound before and after a change. This is that page. Agents cannot listen: **the owner listens here, the agents measure** (see `docs/qa/directive_2026-10-13_skills_build.md`, decisions 38 and 40).
+
+* Address: `https://kymmmm01.github.io/Project1/?scene=sounds` on the public test build (no debug flag, no profile, no save: the page never starts the game). Locally: `http://127.0.0.1:<vite port>/?scene=sounds`.
+* **Not deployed by the agent that built it** (the tree held other workflows' unfinished edits and did not typecheck). Deploy with `tools/deploy_pages.sh` once the tree is whole.
+* Plays through **the game's own audio engine** (`audio` of `src/audio`): same bank, voice limiter, buses and pitch / level jitter as in a fight. Samples of the free packs go through a small player of their own that uses the game's own mixing graph (`createGraph`), so a pile of them behaves like a pile of the game's sounds.
+* Nothing plays by itself. The page opens behind a gate with one big button ("소리 켜기"): the tap starts the browser's audio (iOS needs a tap). Every sound after that starts from a button.
+
+## What the page looks like (portrait, 360 px is the narrowest it is designed for, 16 px gutter, every button at least 46 px high, the big ones 58 px)
+
+* A head with a short note in Korean on how to use it (six points: the gate, the three tabs, the big play button, "×5 · 3배속", "지금 / 새것", "모두 멈춤"), then a **sticky bar**: three tabs, the master volume ("소리 크기", starts at the game's own sound level 0.8; the music follows at the game's ratio 0.5 : 0.8) and a red **모두 멈춤** (stop all: one-shots, samples, the music).
+* **Tab 효과음**: every SFX id of the game, 13 sections by where it is heard (the 13th, "스킬 소리 낱개", is the 48 skill sounds of 2026-10-19, see `docs/handoff/skill_sounds.md`), with chips under the bar to jump to a section:
+  인터페이스 (8) · 소환 · 보드 (13) · 전사 / 사수 / 마법사 / 재주 고양이 (15 each: per cat a "한 번 쏠 때" row that plays the release, the landing and the enemy's answer as a fight does, then the release alone and the landing alone) · 전투 공통 (23, with the chance of a crit as played and the sounds the game no longer uses, marked "옛 소리") · 적 · 쓰러짐 (18) · 보스 (9) · **스킬 (12 rows, one per skill, each with a "지금" = the old borrowed sounds and a "새것" = what the scene plays now, in order and at the scene's times)** · **스킬 소리 낱개 (48: every `sp_*` sound by itself, the Kenney files it lays under its synthesis named in the text)** · 웨이브 · 알림 (8) · 보상 · 뽑기 (16). 215 rows (182 SFX ids, each with exactly one row of its own, + 20 cat shots + the crit combo + the 12 skills), plus 12 tracks and 6 stingers on the music tab.
+  A row = a card with the name (what it is), a plain sentence on when it is heard, the SFX id (selectable text), a big **재생** button and a **×5 · 3배속** button. "×5" plays the row five times, one director gap apart (the `SoundRule` gap of the director for that kind of sound: `GAP_SECONDS` in `catalog.ts`, which a test holds equal to `createRules()` of `src/view/director/stage.ts`), each play detuned by up to 5 %, ladder sounds (coins, merges, stars) climbing a step per play. That is how a busy 3x board stacks the sound. The button lights while the sound lasts.
+* **Tab 음악**: the 12 tracks with 재생 / 멈춤 (the playing one is outlined), a battle intensity switch (잔잔 0 / 중간 0.5 / 가득 1), and the 6 stingers (재생; a stinger ducks the music, so play a track first to hear that).
+* **Tab 후보 (CC0)**: the free sample files. Three packs as chips (임팩트 소리 130 · RPG 소리 51 · 인터페이스 클릭 27), inside each the groups in Korean ("금속 · 무거운 타격 (챙)", "책장 넘기기", ...), a group opens to its files. A file row: a play button, the **file name** (selectable: this is what the owner reads out), length, peak and loudness in dB, the gain "크기 맞춤", a **×5** button and a ★. Stars collect in a box at the top ("내가 고른 소리 N개", the list to read out; kept in `localStorage` only for the convenience of the owner's next visit). A switch "게임 소리 크기에 맞춰 듣기" (on by default): every sample is brought to the level the game gives its own sounds (rule below); off plays the file as recorded.
+* **"지금" and "새것"** (the A/B): see the next section.
+
+## How a later agent shows a before / after (the landing agent's job)
+
+`src/soundboard/next.ts`. A row of the board plays what the game plays today ("지금"). Add a row key there and the row gets a green **새것** button, a **×5 · 3배속** for each side, and a yellow **지금, 새것 이어서 듣기** (old, a pause, new). Keys are the row keys: an SFX id for a single sound (`'imp_w_sword'`), `pair:<unit>` for a cat's shot (`'pair:w_samurai'`), `skill:<name>` for a skill (`'skill:cut'`, `'skill:clones'`, `'skill:charge'`, ...; see `SKILL_ROWS` in `catalog.ts`), `combo:crit`.
+
+```ts
+export const NEW_VERSIONS = {
+  // a new recipe under a new id (add the id to SFX_IDS / sounds.ts, list it in NEW_ONLY_IDS so the coverage test does not ask for a row of its own)
+  imp_w_samurai: [{ sfx: 'imp_w_samurai_v2' }],
+  // a sample of the CC0 packs (key = `pack/name`, see the candidates tab)
+  imp_w_viking: [{ file: 'impact-sounds/impactMetal_heavy_001', volume: 0.9 }],
+  // a skill's whole sequence: cues are { sfx | stinger | file, at (seconds after the tap), volume, pitch, step }
+  'skill:cut': [{ sfx: 'atk_w_samurai' }, { sfx: 'sp_cut_clang', at: 0.02 }, { sfx: 'imp_w_samurai', at: 1.2 }],
+};
+```
+
+* If a new recipe **replaces** an old one under the same id, the board's "지금" would change too. Keep the old sound under `OLD_VERSIONS[key]` (an id the engine still has, or a sample) for as long as the owner compares. Remove both entries when he has chosen.
+* A sound that exists only as somebody's "새것" and so has no row of its own: list its id in `NEW_ONLY_IDS`. Any other new id **needs a row in `catalog.ts`**: `tests/soundboard.catalog.test.ts` fails otherwise (every id of `SFX_IDS` is on the board).
+* For a quick look without editing: `window.__soundboard.board.setNew('skill:cut', cues)` in the page (and `null` to remove).
+* The page lists a sample file only if it is in the manifest (next section); a new sample needs its row in the ledger too.
+
+## The candidate files and the rule for anything that ships
+
+Sources (the owner's decisions 38 and 40): the game's own synthesizer; the three CC0 packs by Kenney already in `art/sfx_src/kenney/` (impact-sounds, rpg-audio, interface-sounds: OGG, each with its `License.txt`: "Creative Commons Zero, CC0", commercial use allowed, no credit needed); ElevenLabs only if the owner gives a paid-plan key. **Nothing else.** The ledger `docs/licenses/sounds.md` lists every sample file that ships (a row per file: file, source pack / file, URL, license, date, where it is used); `tests/soundboard.files.test.ts` fails when a sound file sits in `src/` or `public/` (outside `public/soundboard/`) without a row under "In the game", when a served file has no row, or when a pack's `License.txt` stops saying CC0.
+
+* `tools/sfx/convert.mjs` (run it: `node tools/sfx/convert.mjs [--pack impact-sounds] [--only "regex"]`; env `SFX_PORT`, `SFX_CDP`, `SFX_PROFILE`; headless Edge **muted**, the page only decodes and writes) turns the OGG into **16-bit mono 44.1 kHz WAV** in `public/soundboard/kenney/<pack>/<name>.wav`, trims the silence around each (1 ms before the first sample above -70 dB of the peak, 5 ms after the last above -60 dB, with a 5 ms fade), turns a peak over 0.98 down to 0.98 (19 files decode above it, up to 1.22, and would clip), measures it and writes `manifest.json` and the ledger's board table. 208 files, 6.4 MB; a hit is 5 to 25 KB, the longest (doors, pots) 60 to 150 KB.
+* **Why WAV:** iOS Safari cannot be relied on for Ogg; WAV plays in every browser and has no codec delay, so the attack of a hit stays where it was recorded (AAC / MP3 add a decoder-dependent start delay that cannot be measured for iOS from this machine; Edge's AAC test ate the first ~450 samples of a sound that begins at sample 0). A file that is **chosen for the game** can be made smaller (22.05 kHz for dull sounds) or re-encoded to AAC with an edit list once it can be tried on an iPhone: say how in its ledger row.
+* The interface pack is restricted to the click-like family (click, tick, select, switch, toggle; `PACKS` in `convert.mjs`). To add more of any approved pack, widen `keep` and rerun.
+* **Loudness match** (`matchGain` in `types.ts`): the game normalises every baked sound to a target of its family (`CAT_TARGET` in `recipe.ts`: peak and loudness, whichever is lower: `normalisationGain` of `analysis.ts`). A candidate gets the same rule with the "impact" target (peak 0.28, loudness 0.042; the interface clicks with "ui", 0.2 and 0.034), with `loud` measured the way the game measures it (`loudRms`). So a sample next to the game's sound is not louder just because it was recorded loud, which is what an A/B by ear is most easily fooled by. When a sample moves into the game, give it a `Cat` / target in the engine the same way.
+* **Keeping them out of the game:** the candidates are under `public/soundboard/` (served by the test build, loaded only by the board, never by the game: a test greps `src/` and `index.html` for `soundboard/kenney`), and the page is a lazy chunk (`import('@/soundboard')` in `main.ts`, 55 KB, 20 KB gzipped, not preloaded by the game's page). **For a store build:** `VITE_SOUNDBOARD=off npm run build` leaves the page out of the code and `vite.config.ts` (the `drop-soundboard` plugin) deletes `dist/soundboard/`; checked: no `soundboard` chunk, no folder, no Korean board text in the bundle.
+
+## Files
+
+| file | role |
+|---|---|
+| `src/soundboard/route.ts` | `isSoundBoardRoute(search)`: `?scene=sounds`, nothing else |
+| `src/soundboard/index.ts` | `openSoundBoard()`: takes the page over (no game, no canvas), wires the real engine, `window.__soundboard = { board, stats }` for QA |
+| `src/soundboard/catalog.ts` | the content as data: sections, rows (Korean name, when it is heard, cues of "지금"), `GAP_SECONDS`, music and stinger rows, Korean names of the candidate groups and packs |
+| `src/soundboard/next.ts` | the A/B table (`NEW_VERSIONS`: the 12 skill sequences of 2026-10-19; `OLD_VERSIONS`, `NEW_ONLY_IDS`: empty) |
+| `src/soundboard/player.ts` | cues to calls on the engine / sample player: play, stack (×5), both, stop-all (a play still getting ready does not start after a stop), 8 s patience for a slow first-use bake (the engine drops a sound that is still unbaked when asked, so the board waits for `prime()` instead; the button looks "waiting" after 0.35 s) |
+| `src/soundboard/view.ts` | the page: gate, sticky bar, three tabs, rows, A/B buttons, candidates, picks; plain DOM through `dom.ts` (testable without a browser) |
+| `src/soundboard/engineAudio.ts` | the board's window on `audio` (`prime`, `stopAll` of the engine, master volume at the game's ratio) |
+| `src/soundboard/samples.ts` | the small sample player (fetch, decode, play with the game's graph; woken again on every tap) |
+| `src/soundboard/candidates.ts`, `types.ts`, `style.ts`, `dom.ts` | manifest reading and grouping, interfaces and `matchGain`, the game-look CSS (paper cards, washi tape, coral buttons; every rule under `.sb`), the DOM builder |
+| `src/audio/engine.ts` | **added**, class methods only (the frozen `AudioApi` is unchanged; the game calls neither): `stopAll()` (cuts every sounding or scheduled one-shot in a few ms, frees what the limiter held, lets the music's duck and muffle go; a pooled voice has a `busy` flag that a cut clears) and `wake()` (resume from inside a tap, see the finding below) |
+| `src/main.ts`, `src/vite-env.d.ts`, `vite.config.ts` | the route (before the game starts), `VITE_SOUNDBOARD`, the `drop-soundboard` plugin |
+| `public/soundboard/kenney/` | the 208 WAV files and `manifest.json` |
+| `tools/sfx/convert.mjs`, `convert.html` | the converter and measurer |
+| `docs/licenses/sounds.md` | the ledger (rules, packs, how converted, a row per served file, "In the game" table for later) |
+| `tests/soundboard*.test.ts`, `tests/soundboard-fakeDom.ts`, `tests/soundboard-fakes.ts` | 5 test files, 79 tests; `tests/audio-engine.test.ts` has 2 more for `stopAll` |
+
+## Tests
+
+* `soundboard.catalog`: **every id of `SFX_IDS` has a row** (unique), keys unique, every row Korean-named and says when, every cue names a sound the engine has, the 20 cats' pairs and 12 skills, every music id and stinger id listed (a missing one is a compile error in the test), the gaps equal the director's, `next.ts` only names real rows.
+* `soundboard.player`: nothing plays at construction; a play calls the engine with the cue's level, pitch and delay after getting it ready; steps; samples; ×5 spacing and detune; both; stop-all cancels a play still getting ready and timed stingers; the patience timeout.
+* `soundboard.view`: **nothing plays or loads by itself** (mount, tabs, sections, chips, intensity, candidate list); the engine is created silent at mount and the sample context only inside the tap; the gate; every SFX id has a play and a ×5 button and shows its id; buttons call the engine as the game does; lit buttons; stingers; music start / stop; stop-all; volume; background tab stops sound; a failing play shows a message; the A/B buttons; the candidate list is read only when its tab opens; picks and blocked storage.
+* `soundboard.files`: the route; `main.ts` opens it before the game; the board imports no screen, profile or save; every served WAV is 16-bit mono 44.1 kHz PCM of the length and size the manifest says, not clipped; the manifest and the folder agree; the ledger lists every file with pack / file, URL, CC0 and date; no sound file in the game without a ledger row; nothing of the game loads the candidates; grouping, matching and the loudness rule.
+* `soundboard.engine`: the board talks to the very same engine object; the master volume ratio equals the game's settings defaults (the test reads `settings.ts`); stop-all.
+
+## Looking at it (what was checked, muted)
+
+Headless Edge through `tools/edge/cdp.mjs` (`--mute-audio`; nothing was ever played on a speaker; the context exists and runs, the output is silent), at 360 x 800 and 450 x 900, first on a dev server, then on the **production build** served under a sub-path like GitHub Pages (`/Project1/?scene=sounds`, `vite build` into a scratch folder):
+
+* looks: the gate, the head and note, the sticky bar, a cat's rows, the skills, an A/B row (set through `setNew`), the music tab with a track playing, the candidate tab with a group open and a ★ (screenshots in the scratchpad `soundoard`, read one by one); no horizontal overflow at 360; no game canvas is created.
+* nothing plays before the tap (engine `suspended`, `sfxPlayed` 0); the tap on the gate starts the engine (mouse **and** touch, see the finding below) and the page waits for the background bake (140 sounds) to finish.
+* **every play button of the effects tab pressed in turn** (167 rows): 200 to 207 engine plays counted, no exception, no console error or warning, no failed request (the engine's own limiter dropped some of the rapid presses by its gap and bucket rules, as it would in a fight); seven "×5" presses played 56 sounds; the A/B buttons, a track with the battle layers, a stinger, stop-all, a candidate sample (its WAV fetched and decoded), its "×5" and a ★ all worked.
+* touch: a real touch swipe scrolls the page, a touch drag moves the volume slider, a touch tap plays (headless Chromium with `Emulation.setTouchEmulationEnabled` and `Input.dispatchTouchEvent`; `Input.synthesizeScrollGesture` does not scroll even a plain page, do not use it).
+
+`cdp.mjs`'s `close()` leaves some Edge child processes (renderer, gpu, utility: they carry no `--headless` in their command line) behind: after a script, kill the processes whose command line holds your profile folder.
+
+## The hit pass on the board (2026-10-19)
+
+75 rows have "지금" and "새것" now: every cat's release and landing, the 20 pairs, `hit_heavy`, `crit`, `combo:crit`, `explosion`, the 10 answers of the enemies and the boss's warning and cry. They are made from the board's own rows (`HIT_PASS_KEYS` in `next.ts`), "새것" = the row's cues (what the game plays), "지금" = the same cues with the old recipes, which are kept word for word as `old_<id>` in `src/audio/sfx-before.ts` (a `legacy` recipe: never baked ahead, outside the bank's budget, no family, no check, left out of a store build with `VITE_SOUNDBOARD=off`) and baked with the seed of the sound they were, so they are the sounds the game played, grain for grain. The descriptions of the changed rows in `catalog.ts` say what was done and which recording is under them. See `docs/handoff/hit_sounds.md`. Checked in muted headless Edge at 360 px: 150 buttons pressed, 232 sounds played by the engine, no error, no overflow.
+
+## Finding about the game's own unlock on touch screens (fixed in the game by the hit pass, 2026-10-19)
+
+Measured in Chromium (headless Edge with touch emulation and real `Input.dispatchTouchEvent` taps, muted): `AudioContext.resume()` called in `pointerdown` or `pointerup` of a touch stays pending, and only a call in `touchend` or `click` starts the context (a mouse click counts at mousedown: that is why every desktop check passes). The engine's `unlock()` starts at the first `pointerdown` and then, by design (test "does not stack resume calls while one is hanging"), keeps out of the way for `RESUME_TIMEOUT_MS` (1.5 s) while that attempt hangs, so **the first touch tap leaves the engine suspended and a second tap at least 1.5 s later starts it** (by then the page has had a user activation, so a `resume()` at pointerdown is allowed). The game has the same engine and so, in Chromium, the same one lost first tap; WebKit's rules could not be measured here. The board must not lose its gate tap, so it calls the new `wake()` (a direct `resume()` and the silent buffer) from a capture-phase `click` listener whenever the engine is not running; measured after the change: one touch tap on the gate starts the context. If the lead wants the game fixed too: call the same `wake()` from the `touchend` / `click` branch of `onGesture` (and change that one test). **Done (2026-10-19):** `AudioEngine.onGesture` calls `wake()` on `touchend` and `click` (tests: "a tap that ends in a click or a touchend resumes inside that event"). Looked at again in muted headless Edge with real touch events on the game page: `resume()` is called at the touchend and at the click with a transient user activation and the context starts (0.6 s after the tap in one run; in another run on a busy machine it was still starting after 3 s: the audio service of a fresh headless profile is slow, nothing to do with the tap). Not tried on an iPhone.
+
+## Not done / limits
+
+* Nobody has heard the page. It was not tried on a real iPhone or Android: the gate follows what the game's own engine does on those (`resume()` inside the gesture, a silent buffer, `navigator.audioSession = 'playback'` so the silent switch does not mute it). The sample player does the classic unlock too, and wakes again on any tap.
+* `stopAll()` cannot cut the live-synthesis fallback (browsers without `OfflineAudioContext`: those sounds are not pooled); every phone the game targets has it.
+* The Korean descriptions of what a sound is ("종이 소리", "나무를 톡 두드려요") were written from the recipes and their comments, not by ear: the owner is the judge; correct them in `catalog.ts`.
+* Only the three packs the owner approved are on the board; the interface pack's other 73 files are left out on purpose. No ElevenLabs sound exists (no key).
+* The rows of the skills' "지금" are the sounds the skill scenes played BEFORE they got sounds of their own (they borrowed a heavy hit, a whoosh, a shield break; the four rank 5 rows include the old cut-in `awaken`), "새것" is what the scenes play now (`docs/handoff/skill_sounds.md`); the times are the scene's, rounded. Remove an entry of `next.ts` and bring `catalog.ts` up to date when the owner has chosen.
+
+## Landing review (2026-10-19)
+
+The three parts (the board, the skills' sounds, the hit pass and the mix) were put together and looked at again by a fourth agent: `docs/qa/sound_audit_2026-10-18.md`, section 14, has the numbers. What it did to the board:
+
+* **Checked** (muted headless Edge, `tools/sfx/audit/board_qa.mjs`, on the dev server and on a production build served with `vite preview`): 360 px and 450 px, no horizontal overflow, every button 52 px high or more (the big play buttons 58), the sticky bar stays on top while the page scrolls inside its own container, a chip puts the head of its section right under the bar (three tried), **all 691 buttons of the effects tab pressed** (`PRESS_ALL=1`: 1,767 plays by the engine, no error, no failed request, no console warning; 242 sounds baked, legacy ones included, 15.4 of 16.6 MB). Nothing audio-like is requested before the gate tap in a production build, the game's 29 sample files come after it, the candidate folder only gets its `manifest.json` when the "후보" tab is opened. Screenshots (muted, 360 px): the scratchpad folder `sound\land\board\`.
+* **Which rows have "새것"**: 87 of 233 (75 of the hit pass + the 12 skills). Of the 55 sounds whose waveform changed (20 landings, 20 releases, 10 enemy answers, `hit_heavy`, `crit`, `explosion`, `boss_warning`, `boss_roar`) every one has an A/B on its own row except the snow cat's release (1 dB softer, nothing else), which is inside the "한 번 쏠 때" row of the snow cat. **The changes of the mix** (buses, hush, ceiling, the music's dips) are in both "지금" and "새것": both go through the same graph, so this comparison cannot let the owner hear them.
+* **Text that had become wrong** and was corrected in `catalog.ts` / `view.ts`: `shoot_magic` is not played by anything any more (the cloud scene plays `sp_cloud_pop`), so its row says "옛 소리" like the other unused ones; `explosion`, `shield_break`, `whoosh`, `foe_glass_hit` no longer claim to be heard in the skills' scenes; the shove row said "지금은 …" about the old sound; the candidates tab said that no file is in the game yet (29 are, under the synthesis). Check `catalog.ts` again whenever a scene starts to play another sound than the one a row names: a `when` text is a claim about the game.
+* Two sounds the review found nearly the same as another new one were changed (`sp_clone_hop` against the tiger's hoofbeat, `imp_m_snow` against `imp_m_fire`) and `imp_m_cosmo` was made 2 dB louder (rank order of the mage line): the board shows what the game plays now, so the owner hears the changed ones.
+* Not changed: a mark on the candidate rows for the files that are already in the game (it would help the owner choose the "챙"; `SAMPLE_URLS` of `src/audio/samples.ts` has the list).
+* `tools/sfx/audit/` got `board_qa.mjs` (the checks above), `review.mjs`, `stress.mjs`, `hash.mjs` (see the audit's 14.7).

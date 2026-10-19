@@ -7,7 +7,8 @@
  */
 import type { SfxId } from './api';
 import { air, body, boing, bubble, clack, crackle, dust, grain, rap, rattle, snap, squelch, swish, tink, whistle } from './foley';
-import { bell, knock, thump, type Recipe } from './recipe';
+import { crack, tap, thud } from './hitkit';
+import { bell, knock, type Recipe } from './recipe';
 import { hz } from './theory';
 
 interface Spec {
@@ -24,7 +25,7 @@ interface Spec {
   build: Recipe['build'];
 }
 
-function foe(o: Spec): Recipe {
+export function foe(o: Spec): Recipe {
   return {
     cat: o.cat ?? 'foe',
     trim: o.trim,
@@ -46,107 +47,126 @@ const DEATH = { maxVoices: 4, minGap: 0.04, falloff: 0.12 } as const;
 const FINALE = { maxVoices: 1, minGap: 0.5, falloff: 0 } as const;
 
 export const FOE_RECIPES = {
-  // ---------------------------------------------------------------- hit reactions
+  // ---------------------------------------------------------------- hit reactions (what it is made of: every material has a band of its own and a start that tells it from the weapon's)
   foe_juicy_hit: foe({
     len: 0.14,
     ms: [30, 140],
+    trim: 7.5,
     build(s, v) {
-      // A cucumber is hit: a wet squish (noise sliding down through 800 to 450 Hz), a plop and a crisp crunch on top.
+      // A cucumber is hit: a wet squish (noise sliding down through 800 to 450 Hz), a plop and the crunch of its skin on top (250 to 700 Hz, wet).
       const p = v.j(0.06);
       air(s, { dur: 0.05, v: 1, a: 0.003, d: 0.04, s: 0.01, filter: { t: 'bandpass', f: 800 * p, f2: 450 * p, sw: 0.04, q: 1 } });
       s.tone({ f: 420 * p, f2: 230 * p, sw: 0.04, dur: 0.07, v: 0.7, a: 0.003, d: 0.06, s: 0.01 });
-      snap(s, 0, 0.2, 2400, 0.008);
+      crack(s, 0, 1.1, 2600, 0.014);
     },
   }),
   foe_fluff_hit: foe({
     len: 0.12,
     ms: [30, 120],
+    trim: 1,
     build(s, v) {
-      // A dust bunny: a soft "pff", a slow-attack puff of pink noise through a falling low-pass, and almost no thud.
+      // A dust bunny: a soft "pff", a slow-attack puff of pink noise through a falling low-pass, and a muffled pat. The one that stays soft: no crack.
       const p = v.j(0.06);
-      air(s, { kind: 'pink', dur: 0.07, v: 1, a: 0.012, d: 0.045, s: 0.02, filter: { t: 'lowpass', f: 1100 * p, f2: 450, sw: 0.05 } });
-      thump(s, 170 * p, 110, 0, 0.05, 0.3, 0.03);
+      air(s, { kind: 'pink', dur: 0.07, v: 1, a: 0.012, d: 0.045, s: 0.02, filter: { t: 'lowpass', f: 1300 * p, f2: 500, sw: 0.05 } });
+      thud(s, 0, 280 * p, 160, 0.05, 0.4, 0.3, 140);
     },
   }),
   foe_water_hit: foe({
     len: 0.12,
     ms: [30, 120],
+    trim: 4.5,
     build(s, v) {
-      // A drop is hit: a "plip" (a sine climbing 520 to 950 Hz) and a wet tick.
+      // A drop is hit: a "plip" (a sine climbing 900 to 1500 Hz), a second smaller drop climbing out of it, and a wet tick.
       const p = v.j(0.06);
-      s.tone({ f: 520 * p, f2: 950 * p, sw: 0.035, dur: 0.07, v: 1, a: 0.003, d: 0.06, s: 0.01 });
-      air(s, { dur: 0.02, v: 0.35, a: 0.002, d: 0.015, s: 0.01, filter: { t: 'bandpass', f: 2000 * p, q: 1 } });
+      s.tone({ f: 900 * p, f2: 1500 * p, sw: 0.03, dur: 0.06, v: 1, a: 0.003, d: 0.05, s: 0.01 });
+      s.tone({ f: 1500 * p, f2: 2400 * p, sw: 0.03, at: 0.02, dur: 0.045, v: 0.5, a: 0.003, d: 0.04, s: 0.01 });
+      crack(s, 0, 0.8, 3000, 0.012);
     },
   }),
   foe_rubber_hit: foe({
     len: 0.14,
     ms: [30, 140],
+    trim: 3,
     build(s, v) {
-      // A balloon is hit: a boing (a sine climbing 300 to 560 Hz under a wobble) and the squeak of stretched rubber.
+      // A balloon is hit: a boing (a sine climbing 300 to 560 Hz under a wobble) and the squeak of stretched rubber, high up (2.4 to 3.6 kHz).
       const p = v.j(0.06);
       boing(s, 0, 300 * p, 560 * p, 0.09, 0.8, 18, 60);
-      s.tone({ w: 'triangle', f: 1000 * p, f2: 1500 * p, sw: 0.06, dur: 0.07, v: 0.22, a: 0.006, trem: { rate: 40, depth: 0.8 }, filter: { t: 'lowpass', f: 2400 } });
+      s.tone({ w: 'triangle', f: 2400 * p, f2: 3600 * p, sw: 0.05, at: 0.005, dur: 0.07, v: 0.8, a: 0.006, trem: { rate: 40, depth: 0.8 }, filter: { t: 'lowpass', f: 4500 } });
+      crack(s, 0, 0.9, 3000, 0.012);
     },
   }),
   foe_plastic_hit: foe({
-    len: 0.1,
-    ms: [25, 100],
+    len: 0.12,
+    ms: [25, 110],
+    trim: 5.5,
     build(s, v) {
-      // Hard plastic: a hollow tok at 880 Hz, a second mode a little over an octave above it that dies in 20 ms, and a dry tick.
+      // Hard plastic: a hollow tok at 1.6 kHz, a second mode a little over an octave above it that dies in 25 ms, a pat under it and a dry tick.
       const p = v.j(0.06);
-      s.tone({ f: 880 * p, dur: 0.035, v: 1, a: 0.002, d: 0.03, s: 0.01 });
-      s.tone({ f: 1950 * p, dur: 0.02, v: 0.5, a: 0.002, s: 0.01 });
-      rap(s, 0, 2600 * p, 0.01, 0.4, 1.2);
+      s.tone({ f: 1580 * p, dur: 0.05, v: 1, a: 0.002, d: 0.045, s: 0.01 });
+      s.tone({ f: 3160 * p, dur: 0.03, v: 0.4, a: 0.002, s: 0.01 });
+      thud(s, 0, 420 * p, 250, 0.04, 0.1, 0.3, 200);
+      crack(s, 0, 1.2, 3400, 0.014);
     },
   }),
   foe_tin_hit: foe({
     len: 0.15,
     ms: [40, 150],
+    trim: 6,
     build(s, v) {
-      // A clock face tapped: a tink of thin metal (1.25 kHz) and a small spring answering with a wobble.
+      // A clock face tapped: a tink of thin metal (1.1 kHz), a small spring answering with a wobble and a tick of the tin.
       const p = v.j(0.06);
-      tink(s, 0, 1250 * p, 0.09, 0.8);
+      tink(s, 0, 1100 * p, 0.09, 0.8);
       boing(s, 0.01, 520 * p, 380 * p, 0.1, 0.3, 26, 70);
+      crack(s, 0, 1, 4200, 0.012);
     },
   }),
   foe_motor_hit: foe({
     len: 0.14,
     ms: [40, 140],
+    trim: 5,
     build(s, v) {
-      // A robot vacuum is hit: a dull bonk on its shell and a hiccup of the motor (a low triangle shuddering).
+      // A robot vacuum is hit: a dull bonk on its shell (500 Hz) and a hiccup of the motor (a low triangle shuddering) with a tick.
       const p = v.j(0.06);
-      knock(s, 340 * p, 0, 0.8, 0.05);
-      s.tone({ w: 'triangle', f: 210 * p, f2: 150 * p, sw: 0.07, dur: 0.1, v: 0.35, a: 0.004, trem: { rate: 40, depth: 0.5 }, filter: { t: 'lowpass', f: 900 } });
-      rap(s, 0, 1800, 0.01, 0.3, 1);
+      knock(s, 500 * p, 0, 0.8, 0.05);
+      s.tone({ w: 'triangle', f: 260 * p, f2: 190 * p, sw: 0.07, dur: 0.1, v: 0.35, a: 0.004, trem: { rate: 40, depth: 0.5 }, filter: { t: 'lowpass', f: 900 } });
+      crack(s, 0, 0.8, 2600, 0.012);
     },
   }),
   foe_paper_hit: foe({
     len: 0.1,
     ms: [25, 100],
+    trim: 1.5,
     build(s, v) {
-      // A firecracker: a dry tap on a paper tube, its hollow knock and a puff of powder.
+      // A firecracker: a dry slap on a paper tube (a band around 2 kHz), its hollow knock and the crack of the paper.
       const p = v.j(0.06);
-      grain(s, 0, 1300 * p, 0.5, 0.03);
-      knock(s, 620 * p, 0, 0.9, 0.04, 0.85);
+      grain(s, 0, 2300 * p, 0.7, 0.03);
+      tap(s, 0, 1900 * p, 0.6, 0.025, 0.9);
+      knock(s, 900 * p, 0, 0.7, 0.04, 0.85);
+      crack(s, 0, 1, 3200, 0.012);
     },
   }),
   foe_glass_hit: foe({
     len: 0.14,
     ms: [30, 140],
+    trim: 3,
     build(s, v) {
-      // Glass tapped: a clean high tink (1.9 kHz) with one partial that dies first.
+      // Glass tapped: a clean high tink (1.9 kHz) with one partial that dies first, a second tink a fifth above it and the tick of the glass.
       const p = v.j(0.05);
       tink(s, 0, 1900 * p, 0.09, 1);
+      tink(s, 0.006, 3300 * p, 0.04, 0.3);
+      crack(s, 0, 0.8, 4500, 0.012);
     },
   }),
   foe_cloud_hit: foe({
     len: 0.2,
     ms: [50, 200],
+    trim: 3,
     build(s, v) {
-      // A storm cloud is hit: a soft low thud (90 Hz), a brown rumble that rolls away and a faint low tone.
+      // A storm cloud is hit: a soft low thud whose harmonics reach a phone, a brown rumble that rolls away and a faint low tone.
       const p = v.j(0.06);
-      body(s, 0, 110 * p, 70, 0.1, 0.7, 0.2);
-      air(s, { kind: 'brown', dur: 0.14, v: 0.8, a: 0.01, d: 0.1, s: 0.03, filter: { t: 'lowpass', f: 400 * p, f2: 160, sw: 0.1 } });
+      thud(s, 0, 330 * p, 140, 0.1, 1, 0.6, 120);
+      body(s, 0, 110 * p, 70, 0.1, 0.25, 0.2);
+      air(s, { kind: 'brown', dur: 0.14, v: 0.8, a: 0.01, d: 0.1, s: 0.03, filter: { t: 'lowpass', f: 700 * p, f2: 250, sw: 0.1 } });
     },
   }),
 

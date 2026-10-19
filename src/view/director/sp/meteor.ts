@@ -584,13 +584,16 @@ class MeteorScene implements SpScene<'meteor'> {
     w.drawFall(0);
     // The sky's whistle starts as the fireball does (the battle's clock: it waits under a popup too).
     const fall = this.fallWindow(known.warn);
+    // The whistle is 0.4 s long and has to end as the rock lands: it is played faster when the fall is quicker than that (at 3x).
+    const whistlePitch = Math.min(1.8, Math.max(1, 0.4 / (fall / Math.max(1, this.env.ctx.speed || 1))));
     if (!stage.reduced) {
-      w.whistle = stage.later(Math.max(0, d.at + known.warn - fall - battle.time), () => stage.play(stage.rules.zone, 'whoosh', 0.34, 0.55, 0.03)) ?? null;
+      w.whistle = stage.later(Math.max(0, d.at + known.warn - fall - battle.time), () => stage.play(stage.rules.skill, 'sp_meteor_whistle', 0.8, whistlePitch, 0.02, stage.panOf(known.x))) ?? null;
     }
     // The cat's own cue: a ring in the mages' blue and a few glints rising from the tile.
     stage.fx.shockwave(e.x, e.y + 6, { color: CLASS_COLOR.mage, radius: 62 });
     if (stage.detail > 0) stage.fx.ps.burst(CAST_GLINT, e.x, e.y - 20, { count: stage.detail === 1 ? 0.7 : 1 });
-    stage.play(stage.rules.big, 'atk_m_cosmo', 0.7, 0.95, 0.04);
+    // The sky darkens: a deep hum that rises as the red circle grows (`sp_meteor_warn`).
+    stage.play(stage.rules.skill, 'sp_meteor_warn', 0.85, 1, 0.02, stage.panOf(known.x));
   }
 
   /** How many battle seconds the fall takes: `FALL_BATTLE`, or as many as make `FALL_REAL` real ones at this game speed, never more than the warning. */
@@ -630,7 +633,7 @@ class MeteorScene implements SpScene<'meteor'> {
     this.embers(e.points, detail);
     // The crater begins in the same breath (a crater of this id that is still there is replaced).
     this.crater(e.meteorId, e.x, e.y, known.crater, battle.time, known.life);
-    stage.play(stage.rules.big, 'explosion', 0.85, 0.9, 0.04);
+    stage.play(stage.rules.skill, 'sp_meteor_boom', 1, 1, 0.02, stage.panOf(e.x));
     if (!calm) {
       stage.shake(Trauma.t2, Gate.spShake, 0.3);
       screenFx.flash(Hue.cream, 0.3, 120);
@@ -645,7 +648,7 @@ class MeteorScene implements SpScene<'meteor'> {
     this.wave(e.x, e.y, r, Hue.sun, WAVE_OUTER, calm, known.inner, RING_ALPHA_OUTER);
     if (detail > 0 && !calm) stage.fx.ps.burst(OUTER_DUST, e.x, e.y + 4, { scale: r / 200, count: detail === 1 ? 0.6 : 1, delay: 0.12 });
     this.embers(e.points, detail === 2 ? 1 : 0);
-    stage.play(stage.rules.heavyHit, 'imp_m_cosmo', 0.55, 0.9, 0.04);
+    stage.play(stage.rules.skill, 'sp_meteor_ring', 0.8, 1, 0.03, stage.panOf(e.x));
   }
 
   /** A few ember sparks on the enemies a ring touched (by tier). */

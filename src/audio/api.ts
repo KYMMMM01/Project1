@@ -2,6 +2,67 @@
  * Public audio contract. Everything in the game talks to `audio` (src/audio/index.ts) through this
  * interface only, so the synthesis engine behind it can change freely.
  */
+/**
+ * The sounds as they were before the hit-sound pass of 2026-10-19, kept only for the sound board's "지금" (sfx-before.ts): the game never plays them, they have no
+ * row of their own on the board and belong to no family.
+ */
+export const LEGACY_SFX_IDS = [
+  'old_atk_w_paw',
+  'old_atk_w_sword',
+  'old_atk_w_viking',
+  'old_atk_w_samurai',
+  'old_atk_w_tiger',
+  'old_atk_r_sling',
+  'old_atk_r_archer',
+  'old_atk_r_ninja',
+  'old_atk_r_gunner',
+  'old_atk_r_star',
+  'old_atk_m_fire',
+  'old_atk_m_storm',
+  'old_atk_m_frost',
+  'old_atk_m_cosmo',
+  'old_atk_t_bell',
+  'old_atk_t_chef',
+  'old_atk_t_bard',
+  'old_atk_t_alch',
+  'old_atk_t_lucky',
+  'old_imp_w_paw',
+  'old_imp_w_sword',
+  'old_imp_w_viking',
+  'old_imp_w_samurai',
+  'old_imp_w_tiger',
+  'old_imp_r_sling',
+  'old_imp_r_archer',
+  'old_imp_r_ninja',
+  'old_imp_r_gunner',
+  'old_imp_r_star',
+  'old_imp_m_snow',
+  'old_imp_m_fire',
+  'old_imp_m_storm',
+  'old_imp_m_frost',
+  'old_imp_m_cosmo',
+  'old_imp_t_bell',
+  'old_imp_t_chef',
+  'old_imp_t_bard',
+  'old_imp_t_alch',
+  'old_imp_t_lucky',
+  'old_hit_heavy',
+  'old_crit',
+  'old_explosion',
+  'old_boss_warning',
+  'old_boss_roar',
+  'old_foe_juicy_hit',
+  'old_foe_fluff_hit',
+  'old_foe_water_hit',
+  'old_foe_rubber_hit',
+  'old_foe_plastic_hit',
+  'old_foe_tin_hit',
+  'old_foe_motor_hit',
+  'old_foe_paper_hit',
+  'old_foe_glass_hit',
+  'old_foe_cloud_hit',
+] as const;
+
 export const SFX_IDS = [
   // UI
   'ui_click',
@@ -146,9 +207,72 @@ export const SFX_IDS = [
   'foe_boss_bath',
   'foe_boss_cloud',
   'foe_boss_needle',
+  // the cats' skills (sfx-skills.ts): every skill has sounds of its own, a signature for the moment of the cast and small ones for what goes on while it runs
+  'sp_cutin',
+  'sp_shield_slam',
+  'sp_dust_wedge',
+  'sp_dash',
+  'sp_sheath',
+  'sp_cut_clash',
+  'sp_tiger_roar',
+  'sp_tiger_land',
+  'sp_stomp',
+  'sp_tiger_roar_end',
+  'sp_smoke_pop',
+  'sp_clone_hop',
+  'sp_clone_throw',
+  'sp_clone_vanish',
+  'sp_poster_slap',
+  'sp_cork_pop',
+  'sp_poster_hole',
+  'sp_seal_stamp',
+  'sp_night_hush',
+  'sp_arrow_whoosh',
+  'sp_star_ping',
+  'sp_cloud_pop',
+  'sp_thunder_tick',
+  'sp_cloud_hop',
+  'sp_cloud_sigh',
+  'sp_glass_tap',
+  'sp_glass_shatter',
+  'sp_shard_hit',
+  'sp_meteor_warn',
+  'sp_meteor_whistle',
+  'sp_meteor_boom',
+  'sp_meteor_ring',
+  'sp_strum',
+  'sp_note',
+  'sp_flask_toss',
+  'sp_flask_pop',
+  'sp_fish_boing',
+  'sp_flask_mini',
+  'sp_fish_back',
+  'sp_capsule_fall',
+  'sp_capsule_bounce',
+  'sp_capsule_rattle',
+  'sp_capsule_pop',
+  'sp_prize_fish',
+  'sp_prize_partner',
+  'sp_prize_more',
+  'sp_prize_toy',
+  'sp_prize_guardian',
+  ...LEGACY_SFX_IDS,
 ] as const;
 
 export type SfxId = (typeof SFX_IDS)[number];
+
+/** The ids of the old versions (`LEGACY_SFX_IDS`). */
+export type LegacySfxId = (typeof LEGACY_SFX_IDS)[number];
+
+const LEGACY = new Set<string>(LEGACY_SFX_IDS);
+
+/** Whether an id is an old version kept for the sound board (the game never plays it). */
+export function isLegacySfx(id: string): boolean {
+  return LEGACY.has(id);
+}
+
+/** The ids the game can play: every id but the old versions. */
+export const GAME_SFX_IDS: readonly SfxId[] = SFX_IDS.filter((id) => !LEGACY.has(id));
 
 /**
  * Background tracks. `battle` is the living room (chapter 1); `kitchen`, `bath`, `garden` and `clinic` are chapters 2 to 5 (`battleMusic` picks one).

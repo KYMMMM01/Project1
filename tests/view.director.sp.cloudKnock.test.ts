@@ -49,8 +49,10 @@ interface Rig {
     detail: 0 | 1 | 2;
     reduced: boolean;
     play: ReturnType<typeof vi.fn>;
+    panOf: () => number;
+    stagger: () => number;
     shake: ReturnType<typeof vi.fn>;
-    rules: object;
+    rules: Record<string, object>;
     fx: { ps: { burst: ReturnType<typeof vi.fn> }; shockwave: ReturnType<typeof vi.fn>; fleck: ReturnType<typeof vi.fn>; iceShatter: ReturnType<typeof vi.fn> };
   };
   battle: { spOn: boolean; time: number; enemies: EnemyState[]; events: Emitter<BattleEvents> };
@@ -81,7 +83,7 @@ function rig(detail: 0 | 1 | 2 = 1, reduced = false): Rig {
     reduced,
     play: vi.fn(),
     shake: vi.fn(),
-    rules: { zone: {}, big: {}, status: {}, strike: {}, heavyHit: {} },
+    panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, zone: {}, big: {}, status: {}, strike: {}, heavyHit: {} },
     fx: { ps: { burst: vi.fn() }, shockwave: vi.fn(), fleck: vi.fn(), iceShatter: vi.fn() },
   };
   r.front = new Container();
@@ -210,9 +212,10 @@ describe('numbers that wait for a picture', () => {
         shockwave: () => undefined,
         number: (_x: number, _y: number, value: number | string, style: NumStyle) => shown.push([value, style]),
       },
-      rules: { hit: {}, heavyHit: {}, crit: {}, shoot: {} },
+      panOf: () => 0, panOfField: () => 0, stagger: () => 0, volley: { next: () => 1 }, rules: { skill: {}, skillTick: {}, hit: {}, heavyHit: {}, crit: {}, shoot: {} },
       gates: { ready: () => true },
       play: () => false,
+      playSpread: () => false,
       direct: () => undefined,
       stop: () => undefined,
       shake: () => undefined,
@@ -335,7 +338,10 @@ describe('Knock It Off! (the frost queen)', () => {
     expect(r.stage.fx.iceShatter.mock.calls[0]?.slice(0, 2)).toEqual([480, 45]);
     expect(r.stage.shake).toHaveBeenCalledTimes(1);
     const sounds = r.stage.play.mock.calls.map((c) => c[1]);
-    expect(sounds).toContain('shield_break');
+    // The tap of the paw on the glass, then the glass breaking (the signature: one, never thinned).
+    expect(sounds.filter((s) => s === 'sp_glass_tap')).toHaveLength(1);
+    expect(sounds.filter((s) => s === 'sp_glass_shatter')).toHaveLength(1);
+    expect(r.stage.play.mock.calls.find((c) => c[1] === 'sp_glass_shatter')?.[0]).toBe(r.stage.rules.skill);
     // The dotted ring runs out to the shards' reach: 260 px.
     const ring = r.stage.fx.ps.burst.mock.calls.find((c) => (c[0] as { tex: string }).tex === 'auraReach');
     expect(ring).toBeDefined();
@@ -371,9 +377,12 @@ describe('Knock It Off! (the frost queen)', () => {
     cast(frozen, sf, [shard(1, 400, 45, true)]);
     frozen.run(sf as never, 1.2);
     expect(texOf(frozen)).toEqual(expect.arrayContaining(['crystal', 'shard', 'ring']));
-    // The glass's own break plays the glassy sound and the frozen enemy's shattering plays it again; a slowed one plays the queen's own impact.
-    expect(frozen.stage.play.mock.calls.filter((c) => c[1] === 'shield_break')).toHaveLength(2);
-    expect(frozen.stage.play.mock.calls.map((c) => c[1])).not.toContain('imp_m_frost');
+    // The glass's own break is one sound and the frozen enemy's shattering is a shard going in, loud (volume 1, pitched down); a slowed one's is a small, higher one.
+    const shardsOf = (rg: Rig) => rg.stage.play.mock.calls.filter((c) => c[1] === 'sp_shard_hit');
+    expect(frozen.stage.play.mock.calls.filter((c) => c[1] === 'sp_glass_shatter')).toHaveLength(1);
+    expect(shardsOf(frozen)).toHaveLength(1);
+    expect(shardsOf(frozen)[0]?.[0]).toBe(frozen.stage.rules.skill);
+    expect(shardsOf(frozen)[0]?.[2]).toBe(1);
 
     const slowed = rig();
     const ss = makeKnock(slowed.env);
@@ -382,8 +391,9 @@ describe('Knock It Off! (the frost queen)', () => {
     slowed.run(ss as never, 1.2);
     expect(texOf(slowed)).not.toContain('crystal');
     expect(texOf(slowed)).toContain('shard');
-    expect(slowed.stage.play.mock.calls.map((c) => c[1])).toContain('imp_m_frost');
-    expect(slowed.stage.play.mock.calls.filter((c) => c[1] === 'shield_break')).toHaveLength(1);
+    expect(shardsOf(slowed)).toHaveLength(1);
+    expect(shardsOf(slowed)[0]?.[2]).toBeLessThan(shardsOf(frozen)[0]?.[2] as number);
+    expect(shardsOf(slowed)[0]?.[3]).toBeGreaterThan(shardsOf(frozen)[0]?.[3] as number);
   });
 
   it('wears the picture of the chill the enemy had: the block and the freeze sticker for a frozen one, the frost coat and the slow sticker for a slowed one', () => {
@@ -752,7 +762,7 @@ describe('Tagalong Cloud (the storm cat)', () => {
       bolt(r, 1, 1, i);
       r.run(s as never, 0.4);
     }
-    const pitches = r.stage.play.mock.calls.filter((c) => c[1] === 'zap').map((c) => c[3] as number);
+    const pitches = r.stage.play.mock.calls.filter((c) => c[1] === 'sp_thunder_tick').map((c) => c[3] as number);
     expect(pitches).toHaveLength(6);
     for (let i = 1; i < pitches.length; i++) expect(pitches[i]).toBeGreaterThan(pitches[i - 1] as number);
     // Two bolts in one frame make one ring.
@@ -829,6 +839,28 @@ describe('Tagalong Cloud (the storm cat)', () => {
     bolt(r, 1, 1, 1, [{ x: 400, y: 90, uid: 1 }, { x: 440, y: 90, uid: 2 }]);
     const sparks = r.stage.fx.ps.burst.mock.calls.filter((c) => (c[0] as { prio: number }).prio === 0);
     expect(sparks.map((c) => c[1])).toEqual([440]);
+  });
+
+  it('has its own sound for every beat: a grumpy pop out of the hat, a small thunder for each bolt, a hop, a sigh (a lower one when the host was lost)', () => {
+    const r = field();
+    r.stage.reduced = false;
+    const s = makeCloud(r.env);
+    cast(s);
+    expect(r.stage.play.mock.calls.map((c) => c[1])).toEqual(['sp_cloud_pop']);
+    expect(r.stage.play.mock.calls[0]?.[0]).toBe(r.stage.rules.skill);
+    r.run(s as never, 0.6);
+    bolt(r, 1, 1, 1);
+    r.battle.events.emit('cloudHop', { cloudId: 1, fromUid: 1, fromX: 400, fromY: 90, toUid: 2, toX: 440, toY: 90 } as never);
+    r.run(s as never, 0.3);
+    r.battle.events.emit('cloudEnd', { cloudId: 1, reason: 'lost', hostUid: 2, x: 440, y: 90, bolts: 1 } as never);
+    const ids = r.stage.play.mock.calls.map((c) => c[1]);
+    expect(ids).toEqual(['sp_cloud_pop', 'sp_thunder_tick', 'sp_cloud_hop', 'sp_cloud_sigh']);
+    const rule = (id: string) => r.stage.play.mock.calls.find((c) => c[1] === id)?.[0];
+    expect(rule('sp_thunder_tick')).toBe(r.stage.rules.skillTick);
+    expect(rule('sp_cloud_hop')).toBe(r.stage.rules.skill);
+    expect(rule('sp_cloud_sigh')).toBe(r.stage.rules.skill);
+    // the sigh of a cloud that lost its host is a little lower than the plain one
+    expect(r.stage.play.mock.calls.find((c) => c[1] === 'sp_cloud_sigh')?.[3]).toBeLessThan(0.95);
   });
 
   it('fizzles at its end (a sigh when its time is up, a sad face when it lost its host) and is gone within the second', () => {

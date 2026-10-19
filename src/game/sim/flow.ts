@@ -21,7 +21,7 @@ import { luckShare } from './odds';
 import { captureSnapshot } from './snapshot';
 import { capsuleRng, capsuleToyOk, dropCapsules } from './sp/capsule';
 import { endAllClones } from './sp/clones';
-import { TUTORIAL_PICK_WAVE, tutorialWaveStart } from './tutorial';
+import { TUTORIAL_ELITE_EXTRA_TIME, TUTORIAL_PICK_WAVE, tutorialWaveStart } from './tutorial';
 import type { Sim } from './sim';
 import type { SimEnemy } from './types';
 
@@ -275,7 +275,9 @@ function buildSpawns(s: Sim, wave: number): void {
 function waveLimit(s: Sim, kind: 'elite' | 'boss', ordinal: number): number {
   // The gold dungeon's chest has a limit of its own; the toys and the training add to it like to any other (butler level 0: no cut).
   const base = s.mode === 'gold' ? GOLD_DUNGEON_BOSS_LIMIT : specialLimit(kind, ordinal);
-  return base + (s.fx.bossTime ?? 0) + s.trainBossTime - s.rules.bossTimeCut;
+  // The tutorial's elite has a little more time than a run's (see TUTORIAL_ELITE_EXTRA_TIME).
+  const lesson = s.mode === 'tutorial' && kind === 'elite' ? TUTORIAL_ELITE_EXTRA_TIME : 0;
+  return base + lesson + (s.fx.bossTime ?? 0) + s.trainBossTime - s.rules.bossTimeCut;
 }
 
 export function startWave(s: Sim, wave: number): void {

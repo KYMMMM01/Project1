@@ -142,6 +142,41 @@ export class PitchLadder {
   }
 }
 
+/**
+ * Blows that come from one shot are heard as one blow and a fading echo of it. A piercing arrow that goes through six enemies, a chain, a blast: on the screen it is
+ * one arrow, and six of its sounds on top of each other are not six blows but one louder and stranger one (the star archer's pings were half of all the weapon sounds of a
+ * fight). `next` tells how loud the next blow of a weapon is: the first of a volley full, the second at 0.6, the third at 0.4 and the rest silent, the way an echo thins; a blow
+ * that arrives within `gap` seconds of the one before it belongs to the same volley. A blow that matters (a kill, a heavy one, a crit: `force`) is never silent, it takes the
+ * last step. Weapons are told apart by a small integer, so one kind of cat never takes another's place in a volley.
+ */
+export class Volley {
+  private readonly last: Float64Array;
+  private readonly count: Uint8Array;
+
+  constructor(size: number) {
+    this.last = new Float64Array(size).fill(-1e9);
+    this.count = new Uint8Array(size);
+  }
+
+  /** The volume factor of the next blow of weapon `id` at `now` (0 when it is to stay silent). */
+  next(id: number, now: number, gap: number, force = false): number {
+    if (now - (this.last[id] as number) > gap) this.count[id] = 0;
+    this.last[id] = now;
+    const n = this.count[id] as number;
+    if (n < 255) this.count[id] = n + 1;
+    const f = VOLLEY_STEPS[Math.min(n, VOLLEY_STEPS.length - 1)] as number;
+    return f > 0 || !force ? f : (VOLLEY_STEPS[VOLLEY_STEPS.length - 2] as number);
+  }
+
+  reset(): void {
+    this.last.fill(-1e9);
+    this.count.fill(0);
+  }
+}
+
+/** How loud the first, second and third blow of a volley are; every one after that is silent. */
+export const VOLLEY_STEPS: readonly number[] = [1, 0.6, 0.4, 0];
+
 /** Global hit-stop rationing (guide 2.0.1): one per `gap` seconds, at most `maxMs`, tiny under reduced motion. */
 export class HitStopGate {
   private last = -1e9;

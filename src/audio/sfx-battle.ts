@@ -77,6 +77,7 @@ export const BATTLE_RECIPES = {
     len: 1.55,
     ms: [1100, 1500],
     duck: { depth: 0.55, seconds: 1.3 },
+    hush: { db: 4, seconds: 0.9 },
     rule: { maxVoices: 1, minGap: 0.5, falloff: 0 },
     build(s) {
       // A mallet roll climbs an octave and a half of C major (C4 to E6) behind a rising swish of paper, lands at 0.4 s on

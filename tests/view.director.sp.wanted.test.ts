@@ -209,14 +209,14 @@ describe('the gunner\'s scene: a poster slaps on, a cork goes through it', () =>
     scene: ReturnType<typeof makeWanted>;
     battle: { enemies: EnemyState[]; time: number; events: Emitter<BattleEvents> };
     front: Container;
-    stage: { play: ReturnType<typeof vi.fn>; shake: ReturnType<typeof vi.fn>; detail: 0 | 1 | 2; reduced: boolean };
+    stage: { play: ReturnType<typeof vi.fn>; shake: ReturnType<typeof vi.fn>; detail: 0 | 1 | 2; reduced: boolean; rules: Record<string, object> };
     fx: { ps: { burst: ReturnType<typeof vi.fn> }; shockwave: ReturnType<typeof vi.fn> };
     holds: BiteHolds;
   }
 
   function rig(detail: 0 | 1 | 2 = 2): Rig {
     const fx = { ps: { burst: vi.fn() }, shockwave: vi.fn() };
-    const stage = { play: vi.fn(), shake: vi.fn(), detail, reduced: false, fx, rules: { zone: {}, shoot: {}, heavyHit: {}, big: {} } };
+    const stage = { play: vi.fn(), shake: vi.fn(), detail, reduced: false, fx, panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, zone: {}, shoot: {}, heavyHit: {}, big: {} } };
     const front = new Container();
     const battle = { enemies: [] as EnemyState[], time: 0, events: new Emitter<BattleEvents>() };
     const env = { stage: stage as unknown as Stage, ctx: { layers: { fxFront: front, fxBack: new Container() } }, battle: battle as unknown as BattleApi } as unknown as SpEnv;
@@ -501,9 +501,11 @@ describe('the gunner\'s scene: a poster slaps on, a cork goes through it', () =>
     cast(r, boss);
     for (let t = 0; t < 0.5; t += 1 / 60) frame(r, 1 / 60, 1 / 60);
     const ids = r.stage.play.mock.calls.map((c) => c[1] as string);
-    expect(ids).toContain('whoosh');
-    expect(ids).toContain('atk_r_gunner');
-    expect(ids).toContain('imp_r_gunner');
+    expect(ids).toContain('sp_poster_slap');
+    expect(ids).toContain('sp_cork_pop');
+    expect(ids).toContain('sp_poster_hole');
+    // All three are signatures: the skill's rule, which the fight's busy second cannot thin.
+    for (const id of ['sp_poster_slap', 'sp_cork_pop', 'sp_poster_hole']) expect(r.stage.play.mock.calls.find((c) => c[1] === id)?.[0]).toBe(r.stage.rules.skill);
     expect(r.stage.shake).toHaveBeenCalledWith(Trauma.t1, Gate.spShake, expect.any(Number));
     const calm = rig();
     calm.stage.reduced = true;
@@ -712,7 +714,7 @@ describe('the boss bar with the gunner\'s bite', () => {
     };
     const top = { setBossMode: () => undefined };
     const bar = new BossBar(env as never, top as never);
-    const stage = { play: vi.fn(), shake: vi.fn(), detail: 2, reduced: false, fx: { ps: { burst: vi.fn() }, shockwave: vi.fn() }, rules: { zone: {}, shoot: {}, heavyHit: {}, big: {} } };
+    const stage = { play: vi.fn(), shake: vi.fn(), detail: 2, reduced: false, fx: { ps: { burst: vi.fn() }, shockwave: vi.fn() }, panOf: () => 0, stagger: () => 0, rules: { skill: {}, skillTick: {}, zone: {}, shoot: {}, heavyHit: {}, big: {} } };
     const spEnv = { stage: stage as unknown as Stage, ctx: { layers: { fxFront: new Container(), fxBack: new Container() } }, battle: sim } as unknown as SpEnv;
     const scene = makeWanted(spEnv);
     // The dispatcher's job: the stage rule lets one cast effect through per quarter second (sim time stands in for real time here), and only

@@ -4,6 +4,7 @@ import { AudioEngine } from './engine';
 export * from './api';
 export * from './combat';
 export { battleMusic } from './playlist';
+export { audioRandom, audioSpread, seedAudio } from './random';
 
 /** Engine instance, kept separate so dev tooling (the demo HUD) can read counters without widening AudioApi. */
 const engine = new AudioEngine();

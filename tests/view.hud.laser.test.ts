@@ -94,6 +94,30 @@ describe('the guided first use', () => {
     expect(f.step).toBe('done');
   });
 
+  it('stands down with its lesson: back to waiting when an urgent lesson cut in, over for good when the lesson was given up on', () => {
+    const cut = new LaserGuideFlow();
+    cut.start();
+    cut.stand(true);
+    expect(cut.step).toBe('wait');
+    cut.start();
+    expect(cut.step).toBe('press');
+    const dropped = new LaserGuideFlow();
+    dropped.start();
+    dropped.onCardClosed();
+    dropped.stand(false);
+    expect(dropped.step).toBe('done');
+    expect(dropped.done).toBe(true);
+    // a guide that is already showing the marks (or has not started) is left as it is
+    const seeing = new LaserGuideFlow();
+    seeing.start();
+    seeing.onDot();
+    seeing.stand(false);
+    expect(seeing.step).toBe('see');
+    const waiting = new LaserGuideFlow();
+    waiting.stand(false);
+    expect(waiting.step).toBe('wait');
+  });
+
   it('waits at the press step for as long as it takes (the card is what the player is asked to open)', () => {
     const f = new LaserGuideFlow();
     f.start();

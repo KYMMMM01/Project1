@@ -6,6 +6,7 @@ import { setLang } from '@/core/i18n';
 import { createApp } from '@/app/boot';
 import { preparePlatformRuntime } from '@/platform';
 import { TAB_ORDER, type TabId } from '@/screens/contract';
+import { isSoundBoardRoute } from '@/soundboard/route';
 
 /** The title moment of a real launch lasts at least this long, in milliseconds. */
 const TITLE_MS = 1100;
@@ -28,6 +29,12 @@ function tabParam(params: URLSearchParams): TabId | undefined {
 }
 
 async function main(): Promise<void> {
+  // The sound board (?scene=sounds): a plain page over the audio engine, no game, no profile, no debug flag (release builds can drop it: VITE_SOUNDBOARD=off).
+  if (import.meta.env.VITE_SOUNDBOARD !== 'off' && isSoundBoardRoute(location.search)) {
+    const { openSoundBoard } = await import('@/soundboard');
+    openSoundBoard();
+    return;
+  }
   const parent = document.getElementById('stage');
   if (!parent) throw new Error('#stage missing');
   if (debugEnabled()) installDebug();

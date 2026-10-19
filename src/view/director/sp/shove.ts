@@ -193,8 +193,11 @@ class ShoveScene implements SpScene<'shove'> {
     this.roadDust(cx, cy + 6, runs, detail);
     this.slideAll(d.pushed, detail, calm);
 
-    stage.play(stage.rules.big, 'hit_heavy', 0.8, 0.8, 0.04);
-    stage.later(0.06, () => stage.play(stage.rules.zone, 'whoosh', 0.35, 0.8, 0.05));
+    // The shield's own sound (`sp_shield_slam`, an iron-rimmed round of wood on the road) and, a beat later, the wedge of dust running out: the signature is
+    // not thinned by the fight's rules (`stage.rules.skill`), and both are heard from the side of the screen the cat stands on.
+    const pan = stage.panOf(cx);
+    stage.play(stage.rules.skill, 'sp_shield_slam', 1, 1, 0.02, pan);
+    stage.later(0.06, () => stage.play(stage.rules.skill, 'sp_dust_wedge', 0.8, 1, 0.04, pan));
     if (!calm) stage.shake(Trauma.t1, Gate.spShake, 0.3);
   }
 

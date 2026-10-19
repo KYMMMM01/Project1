@@ -13,6 +13,7 @@ import type {
   BattleUiEvents,
   DirectorPart,
   FieldPart,
+  GestureLocks,
   HudAnchor,
   HudPart,
   PauseReason,
@@ -57,6 +58,7 @@ class Context implements BattleContext {
   field: FieldPart | null = null;
   hud: HudPart | null = null;
   readonly clock = new BattleClock();
+  readonly locks: GestureLocks = { laser: false, sell: false };
   private readonly fxClock = { timeScale: 1 };
   private readonly hitStop: ReturnType<typeof createHitStop>;
 
