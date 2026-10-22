@@ -1,6 +1,8 @@
 import { Container, Graphics } from 'pixi.js';
 import { Color } from '@/ui/theme';
+import { crumb } from './crumbs';
 import { game } from './game';
+import { trimBakePool } from './gpuMemory';
 import { Ease, Tweener, uiTweens } from './tween';
 
 /**
@@ -10,6 +12,8 @@ import { Ease, Tweener, uiTweens } from './tween';
 export abstract class Scene extends Container {
   /** Scene-local clock: killed automatically on exit, and may be paused/slowed independently. */
   readonly tweens = new Tweener();
+  /** The scene's name on the crumb trail (core/crumbs.ts); a release build renames the classes, so the name is spelled out. */
+  readonly trailName: string = 'scene';
 
   /** Called once after the scene is on stage, before the transition reveals it. */
   enter(): void | Promise<void> {}
@@ -61,9 +65,12 @@ export class SceneManager {
         prev.tweens.killAll();
         game.sceneLayer.removeChild(prev);
         prev.destroy({ children: true });
+        // Its cached pictures went back to the pool: nothing holds them now, and the next scene builds its own.
+        trimBakePool();
       }
       const next = make();
       this.current = next;
+      crumb('scene', next.trailName);
       game.sceneLayer.addChild(next);
       next.resize(game.w, game.h);
       await next.enter();

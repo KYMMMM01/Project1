@@ -16,6 +16,7 @@ const LOGO_W = 600;
  * `title` the hand-over goes through the title moment: the key art with the logo on its calm top third.
  */
 export class BootScene extends Scene {
+  override readonly trailName = 'boot';
   private art: Sprite | null = null;
   private logo: Logo | null = null;
   private floor: HomeFloor | null = null;

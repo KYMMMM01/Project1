@@ -8,6 +8,7 @@ import type { Recipe } from '@/audio/recipe';
 import { Inst } from '@/audio/scores';
 import { SOUNDS, sfxIndexOf } from '@/audio/sounds';
 import { game } from '@/core/game';
+import { startLean } from '@/core/lean';
 
 /**
  * Baking is real unless a test switches `mode` to 'fake': then every bake is a promise the test settles by hand and the engine believes it
@@ -677,6 +678,40 @@ describe('AudioEngine priming', () => {
     engine.init();
     expect(engine.primeLeft({ sfx: 'hit_light' })).toBe(0);
     expect(engine.primeStep({ sfx: 'hit_light' })).toBe(0);
+  });
+
+  it('starts baking the whole catalogue in the background once the context runs, and leaves it unbaked in the lean mode', async () => {
+    engine.init();
+    game.events.emit('firstInput', null);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(baking.jobs.length).toBeGreaterThan(0);
+    engine.dispose();
+    baking.jobs.length = 0;
+    FakeContext.instances.length = 0;
+    startLean(2, '');
+    try {
+      engine = new AudioEngine();
+      engine.init();
+      game.events.emit('firstInput', null);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(engine.unlocked).toBe(true);
+      expect(baking.jobs).toHaveLength(0);
+      // What is asked for by name is still baked.
+      expect(engine.primeStep({ sfx: 'hit_light' })).toBe(2);
+      expect(baking.jobs).toHaveLength(1);
+    } finally {
+      startLean(0, '');
+    }
+  });
+
+  it('keeps the background bake quiet while a scene asks for it, and starts it afterwards', async () => {
+    engine.init();
+    engine.deferBackgroundBake(5000);
+    game.events.emit('firstInput', null);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(baking.jobs).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(baking.jobs.length).toBeGreaterThan(0);
   });
 
   it('bakes one variant a step, even while the context is locked, and says how many are left', async () => {

@@ -3,6 +3,7 @@
  * opening the battle scene, wave-start saves, retry, returning home, and picking a run up again after
  * the app was killed.
  */
+import { crumb } from '@/core/crumbs';
 import { debugEnabled } from '@/core/debug';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
@@ -88,6 +89,7 @@ function onBattleCreated(scene: BattleScene): void {
   // A restart prepares the next run while this battle is still on screen for the length of the transition: wave saves are for the run this battle was created for.
   const mine = profile.pendingRun;
   battle.events.on('waveStart', () => {
+    crumb('wave', String(battle.wave));
     if (profile.pendingRun !== mine) return;
     const snapshot = battle.snapshot();
     if (snapshot) void profile.saveSnapshot(snapshot);

@@ -3,14 +3,17 @@ import { Color } from '@/ui/theme';
 import { Emitter } from './events';
 import { uiTweens } from './tween';
 import { clamp } from './math';
+import { crumb } from './crumbs';
+import { watchContext } from './glRecovery';
+import { installGpuMemory } from './gpuMemory';
+import { maxResolution } from './lean';
 
 /** Design space: fixed 720 wide, height flexes with the device aspect between these bounds. */
 export const DESIGN_W = 720;
 export const DESIGN_MIN_H = 1280;
 export const DESIGN_MAX_H = 1600;
 
-/** Cap the backing-store size: phones report DPR 3+, which quadruples fill cost for no visible gain. */
-const MAX_RESOLUTION = 2;
+/** Cap the backing-store size: phones report DPR 3+, which quadruples fill cost for no visible gain (`maxResolution()`: 2, or 1.5 in the lean mode of core/lean.ts). */
 const MAX_BACKING_HEIGHT = 2400;
 
 export interface GameEvents {
@@ -68,6 +71,8 @@ export class Game {
   private externalPause = 0;
 
   async init(parent: HTMLElement): Promise<void> {
+    // Before the first texture is baked: see gpuMemory.ts (the multisample buffers of baked pictures, pool sizes).
+    installGpuMemory(() => this.app?.renderer ?? null);
     const app = new Application();
     await app.init({
       width: DESIGN_W,
@@ -83,6 +88,17 @@ export class Game {
     parent.appendChild(app.canvas);
     app.canvas.style.touchAction = 'none';
     app.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // A lost graphics context empties every baked picture: the game stops, and starts the page again from what is saved (glRecovery.ts).
+    watchContext(app.canvas, {
+      lost: () => {
+        crumb('gl-lost');
+        this.setExternalPause(true);
+      },
+      settled: (reloading) => {
+        crumb(reloading ? 'gl-reload' : 'gl-carry-on');
+        if (!reloading) this.setExternalPause(false);
+      },
+    });
 
     this.shakeLayer.addChild(this.sceneLayer);
     this.root.addChild(this.shakeLayer, this.popupLayer, this.overlayLayer, this.transitionLayer);
@@ -90,12 +106,22 @@ export class Game {
     app.stage.eventMode = 'static';
 
     this.layout();
-    window.addEventListener('resize', () => this.layout());
-    window.addEventListener('orientationchange', () => this.layout());
-    window.visualViewport?.addEventListener('resize', () => this.layout());
+    // A phone fires these in bursts (the address bar sliding, a pinch, the keyboard): each answer is one pass a frame at most, and a pass that finds the
+    // same size and density does nothing (it would otherwise rebuild the drawing buffer, 45 MB of it, and every scene's layout, for no change).
+    const queue = (): void => this.queueLayout();
+    window.addEventListener('resize', queue);
+    window.addEventListener('orientationchange', queue);
+    window.visualViewport?.addEventListener('resize', queue);
 
-    document.addEventListener('visibilitychange', () => this.refreshVisibility());
-    window.addEventListener('pagehide', () => this.refreshVisibility());
+    document.addEventListener('visibilitychange', () => {
+      // The page itself going away or coming back (not a pause for an ad or a lost graphics context): the trail's "the player left" mark.
+      crumb(document.visibilityState === 'hidden' ? 'hidden' : 'visible');
+      this.refreshVisibility();
+    });
+    window.addEventListener('pagehide', () => {
+      crumb('hidden');
+      this.refreshVisibility();
+    });
     window.addEventListener('pageshow', () => this.refreshVisibility());
 
     const first = () => {
@@ -189,10 +215,26 @@ export class Game {
     }
   }
 
+  private layoutQueued = false;
+  private layoutKey = '';
+
+  private queueLayout(): void {
+    if (this.layoutQueued) return;
+    this.layoutQueued = true;
+    requestAnimationFrame(() => {
+      this.layoutQueued = false;
+      this.layout();
+    });
+  }
+
   private layout(): void {
     const vv = window.visualViewport;
     const vw = Math.max(1, Math.floor(vv?.width ?? window.innerWidth));
     const vh = Math.max(1, Math.floor(vv?.height ?? window.innerHeight));
+    const density = window.devicePixelRatio || 1;
+    const key = `${vw}x${vh}@${density}`;
+    if (key === this.layoutKey) return;
+    this.layoutKey = key;
 
     // Fit width first; let height flex inside the supported range; letterbox whatever is left over.
     let scale = vw / DESIGN_W;
@@ -209,10 +251,10 @@ export class Game {
     const cssW = Math.round(DESIGN_W * scale);
     const cssH = Math.round(h * scale);
     const dpr = window.devicePixelRatio || 1;
-    const resolution = Math.max(1, Math.min(dpr, MAX_RESOLUTION, MAX_BACKING_HEIGHT / cssH));
+    const resolution = Math.max(1, Math.min(dpr, maxResolution(), MAX_BACKING_HEIGHT / cssH));
 
-    this.app.renderer.resolution = resolution;
-    this.app.renderer.resize(cssW, cssH);
+    // One call: setting the resolution first resized the drawing buffer, and the size then did it again.
+    this.app.renderer.resize(cssW, cssH, resolution);
     this.app.canvas.style.width = cssW + 'px';
     this.app.canvas.style.height = cssH + 'px';
     this.root.scale.set(scale);

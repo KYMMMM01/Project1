@@ -23,6 +23,13 @@ export function bankBudget(sampleRate: number): number {
   return Math.round((BANK_BUDGET_MB * 1_000_000 * sampleRate) / 48000);
 }
 
+/**
+ * Time left between one background bake and the next (ms). A bake is a burst of work and of garbage (the offline graph, the rendered buffer and its copy), and
+ * the background queue is 340 of them: back to back, as fast as a phone lets the timer fire, they leave it no breath for the frames, for the garbage collector,
+ * or for a scene that is being built. The gap makes the whole queue take half a minute instead of twenty seconds.
+ */
+export const BACKGROUND_GAP_MS = 60;
+
 /** How many variants a catalogue entry is baked in. */
 export function variantsOf(index: number): number {
   return SOUNDS[index]?.recipe.variants ?? 1;
@@ -69,6 +76,8 @@ export class SoundBank {
   private readonly failed = new Set<number>();
   private idleId: number | null = null;
   private timerId: ReturnType<typeof setTimeout> | null = null;
+  /** The background queue starts nothing before this time (`performance.now()`): set by `hold` and after each sound. */
+  private restUntil = 0;
   private warned = false;
   /** Baking time per variant in ms (start to landing), so a slow device is visible in the debug stats. */
   bakeMs = 0;
@@ -172,6 +181,14 @@ export class SoundBank {
     this.schedule();
   }
 
+  /**
+   * Keep the background queue quiet for `ms` more milliseconds (what a sound is asked for by name, `ensure` and `bakeStep`, is not held: a fight's own sounds still
+   * get baked on time). A scene that is being built asks for it, so the queue's bursts do not land on top of the scene's own.
+   */
+  hold(ms: number): void {
+    this.restUntil = Math.max(this.restUntil, performance.now() + ms);
+  }
+
   /** Stop background baking and forget the queue; buffers already baked stay readable and nobody waits for a bake any more. */
   dispose(): void {
     this.disposed = true;
@@ -247,6 +264,15 @@ export class SoundBank {
   private schedule(): void {
     if (this.disposed || this.scheduled || this.queue.length === 0) return;
     this.scheduled = true;
+    const rest = this.restUntil - performance.now();
+    if (rest > 0) {
+      this.timerId = setTimeout(() => {
+        this.timerId = null;
+        this.scheduled = false;
+        this.schedule();
+      }, Math.ceil(rest));
+      return;
+    }
     const run = (deadline?: IdleDeadline): void => {
       this.idleId = null;
       this.timerId = null;
@@ -259,7 +285,10 @@ export class SoundBank {
       this.scheduled = false;
       const next = this.queue.shift();
       if (next === undefined) return;
-      void this.ensure(next, true).then(() => this.schedule());
+      void this.ensure(next, true).then(() => {
+        this.hold(BACKGROUND_GAP_MS);
+        this.schedule();
+      });
     };
     if (typeof requestIdleCallback === 'function') this.idleId = requestIdleCallback(run, { timeout: 250 });
     else this.timerId = setTimeout(run, 24);

@@ -28,7 +28,8 @@ export function numberText(size: number, color: number = Color.ink, text = '', o
       name,
       style: labelStyle({ size: s, color: Color.white, onArt }),
       chars: CHARS,
-      resolution: 2,
+      // 1.25 texels per design px is 1.15 per device px on a phone's 2x stage: sharp, where 2 was a sheet of 1024 x 1024 (5 MB with its mipmaps) for each size.
+      resolution: 1.25,
       padding: 4,
     });
   }

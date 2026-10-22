@@ -9,6 +9,7 @@
  */
 import { audio, type PrimeTarget, type SfxId, type StingerId } from '@/audio';
 import { hasTex, imageKeys } from '@/core/assets';
+import { leanMode } from '@/core/lean';
 import { AREA_PICTURES, DISC_KINDS, PAINT_IDS, fxVignette, paintKey, numberFontTextures, uploadTexture, warm, warmImage, warmParticles, WARM_PRIO, type DiscKind } from '@/fx';
 import { mergeResultOf, type BattleApi, type UnitId } from '@/game';
 import { waveNeeds, type WaveNeeds } from './field/warmPlan';
@@ -72,8 +73,11 @@ export class BattleWarmup {
     for (const kind of DISC_KINDS) warmArea(kind, WARM_PRIO.later);
     // Every other drawn battle picture: the shots, bursts, bolts, shards and the shield badge, before the first fight needs them.
     for (const id of PAINT_IDS) warmImage(paintKey(id), WARM_PRIO.later);
-    for (const key of imageKeys()) {
-      if (LATER_PREFIXES.some((p) => key.startsWith(p))) warmImage(key, WARM_PRIO.later);
+    // The lean mode (core/lean.ts) keeps the pictures of kinds that may never come off the graphics card until one is drawn.
+    if (!leanMode()) {
+      for (const key of imageKeys()) {
+        if (LATER_PREFIXES.some((p) => key.startsWith(p))) warmImage(key, WARM_PRIO.later);
+      }
     }
     // The field is about to be lost: the defeat fanfare is ready before the countdown ends.
     this.offs.push(

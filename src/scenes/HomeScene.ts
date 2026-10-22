@@ -1,5 +1,5 @@
 import { gameplayStop } from '@/app/lifecycle';
-import { audio } from '@/audio';
+import { audio, deferBackgroundBake } from '@/audio';
 import { closeCodex, openCodex } from '@/codex';
 import { debugExpose } from '@/core/debug';
 import { game } from '@/core/game';
@@ -25,6 +25,8 @@ export interface HomeOptions {
 const TAB_ICON = { shop: 'shop', cats: 'paw', battle: 'swords', missions: 'mission', pass: 'crown' } as const;
 /** The feature that opens each tab (the battle tab is always open). */
 const TAB_FEATURE: Record<TabId, FeatureId | null> = { shop: 'shop', cats: 'cats', battle: null, missions: 'missions', pass: 'pass' };
+/** Milliseconds the background sound bake stays quiet when a home screen is built. */
+const HOME_BAKE_HOLD_MS = 2500;
 const BADGE_POLL = 1;
 const REFRESH_POLL = 60;
 /** Where the shop's "+" buttons lead: the section that sells each currency. */
@@ -36,6 +38,7 @@ const SHOP_SECTION: Record<CurrencyKind, string> = { gold: 'daily', gems: 'gems'
  * singleton forwards tab and system-screen requests to whichever home scene is on screen.
  */
 export class HomeScene extends Scene implements HomeSurface {
+  override readonly trailName = 'home';
   private readonly floor = new HomeFloor();
   private readonly topBar: HomeTopBar;
   private readonly tabBar: TabBar;
@@ -47,6 +50,8 @@ export class HomeScene extends Scene implements HomeSurface {
 
   constructor(opts: HomeOptions = {}) {
     super();
+    // The sound catalogue's background bake waits while the home screen is built and shown (see SoundBank.hold).
+    deferBackgroundBake(HOME_BAKE_HOLD_MS);
     this.rect = shellLayout(game.w, game.h, game.safeTop, game.safeBottom).area;
     this.topBar = new HomeTopBar({
       onPlus: (kind) => services.openShop(SHOP_SECTION[kind]),

@@ -1,4 +1,5 @@
 import { Container } from 'pixi.js';
+import { deferBackgroundBake } from '@/audio';
 import { game } from '@/core/game';
 import { Emitter } from '@/core/events';
 import { Scene, scenes } from '@/core/scene';
@@ -46,6 +47,9 @@ export function setBattleCreatedHook(fn: ((scene: BattleScene) => void) | null):
 
 /** Real seconds the scene waits for the director to announce `finished` before it announces it itself. */
 const FINISH_FALLBACK = 8;
+
+/** Milliseconds the background sound bake stays quiet when a battle is built: its walk-in, the first wave's preparation and the first fights. */
+const BATTLE_BAKE_HOLD_MS = 10000;
 
 /** The shared contract implemented over one running battle: clocks, selection, commands and flow. */
 class Context implements BattleContext {
@@ -168,6 +172,7 @@ class Context implements BattleContext {
  * and the HUD together through the shared context.
  */
 export class BattleScene extends Scene {
+  override readonly trailName = 'battle';
   readonly battle: BattleApi;
   readonly ctx: BattleContext;
   private readonly context: Context;
@@ -183,6 +188,9 @@ export class BattleScene extends Scene {
 
   constructor(readonly run: RunConfig) {
     super();
+    // A battle that is being built and starting has the least to spare: the bake of the whole sound catalogue waits (the battle's own sounds are
+    // asked for by name through the warm-up and are not held).
+    deferBackgroundBake(BATTLE_BAKE_HOLD_MS);
     // The floating numbers' glyphs (the stock faces and the burn, poison, bleed and shield colours) are drawn now, while the scene is built behind
     // the transition: each face is 20 ms of drawing, which would otherwise land on the frame of its first number.
     ensureNumberFonts();

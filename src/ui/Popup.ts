@@ -1,6 +1,7 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { audio } from '@/audio';
 import { game } from '@/core/game';
+import { trimBakePoolSoon } from '@/core/gpuMemory';
 import { lerp } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { backGesture } from './backGesture';
@@ -208,6 +209,8 @@ export class PopupManager {
       if (!popup.destroyed) {
         game.popupLayer.removeChild(popup);
         popup.destroy({ children: true });
+        // Its cached pictures went back to the pool, which keeps them for good: let go of what nothing takes back.
+        trimBakePoolSoon();
       }
       entry.resolve(value);
       if (this.stack.length === 0) this.detach();

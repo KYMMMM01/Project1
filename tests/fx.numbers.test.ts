@@ -745,15 +745,40 @@ describe('the glyph sheets the warm-up uploads', () => {
 describe('the faces', () => {
   it('are baked thin for the ordinary numbers and thick for the big ones, with the Korean units of the short format', async () => {
     vi.resetModules();
-    const { ensureNumberFonts } = await import('@/fx/numbers');
+    const { ensureNumberFonts, NUMBER_CHARS } = await import('@/fx/numbers');
     ensureNumberFonts();
     expect(font.installed.some((f) => f.stroke === 10)).toBe(true);
     expect(font.installed.some((f) => f.stroke === 15)).toBe(true);
     for (const f of font.installed) {
-      const chars = (f.chars as unknown[]).flat().join('');
+      const chars = String(f.chars);
+      expect(chars).toBe(NUMBER_CHARS);
       for (const ch of '만억조') expect(chars).toContain(ch);
-      // The letters of the short format (K, M, B, T) come with the range of capitals.
-      expect(chars).toContain('AZ');
+      // The letters of the short format (K, M, B, T) are there one by one: the range of capitals made three sheets a face.
+      for (const ch of 'KMBT') expect(chars).toContain(ch);
     }
+  });
+
+  it('carry no glyph a figure never draws: a face is one small sheet, not three big ones', async () => {
+    vi.resetModules();
+    const { NUMBER_CHARS } = await import('@/fx/numbers');
+    // 23 glyphs: they fit one sheet of 512 x 512 at the baked size (47 of them took three of 1024 x 1024).
+    expect([...NUMBER_CHARS].length).toBeLessThanOrEqual(26);
+    expect(new Set(NUMBER_CHARS).size).toBe([...NUMBER_CHARS].length);
+  });
+
+  it('cover every character a figure is written with, in both languages and over the whole range', async () => {
+    vi.resetModules();
+    const { figure, STYLES, NUMBER_CHARS } = await import('@/fx/numbers');
+    const have = new Set(NUMBER_CHARS);
+    const values: number[] = [0, 1, 7, 99, 999, 1000, 1234, 9999, 10_000, 12_345, 99_999, 123_456, 999_999, 1_234_567, 12_345_678, 99_999_999, 123_456_789, 1e10, 1e11, 123_456_789_012, 1e12, 5.5e12, 1e15];
+    for (const lang of ['ko', 'en'] as const) {
+      setLang(lang);
+      for (const def of Object.values(STYLES)) {
+        for (const v of values) {
+          for (const ch of figure(def, v)) expect(have.has(ch), `"${ch}" in "${figure(def, v)}" (${lang}, ${v})`).toBe(true);
+        }
+      }
+    }
+    setLang('ko');
   });
 });

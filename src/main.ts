@@ -1,12 +1,16 @@
 import { game } from '@/core/game';
 import { scenes, type Scene } from '@/core/scene';
 import { BootScene } from '@/scenes/BootScene';
-import { debugEnabled, installDebug } from '@/core/debug';
+import { debugEnabled, debugExpose, installDebug } from '@/core/debug';
 import { setLang } from '@/core/i18n';
 import { createApp } from '@/app/boot';
 import { preparePlatformRuntime } from '@/platform';
 import { TAB_ORDER, type TabId } from '@/screens/contract';
 import { isSoundBoardRoute } from '@/soundboard/route';
+import { isDiagRoute } from '@/diag/route';
+import { crumb, currentTrail, previousEnds, startCrumbs } from '@/core/crumbs';
+import { LEAN_WINDOW_MS, leanVerdict, startLean } from '@/core/lean';
+import { gpuMemoryStats } from '@/core/gpuMemory';
 
 /** The title moment of a real launch lasts at least this long, in milliseconds. */
 const TITLE_MS = 1100;
@@ -35,9 +39,25 @@ async function main(): Promise<void> {
     openSoundBoard();
     return;
   }
+  // The diagnostics page (?scene=diag): plain text about the device and where the game last ended; it starts nothing and touches no save.
+  if (isDiagRoute(location.search)) {
+    const { openDiag } = await import('@/diag');
+    openDiag();
+    return;
+  }
   const parent = document.getElementById('stage');
   if (!parent) throw new Error('#stage missing');
-  if (debugEnabled()) installDebug();
+  // The trail of this page starts here, and the one before it is judged (core/crumbs.ts).
+  startCrumbs();
+  // A device whose page keeps being closed under the player gets a lighter game from the next start on (core/lean.ts).
+  const lean = startLean(previousEnds(LEAN_WINDOW_MS).count, location.search);
+  if (lean.lean) crumb('lean', 'on');
+  if (debugEnabled()) {
+    installDebug();
+    debugExpose('crumbs', { trail: currentTrail, ends: previousEnds });
+    debugExpose('gpuMemory', gpuMemoryStats);
+    debugExpose('lean', leanVerdict);
+  }
   await preparePlatformRuntime();
   await game.init(parent);
   scenes.init();

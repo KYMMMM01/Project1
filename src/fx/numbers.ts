@@ -26,7 +26,17 @@ const GLYPH = 36.5;
 const GLYPH_WIDE = 64;
 /** How far a face colour is lightened toward cream: on artwork the digits are light with a brown stroke (kit rule), the hue still says the kind. */
 const FACE_LIGHT = 0.3;
-const CHARS = [['0', '9'], ['A', 'Z'], '+-.,!x%ai ×만억조'];
+/**
+ * What a figure is made of (`figure` below): the digits, the thousands comma and the decimal point, the signs and the crit mark, and the unit letters of the short
+ * format (`fmt`: 만 억 조 in Korean, K M B T in English). Nothing else is baked: the glyph sheet was 47 glyphs a face, three or four sheets of 1024 x 1024 for each
+ * of nine faces (270 MB of canvases and of graphics memory) and a phone only ever drew these. Any other character a caller brings is added by the font on its first use.
+ */
+export const NUMBER_CHARS = '0123456789,.+-!KMBT만억조';
+/**
+ * The glyphs are drawn at this many texels per baked pixel. A figure is shown at 0.35 to 0.8 of the baked size and the board is drawn at 1.1 device pixels per design
+ * pixel, so one texel per baked pixel is at least one per device pixel at the largest size (it was two: four times the texels for no sharper picture).
+ */
+const FACE_RESOLUTION = 1;
 /** Hits on one enemy in this many seconds are one number. */
 const MERGE_WINDOW = 0.3;
 /** A merged hit lets its number live this much longer from the pop: the new figure is read for about a third of a second at least. */
@@ -63,9 +73,10 @@ function faceFont(color: number, thin: boolean): string {
   faces.set(key, name);
   BitmapFont.install({
     name,
-    chars: CHARS,
-    resolution: 2,
-    padding: 10,
+    chars: NUMBER_CHARS,
+    resolution: FACE_RESOLUTION,
+    // The stroke's own width is added to the padding of every glyph: 10 more on top of it only spread the glyphs over more sheets.
+    padding: 2,
     style: {
       fontFamily: FONT_FAMILY,
       fontSize: BAKED,
@@ -92,7 +103,7 @@ export function bakeNumberFace(color: number): void {
   faceFont(color, true);
 }
 
-interface StyleDef {
+export interface StyleDef {
   /** Flat face colour of the digits, and whether their outline is the thin one. */
   face: number;
   thin: boolean;
@@ -121,7 +132,7 @@ interface StyleDef {
   suffix: string;
 }
 
-const STYLES: Record<NumStyle, StyleDef> = {
+export const STYLES: Record<NumStyle, StyleDef> = {
   damage: {
     face: Color.coral, thin: true, ink: [28, 30], width: 100, life: 0.7, rise: 16, out: 10, alpha: 1,
     pop: [0.7, 1.1, 1], popSeconds: 0.08, tilt: 0, prio: 1, gate: 'hit', quiet: false, prefix: '', suffix: '',
@@ -675,6 +686,6 @@ function shortFigure(value: number): string {
 }
 
 /** The text of a figure: its style's prefix and suffix round the short number format. */
-function figure(def: StyleDef, value: number | string): string {
+export function figure(def: StyleDef, value: number | string): string {
   return def.prefix + (typeof value === 'number' ? shortFigure(value) : value.replace(/^-/, '')) + def.suffix;
 }

@@ -22,6 +22,7 @@ vi.mock('@/fx/particles', async (orig) => ({ ...(await orig<typeof import('@/fx/
 import { warm } from '@/fx';
 import type { BattleApi, UnitId, WavePreviewEntry } from '@/game';
 import { BattleWarmup } from '@/view/warmup';
+import { startLean } from '@/core/lean';
 
 /** The sound engine as the warm-up sees it: what is left to bake per sound (2 variants unless told), and every step taken. */
 const sound = vi.hoisted(() => ({ left: new Map<string, number>(), steps: [] as string[] }));
@@ -108,6 +109,21 @@ describe('the battle warm-up', () => {
     }
     expect(warm.has('img:bg_kitchen')).toBe(false);
     expect(warm.has('img:icon_fish')).toBe(false);
+  });
+
+  it('leaves the pictures of kinds that may never come off the card until one is drawn when the game is lean', () => {
+    startLean(2, '');
+    try {
+      const { b } = fake({});
+      new BattleWarmup(b as unknown as BattleApi);
+      drain();
+      for (const key of ['enemy_cucumber', 'boss_vacuum', 'unit_w_paw', 'relic_lucky_coin', 'icon_chest_wood', 'icon_hand']) expect(warm.has(`img:${key}`)).toBe(false);
+      // The drawn effect pictures and the shader are still ahead of the first fight.
+      expect(warm.has('img:fx_shot_arrow')).toBe(true);
+      expect(warm.has('pipe:particles')).toBe(true);
+    } finally {
+      startLean(0, '');
+    }
   });
 
   it('puts the drawn pictures of every ground area, and the other battle effects, on the card ahead of the first fight', () => {

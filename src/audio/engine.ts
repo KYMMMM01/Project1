@@ -9,6 +9,7 @@
  * effect the moment audio can run, so a game may start its soundtrack before the first tap.
  */
 import { game } from '@/core/game';
+import { leanMode } from '@/core/lean';
 import type { AudioApi, MusicId, PlayOpts, PrimeTarget, SfxId, StingerId } from './api';
 import { SoundBank } from './bank';
 import { offlineSupported } from './bake';
@@ -388,7 +389,8 @@ export class AudioEngine implements AudioApi {
       this.prerenderStarted = true;
       // The recordings some recipes lay under their synthesis are read now (about half a megabyte in all); a bake that needs one waits for it.
       void sampleStore.preload();
-      if (offlineSupported()) this.bank?.enqueue(PRERENDER_ORDER);
+      // The lean mode (core/lean.ts) leaves the catalogue unbaked: what a scene needs is asked for by name (the warm-up, a first play).
+      if (offlineSupported() && !leanMode()) this.bank?.enqueue(PRERENDER_ORDER);
     }
     this.syncMusic();
     this.watchClock(ctx);
@@ -749,6 +751,11 @@ export class AudioEngine implements AudioApi {
     const bank = this.bank;
     if (!bank) return;
     for (const id of ids) await bank.ensure(sfxIndexOf(id), true);
+  }
+
+  /** Keep the background bake quiet for `ms` more milliseconds (a scene is being built: see `SoundBank.hold`). */
+  deferBackgroundBake(ms: number): void {
+    this.bank?.hold(ms);
   }
 
   primeStep(target: PrimeTarget): number {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BANK_BUDGET_MB, SoundBank, bankBudget, variantsOf } from '@/audio/bank';
+import { BACKGROUND_GAP_MS, BANK_BUDGET_MB, SoundBank, bankBudget, variantsOf } from '@/audio/bank';
 import { sfxIndexOf } from '@/audio/sounds';
 
 /** Every bake is a promise the test settles by hand, so the order the renders finish in is the test's to choose. */
@@ -251,12 +251,62 @@ describe('the sound bank', () => {
       void queued.ensure(ONE);
       await landAll();
       queued.enqueue([ONE, TWO, THREE]);
-      await vi.advanceTimersByTimeAsync(30);
+      await vi.advanceTimersByTimeAsync(BACKGROUND_GAP_MS + 30);
       expect(baking.jobs.map((j) => j.key)).toEqual(['sfx:ui_click']);
       await landAll();
       expect(queued.complete(TWO)).toBe(true);
-      await vi.advanceTimersByTimeAsync(30);
+      await vi.advanceTimersByTimeAsync(BACKGROUND_GAP_MS + 30);
       expect(baking.jobs.some((j) => j.key === 'sfx:hit_light')).toBe(true);
+      queued.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a gap after each background sound before the next one starts', async () => {
+    vi.useFakeTimers();
+    try {
+      const queued = new SoundBank(48000);
+      queued.enqueue([TWO, THREE]);
+      await vi.advanceTimersByTimeAsync(30);
+      await landAll();
+      expect(queued.complete(TWO)).toBe(true);
+      // The next sound is not started in the slice that follows a landing, only once the gap has passed.
+      await vi.advanceTimersByTimeAsync(BACKGROUND_GAP_MS - 10);
+      expect(baking.jobs).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(40);
+      expect(baking.jobs.some((j) => j.key === 'sfx:hit_light')).toBe(true);
+      queued.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the background queue quiet while it is held, and starts again afterwards', async () => {
+    vi.useFakeTimers();
+    try {
+      const queued = new SoundBank(48000);
+      queued.hold(5000);
+      queued.enqueue([TWO]);
+      await vi.advanceTimersByTimeAsync(4900);
+      expect(baking.jobs).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(baking.jobs.map((j) => j.key)).toEqual(['sfx:ui_click']);
+      queued.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not hold a sound that is asked for by name', async () => {
+    vi.useFakeTimers();
+    try {
+      const queued = new SoundBank(48000);
+      queued.hold(5000);
+      void queued.ensure(ONE);
+      expect(baking.jobs.map((j) => j.key)).toEqual(['sfx:ui_popup_open']);
+      expect(queued.bakeStep(TWO)).toBe(true);
+      expect(baking.jobs).toHaveLength(2);
       queued.dispose();
     } finally {
       vi.useRealTimers();
