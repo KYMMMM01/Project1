@@ -24,9 +24,10 @@ export const TUTORIAL_SCRIPT: readonly UnitId[] = ['w_paw', 'w_paw', 'r_archer']
 /**
  * Extra seconds the tutorial's one elite gets over the normal limit. The tutorial gives a new player three cats and a pick, not the board of a run that has summoned for
  * forty seconds, and the lesson that points at the fish asks for more cats only in words: with the limit of a normal run, 13 of 300 seeds were lost at the elite
- * by a player who did what they were told (and a lost first run is a counted run, so the tutorial is not offered again); with this much more, 1 of 500.
+ * by a player who did what they were told (and a lost first run is a counted run, so the tutorial is not offered again). With 10 s more, 1 of 500 were lost and
+ * 3 won with under 5 s left (a real screen ran about 2 s tighter than that model: seed 23 had 1 to 1.7 s left); with 20 s, none of 500 and at least 7 s left.
  */
-export const TUTORIAL_ELITE_EXTRA_TIME = 10;
+export const TUTORIAL_ELITE_EXTRA_TIME = 20;
 
 /** The wave that opens the scripted pick-of-three (the sim's `pickSummon` brings the sunbeams once it is answered). */
 export const TUTORIAL_PICK_WAVE = 3;

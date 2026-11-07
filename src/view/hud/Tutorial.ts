@@ -698,6 +698,7 @@ export class Tutorial {
         width: NOTE_W,
         tile: NOTE_TILE,
         buttons: step.ok ? [{ label: t('guide.ok'), style: 'primary', width: 220 }] : [],
+        avoid: this.noteKeep(),
       },
       () => this.script.tapOk(),
       !this.note.visible,
@@ -721,6 +722,13 @@ export class Tutorial {
     this.hole = NO_RECT;
     this.noteLook = '';
     this.blockingNow = false;
+  }
+
+  /** What the note beside its target keeps off: the cats, the controls and the lane, and the skip button. */
+  private noteKeep(): Keep[] {
+    const keep: Keep[] = [...this.host.keepClear()];
+    if (this.skipLayer.visible) keep.push({ ...skipRect(topRects(this.layout), this.env.reveal.speed), weight: 3 });
+    return keep;
   }
 
   /** What the paw must not lie on besides the label of what it points at: the lesson's note and the skip button, then the cats and buttons. */

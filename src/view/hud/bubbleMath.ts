@@ -150,6 +150,18 @@ export function placeCard(s: CardSpec): BubbleFit {
   return strip(fit.ok ? fit : better(fit, settleBubble(cx, target.y, true, w, h, bounds, arrow)));
 }
 
+/**
+ * Where a tutorial note goes: right beside what it points at, so the eye does not travel. A note about a control of the bottom panel lies
+ * just above the panel as a card does; a note about the board or the top row lies above or below its target, whichever side hides less of
+ * `avoid` (the cats, the controls, the lane), and never reaches down onto the summon button.
+ */
+export function placeNote(s: CardSpec & { avoid: readonly Weighted[] }): BubbleFit {
+  const { target, w, h, bounds, arrow, panelTop, avoid } = s;
+  if (target.y + target.h / 2 >= panelTop) return placeCard(s);
+  const floor = Math.min(bounds.y + bounds.h, panelTop + SHEET_ROOM);
+  return placeBubble({ target, w, h, bounds: { ...bounds, h: floor - bounds.y }, arrow, prefer: 'below', avoid });
+}
+
 /** The smallest rectangle holding both. */
 export function unionRect(a: Rect, b: Rect): Rect {
   const x = Math.min(a.x, b.x);

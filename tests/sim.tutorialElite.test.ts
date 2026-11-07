@@ -113,17 +113,17 @@ describe('the elite of the tutorial\'s wave 4', () => {
   });
 
   it('is not lost by a player who answers every nudge (seeds the old numbers lost)', () => {
-    for (const seed of [23, 80, 105, 173, 230, 247, 351, 362]) {
+    for (const seed of [23, 80, 105, 142, 173, 230, 247, 351, 362]) {
       const run = obedientRun(seed);
       expect(run.lost, `seed ${seed} lost with ${run.cats} cats`).toBe(false);
       expect(run.left, `seed ${seed}`).not.toBeNull();
     }
   });
 
-  it('is lost by hardly any such player: at most one seed in a hundred and fifty (it was seven)', () => {
+  it('is lost by no such player in a hundred and fifty seeds (it was seven with no extra time, one with 10 s: seed 142)', () => {
     let lost = 0;
     for (let seed = 1; seed <= 150; seed++) if (obedientRun(seed).lost) lost++;
-    expect(lost).toBeLessThanOrEqual(1);
+    expect(lost).toBe(0);
   }, 120_000);
 
   it('keeps the nudge coming until the board is eight cats thick', () => {

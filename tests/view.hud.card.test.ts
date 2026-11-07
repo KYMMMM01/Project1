@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FIELD_H } from '@/game/geometry';
 import type { BattleLayout } from '@/view/context';
-import { overlapArea, placeCard } from '@/view/hud/bubbleMath';
+import { overlapArea, placeCard, placeNote, type Weighted } from '@/view/hud/bubbleMath';
 import { bottomRects, topRects, type Rect } from '@/view/hud/layoutMath';
 
 function layout(h: number): BattleLayout {
@@ -70,6 +70,60 @@ describe('where a lesson card goes', () => {
       const { fit } = place(l, { x: 560, y: l.fieldY + 10, w: 100, h: 100 }, 280);
       expect(fit.tailX).toBeGreaterThan(CARD_W / 2);
       expect(fit.tailX).toBeLessThanOrEqual(CARD_W - 34);
+    });
+  }
+});
+
+describe('where a tutorial note goes: right beside what it points at', () => {
+  for (const screen of [1280, 1600]) {
+    const l = layout(screen);
+    const panelTop = bottomRects(l).top;
+    const top = topRects(l);
+    const bounds: Rect = { x: 0, y: 14, w: l.w, h: l.h - 28 };
+    const note = (target: Rect, h: number, avoid: Weighted[] = []) => {
+      const fit = placeNote({ target, w: CARD_W, h, bounds, arrow: ARROW, panelTop, boardBottom: l.fieldY + FIELD_H, avoid });
+      return { fit, body: { x: fit.x, y: fit.y, w: CARD_W, h } };
+    };
+    const gauge: Rect = { x: top.gauge.x, y: top.gauge.y, w: top.gauge.w, h: top.gauge.h };
+    const topRow: Rect = { x: 24, y: l.fieldY + 10, w: 600, h: 96 };
+    const bottomRow: Rect = { x: 24, y: l.fieldY + FIELD_H - 106, w: 200, h: 96 };
+
+    it(`${screen}: a note about the enemy bar lies right under it, not under the board`, () => {
+      for (const h of [130, 220]) {
+        const { fit, body } = note(gauge, h);
+        expect(fit.above).toBe(false);
+        expect(body.y - (gauge.y + gauge.h)).toBe(ARROW);
+        expect(overlapArea(body, gauge)).toBe(0);
+      }
+    });
+
+    it(`${screen}: a note about the top row of the board touches it by its tail`, () => {
+      const { body } = note(topRow, 130);
+      const gap = body.y >= topRow.y + topRow.h ? body.y - (topRow.y + topRow.h) : topRow.y - (body.y + body.h);
+      expect(gap).toBe(ARROW);
+      expect(overlapArea(body, topRow)).toBe(0);
+    });
+
+    it(`${screen}: a note takes the side of its target that hides fewer cats`, () => {
+      const target: Rect = { x: 24, y: l.fieldY + 200, w: 108, h: 96 };
+      const catsBelow: Weighted[] = [{ x: 24, y: l.fieldY + 310, w: 600, h: 200, weight: 3 }];
+      expect(note(target, 130, catsBelow).fit.above).toBe(true);
+      const catsAbove: Weighted[] = [{ x: 24, y: l.fieldY + 40, w: 600, h: 150, weight: 3 }];
+      expect(note(target, 130, catsAbove).fit.above).toBe(false);
+    });
+
+    it(`${screen}: a note never reaches down onto the summon button, nor off the screen`, () => {
+      for (const h of [130, 220, 280]) {
+        const { body } = note(bottomRow, h);
+        expect(body.y + body.h).toBeLessThanOrEqual(panelTop + 284);
+        expect(body.y).toBeGreaterThanOrEqual(bounds.y);
+        expect(overlapArea(body, bottomRow)).toBe(0);
+      }
+    });
+
+    it(`${screen}: a note about a bottom control lies just above the panel, as a card does`, () => {
+      const summon: Rect = { x: 210, y: panelTop + 284, w: 300, h: 140 };
+      expect(note(summon, 220).fit).toEqual(placeCard({ target: summon, w: CARD_W, h: 220, bounds, arrow: ARROW, panelTop, boardBottom: l.fieldY + FIELD_H }));
     });
   }
 });

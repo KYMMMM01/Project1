@@ -1,7 +1,8 @@
 /**
  * The paper speech bubble of the lessons: the topic's picture on a small tile, its words, and up to two buttons. The tutorial
  * uses it as a short note (two lines and, for a read-only lesson, "got it"); the first-encounter lessons use it as a card (title,
- * teaching text, "got it" and "more in the guidebook"). It lies over the half of the screen its target is not on (bubbleMath.ts `placeCard`).
+ * teaching text, "got it" and "more in the guidebook"). A card lies over the half of the screen its target is not on (bubbleMath.ts `placeCard`);
+ * a tutorial note lies right beside its target (`placeNote`).
  */
 import { Container, Graphics } from 'pixi.js';
 import { Ease } from '@/core/tween';
@@ -9,7 +10,7 @@ import { illustration, topicDef, type TopicId } from '@/guide';
 import { balanceWrap, Button, drawSpeechBubble, motion, paperSeed, popIn, TweenBag, uiLabel } from '@/ui';
 import type { HudEnv } from './env';
 import { FIELD_H } from '@/game/geometry';
-import { BUBBLE_MARGIN, placeCard } from './bubbleMath';
+import { BUBBLE_MARGIN, placeCard, placeNote, type Weighted } from './bubbleMath';
 import { bottomRects, type Rect } from './layoutMath';
 
 const PAD = 20;
@@ -32,6 +33,8 @@ export interface BubbleSpec {
   /** Side of the picture's tile. */
   tile: number;
   buttons: readonly BubbleButton[];
+  /** Given (the tutorial's notes): the bubble lies right beside its target, keeping off these (`placeNote`); without, it is a card on the other half (`placeCard`). */
+  avoid?: readonly Weighted[];
 }
 
 export class LessonBubble {
@@ -74,7 +77,8 @@ export class LessonBubble {
     const h = PAD * 2 + contentH + (rowH > 0 ? 18 + rowH : 0);
     const l = this.env.layout();
     const bounds: Rect = { x: 0, y: l.safeTop + BUBBLE_MARGIN, w: l.w, h: l.h - l.safeBottom - l.safeTop - BUBBLE_MARGIN * 2 };
-    const fit = placeCard({ target: spec.target, w: W, h, bounds, arrow: ARROW, panelTop: bottomRects(l).top, boardBottom: l.fieldY + FIELD_H });
+    const card = { target: spec.target, w: W, h, bounds, arrow: ARROW, panelTop: bottomRects(l).top, boardBottom: l.fieldY + FIELD_H };
+    const fit = spec.avoid ? placeNote({ ...card, avoid: spec.avoid }) : placeCard(card);
     const bodyY = fit.above ? -fit.tail - h : fit.tail;
     const g = new Graphics();
     drawSpeechBubble(g, -fit.tailX, bodyY, W, h, {
