@@ -2,7 +2,7 @@ import { game } from './game';
 import { scenes } from './scene';
 
 /**
- * QA hooks on window.__dbg — enabled in dev builds and with ?debug=1. Automated browser checks use
+ * QA hooks on window.__dbg — enabled in dev builds, with ?debug=1 and on the developer lab (?scene=lab). Automated browser checks use
  * these to convert design coordinates to client pixels and to read captured errors.
  */
 export interface DebugApi {
@@ -21,7 +21,8 @@ declare global {
 }
 
 export function debugEnabled(): boolean {
-  return import.meta.env.DEV || new URLSearchParams(location.search).has('debug');
+  const params = new URLSearchParams(location.search);
+  return import.meta.env.DEV || params.has('debug') || params.get('scene') === 'lab';
 }
 
 export function installDebug(): void {

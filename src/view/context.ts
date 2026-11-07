@@ -66,7 +66,7 @@ export interface BattleLayout {
 /** Named HUD points other parts aim at (currency flights, pointers). Scene space. */
 export type HudAnchor = 'fish' | 'purr' | 'enemyGauge' | 'wave' | 'summon' | 'relics' | 'laser';
 
-export type PauseReason = 'user' | 'popup' | 'tutorial' | 'cutin' | 'system';
+export type PauseReason = 'user' | 'popup' | 'tutorial' | 'cutin' | 'system' | 'lab';
 
 /**
  * Gestures the field keeps from the player, set by the HUD (all off outside the tutorial run): `laser` while the laser button has not been brought in (a tap on the

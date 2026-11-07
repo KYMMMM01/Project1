@@ -1,6 +1,6 @@
 /**
- * Debug-only route into the battle (`?scene=battle&chapter=N&stake=N&seed=N&mode=...&sandbox=1&runs=N`)
- * and the QA hooks on `window.__dbg.battle`. Loaded lazily from main.ts, never part of the normal flow.
+ * Debug-only route into the battle (`?scene=battle&chapter=N&stake=N&seed=N&mode=...&sandbox=1&runs=N`, or `?scene=lab` for the developer
+ * lab: the same battle with the panel of lab.ts) and the QA hooks on `window.__dbg.battle`. Loaded lazily from main.ts, never part of the normal flow.
  */
 import { debugExpose } from '@/core/debug';
 import { setLang } from '@/core/i18n';
@@ -58,8 +58,19 @@ export function runFromQuery(params: URLSearchParams): RunConfig {
 export async function openDebugBattle(params: URLSearchParams): Promise<void> {
   const lang = params.get('lang');
   if (lang === 'ko' || lang === 'en') setLang(lang);
+  // The developer lab (`?scene=lab`) is this battle in the sandbox with its panel (lab.ts).
+  const lab = params.get('scene') === 'lab';
+  if (lab) {
+    // Always a sandbox: the lab marks every guide topic read, which must never reach the player's real save.
+    params.set('sandbox', '1');
+    if (!params.has('runs')) params.set('runs', '5');
+  }
   const run = runFromQuery(params);
-  setBattleCreatedHook(installBattleDebug);
+  const mountLab = lab ? (await import('./lab')).mountLab : null;
+  setBattleCreatedHook((scene) => {
+    const api = installBattleDebug(scene);
+    mountLab?.(scene, api);
+  });
   await scenes.goto(() => new BootScene(() => new BattleScene(run)), 'none');
 }
 
@@ -101,7 +112,7 @@ function drive(b: BattleApi, sim: Sim, until: () => boolean, clear: boolean): vo
   }
 }
 
-export function installBattleDebug(scene: BattleScene): void {
+export function installBattleDebug(scene: BattleScene) {
   const b = scene.battle;
   const sim = b instanceof Sim ? b : null;
   const need = (): Sim => {
@@ -117,7 +128,7 @@ export function installBattleDebug(scene: BattleScene): void {
       scene.ctx.fx.clear();
     }
   };
-  debugExpose('battle', {
+  const api = {
     scene,
     ctx: scene.ctx,
     battle: b,
@@ -287,5 +298,7 @@ export function installBattleDebug(scene: BattleScene): void {
     pauseReasons(): string[] {
       return scene.pauseReasons();
     },
-  });
+  };
+  debugExpose('battle', api);
+  return api;
 }

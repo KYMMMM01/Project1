@@ -66,8 +66,9 @@ async function main(): Promise<void> {
   const debug = debugEnabled();
   const app = createApp();
 
-  // QA route: ?scene=battle&chapter=N&stake=N&seed=N&mode=...&sandbox=1 opens a battle directly.
-  if (debug && params.get('scene') === 'battle') {
+  // QA route: ?scene=battle&chapter=N&stake=N&seed=N&mode=...&sandbox=1 opens a battle directly; ?scene=lab is the developer lab (view/field/lab.ts).
+  const scene = params.get('scene');
+  if (debug && (scene === 'battle' || scene === 'lab')) {
     await app.start();
     const { openDebugBattle } = await import('@/view/field/debug');
     await openDebugBattle(params);
