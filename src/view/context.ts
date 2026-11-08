@@ -87,6 +87,8 @@ export interface BattleUiEvents {
   refused: { command: string; fail: Fail; cell: number | null };
   /** The player is dragging a unit (from = cell, over = cell under the pointer or -1, sell = over the sell zone). */
   drag: { from: number | null; over: number; sell: boolean };
+  /** A tap on an empty cell that nothing else took (no cat selected, no special cell to explain): the developer lab stands a cat there. */
+  emptyTap: { cell: number };
   /** The run is over and staging has finished: the HUD may show the result flow. */
   finished: { victory: boolean };
 }
@@ -140,6 +142,8 @@ export interface BattleContext {
   readonly paused: boolean;
   /** The only thing holding the battle is a tutorial lesson waiting for the player's gesture: the field still takes touches (a drag, a tap on a cat). */
   readonly lessonHold: boolean;
+  /** The field takes touches although the battle is held: a lesson's hold, or the developer lab's own pause (`?scene=lab`). */
+  readonly touchHold: boolean;
   /** Gestures the tutorial keeps from the field for now. */
   readonly locks: GestureLocks;
   /** Pauses nest per reason: the battle runs only when no reason is active. */

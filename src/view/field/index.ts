@@ -73,6 +73,7 @@ export function createField(ctx: BattleContext): FieldPart {
   input.onPress = (x, y) => toys.tapAt(x, y);
   input.onEmptyTap = (cell) => {
     if (cellNote.lit(cell)) cellNote.show(cell);
+    else ctx.events.emit('emptyTap', { cell });
   };
   /** Numbers stand between the HUD's lower edge and the bottom panel, an 8 px margin in from the screen's sides, and off the board (a cat's name tags are the cells' lower edge). */
   const NUMBER_SIDE = 8;

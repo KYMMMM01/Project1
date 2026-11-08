@@ -79,10 +79,10 @@ export class FieldInput {
     return this.env.ctx;
   }
 
-  /** Taps are ignored while anything else owns the screen (a lesson that holds the clock for the player's gesture does not own it). */
+  /** Taps are ignored while anything else owns the screen (a lesson that holds the clock for the player's gesture, or the lab's pause, does not own it). */
   private blocked(): boolean {
     const { battle } = this.env;
-    return (this.ctx.paused && !this.ctx.lessonHold) || battle.pending !== null || battle.phase === 'won' || battle.phase === 'lost' || battle.phase === 'choice';
+    return (this.ctx.paused && !this.ctx.touchHold) || battle.pending !== null || battle.phase === 'won' || battle.phase === 'lost' || battle.phase === 'choice';
   }
 
   private toField(e: FederatedPointerEvent): void {
