@@ -15,7 +15,7 @@ import { t } from '@/core/i18n';
 import { CLASS_IDS, type UnitId } from '@/game';
 import { CELL_COUNT, CELL_H, CELL_W, cellCenterX, cellCenterY } from '@/game/geometry';
 import { topicTeach, type TopicId } from '@/guide';
-import { Button, Color, confirmDialog, Dim, drawDashedRect, motion, paperSeed, toast, TweenBag } from '@/ui';
+import { Button, Color, confirmDialog, Dim, drawDashedRect, motion, paperSeed, TweenBag } from '@/ui';
 import type { BattleLayout } from '../context';
 import { info } from '../info';
 import type { EnvImpl } from './env';
@@ -30,7 +30,7 @@ import {
 } from './layoutMath';
 import { findTwins } from './planMath';
 import { firstCat, kingCell, shadeCat, sunLanding, twinPair, weakestCat } from './pawTarget';
-import { REVEAL_KEYS, type RevealKey } from './policy';
+import type { RevealKey } from './policy';
 import { nearRingCell, ringBox, ringCat } from './ringSpot';
 import { MEASURE_EVERY, SpotSettle, windowMoved } from './spotMath';
 import { FIRST_SUMMON_AFTER, NUDGE_FOR, nudgeDue } from './tutorialFlow';
@@ -938,23 +938,18 @@ export class Tutorial {
     this.skip();
   }
 
-  /** The lessons stop for good: the hidden controls all arrive, the run goes on as an easy one and the guidebook is pointed out. */
+  /**
+   * The lessons stop for good and the player goes straight to the lobby: the tutorial is a stage of its own, not a run to carry on. The
+   * unfinished tutorial run is dropped by the run flow (app/flow.ts, `dropInterruptedTutorial`) and, being skipped, is not offered again.
+   */
   private skip(): void {
     this.script.stop();
-    this.countLeft();
     this.skipped = true;
     this.env.progress.markSkipped();
     this.endVisuals();
     this.showSkip(false);
     audio.play('ui_confirm');
-    let i = 0;
-    for (const key of REVEAL_KEYS) {
-      if (this.env.reveal[key]) continue;
-      this.bag.call(i++ * 0.09, () => {
-        if (!this.destroyed) this.arrive(key);
-      });
-    }
-    toast(t('guide.skip.note'), 'info');
+    this.env.ctx.exit();
   }
 
   // ───────────────────────── frame events from the HUD ─────────────────────────

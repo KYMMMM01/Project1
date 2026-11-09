@@ -92,7 +92,7 @@ addStrings('ko', {
   'hud.buff.from': '재주 효과 · {names}',
 
   // pick of three
-  'hud.pick.title': '하나를 골라요',
+  'hud.pick.title': '고양이 고르기',
   'hud.pick.sub': '이번 소환은 세 마리 중에서 골라요.',
   'hud.pick.tip': '꾹 누르면 능력이 보여요',
   // peek at the board from a forced choice
