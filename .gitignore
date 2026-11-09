@@ -20,3 +20,6 @@ video/*.ogg
 video/*.mp4
 video/*.webm
 video/work/
+
+# local secrets (the ElevenLabs key for tools/sfx): never committed
+.env.local

@@ -14,7 +14,7 @@
 import type { SfxId } from './api';
 import { air, body, clack, crackle, dust, snap, tink } from './foley';
 import { IMPACT_FILE, RPG_FILE, crack, rec, tap, thud } from './hitkit';
-import { bell, knock, pluck, type Recipe } from './recipe';
+import { bell, knock, pluck, recording, type Recipe } from './recipe';
 import { impact } from './sfx-cats';
 import { hz } from './theory';
 
@@ -23,9 +23,13 @@ export const IMPACT_RECIPES = {
   imp_w_paw: impact({
     rank: 0,
     db: 2.6,
-    len: 0.12,
-    ms: [30, 100],
+    len: 0.28,
+    ms: [30, 280],
+    needs: ['elevenlabs/imp_w_paw'],
     build(s, v) {
+      // The owner's pick (2026-11-09): a soft slap on a rubber toy with a little boing, recorded with ElevenLabs; the file keeps its first 0.27 s so that
+      // ten hits a second stay a rhythm.
+      if (recording(s, 'imp_w_paw')) return;
       // A glove on a cushion: the slap of the leather (a band around 1.2 kHz with its crack on top) and the pat under it, high enough for a phone to play.
       const p = v.j(0.06);
       tap(s, 0, 1250 * p, 0.9, 0.035, 0.9);

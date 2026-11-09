@@ -5,7 +5,7 @@
  * are relative only; the baker normalises to the family target.
  */
 import type { SfxId } from './api';
-import { bell, kalimba, knock, mallet, paper, pluck, pop, puff, shake, stamp, thump, tick, whoosh, type Recipe } from './recipe';
+import { bell, kalimba, knock, mallet, paper, pluck, pop, puff, recording, shake, stamp, thump, tick, whoosh, type Recipe } from './recipe';
 import { hz } from './theory';
 
 export const UI_RECIPES = {
@@ -106,13 +106,16 @@ export const UI_RECIPES = {
   // ---------------------------------------------------------------- economy / rewards
   coin: {
     cat: 'tick',
-    len: 0.26,
-    ms: [60, 230],
+    len: 0.36,
+    ms: [60, 350],
     variants: 3,
     rate: 0.025,
     climb: 14,
     rule: { maxVoices: 6, minGap: 0.03, falloff: 0.12 },
+    needs: ['elevenlabs/coin'],
     build(s, v) {
+      // The owner's pick (2026-11-09): a bright gold coin "ding" recorded with ElevenLabs.
+      if (recording(s, 'coin')) return;
       // One kalimba tine (G5) with a woody tick: a small soft coin, made to be heard in dozens while a count runs.
       const p = v.j(0.02);
       kalimba(s, hz('G5') * p, 0, 0.2, 1);
@@ -198,11 +201,14 @@ export const UI_RECIPES = {
   // ---------------------------------------------------------------- summon (escalating, one instrument family)
   summon_common: {
     cat: 'tick',
-    len: 0.22,
-    ms: [60, 200],
+    len: 0.38,
+    ms: [60, 380],
     // Rapid summoning (four or more a second) thins out: 80 ms apart and quieter as it gets denser.
     rule: { maxVoices: 4, minGap: 0.08, falloff: 0.25 },
+    needs: ['elevenlabs/summon_common'],
     build(s) {
+      // The owner's pick (2026-11-09): a magical pop with a sparkle, recorded with ElevenLabs.
+      if (recording(s, 'summon_common')) return;
       // A sticker pressed onto the board: a pitched pop (E5) and a little puff of paper.
       pop(s, hz('E5'), 0, 1, 0.12);
       puff(s, 0, 0.06, 0.25, 2600, 1500);
@@ -277,9 +283,12 @@ export const UI_RECIPES = {
   // ---------------------------------------------------------------- merge & friends
   merge: {
     cat: 'combat',
-    len: 0.5,
-    ms: [150, 480],
+    len: 0.7,
+    ms: [150, 700],
+    needs: ['elevenlabs/merge'],
     build(s) {
+      // The owner's pick (2026-11-09): a warm shimmering fusion pop, recorded with ElevenLabs.
+      if (recording(s, 'merge')) return;
       // A pop where the two cats meet, then a ukulele pair that rises (E5 up to A5). playStep lifts the whole figure, so
       // a higher rank lands one step higher.
       const e = s.echo(0.06, 0.2, 0.2, 4500);

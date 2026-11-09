@@ -14,7 +14,7 @@
  */
 import type { SfxId } from './api';
 import { air, body, boing, bubble, crackle, dust, grain, rap, rattle, snap, squelch, swish, tink, whistle } from './foley';
-import { bell, kalimba, knock, mallet, pluck, pop, puff, shake, stamp, thump, type Recipe } from './recipe';
+import { bell, kalimba, knock, mallet, pluck, pop, puff, recording, shake, stamp, thump, type Recipe } from './recipe';
 import { hz } from './theory';
 
 /** Recorded layers (ids of `samples.ts`: `<pack>/<file>`). */
@@ -171,13 +171,17 @@ export const SKILL_RECIPES = {
   sp_tiger_roar: signature({
     // two tigers that cast within a second (rank 5 casts are 1.2 battle seconds apart) both roar, the second a little under the first
     rule: { maxVoices: 2, minGap: 0.2, falloff: 0.5 },
-    len: 1.15,
-    ms: [650, 1100],
-    // (2 dB under what it was: in the busiest second of a 3x chapter the roar was a quarter to a half of all the energy: docs/qa/sound_audit_2026-10-18.md, 13)
-    trim: -0.5,
+    len: 1.25,
+    ms: [650, 1250],
+    // (2 dB under what it was: in the busiest second of a 3x chapter the roar was a quarter to a half of all the energy: docs/qa/sound_audit_2026-10-18.md, 13;
+    // 2 dB further down for the recording, whose full midrange sounds 2 dB louder than the synthesis at the same RMS (K-weighted loudest 400 ms))
+    trim: -2.5,
     duck: { depth: 0.5, seconds: 1 },
     hush: { db: 3, seconds: 0.6 },
+    needs: ['elevenlabs/sp_tiger_roar'],
     build(s) {
+      // The owner's pick (2026-11-09): a short heroic tiger roar, recorded with ElevenLabs.
+      if (recording(s, 'sp_tiger_roar')) return;
       // A cartoon roar, not a tiger: a big cat's throat made of two triangle waves with a slow chorus, driven a little so that the upper
       // harmonics appear, chopped at 27 Hz (the growl), sliding from 215 down to 105 Hz over the breath while a formant peak closes from
       // 1.1 to 0.5 kHz ("aaah" into "oooh"). Over it a breath of noise in the same band, chopped the same way, and a rasp at 3 kHz
@@ -569,12 +573,15 @@ export const SKILL_RECIPES = {
     },
   }),
   sp_meteor_boom: signature({
-    len: 0.95,
-    ms: [350, 900],
-    trim: 0.5,
+    len: 1.05,
+    ms: [350, 1050],
+    // (4.5 dB under the synthesis's 0.5: the recording's full midrange sounds 4.7 dB louder at the same RMS, K-weighted loudest 400 ms)
+    trim: -4,
     duck: { depth: 0.55, seconds: 1.2 },
-    needs: [IMPACT('impactMetal_heavy_000')],
+    needs: ['elevenlabs/sp_meteor_boom', IMPACT('impactMetal_heavy_000')],
     build(s) {
+      // The owner's pick (2026-11-09): a heavy cartoon meteor impact with rock debris, recorded with ElevenLabs.
+      if (recording(s, 'sp_meteor_boom')) return;
       // The rock lands: a sine dropping from 180 to 42 Hz over 0.35 s and driven hard, so that its harmonics at 360 to 900 Hz carry on a
       // phone, a fist of noise (150 to 1200 Hz) that dies in 0.3 s, a second thud with a flatter fall, a shower of debris (a heavy metal
       // recording, a crackle that falls in pitch) and the dust that follows.

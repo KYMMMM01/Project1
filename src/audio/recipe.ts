@@ -5,6 +5,7 @@
  * knock is a refusal, a rubber stamp is a claim, a sticker pop is a small pitched glide, and notes come
  * from mallets and plucked strings (marimba, kalimba, ukulele), never from raw saw waves.
  */
+import { sampleStore } from './samples';
 import type { Send, Synth } from './synth';
 import type { VoiceRule } from './voices';
 
@@ -137,6 +138,16 @@ export function stamp(s: Synth, at: number, v = 1, f = 150): void {
   thump(s, f, f * 0.45, at, 0.11, v, 0.06, 0.4);
   s.noise({ at, dur: 0.05, v: v * 0.5, a: 0.002, s: 0.01, filter: { t: 'lowpass', f: 900 } });
   s.noise({ at: at + 0.018, dur: 0.03, v: v * 0.35, a: 0.002, s: 0.01, filter: { t: 'bandpass', f: 2300, q: 0.9 } });
+}
+
+/**
+ * The recording the owner picked for a sound (ElevenLabs, `src/assets/sfx/elevenlabs/<id>.wav`, listed in docs/licenses/sounds.md), played alone. False while
+ * the file has not been read (or never will be): the recipe then plays its own synthesis, which stays a whole sound. The recipe lists `elevenlabs/<id>` in
+ * `needs` so that the bake waits for the file.
+ */
+export function recording(s: Synth, id: string): boolean {
+  const key = `elevenlabs/${id}`;
+  return sampleStore.get(key) !== undefined && s.sample(key);
 }
 
 /** Sticker pop: a sine that glides up a minor third in 22 ms (the peel) and rings down, with a faint octave and a peel tick. */

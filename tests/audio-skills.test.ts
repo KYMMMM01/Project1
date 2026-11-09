@@ -137,8 +137,10 @@ describe('the sample store', () => {
 });
 
 describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
+  // the Kenney layers (`files`) and the owner's ElevenLabs recordings (`eleven`, whole sounds: their own rules below)
   const files: string[] = [];
-  for (const pack of readdirSync(SFX_DIR)) for (const f of readdirSync(join(SFX_DIR, pack))) files.push(`${pack}/${f}`);
+  const eleven: string[] = [];
+  for (const pack of readdirSync(SFX_DIR)) for (const f of readdirSync(join(SFX_DIR, pack))) (pack === 'elevenlabs' ? eleven : files).push(`${pack}/${f}`);
 
   it('are WAV, 16-bit mono 44.1 kHz, short and small, and the store knows every one of them', () => {
     expect(files.length).toBeGreaterThan(10);
@@ -159,7 +161,41 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
       expect(SAMPLE_URLS.has(f.slice(0, -4)), f).toBe(true);
     }
     expect(total).toBeLessThan(1024 * 1024);
-    expect(SAMPLE_URLS.size).toBe(files.length);
+    expect(SAMPLE_URLS.size).toBe(files.length + eleven.length);
+  });
+
+  it('carry the owner\'s ElevenLabs recordings as WAV, 16-bit mono 44.1 kHz, each the whole sound of the one recipe of its name, with a row of the ledger', () => {
+    const inGame = LEDGER.slice(LEDGER.indexOf('## In the game'));
+    expect(eleven.length).toBeGreaterThan(0);
+    let total = 0;
+    for (const f of eleven) {
+      expect(f, f).toMatch(/\.wav$/);
+      const path = join(SFX_DIR, f);
+      const size = statSync(path).size;
+      total += size;
+      expect(size, `${f} bytes`).toBeLessThanOrEqual(200 * 1024);
+      const bytes = readFileSync(path);
+      expect(bytes.readUInt16LE(22), `${f} channels`).toBe(1);
+      const pcm = parseWav(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + size) as ArrayBuffer);
+      expect(pcm, f).not.toBeNull();
+      expect(pcm?.rate, f).toBe(44100);
+      const seconds = (pcm?.data.length ?? 0) / 44100;
+      expect(seconds, f).toBeLessThanOrEqual(2);
+      let peak = 0;
+      for (const v of pcm?.data ?? []) peak = Math.max(peak, Math.abs(v));
+      expect(peak, `${f} peak`).toBeLessThanOrEqual(0.98 + 1e-3);
+      const id = f.slice('elevenlabs/'.length, -4);
+      const owner = SOUNDS.filter((d) => (d.recipe.needs ?? []).includes(`elevenlabs/${id}`));
+      expect(owner.map((d) => d.id), f).toEqual([id]);
+      // the recipe renders long enough to hold the whole file
+      expect(owner[0]?.recipe.len ?? 0, f).toBeGreaterThanOrEqual(seconds);
+      const row = inGame.split('\n').find((l) => l.includes(`src/assets/sfx/${f} `));
+      expect(row, f).toBeDefined();
+      expect(row).toContain('ElevenLabs');
+      expect(row).toContain('commercial');
+      expect(row).toMatch(/\| \d{4}-\d{2}-\d{2} \|/);
+    }
+    expect(total).toBeLessThan(1.5 * 1024 * 1024);
   });
 
   it('come only from the three CC0 packs, and each has a row of the ledger with its source, URL, license and date', () => {
@@ -176,14 +212,15 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
       // the source file is in the repository
       expect(existsSync(join(ROOT, 'art', 'sfx_src', 'kenney', `kenney_${pack}`, 'Audio', `${file.slice(0, -4)}.ogg`)), f).toBe(true);
     }
-    expect(inGame.split('\n').filter((l) => l.startsWith('| src/assets/sfx/'))).toHaveLength(files.length);
+    expect(inGame.split('\n').filter((l) => l.startsWith('| src/assets/sfx/') && !l.startsWith('| src/assets/sfx/elevenlabs/'))).toHaveLength(files.length);
+    expect(inGame.split('\n').filter((l) => l.startsWith('| src/assets/sfx/elevenlabs/'))).toHaveLength(eleven.length);
   });
 
   it('are each laid under some recipe (no file ships without a sound that uses it), and every recipe\'s `needs` is a file that ships', () => {
     const needed = new Set<string>();
     for (const d of SOUNDS) for (const id of d.recipe.needs ?? []) needed.add(id);
     for (const id of needed) expect(SAMPLE_URLS.has(id), id).toBe(true);
-    for (const f of files) expect(needed.has(f.slice(0, -4)), `${f} is not used`).toBe(true);
+    for (const f of [...files, ...eleven]) expect(needed.has(f.slice(0, -4)), `${f} is not used`).toBe(true);
   });
 });
 
@@ -240,7 +277,8 @@ describe('the skills\' sounds', () => {
         for (const x of samples) used.add(x);
       }
       for (const x of used) expect(r.needs ?? [], `${id} lays ${x}`).toContain(x);
-      for (const x of r.needs ?? []) expect(used.has(x), `${id} says it needs ${x} and never lays it`).toBe(true);
+      // (an ElevenLabs recording is played alone once it has been read, which this recorder never does: the synthesis is what it records)
+      for (const x of r.needs ?? []) if (!x.startsWith('elevenlabs/')) expect(used.has(x), `${id} says it needs ${x} and never lays it`).toBe(true);
     }
   });
 
@@ -258,11 +296,11 @@ describe('the skills\' sounds', () => {
     }
   });
 
-  it('stay short (a roar is the longest, under 1.2 s) and never reach for the top of the range (no low-pass above 10 kHz)', () => {
+  it('stay short (a roar is the longest, 1.2 s since the owner\'s recording) and never reach for the top of the range (no low-pass above 10 kHz)', () => {
     for (const id of IDS) {
       const r = recipeOf(id);
       expect(r.len, id).toBeLessThanOrEqual(1.3);
-      expect(r.ms[1], id).toBeLessThanOrEqual(1150);
+      expect(r.ms[1], id).toBeLessThanOrEqual(1250);
       if (r.lp) expect(r.lp, id).toBeLessThanOrEqual(10000);
     }
   });

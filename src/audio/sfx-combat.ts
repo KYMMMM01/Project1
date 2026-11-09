@@ -9,7 +9,7 @@
 import type { SfxId } from './api';
 import { body, clack, snap } from './foley';
 import { crack, thud } from './hitkit';
-import { bell, kalimba, knock, mallet, paper, pluck, puff, shake, stamp, thump, whoosh, type Recipe } from './recipe';
+import { bell, kalimba, knock, mallet, paper, pluck, puff, recording, shake, stamp, thump, whoosh, type Recipe } from './recipe';
 import { hz } from './theory';
 
 export const COMBAT_RECIPES = {
@@ -294,11 +294,14 @@ export const COMBAT_RECIPES = {
   boss_roar: {
     cat: 'big',
     trim: -3.5,
-    len: 1.2,
-    ms: [700, 1250],
+    len: 1.6,
+    ms: [700, 1600],
     duck: { depth: 0.35, seconds: 0.9 },
     hush: { db: 3, seconds: 0.6 },
+    needs: ['elevenlabs/boss_roar'],
     build(s) {
+      // The owner's pick (2026-11-09): a deep rumbling entrance roar over a heavy low boom, recorded with ElevenLabs.
+      if (recording(s, 'boss_roar')) return;
       // A big drum hit and a low upright-bass note that sags a fourth (262 to 196 Hz) with a slow vibrato, over a rumble of
       // brown noise and a rustle of paper. It is a heavy footstep, not a growl.
       thump(s, 140, 60, 0, 0.6, 0.9, 0.35, 0.4);
@@ -329,9 +332,12 @@ export const COMBAT_RECIPES = {
   wave_start: {
     cat: 'combat',
     trim: -2,
-    len: 0.6,
-    ms: [250, 700],
+    len: 0.83,
+    ms: [250, 830],
+    needs: ['elevenlabs/wave_start'],
     build(s) {
+      // The owner's pick (2026-11-09): two cheerful marimba notes, recorded with ElevenLabs.
+      if (recording(s, 'wave_start')) return;
       // The next wave is coming: two marimba notes (G4 then D5, a fifth up), a low thump under the first and a brush of paper.
       mallet(s, hz('G4'), 0, 0.22, 0.9);
       mallet(s, hz('D5'), 0.1, 0.3, 1);

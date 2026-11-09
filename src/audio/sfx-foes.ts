@@ -8,7 +8,7 @@
 import type { SfxId } from './api';
 import { air, body, boing, bubble, clack, crackle, dust, grain, rap, rattle, snap, squelch, swish, tink, whistle } from './foley';
 import { crack, tap, thud } from './hitkit';
-import { bell, knock, type Recipe } from './recipe';
+import { bell, knock, recording, type Recipe } from './recipe';
 import { hz } from './theory';
 
 interface Spec {
@@ -22,6 +22,8 @@ interface Spec {
   /** Which loudness tier: a reaction under a weapon, or the long last breath of a boss. */
   cat?: 'foe' | 'finale';
   rule?: Recipe['rule'];
+  /** Recorded layers the recipe uses (see `Recipe.needs`). */
+  needs?: readonly string[];
   build: Recipe['build'];
 }
 
@@ -37,6 +39,7 @@ export function foe(o: Spec): Recipe {
     prio: o.prio,
     climb: o.climb,
     rule: o.rule ?? { maxVoices: 2, minGap: 0.05, falloff: 0.15 },
+    needs: o.needs,
     build: o.build,
   };
 }
@@ -172,12 +175,15 @@ export const FOE_RECIPES = {
 
   // ---------------------------------------------------------------- deaths
   foe_juicy_die: foe({
-    len: 0.45,
-    ms: [150, 440],
+    len: 0.5,
+    ms: [150, 490],
     prio: 2,
     climb: 7,
     rule: DEATH,
+    needs: ['elevenlabs/foe_juicy_die'],
     build(s, v) {
+      // The owner's pick (2026-11-09, round 2): a juicy squish and pop, recorded with ElevenLabs.
+      if (recording(s, 'foe_juicy_die')) return;
       // A cucumber snaps and squelches: a crack and a short "tok", a wet squelch sliding down through 1.5 kHz to 300 Hz, bubbles and a plop.
       const p = v.j(0.07);
       snap(s, 0, 0.9, 2800, 0.012);

@@ -99,7 +99,9 @@ for (const [pack, name, where, maxMs] of FILES) {
 }
 // files of an earlier run that the table no longer lists are removed, so the folder and the ledger cannot disagree
 const listed = new Set(FILES.map(([p, n]) => `${p}/${n}.wav`));
+// (the owner's ElevenLabs recordings in elevenlabs/ are not this script's: it never touches them)
 for (const pack of fs.existsSync(TO) ? fs.readdirSync(TO) : []) {
+  if (pack === 'elevenlabs') continue;
   for (const f of fs.readdirSync(path.join(TO, pack))) if (!listed.has(`${pack}/${f}`)) fs.rmSync(path.join(TO, pack, f));
 }
 
@@ -116,7 +118,9 @@ Sample files that ship with the game, read by \`src/audio/samples.ts\` and laid 
 |---|---|---|---|---|---|
 ${rows.join('\n')}
 `;
-let out = lf.slice(0, head) + section;
+// the owner's ElevenLabs recordings have a table of their own after this one, which this script leaves as it is
+const eleven = lf.indexOf('\n### Recorded with ElevenLabs', head);
+let out = lf.slice(0, head) + section + (eleven >= 0 ? lf.slice(eleven) : '');
 if (crlf) out = out.replace(/\n/g, '\r\n');
 fs.writeFileSync(LEDGER, out);
 console.log(`${rows.length} files, ${total} bytes -> ${path.relative(ROOT, TO)}; ledger rewritten`);

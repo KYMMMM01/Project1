@@ -382,7 +382,11 @@ describe('a hit begins with a crack and has a body a phone can play (hitkit.ts)'
       const used = new Set<string>();
       const n = d.recipe.variants ?? 1;
       for (let v = 0; v < n; v++) for (const s of record(d.recipe, v).samples) used.add(s.id);
-      expect([...used].sort(), d.key).toEqual([...(d.recipe.needs ?? [])].sort());
+      // an ElevenLabs recording the owner picked is the whole sound, played alone when it has been read (`recording`): it is not a layer, and the only one a
+      // recipe may ask for is its own
+      const layers = (d.recipe.needs ?? []).filter((id) => !id.startsWith('elevenlabs/'));
+      for (const id of d.recipe.needs ?? []) if (id.startsWith('elevenlabs/')) expect(id, d.key).toBe(`elevenlabs/${d.id}`);
+      expect([...used].sort(), d.key).toEqual([...layers].sort());
       const s = record(d.recipe);
       expect(s.tones.length + s.noises.length, `${d.key} is a whole sound without its files`).toBeGreaterThan(0);
     }
@@ -393,6 +397,8 @@ describe('a hit begins with a crack and has a body a phone can play (hitkit.ts)'
     const ids = new Set<string>();
     for (const id of IMPACTS) for (const f of recipeOf(id).needs ?? []) ids.add(f);
     for (const id of ['hit_heavy', 'crit', 'explosion', 'boss_roar', 'boss_warning'] as const) for (const f of recipeOf(id).needs ?? []) ids.add(f);
+    // (the owner's ElevenLabs recordings are whole sounds with rules of their own: tests/audio-skills.test.ts)
+    for (const id of ids) if (id.startsWith('elevenlabs/')) ids.delete(id);
     expect(ids.size).toBeGreaterThanOrEqual(7);
     for (const id of ids) {
       const file = path.join(__dirname, '..', 'src', 'assets', 'sfx', `${id}.wav`);

@@ -5,7 +5,7 @@
  * mallets, plucked strings, a stamp and paper: a warm tune for a win, a soft sigh for a loss.
  */
 import type { StingerId } from './api';
-import { bell, kalimba, mallet, pluck, puff, shake, stamp, thump, type Recipe } from './recipe';
+import { bell, kalimba, mallet, pluck, puff, recording, shake, stamp, thump, type Recipe } from './recipe';
 import { hz } from './theory';
 
 export const STINGER_RECIPES: Record<StingerId, Recipe> = {
@@ -13,7 +13,10 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
     cat: 'stinger',
     len: 2.0,
     ms: [1100, 1800],
+    needs: ['elevenlabs/victory'],
     build(s) {
+      // The owner's pick (2026-11-09): a warm marimba and glockenspiel jingle, recorded with ElevenLabs.
+      if (recording(s, 'victory')) return;
       // A warm little tune in C major: a marimba climb (G4 C5 E5 G5) lands at 0.5 s on the stamp and a full chord
       // (C5 E5 G5 C6) over a low plucked C and a hand bell, a kalimba tune (E6 D6 C6) rings out above it, and a shake of
       // paper and a puff of confetti finish the picture.
