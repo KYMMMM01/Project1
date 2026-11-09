@@ -285,8 +285,11 @@ describe('feature unlocks', () => {
   const none = { runs: 0, accountLevel: 1, chaptersCleared: 0, butler: false };
   it('opens by progress', () => {
     expect(unlockedFeatures(none)).toEqual([]);
-    expect(unlockedFeatures({ ...none, runs: 1 })).toEqual(['speed2x', 'cats', 'patrol', 'pass']);
-    expect(isFeatureUnlocked('missions', { ...none, runs: 3 })).toBe(true);
+    expect(unlockedFeatures({ ...none, runs: 1 })).toEqual(['speed2x', 'cats', 'patrol', 'missions', 'shop', 'pass']);
+    // Missions and the shop open with the first finished run too (owner's request; they used to wait for 3 runs).
+    expect(isFeatureUnlocked('shop', none)).toBe(false);
+    expect(isFeatureUnlocked('treat', { ...none, runs: 2 })).toBe(false);
+    expect(isFeatureUnlocked('treat', { ...none, runs: 3 })).toBe(true);
     // The season pass opens with the first finished run, whatever the account level (it used to wait for level 4).
     expect(isFeatureUnlocked('pass', none)).toBe(false);
     expect(isFeatureUnlocked('pass', { ...none, runs: 1 })).toBe(true);
@@ -435,7 +438,7 @@ describe('text', () => {
       '1 gold', '1 gem', '1 sweep ticket', `1 ${t('unit.w_paw.name')} card`,
     ]);
     expect(featureHint('cats')).toBe('Unlocks after 1 run.');
-    expect(featureHint('missions')).toBe('Unlocks after 3 runs.');
+    expect(featureHint('treat')).toBe('Unlocks after 3 runs.');
     expect(oddsView(ODDS.silver, { goldOpened: 0, target: null }).guaranteeTexts).toEqual([
       'At least 1 Alley Boss card or better in every chest.',
     ]);
