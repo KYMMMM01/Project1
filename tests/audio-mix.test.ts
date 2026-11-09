@@ -264,7 +264,8 @@ describe('the levels of the families, from a UI click up to a skill\'s signature
 
   it('brings the boss\'s cry and drum roll down 2 to 3 dB from where they were, and gives each a middle that a phone plays', () => {
     expect(recipeOf('boss_roar').trim).toBeLessThanOrEqual(-3);
-    expect(recipeOf('boss_warning').trim).toBeLessThanOrEqual(-5);
+    // (the warning was turned back up 3 dB on 2026-11-09 for its siren: the owner found it too weak; it stays under the big tier's own level)
+    expect(recipeOf('boss_warning').trim).toBeLessThanOrEqual(-2.5);
   });
 });
 

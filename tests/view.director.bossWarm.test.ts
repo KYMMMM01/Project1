@@ -5,7 +5,7 @@ import '@/view/director/strings';
 import { Color } from '@/ui/theme';
 import { WarmQueue } from '@/fx/warm';
 
-const fx = vi.hoisted(() => ({ queue: null as unknown as WarmQueue, drawn: [] as unknown[] }));
+const fx = vi.hoisted(() => ({ queue: null as unknown as WarmQueue, drawn: [] as unknown[], alarm: [] as unknown[][] }));
 vi.mock('pixi.js', async () => ({
   ...(await vi.importActual<typeof import('pixi.js')>('pixi.js')),
   // The red edge is a sprite of the vignette picture; a sprite needs a canvas, which the tests do not have.
@@ -25,6 +25,12 @@ vi.mock('@/fx', async () => {
     fxVignette: () => ({}),
     screenFx: { vignettePulse: () => undefined },
     Trauma: {},
+    // the caution tape and the siren lights (fx/bossAlarm.ts): what the director asks of them
+    bossAlarm: {
+      prepare: (word: string) => void fx.alarm.push(['prepare', word]),
+      play: (word: string, o: { tempo: number; landAt: number; paused: () => boolean }) => void fx.alarm.push(['play', word, o.tempo, +o.landAt.toFixed(2), o.paused()]),
+      destroy: () => void fx.alarm.push(['destroy']),
+    },
   };
 });
 
@@ -62,13 +68,13 @@ function mount(): Rig {
     },
   } as unknown as BannerService;
   const stage = {
-    ctx: { battle: { previewWave: (wave: number) => [{ enemy: wave % 8 === 0 ? 'boss_vacuum' : 'spray', count: 1 }] } },
+    ctx: { speed: 2, paused: false, battle: { previewWave: (wave: number) => [{ enemy: wave % 8 === 0 ? 'boss_vacuum' : 'spray', count: 1 }] } },
     fx: { ps: {}, bossWarning: () => undefined },
     direct: () => undefined,
     buzz: () => undefined,
     onDestroy: () => undefined,
   } as unknown as Stage;
-  mountBoss(stage, on, banners, { setBoss: () => undefined } as unknown as Parameters<typeof mountBoss>[3]);
+  mountBoss(stage, on, banners, { setBoss: () => undefined, setElite: () => undefined } as unknown as Parameters<typeof mountBoss>[3]);
   return rig;
 }
 
@@ -89,6 +95,7 @@ beforeEach(() => {
   fx.queue = new WarmQueue();
   fx.queue.now = () => 0;
   fx.drawn.length = 0;
+  fx.alarm.length = 0;
 });
 
 describe('the warning of an elite or a boss wave, drawn ahead of time', () => {
@@ -102,7 +109,7 @@ describe('the warning of an elite or a boss wave, drawn ahead of time', () => {
   it('draws the boss ribbon, dressed with the boss and its colour, once the wave before it starts', () => {
     const rig = mount();
     rig.emit('waveStart', { wave: 7, kind: 'normal' });
-    expect(fx.queue.pending).toBe(2);
+    expect(fx.queue.pending).toBe(3);
     expect(fx.drawn).toHaveLength(0);
     drain();
     expect(rig.dressed).toHaveLength(1);
@@ -110,9 +117,19 @@ describe('the warning of an elite or a boss wave, drawn ahead of time', () => {
     expect(spec.color).toBe(Color.berry);
     expect(spec.title).toBe(t('director.warning'));
     expect(spec.sub).toContain('Vacuum');
-    // The ribbon and the edge sprite, in the order they were asked.
+    // The ribbon and the edge sprite, in the order they were asked; the boss alarm is built ahead with the same word.
     expect(fx.drawn).toHaveLength(2);
     expect(fx.drawn[0]).toBe(rig.ribbon.current);
+    expect(fx.alarm).toEqual([['prepare', t('director.warning')]]);
+  });
+
+  it('sounds the boss alarm (tape, lights, throb) at the boss wave, at the battle\'s speed, and not for an elite', () => {
+    const rig = mount();
+    rig.emit('waveStart', { wave: 4, kind: 'elite' });
+    expect(fx.alarm).toEqual([]);
+    rig.emit('waveStart', { wave: 8, kind: 'boss' });
+    // at 2x the boss lands 0.5 + 0.14 real seconds after the wave starts
+    expect(fx.alarm).toEqual([['play', t('director.warning'), 2, 0.64, false]]);
   });
 
   it('dresses an elite ribbon in the elite colour', () => {

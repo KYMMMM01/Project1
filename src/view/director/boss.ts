@@ -7,7 +7,7 @@ import { Sprite } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { rand } from '@/core/math';
 import { Ease } from '@/core/tween';
-import { Trauma, WARM_PRIO, fxVignette, renderOnce, screenFx, warm, type FxHandle } from '@/fx';
+import { Trauma, WARM_PRIO, bossAlarm, fxVignette, renderOnce, screenFx, warm, type FxHandle } from '@/fx';
 import { PATH_LENGTH, cellCenterX, cellCenterY, pathPoint, type PathPoint } from '@/game/geometry';
 import type { EnemyState } from '@/game';
 import { BOSS_APPEAR, enemyDef, isWaveTarget, waveKindOf } from '@/game';
@@ -76,6 +76,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
       if (ribbon) renderOnce(ribbon);
     });
     warm.request(`director:${serial}:edge`, WARM_PRIO.coming, 2, drawAlarmEdge);
+    if (kind === 'boss') warm.request(`director:${serial}:alarm`, WARM_PRIO.coming, 4, () => bossAlarm.prepare(t('director.warning')));
   });
 
   on('waveStart', (e) => {
@@ -94,6 +95,8 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
     stage.direct('boss_warning', boss ? 0.9 : 0.55);
     if (boss) {
       fx.bossWarning();
+      // the caution tape across the screen, the siren lights and the red throb (the owner, 2026-11-09: the warning was too quiet)
+      bossAlarm.play(t('director.warning'), { tempo: ctx.speed, landAt: BOSS_APPEAR / Math.max(1, ctx.speed) + BOSS_DROP, paused: () => ctx.paused });
       music.setBoss(true);
     } else {
       screenFx.vignettePulse(RED, 0.2, 500, 1);
@@ -278,6 +281,7 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
   stage.onDestroy(() => {
     for (const h of handles) h.stop();
     handles.length = 0;
+    bossAlarm.destroy();
   });
 
 }

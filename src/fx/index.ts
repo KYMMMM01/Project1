@@ -20,6 +20,7 @@ export * from './light';
 export * from './paint';
 export * from './warm';
 export * from './cutin';
+export * from './bossAlarm';
 export * from './numbers';
 export * from './flyTo';
 export * from './juice';

@@ -269,15 +269,29 @@ export const COMBAT_RECIPES = {
   },
   boss_warning: {
     cat: 'big',
-    trim: -5.5,
+    // (3 dB over the -5.5 the 2026-10 audit had set for the roll alone: the owner found the siren "좀 약하다", and the siren now carries it)
+    trim: -2.5,
     len: 1.55,
     ms: [800, 1450],
-    // the fight gives way to the roll of the drum for a moment (hush.ts)
-    duck: { depth: 0.3, seconds: 1 },
-    hush: { db: 2.5, seconds: 0.9 },
+    // the fight and the music give way to the siren for a moment (hush.ts; the owner: "소리가 좀 약하다")
+    duck: { depth: 0.45, seconds: 1.2 },
+    hush: { db: 3.5, seconds: 1 },
     build(s) {
-      // A low mallet roll, no siren: nine felt-mallet hits on a big box that speed up and swell, then one deep hit.
+      // A low mallet roll: nine felt-mallet hits on a big box that speed up and swell, then one deep hit.
       // A wooden knock rides on every hit and saturation puts harmonics above the 150 Hz fundamental, so a phone speaker can still play the roll.
+      // Over it, in front of it, a siren that rises and falls twice, 560 Hz up to 1040 and back (the owner, 2026-11-09: the warning was too quiet; of
+      // four sounds he picked this one, then "소리가 좀 약하다"): a triangle voice with a driven triangle an octave under it (no square: the game's sounds are wood, felt, paper and strings), so that it carries over the
+      // fight and a phone speaker; it goes with the beacon and the caution tape of fx/bossAlarm.ts.
+      const voice = { d: 0.04, s: 0.95, vib: { rate: 6, cents: 10 } };
+      for (let k = 0; k < 4; k++) {
+        const up = k % 2 === 0;
+        const at = k * 0.3;
+        const f = up ? 560 : 1040;
+        const f2 = up ? 1040 : 560;
+        const edge = { a: k === 0 ? 0.03 : 0.005, r: k === 3 ? 0.1 : 0.005 };
+        s.tone({ ...voice, ...edge, w: 'triangle', f, f2, sw: 0.29, at, dur: 0.3, v: 0.62, filter: { t: 'lowpass', f: 3400 } });
+        s.tone({ ...voice, ...edge, w: 'triangle', f: f / 2, f2: f2 / 2, sw: 0.29, at, dur: 0.3, v: 0.26, sat: 0.6, filter: { t: 'lowpass', f: 2200 } });
+      }
       let t = 0;
       for (let k = 0; k < 9; k++) {
         thump(s, 150, 105, t, 0.14, 0.25 + k * 0.05, 0.06, 0.4);
