@@ -28,7 +28,7 @@ vi.mock('@/fx', async () => {
     // the caution tape and the siren lights (fx/bossAlarm.ts): what the director asks of them
     bossAlarm: {
       prepare: (word: string) => void fx.alarm.push(['prepare', word]),
-      play: (word: string, o: { tempo: number; landAt: number; paused: () => boolean }) => void fx.alarm.push(['play', word, o.tempo, +o.landAt.toFixed(2), o.paused()]),
+      play: (word: string, o: { tempo: number; landAt: number; paused: () => boolean; lampX: number; lampY: number }) => void fx.alarm.push(['play', word, o.tempo, +o.landAt.toFixed(2), o.paused(), o.lampX, o.lampY]),
       destroy: () => void fx.alarm.push(['destroy']),
     },
   };
@@ -68,7 +68,7 @@ function mount(): Rig {
     },
   } as unknown as BannerService;
   const stage = {
-    ctx: { speed: 2, paused: false, battle: { previewWave: (wave: number) => [{ enemy: wave % 8 === 0 ? 'boss_vacuum' : 'spray', count: 1 }] } },
+    ctx: { speed: 2, paused: false, layout: { fieldX: 0, fieldY: 300 }, battle: { previewWave: (wave: number) => [{ enemy: wave % 8 === 0 ? 'boss_vacuum' : 'spray', count: 1 }] } },
     fx: { ps: {}, bossWarning: () => undefined },
     direct: () => undefined,
     buzz: () => undefined,
@@ -129,7 +129,7 @@ describe('the warning of an elite or a boss wave, drawn ahead of time', () => {
     expect(fx.alarm).toEqual([]);
     rig.emit('waveStart', { wave: 8, kind: 'boss' });
     // at 2x the boss lands 0.5 + 0.14 real seconds after the wave starts
-    expect(fx.alarm).toEqual([['play', t('director.warning'), 2, 0.64, false]]);
+    expect(fx.alarm).toEqual([['play', t('director.warning'), 2, 0.64, false, 360, 434]]);
   });
 
   it('dresses an elite ribbon in the elite colour', () => {

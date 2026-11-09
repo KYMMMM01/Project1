@@ -8,7 +8,7 @@ import { t } from '@/core/i18n';
 import { rand } from '@/core/math';
 import { Ease } from '@/core/tween';
 import { Trauma, WARM_PRIO, bossAlarm, fxVignette, renderOnce, screenFx, warm, type FxHandle } from '@/fx';
-import { PATH_LENGTH, cellCenterX, cellCenterY, pathPoint, type PathPoint } from '@/game/geometry';
+import { BOARD_Y, FIELD_W, PATH_LENGTH, cellCenterX, cellCenterY, pathPoint, type PathPoint } from '@/game/geometry';
 import type { EnemyState } from '@/game';
 import { BOSS_APPEAR, enemyDef, isWaveTarget, waveKindOf } from '@/game';
 import type { BannerService, BannerSpec } from './banners';
@@ -96,7 +96,10 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
     if (boss) {
       fx.bossWarning();
       // the caution tape across the screen, the siren lights and the red throb (the owner, 2026-11-09: the warning was too quiet)
-      bossAlarm.play(t('director.warning'), { tempo: ctx.speed, landAt: BOSS_APPEAR / Math.max(1, ctx.speed) + BOSS_DROP, paused: () => ctx.paused });
+      // the beacon stands inside the board's top middle cell (its dome 44 px under the board's top edge), in screen space
+      const lampX = ctx.layout.fieldX + FIELD_W / 2;
+      const lampY = ctx.layout.fieldY + BOARD_Y + 44;
+      bossAlarm.play(t('director.warning'), { tempo: ctx.speed, landAt: BOSS_APPEAR / Math.max(1, ctx.speed) + BOSS_DROP, paused: () => ctx.paused, lampX, lampY });
       music.setBoss(true);
     } else {
       screenFx.vignettePulse(RED, 0.2, 500, 1);

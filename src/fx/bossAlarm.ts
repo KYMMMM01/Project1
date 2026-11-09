@@ -37,6 +37,10 @@ export interface AlarmOpts {
   landAt: number;
   /** True while the battle is held (pause menu, popup): the alarm holds too. */
   paused: () => boolean;
+  /** Where the beacon stands, in screen space (the director puts it inside the board's top middle cell: on some screens the ribbon touches
+   * the board, so the lamp cannot stand between them without covering the ribbon's words). */
+  lampX: number;
+  lampY: number;
 }
 const TAPE_H = 58;
 const STRIPE = 28;
@@ -49,9 +53,7 @@ const STRIPS = [
 ] as const;
 /** Scroll of the words along the tape while it holds (px per second). */
 const DRIFT = 90;
-/** The beacon: where it stands (share of the height: between the ribbon and the board's top row, over the middle of the lane's first run),
- * how fast it turns (radians per second), how wide its cones open at the far end and how far they reach (shares of the screen). */
-const LAMP_Y = 0.205;
+/** The beacon: how fast it turns (radians per second), how wide its cones open at the far end and how far they reach (shares of the screen). */
 const SPIN = 3.6;
 const CONE_W = 0.62;
 const CONE_L = 1.05;
@@ -133,7 +135,7 @@ class Alarm {
   private halo: Sprite | null = null;
   private off: (() => void) | null = null;
   private t = 0;
-  private o: AlarmOpts = { tempo: 1, landAt: Infinity, paused: () => false };
+  private o: AlarmOpts = { tempo: 1, landAt: Infinity, paused: () => false, lampX: 0, lampY: 0 };
   private screen: ScreenFx = screenFx;
   private beatsShaken = 0;
   /** The battle was held at the last step (the layer is hidden and the throb stopped for it). */
@@ -167,7 +169,6 @@ class Alarm {
     // highlight on a dark base) drawn over its own light
     const { cone, glow } = textures();
     const lamp = new Container();
-    lamp.position.set(w / 2, h * LAMP_Y);
     for (let k = 0; k < 2; k++) {
       const b = new Sprite(cone);
       b.anchor.set(0.5, 1);
@@ -228,6 +229,7 @@ class Alarm {
     this.screen = screen;
     this.beatsShaken = 0;
     this.held = false;
+    this.lamp?.position.set(o.lampX, o.lampY);
     const overlay = game.overlayLayer;
     if (this.layer.parent !== overlay) overlay.addChildAt(this.layer, Math.max(0, overlay.getChildIndex(screen.layer)));
     this.layer.visible = true;
