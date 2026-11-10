@@ -264,7 +264,8 @@ export const IMPACT_RECIPES = {
   }),
   imp_m_frost: impact({
     rank: 3,
-    db: -0.1,
+    // -0.1 to -2.1 dB: the owner heard the ice queen over the other cats (2026-11-11); a bright ring of ice (centroid 3.6 kHz).
+    db: -2.1,
     len: 0.28,
     ms: [80, 280],
     lp: 7500,

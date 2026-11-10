@@ -1,9 +1,9 @@
 /**
- * Runtime bridges for the two platforms whose SDKs are npm packages that are NOT dependencies of this
- * repo: Apps in Toss (@apps-in-toss/web-framework) and Capacitor (@capacitor-community/admob,
- * @capacitor/preferences, @capacitor/app, RevenueCat). The adapters are written against the small
- * typed interfaces below, looked up at runtime, so the repo compiles without the packages and the
- * adapters degrade to "unavailable" while a bridge is missing. See README.md for the 5-line wiring.
+ * Runtime bridges for the two platforms whose SDKs are npm packages: Apps in Toss (@apps-in-toss/web-framework, NOT a dependency
+ * of this repo; see README.md for its wiring) and Capacitor (@capacitor-community/admob, @capacitor/preferences, @capacitor/app,
+ * RevenueCat; dependencies since 2026-11-11, imported by the Capacitor adapter in the store build only). The adapters are written
+ * against the small typed interfaces below, so the tests can hand in their own objects and an adapter degrades to "unavailable"
+ * while a bridge is missing.
  *
  * This file is tiny and shared by every build; it holds types and two registration slots only.
  */
@@ -95,8 +95,17 @@ export interface CapListenerHandle {
   remove(): Promise<void> | void;
 }
 
+/** What the consent (UMP) calls answer; `status` is 'REQUIRED' | 'NOT_REQUIRED' | 'OBTAINED' | 'UNKNOWN'. */
+export interface CapConsentInfo {
+  status: string;
+  isConsentFormAvailable?: boolean;
+  canRequestAds: boolean;
+}
+
 export interface CapAdMob {
   initialize(options?: { initializeForTesting?: boolean; testingDevices?: string[] }): Promise<void>;
+  requestConsentInfo?(): Promise<CapConsentInfo>;
+  showConsentForm?(): Promise<CapConsentInfo>;
   prepareRewardVideoAd(options: { adId: string; isTesting?: boolean }): Promise<unknown>;
   showRewardVideoAd(options?: { adId?: string }): Promise<{ type?: string; amount?: number } | undefined>;
   prepareInterstitial(options: { adId: string; isTesting?: boolean }): Promise<unknown>;
@@ -117,23 +126,29 @@ export interface CapApp {
   ): Promise<CapListenerHandle> | CapListenerHandle;
 }
 
-/** Shape assumed for RevenueCat's CustomerInfo: only `nonSubscriptionTransactions` is used (UNVERIFIED item fields). */
+/** RevenueCat's CustomerInfo: only `nonSubscriptionTransactions` is used (14.x: transactionIdentifier, productIdentifier). */
 export interface CapCustomerInfo {
   nonSubscriptionTransactions?: Array<{
     transactionIdentifier?: string;
     transactionId?: string;
     productIdentifier?: string;
     productId?: string;
+    /** ISO 8601. */
+    purchaseDate?: string;
   }>;
 }
 
 /** `restorePurchases()` returns the CustomerInfo; some plugin versions wrap it in `{ customerInfo }`. */
 export type CapRestoreResult = CapCustomerInfo | { customerInfo: CapCustomerInfo };
 
-/** RevenueCat (@revenuecat/purchases-capacitor). Surface NOT verified against the docs, see README. */
+/** RevenueCat (@revenuecat/purchases-capacitor 14), the slice the adapter uses (checked against its type definitions). */
 export interface CapPurchases {
+  configure?(options: { apiKey: string }): Promise<void>;
   restorePurchases(): Promise<CapRestoreResult>;
-  getProducts(options: { productIdentifiers: string[] }): Promise<{
+  /** The cached customer info (no store restore). */
+  getCustomerInfo?(): Promise<CapRestoreResult>;
+  /** `type`: 'SUBSCRIPTION' (the default on Android) or 'NON_SUBSCRIPTION'. */
+  getProducts(options: { productIdentifiers: string[]; type?: string }): Promise<{
     products: Array<{ identifier: string; priceString?: string }>;
   }>;
   purchaseStoreProduct(options: { product: unknown }): Promise<{

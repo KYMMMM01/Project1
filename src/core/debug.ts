@@ -3,7 +3,8 @@ import { scenes } from './scene';
 
 /**
  * QA hooks on window.__dbg — enabled in dev builds, with ?debug=1 and on the developer lab (?scene=lab). Automated browser checks use
- * these to convert design coordinates to client pixels and to read captured errors.
+ * these to convert design coordinates to client pixels and to read captured errors. A store build (VITE_PLATFORM=capacitor) has none of
+ * them, nor the cheats and QA routes behind them, unless it is an internal test build made with VITE_DEBUG=on.
  */
 export interface DebugApi {
   game: typeof game;
@@ -21,6 +22,7 @@ declare global {
 }
 
 export function debugEnabled(): boolean {
+  if (import.meta.env.VITE_PLATFORM === 'capacitor' && import.meta.env.VITE_DEBUG !== 'on') return false;
   const params = new URLSearchParams(location.search);
   return import.meta.env.DEV || params.has('debug') || params.get('scene') === 'lab';
 }

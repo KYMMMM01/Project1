@@ -119,6 +119,8 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
       width: w,
       height: TAB_H,
       selected: section,
+      // The guide's section bar is a big tab, like the home bar and the codex's sections (the owner, 2026-11-11).
+      sound: 'ui_tab_big',
       tabs: SECTIONS.map((id) => ({ id, label: t(`guide.section.${id}`) })),
     });
     tabs.onSelect((id) => {

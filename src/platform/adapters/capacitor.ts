@@ -1,27 +1,26 @@
 /**
- * Capacitor (Android / iOS store build) adapter. The plugins are npm packages that are NOT installed
- * here: the adapter looks them up at runtime in `window.Capacitor.Plugins` (or the objects given to
- * registerCapacitorPlugins()) and degrades to "unavailable" when a plugin is missing.
- * Docs relied on (fetched 2026-10-06):
- *   https://github.com/capacitor-community/admob   AdMob.initialize, prepareRewardVideoAd/showRewardVideoAd
- *        (-> AdMobRewardItem {type, amount}), addListener, AdOptions {adId, isTesting}
- *   RewardAdPluginEvents (raw file src/reward/reward-ad-plugin-events.enum.ts): Loaded 'onRewardedVideoAdLoaded',
- *        FailedToLoad ..'FailedToLoad', FailedToShow ..'FailedToShow', Dismissed ..'Dismissed', Rewarded 'onRewardedVideoAdReward'
- *   https://capacitorjs.com/docs/apis/preferences  Preferences.get/set/remove({key, value})
- *   https://capacitorjs.com/docs/apis/app          App.addListener('appStateChange', ({isActive}) => ...)
- *   https://www.revenuecat.com/docs/getting-started/restoring-purchases   `const customerInfo = await Purchases.restorePurchases()`
- *   https://www.revenuecat.com/docs/customers/customer-info   CustomerInfo has `nonSubscriptionTransactions`
- * NOT confirmed (see README / final report): the item fields of nonSubscriptionTransactions, whether it lists
- * consumables and non-consumables, whether refunds leave it, RevenueCat's getProducts / purchaseStoreProduct /
- * transaction.transactionIdentifier / userCancelled, and that `Capacitor.Plugins.<Name>` exposes plugins the
- * app code never imported.
+ * Capacitor (Android / iOS store build) adapter. The store build (VITE_PLATFORM=capacitor) imports the plugin packages itself
+ * (`loadPlugins`) and hands them to registerCapacitorPlugins(); every other build and the tests never reach that import and pass
+ * their own objects (or `window.Capacitor.Plugins`). A missing plugin degrades to "unavailable".
+ * Checked against the installed type definitions (2026-11-11: @capacitor-community/admob 8.3, @revenuecat/purchases-capacitor 14.1,
+ * @capacitor/app 8.1, @capacitor/preferences 8.0):
+ *   AdMob.initialize({initializeForTesting}), prepareRewardVideoAd({adId, isTesting}), showRewardVideoAd() -> AdMobRewardItem
+ *   {type, amount}; RewardAdPluginEvents Loaded 'onRewardedVideoAdLoaded', FailedToLoad, FailedToShow, Dismissed, Rewarded
+ *   'onRewardedVideoAdReward'; consent: requestConsentInfo() / showConsentForm() -> {status, isConsentFormAvailable, canRequestAds}.
+ *   Purchases.configure({apiKey}); getProducts({productIdentifiers, type}) where type defaults to SUBSCRIPTION on Android, so the
+ *   one-time products are asked for as NON_SUBSCRIPTION; purchaseStoreProduct({product}) -> {transaction: {transactionIdentifier}};
+ *   restorePurchases() -> {customerInfo: {nonSubscriptionTransactions: [{transactionIdentifier, productIdentifier}]}}; a cancelled
+ *   purchase rejects with code '1' (PURCHASE_CANCELLED_ERROR) and userCancelled true.
+ * Still to check on a device: whether refunds leave nonSubscriptionTransactions (they do not reach the revoke handler here).
  * Interstitials are portal-only (GDD 8.1), so the AdMob interstitial calls are never used here.
- * Ad unit id: VITE_ADMOB_REWARDED_ID; VITE_ADMOB_TESTING=1 or a dev build uses AdMob test mode.
- * EEA consent (UMP) is NOT handled here.
+ * Ad unit id: VITE_ADMOB_REWARDED_ID; VITE_ADMOB_TESTING=1 or a dev build uses AdMob test mode. RevenueCat: VITE_REVENUECAT_API_KEY
+ * (the public Google SDK key, goog_...). Without it purchases are unavailable.
+ * The ad SDK starts after init() has returned (consent first, where the UMP SDK asks for it), so it is not on the first screen's path.
  */
 import {
   getCapacitorAdMobEvents,
   getCapacitorPlugins,
+  registerCapacitorPlugins,
   type CapAdMobEvents,
   type CapCustomerInfo,
   type CapListenerHandle,
@@ -29,7 +28,7 @@ import {
   type CapacitorPlugins,
 } from '../bridges';
 import { createLocalStorageBackend, safeStorage } from '../storage';
-import type { AdResult, IapOutcome, OrderRecord, PlatformAdapter, PlatformIap } from '../types';
+import type { AdResult, IapOutcome, OrderRecord, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
 import { errorMessage, safe, Signal } from '../util';
 
 const DEFAULT_EVENTS: CapAdMobEvents = {
@@ -43,6 +42,15 @@ const DEFAULT_EVENTS: CapAdMobEvents = {
 /** A load that neither succeeded nor failed within this long is abandoned and retried. */
 const LOAD_TIMEOUT_MS = 20_000;
 const RETRY_MS = 30_000;
+/** RevenueCat's PRODUCT_CATEGORY.NON_SUBSCRIPTION and PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR. */
+const ONE_TIME = 'NON_SUBSCRIPTION';
+const CANCELLED = '1';
+/** Purchases this device started and has not yet seen granted (see `pendingOrders`): productId -> start time in ms. */
+const INTENTS_KEY = 'iap.intents';
+/** A transaction this long before the attempt's start is an older purchase of the same product, not this one (clock skew margin). */
+const INTENT_SKEW_MS = 5 * 60_000;
+/** An attempt with no transaction after this long is dropped (Google Play keeps a pending payment open for a few days at most). */
+const INTENT_MAX_AGE_MS = 14 * 24 * 3600_000;
 
 const events = (): CapAdMobEvents => ({ ...DEFAULT_EVENTS, ...getCapacitorAdMobEvents() });
 const plugins = (): CapacitorPlugins | null => getCapacitorPlugins();
@@ -53,6 +61,24 @@ function adUnitId(): string | undefined {
 }
 
 const testing = (): boolean => import.meta.env.VITE_ADMOB_TESTING === '1' || import.meta.env.DEV === true;
+
+function revenueCatKey(): string | undefined {
+  const v: unknown = import.meta.env.VITE_REVENUECAT_API_KEY;
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+/** The store build brings in the plugin packages itself; the literal comparison drops the imports from every other build. */
+async function loadPlugins(): Promise<void> {
+  if (import.meta.env.VITE_PLATFORM !== 'capacitor') return;
+  const [{ AdMob }, { Preferences }, { App }, { Purchases }] = await Promise.all([
+    import('@capacitor-community/admob'),
+    import('@capacitor/preferences'),
+    import('@capacitor/app'),
+    import('@revenuecat/purchases-capacitor'),
+  ]);
+  // The packages' own types are wider than the slices in bridges.ts (overloaded addListener, enums for strings).
+  registerCapacitorPlugins({ AdMob, Preferences, App, Purchases } as unknown as CapacitorPlugins);
+}
 
 async function listen(
   event: string,
@@ -81,7 +107,25 @@ export function createAdapter(): PlatformAdapter {
   const pauseSignal = new Signal();
   const resumeSignal = new Signal();
 
-  const enabled = (): boolean => plugins()?.AdMob !== undefined && adUnitId() !== undefined;
+  // sdkReady: the SDK has started and its listeners are on. adsAllowed: the consent SDK has answered that an ad may be requested
+  // (true at once where there is no consent API); it stays false while consent is unknown, so no ad goes out before it.
+  let sdkReady = false;
+  let adsAllowed = false;
+  let consentTimer: ReturnType<typeof setTimeout> | undefined;
+  const enabled = (): boolean => adsAllowed && plugins()?.AdMob !== undefined && adUnitId() !== undefined;
+
+  // RevenueCat is configured once, on the first purchase call; a failed configure leaves purchases unavailable.
+  let configured: Promise<boolean> | undefined;
+  const purchases = async (): Promise<NonNullable<CapacitorPlugins['Purchases']> | null> => {
+    const P = plugins()?.Purchases;
+    const apiKey = revenueCatKey();
+    if (!P || !apiKey) return null;
+    configured ??= Promise.resolve(P.configure?.({ apiKey })).then(
+      () => true,
+      () => false,
+    );
+    return (await configured) ? P : null;
+  };
 
   const retryLater = (): void => {
     slot = 'idle';
@@ -93,12 +137,34 @@ export function createAdapter(): PlatformAdapter {
   function preload(): void {
     const AdMob = plugins()?.AdMob;
     const adId = adUnitId();
-    if (!AdMob || !adId || slot !== 'idle') return;
+    if (!AdMob || !adId || !sdkReady || !adsAllowed || slot !== 'idle') return;
     clearTimeout(retryTimer);
     slot = 'loading';
     // The Loaded / FailedToLoad listeners settle the slot; a rejected prepare call or silence also means "no ad".
     loadTimer = setTimeout(retryLater, LOAD_TIMEOUT_MS);
     Promise.resolve(AdMob.prepareRewardVideoAd({ adId, isTesting: testing() })).catch(retryLater);
+  }
+
+  /** Consent first (UMP: a form only where the law asks for one), then the first preload. A failure (offline start) asks again later. */
+  async function askConsent(): Promise<void> {
+    const AdMob = plugins()?.AdMob;
+    if (!AdMob) return;
+    clearTimeout(consentTimer);
+    try {
+      if (AdMob.requestConsentInfo) {
+        let consent = await AdMob.requestConsentInfo();
+        if (consent.status === 'REQUIRED' && consent.isConsentFormAvailable && AdMob.showConsentForm) {
+          consent = await AdMob.showConsentForm();
+        }
+        adsAllowed = consent.canRequestAds;
+      } else {
+        adsAllowed = true;
+      }
+      preload();
+    } catch {
+      adsAllowed = false;
+      consentTimer = setTimeout(() => void askConsent(), RETRY_MS);
+    }
   }
 
   const show = async (): Promise<AdResult> => {
@@ -153,36 +219,85 @@ export function createAdapter(): PlatformAdapter {
     { maxBytes: 4_000_000, label: 'capacitor.Preferences' },
   );
 
+  // A purchase is written down before the store sheet opens and crossed out once granted, so a payment the app never saw finish
+  // (the app died in between, or Play kept it pending and completed it later) is granted by the next sync as a pending order;
+  // without this record it would only come back through restore, where a consumable is recorded but not given (meta/profile.ts).
+  const pendingProduct = new Map<string, string>();
+  async function readIntents(): Promise<Record<string, number>> {
+    try {
+      const v: unknown = JSON.parse((await storage.get(INTENTS_KEY)) ?? '{}');
+      const out: Record<string, number> = {};
+      if (v && typeof v === 'object') {
+        for (const [id, at] of Object.entries(v)) if (typeof at === 'number' && Date.now() - at < INTENT_MAX_AGE_MS) out[id] = at;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+  async function writeIntent(productId: string, at: number | null): Promise<void> {
+    const intents = await readIntents();
+    if (at === null) delete intents[productId];
+    else intents[productId] = at;
+    await storage.set(INTENTS_KEY, JSON.stringify(intents)).catch(() => undefined);
+  }
+
   const iap: PlatformIap = {
-    isAvailable: () => plugins()?.Purchases !== undefined,
+    isAvailable: () => plugins()?.Purchases !== undefined && revenueCatKey() !== undefined,
     async products(ids) {
-      const P = plugins()?.Purchases;
+      const P = await purchases();
       if (!P) return [];
-      const { products } = await P.getProducts({ productIdentifiers: [...ids] });
+      const { products } = await P.getProducts({ productIdentifiers: [...ids], type: ONE_TIME });
       return products
         .filter((p) => typeof p.priceString === 'string' && p.priceString !== '')
         .map((p) => ({ id: p.identifier, priceText: p.priceString as string }));
     },
     async purchase(productId, onPaid): Promise<IapOutcome> {
-      const P = plugins()?.Purchases;
+      const P = await purchases();
       if (!P) return 'unavailable';
       try {
-        const { products } = await P.getProducts({ productIdentifiers: [productId] });
+        const { products } = await P.getProducts({ productIdentifiers: [productId], type: ONE_TIME });
         const product = products.find((p) => p.identifier === productId);
         if (!product) return 'failed';
+        await writeIntent(productId, Date.now());
         const res = await P.purchaseStoreProduct({ product });
         // The store transaction id is the order id. (Fallback id is NOT idempotent across restarts.)
         const orderId = res.transaction?.transactionIdentifier ?? `${productId}:${Date.now()}`;
-        return (await onPaid(orderId)) ? 'purchased' : 'failed';
+        const granted = await onPaid(orderId);
+        // A grant that failed keeps the record: the next sync finds the transaction and grants it.
+        if (granted) await writeIntent(productId, null);
+        return granted ? 'purchased' : 'failed';
       } catch (e) {
-        const cancelled = (e as { userCancelled?: unknown } | null)?.userCancelled === true;
-        return cancelled || /cancel/i.test(errorMessage(e)) ? 'cancelled' : 'failed';
+        const err = e as { userCancelled?: unknown; code?: unknown } | null;
+        const cancelled = err?.userCancelled === true || err?.code === CANCELLED || /cancel/i.test(errorMessage(e));
+        // Any other failure (a payment Play keeps pending is code '20') keeps the record: money may still change hands.
+        if (cancelled) await writeIntent(productId, null);
+        return cancelled ? 'cancelled' : 'failed';
       }
     },
-    // The store plugin finishes transactions itself and has no "pending orders" list.
-    pendingOrders: async () => [],
+    // RevenueCat finishes Play transactions itself; the pending orders are the transactions of purchases this device started and
+    // has not granted (the record above). With no record there is nothing to ask the store.
+    async pendingOrders() {
+      const intents = await readIntents();
+      if (Object.keys(intents).length === 0) return [];
+      const P = await purchases();
+      if (!P) return [];
+      const info = customerInfo(await (P.getCustomerInfo ? P.getCustomerInfo() : P.restorePurchases()));
+      const out: PendingOrder[] = [];
+      for (const t of info.nonSubscriptionTransactions ?? []) {
+        const orderId = t.transactionIdentifier ?? t.transactionId;
+        const productId = t.productIdentifier ?? t.productId;
+        const since = productId === undefined ? undefined : intents[productId];
+        if (!orderId || !productId || since === undefined) continue;
+        const at = Date.parse(t.purchaseDate ?? '');
+        if (Number.isFinite(at) && at < since - INTENT_SKEW_MS) continue;
+        pendingProduct.set(orderId, productId);
+        out.push({ orderId, productId });
+      }
+      return out;
+    },
     async completedOrders(): Promise<OrderRecord[]> {
-      const P = plugins()?.Purchases;
+      const P = await purchases();
       if (!P) return [];
       const info = customerInfo(await P.restorePurchases());
       const out: OrderRecord[] = [];
@@ -193,7 +308,12 @@ export function createAdapter(): PlatformAdapter {
       }
       return out;
     },
-    complete: async () => undefined,
+    async complete(orderId) {
+      const productId = pendingProduct.get(orderId);
+      if (productId === undefined) return;
+      pendingProduct.delete(orderId);
+      await writeIntent(productId, null);
+    },
   };
 
   return {
@@ -211,10 +331,13 @@ export function createAdapter(): PlatformAdapter {
       managesAdFrequency: false,
     },
     async init() {
+      await loadPlugins().catch(() => undefined);
       const p = plugins();
-      if (p?.AdMob) {
-        try {
-          await p.AdMob.initialize({ initializeForTesting: testing() });
+      const AdMob = p?.AdMob;
+      if (AdMob) {
+        // Not awaited: the SDK (and a consent form, where one is required) starts behind the first screen.
+        void (async () => {
+          await AdMob.initialize({ initializeForTesting: testing() });
           const ev = events();
           await listen(
             ev.rewardLoaded,
@@ -225,10 +348,11 @@ export function createAdapter(): PlatformAdapter {
             permanent,
           );
           await listen(ev.rewardFailedToLoad, retryLater, permanent);
-          preload();
-        } catch {
-          /* AdMob failed to initialise: ads stay unavailable, the game still starts */
-        }
+          sdkReady = true;
+          await askConsent();
+        })().catch(() => {
+          /* AdMob failed to start: ads stay unavailable, the game is not affected */
+        });
       }
       const App = p?.App;
       if (App) {

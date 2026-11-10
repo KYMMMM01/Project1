@@ -883,9 +883,11 @@ describe('Capacitor (plugins)', () => {
   });
 
   it('purchase maps the store transaction to the order id; cancel and failure are distinguished', async () => {
+    vi.stubEnv('VITE_REVENUECAT_API_KEY', 'goog_test');
     const { a, t } = await ready();
     const purchases = {
-      getProducts: vi.fn(async (o: { productIdentifiers: string[] }) => ({
+      configure: vi.fn(async () => undefined),
+      getProducts: vi.fn(async (o: { productIdentifiers: string[]; type?: string }) => ({
         products: o.productIdentifiers.map((id) => ({ identifier: id, priceString: '₩1,500' })),
       })),
       purchaseStoreProduct: vi.fn(async () => ({ transaction: { transactionIdentifier: 'tx-1' } })),
@@ -906,12 +908,23 @@ describe('Capacitor (plugins)', () => {
       }),
     ).toBe('purchased');
     expect(ids).toEqual(['tx-1']);
+    // RevenueCat is configured once with the key, and the one-time products are asked for as NON_SUBSCRIPTION (Android's default is SUBSCRIPTION)
+    expect(purchases.configure).toHaveBeenCalledTimes(1);
+    expect(purchases.configure).toHaveBeenCalledWith({ apiKey: 'goog_test' });
+    expect(purchases.getProducts).toHaveBeenCalledWith({ productIdentifiers: ['gems_80'], type: 'NON_SUBSCRIPTION' });
     purchases.purchaseStoreProduct.mockRejectedValueOnce({ userCancelled: true });
+    expect(await a.iap!.purchase('gems_80', async () => true)).toBe('cancelled');
+    purchases.purchaseStoreProduct.mockRejectedValueOnce({ code: '1', userCancelled: null, message: 'Purchase was cancelled.' });
     expect(await a.iap!.purchase('gems_80', async () => true)).toBe('cancelled');
     purchases.purchaseStoreProduct.mockRejectedValueOnce(new Error('billing unavailable'));
     expect(await a.iap!.purchase('gems_80', async () => true)).toBe('failed');
     expect(await a.iap!.products!(['gems_80'])).toEqual([{ id: 'gems_80', priceText: '₩1,500' }]);
+    // that failure kept the purchase record, so the store's gems_80 transaction is offered as a pending order until completed
+    expect(await a.iap!.pendingOrders()).toEqual([{ orderId: 'tx-1', productId: 'gems_80' }]);
+    await a.iap!.complete('tx-1');
+    purchases.restorePurchases.mockClear();
     expect(await a.iap!.pendingOrders()).toEqual([]);
+    expect(purchases.restorePurchases).not.toHaveBeenCalled(); // no record: the store is not asked
     // restore: the CustomerInfo's non-subscription transactions are the completed orders (refunds are not visible)
     expect(await a.iap!.completedOrders!()).toEqual([
       { orderId: 'tx-1', productId: 'gems_80', status: 'completed' },
@@ -921,6 +934,141 @@ describe('Capacitor (plugins)', () => {
       customerInfo: { nonSubscriptionTransactions: [{ transactionIdentifier: 'tx-9', productIdentifier: 'starter_pack' }] },
     } as never);
     expect(await a.iap!.completedOrders!()).toEqual([{ orderId: 'tx-9', productId: 'starter_pack', status: 'completed' }]);
+  });
+
+  it('a payment the app never saw finish is granted by the next sync as a pending order, once, and only for this attempt', async () => {
+    vi.stubEnv('VITE_REVENUECAT_API_KEY', 'goog_test');
+    vi.setSystemTime(new Date('2026-11-11T10:00:00Z'));
+    const tx: Array<{ transactionIdentifier: string; productIdentifier: string; purchaseDate: string }> = [
+      { transactionIdentifier: 'old-1', productIdentifier: 'gems_680', purchaseDate: '2026-11-01T09:00:00Z' },
+    ];
+    const purchases = {
+      configure: vi.fn(async () => undefined),
+      getProducts: vi.fn(async (o: { productIdentifiers: string[] }) => ({
+        products: o.productIdentifiers.map((id) => ({ identifier: id, priceString: '₩9,900' })),
+      })),
+      // Play keeps the payment pending: RevenueCat rejects with PAYMENT_PENDING_ERROR ('20')
+      purchaseStoreProduct: vi.fn(async () => {
+        throw { code: '20', userCancelled: false, message: 'The payment is pending.' };
+      }),
+      getCustomerInfo: vi.fn(async () => ({ customerInfo: { nonSubscriptionTransactions: tx } })),
+      restorePurchases: vi.fn(async () => ({ customerInfo: { nonSubscriptionTransactions: tx } })),
+    };
+    const { a, t } = await ready((x) => (x.p.Purchases = purchases));
+    expect(await a.iap!.purchase('gems_680', async () => true)).toBe('failed');
+    // not completed yet: the old purchase of the same product is not this attempt
+    expect(await a.iap!.pendingOrders()).toEqual([]);
+    expect(purchases.getCustomerInfo).toHaveBeenCalledTimes(1);
+    expect(purchases.restorePurchases).not.toHaveBeenCalled();
+    // the payment clears later (or the app had died after paying): the next sync sees the new transaction
+    tx.push({ transactionIdentifier: 'new-1', productIdentifier: 'gems_680', purchaseDate: '2026-11-11T10:03:00Z' });
+    expect(await a.iap!.pendingOrders()).toEqual([{ orderId: 'new-1', productId: 'gems_680' }]);
+    await a.iap!.complete('new-1');
+    expect(await a.iap!.pendingOrders()).toEqual([]);
+    // a new adapter (next boot) reads the same storage: the record is gone
+    const b = createCap();
+    await b.init();
+    expect(await b.iap!.pendingOrders()).toEqual([]);
+    expect(t.p.Preferences).toBeDefined();
+  });
+
+  it('a granted purchase crosses its record out; a cancelled one leaves none', async () => {
+    vi.stubEnv('VITE_REVENUECAT_API_KEY', 'goog_test');
+    const purchases = {
+      configure: vi.fn(async () => undefined),
+      getProducts: vi.fn(async (o: { productIdentifiers: string[] }) => ({
+        products: o.productIdentifiers.map((id) => ({ identifier: id, priceString: '₩1,500' })),
+      })),
+      purchaseStoreProduct: vi.fn(async () => ({ transaction: { transactionIdentifier: 'tx-5' } })),
+      getCustomerInfo: vi.fn(async () => ({
+        customerInfo: { nonSubscriptionTransactions: [{ transactionIdentifier: 'tx-5', productIdentifier: 'gems_260' }] },
+      })),
+      restorePurchases: vi.fn(async () => ({ customerInfo: { nonSubscriptionTransactions: [] } })),
+    };
+    const { a } = await ready((x) => (x.p.Purchases = purchases));
+    expect(await a.iap!.purchase('gems_260', async () => true)).toBe('purchased');
+    expect(await a.iap!.pendingOrders()).toEqual([]);
+    purchases.purchaseStoreProduct.mockRejectedValueOnce({ code: '1', userCancelled: true });
+    expect(await a.iap!.purchase('gems_260', async () => true)).toBe('cancelled');
+    expect(await a.iap!.pendingOrders()).toEqual([]);
+    // a grant that failed keeps the record, so the sync can try again
+    expect(await a.iap!.purchase('gems_260', async () => false)).toBe('failed');
+    expect(await a.iap!.pendingOrders()).toEqual([{ orderId: 'tx-5', productId: 'gems_260' }]);
+    expect(purchases.getCustomerInfo).toHaveBeenCalledTimes(1);
+  });
+
+  it('a consent request that fails (offline start) is asked again later, and ads follow its answer', async () => {
+    const consent = vi
+      .fn<() => Promise<{ status: string; isConsentFormAvailable: boolean; canRequestAds: boolean }>>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ status: 'NOT_REQUIRED', isConsentFormAvailable: false, canRequestAds: true });
+    const { a, t } = await ready((x) => Object.assign(x.AdMob, { requestConsentInfo: consent }));
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(false);
+    expect(t.AdMob.prepareRewardVideoAd).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(consent).toHaveBeenCalledTimes(2);
+    expect(t.AdMob.prepareRewardVideoAd).toHaveBeenCalledTimes(1);
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(true);
+  });
+
+  it('purchases are unavailable without the RevenueCat key or when configure fails', async () => {
+    const { a, t } = await ready();
+    const purchases = {
+      configure: vi.fn(async () => undefined),
+      getProducts: vi.fn(async () => ({ products: [] })),
+      purchaseStoreProduct: vi.fn(async () => ({})),
+      restorePurchases: vi.fn(async () => ({ customerInfo: { nonSubscriptionTransactions: [] } })),
+    };
+    t.p.Purchases = purchases;
+    expect(a.iap!.isAvailable!()).toBe(false); // no VITE_REVENUECAT_API_KEY
+    expect(await a.iap!.purchase('gems_80', async () => true)).toBe('unavailable');
+    expect(purchases.configure).not.toHaveBeenCalled();
+    vi.stubEnv('VITE_REVENUECAT_API_KEY', 'goog_test');
+    const b = createCap();
+    await b.init();
+    purchases.configure.mockRejectedValueOnce(new Error('invalid key'));
+    expect(b.iap!.isAvailable!()).toBe(true);
+    expect(await b.iap!.purchase('gems_80', async () => true)).toBe('unavailable');
+    expect(await b.iap!.completedOrders!()).toEqual([]);
+    expect(purchases.configure).toHaveBeenCalledTimes(1); // the failed configure is not retried in this session
+  });
+
+  it('init does not wait for the ad SDK; nothing is preloaded before it has started', async () => {
+    let started!: () => void;
+    const t = plugins();
+    t.AdMob.initialize.mockImplementation(() => new Promise<undefined>((r) => (started = () => r(undefined))));
+    vi.stubEnv('VITE_ADMOB_REWARDED_ID', 'ca-app-pub-test/1');
+    registerCapacitorPlugins(t.p);
+    const a = createCap();
+    await a.init(); // returns while initialize() is still pending
+    a.ads.preload('rewarded', 'revive');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.AdMob.prepareRewardVideoAd).not.toHaveBeenCalled();
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(false);
+    started();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(t.AdMob.prepareRewardVideoAd).toHaveBeenCalledTimes(1);
+    expect(a.ads.isAvailable('rewarded', 'revive')).toBe(true);
+  });
+
+  it('asks for consent where it is required and requests no ad when it is refused', async () => {
+    const consent = (status: string, canRequestAds: boolean) => ({ status, isConsentFormAvailable: true, canRequestAds });
+    const refusedForm = vi.fn(async () => consent('OBTAINED', false));
+    const refused = await ready((x) => {
+      Object.assign(x.AdMob, { requestConsentInfo: vi.fn(async () => consent('REQUIRED', false)), showConsentForm: refusedForm });
+    });
+    expect(refusedForm).toHaveBeenCalledTimes(1);
+    expect(refused.t.AdMob.prepareRewardVideoAd).not.toHaveBeenCalled();
+    expect(refused.a.ads.isAvailable('rewarded', 'revive')).toBe(false);
+    refused.a.ads.preload('rewarded', 'revive');
+    expect(refused.t.AdMob.prepareRewardVideoAd).not.toHaveBeenCalled();
+
+    const outsideForm = vi.fn(async () => consent('OBTAINED', true));
+    const outside = await ready((x) => {
+      Object.assign(x.AdMob, { requestConsentInfo: vi.fn(async () => consent('NOT_REQUIRED', true)), showConsentForm: outsideForm });
+    });
+    expect(outsideForm).not.toHaveBeenCalled();
+    expect(outside.a.ads.isAvailable('rewarded', 'revive')).toBe(true);
   });
 
   it('gives up on a load that never answers and retries later', async () => {

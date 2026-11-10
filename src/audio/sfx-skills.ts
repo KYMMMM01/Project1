@@ -510,7 +510,8 @@ export const SKILL_RECIPES = {
   sp_glass_tap: signature({
     len: 0.3,
     ms: [90, 280],
-    trim: 2,
+    // 2 to -2 dB: the owner heard the ice queen over the other cats (2026-11-11); it was the third loudest skill sound (K-weighted -12.7 against a median of -18.3) and bright.
+    trim: -2,
     needs: ['elevenlabs/sp_glass_tap', IMPACT('impactGlass_light_001')],
     build(s) {
       // The owner's pick (2026-11-09): recorded with ElevenLabs.
@@ -526,7 +527,8 @@ export const SKILL_RECIPES = {
   sp_glass_shatter: signature({
     len: 0.85,
     ms: [250, 800],
-    trim: 3,
+    // 3 to -1 dB: the owner heard the ice queen over the other cats (2026-11-11); it was the second loudest skill sound (-12.6) with its peak at -1.2 dB.
+    trim: -1,
     lp: 8500,
     duck: { depth: 0.3, seconds: 0.5 },
     needs: ['elevenlabs/sp_glass_shatter', IMPACT('impactGlass_heavy_003'), IMPACT('impactGlass_medium_004')],
@@ -556,7 +558,8 @@ export const SKILL_RECIPES = {
     rule: { maxVoices: 4, minGap: 0.04, falloff: 0.1 },
     len: 0.2,
     ms: [50, 190],
-    trim: 2.5,
+    // 2.5 to 0.5 dB: the owner heard the ice queen over the other cats (2026-11-11); five or more land in one cast and stack up.
+    trim: 0.5,
     variants: 5,
     rate: 0.04,
     lp: 8500,

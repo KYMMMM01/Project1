@@ -136,14 +136,9 @@ if (import.meta.env.VITE_PLATFORM === 'toss') {
 }
 ```
 
-Capacitor: `npm i @capacitor/app @capacitor/preferences @capacitor-community/admob @revenuecat/purchases-capacitor`
-
-```ts
-if (import.meta.env.VITE_PLATFORM === 'capacitor') {
-  const { AdMob, RewardAdPluginEvents: R } = await import('@capacitor-community/admob');
-  registerCapacitorPlugins({ AdMob, Preferences, App, Purchases }, { rewardRewarded: R.Rewarded, rewardDismissed: R.Dismissed });
-}   // (import Preferences / App / Purchases the same way). Without it the adapter looks in window.Capacitor.Plugins.
-```
+Capacitor: the packages are dependencies (2026-11-11) and the adapter imports them itself in the store build
+(`loadPlugins` in `adapters/capacitor.ts`, behind the literal `VITE_PLATFORM === 'capacitor'`), so no wiring is needed. Tests and other
+builds hand their own objects to `registerCapacitorPlugins(...)` or leave `window.Capacitor.Plugins` to the adapter.
 
 While a bridge is missing the adapter reports ads and purchases as unavailable and uses localStorage.
 

@@ -387,7 +387,7 @@ export class AudioEngine implements AudioApi {
     this.everRan = true;
     if (!this.prerenderStarted) {
       this.prerenderStarted = true;
-      // The recordings some recipes lay under their synthesis are read now (about half a megabyte in all); a bake that needs one waits for it.
+      // The recordings (whole sounds, and layers under a synthesis) are read now (about 5 MB of 16-bit WAV, 152 files); a bake that needs one waits for it.
       void sampleStore.preload();
       // The lean mode (core/lean.ts) leaves the catalogue unbaked: what a scene needs is asked for by name (the warm-up, a first play).
       if (offlineSupported() && !leanMode()) this.bank?.enqueue(PRERENDER_ORDER);

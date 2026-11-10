@@ -290,7 +290,8 @@ export const CAT_RECIPES = {
   }),
   atk_m_frost: swing({
     rank: 3,
-    db: -3.8,
+    // -3.8 to -6.8 dB: the owner heard the ice queen over the other cats (2026-11-11). Its K-weighted level sat at the cats' median, but it is the brightest swing (centroid 5.5 kHz) and long.
+    db: -6.8,
     len: 0.28,
     ms: [90, 280],
     lp: 7500,
