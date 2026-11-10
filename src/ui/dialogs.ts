@@ -8,7 +8,7 @@ import type { ButtonStyleId } from './theme';
 interface DialogButton {
   label: string;
   style: ButtonStyleId;
-  result: boolean;
+  result: boolean | null;
 }
 
 interface DialogSpec {
@@ -16,14 +16,14 @@ interface DialogSpec {
   message: string;
   buttons: DialogButton[];
   backdropClose: boolean;
-  dismissResult: boolean;
+  dismissResult: boolean | null;
   priority: number;
 }
 
 const W = 620;
 
 /** Message + one or two buttons on a paper sheet with a title label. The building block of confirm/alert. */
-class DialogPopup extends Popup<boolean> {
+class DialogPopup extends Popup<boolean | null> {
   constructor(spec: DialogSpec) {
     super({
       dismissResult: spec.dismissResult,
@@ -63,8 +63,8 @@ export interface ConfirmOpts {
 }
 
 /** Yes/no question. Resolves true on confirm, false on cancel / backdrop / Escape. */
-export function confirmDialog(opts: ConfirmOpts): Promise<boolean> {
-  return popups.open(
+export async function confirmDialog(opts: ConfirmOpts): Promise<boolean> {
+  return (await popups.open(
     new DialogPopup({
       title: opts.title,
       message: opts.message,
@@ -74,6 +74,26 @@ export function confirmDialog(opts: ConfirmOpts): Promise<boolean> {
       ],
       backdropClose: !opts.danger,
       dismissResult: false,
+      priority: 2,
+    }),
+  )) === true;
+}
+
+/**
+ * A choice between two real options where closing the sheet (Back, Escape) decides nothing: true for confirm, false for cancel, null for
+ * closed. The backdrop does not close it.
+ */
+export function choiceDialog(opts: ConfirmOpts): Promise<boolean | null> {
+  return popups.open(
+    new DialogPopup({
+      title: opts.title,
+      message: opts.message,
+      buttons: [
+        { label: opts.cancelLabel, style: 'neutral', result: false },
+        { label: opts.confirmLabel, style: opts.danger ? 'danger' : 'success', result: true },
+      ],
+      backdropClose: false,
+      dismissResult: null,
       priority: 2,
     }),
   );

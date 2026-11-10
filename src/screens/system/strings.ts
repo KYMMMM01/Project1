@@ -38,6 +38,11 @@ addStrings('ko', {
   'rt.sys.quality.hint': '자동은 기기가 버거울 때 알아서 낮춰요.',
   'rt.sys.lang': '언어',
   'rt.sys.restore': '구매 복원',
+  'rt.sys.pgs.title': 'Google Play 게임즈',
+  'rt.sys.pgs.off': '연결하면 진행이 클라우드에 저장돼서 새 기기에서도 이어서 할 수 있어요. 무한 모드 랭킹에도 올라가요.',
+  'rt.sys.pgs.wait': '연결 중이에요…',
+  'rt.sys.pgs.on': '{name} 님으로 연결됐어요. 진행이 클라우드에 저장돼요.',
+  'rt.sys.pgs.board': '무한 모드 랭킹',
   'rt.sys.restore.none': '복원할 구매가 없어요.',
   'rt.sys.restore.done': '구매를 복원했어요.',
   'rt.sys.restore.fail': '복원하지 못했어요. 잠시 뒤에 다시 해 보세요.',
@@ -60,7 +65,7 @@ addStrings('ko', {
   'rt.sys.reset.msg1': '고양이, 골드, 보석, 기록이 모두 사라져요. 정말 지울까요?',
   'rt.sys.reset.yes1': '계속하기',
   'rt.sys.reset.title2': '마지막으로 확인해요',
-  'rt.sys.reset.msg2': '지운 기록은 되돌릴 수 없어요. 냥이 코드를 복사해 두었는지 확인해 주세요.',
+  'rt.sys.reset.msg2': '지운 기록은 되돌릴 수 없어요. Google Play 게임즈에 연결돼 있으면, 다음에 연결할 때 클라우드에 남은 진행을 가져올지 물어봐요.',
   'rt.sys.reset.yes2': '모두 지우기',
   'rt.sys.reset.no': '그만두기',
 
@@ -162,6 +167,11 @@ addStrings('en', {
   'rt.sys.quality.hint': 'Auto lowers it by itself when the device struggles.',
   'rt.sys.lang': 'Language',
   'rt.sys.restore': 'Restore purchases',
+  'rt.sys.pgs.title': 'Google Play Games',
+  'rt.sys.pgs.off': 'Connect to keep your progress in the cloud and carry on from a new device. Your endless runs join the leaderboard too.',
+  'rt.sys.pgs.wait': 'Connecting…',
+  'rt.sys.pgs.on': 'Signed in as {name}. Your progress is saved in the cloud.',
+  'rt.sys.pgs.board': 'Endless leaderboard',
   'rt.sys.restore.none': 'No purchases to restore.',
   'rt.sys.restore.done': 'Purchases restored.',
   'rt.sys.restore.fail': 'Could not restore. Please try again in a moment.',
@@ -184,7 +194,7 @@ addStrings('en', {
   'rt.sys.reset.msg1': 'Your cats, gold, gems and records will be gone. Erase everything?',
   'rt.sys.reset.yes1': 'Continue',
   'rt.sys.reset.title2': 'One last check',
-  'rt.sys.reset.msg2': 'Erased progress cannot come back. Make sure you saved a Meow Code first.',
+  'rt.sys.reset.msg2': 'Erased progress cannot come back. If you use Google Play Games, the next sign-in asks whether to bring back the progress left in the cloud.',
   'rt.sys.reset.yes2': 'Erase all',
   'rt.sys.reset.no': 'Keep playing',
 
@@ -247,5 +257,5 @@ addStrings('en', {
   'rt.sys.feat.dungeon': 'A short run where catching coins pays gold.',
 });
 
-/** Shown in the settings footer. Replace with a build-time define when the build provides one. */
-export const GAME_VERSION = '0.1.0';
+/** Shown in the settings footer and on the title: package.json "version" (vite.config.ts define). */
+export const GAME_VERSION: string = __APP_VERSION__;

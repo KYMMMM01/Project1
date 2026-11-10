@@ -11,12 +11,16 @@ def signWithKeystore = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
 // Google's sample AdMob app id (test ads only) for debug builds; a release must set its own (gradle.properties: admobAppId).
 def admobAppId = (project.findProperty('admobAppId') ?: '').toString().trim()
 def admobSampleAppId = 'ca-app-pub-3940256099942544~3347511713'
+// Play Games Services project id (Play Console, Play Games Services, Configuration: the number). Empty: the PlayGames plugin stays off.
+def pgsProjectId = (project.findProperty('pgsProjectId') ?: '').toString().trim()
 gradle.taskGraph.whenReady { graph ->
     if (!graph.allTasks.any { it.name.toLowerCase().contains('release') }) return
     if (admobAppId.isEmpty()) {
         throw new GradleException('Set admobAppId in android/gradle.properties (AdMob, Apps, App settings: the ~ id) before a release build.')
     }
     // The app id has a tilde; an ad unit id (a slash) here makes the ad SDK stop the app at start.
+    // Not an error (a build before the Play Console setup is allowed), but a release without it has no Google Play Games at all.
+    if (pgsProjectId.isEmpty()) logger.warn('pgsProjectId is empty in android/gradle.properties: this release has no Google Play Games (sign-in, cloud save, leaderboard).')
     if (!(admobAppId ==~ /ca-app-pub-\d{16}~\d{10}/)) {
         throw new GradleException("admobAppId '" + admobAppId + "' is not an AdMob app id (ca-app-pub-<16 digits>~<10 digits>; not the ad unit id with a slash).")
     }
@@ -33,6 +37,8 @@ android {
         versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [admobAppId: admobAppId.isEmpty() ? admobSampleAppId : admobAppId]
+        // A string resource, as the PGS docs ask: a bare number in the manifest would be read as an integer.
+        resValue 'string', 'game_services_project_id', pgsProjectId
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -69,6 +75,8 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    // Google Play Games Services v2 (PlayGamesPlugin.java): sign-in, leaderboards, Saved Games.
+    implementation "com.google.android.gms:play-services-games-v2:22.1.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

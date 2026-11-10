@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
@@ -42,6 +42,8 @@ export default defineConfig(({ mode }) => ({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   plugins: [trimBuild(mode)],
+  // The title shows it (screens/shell/TitleOverlay.ts); android/app/build.gradle's versionName follows the same number.
+  define: { __APP_VERSION__: JSON.stringify((JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version) },
   server: { port: 5173, strictPort: true, host: '127.0.0.1' },
   preview: { port: 4173, strictPort: true, host: '127.0.0.1' },
   build: {

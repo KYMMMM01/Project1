@@ -34,7 +34,7 @@ export { Toggle, Slider, Stepper, type ToggleOpts, type SliderOpts, type Stepper
 export { TabBar, SegmentTabs, type TabDef, type TabBarOpts, type SegmentDef, type SegmentTabsOpts } from './TabBar';
 export { ScrollView, type ScrollViewOpts } from './ScrollView';
 export { Popup, PopupManager, popups, type PopupOpts } from './Popup';
-export { confirmDialog, alertDialog, type ConfirmOpts, type AlertOpts } from './dialogs';
+export { confirmDialog, choiceDialog, alertDialog, type ConfirmOpts, type AlertOpts } from './dialogs';
 export {
   RewardPopup,
   showRewards,

@@ -1,11 +1,12 @@
 import { closeCodex } from '@/codex';
 import { debugExpose } from '@/core/debug';
-import { profile } from '@/meta';
+import { profile, setCloudChooser } from '@/meta';
 import { popups } from '@/ui/Popup';
 import { ensureSettings } from '@/view/hud/settings';
 import { provide, services, type Shell } from '../contract';
 import { AutoPopups, markCalendarOffered } from './autoPopups';
 import { CalendarPopup } from './calendarPopup';
+import { askCloudChoice } from './cloudChoice';
 import { stopConfetti } from './kit/confetti';
 import { loadRoutinePrefs, markProfileSeen } from './prefs';
 import { closeSettingsScreen, openSettingsScreen, scrollSettingsTo } from './settingsScreen';
@@ -24,6 +25,7 @@ let installed: Installed | null = null;
  */
 export function installSystemScreens(shell: Shell): void {
   installed?.dispose();
+  setCloudChooser(askCloudChoice);
   void ensureSettings();
   void loadRoutinePrefs();
 

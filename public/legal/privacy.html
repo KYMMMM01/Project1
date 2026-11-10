@@ -15,7 +15,8 @@
 
 <h2>1. 개발자가 직접 수집하는 정보</h2>
 <p>개발자는 회원가입이나 로그인을 받지 않고, 개발자가 운영하는 서버도 없습니다. 이름, 전화번호, 이메일 같은 정보를 게임 안에서 받지 않습니다.</p>
-<p>게임 진행 상황(고양이, 재화, 기록, 설정 등)은 이용자의 기기 안에만 저장됩니다. 안드로이드의 자동 백업을 켜 둔 경우, 이 데이터는 Google 의 기기 백업 기능에 따라 이용자의 Google 계정에 백업될 수 있으며 개발자는 그 백업에 접근할 수 없습니다.</p>
+<p>게임 진행 상황(고양이, 재화, 기록, 설정 등)은 이용자의 기기에 저장됩니다. 안드로이드의 자동 백업을 켜 둔 경우, 이 데이터는 Google 의 기기 백업 기능에 따라 이용자의 Google 계정에 백업될 수 있으며 개발자는 그 백업에 접근할 수 없습니다.</p>
+<p>Google Play 게임즈에 연결한 경우, 같은 진행 상황이 이용자 Google 계정의 Google Play 게임즈 저장 공간(Saved Games, Google Drive 의 앱 전용 영역)에도 저장되어 다른 기기에서 이어서 할 수 있습니다. 이 저장 공간은 이용자의 Google 계정에 속하며, 개발자는 서버에서 이를 열람하지 않습니다.</p>
 <p>이용자가 문의 메일을 보내면, 답변을 위해 보낸 이메일 주소와 메일 내용을 받게 됩니다. 이 정보는 문의 처리에만 쓰고 처리가 끝난 뒤 1년 안에 지웁니다.</p>
 
 <h2>2. 외부 서비스가 수집하는 정보</h2>
@@ -26,6 +27,7 @@
 <tr><td>Google AdMob (Google LLC)</td><td>보상형 광고 표시, 광고 효과 측정, 부정 클릭 방지</td><td>광고 ID, 기기 정보(모델, 운영체제, 언어), IP 주소로 추정한 대략적 위치, 광고 노출과 클릭 기록, 오류 정보</td></tr>
 <tr><td>Google 사용자 메시지 플랫폼(UMP)</td><td>유럽 경제 지역과 영국 등에서 광고 동의 받기</td><td>동의 여부, 기기 정보</td></tr>
 <tr><td>RevenueCat (RevenueCat, Inc.)</td><td>인앱 구매 처리, 구매 확인과 복원</td><td>익명 이용자 ID(게임이 만든 무작위 값), 구매 내역(상품, 일시, 거래 번호), 기기 정보, IP 주소</td></tr>
+<tr><td>Google Play 게임즈 서비스 (Google LLC), 연결한 경우</td><td>계정 연결, 클라우드 저장, 랭킹</td><td>Play 게임즈 플레이어 ID 와 닉네임, 저장된 진행 상황, 랭킹 점수(무한 모드 최고 웨이브). 랭킹 점수와 닉네임은 Play 게임즈의 공개 설정에 따라 다른 이용자에게 보일 수 있습니다.</td></tr>
 <tr><td>Google Play 결제 (Google LLC)</td><td>결제와 환불</td><td>Google 계정의 결제 정보(개발자는 받지 않음)</td></tr>
 </tbody>
 </table>
@@ -43,7 +45,7 @@
 <table>
 <thead><tr><th>이전받는 자</th><th>국가</th><th>항목</th><th>목적</th><th>보유 기간</th></tr></thead>
 <tbody>
-<tr><td>Google LLC (연락처: <a href="https://support.google.com/policies/contact/general_privacy_form">개인정보 문의</a>)</td><td>미국</td><td>광고 ID, 기기 정보, IP 주소, 광고 기록</td><td>광고 표시와 측정</td><td>Google 정책에 따름</td></tr>
+<tr><td>Google LLC (연락처: <a href="https://support.google.com/policies/contact/general_privacy_form">개인정보 문의</a>)</td><td>미국</td><td>광고 ID, 기기 정보, IP 주소, 광고 기록, Play 게임즈에 연결한 경우 플레이어 ID, 닉네임, 저장된 진행 상황, 랭킹 점수</td><td>광고 표시와 측정, 클라우드 저장과 랭킹</td><td>Google 정책에 따름(저장된 진행 상황은 이용자가 지울 때까지)</td></tr>
 <tr><td>RevenueCat, Inc. (privacy@revenuecat.com)</td><td>미국</td><td>익명 이용자 ID, 구매 내역, 기기 정보, IP 주소</td><td>구매 처리와 복원</td><td>법령 보관 기간 또는 삭제 요청 시까지</td></tr>
 </tbody>
 </table>
@@ -52,6 +54,7 @@
 <h2>5. 이용자의 권리와 행사 방법</h2>
 <ul>
 <li>맞춤 광고 끄기, 광고 ID 재설정 또는 삭제: 안드로이드 설정, Google(또는 개인정보 보호), 광고에서 할 수 있습니다.</li>
+<li>Google Play 게임즈 연결은 선택입니다. 연결하지 않아도 게임을 할 수 있습니다. 연결을 끊거나 클라우드에 저장된 진행과 랭킹 기록을 지우려면 Google Play 게임즈 앱의 설정 또는 Google 계정의 데이터 관리에서 할 수 있으며, 문의처로 요청하시면 방법을 안내해 드립니다.</li>
 <li>유럽 경제 지역과 영국 등의 이용자는 게임이 처음 실행될 때 광고 동의 여부를 고를 수 있습니다.</li>
 <li>기기에 저장된 게임 데이터 삭제: 앱을 삭제하거나 안드로이드 설정에서 앱 데이터를 지우면 됩니다. 삭제한 진행 상황은 복구할 수 없습니다(구매한 상품은 설정의 구매 복원으로 다시 받을 수 있습니다).</li>
 <li>구매 기록의 열람, 정정, 삭제, 처리 정지 요청: 아래 문의처로 메일을 보내 주시면 RevenueCat 에 요청을 전달해 처리하고 그 결과를 알려 드립니다. 요청을 위해 게임 설정에 표시되는 정보나 구매 영수증 번호가 필요할 수 있습니다.</li>
@@ -84,7 +87,7 @@
 
 <section class="en" lang="en">
 <h2>English summary</h2>
-<p>Meow Guard is made by Bulssi Studio. We run no server and ask for no account: your game progress stays on your device (and in your Google account backup if Android backup is on). The game uses Google AdMob (rewarded ads; may collect the advertising ID, device information, approximate location from the IP address and ad interactions; consent is asked in the EEA and UK through Google's UMP), RevenueCat (in-app purchase processing; an anonymous random user ID, purchase history, device information, IP address) and Google Play billing. These providers process data in the United States under their own policies. You can reset or delete your advertising ID or opt out of personalised ads in Android settings, delete local data by uninstalling the app, and ask us to have your purchase records accessed or deleted. The game is not directed to children under 14. Contact: Bulssi Studio, <a href="mailto:dbals498@gmail.com">dbals498@gmail.com</a>. Effective 11 November 2026.</p>
+<p>Meow Guard is made by Bulssi Studio. We run no server and ask for no account: your game progress stays on your device (and in your Google account backup if Android backup is on). The game uses Google AdMob (rewarded ads; may collect the advertising ID, device information, approximate location from the IP address and ad interactions; consent is asked in the EEA and UK through Google's UMP), RevenueCat (in-app purchase processing; an anonymous random user ID, purchase history, device information, IP address) Google Play Games Services if you connect it (your Play Games player id and nickname, your saved progress in your Google account's Saved Games, and your endless-mode best wave on a leaderboard that other players may see), and Google Play billing. Connecting Play Games is optional. These providers process data in the United States under their own policies. You can reset or delete your advertising ID or opt out of personalised ads in Android settings, delete local data by uninstalling the app, and ask us to have your purchase records accessed or deleted. The game is not directed to children under 14. Contact: Bulssi Studio, <a href="mailto:dbals498@gmail.com">dbals498@gmail.com</a>. Effective 11 November 2026.</p>
 </section>
 </main>
 </body>

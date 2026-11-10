@@ -358,8 +358,8 @@ export const KO: Record<string, string> = {
   'guide.endless.full':
     '{chapter}챕터를 깨면 열려요. 웨이브가 끝없이 이어지고, {after}웨이브를 넘으면 적이 웨이브마다 {growth}%씩 단단해지고, {late}웨이브를 넘으면 {lateGrowth}%씩 단단해져요.\n{w1}, {w2}, {w3}웨이브에 닿으면 보상을 받아요.',
 
-  'guide.backup_code.title': '냥이 코드(백업)',
-  'guide.backup_code.teach': '코드 한 줄로 진행 상황을 옮길 수 있어요.',
+  'guide.backup_code.title': '클라우드 저장',
+  'guide.backup_code.teach': 'Google Play 게임즈에 연결하면 진행이 클라우드에 저장돼요.',
   'guide.backup_code.full':
-    '설정에서 냥이 코드를 만들면 지금까지의 진행 상황이 글자 한 줄이 돼요. 메모해 두었다가 다른 기기에서 불러오면 이어서 할 수 있어요.\n코드는 서버에 저장되지 않아요. 기기를 바꾸기 전에 꼭 새로 만들어 두고, 남에게 보여 주지 마세요.',
+    'Google Play 게임즈에 연결해 두면 진행 상황이 Google 계정의 클라우드에 저장돼요. 새 기기에서 같은 계정으로 연결하면 이어서 할 수 있어요.\n연결은 타이틀 화면이나 설정에서 할 수 있어요. 연결하지 않아도 이 기기에 저장되지만, 앱을 지우면 진행이 사라져요. 구매한 상품은 설정의 구매 복원으로 다시 받을 수 있어요.',
 };

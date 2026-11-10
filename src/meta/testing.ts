@@ -75,7 +75,7 @@ export function at(y: number, m: number, d: number, h = 12, min = 0): number {
 
 /** A loaded profile. Pass `keepStorage: true` to keep the previous rig's storage (a "restart"). */
 export async function createTestProfile(
-  opts: { start?: number; keepStorage?: boolean; seed?: () => number; testGrants?: boolean } = {},
+  opts: { start?: number; keepStorage?: boolean; seed?: () => number; testGrants?: boolean; submitScore?: (board: string, score: number) => void } = {},
 ): Promise<TestRig> {
   if (!opts.keepStorage) setStorageBackend(createMemoryBackend());
   const clock = new FakeClock(opts.start ?? at(2026, 10, 6, 9));
@@ -90,6 +90,7 @@ export async function createTestProfile(
     ads,
     analytics: { track: (event, params) => analytics.push({ event, params: params ?? {} }) },
     testGrants: opts.testGrants,
+    submitScore: opts.submitScore,
   });
   await profile.load();
   return { profile, clock, ads, analytics };

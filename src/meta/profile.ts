@@ -40,6 +40,8 @@ const DAY_MS = 86_400_000;
 /** Extra gems for a second season pass bought while the first is still active (the premium row is already open). */
 const SEASON_DUPLICATE_GEMS = 600;
 export const CUP_BOARD_ID = 'weekly_cup';
+/** The endless mode's best wave (a Google Play Games leaderboard on the Android app). */
+export const ENDLESS_BOARD_ID = 'endless_best';
 /** The most a single test grant hands out. */
 const TEST_GRANT_MAX = 100_000;
 
@@ -271,6 +273,7 @@ export class Profile extends RoutineProfile {
       if (stats.wavesCleared > d.endless.best) {
         d.endless.best = stats.wavesCleared;
         newBest = true;
+        this.deps.submitScore?.(ENDLESS_BOARD_ID, d.endless.best);
       }
       d.endless.weekBest = Math.max(d.endless.weekBest, stats.wavesCleared);
     } else if (stats.mode === 'gold') {
@@ -541,29 +544,66 @@ export class Profile extends RoutineProfile {
     return ok(previewOf(r.value.data, r.value.savedAt));
   }
 
-  /**
-   * Replace this profile with a code's. Orders and the purchase ledger of both devices are merged so
-   * a replayed order is never granted twice, and a refund never comes back: an order this device took
-   * back is taken back from the code's copy too. Ownership of the Butler Pass is kept if either has
-   * it, unless every Butler Pass order in the merged ledger was refunded.
-   */
+  /** Replace this profile with a code's (see `adopt`). */
   async importCode(code: string): Promise<Result<BackupPreview>> {
     const r = await this.readCode(code);
     if (!r.ok) return r;
+    await this.adopt(r.value.data);
+    return ok(previewOf(r.value.data, r.value.savedAt));
+  }
+
+  // ───────────────────────────── cloud save ─────────────────────────────
+
+  /** What goes to the cloud save: the whole profile, as the save file holds it. */
+  cloudData(): unknown {
+    return this.data;
+  }
+
+  /** A profile that has played no run and bought nothing: another device's progress may simply replace it. */
+  isFresh(): boolean {
+    return this.data.stats.runs === 0 && Object.keys(this.data.orders).length === 0;
+  }
+
+  /** This device's progress in the words of the choice dialog. */
+  localPreview(): BackupPreview {
+    return previewOf(this.data, this.now());
+  }
+
+  /** A cloud copy checked and brought up to date like a save file; changes nothing. */
+  readCloud(raw: unknown, savedAt: number): Result<{ data: ProfileData; preview: BackupPreview }> {
+    const data = sanitizeProfile(raw, this.now(), this.deps.seed());
+    if (!data) return fail('invalid_code');
+    return ok({ data, preview: previewOf(data, savedAt) });
+  }
+
+  /** Replace this profile with a cloud copy read by `readCloud`, under the same rules as a code import. */
+  async adoptCloud(data: ProfileData): Promise<void> {
+    await this.adopt(data);
+  }
+
+  /**
+   * Replace this profile with another device's (a code or the cloud save). Orders and the purchase ledger of both are merged so a replayed
+   * order is never granted twice, and a refund never comes back: an order this device took back is taken back from the other copy too.
+   * Ownership of the Butler Pass is kept if either has it, unless every Butler Pass order in the merged ledger was refunded.
+   */
+  private async adopt(next: ProfileData): Promise<void> {
     const cur = this.data;
-    const next = r.value.data;
     next.pending = null;
     const refunded = Object.entries(next.orders).filter(([id, o]) => !o.revoked && cur.orders[id]?.revoked === true).map(([, o]) => o);
-    next.orders = { ...cur.orders, ...next.orders };
+    // Orders this device granted that the other copy never saw (bought here after its last upload): their goods are not in the other
+    // copy, so they are granted again on it below. Carried over as "done", they would be lost and never come back through a restore.
+    const missing = Object.entries(cur.orders).filter(([id, o]) => !o.revoked && !next.orders[id]);
+    const carried = Object.fromEntries(Object.entries(cur.orders).filter(([id]) => !missing.some(([m]) => m === id)));
+    next.orders = { ...carried, ...next.orders };
     next.iapLedger = mergeLedgers(normalizeLedger(cur.iapLedger), normalizeLedger(next.iapLedger));
     next.time.lastSeenAt = Math.max(next.time.lastSeenAt, cur.time.lastSeenAt);
     this.deps.store.data = next;
     for (const o of refunded) this.takeBack(o);
     next.owned.butler = (next.owned.butler || cur.owned.butler) && !butlerRefunded(next.orders);
     this.clock.observe(next.time.lastSeenAt);
+    for (const [id, o] of missing) await this.grantOrder(o.p, id, 'purchase');
     this.refresh();
     await this.flush();
-    return ok(previewOf(next, r.value.savedAt));
   }
 }
 

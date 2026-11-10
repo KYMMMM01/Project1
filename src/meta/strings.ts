@@ -126,6 +126,11 @@ const ko: Record<string, string> = {
   'meta.piggy.free': '{days}일 뒤에는 결제 없이 {n}개를 꺼낼 수 있어요.',
   'meta.backup.title': '냥이 코드',
   'meta.backup.help': '이 코드를 다른 기기에 붙여 넣으면 진행 상황을 옮길 수 있어요.',
+  'meta.cloud.desc': 'Lv {level}, 챕터 {chapters}',
+  'meta.cloud.ask.title': '어느 진행으로 할까요?',
+  'meta.cloud.ask.body': 'Google Play 게임즈 클라우드에 다른 기기의 진행이 있어요.\n\n클라우드: Lv {cl}, 챕터 {cc}, 보석 {cg} ({cw})\n이 기기: Lv {ll}, 챕터 {lc}, 보석 {lg}\n\n고르지 않은 쪽의 진행은 사라져요. 이 기기에서 산 상품은 어느 쪽을 골라도 남아요.',
+  'meta.cloud.ask.cloud': '클라우드 진행',
+  'meta.cloud.ask.local': '이 기기 진행',
 
   // cosmetics
   'meta.cos.rug_default': '기본 러그',
@@ -267,6 +272,11 @@ const en: Record<string, string> = {
   'meta.piggy.free.one': 'After {days} day you can take {n} gems out for free.',
   'meta.backup.title': 'Meow Code',
   'meta.backup.help': 'Paste this code on another device to move your progress.',
+  'meta.cloud.desc': 'Lv {level}, chapter {chapters}',
+  'meta.cloud.ask.title': 'Which progress?',
+  'meta.cloud.ask.body': 'Your Google Play Games cloud has progress from another device.\n\nCloud: Lv {cl}, chapter {cc}, {cg} gems ({cw})\nThis device: Lv {ll}, chapter {lc}, {lg} gems\n\nThe one you do not pick is lost. What you bought on this device stays either way.',
+  'meta.cloud.ask.cloud': 'Cloud progress',
+  'meta.cloud.ask.local': 'This device',
 
   'meta.cos.rug_default': 'Default rug',
   'meta.cos.rug_ch1': 'Living room rug',

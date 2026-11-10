@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, type DestroyOptions, type Text } from 'pixi.js';
+import { Container, Graphics, Rectangle, Sprite, type DestroyOptions, type Text } from 'pixi.js';
 import { audio, type SfxId } from '@/audio';
 import { haptic, type HapticId } from '@/core/haptics';
 import { clamp, lerp } from '@/core/math';
@@ -6,6 +6,7 @@ import { Ease } from '@/core/tween';
 import { Badge, type BadgeValue } from './Badge';
 import { LoadingSpinner } from './Decor';
 import { drawIcon, type IconName } from './icons';
+import { hasTex, tex } from '@/core/assets';
 import { buttonRows, type Box } from './layoutMath';
 import { motion, shakeX, TweenBag } from './motion';
 import { drawPaperFace, drawPaperShadow, paperSeed, tapeStrip, type PaperOpts } from './paper';
@@ -19,6 +20,8 @@ export interface ButtonOpts {
   sublabel?: string;
   icon?: IconName;
   iconColor?: number;
+  /** An image icon instead of a drawn one: an asset key (core/assets.ts), fitted into the icon's square (a brand mark such as Play Games). */
+  iconImage?: string;
   /** Small icon in front of the sublabel (a coin before a price). */
   sublabelIcon?: IconName;
   style?: ButtonStyleId;
@@ -84,6 +87,7 @@ export class Button extends Container implements Pressable {
   private labelText: string;
   private subText: string;
   private iconName: IconName | undefined;
+  private readonly iconImage: string | undefined;
   private subIconName: IconName | undefined;
   private readonly iconColor: number | undefined;
   private readonly fontSize: number;
@@ -115,6 +119,7 @@ export class Button extends Container implements Pressable {
     this.labelText = opts.label ?? '';
     this.subText = opts.sublabel ?? '';
     this.iconName = opts.icon;
+    this.iconImage = opts.iconImage;
     this.subIconName = opts.sublabelIcon;
     this.iconColor = opts.iconColor;
     this.fontSize = Math.max(MIN_FONT, opts.fontSize ?? Math.round(Math.max(MIN_FONT, Math.min(48, h * 0.38))));
@@ -372,9 +377,10 @@ export class Button extends Container implements Pressable {
     }
 
     let iconSize = 0;
-    if (this.iconName) {
+    const image = this.iconImage && hasTex(this.iconImage) ? this.iconImage : undefined;
+    if (this.iconName || image) {
       iconSize = hasLabel ? Math.round(Math.min(h * 0.58, fs * 1.3)) : Math.round(Math.min(w, h) * 0.62);
-      this.iconG = drawIcon(this.iconName, iconSize, this.iconColor);
+      this.iconG = image ? fittedImage(image, iconSize) : drawIcon(this.iconName as IconName, iconSize, this.iconColor);
       if (!this.isEnabled) this.iconG.alpha = 0.55;
       this.content.addChild(this.iconG);
     }
@@ -507,4 +513,14 @@ export class Button extends Container implements Pressable {
       },
     });
   }
+}
+
+/** An image scaled to fit a `size` square, centred on its origin (the drawn icons' convention). */
+function fittedImage(key: string, size: number): Container {
+  const s = new Sprite(tex(key));
+  s.anchor.set(0.5);
+  s.scale.set(size / Math.max(s.texture.width, s.texture.height));
+  const c = new Container();
+  c.addChild(s);
+  return c;
 }

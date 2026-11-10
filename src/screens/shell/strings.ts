@@ -11,6 +11,10 @@ addStrings('ko', {
   'shell.xp': '{a} / {b}',
   'shell.logo': '냥이 수비대',
   'shell.logo.ready': '준비됐어요',
+  'shell.title.tap': '화면을 눌러 시작',
+  'shell.title.pgs.connect': 'Google Play 게임즈 연결',
+  'shell.title.pgs.wait': 'Google Play 게임즈 연결 중…',
+  'shell.title.pgs.on': '{name} 님으로 연결됨',
 
   'shell.pre.title': '출동 준비',
   'shell.pre.chapter': '챕터 {n}',
@@ -68,6 +72,10 @@ addStrings('en', {
   'shell.xp': '{a} / {b}',
   'shell.logo': 'Meow Guard',
   'shell.logo.ready': 'Ready',
+  'shell.title.tap': 'Tap to start',
+  'shell.title.pgs.connect': 'Connect Google Play Games',
+  'shell.title.pgs.wait': 'Connecting to Google Play Games…',
+  'shell.title.pgs.on': 'Signed in as {name}',
 
   'shell.pre.title': 'Get ready',
   'shell.pre.chapter': 'Chapter {n}',

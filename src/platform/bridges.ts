@@ -157,8 +157,20 @@ export interface CapPurchases {
   }>;
 }
 
+/** The game's own Play Games Services v2 plugin (android/app/src/main/java/com/bulssistudio/meowguard/PlayGamesPlugin.java). */
+export interface CapPlayGames {
+  isAuthenticated(): Promise<{ available: boolean; authenticated: boolean }>;
+  signIn(): Promise<{ available: boolean; authenticated: boolean }>;
+  getPlayer(): Promise<{ playerId: string; displayName: string }>;
+  submitScore(options: { leaderboardId: string; score: number }): Promise<{ available: boolean; submitted?: boolean }>;
+  showLeaderboard(options: { leaderboardId: string }): Promise<void>;
+  saveSnapshot(options: { name: string; data: string; description?: string }): Promise<{ available: boolean; saved?: boolean }>;
+  loadSnapshot(options: { name: string }): Promise<{ available: boolean; found?: boolean; data?: string | null }>;
+}
+
 export interface CapacitorPlugins {
   AdMob?: CapAdMob;
+  PlayGames?: CapPlayGames;
   Preferences?: CapPreferences;
   App?: CapApp;
   Purchases?: CapPurchases;

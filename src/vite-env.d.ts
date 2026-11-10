@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** package.json "version", set at build time (vite.config.ts define). */
+declare const __APP_VERSION__: string;
+
 interface ImportMetaEnv {
   /** Build-time platform: 'dev' (default) | 'itch' | 'crazygames' | 'poki' | 'gd' | 'yt' | 'toss' | 'capacitor'. */
   readonly VITE_PLATFORM?: string;
@@ -19,4 +22,6 @@ interface ImportMetaEnv {
   readonly VITE_ADMOB_TESTING?: string;
   /** Capacitor build: RevenueCat's public Google SDK key (goog_...); purchases are unavailable while unset. */
   readonly VITE_REVENUECAT_API_KEY?: string;
+  /** Capacitor build: the Play Console leaderboard id of the endless mode's best wave (Google Play Games); the board is skipped while unset. */
+  readonly VITE_PGS_LEADERBOARD_ENDLESS?: string;
 }

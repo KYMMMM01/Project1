@@ -26,7 +26,9 @@ import {
   type CapListenerHandle,
   type CapRestoreResult,
   type CapacitorPlugins,
+  type CapPlayGames,
 } from '../bridges';
+import { playGames } from '../playGames';
 import { createLocalStorageBackend, safeStorage } from '../storage';
 import type { AdResult, IapOutcome, OrderRecord, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
 import { errorMessage, safe, Signal } from '../util';
@@ -70,14 +72,17 @@ function revenueCatKey(): string | undefined {
 /** The store build brings in the plugin packages itself; the literal comparison drops the imports from every other build. */
 async function loadPlugins(): Promise<void> {
   if (import.meta.env.VITE_PLATFORM !== 'capacitor') return;
-  const [{ AdMob }, { Preferences }, { App }, { Purchases }] = await Promise.all([
+  const [{ AdMob }, { Preferences }, { App }, { Purchases }, { registerPlugin }] = await Promise.all([
     import('@capacitor-community/admob'),
     import('@capacitor/preferences'),
     import('@capacitor/app'),
     import('@revenuecat/purchases-capacitor'),
+    import('@capacitor/core'),
   ]);
+  // The game's own native plugin (PlayGamesPlugin.java) has no npm package: registerPlugin gives its proxy by name.
+  const PlayGames = registerPlugin<CapPlayGames>('PlayGames');
   // The packages' own types are wider than the slices in bridges.ts (overloaded addListener, enums for strings).
-  registerCapacitorPlugins({ AdMob, Preferences, App, Purchases } as unknown as CapacitorPlugins);
+  registerCapacitorPlugins({ AdMob, Preferences, App, Purchases, PlayGames } as unknown as CapacitorPlugins);
 }
 
 async function listen(
@@ -324,7 +329,7 @@ export function createAdapter(): PlatformAdapter {
       interstitialAds: false,
       iap: true,
       adFreePurchase: true,
-      leaderboard: false,
+      leaderboard: true,
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: true,
@@ -386,5 +391,7 @@ export function createAdapter(): PlatformAdapter {
     },
     storage,
     iap,
+    // Google Play Games boards: a board without a Play Console id (or a player not signed in) is skipped.
+    leaderboard: { submit: (boardId, score) => playGames.submit(boardId, score) },
   };
 }

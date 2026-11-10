@@ -354,8 +354,8 @@ export const EN: Record<string, string> = {
   'guide.endless.full':
     'It opens after you clear chapter {chapter}. The waves never end, and past wave {after} enemies get {growth}% tougher every wave, and past wave {late} {lateGrowth}% tougher.\nReaching waves {w1}, {w2} and {w3} pays rewards.',
 
-  'guide.backup_code.title': 'Meow Code (backup)',
-  'guide.backup_code.teach': 'One line of text carries your progress to a new device.',
+  'guide.backup_code.title': 'Cloud save',
+  'guide.backup_code.teach': 'Connect Google Play Games to keep your progress in the cloud.',
   'guide.backup_code.full':
-    'In Settings, make a Meow Code and your whole progress becomes one line of text. Write it down, then load it on another device to carry on.\nThe code is not stored on any server. Make a fresh one before you switch devices and never show it to anyone.',
+    "Connected to Google Play Games, your progress is saved in your Google account's cloud. Connect with the same account on a new device to carry on.\nYou can connect on the title screen or in Settings. Without it the game still saves on this device, but deleting the app deletes your progress. Purchases come back with Restore purchases in Settings.",
 };

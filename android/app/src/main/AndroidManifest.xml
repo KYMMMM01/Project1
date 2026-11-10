@@ -21,6 +21,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Play Games Services project id (gradle property pgsProjectId through a string resource); empty until Play Console is set up. -->
+        <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/game_services_project_id" />
+
         <!-- AdMob app id: the admobAppId Gradle property (android/gradle.properties); a release build refuses to run without it. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

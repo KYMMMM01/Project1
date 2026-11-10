@@ -9,16 +9,15 @@ import { uiTweens } from '@/core/tween';
 import type { NumbersMode } from '@/fx';
 import { openCodex } from '@/codex';
 import { guideProgress, openGuide, type GuideHost } from '@/guide';
-import { bundleParts, errorKey, profile } from '@/meta';
-import { iap } from '@/platform';
-import { backOut, Button, Color, drawIcon, fitLabel, motion, PaperLabel, paperSeed, popups, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, TweenBag, uiLabel } from '@/ui';
+import { bundleParts, ENDLESS_BOARD_ID, errorKey, profile } from '@/meta';
+import { iap, playGames } from '@/platform';
+import { backOut, Button, Color, drawIcon, fitLabel, motion, PaperLabel, paperSeed, ScreenScaffold, SegmentTabs, Slider, toast, Toggle, TweenBag, uiLabel } from '@/ui';
 import { refusalCue } from '@/ui/press';
 import { shell } from '@/screens/shell/controller';
 import { clearPointer, showPointer } from '@/screens/shell/HomePointer';
 import { currentSettings, ensureSettings, updateSettings } from '@/view/hud/settings';
 import { SHAKE_MODES, volumeStep, type ShakeMode } from '@/view/hud/settingsMath';
 import { playClaim } from '@/screens/battle/claim';
-import { CodeExportPopup, CodeImportPopup } from './backupPopups';
 import { paperSheet } from './kit/sheets';
 import { routinePrefs, setQuality } from './prefs';
 import { resetProgress } from './resetProgress';
@@ -72,7 +71,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
   let closed = false;
   let restoring = false;
   const bag = new TweenBag();
-  /** The "make a code" button of the rows built last: what the guidebook's backup topic points at. */
+  /** The Google Play Games button of the rows built last (connect, or the endless ranking): what the guidebook's cloud-save topic points at. */
   let backupButton: Button | null = null;
   /** Runs once the guidebook has gone and the sheet is built again (the pointer needs the new rows). */
   let afterGuide: (() => void) | null = null;
@@ -260,29 +259,37 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
       }),
     ]);
 
-    const bw = (w - SIDE * 2 - GAP) / 2;
-    const help = uiLabel(t('meta.backup.help'), { size: 26, color: Color.inkSoft, wrap: w - SIDE * 2, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 36 });
-    const records: FormRow[] = [
-      {
+    // Google Play Games (the Android app): the state, then the connect button or the endless mode's leaderboard. The Meow Code that moved a
+    // save by hand is gone (2026-11-11): the cloud save does that, and a code could be edited.
+    backupButton = null;
+    const records: FormRow[] = [];
+    const pgs = playGames.state();
+    if (pgs.status !== 'none') {
+      const helpText = pgs.status === 'on' ? t('rt.sys.pgs.on', { name: pgs.name }) : t(pgs.status === 'wait' ? 'rt.sys.pgs.wait' : 'rt.sys.pgs.off');
+      const help = uiLabel(helpText, { size: 26, color: Color.inkSoft, wrap: w - SIDE * 2, align: 'left', anchorX: 0, anchorY: 0, lineHeight: 36 });
+      records.push({
         height: 62 + Math.ceil(help.height) + 14,
         draw: (row) => {
-          labelOf(row, t('rt.sys.code.title'), w, 34, 0);
+          labelOf(row, t('rt.sys.pgs.title'), w, 34, 0);
           help.position.set(SIDE, 62);
           row.addChild(help);
         },
-      },
-      {
-        height: 96 + 40,
-        draw: (row) => {
-          const exp = buttonOf(t('rt.sys.code.export'), 'info', 'code', () => void exportCode(), bw);
-          backupButton = exp;
-          exp.position.set(SIDE + bw / 2, 68);
-          const imp = buttonOf(t('rt.sys.code.import'), 'info', 'code', () => void popups.open(new CodeImportPopup(onChanged)), bw);
-          imp.position.set(SIDE + bw + GAP + bw / 2, 68);
-          row.addChild(exp, imp);
-        },
-      },
-    ];
+      });
+      const board = pgs.status === 'on' && playGames.boardId(ENDLESS_BOARD_ID) !== undefined;
+      if (pgs.status === 'off' || board) {
+        records.push({
+          height: 96 + 40,
+          draw: (row) => {
+            const label = t(pgs.status === 'off' ? 'shell.title.pgs.connect' : 'rt.sys.pgs.board');
+            const b = new Button({ label, iconImage: 'icon_pgs_controller', style: 'neutral', width: w - SIDE * 2, height: 96, fontSize: 32 });
+            b.onTap(() => void (pgs.status === 'off' ? playGames.connect() : playGames.showBoard(ENDLESS_BOARD_ID)));
+            backupButton = b;
+            b.position.set(w / 2, 68);
+            row.addChild(b);
+          },
+        });
+      }
+    }
     if (iap.isAvailable()) {
       records.push({
         height: 96 + 40,
@@ -293,7 +300,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
         },
       });
     }
-    add(t('rt.sys.section.data'), records);
+    if (records.length > 0) add(t('rt.sys.section.data'), records);
 
     // The one dangerous action lives on a kraft note of its own, away from the ordinary rows.
     const note = new Container();
@@ -380,11 +387,6 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     next?.();
   };
 
-  const exportCode = async (): Promise<void> => {
-    const code = await profile.exportCode();
-    if (!closed) void popups.open(new CodeExportPopup(code));
-  };
-
   const restorePurchases = async (b: Button): Promise<void> => {
     if (restoring) return;
     restoring = true;
@@ -408,6 +410,8 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     if (!closed) build(true);
   };
   const offLang = i18nEvents.on('change', () => queueMicrotask(rebuild));
+  // Signing in (or out) of Google Play Games while the sheet is open changes its rows.
+  const offPgs = playGames.onChange(() => queueMicrotask(rebuild));
 
   // The notice at the top appears the moment the first write is lost, even with this screen already open.
   const offVolatile = onStorageVolatile(() => queueMicrotask(rebuild));
@@ -418,6 +422,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     clearPointer();
     bag.killAll();
     offLang();
+    offPgs();
     offVolatile();
     current = null;
     dispose = null;
@@ -429,6 +434,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     clearPointer();
     bag.killAll();
     offLang();
+    offPgs();
     offVolatile();
     current = null;
     dispose = null;

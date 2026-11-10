@@ -12,15 +12,26 @@ import { isDiagRoute } from '@/diag/route';
 import { crumb, currentTrail, previousEnds, startCrumbs } from '@/core/crumbs';
 import { LEAN_WINDOW_MS, leanVerdict, startLean } from '@/core/lean';
 import { gpuMemoryStats } from '@/core/gpuMemory';
+import type { PgsView } from '@/screens/shell/TitleOverlay';
 
-/** The title moment of a real launch lasts at least this long, in milliseconds. */
+/** A real launch shows the title moment (a positive value turns it on; the title then waits for a tap). */
 const TITLE_MS = 1100;
 
-/** How long the title moment lasts: a real launch always has it; QA routes skip it (?scene=..., ?notitle=1) or stretch it (?titlems=N). */
+/** Whether the title moment is shown: a real launch always has it; QA routes skip it (?scene=..., ?notitle=1). */
 function titleMoment(params: URLSearchParams, debug: boolean): number {
   if (!debug) return TITLE_MS;
-  if (params.has('scene') || params.has('notitle')) return 0;
-  return Number(params.get('titlems')) || TITLE_MS;
+  return params.has('scene') || params.has('notitle') ? 0 : TITLE_MS;
+}
+
+/** QA only: the title leaves by itself after ?titlems=N instead of waiting for a tap. */
+function titleAuto(params: URLSearchParams, debug: boolean): number {
+  return debug ? Number(params.get('titlems')) || 0 : 0;
+}
+
+/** QA only: a faked Google Play Games state on the title (?pgs=on|off|wait). */
+function titlePgs(params: URLSearchParams, debug: boolean): PgsView | null {
+  const p = debug ? params.get('pgs') : null;
+  return p === 'on' ? { state: 'on', name: '냥집사' } : p === 'off' ? { state: 'off' } : p === 'wait' ? { state: 'wait' } : null;
 }
 
 // Dev galleries: ?demo=ui loads src/demo/UiDemo.ts, ?demo=fx loads src/demo/FxDemo.ts, and so on.
@@ -95,7 +106,10 @@ async function main(): Promise<void> {
   // QA: ?lang=ko|en overrides the saved language once the settings are applied (registered first, so it runs before the first scene is built).
   const lang = params.get('lang');
   if (debug && (lang === 'ko' || lang === 'en')) void ready.then(() => setLang(lang));
-  await scenes.goto(() => new BootScene(() => app.firstScene(), ready, () => app.shown(), titleMoment(params, debug)), 'none');
+  await scenes.goto(
+    () => new BootScene(() => app.firstScene(), ready, () => app.shown(), titleMoment(params, debug), titleAuto(params, debug), titlePgs(params, debug)),
+    'none',
+  );
 }
 
 main().catch((err) => {
