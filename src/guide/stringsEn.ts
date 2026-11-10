@@ -352,7 +352,7 @@ export const EN: Record<string, string> = {
   'guide.endless.title': 'Endless Mode',
   'guide.endless.teach': 'See how long you last against endless waves.',
   'guide.endless.full':
-    'It opens after you clear chapter {chapter}. The waves never end, and past wave {after} enemies get {growth}% tougher every wave.\nReaching waves {w1}, {w2} and {w3} pays rewards.',
+    'It opens after you clear chapter {chapter}. The waves never end, and past wave {after} enemies get {growth}% tougher every wave, and past wave {late} {lateGrowth}% tougher.\nReaching waves {w1}, {w2} and {w3} pays rewards.',
 
   'guide.backup_code.title': 'Meow Code (backup)',
   'guide.backup_code.teach': 'One line of text carries your progress to a new device.',

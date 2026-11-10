@@ -61,9 +61,7 @@ const SKILL_NEW: Readonly<Record<string, readonly Cue[]>> = {
     { sfx: 'sp_clone_vanish', volume: 0.9, at: 3.3 },
   ],
   'skill:wanted': [
-    { sfx: 'sp_poster_slap', volume: 1, at: 0 },
     { sfx: 'sp_cork_pop', volume: 0.9, at: 0.3 },
-    { sfx: 'sp_poster_hole', volume: 1, at: 0.55 },
     { sfx: 'sp_seal_stamp', volume: 0.9, at: 0.64 },
   ],
   'skill:lap': [

@@ -101,7 +101,7 @@ BACKGROUNDS = {
     "bg_kitchen": "a bright kitchen floor: cream and mint checkerboard tiles. Along the outer edges only: the bottom of white cabinets, a red fridge corner, a small trash bin, a spilled cereal bowl, a fallen wooden spoon, a floor mat by the sink",
     "bg_bathroom": "a clean bathroom floor: small pale-blue hexagon tiles, slightly wet and shiny. Along the outer edges only: the side of a white bathtub, a fluffy bath mat, a rubber duck, a laundry basket, soap bubbles, a towel dropped on the floor",
     "bg_garden": "a sunny backyard lawn: soft green grass with a few daisies and stepping stones. Along the outer edges only: a wooden fence, a flower bed, a garden hose, a watering can, a doghouse corner, scattered autumn leaves",
-    "bg_vet": "a pet clinic floor: clean light-teal vinyl with a subtle paw-print pattern. Along the outer edges only: the legs of an exam table, a pet carrier, a weighing scale, a cabinet with jars, a waiting-room chair, a potted plant",
+    "bg_vet": "a pet clinic floor: pale butter-yellow vinyl with faint white paw-print stamps. Along the outer edges only: the legs of an exam table, a blue pet carrier, a weighing scale, a medicine cabinet with jars, a small first-aid kit with a red cross, a potted plant",
 }
 
 RUGS = {

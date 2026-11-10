@@ -3,6 +3,7 @@
  * comes from foes.ts (which reads the data tables); nothing is typed here, so a test can recompute any shown number and compare.
  */
 import { t } from '@/core/i18n';
+import { tilesText } from '@/game/data/lengthText';
 import { ENEMY_SPECS } from '@/game/data/enemies';
 import { stakeRules } from '@/game/data/stakes';
 import { traitOrder } from '@/view/hud/policy';
@@ -154,6 +155,7 @@ function shown(vars: Record<string, number>): Record<string, string> {
 function abilityLine(a: Ability): AbilityLine {
   const vars: Record<string, string | number> = shown(a.vars);
   for (const [key, id] of Object.entries(a.names)) vars[key] = foeName(id);
+  if (a.vars.radius !== undefined) vars.radius = tilesText(a.vars.radius);
   return { name: t(`codex.ability.${a.kind}.name`), text: t(`codex.ability.${a.kind}.text`, vars) };
 }
 

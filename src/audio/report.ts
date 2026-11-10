@@ -18,6 +18,7 @@ import { busNode, createGraph } from './graph';
 import { Hush } from './hush';
 import { MusicPlayer } from './music';
 import { CAT_TARGET } from './recipe';
+import { sampleStore } from './samples';
 import { SOUNDS, sfxIndexOf, type SoundDef } from './sounds';
 import { SCORES, TRACK_IDS } from './library';
 import type { MusicTrackId } from './scores';
@@ -64,6 +65,8 @@ export interface ReportRow {
   bytes: number;
   /** Normalisation gain applied to the raw synth output. */
   gainDb: number;
+  /** The row measured an ElevenLabs recording of the owner's (the recipe played the file alone): see `judgedByRecording`. */
+  recorded: boolean;
   ok: boolean;
   issues: string[];
 }
@@ -124,6 +127,8 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
   const max = (f: (s: SoundStats) => number) => all.reduce((m, s) => Math.max(m, f(s)), -Infinity);
   const mean = (f: (s: SoundStats) => number) => all.reduce((m, s) => m + f(s), 0) / all.length;
   const [lo, hi] = def.recipe.ms;
+  // (the same condition as `recording()` in recipe.ts: the recipe asks for its own file and the file has been read)
+  const recorded = (def.recipe.needs ?? []).includes(`elevenlabs/${def.id}`) && sampleStore.get(`elevenlabs/${def.id}`) !== undefined;
   const issues: string[] = [];
   if (all.some((s) => s.silent)) issues.push('silent');
   if (all.some((s) => s.clipped)) issues.push('clipped');
@@ -131,7 +136,8 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
   if (all.some((s) => Math.abs(s.dcOffset) > DC_LIMIT)) issues.push('dc');
   if (all.some((s) => !s.startsAtZero)) issues.push('click-start');
   if (all.some((s) => !s.endsNearZero)) issues.push('click-end');
-  if (all.some((s) => s.durationMs < lo || s.durationMs > hi)) issues.push(`duration ${Math.round(max((s) => s.durationMs))}ms not in ${lo}-${hi}`);
+  // A recording is as long as the owner made it: its window keeps the upper bound (the memory and the music's ducking are sized by it) and drops the lower one.
+  if (all.some((s) => s.durationMs > hi || (!recorded && s.durationMs < lo))) issues.push(`duration ${Math.round(max((s) => s.durationMs))}ms not in ${lo}-${hi}`);
   return {
     id: def.id,
     kind: def.stinger ? 'stinger' : 'sfx',
@@ -163,6 +169,7 @@ async function rowFor(def: SoundDef, sampleRate: number): Promise<ReportRow> {
     sig: (all[0] as SoundStats).sig,
     bytes,
     gainDb: round(gainDb, 1),
+    recorded,
     ok: issues.length === 0,
     issues,
   };
@@ -178,10 +185,16 @@ function familyChecks(rows: readonly ReportRow[], families: readonly Family[] = 
   const by = new Map(rows.map((r) => [r.kind === 'stinger' ? `stinger:${r.id}` : r.id, r]));
   return families.map((fam) => {
     const bad: string[] = [];
+    let recordings = 0;
     for (const key of fam.members) {
       const r = by.get(key);
       if (!r) {
         bad.push(`${key} missing`);
+        continue;
+      }
+      // The bands of a family say what a synthesis is made of (a paper tap, a wood knock, a tine); a recording is judged by `judgedByRecording`, not by them.
+      if (r.recorded) {
+        recordings++;
         continue;
       }
       if (r.durationMs > fam.maxMs) bad.push(`${key} ${r.durationMs} ms`);
@@ -195,7 +208,7 @@ function familyChecks(rows: readonly ReportRow[], families: readonly Family[] = 
     return {
       name: `family "${fam.name}": at most ${fam.maxMs} ms, attack <= ${fam.maxAttackMs} ms, centroid ${fam.centroid[0]}-${fam.centroid[1]} Hz, low <= ${fam.maxLow}, high <= ${fam.maxHigh}${fam.minSnap === undefined ? '' : `, snap >= ${fam.minSnap}`}`,
       ok: bad.length === 0,
-      detail: bad.length === 0 ? `${fam.members.length} sounds inside` : bad.join('; '),
+      detail: bad.length === 0 ? `${fam.members.length - recordings} sounds inside${recordings ? `, ${recordings} recorded (own rules)` : ''}` : bad.join('; '),
     };
   });
 }
@@ -208,7 +221,7 @@ function closestPair(rows: ReadonlyMap<string, ReportRow>, ids: readonly string[
     for (let j = i + 1; j < ids.length; j++) {
       const a = rows.get(ids[i] as string);
       const b = rows.get(ids[j] as string);
-      if (!a || !b) continue;
+      if (!a || !b || a.recorded || b.recorded) continue;
       const d = signatureDistance(a.sig, b.sig);
       if (d < dist) {
         dist = d;
@@ -217,6 +230,20 @@ function closestPair(rows: ReadonlyMap<string, ReportRow>, ids: readonly string[
     }
   }
   return { dist: round(dist, 2), pair };
+}
+
+/**
+ * How a recording is judged. A recording is the owner's pick and a whole sound: it has to be healthy (not silent, clipped, cut off or off-centre, and click-safe at both
+ * ends: the row's `issues`), no longer than its recipe allows, and as loud as its tier (the bake normalises every sound to its family's target). What it does not have
+ * to be is what a synthesis was designed to be: the bands of a family (centroid, attack, low and high share, a paper tap's length), being unlike its neighbours by
+ * fingerprint, climbing a ladder rank by rank, or being the lighter or brighter half of a pair. Those rules exist because a recipe could be tuned until it met them; a file
+ * cannot, and holding it to them would only fail a sound the owner chose. A check that compares a recording with other sounds is skipped (it passes, with the reason in its detail).
+ */
+function judgedByRecording(checks: Check[]) {
+  return (name: string, ok: boolean, detail: string, ...of: readonly ReportRow[]): void => {
+    const rec = of.filter((x) => x.recorded).map((x) => x.id);
+    checks.push(rec.length > 0 ? { name, ok: true, detail: `skipped, ${rec.join(', ')} is a recording` } : { name, ok, detail });
+  };
 }
 
 /** Two sounds this close are one sound to the ear: a unit is a clear difference in one respect (see analysis.ts SIG_UNIT). */
@@ -233,7 +260,8 @@ function combatChecks(rows: readonly ReportRow[]): Check[] {
   const by = new Map(rows.filter((x) => x.kind === 'sfx').map((x) => [x.id, x]));
   const get = (id: string): ReportRow => by.get(id) as ReportRow;
   const checks: Check[] = [];
-  const check = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+  const check = judgedByRecording(checks);
+  const synth = (list: readonly ReportRow[]) => list.filter((x) => !x.recorded);
 
   for (const [name, ids] of [['releases', RELEASES], ['impacts', IMPACTS], ['enemy hits', FOE_HITS], ['enemy deaths', FOE_DEATHS], ['boss deaths', BOSS_DEATHS]] as const) {
     const c = closestPair(by, ids);
@@ -244,14 +272,15 @@ function combatChecks(rows: readonly ReportRow[]): Check[] {
       const rs = line.map((u) => get(`${prefix}${u}`));
       const loud = rs.map((x) => x.loudRms);
       const grows = (v: readonly number[], slack: number) => v.every((x, i) => i === 0 || x >= (v[i - 1] as number) * slack);
-      check(`${line[0]} line ${kind}s grow rank by rank (200 ms loudness, each at least 4 % above the one before)`, grows(loud, 1.04), loud.join(' < '));
+      check(`${line[0]} line ${kind}s grow rank by rank (200 ms loudness, each at least 4 % above the one before)`, grows(loud, 1.04), loud.join(' < '), ...rs);
       const head = (rs[0] as ReportRow).durationMs + (rs[1] as ReportRow).durationMs;
       const tail = (rs[3] as ReportRow).durationMs + (rs[4] as ReportRow).durationMs;
-      check(`${line[0]} line ${kind}s: the top two ranks are longer than the bottom two`, tail > head, `${head} ms < ${tail} ms`);
+      check(`${line[0]} line ${kind}s: the top two ranks are longer than the bottom two`, tail > head, `${head} ms < ${tail} ms`, ...rs);
     }
   }
-  const imps = IMPACTS.map(get);
-  const rels = RELEASES.map(get);
+  const allImps = IMPACTS.map(get);
+  const imps = synth(allImps);
+  const rels = synth(RELEASES.map(get));
   const mean = (list: readonly ReportRow[], f: (x: ReportRow) => number) => list.reduce((a, x) => a + f(x), 0) / list.length;
   check('every impact has a crisp start (A-weighted 2-6 kHz share of its first 20 ms >= 0.05)', imps.every((x) => x.snapFrac >= 0.05), imps.filter((x) => x.snapFrac < 0.05).map((x) => `${x.id} ${x.snapFrac}`).join(', ') || 'all');
   // The hit pass of 2026-10-19 (docs/qa/sound_audit_2026-10-18.md, 13): a hit begins with a crack, a phone can play it, it does not ring on, and what a blow adds to it is bigger.
@@ -261,14 +290,14 @@ function combatChecks(rows: readonly ReportRow[]): Check[] {
   check('an impact falls to a tenth of its peak in 60 ms (the top rank of a line in 80 ms)', imps.every((x) => x.fallMs <= (top.has(x.id) ? 80 : 60)), imps.map((x) => `${x.id.slice(4)} ${x.fallMs}`).join(', '));
   check('a phone can play most of every impact (the share at 250 Hz and up >= 0.35, the heavy hitters included)', imps.every((x) => x.phoneFrac >= 0.35) && get('hit_heavy').phoneFrac >= 0.35, imps.filter((x) => x.phoneFrac < 0.35).map((x) => `${x.id.slice(4)} ${x.phoneFrac}`).join(', ') || `heavy ${get('hit_heavy').phoneFrac}`);
   check('the crit and the heavy layer have a body a phone plays too (>= 0.35 at 250 Hz and up)', get('crit').phoneFrac >= 0.35 && get('hit_heavy').phoneFrac >= 0.35, `crit ${get('crit').phoneFrac}, heavy ${get('hit_heavy').phoneFrac}`);
-  check('every cat\'s release is lighter than its landing (200 ms loudness at most 95 % of it): the release is the lighter half of the pair', RELEASES.every((id, i) => get(id).loudRms <= (imps[i] as ReportRow).loudRms * 0.95), RELEASES.map((id, i) => `${id.slice(4)} ${round(get(id).loudRms / (imps[i] as ReportRow).loudRms, 2)}`).join(', '));
-  const hits = FOE_HITS.map(get);
+  check('every cat\'s release is lighter than its landing (200 ms loudness at most 95 % of it): the release is the lighter half of the pair', RELEASES.every((id, i) => get(id).recorded || (allImps[i] as ReportRow).recorded || get(id).loudRms <= (allImps[i] as ReportRow).loudRms * 0.95), RELEASES.map((id, i) => `${id.slice(4)} ${round(get(id).loudRms / (allImps[i] as ReportRow).loudRms, 2)}`).join(', '));
+  const hits = synth(FOE_HITS.map(get));
   check('what an enemy answers with is in the band of what it is made of: no two answers share a centroid within 12 %, the hard ones (plastic, tin, glass) have a crack', hits.every((x, i) => hits.every((y, j) => i === j || Math.abs(Math.log(x.centroidHz / y.centroidHz)) > 0.12)) && ['plastic', 'tin', 'glass'].every((m) => get(`foe_${m}_hit`).biteFrac >= 0.05), hits.map((x) => `${x.id.slice(4, -4)} ${x.centroidHz}`).join(', '));
   const heavy = ['imp_w_viking', 'imp_w_tiger', 'imp_m_cosmo', 'imp_m_fire', 'imp_m_storm', 'imp_r_gunner'];
   check('the heavy hitters carry a low body (80-200 Hz share >= 0.1)', heavy.every((id) => get(id).bodyFrac >= 0.1), heavy.map((id) => `${id.slice(4)} ${get(id).bodyFrac}`).join(', '));
   check('impacts are louder than releases, releases louder than the UI', mean(imps, (x) => x.peak) > mean(rels, (x) => x.peak) && mean(rels, (x) => x.peak) > get('ui_click').peak, `${round(mean(imps, (x) => x.peak), 3)} > ${round(mean(rels, (x) => x.peak), 3)} > ${get('ui_click').peak}`);
   check('releases are short (mean under 180 ms) and impacts shorter (mean under 140 ms)', mean(rels, (x) => x.durationMs) < 180 && mean(imps, (x) => x.durationMs) < 140, `${Math.round(mean(rels, (x) => x.durationMs))} ms, ${Math.round(mean(imps, (x) => x.durationMs))} ms`);
-  check('bosses die heavier and longer than any enemy', BOSS_DEATHS.every((id) => get(id).durationMs > Math.max(...FOE_DEATHS.map((d) => get(d).durationMs))) , BOSS_DEATHS.map((id) => `${id.slice(9)} ${get(id).durationMs}`).join(', '));
+  check('bosses die heavier and longer than any enemy', synth(BOSS_DEATHS.map(get)).every((b) => b.durationMs > Math.max(...synth(FOE_DEATHS.map(get)).map((d) => d.durationMs))), BOSS_DEATHS.map((id) => `${id.slice(9)} ${get(id).durationMs}`).join(', '));
   return checks;
 }
 
@@ -277,9 +306,10 @@ function designChecks(rows: ReportRow[]): Check[] {
   const by = new Map(rows.map((r) => [`${r.kind}:${r.id}`, r]));
   const r = (id: string): ReportRow => by.get(`sfx:${id}`) as ReportRow;
   const checks: Check[] = [];
-  const check = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+  const check = judgedByRecording(checks);
 
-  const ladder = ['summon_common', 'summon_rare', 'summon_epic', 'summon_legendary', 'summon_mythic'].map(r);
+  // (a recording on the ladder, the common summon today, is left out: the rungs that are synthesis still climb)
+  const ladder = ['summon_common', 'summon_rare', 'summon_epic', 'summon_legendary', 'summon_mythic'].map(r).filter((x) => !x.recorded);
   const climbs = (pick: (x: ReportRow) => number, slack: number) => ladder.every((x, i) => i === 0 || pick(x) >= pick(ladder[i - 1] as ReportRow) * slack);
   check('summon escalates in length', ladder.every((x, i) => i === 0 || x.durationMs > (ladder[i - 1] as ReportRow).durationMs), ladder.map((x) => x.durationMs).join(' < '));
   check('summon escalates in peak level', climbs((x) => x.peak, 0.999), ladder.map((x) => x.peak).join(' <= '));
@@ -293,7 +323,7 @@ function designChecks(rows: ReportRow[]): Check[] {
   check('ui_error is a dull knock, darker than the click', r('ui_error').centroidHz < r('ui_click').centroidHz, `${r('ui_error').centroidHz} vs ${r('ui_click').centroidHz} Hz`);
   check('ui_tab is a double slide (longer than a tap, shorter than 125 ms)', r('ui_tab').durationMs > r('ui_click').durationMs && r('ui_tab').durationMs <= 125, `${r('ui_tab').durationMs} ms`);
   check('reward_claim is a stamp: weight under a hard touch (low share 0.1-0.5, attack under 6 ms)', r('reward_claim').lowFrac >= 0.1 && r('reward_claim').lowFrac <= 0.5 && r('reward_claim').attackMs < 6, `low ${r('reward_claim').lowFrac}, attack ${r('reward_claim').attackMs} ms`);
-  check('coin is a soft pitched tine and gem the brighter one', r('coin').centroidHz > 500 && r('coin').centroidHz < 1200 && r('gem').centroidHz > r('coin').centroidHz, `${r('coin').centroidHz} < ${r('gem').centroidHz} Hz`);
+  check('coin is a soft pitched tine and gem the brighter one', r('coin').centroidHz > 500 && r('coin').centroidHz < 1200 && r('gem').centroidHz > r('coin').centroidHz, `${r('coin').centroidHz} < ${r('gem').centroidHz} Hz`, r('coin'), r('gem'));
   check('star is a sticker pop (pitched, 400-900 Hz, attack under 4 ms)', r('star').centroidHz > 400 && r('star').centroidHz < 900 && r('star').attackMs < 4, `${r('star').centroidHz} Hz, attack ${r('star').attackMs} ms`);
 
   // Battle texture.
@@ -302,20 +332,20 @@ function designChecks(rows: ReportRow[]): Check[] {
   check('hit_heavy is the weight under a heavy blow: body 80-200 Hz (>= 0.15) and a crisp start (snap >= 0.05)', r('hit_heavy').bodyFrac >= 0.15 && r('hit_heavy').snapFrac >= 0.05, `body ${r('hit_heavy').bodyFrac}, snap ${r('hit_heavy').snapFrac}`);
   check('crit is a bright crack with a body under it, brighter than the heavy layer and louder than a plain hit', r('crit').centroidHz > r('hit_heavy').centroidHz && r('crit').snapFrac >= 0.2 && r('crit').bodyFrac >= 0.1 && r('crit').peak > r('hit_light').peak, `centroid ${r('hit_heavy').centroidHz} -> ${r('crit').centroidHz} Hz, snap ${r('crit').snapFrac}, body ${r('crit').bodyFrac}`);
   check('explosion and boss_die carry low end', r('explosion').lowFrac > 0.25 && r('boss_die').lowFrac > 0.25, `${r('explosion').lowFrac}, ${r('boss_die').lowFrac}`);
-  check('boss_warning is a low mallet roll, not a siren (centroid under 500 Hz, 0.8-1.45 s)', r('boss_warning').centroidHz < 500 && r('boss_warning').durationMs >= 800 && r('boss_warning').durationMs <= 1450, `${r('boss_warning').centroidHz} Hz, ${r('boss_warning').durationMs} ms`);
+  check('boss_warning is a low mallet roll under a rising siren (centroid under 800 Hz, 0.8-1.45 s)', r('boss_warning').centroidHz < 800 && r('boss_warning').durationMs >= 800 && r('boss_warning').durationMs <= 1450, `${r('boss_warning').centroidHz} Hz, ${r('boss_warning').durationMs} ms`);
   check('danger_alarm is a short heartbeat knock', r('danger_alarm').durationMs <= 330, `${r('danger_alarm').durationMs} ms`);
   check('hazard_warn is shorter than danger_alarm', r('hazard_warn').durationMs < r('danger_alarm').durationMs, `${r('hazard_warn').durationMs} < ${r('danger_alarm').durationMs} ms`);
   check('laser_off is the shorter blip of the pair', r('laser_off').durationMs < r('laser_on').durationMs, `${r('laser_off').durationMs} < ${r('laser_on').durationMs} ms`);
   check('molt is a soft puff (little energy above 4 kHz)', r('molt').highFrac < 0.2, `${r('molt').highFrac}`);
   check('purr flutters at about 25 Hz', Math.abs(r('purr').modHz - 25) <= 4 && r('purr').modDepth > 0.2, `${r('purr').modHz} Hz, index ${r('purr').modDepth}`);
-  check('purr is low-end warm and quieter than the combat family', r('purr').lowFrac > 0.3 && r('purr').loudRms < r('merge').loudRms, `low ${r('purr').lowFrac}, ${r('purr').loudRms} < ${r('merge').loudRms}`);
+  check('purr is low-end warm and quieter than the combat family', r('purr').lowFrac > 0.3 && r('purr').loudRms < r('merge').loudRms, `low ${r('purr').lowFrac}, ${r('purr').loudRms} < ${r('merge').loudRms}`, r('purr'), r('merge'));
   const mythic = by.get('stinger:mythic') as ReportRow;
   check('awaken is a short proud fanfare under 1.5 s with the highest peak of any SFX and a loudness within 3 dB of the big tier', r('awaken').durationMs < 1500 && rows.filter((x) => x.kind === 'sfx').every((x) => x.peak <= r('awaken').peak + 0.001) && gainToDb(r('awaken').loudRms / CAT_TARGET.big.rms) > -3, `${r('awaken').durationMs} ms, peak ${r('awaken').peak}, loud ${r('awaken').loudRms}`);
-  check('call_wave is brighter than the plain wave_start pair', r('call_wave').centroidHz > r('wave_start').centroidHz, `${r('call_wave').centroidHz} vs ${r('wave_start').centroidHz} Hz`);
+  check('call_wave is brighter than the plain wave_start pair', r('call_wave').centroidHz > r('wave_start').centroidHz, `${r('call_wave').centroidHz} vs ${r('wave_start').centroidHz} Hz`, r('call_wave'), r('wave_start'));
   check('sunbeam is warm and airy, not shrill', r('sunbeam').highFrac < 0.15 && r('sunbeam').centroidHz > 500 && r('sunbeam').centroidHz < 2000, `${r('sunbeam').centroidHz} Hz, high ${r('sunbeam').highFrac}`);
   check('splash is broadband water noise', r('splash').centroidHz > 700, `${r('splash').centroidHz} Hz`);
   check('zap is a short fizz (under 200 ms, centroid 600-2500 Hz)', r('zap').durationMs < 200 && r('zap').centroidHz > 600 && r('zap').centroidHz < 2500, `${r('zap').centroidHz} Hz, ${r('zap').durationMs} ms`);
-  check('weaken is dull and droopy (darker than a coin)', r('weaken').centroidHz < 1000 && r('weaken').centroidHz < r('coin').centroidHz, `${r('weaken').centroidHz} Hz`);
+  check('weaken is dull and droopy (darker than a coin)', r('weaken').centroidHz < 1000 && r('weaken').centroidHz < r('coin').centroidHz, `${r('weaken').centroidHz} Hz`, r('weaken'), r('coin'));
   check('shield_break is a scatter (longer and brighter than a plain knock, quieter highs than glass)', r('shield_break').durationMs > 200 && r('shield_break').highFrac < 0.1, `${r('shield_break').durationMs} ms, high ${r('shield_break').highFrac}`);
 
   // Loudness order of the families, by peak: UI < shots/hits < combat < rewards < big.
@@ -326,7 +356,8 @@ function designChecks(rows: ReportRow[]): Check[] {
   const stingers = rows.filter((x) => x.kind === 'stinger');
   check('stingers are 1-2.3 s', stingers.every((x) => x.durationMs >= 1000 && x.durationMs <= 2300), stingers.map((x) => `${x.id} ${x.durationMs}`).join(', '));
   check('defeat is gentle: no low thud, a soft centroid', (by.get('stinger:defeat') as ReportRow).lowFrac < 0.2 && (by.get('stinger:defeat') as ReportRow).centroidHz < 800, `low ${(by.get('stinger:defeat') as ReportRow).lowFrac}, ${(by.get('stinger:defeat') as ReportRow).centroidHz} Hz`);
-  check('victory is a warm tune (centroid 500-1500 Hz)', (by.get('stinger:victory') as ReportRow).centroidHz > 500 && (by.get('stinger:victory') as ReportRow).centroidHz < 1500, `${(by.get('stinger:victory') as ReportRow).centroidHz} Hz`);
+  const victory = by.get('stinger:victory') as ReportRow;
+  check('victory is a warm tune (centroid 500-1500 Hz)', victory.centroidHz > 500 && victory.centroidHz < 1500, `${victory.centroidHz} Hz`, victory);
   check('mythic stinger sits within 3 dB of awaken', Math.abs(gainToDb(r('awaken').loudRms) - gainToDb(mythic.loudRms)) < 3, `${r('awaken').loudRms} vs ${mythic.loudRms}`);
   return [...checks, ...familyChecks(rows)];
 }
@@ -705,8 +736,8 @@ function fightEvents(seconds: number, speed: number): MixEvent[] {
 function battleEvents(seconds: number): MixEvent[] {
   const ev: MixEvent[] = [];
   for (let t = 0.2; t < seconds; t += 1 / 16) ev.push({ at: t, id: 'hit_light' });
-  for (let t = 0.3; t < seconds; t += 0.25) ev.push({ at: t, id: 'enemy_die' });
-  for (let t = 0.1, k = 0; t < seconds; t += 1 / 8, k++) ev.push({ at: t, id: k % 2 ? 'shoot_arrow' : 'shoot_magic' });
+  for (let t = 0.3; t < seconds; t += 0.25) ev.push({ at: t, id: 'foe_paper_die' });
+  for (let t = 0.1, k = 0; t < seconds; t += 1 / 8, k++) ev.push({ at: t, id: k % 2 ? 'atk_r_archer' : 'atk_m_fire' });
   for (let t = 0.4; t < seconds; t += 0.2) ev.push({ at: t, id: 'coin' });
   for (let t = 1; t < seconds; t += 2) ev.push({ at: t, id: 'explosion' });
   for (let t = 0.7; t < seconds; t += 1.1) ev.push({ at: t, id: 'hit_heavy' });

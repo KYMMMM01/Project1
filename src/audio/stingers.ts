@@ -76,7 +76,10 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
     trim: -3,
     len: 1.9,
     ms: [1100, 1700],
+    needs: ['elevenlabs/mythic'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'mythic')) return;
       // The halo after the awakening: the awaken sound has already struck the chord, so this one has no attack of its own. A
       // quiet marimba roll alternating C6 and G5 swells and fades, a low plucked C holds under it, hand bells and kalimba
       // tines fall through the C-major pentatonic set and a shake of paper drifts across.
@@ -93,7 +96,10 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
     trim: -2,
     len: 1.6,
     ms: [1000, 1500],
+    needs: ['elevenlabs/level_up_stinger'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'level_up_stinger')) return;
       // Triumphant but small: the stamp, a marimba climb (C5 E5 G5), a held C6 over a C-major chord and bells above it.
       const e = s.echo(0.08, 0.25, 0.25, 5000);
       stamp(s, 0, 0.8);
@@ -102,6 +108,25 @@ export const STINGER_RECIPES: Record<StingerId, Recipe> = {
       ['G6', 'C7', 'E7'].forEach((n, k) => bell(s, hz(n), 0.42 + k * 0.1, 0.6, 0.3, { bus: e, amt: 0.3 }));
       kalimba(s, hz('E6'), 0.6, 0.5, 0.4, { bus: e, amt: 0.3 });
       shake(s, 0.4, 0.4, 0.5);
+    },
+  },
+  king: {
+    cat: 'stinger',
+    trim: -3,
+    len: 1.6,
+    ms: [1000, 1500],
+    build(s) {
+      // A cat is crowned (a merge that makes a top rank, 대왕; the owner kept this synthesis over a recording, 2026-11-10). A marimba call in
+      // G major (G4 D5 G5 B5) lands at 0.32 s on the stamp, a low plucked G and a full chord, hand bells crown it and a kalimba tine answers;
+      // no halo or roll, so it is told from the awakening's `mythic` (a roll that fades) and from `level_up` (C major, one climb of three).
+      const e = s.echo(0.08, 0.25, 0.25, 5000);
+      ['G4', 'D5', 'G5', 'B5'].forEach((n, k) => mallet(s, hz(n), k * 0.08, 0.28, 0.7 + k * 0.04));
+      stamp(s, 0.32, 0.9, 120);
+      ['G4', 'B4', 'D5', 'G5'].forEach((n) => mallet(s, hz(n), 0.32, 0.8, 0.65, { bus: e, amt: 0.3 }));
+      pluck(s, hz('G3'), 0.32, 0.7, 0.7);
+      ['D6', 'G6', 'B6'].forEach((n, k) => bell(s, hz(n), 0.36 + k * 0.08, 0.6, 0.32, { bus: e, amt: 0.3 }));
+      kalimba(s, hz('D7'), 0.62, 0.4, 0.3, { bus: e, amt: 0.3 });
+      shake(s, 0.32, 0.4, 0.5);
     },
   },
   jackpot: {
@@ -135,4 +160,5 @@ export const STINGER_DUCK: Record<StingerId, number> = {
   mythic: 0.75,
   level_up: 0.5,
   jackpot: 0.65,
+  king: 0.55,
 };

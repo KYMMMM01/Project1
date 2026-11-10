@@ -72,7 +72,7 @@ describe('sound board catalog: every sound of the game can be heard', () => {
   it('lists every music track and every stinger', () => {
     const tracks: Record<Exclude<MusicId, 'none'>, true> = { home: true, home2: true, battle: true, kitchen: true, bath: true, garden: true, clinic: true, elite: true, boss: true, gold: true, win: true, lose: true };
     expect(MUSIC_ROWS.map((m) => m.id).sort()).toEqual(Object.keys(tracks).sort());
-    const stingers: Record<StingerId, true> = { victory: true, defeat: true, boss_intro: true, mythic: true, level_up: true, jackpot: true };
+    const stingers: Record<StingerId, true> = { victory: true, defeat: true, boss_intro: true, mythic: true, king: true, level_up: true, jackpot: true };
     expect(STINGER_ROWS.map((s) => s.id).sort()).toEqual(Object.keys(stingers).sort());
     for (const m of MUSIC_ROWS) expect(HANGUL.test(m.ko + m.when), m.id).toBe(true);
     for (const s of STINGER_ROWS) expect(HANGUL.test(s.ko + s.when), s.id).toBe(true);

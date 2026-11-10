@@ -139,8 +139,13 @@ export class Toggle extends Container {
     const p = this.pos;
     const travel = (TW - TH) / 2;
     this.knob.x = lerp(-travel, travel, p);
-    this.onLayer.alpha = clamp01(p);
-    this.check.alpha = clamp01(p);
+    // Hidden at 0, not only transparent: inside a render group (the battle's layers, where the pause menu's settings open) a piece whose
+    // alpha drops to 0 keeps its last drawn alpha on screen, so a switched-off toggle went on showing its green fill and check.
+    const a = clamp01(p);
+    this.onLayer.alpha = a;
+    this.onLayer.visible = a > 0;
+    this.check.alpha = a;
+    this.check.visible = a > 0;
   }
 
   override destroy(options?: DestroyOptions): void {

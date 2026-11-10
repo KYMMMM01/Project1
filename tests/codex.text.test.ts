@@ -4,6 +4,7 @@ import { RELIC_IDS, SPECIAL_CELL_IDS } from '@/game/api';
 import {
   DODGE_CAP, ENEMY_CAP, HAZARD_RECOVER, HAZARD_WARNING, OVERFLOW_GRACE, SUN_CELLS, SLOW_CAP_BOSS,
 } from '@/game/data/balance';
+import { tilesText } from '@/game/data/lengthText';
 import { BOSS_SPECS, ENEMY_SPECS } from '@/game/data/enemies';
 import { relicDef, relicSpec } from '@/game/data/relics';
 import { stakeRules } from '@/game/data/stakes';
@@ -172,7 +173,7 @@ describe('codex monster pages quote the data', () => {
         const abilities = abilitiesOf(id);
         abilities.forEach((a, i) => {
           const text = lines[i]?.text ?? '';
-          for (const [key, v] of Object.entries(a.vars)) expect(text, `${lang} ${id} ${a.kind} ${key}`).toContain(String(v));
+          for (const [key, v] of Object.entries(a.vars)) expect(text, `${lang} ${id} ${a.kind} ${key}`).toContain(key === 'radius' ? tilesText(v) : String(v));
         });
       }
     }

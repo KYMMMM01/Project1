@@ -68,6 +68,7 @@ export const SFX_IDS = [
   'ui_click',
   'ui_back',
   'ui_tab',
+  'ui_tab_big',
   'ui_toggle',
   'ui_popup_open',
   'ui_popup_close',
@@ -94,11 +95,6 @@ export const SFX_IDS = [
   'place',
   'pickup',
   // combat
-  'shoot_arrow',
-  'shoot_magic',
-  'shoot_cannon',
-  'shoot_ice',
-  'shoot_lightning',
   'shoot_poison',
   'shoot_claw',
   'hit_light',
@@ -109,7 +105,6 @@ export const SFX_IDS = [
   'stun',
   'buff',
   'heal',
-  'enemy_die',
   'boss_warning',
   'boss_roar',
   'boss_die',
@@ -193,6 +188,7 @@ export const SFX_IDS = [
   'foe_paper_hit',
   'foe_glass_hit',
   'foe_cloud_hit',
+  'foe_shield_hit',
   'foe_juicy_die',
   'foe_fluff_die',
   'foe_water_die',
@@ -222,9 +218,7 @@ export const SFX_IDS = [
   'sp_clone_hop',
   'sp_clone_throw',
   'sp_clone_vanish',
-  'sp_poster_slap',
   'sp_cork_pop',
-  'sp_poster_hole',
   'sp_seal_stamp',
   'sp_night_hush',
   'sp_arrow_whoosh',
@@ -281,7 +275,7 @@ export const GAME_SFX_IDS: readonly SfxId[] = SFX_IDS.filter((id) => !LEGACY.has
  */
 export type MusicId = 'none' | 'home' | 'home2' | 'battle' | 'kitchen' | 'bath' | 'garden' | 'clinic' | 'elite' | 'boss' | 'gold' | 'win' | 'lose';
 
-export type StingerId = 'victory' | 'defeat' | 'boss_intro' | 'mythic' | 'level_up' | 'jackpot';
+export type StingerId = 'victory' | 'defeat' | 'boss_intro' | 'mythic' | 'level_up' | 'jackpot' | 'king';
 
 /** What `primeStep` can get ready ahead of its first use: a sound effect or a stinger (the two have ids in common, so they are told apart by key). */
 export type PrimeTarget = { readonly sfx: SfxId } | { readonly stinger: StingerId };

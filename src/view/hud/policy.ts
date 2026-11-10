@@ -182,12 +182,12 @@ export function offerRoute(reason: string, sandbox: boolean): OfferRoute {
 
 export type LuckLine = { kind: 'top' | 'low' | 'avg'; n: number };
 
-/** summonLuck is the share of equally long summon sequences that rolled worse: 0.9 = luckier than 90 %. */
-export function luckLine(luck: number): LuckLine {
+/** summonLuck is the share of equally long summon sequences that rolled worse: 0.9 = luckier than 90 %. A win has no bad-luck line to say (null). */
+export function luckLine(luck: number, victory = false): LuckLine | null {
   const l = Math.min(1, Math.max(0, luck));
   if (l >= 0.45 && l <= 0.55) return { kind: 'avg', n: 50 };
   if (l > 0.55) return { kind: 'top', n: Math.max(1, Math.round((1 - l) * 100)) };
-  return { kind: 'low', n: Math.max(1, Math.round(l * 100)) };
+  return victory ? null : { kind: 'low', n: Math.max(1, Math.round(l * 100)) };
 }
 
 /**

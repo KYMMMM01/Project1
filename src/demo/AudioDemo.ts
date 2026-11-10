@@ -19,7 +19,7 @@ const COLS = 4;
 const CELL_H = 54;
 const MUSIC: readonly MusicId[] = ['none', 'home', 'home2', 'battle', 'kitchen', 'bath', 'garden', 'clinic', 'elite', 'boss', 'gold', 'win', 'lose'];
 const MUSIC_COLS = 7;
-const STINGERS: readonly StingerId[] = ['victory', 'defeat', 'boss_intro', 'mythic', 'level_up', 'jackpot'];
+const STINGERS: readonly StingerId[] = ['victory', 'defeat', 'boss_intro', 'mythic', 'level_up', 'jackpot', 'king'];
 const STEPS = 11;
 
 /** The v1.0 battle verbs, drawn as one teal block at the end of the grid. */
@@ -32,7 +32,7 @@ function familyColor(id: SfxId): number {
   if (id.startsWith('summon') || id.startsWith('merge') || id === 'upgrade' || id === 'sell') return Color.violetDark;
   if (id.startsWith('atk_') || id.startsWith('imp_')) return Color.dangerDark;
   if (id.startsWith('foe_')) return Color.mustardDark;
-  if (id.startsWith('shoot') || id.startsWith('hit') || id === 'crit' || id === 'explosion' || id.startsWith('boss') || id === 'enemy_die') return Color.dangerDark;
+  if (id.startsWith('shoot') || id.startsWith('hit') || id === 'crit' || id === 'explosion' || id.startsWith('boss')) return Color.dangerDark;
   if (['freeze', 'stun', 'buff', 'heal'].includes(id)) return Color.mustardDark;
   if (['wave_start', 'wave_clear', 'danger_alarm', 'countdown_tick', 'whoosh', 'relic_pick'].includes(id)) return Color.successDark;
   if (id.startsWith('chest') || id.startsWith('card') || id.startsWith('reel') || id === 'jackpot' || id === 'gamble_fail') return Color.berryDark;

@@ -127,7 +127,8 @@ describe('the weapon and enemy catalogue', () => {
     }
     expect(RELEASES).toHaveLength(20);
     expect(IMPACTS).toHaveLength(20);
-    expect(FOE_HITS.length + FOE_DEATHS.length + BOSS_DEATHS.length).toBe(Object.keys(FOE_RECIPES).length);
+    // (+ 1: the shield's hit, `foe_shield_hit`, which belongs to no material)
+    expect(FOE_HITS.length + FOE_DEATHS.length + BOSS_DEATHS.length + 1).toBe(Object.keys(FOE_RECIPES).length);
   });
 
   it('the class lines are the roster lines, weakest first', () => {

@@ -10,6 +10,9 @@ import { SOUNDS, sfxIndexOf } from '@/audio/sounds';
 import type { SampleOpts, Send, Synth } from '@/audio/synth';
 import { createRules } from '@/view/director/stage';
 
+/** The ElevenLabs file of a sound: its own id, except the level_up stinger, which shares its name with the level_up sound. */
+const recordingFile = (d: { key: string; id: string }): string => (d.key === 'stinger:level_up' ? 'level_up_stinger' : d.id);
+
 const ROOT = join(__dirname, '..');
 const SFX_DIR = join(ROOT, 'src', 'assets', 'sfx');
 const LEDGER = readFileSync(join(ROOT, 'docs', 'licenses', 'sounds.md'), 'utf8');
@@ -151,7 +154,9 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
       const size = statSync(path).size;
       total += size;
       expect(size, `${f} bytes`).toBeLessThanOrEqual(60 * 1024);
-      const pcm = parseWav(readFileSync(path).buffer.slice(readFileSync(path).byteOffset, readFileSync(path).byteOffset + size) as ArrayBuffer);
+      // one read: Node packs small reads into a shared pool, so slice by this buffer's own offset
+      const bytes = readFileSync(path);
+      const pcm = parseWav(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
       expect(pcm, f).not.toBeNull();
       expect(pcm?.rate, f).toBe(44100);
       expect((pcm?.data.length ?? 0) / 44100, f).toBeLessThanOrEqual(0.4 + 1e-3);
@@ -176,7 +181,7 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
       expect(size, `${f} bytes`).toBeLessThanOrEqual(200 * 1024);
       const bytes = readFileSync(path);
       expect(bytes.readUInt16LE(22), `${f} channels`).toBe(1);
-      const pcm = parseWav(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + size) as ArrayBuffer);
+      const pcm = parseWav(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
       expect(pcm, f).not.toBeNull();
       expect(pcm?.rate, f).toBe(44100);
       const seconds = (pcm?.data.length ?? 0) / 44100;
@@ -186,7 +191,7 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
       expect(peak, `${f} peak`).toBeLessThanOrEqual(0.98 + 1e-3);
       const id = f.slice('elevenlabs/'.length, -4);
       const owner = SOUNDS.filter((d) => (d.recipe.needs ?? []).includes(`elevenlabs/${id}`));
-      expect(owner.map((d) => d.id), f).toEqual([id]);
+      expect(owner.map((d) => recordingFile(d)), f).toEqual([id]);
       // the recipe renders long enough to hold the whole file
       expect(owner[0]?.recipe.len ?? 0, f).toBeGreaterThanOrEqual(seconds);
       const row = inGame.split('\n').find((l) => l.includes(`src/assets/sfx/${f} `));
@@ -195,7 +200,9 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
       expect(row).toContain('commercial');
       expect(row).toMatch(/\| \d{4}-\d{2}-\d{2} \|/);
     }
-    expect(total).toBeLessThan(1.5 * 1024 * 1024);
+    // Every sound the game plays is a recording since 2026-11-10 (the owner: replace them all), about 6.5 MB of PCM; it is read after the
+    // first tap, in the background, and a sound not read yet plays its synthesis (samples.ts), so it never holds the start.
+    expect(total).toBeLessThan(8 * 1024 * 1024);
   });
 
   it('come only from the three CC0 packs, and each has a row of the ledger with its source, URL, license and date', () => {
@@ -219,14 +226,16 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
   it('are each laid under some recipe (no file ships without a sound that uses it), and every recipe\'s `needs` is a file that ships', () => {
     const needed = new Set<string>();
     for (const d of SOUNDS) for (const id of d.recipe.needs ?? []) needed.add(id);
-    for (const id of needed) expect(SAMPLE_URLS.has(id), id).toBe(true);
+    // (an ElevenLabs file the owner has not recorded yet is not shipped: its recipe plays its synthesis until it is)
+    for (const id of needed) if (!id.startsWith('elevenlabs/')) expect(SAMPLE_URLS.has(id), id).toBe(true);
     for (const f of [...files, ...eleven]) expect(needed.has(f.slice(0, -4)), `${f} is not used`).toBe(true);
   });
 });
 
 describe('the skills\' sounds', () => {
-  it('are 48: a signature or a small sound for every moment, all named sp_, none lost from the catalogue', () => {
-    expect(IDS).toHaveLength(48);
+  it('are 46: a signature or a small sound for every moment, all named sp_, none lost from the catalogue', () => {
+    // (48 until 2026-11-10, when the wanted poster's slap and tear went: the owner wants the skill to sound as the shot alone)
+    expect(IDS).toHaveLength(46);
     expect(SFX_IDS.filter((id) => id.startsWith('sp_')).sort()).toEqual([...IDS].sort());
     for (const id of IDS) expect(sfxIndexOf(id), id).toBeGreaterThanOrEqual(0);
   });

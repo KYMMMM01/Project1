@@ -10,7 +10,7 @@
 import type { SfxId } from './api';
 import { air, body, boing, bubble, clack, crackle, dust, rap, snap, swish, tink, whistle } from './foley';
 import { crack, thud } from './hitkit';
-import { bell, knock, pluck, type Recipe } from './recipe';
+import { bell, knock, pluck, recording, type Recipe } from './recipe';
 import { hz } from './theory';
 
 /** Extra level in dB per rank inside a class line, weakest first: the step must be audible, not just measurable. */
@@ -76,7 +76,10 @@ export const CAT_RECIPES = {
     len: 0.14,
     ms: [30, 140],
     gap: 0.06,
+    needs: ['elevenlabs/atk_w_paw'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_w_paw.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_w_paw')) return;
       // A boxer's jab: a quick narrow whiff of paper-thin air and the little pat of the glove at the end of the arm.
       const p = v.j(0.06);
       swish(s, 1500 * p, 3300 * p, 0, 0.05, 1, 1.1, 0.35);
@@ -88,7 +91,10 @@ export const CAT_RECIPES = {
     db: -0.6,
     len: 0.18,
     ms: [50, 180],
+    needs: ['elevenlabs/atk_w_sword'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_w_sword.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_w_sword')) return;
       // A wooden sword: a longer swish than the jab with a hollow wooden hum under it, and a small clack as the swing ends.
       const p = v.j(0.06);
       swish(s, 900 * p, 2800 * p, 0, 0.1, 1, 1, 0.4);
@@ -102,7 +108,10 @@ export const CAT_RECIPES = {
     len: 0.26,
     ms: [90, 260],
     gap: 0.1,
+    needs: ['elevenlabs/atk_w_viking'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_w_viking.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_w_viking')) return;
       // A heavy axe: a wide slow swish that peaks late, a low hum of moved air under it and a dull thump as the head comes round.
       const p = v.j(0.06);
       swish(s, 380 * p, 1500 * p, 0, 0.17, 1.1, 0.7, 0.55);
@@ -116,7 +125,10 @@ export const CAT_RECIPES = {
     len: 0.16,
     ms: [50, 160],
     lp: 7500,
+    needs: ['elevenlabs/atk_w_samurai'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_w_samurai.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_w_samurai')) return;
       // A katana leaving its sheath: a thin fast "shing", a narrow noise band that rises through 2 to 4 kHz, and the blade's own ring.
       const p = v.j(0.05);
       air(s, { dur: 0.065, v: 1, a: 0.012, d: 0.04, s: 0.02, filter: [{ t: 'highpass', f: 1400 }, { t: 'bandpass', f: 2300 * p, f2: 4300 * p, sw: 0.05, q: 2.2 }] });
@@ -130,7 +142,10 @@ export const CAT_RECIPES = {
     len: 0.34,
     ms: [120, 340],
     gap: 0.12,
+    needs: ['elevenlabs/atk_w_tiger'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_w_tiger.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_w_tiger')) return;
       // A polearm: the widest whoosh in the game, a deep wind under it and a dull knock of the shaft at the end of the swing.
       const p = v.j(0.06);
       swish(s, 260 * p, 1300 * p, 0, 0.22, 1.2, 0.6, 0.6);
@@ -147,7 +162,10 @@ export const CAT_RECIPES = {
     len: 0.13,
     ms: [25, 130],
     gap: 0.07,
+    needs: ['elevenlabs/atk_r_sling'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_r_sling.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_r_sling')) return;
       // A slingshot: the rubber snaps forward (a fast downward glide with a tick) and the pebble hisses away.
       const p = v.j(0.06);
       s.tone({ f: 980 * p, f2: 210 * p, sw: 0.03, dur: 0.07, v: 1, a: 0.002, d: 0.06, s: 0.01 });
@@ -178,7 +196,10 @@ export const CAT_RECIPES = {
     len: 0.18,
     ms: [50, 180],
     lp: 7500,
+    needs: ['elevenlabs/atk_r_ninja'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_r_ninja.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_r_ninja')) return;
       // A shuriken spinning away: noise chopped at 55 Hz (the blades) climbing from 1.9 to 3.1 kHz, a thin whoosh and a tiny ring of the edge.
       const p = v.j(0.05);
       air(s, { dur: 0.11, v: 0.9, a: 0.01, d: 0.07, s: 0.05, trem: { rate: 55, depth: 0.85 }, filter: { t: 'bandpass', f: 1900 * p, f2: 3100 * p, sw: 0.08, q: 1.6 } });
@@ -192,7 +213,10 @@ export const CAT_RECIPES = {
     len: 0.22,
     ms: [60, 220],
     gap: 0.09,
+    needs: ['elevenlabs/atk_r_gunner'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_r_gunner.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_r_gunner')) return;
       // A cork gun: a hollow "pop" (a sine dropping 540 to 200 Hz), the puff of air, a tiny squeak of the cork and a soft recoil thump.
       const p = v.j(0.05);
       s.tone({ f: 540 * p, f2: 200 * p, sw: 0.03, dur: 0.07, v: 1, a: 0.002, d: 0.06, s: 0.01 });
@@ -238,7 +262,10 @@ export const CAT_RECIPES = {
     len: 0.26,
     ms: [80, 260],
     gap: 0.09,
+    needs: ['elevenlabs/atk_m_fire'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_m_fire.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_m_fire')) return;
       // A match struck: a rough scratch (noise chopped at 100 Hz rising through 2.3 to 3.6 kHz) and the whoosh of the flame taking hold.
       const p = v.j(0.05);
       crackle(s, 0, 0.045, 2300 * p, 0.8, 100, 3600 * p);
@@ -251,7 +278,10 @@ export const CAT_RECIPES = {
     len: 0.22,
     ms: [60, 220],
     lp: 7500,
+    needs: ['elevenlabs/atk_m_storm'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_m_storm.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_m_storm')) return;
       // Lightning gathering: a crackle gliding down from 2.6 to 1.2 kHz, then a paper being torn open (a band that zips up from 0.7 to 3.6 kHz, chopped at 130 Hz).
       const p = v.j(0.05);
       crackle(s, 0, 0.08, 2600 * p, 0.8, 80, 1200 * p);
@@ -264,7 +294,10 @@ export const CAT_RECIPES = {
     len: 0.28,
     ms: [90, 280],
     lp: 7500,
+    needs: ['elevenlabs/atk_m_frost'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_m_frost.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_m_frost')) return;
       // Ice crystals tinkling (three pings stepping up, 35 ms apart, in a short echo) over a cold gust of band-passed breath.
       const p = v.j(0.04);
       const e = s.echo(0.04, 0.22, 0.22, 5000);
@@ -278,7 +311,10 @@ export const CAT_RECIPES = {
     len: 0.3,
     ms: [100, 300],
     gap: 0.12,
+    needs: ['elevenlabs/atk_m_cosmo'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_m_cosmo.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_m_cosmo')) return;
       // The black hole inhales: a "whoomp" played backwards. A low swell whose low-pass opens from 140 Hz to 1.7 kHz and a sine
       // climbing 110 to 330 Hz (driven, so that a phone hears its harmonics), both cut off right at the top instead of fading.
       const p = v.j(0.05);
@@ -294,7 +330,10 @@ export const CAT_RECIPES = {
     len: 0.26,
     ms: [60, 260],
     gap: 0.1,
+    needs: ['elevenlabs/atk_t_bell'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_t_bell.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_t_bell')) return;
       // A hand bell: one ding (E6) with its inharmonic partials and the tick of the clapper.
       const p = v.j(0.04);
       bell(s, hz('E6') * p, 0, 0.2, 1);
@@ -305,7 +344,10 @@ export const CAT_RECIPES = {
     rank: 1,
     len: 0.2,
     ms: [60, 200],
+    needs: ['elevenlabs/atk_t_chef'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_t_chef.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_t_chef')) return;
       // A frying pan tossed: a swish, the pan wobbling in the air (a sine at 330 Hz sagging under a fast wobble) and the tick of the handle.
       const p = v.j(0.05);
       swish(s, 800 * p, 2200 * p, 0, 0.09, 0.9, 1, 0.4);
@@ -319,7 +361,10 @@ export const CAT_RECIPES = {
     len: 0.28,
     ms: [100, 260],
     gap: 0.1,
+    needs: ['elevenlabs/atk_t_bard'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_t_bard.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_t_bard')) return;
       // A lute pluck that walks up a G chord (G4 B4 D5 G5, 45 ms apart).
       const p = v.j(0.04);
       [hz('G4'), hz('B4'), hz('D5'), hz('G5')].forEach((f, k) => pluck(s, f * p, k * 0.045, 0.13, 0.7 - k * 0.05));
@@ -331,7 +376,10 @@ export const CAT_RECIPES = {
     len: 0.24,
     ms: [80, 240],
     lp: 7500,
+    needs: ['elevenlabs/atk_t_alch'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_t_alch.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_t_alch')) return;
       // A glass vial: a clink of the glass, a bubble in the liquid and a fizz that starts as the cork lifts.
       const p = v.j(0.05);
       bell(s, 1760 * p, 0, 0.07, 0.8);
@@ -345,7 +393,10 @@ export const CAT_RECIPES = {
     len: 0.3,
     ms: [80, 240],
     gap: 0.1,
+    needs: ['elevenlabs/atk_t_lucky'],
     build(s, v) {
+      // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/atk_t_lucky.wav`); the synthesis below is the fallback for a device that cannot read it.
+      if (recording(s, 'atk_t_lucky')) return;
       // A coin flipped: the thumb's snap, a soft whoosh, and the coin ringing as it spins (a sine at 2.2 kHz warbling as the spin slows).
       const p = v.j(0.04);
       snap(s, 0, 0.4, 3000, 0.008);

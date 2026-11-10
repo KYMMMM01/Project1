@@ -2,6 +2,7 @@
  * Debug-only route into the battle (`?scene=battle&chapter=N&stake=N&seed=N&mode=...&sandbox=1&runs=N`, or `?scene=lab` for the developer
  * lab: the same battle with the panel of lab.ts) and the QA hooks on `window.__dbg.battle`. Loaded lazily from main.ts, never part of the normal flow.
  */
+import { loadBattleImages } from '@/core/assets';
 import { debugExpose } from '@/core/debug';
 import { setLang } from '@/core/i18n';
 import { scenes } from '@/core/scene';
@@ -71,6 +72,7 @@ export async function openDebugBattle(params: URLSearchParams): Promise<void> {
     const api = installBattleDebug(scene);
     mountLab?.(scene, api);
   });
+  await loadBattleImages();
   await scenes.goto(() => new BootScene(() => new BattleScene(run)), 'none');
 }
 

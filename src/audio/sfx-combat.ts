@@ -13,82 +13,7 @@ import { bell, kalimba, knock, mallet, paper, pluck, puff, recording, shake, sta
 import { hz } from './theory';
 
 export const COMBAT_RECIPES = {
-  // ---------------------------------------------------------------- shots, one material each
-  shoot_arrow: {
-    cat: 'fire',
-    len: 0.14,
-    ms: [50, 180],
-    lp: 5000,
-    variants: 2,
-    rate: 0.05,
-    build(s, v) {
-      // A paper dart: a short swish of pink noise rising through 1-3 kHz and a rubber-band twang under it.
-      const p = v.j(0.06);
-      whoosh(s, 1100 * p, 3000 * p, 0, 0.075, 0.9, 1.2, 0.3);
-      s.tone({ w: 'triangle', f: 280 * p, f2: 230 * p, sw: 0.035, dur: 0.05, v: 0.35 });
-    },
-  },
-  shoot_magic: {
-    cat: 'fire',
-    len: 0.2,
-    ms: [60, 200],
-    lp: 5000,
-    variants: 2,
-    rate: 0.04,
-    build(s, v) {
-      // A fizz-pop: a sine bubble that glides up a fifth and a puff of fine fizz (noise chopped at 45 Hz), in a tiny echo.
-      const p = v.j(0.05);
-      const e = s.echo(0.045, 0.2, 0.2, 4500);
-      s.tone({ f: 620 * p, f2: 930 * p, sw: 0.05, dur: 0.1, v: 1, a: 0.003, send: { bus: e, amt: 0.4 } });
-      s.noise({ dur: 0.07, v: 0.35, a: 0.005, s: 0.02, trem: { rate: 45, depth: 0.8 }, filter: { t: 'bandpass', f: 3800 * p, q: 1 } });
-    },
-  },
-  shoot_cannon: {
-    cat: 'fire',
-    trim: 3,
-    len: 0.2,
-    ms: [60, 220],
-    lp: 5000,
-    variants: 2,
-    rate: 0.04,
-    build(s, v) {
-      // A cardboard tube popper: a saturated sine drop for the barrel (harmonics keep it audible on a phone speaker),
-      // a lowpassed burst for the puff, a dull rattle of the tube.
-      const p = v.j(0.05);
-      thump(s, 260 * p, 110, 0, 0.12, 0.8, 0.07, 0.3);
-      s.noise({ dur: 0.09, v: 1, a: 0.002, s: 0.003, filter: { t: 'lowpass', f: 1400, f2: 400, sw: 0.08 } });
-      s.noise({ at: 0.01, dur: 0.05, v: 0.2, a: 0.003, s: 0.02, filter: { t: 'bandpass', f: 700, q: 2 } });
-    },
-  },
-  shoot_ice: {
-    cat: 'fire',
-    len: 0.14,
-    ms: [40, 150],
-    lp: 5000,
-    variants: 2,
-    rate: 0.04,
-    build(s, v) {
-      // A tiny wind-chime tink: a high sine with a fast decay, a quieter fifth above it and a hushed breath of noise.
-      const p = v.j(0.05);
-      s.tone({ f: 1760 * p, dur: 0.09, v: 0.8, a: 0.002, s: 0.01 });
-      s.tone({ f: 2637 * p, dur: 0.05, v: 0.3, a: 0.002, s: 0.01 });
-      s.noise({ dur: 0.04, v: 0.25, a: 0.003, s: 0.01, filter: { t: 'bandpass', f: 4200, q: 1.5 } });
-    },
-  },
-  shoot_lightning: {
-    cat: 'fire',
-    len: 0.16,
-    ms: [40, 160],
-    lp: 5000,
-    variants: 2,
-    rate: 0.04,
-    build(s, v) {
-      // Cellophane crackle: band-passed noise chopped at 70 Hz and gliding down, a soft triangle blip under it.
-      const p = v.j(0.06);
-      s.noise({ dur: 0.08, v: 1, a: 0.003, s: 0.02, trem: { rate: 70, depth: 0.8 }, filter: { t: 'bandpass', f: 2400 * p, f2: 1000 * p, sw: 0.07, q: 1.3 } });
-      s.tone({ w: 'triangle', f: 900 * p, f2: 450 * p, sw: 0.06, dur: 0.07, v: 0.3, filter: { t: 'lowpass', f: 1800 } });
-    },
-  },
+  // ---------------------------------------------------------------- what an ailment sounds like on the enemy (poison, bleed)
   shoot_poison: {
     cat: 'fire',
     len: 0.2,
@@ -148,7 +73,10 @@ export const COMBAT_RECIPES = {
     rate: 0.05,
     prio: 1,
     rule: { maxVoices: 2, minGap: 0.09, falloff: 0.15 },
+    needs: ['elevenlabs/hit_heavy'],
     build(s, v) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'hit_heavy')) return;
       // The weight under a heavy blow, a killing blow or a hit on a boss. It rides on the weapon's own impact and never replaces it: a drop through 320 to 120 Hz driven so
       // that its harmonics sit where a phone plays (300 to 1200 Hz), the low body under it (150 to 70 Hz), a closing low-passed slap, a woody knock and the crack on top.
       const p = v.j(0.06);
@@ -169,7 +97,10 @@ export const COMBAT_RECIPES = {
     rate: 0.03,
     prio: 2,
     rule: { maxVoices: 2, minGap: 0.09, falloff: 0.1 },
+    needs: ['elevenlabs/crit'],
     build(s, v) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'crit')) return;
       // The crit layer, always played together with the weapon's own impact (never in place of it, so a crit is the same weapon with more): a bright crack at 4.3 kHz, a ping
       // (a sine at 2.4 kHz with 3.6 and 4.8 kHz above it, gone in 70 ms) and a body underneath that a phone plays.
       const p = v.j(0.03);
@@ -188,7 +119,10 @@ export const COMBAT_RECIPES = {
     ms: [150, 650],
     variants: 2,
     rule: { maxVoices: 3, minGap: 0.12, falloff: 0.1 },
+    needs: ['elevenlabs/explosion'],
     build(s, v) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'explosion')) return;
       // A paper bag popped: a noise burst through a closing low-pass (the bang), a brown whump, a drop whose harmonics reach a phone for the weight (380 to 110 Hz), the crack of
       // the paper and a flutter of confetti settling after it. No fireball, nothing above 4 kHz that matters.
       const p = v.j(0.08);
@@ -205,7 +139,10 @@ export const COMBAT_RECIPES = {
     trim: -4,
     len: 0.5,
     ms: [200, 520],
+    needs: ['elevenlabs/freeze'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'freeze')) return;
       // Frost on a window: three kalimba tines falling (D6 A5 E5) and a hush of high noise on top.
       const e = s.echo(0.055, 0.2, 0.22, 4500);
       ['D6', 'A5', 'E5'].forEach((n, k) => kalimba(s, hz(n), k * 0.06, 0.22, 0.8, { bus: e, amt: 0.3 }));
@@ -242,29 +179,14 @@ export const COMBAT_RECIPES = {
     trim: -4,
     len: 0.65,
     ms: [250, 650],
+    needs: ['elevenlabs/heal'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'heal')) return;
       // Warm and gentle: a slow-vibrato sine glides up a fifth under a quick kalimba trill (G5 A5 C6 E6 G6).
       const e = s.echo(0.07, 0.2, 0.22, 4500);
       s.tone({ f: 523, f2: 784, sw: 0.25, dur: 0.36, v: 0.4, a: 0.03, vib: { rate: 6, cents: 20 } });
       ['G5', 'A5', 'C6', 'E6', 'G6'].forEach((n, k) => kalimba(s, hz(n), 0.05 + k * 0.045, 0.25, 0.5, { bus: e, amt: 0.3 }));
-    },
-  },
-  enemy_die: {
-    cat: 'hit',
-    trim: 3,
-    len: 0.3,
-    ms: [80, 340],
-    lp: 5000,
-    variants: 3,
-    rate: 0.08,
-    climb: 12,
-    prio: 2,
-    rule: { maxVoices: 6, minGap: 0.035, falloff: 0.15 },
-    build(s, v) {
-      // A paper ball crumpled and popped: a crackle (band-passed noise chopped at 60 Hz) and a soft sine pop falling 440 to 170 Hz.
-      const p = v.j(0.1);
-      s.noise({ dur: 0.08, v: 0.8, a: 0.004, s: 0.02, trem: { rate: 60, depth: 0.9 }, filter: { t: 'bandpass', f: 1700 * p, q: 1 } });
-      thump(s, 440 * p, 170 * p, 0, 0.15, 0.9, 0.1);
     },
   },
   boss_warning: {
@@ -332,7 +254,10 @@ export const COMBAT_RECIPES = {
     ms: [800, 1400],
     duck: { depth: 0.4, seconds: 1 },
     hush: { db: 3, seconds: 0.8 },
+    needs: ['elevenlabs/boss_die'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'boss_die')) return;
       // A tower of cardboard collapsing: a big felt thud, a crumple of crackling noise that closes down, a cascade of
       // wooden knocks falling in pitch and a last soft thump when the last box lands.
       thump(s, 150, 60, 0, 0.6, 0.9, 0.3, 0.4);
@@ -426,7 +351,10 @@ export const COMBAT_RECIPES = {
     trim: -4,
     len: 0.5,
     ms: [200, 520],
+    needs: ['elevenlabs/chest_shake'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'chest_shake')) return;
       // A wooden box rattling: five knocks, alternating between two pitches, and a loose rattle of pebbles inside it.
       [0, 0.07, 0.15, 0.22, 0.3].forEach((t, k) => knock(s, k % 2 ? 280 : 340, t, 0.8 - k * 0.04, 0.06));
       s.noise({ at: 0.05, dur: 0.3, v: 0.12, a: 0.04, s: 0.1, trem: { rate: 24, depth: 1 }, filter: { t: 'bandpass', f: 2200, q: 1.2 } });
@@ -476,7 +404,10 @@ export const COMBAT_RECIPES = {
     trim: 2,
     len: 0.16,
     ms: [50, 150],
+    needs: ['elevenlabs/reel_stop'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'reel_stop')) return;
       // A thunk: a felt pat, a wooden knock on top and a dull lowpassed slap.
       thump(s, 260, 150, 0, 0.1, 0.8, 0.05, 0.3);
       knock(s, 400, 0, 0.6, 0.05);
@@ -507,7 +438,10 @@ export const COMBAT_RECIPES = {
     trim: -3,
     len: 0.7,
     ms: [250, 620],
+    needs: ['elevenlabs/gamble_fail'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'gamble_fail')) return;
       // "Oh no", kindly: two plucked notes sagging (E5 then C5), the second one slower, over a quiet low thump.
       pluck(s, hz('E5'), 0, 0.25, 0.9);
       s.tone({ w: 'triangle', f: hz('C5'), f2: hz('B4'), sw: 0.3, at: 0.22, dur: 0.4, v: 0.8, a: 0.004, d: 0.35, s: 0.02, filter: { t: 'lowpass', f: 2000, f2: 900, sw: 0.3 } });

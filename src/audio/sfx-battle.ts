@@ -6,7 +6,7 @@
  * recipe are relative; the baker normalises to the family target.
  */
 import type { SfxId } from './api';
-import { bell, kalimba, knock, mallet, paper, pluck, puff, shake, stamp, thump, whoosh, type Recipe } from './recipe';
+import { bell, kalimba, knock, mallet, paper, pluck, puff, recording, shake, stamp, thump, whoosh, type Recipe } from './recipe';
 import { hz } from './theory';
 
 export const BATTLE_RECIPES = {
@@ -59,7 +59,10 @@ export const BATTLE_RECIPES = {
     len: 0.8,
     ms: [350, 700],
     rule: { maxVoices: 1, minGap: 0.4, falloff: 0 },
+    needs: ['elevenlabs/purr'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'purr')) return;
       // Every layer is chopped by the same 25 Hz flutter, which is what a purr is. The body is a detuned triangle pair at
       // 98 Hz, saturated a little and low-passed warm (its upper harmonics keep it audible on a phone speaker that cannot
       // make 98 Hz), a triangle an octave up supplies the "mrr" vowel, and band-passed pink noise is the breathy rasp. A
@@ -120,7 +123,10 @@ export const BATTLE_RECIPES = {
     len: 0.9,
     ms: [350, 850],
     rule: { maxVoices: 2, minGap: 0.25, falloff: 0 },
+    needs: ['elevenlabs/sunbeam'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'sunbeam')) return;
       // Warm light, not a bell strike: a slow 35 ms swell on an open C-G-E stack of sines (a wide chorus on the root for
       // warmth) and a triangle underneath, a very slow vibrato, a breath of pink air drifting down from 5 kHz to 3 kHz, a
       // short soft echo and one high twinkle (B6) that arrives late. The warmth comes from the swell, not from a long tail.
@@ -140,7 +146,10 @@ export const BATTLE_RECIPES = {
     len: 0.3,
     ms: [100, 280],
     rule: { maxVoices: 2, minGap: 0.15, falloff: 0 },
+    needs: ['elevenlabs/hazard_warn'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'hazard_warn')) return;
       // A clear but friendly two-note knock: two wooden blocks, the second a fourth higher (A5 then D6), each with a quiet
       // octave pip. The pitch holds steady (no sag) so the pair reads as two notes, and it is far shorter than the
       // danger heartbeat so nobody mistakes one for the other.
@@ -183,7 +192,10 @@ export const BATTLE_RECIPES = {
     variants: 3,
     rate: 0.06,
     rule: { maxVoices: 4, minGap: 0.05, falloff: 0.15 },
+    needs: ['elevenlabs/zap'],
     build(s, v) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'zap')) return;
       // A fizz, for magic hits and a lightning bolt alike: cellophane crackle (band-passed noise chopped at 90 Hz and falling
       // from 3.2 to 1.4 kHz), a soft sine pop that rises a fourth and a small felt pat so the hit has body.
       const p = v.j(0.06);
@@ -198,7 +210,10 @@ export const BATTLE_RECIPES = {
     len: 0.6,
     ms: [250, 650],
     rule: { maxVoices: 2, minGap: 0.15, falloff: 0 },
+    needs: ['elevenlabs/weaken'],
     build(s) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'weaken')) return;
       // A gentle deflating "wuh": a triangle and a sine slide 480 to 230 Hz while a wide 7.5 Hz vibrato (+-70 cents) and a
       // 7.5 Hz amplitude wobble make it unsteady, the low-pass droops closed from 2.4 kHz to 420 Hz as if the strength drains
       // out, over a falling breath of noise. One long glide, where gamble_fail is two separate notes.
@@ -216,7 +231,10 @@ export const BATTLE_RECIPES = {
     ms: [200, 500],
     variants: 2,
     rule: { maxVoices: 2, minGap: 0.1, falloff: 0 },
+    needs: ['elevenlabs/shield_break'],
     build(s, v) {
+      // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
+      if (recording(s, 'shield_break')) return;
       // A paper shield tears and its pieces fall: a hard paper crack (a band-passed snap at 2.2 kHz), a felt knock, eight little
       // wooden pings between 1.2 and 3.2 kHz falling over 0.3 s with falling levels, and a mid marimba tone for the body.
       // Where freeze is three clean falling tines, this is a scatter.

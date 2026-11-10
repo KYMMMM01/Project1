@@ -31,6 +31,9 @@ const GOLD = Color.mustard;
 const SUMMON_SFX: readonly SfxId[] = ['summon_common', 'summon_rare', 'summon_epic', 'summon_legendary', 'summon_mythic'];
 const SUMMON_VOLUME: readonly number[] = [0.55, 0.65, 0.8, 0.95, 1];
 
+/** Seconds an awakening or a crowning keeps the next crowning quiet (a stinger is about 1.5 s long). */
+const KING_CLEAR = 3;
+
 const CLASS_ICON: Record<ClassId, IconName> = {
   warrior: 'class_warrior',
   ranger: 'class_ranger',
@@ -48,6 +51,9 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
   const themeDef: EmitDef = { ...THEME_SPRAY, tex: theme.tex, gravity: theme.gravity };
   let lastBig = -99;
   let awakenCount = 0;
+  /** When the last awakening and the last crowning began (director clock): the king's stinger is not played over an awakening or over another crowning. */
+  let lastAwaken = -99;
+  let lastKing = -99;
   let litCells: readonly number[] = [];
 
   /** Cosmetic summon-effect theme: extra pieces on top of the rarity colours, never instead of them. */
@@ -116,6 +122,11 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
       stage.playStep(stage.rules.merge, tier >= 2 ? 'merge_big' : 'merge', step + tier, tier >= 2 ? 0.85 : 0.75);
     });
     if (tier >= 2) stage.laterReal(MERGE_SECONDS, () => reveal(x, y, tier, 1.15));
+    // The merge that makes the top rank (대왕, 'legendary': a guardian comes only by awakening) gets its own stinger, unless an awakening is under way (its `mythic` rings then).
+    if (RARITY_ORDER[tier] === 'legendary' && stage.now - lastAwaken > KING_CLEAR && stage.now - lastKing > KING_CLEAR) {
+      lastKing = stage.now;
+      stage.laterReal(MERGE_SECONDS, () => audio.stinger('king'));
+    }
     themeBurst(x, y, tier);
     if (e.jumped) {
       // Snack stick: the unit skipped a rarity, so it gets a second ring, a rising flourish and a gold chime.
@@ -140,6 +151,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     // The lucky cat's guardian capsule awakens a cat for free (`e.free`): always the short banner, never the slow motion, and it does not use up
     // the long first banner that the player's own first awakening gets.
     if (!e.free) awakenCount++;
+    lastAwaken = stage.now;
     const id = e.result.id;
     const x = cellCenterX(e.cell);
     const y = cellCenterY(e.cell) - 10;

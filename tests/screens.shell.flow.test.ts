@@ -83,9 +83,11 @@ const h = vi.hoisted(() => {
     openPreRun: vi.fn(),
     gameplayStart: vi.fn(),
     gameplayStop: vi.fn(),
+    loadBattleImages: vi.fn(async () => undefined),
   };
 });
 
+vi.mock('@/core/assets', () => ({ loadBattleImages: h.loadBattleImages }));
 vi.mock('@/core/debug', () => ({ debugEnabled: () => false }));
 vi.mock('@/core/game', () => ({ game: { w: 720, h: 1280 } }));
 vi.mock('@/core/i18n', () => ({ t: (key: string) => key, addStrings: () => undefined }));
@@ -154,6 +156,17 @@ describe('a tutorial the app was killed in', () => {
     expect(h.profile.prepareRun).toHaveBeenCalledWith({ mode: 'tutorial' });
     expect(first()).toBeInstanceOf(h.FakeBattle);
     expect(h.state.runs).toBe(0);
+  });
+
+  it('has the battle-only images in before the battle scene is made (its constructors read them)', async () => {
+    let loaded = false;
+    h.loadBattleImages.mockImplementationOnce(async () => {
+      await Promise.resolve();
+      loaded = true;
+    });
+    const first = await flow.chooseFirstScene();
+    expect(loaded).toBe(true);
+    expect(first()).toBeInstanceOf(h.FakeBattle);
   });
 
   it('is never put to the player as a run to give up', async () => {

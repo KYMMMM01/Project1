@@ -3,6 +3,7 @@
  * opening the battle scene, wave-start saves, retry, returning home, and picking a run up again after
  * the app was killed.
  */
+import { loadBattleImages } from '@/core/assets';
 import { crumb } from '@/core/crumbs';
 import { debugEnabled } from '@/core/debug';
 import { game } from '@/core/game';
@@ -128,6 +129,8 @@ async function begin(request: StartRunRequest, snack: SnackChoice | undefined, b
     toast(t(errorKey(prepared.error)), 'warning');
     return false;
   }
+  // The battle's effect sprites are in before its scene is built (the app loads them in the background once the home screen is up, so this is rarely a wait).
+  await loadBattleImages();
   const make = battleScene(runConfig(prepared.value));
   const opened = await gotoWhenIdle(() => {
     beforeSwap?.();
@@ -206,6 +209,7 @@ export async function offerContinue(): Promise<void> {
     if (!pending) return;
     const resume = await continuePrompt(pending.init.chapter, pending.snapshot?.wave);
     if (resume) {
+      await loadBattleImages();
       const make = battleScene(runConfig(resumeInit(pending.init), pending.snapshot));
       if (!(await gotoWhenIdle(make, 'iris'))) toast(t('meta.err.unavailable'), 'warning');
       return;
@@ -240,7 +244,10 @@ export async function chooseFirstScene(): Promise<() => Scene> {
   // A player who skipped the tutorial and closed the app during that run is not sent back into it.
   if (!profile.pendingRun && profile.data.stats.runs === 0 && !guideProgress.skipped) {
     const prepared = await profile.prepareRun({ mode: 'tutorial' });
-    if (prepared.ok) return battleScene(runConfig(prepared.value));
+    if (prepared.ok) {
+      await loadBattleImages();
+      return battleScene(runConfig(prepared.value));
+    }
   }
   return homeScene();
 }

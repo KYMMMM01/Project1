@@ -58,7 +58,10 @@ export const SKILL_RECIPES = {
     ms: [350, 700],
     trim: -1,
     duck: { depth: 0.4, seconds: 0.7 },
+    needs: ['elevenlabs/sp_cutin'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_cutin')) return;
       // The banner of a guardian's first cast, a third of the awakening's length so that the skill's own sound is not buried under it:
       // a quick roll of three marimba notes, a paper rise, the stamp and a bright chord with a bell on top.
       const e = s.echo(0.07, 0.22, 0.22, 4800);
@@ -77,8 +80,10 @@ export const SKILL_RECIPES = {
     ms: [80, 380],
     trim: 3,
     duck: { depth: 0.35, seconds: 0.5 },
-    needs: [IMPACT('impactWood_heavy_000'), IMPACT('impactMetal_heavy_001')],
+    needs: ['elevenlabs/sp_shield_slam', IMPACT('impactWood_heavy_000'), IMPACT('impactMetal_heavy_001')],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_shield_slam')) return;
       // A round shield of iron-rimmed wood comes down on the road. The weight is a sine drop (170 to 62 Hz) driven so that its harmonics
       // sit at 300 to 900 Hz where a phone can play them; the wood is a dull knock and a short burst of chopped splinters; the rim
       // rings once (2.1 kHz, the iron). Underneath, a recording of a heavy wooden thud and of a heavy metal rim.
@@ -100,7 +105,10 @@ export const SKILL_RECIPES = {
     lp: 3200,
     variants: 1,
     rule: { maxVoices: 1, minGap: 0.1, falloff: 0 },
+    needs: ['elevenlabs/sp_dust_wedge'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_dust_wedge')) return;
       // The wedge of dust that runs out over the road: a soft low cloud and a felt pat, nothing sharp.
       dust(s, 0, 0.3, 0.9, 1100, 260);
       thump(s, 150, 85, 0.01, 0.12, 0.4, 0.07, 0.3);
@@ -114,8 +122,10 @@ export const SKILL_RECIPES = {
     ms: [150, 320],
     trim: 2.5,
     lp: 9000,
-    needs: [RPG('knifeSlice')],
+    needs: ['elevenlabs/sp_dash', RPG('knifeSlice')],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_dash')) return;
       // The afterimage tears down the road: a swish that climbs (1.4 to 5.2 kHz) and peaks late, a thin whistle of a blade in the air.
       const p = v.j(0.05);
       swish(s, 1200 * p, 4200 * p, 0, 0.24, 1, 1.1, 0.75);
@@ -128,8 +138,10 @@ export const SKILL_RECIPES = {
     ms: [50, 260],
     trim: 3,
     variants: 1,
-    needs: [RPG('metalLatch')],
+    needs: ['elevenlabs/sp_sheath', RPG('metalLatch')],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_sheath')) return;
       // The sword goes home: a short scrape of steel on the mouth of the sheath and the click of the guard. A clean, small "tak".
       air(s, { at: 0, dur: 0.035, v: 0.5, a: 0.015, d: 0.02, s: 0.01, filter: { t: 'bandpass', f: 5200, f2: 3200, sw: 0.03, q: 0.9 } });
       s.sample(RPG('metalLatch'), { v: 0.85, at: 0.03, rate: 0.95 });
@@ -146,8 +158,10 @@ export const SKILL_RECIPES = {
     variants: 3,
     rate: 0.02,
     duck: { depth: 0.3, seconds: 0.4 },
-    needs: [IMPACT('impactMetal_light_000'), IMPACT('impactMetal_light_001'), IMPACT('impactMetal_light_003'), IMPACT('impactMetal_light_004')],
+    needs: ['elevenlabs/sp_cut_clash', IMPACT('impactMetal_light_000'), IMPACT('impactMetal_light_001'), IMPACT('impactMetal_light_003'), IMPACT('impactMetal_light_004')],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_cut_clash')) return;
       // "Chaeng!": every line opens in the same instant, as if the whole row of blades struck together. The contact is a crack and a
       // 40 ms burst of bright noise, the ring is four inharmonic partials of a struck blade (1.9, 3.1, 4.7 and 6.4 kHz, the lowest
       // two the longest), a short comb echo makes the two steel faces answer each other, and a recording of two light metal pieces
@@ -209,7 +223,10 @@ export const SKILL_RECIPES = {
     ms: [150, 400],
     trim: 0.5,
     rule: { maxVoices: 1, minGap: 0.2, falloff: 0 },
+    needs: ['elevenlabs/sp_tiger_land'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_tiger_land')) return;
       // The tiger comes down from its leap at 1.5 times its size: a big felt thud driven for the phone, a cloud of dust, one paw on the road.
       thump(s, 230, 70, 0, 0.26, 0.8, 0.1, 0.85);
       thump(s, 420, 190, 0, 0.1, 0.7, 0.05, 0.6);
@@ -224,7 +241,10 @@ export const SKILL_RECIPES = {
     ms: [40, 130],
     trim: 5.5,
     lp: 6500,
+    needs: ['elevenlabs/sp_stomp'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_stomp')) return;
       // A hoof (a paw) on the road: a short low "dum" with the harmonics a phone can play, a pat of dust.
       const p = v.j(0.08);
       thump(s, 340 * p, 150, 0, 0.1, 1, 0.05, 0.7);
@@ -237,7 +257,10 @@ export const SKILL_RECIPES = {
     len: 0.55,
     ms: [250, 520],
     trim: -2.5,
+    needs: ['elevenlabs/sp_tiger_roar_end'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_tiger_roar_end')) return;
       // The tiger stands at the end of the run and answers itself: one short growl, a falling "rrow" a fifth lower than the first and
       // over in a third of the time.
       const grow = { rate: 28, depth: 0.5 };
@@ -253,7 +276,10 @@ export const SKILL_RECIPES = {
     ms: [220, 480],
     trim: -1,
     rate: 0.03,
+    needs: ['elevenlabs/sp_smoke_pop'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_smoke_pop')) return;
       // "Pong!": a round hollow pop (a sine falling from 330 to 95 Hz in 50 ms, like a cork out of a bottle) with a burst of smoke behind
       // it, a cloud of soft noise that sinks from 2.2 kHz to 500 Hz, and a small chime on top for the cartoon. A leaf rustles after it.
       const p = v.j(0.05);
@@ -273,7 +299,10 @@ export const SKILL_RECIPES = {
     ms: [40, 130],
     trim: 6,
     lp: 5500,
+    needs: ['elevenlabs/sp_clone_hop'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_clone_hop')) return;
       // A clone lands on its tile: a light "tip" (a sine that slips from 880 to 640 Hz in 25 ms) and the rustle of a leaf. Pale and high on purpose, so that it is not the tiger's
       // hoofbeat (`sp_stomp`: a low drop and a puff of dust): the landing review measured the two nearly the same when both were a felt "tup".
       const p = v.j(0.08);
@@ -288,7 +317,10 @@ export const SKILL_RECIPES = {
     ms: [60, 220],
     trim: 0,
     lp: 4000,
+    needs: ['elevenlabs/sp_clone_throw'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_clone_throw')) return;
       // A clone's shuriken: the ninja's own throw, but made of air only and darkened, so it reads as a ghost of it.
       const p = v.j(0.06);
       swish(s, 2600 * p, 1300 * p, 0, 0.14, 0.9, 1.2, 0.3);
@@ -300,7 +332,10 @@ export const SKILL_RECIPES = {
     len: 0.3,
     variants: 1,
     ms: [100, 300],
+    needs: ['elevenlabs/sp_clone_vanish'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_clone_vanish')) return;
       // A clone goes out: a small high "pwip" (a sine gliding 640 down to 280 Hz), a puff that thins, a leaf.
       const p = v.j(0.06);
       s.tone({ f: 640 * p, f2: 280, sw: 0.06, dur: 0.1, v: 1, a: 0.002, d: 0.09, s: 0.01 });
@@ -311,28 +346,17 @@ export const SKILL_RECIPES = {
   }),
 
   // ---------------------------------------------------------------------------------------------- wanted: one shot (gunner)
-  sp_poster_slap: signature({
-    len: 0.3,
-    ms: [100, 280],
-    trim: 1,
-    needs: [RPG('bookClose')],
-    build(s) {
-      // The wanted poster is slapped onto the boss: a flat paper slap (a band of noise at 1.2 kHz for 50 ms and a flap higher up),
-      // a low pop of the air trapped under it, and a recording of a book shut on a desk.
-      air(s, { dur: 0.055, v: 0.95, a: 0.001, d: 0.045, s: 0.01, filter: { t: 'bandpass', f: 1250, f2: 900, sw: 0.04, q: 0.7 } });
-      grain(s, 0.02, 2600, 0.6, 0.04);
-      thump(s, 240, 110, 0, 0.1, 0.8, 0.05, 0.4);
-      snap(s, 0, 0.35, 3000, 0.01);
-      s.sample(RPG('bookClose'), { v: 0.75 });
-    },
-  }),
   sp_cork_pop: signature({
-    len: 0.28,
-    ms: [80, 250],
+    // long enough for the owner's pick (2026-11-10): the shot's boom carries a tail, the one decisive shot of the skill
+    len: 0.7,
+    ms: [80, 700],
     trim: 1.5,
     rate: 0.03,
     variants: 2,
+    needs: ['elevenlabs/sp_cork_pop'],
     build(s, v) {
+      // The owner's pick (take K of 2026-11-10, recorded with ElevenLabs): one decisive shot.
+      if (recording(s, 'sp_cork_pop')) return;
       // The cork gun: "pong", the hollow pop of a cork leaving a bottle (a sine falling 560 to 190 Hz in 35 ms), the puff of air that
       // pushed it, a squeak of the cork on the glass and a faint partial that tells the pop is round.
       const p = v.j(0.05);
@@ -343,26 +367,14 @@ export const SKILL_RECIPES = {
       snap(s, 0, 0.3, 3200, 0.01);
     },
   }),
-  sp_poster_hole: signature({
-    len: 0.35,
-    ms: [100, 330],
-    trim: 3,
-    needs: [IMPACT('impactTin_medium_003')],
-    build(s) {
-      // The cork goes through the poster's middle: a tin plate struck (the recording and a 780 Hz ping), the tear of the paper (a
-      // crackle sliding down from 3.2 to 1.2 kHz) and a low pat.
-      tink(s, 0, 780, 0.16, 0.8);
-      crackle(s, 0.005, 0.17, 3200, 0.7, 70, 900);
-      thump(s, 210, 100, 0, 0.1, 0.8, 0.05, 0.4);
-      snap(s, 0, 0.6, 3600, 0.012);
-      s.sample(IMPACT('impactTin_medium_003'), { v: 0.85 });
-    },
-  }),
   sp_seal_stamp: signature({
     len: 0.3,
     ms: [60, 300],
     trim: -1.5,
+    needs: ['elevenlabs/sp_seal_stamp'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_seal_stamp')) return;
       // The case is closed: the rubber stamp on the poster, a "ka-chunk" of two beats (the stamp, the pad's puff) and a wooden knock.
       stamp(s, 0, 1, 170);
       knock(s, 310, 0.03, 0.55, 0.08, 0.85);
@@ -430,7 +442,10 @@ export const SKILL_RECIPES = {
     len: 0.4,
     ms: [150, 380],
     trim: -1,
+    needs: ['elevenlabs/sp_cloud_pop'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_cloud_pop')) return;
       // A grumpy little cloud pops out of the hat: a low round "pof" (a sine falling 240 to 110 Hz), a puff of dark air (a low-passed
       // cloud) and a sulking "bwoop" sliding down a fourth with a wobble.
       s.tone({ f: 240, f2: 110, sw: 0.06, dur: 0.15, v: 1, a: 0.002, d: 0.13, s: 0.01, sat: 0.2 });
@@ -446,7 +461,10 @@ export const SKILL_RECIPES = {
     variants: 2,
     climb: 8,
     rule: { maxVoices: 3, minGap: 0.1, falloff: 0.1 },
+    needs: ['elevenlabs/sp_thunder_tick'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_thunder_tick')) return;
       // A small thunder for a small cloud: the crack of the bolt (a snap and 30 ms of bright noise), the fizz of the air (cellophane
       // chopped at 90 Hz) and the roll behind it, a low sine drop driven for the phone and a band of dark noise that swells and
       // dies in 220 ms. The scene lifts it a little higher with each of the eight bolts.
@@ -463,7 +481,10 @@ export const SKILL_RECIPES = {
     ms: [80, 230],
     trim: 0.5,
     variants: 1,
+    needs: ['elevenlabs/sp_cloud_hop'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_cloud_hop')) return;
       // The cloud jumps to the next host: a quick rising swish (600 Hz to 2.2 kHz) and a small startled "boing".
       swish(s, 600, 2200, 0, 0.16, 0.8, 1, 0.6);
       boing(s, 0.03, 380, 620, 0.14, 0.4, 24, 60);
@@ -473,7 +494,10 @@ export const SKILL_RECIPES = {
     len: 0.65,
     ms: [250, 620],
     trim: -2.5,
+    needs: ['elevenlabs/sp_cloud_sigh'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_cloud_sigh')) return;
       // The cloud runs out: a sigh (pink noise through a band that sinks from 700 to 300 Hz), a tired sine falling a minor third, and
       // a few drops of rain.
       air(s, { kind: 'pink', dur: 0.45, v: 0.7, a: 0.08, d: 0.3, s: 0.05, r: 0.15, filter: { t: 'bandpass', f: 800, f2: 320, sw: 0.4, q: 0.8 } });
@@ -487,8 +511,10 @@ export const SKILL_RECIPES = {
     len: 0.3,
     ms: [90, 280],
     trim: 2,
-    needs: [IMPACT('impactGlass_light_001')],
+    needs: ['elevenlabs/sp_glass_tap', IMPACT('impactGlass_light_001')],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_glass_tap')) return;
       // The queen taps the glass off the edge with a paw: one clear "tok" of glass (a ping at 1.8 kHz with its 2.3 partial and a tick).
       tink(s, 0, 1800, 0.14, 0.7);
       tink(s, 0.002, 3300, 0.06, 0.2);
@@ -503,8 +529,10 @@ export const SKILL_RECIPES = {
     trim: 3,
     lp: 8500,
     duck: { depth: 0.3, seconds: 0.5 },
-    needs: [IMPACT('impactGlass_heavy_003'), IMPACT('impactGlass_medium_004')],
+    needs: ['elevenlabs/sp_glass_shatter', IMPACT('impactGlass_heavy_003'), IMPACT('impactGlass_medium_004')],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_glass_shatter')) return;
       // The glass breaks on the road: the burst (a crack, 60 ms of bright noise), a body of glass (a heavy and a medium recording), and
       // the sparkle that the recordings lack: eight pings between 2.4 and 7 kHz that fall in pitch over a third of a second, each a
       // little quieter, in a small bright echo.
@@ -532,8 +560,10 @@ export const SKILL_RECIPES = {
     variants: 5,
     rate: 0.04,
     lp: 8500,
-    needs: [IMPACT('impactGlass_light_000'), IMPACT('impactGlass_light_001'), IMPACT('impactGlass_light_002'), IMPACT('impactGlass_light_003'), IMPACT('impactGlass_light_004')],
+    needs: ['elevenlabs/sp_shard_hit', IMPACT('impactGlass_light_000'), IMPACT('impactGlass_light_001'), IMPACT('impactGlass_light_002'), IMPACT('impactGlass_light_003'), IMPACT('impactGlass_light_004')],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_shard_hit')) return;
       // A shard of glass sticks into an enemy: a short "tik" of glass (a recording, a different one on each of five variants), an ice
       // "chk" (a snap and a ping at 2.2 kHz) and nothing that rings on.
       const p = v.j(0.05);
@@ -552,7 +582,10 @@ export const SKILL_RECIPES = {
     variants: 1,
     lp: 3500,
     rule: { maxVoices: 2, minGap: 0.4, falloff: 0.5 },
+    needs: ['elevenlabs/sp_meteor_warn'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_meteor_warn')) return;
       // The sky darkens: a deep hum that rises a fifth as the red circle grows (a triangle from 70 to 105 Hz, driven so that its harmonics
       // at 300 to 600 Hz carry on a phone) and a band of air that climbs with it. It stops short, as the whistle takes over.
       s.tone({ w: 'triangle', f: 110, f2: 165, sw: 0.85, dur: 0.95, v: 0.9, a: 0.5, d: 0.3, s: 0.8, r: 0.08, sat: 0.8, filter: [{ t: 'highpass', f: 300, q: 0.6 }, { t: 'highpass', f: 300, q: 0.6 }, { t: 'lowpass', f: 1300, f2: 2000, sw: 0.8, q: 0.8 }], trem: { rate: 9, depth: 0.25 } });
@@ -564,7 +597,10 @@ export const SKILL_RECIPES = {
     ms: [200, 480],
     trim: 0.5,
     rate: 0.02,
+    needs: ['elevenlabs/sp_meteor_whistle'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_meteor_whistle')) return;
       // The rock falls: a whistle that drops from 2.4 kHz to 650 Hz in 0.4 s (louder as it comes) and a fire-crackle of air around it.
       s.tone({ f: 2400, f2: 650, sw: 0.4, dur: 0.44, v: 0.6, a: 0.12, d: 0.3, s: 0.8, r: 0.06 });
       s.tone({ f: 1200, f2: 330, sw: 0.4, dur: 0.44, v: 0.18, a: 0.12, d: 0.3, s: 0.8, r: 0.06 });
@@ -600,7 +636,10 @@ export const SKILL_RECIPES = {
     len: 0.5,
     ms: [200, 480],
     trim: -1,
+    needs: ['elevenlabs/sp_meteor_ring'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_meteor_ring')) return;
       // The second ring of the blast rolls out over the road: a soft low "whoom" (a band of air swelling at 200 to 900 Hz) and a short
       // driven thud, quieter than the blast itself.
       air(s, { kind: 'pink', dur: 0.4, v: 1.1, a: 0.07, d: 0.25, s: 0.05, r: 0.1, filter: [{ t: 'highpass', f: 220 }, { t: 'bandpass', f: 300, f2: 1000, sw: 0.25, q: 0.7 }] });
@@ -613,7 +652,10 @@ export const SKILL_RECIPES = {
     len: 0.7,
     ms: [250, 650],
     trim: -2,
+    needs: ['elevenlabs/sp_strum'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_strum')) return;
       // A lute strummed down: four strings of a G chord (G3, B3, D4, G4) 22 ms apart, each plucked with a nail (a tick at 2.5 kHz),
       // the same chord an octave up a hair behind it for the sparkle, and a short room.
       const e = s.echo(0.06, 0.22, 0.2, 5000);
@@ -632,7 +674,10 @@ export const SKILL_RECIPES = {
     trim: 1,
     variants: 2,
     climb: 14,
+    needs: ['elevenlabs/sp_note'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_note')) return;
       // A golden note arrives: a small bell (G5 with its inharmonic partials) over a kalimba tine an octave above, in a little echo.
       const p = v.j(0.03);
       const e = s.echo(0.05, 0.2, 0.2, 4800);
@@ -648,7 +693,10 @@ export const SKILL_RECIPES = {
     ms: [120, 330],
     trim: 3,
     variants: 1,
+    needs: ['elevenlabs/sp_flask_toss'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_flask_toss')) return;
       // The flasks leave the paw: a clink of glass on glass, a swish that climbs, and a thin wobbling whine of the liquid.
       tink(s, 0, 2500, 0.09, 0.45);
       swish(s, 800, 2800, 0.01, 0.24, 0.8, 1, 0.6);
@@ -660,8 +708,10 @@ export const SKILL_RECIPES = {
     ms: [250, 620],
     trim: 0,
     duck: { depth: 0.3, seconds: 0.5 },
-    needs: [IMPACT('impactGlass_light_002')],
+    needs: ['elevenlabs/sp_flask_pop', IMPACT('impactGlass_light_002')],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_flask_pop')) return;
       // The big flask breaks on the boss: glass (a crack, a ping at 1.6 kHz, a recording) and, a hair behind it, "pong": a round soft
       // pop of pink smoke (a sine rising from 220 to 480 Hz like a bubble bursting, a cloud of air that sinks from 2.6 to 0.6 kHz) with
       // three bubbles in it.
@@ -679,7 +729,10 @@ export const SKILL_RECIPES = {
     len: 0.6,
     ms: [250, 560],
     trim: -3,
+    needs: ['elevenlabs/sp_fish_boing'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_fish_boing')) return;
       // A fish where a boss was: "boing" (a sine sliding up from 300 to 700 Hz under a wobble, a spring), a wet squelch, and three flaps
       // of a tail against the road.
       boing(s, 0, 300, 700, 0.3, 1, 16, 80);
@@ -699,7 +752,10 @@ export const SKILL_RECIPES = {
     variants: 3,
     rate: 0.06,
     climb: 9,
+    needs: ['elevenlabs/sp_flask_mini'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_flask_mini')) return;
       // A small flask on a weak enemy: a tick of glass, a tiny "pop" and a puff, a few of them one after another.
       const p = v.j(0.06);
       tink(s, 0, 2100 * p, 0.07, 0.6);
@@ -713,7 +769,10 @@ export const SKILL_RECIPES = {
     ms: [100, 290],
     trim: 4,
     variants: 1,
+    needs: ['elevenlabs/sp_fish_back'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_fish_back')) return;
       // The fish is a boss again: it shakes itself ("brrr", a sine that sinks 700 to 350 Hz under a fast wobble) in a puff of smoke.
       boing(s, 0, 700, 350, 0.2, 0.7, 30, 90);
       dust(s, 0, 0.2, 0.8, 2400, 600);
@@ -728,7 +787,10 @@ export const SKILL_RECIPES = {
     trim: -3.5,
     variants: 1,
     rule: { maxVoices: 2, minGap: 0.15, falloff: 0 },
+    needs: ['elevenlabs/sp_capsule_fall'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_capsule_fall')) return;
       // The capsule comes down from the sky: a whistle that falls from 2.6 to 0.9 kHz as it gets nearer, with a flutter of air round it.
       whistle(s, 0, 2600, 900, 0.48, 0.6);
       swish(s, 1600, 600, 0, 0.45, 0.4, 1.3, 0.3);
@@ -740,8 +802,10 @@ export const SKILL_RECIPES = {
     trim: 0.5,
     variants: 3,
     lp: 6500,
-    needs: [IMPACT('impactGeneric_light_000'), IMPACT('impactGeneric_light_002'), IMPACT('impactGeneric_light_004')],
+    needs: ['elevenlabs/sp_capsule_bounce', IMPACT('impactGeneric_light_000'), IMPACT('impactGeneric_light_002'), IMPACT('impactGeneric_light_004')],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_capsule_bounce')) return;
       // The capsule bounces on the board: a hollow knock of plastic (a sine at 700 Hz that sags, a tick), a recording of something light
       // on a table (a different one on each of three variants).
       const p = v.j(0.05);
@@ -757,8 +821,10 @@ export const SKILL_RECIPES = {
     trim: 2.5,
     variants: 1,
     lp: 4400,
-    needs: [RPG('handleCoins2')],
+    needs: ['elevenlabs/sp_capsule_rattle', RPG('handleCoins2')],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_capsule_rattle')) return;
       // The prize rattles in its shell: seven quick ticks of loose things in a band at 5 kHz, a couple of wooden knocks of the shell
       // itself, and a recording of coins in a hand.
       for (let k = 0; k < 7; k++) {
@@ -773,8 +839,10 @@ export const SKILL_RECIPES = {
     len: 0.3,
     ms: [100, 280],
     trim: -0.5,
-    needs: [RPG('metalLatch')],
+    needs: ['elevenlabs/sp_capsule_pop', RPG('metalLatch')],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_capsule_pop')) return;
       // The shell opens: "ttalkak" (the click of the latch, a recording and a snap) and "pong" (the lid springs: a sine rising 380 to 760
       // Hz with a boing and a puff of air).
       s.sample(RPG('metalLatch'), { v: 0.8 });
@@ -789,7 +857,10 @@ export const SKILL_RECIPES = {
     len: 0.6,
     ms: [250, 560],
     trim: -3.5,
+    needs: ['elevenlabs/sp_prize_fish'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_prize_fish')) return;
       // A fish prize: a bouncy "boing" and a splash of three bubbles and a paper pop, the cheerful small prize.
       const e = s.echo(0.06, 0.22, 0.2, 4800);
       boing(s, 0, 360, 820, 0.22, 0.8, 18, 70);
@@ -818,7 +889,10 @@ export const SKILL_RECIPES = {
     len: 0.6,
     ms: [250, 560],
     trim: -1.5,
+    needs: ['elevenlabs/sp_prize_more'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_prize_more')) return;
       // One more! A quick climb ("bi-bwip": a sine from 400 to 900 Hz), a pop and the tick of a smaller capsule rolling out.
       s.tone({ f: 400, f2: 900, sw: 0.1, dur: 0.16, v: 0.9, a: 0.004, d: 0.12, s: 0.01 });
       pop(s, 700, 0.12, 0.8, 0.14);
@@ -831,7 +905,10 @@ export const SKILL_RECIPES = {
     ms: [500, 1000],
     trim: -2.5,
     duck: { depth: 0.4, seconds: 0.8 },
+    needs: ['elevenlabs/sp_prize_toy'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_prize_toy')) return;
       // A toy box: the lid pops (a knock and a pop), then four climbing notes (C6 E6 G6 C7) and a spray of glitter.
       const e = s.echo(0.07, 0.28, 0.25, 5000);
       knock(s, 330, 0, 0.7, 0.08, 0.8);
@@ -846,7 +923,10 @@ export const SKILL_RECIPES = {
     ms: [650, 1150],
     trim: -2.5,
     duck: { depth: 0.4, seconds: 0.8 },
+    needs: ['elevenlabs/sp_prize_guardian'],
     build(s) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'sp_prize_guardian')) return;
       // A guardian wakes: a warm swell of an open chord (C5, G5, E6, a wide chorus on the root) that blooms in 90 ms and glows for a
       // second, a low "whoom" under it, and a falling shower of twinkles.
       const e = s.echo(0.08, 0.3, 0.28, 5200);

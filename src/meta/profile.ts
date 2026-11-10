@@ -232,11 +232,20 @@ export class Profile extends RoutineProfile {
 
   /**
    * Settle a finished run. `abandoned` = the player quit from the pause menu: the rewards are the
-   * same, but the ad policy does not count it as a completed run.
+   * same, but the ad policy does not count it as a completed run. A run quit before any wave was
+   * cleared does not count at all: the pending run is dropped and an empty reward comes back (marked
+   * doubled, so the result screen offers nothing to double; `lastRun` keeps the run before it).
    */
   async finishRun(stats: RunStats, opts: { abandoned?: boolean } = {}): Promise<Result<RunReward>> {
     // A dungeon run pays once, for the entry that started it: no pending run, nothing to settle.
     if (stats.mode === 'gold' && this.data.pending?.init.mode !== 'gold') return fail('nothing_to_claim');
+    if (opts.abandoned && stats.wavesCleared === 0) {
+      await this.discardPendingRun();
+      return ok({
+        id: 0, mode: stats.mode, chapter: stats.chapter, stake: stats.stake, victory: false, wavesCleared: 0,
+        gold: 0, xp: 0, bundle: {}, firstClear: false, doubled: true, newBest: false,
+      });
+    }
     this.refresh(); // a run that ends after midnight belongs to the new day, week and season
     const d = this.data;
     const date = this.today();

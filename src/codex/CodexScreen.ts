@@ -115,7 +115,7 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
   const buildBar = (): void => {
     const w = scaffold.contentWidth;
     const tabs = new SegmentTabs({
-      width: w, height: TAB_H, selected: section,
+      width: w, height: TAB_H, selected: section, sound: 'ui_tab_big',
       tabs: CODEX_SECTIONS.map((id) => ({ id, label: t(`codex.section.${id}`) })),
     });
     tabs.onSelect((id) => {

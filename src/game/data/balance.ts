@@ -185,6 +185,18 @@ export const DAILY_WAVES = 16;
  */
 export const ENDLESS_GROWTH = 1.07;
 /**
+ * Endless mode, 2026-11-10: the waves up to the last reward wave (80, the last of the meta layer's ENDLESS_TIERS; tests/endless.test.ts keeps the two
+ * equal, this layer cannot import meta) stay as they were, and every wave after it grows by ENDLESS_LATE_GROWTH instead. Measured with the merge and the
+ * synergy bot (480 runs): reaching wave 80 is 43% either way; of the runs that pass it the mean depth past 80 fell from 5.4 to 3.9 waves.
+ */
+export const ENDLESS_LATE_FROM = 80;
+export const ENDLESS_LATE_GROWTH = 1.12;
+
+/** Growth of the health step that arrives at `wave`. */
+function growthInto(wave: number): number {
+  return wave > ENDLESS_LATE_FROM ? ENDLESS_LATE_GROWTH : ENDLESS_GROWTH;
+}
+/**
  * Chapters 1..5. Tuned so the recommended unit level clears each chapter at the same rate: the unit
  * levels (+10% damage per level) carry most of the growth, the chapters add rules instead.
  * Rules v1.2 scaled every value by about 1.05: merges keep their class, so a planned ladder is stronger.
@@ -225,7 +237,7 @@ export const BOSS_HP: readonly number[] = [1431, 3658, 12965];
 export function hpIndex(wave: number): number {
   if (wave <= HP_INDEX.length - 1) return HP_INDEX[wave < 1 ? 1 : wave] as number;
   let v = HP_INDEX[HP_INDEX.length - 1] as number;
-  for (let w = HP_INDEX.length - 1; w < wave; w++) v *= ENDLESS_GROWTH;
+  for (let w = HP_INDEX.length; w <= wave; w++) v *= growthInto(w);
   return v;
 }
 
@@ -234,7 +246,9 @@ export function specialHp(kind: 'elite' | 'boss', ordinal: number): number {
   const table = kind === 'elite' ? ELITE_HP : BOSS_HP;
   if (ordinal < table.length) return table[ordinal] as number;
   let v = table[table.length - 1] as number;
-  for (let i = table.length - 1; i < ordinal; i++) for (let k = 0; k < 8; k++) v *= ENDLESS_GROWTH;
+  // The n-th elite stands on wave 4 + 8n, the n-th boss on 8 + 8n: each step of eight waves is priced by the waves it crosses.
+  const base = kind === 'elite' ? 4 : 8;
+  for (let i = table.length - 1; i < ordinal; i++) for (let k = 1; k <= 8; k++) v *= growthInto(base + 8 * i + k);
   return v;
 }
 

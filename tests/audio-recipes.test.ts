@@ -160,7 +160,7 @@ describe('sound catalogue', () => {
   });
 
   it('lets a noise-based tick ask for a shorter playStep climb and the awakening dip the music', () => {
-    for (const id of ['coin', 'gem', 'card_flip', 'reel_tick', 'enemy_die'] as const) {
+    for (const id of ['coin', 'gem', 'card_flip', 'reel_tick', 'foe_paper_die'] as const) {
       const climb = (SOUNDS[sfxIndexOf(id)]?.recipe as Recipe).climb ?? 24;
       expect(climb, id).toBeLessThanOrEqual(19);
       expect(climb, id).toBeGreaterThan(0);
@@ -172,7 +172,7 @@ describe('sound catalogue', () => {
   });
 
   it('gives frequent ids several variants and a playback-rate jitter', () => {
-    for (const id of ['hit_light', 'hit_heavy', 'crit', 'zap', 'coin', 'enemy_die', 'ui_click', 'ui_back', 'ui_tab', 'shoot_arrow', 'shoot_magic', 'shoot_cannon', 'shoot_ice', 'shoot_lightning', 'shoot_poison', 'shoot_claw'] as const) {
+    for (const id of ['hit_light', 'hit_heavy', 'crit', 'zap', 'coin', 'foe_paper_die', 'ui_click', 'ui_back', 'ui_tab', 'shoot_poison', 'shoot_claw'] as const) {
       const r = SOUNDS[sfxIndexOf(id)]?.recipe as Recipe;
       expect(r.variants ?? 1, id).toBeGreaterThanOrEqual(2);
       expect(r.rate ?? 0, id).toBeGreaterThan(0);
@@ -276,7 +276,6 @@ describe('recipes', () => {
     for (const id of SFX_IDS.filter((x) => x.startsWith('shoot_') || x === 'hit_light' || x === 'hit_heavy' || x === 'crit')) {
       expect((SOUNDS[sfxIndexOf(id)]?.recipe as Recipe).ms[1], id).toBeLessThanOrEqual(260);
     }
-    for (const id of ['enemy_die'] as const) expect((SOUNDS[sfxIndexOf(id)]?.recipe as Recipe).ms[1]).toBeLessThanOrEqual(350);
   });
 
   it('keeps stingers within 1 to 2 seconds', () => {

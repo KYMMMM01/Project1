@@ -8,7 +8,7 @@ import { enemySpec, isWaveTarget, type EnemyId, type UnitId, type WavePreviewEnt
 
 /** Heard in the first minute of any battle, in the order they are first needed: menus, the summon ladder, a merge, plain hits, a new wave. */
 export const START_SOUNDS: readonly SfxId[] = [
-  'ui_click', 'summon_common', 'pickup', 'place', 'merge', 'hit_light', 'wave_start', 'ui_popup_open', 'ui_popup_close', 'ui_back', 'ui_tab',
+  'ui_click', 'summon_common', 'pickup', 'place', 'merge', 'hit_light', 'wave_start', 'ui_popup_open', 'ui_popup_close', 'ui_back', 'ui_tab', 'ui_tab_big',
   'ui_error', 'summon_rare', 'summon_epic', 'hit_heavy', 'crit', 'coin', 'merge_big', 'summon_legendary', 'relic_pick', 'wave_clear', 'whoosh',
 ];
 
@@ -22,8 +22,8 @@ export const LATER_SOUNDS: readonly SfxId[] = [
   'hazard_warn', 'splash', 'buff', 'explosion', 'summon_mythic',
 ];
 
-/** The stingers a run can play: the two ends of it, and the awakening's halo. The director never plays `boss_intro` (the warning and the boss track do that job). */
-export const LATER_STINGERS: readonly StingerId[] = ['victory', 'defeat', 'mythic'];
+/** The stingers a run can play: the two ends of it, the awakening's halo and a crowning (a merge that makes a 대왕). The director never plays `boss_intro` (the warning and the boss track do that job). */
+export const LATER_STINGERS: readonly StingerId[] = ['victory', 'defeat', 'mythic', 'king'];
 
 /** What a cat's attack sounds like leaving it and landing (the crit layer is one shared sound, in the start list). */
 export function unitSounds(id: UnitId): SfxId[] {
@@ -39,7 +39,7 @@ export const SKILL_SOUNDS: Partial<Record<UnitId, readonly SfxId[]>> = {
   w_samurai: ['sp_dash', 'sp_sheath', 'sp_cut_clash'],
   w_tiger: ['sp_cutin', 'sp_tiger_roar', 'sp_tiger_land', 'sp_stomp', 'sp_tiger_roar_end'],
   r_ninja: ['sp_smoke_pop', 'sp_clone_hop', 'sp_clone_throw', 'sp_clone_vanish'],
-  r_gunner: ['sp_poster_slap', 'sp_cork_pop', 'sp_poster_hole', 'sp_seal_stamp'],
+  r_gunner: ['sp_cork_pop', 'sp_seal_stamp'],
   r_star: ['sp_cutin', 'sp_night_hush', 'sp_arrow_whoosh', 'sp_star_ping'],
   m_storm: ['sp_cloud_pop', 'sp_thunder_tick', 'sp_cloud_hop', 'sp_cloud_sigh'],
   m_frost: ['sp_glass_tap', 'sp_glass_shatter', 'sp_shard_hit'],
@@ -59,7 +59,7 @@ export function enemySounds(id: EnemyId): SfxId[] {
   const spec = enemySpec(id);
   const out: SfxId[] = [foeHitSfx(id).id, foeDieSfx(id).id];
   if (spec.aura?.kind === 'heal') out.push('heal');
-  if (spec.shield) out.push('shield_break');
+  if (spec.shield) out.push('foe_shield_hit', 'shield_break');
   if (spec.weakenPulse) out.push('weaken');
   if (spec.hazardPulse) out.push('hazard_warn', 'splash');
   switch (spec.ability) {

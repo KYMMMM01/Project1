@@ -182,6 +182,34 @@ describe('runs', () => {
     expect((await profile.prepareRun({ mode: 'chapter', chapter: 2 })).ok).toBe(true);
   });
 
+  it('a run quit from the pause menu before any wave was cleared does not count and pays nothing', async () => {
+    const rig = await createTestProfile();
+    const { profile } = rig;
+    await playRun(rig);
+    const before = JSON.stringify({ ...profile.data, pending: null });
+    const gold = profile.data.gold;
+    const last = profile.data.lastRun;
+    expect((await profile.prepareRun({ mode: 'chapter', chapter: 1 })).ok).toBe(true);
+    const r = await profile.finishRun(stats({ victory: false, wavesCleared: 0, kills: 3 }), { abandoned: true });
+    expect(r.ok && r.value).toMatchObject({ gold: 0, xp: 0, wavesCleared: 0, doubled: true });
+    expect(profile.pendingRun).toBeNull();
+    expect(rig.ads.runs.at(-1)).toBe('abandon');
+    expect(profile.data.gold).toBe(gold);
+    expect(profile.data.lastRun).toBe(last);
+    expect(JSON.stringify(profile.data)).toBe(before);
+  });
+
+  it('a run quit after one cleared wave still counts, and a lost run with no wave still counts', async () => {
+    const rig = await createTestProfile();
+    const { profile } = rig;
+    expect((await profile.prepareRun({ mode: 'chapter', chapter: 1 })).ok).toBe(true);
+    await profile.finishRun(stats({ victory: false, wavesCleared: 1 }), { abandoned: true });
+    expect(profile.data.stats.runs).toBe(1);
+    expect((await profile.prepareRun({ mode: 'chapter', chapter: 1 })).ok).toBe(true);
+    await profile.finishRun(stats({ victory: false, wavesCleared: 0 }));
+    expect(profile.data.stats.runs).toBe(2);
+  });
+
   it('sets up the daily challenge from the date: seed, rule, level 5 for everyone, training off, no snack', async () => {
     const rig = await createTestProfile();
     const { profile } = rig;

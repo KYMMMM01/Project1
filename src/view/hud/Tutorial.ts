@@ -546,7 +546,7 @@ export class Tutorial {
     if (target === 'chips' && hole.w > 0) hole = trimBelow(hole, currencyTop(this.layout));
     const blocking = step.holds(w) && !step.popup && !this.script.relaxed;
     const text = this.textOf(step, w);
-    const noteLook = `${step.id}|${text}|${this.layout.w}|${this.layout.h}`;
+    const noteLook = `${step.id}|${target}|${text}|${this.layout.w}|${this.layout.h}`;
     const where = this.pair ? this.pair.join('-') : '';
     const pawLook = `${target}|${where}|${this.cat}|${this.sunTo}|${this.layout.w}|${this.layout.h}`;
     // The paw points at something else now (another target, another cat): it is taken away and laid again for the new spot.
@@ -562,6 +562,9 @@ export class Tutorial {
         break;
       case 'wait':
         this.drawWindow(hole, blocking);
+        // A two-step lesson (tap the cat, then its button) has a new target the moment the tap lands: the note that is up goes there at once
+        // instead of standing by the old spot while the sheet slides in (only the paw waits for the target to come to rest).
+        if (this.note.visible && noteLook !== this.noteLook && hole.w > 0) this.say(step, hole, text, noteLook);
         break;
       case 'follow':
         this.drawWindow(hole, blocking);

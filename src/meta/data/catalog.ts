@@ -30,7 +30,7 @@ export const GEM_PASS_DAILY = 30;
 export const IAP_SPECS: readonly IapSpec[] = [
   {
     id: 'baby_cat_pack', type: 'consumable', krw: 1100, once: true, grant: 'bundle',
-    name: { ko: '아기 고양이 팩', en: 'Kitten Pack' },
+    name: { ko: '아기 고양이 팩', en: 'Baby Cat Pack' },
     bundle: { gems: 180, chests: { silver: 1 }, cosmetics: ['rug_baby'] },
   },
   {
@@ -40,7 +40,7 @@ export const IAP_SPECS: readonly IapSpec[] = [
   },
   {
     id: 'growth_pack', type: 'consumable', krw: 6600, once: true, grant: 'bundle',
-    name: { ko: '성장 패키지', en: 'Growth Package' },
+    name: { ko: '성장 팩', en: 'Growth Pack' },
     bundle: { gems: 700, gold: 15000, chests: { gold: 2 } },
   },
   {

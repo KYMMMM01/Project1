@@ -501,11 +501,12 @@ describe('the gunner\'s scene: a poster slaps on, a cork goes through it', () =>
     cast(r, boss);
     for (let t = 0; t < 0.5; t += 1 / 60) frame(r, 1 / 60, 1 / 60);
     const ids = r.stage.play.mock.calls.map((c) => c[1] as string);
-    expect(ids).toContain('sp_poster_slap');
+    // The shot is the skill's sound; the poster slapped on and torn through is only seen (the owner, 2026-11-10).
     expect(ids).toContain('sp_cork_pop');
-    expect(ids).toContain('sp_poster_hole');
-    // All three are signatures: the skill's rule, which the fight's busy second cannot thin.
-    for (const id of ['sp_poster_slap', 'sp_cork_pop', 'sp_poster_hole']) expect(r.stage.play.mock.calls.find((c) => c[1] === id)?.[0]).toBe(r.stage.rules.skill);
+    expect(ids).not.toContain('sp_poster_slap');
+    expect(ids).not.toContain('sp_poster_hole');
+    // A signature: the skill's rule, which the fight's busy second cannot thin.
+    expect(r.stage.play.mock.calls.find((c) => c[1] === 'sp_cork_pop')?.[0]).toBe(r.stage.rules.skill);
     expect(r.stage.shake).toHaveBeenCalledWith(Trauma.t1, Gate.spShake, expect.any(Number));
     const calm = rig();
     calm.stage.reduced = true;

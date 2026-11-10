@@ -12,7 +12,7 @@ const T = {
   sp_dash: [0.9, -19], sp_sheath: [0.9, -19], sp_cut_clash: [1, -16.5],
   sp_tiger_roar: [1, -16.5], sp_tiger_land: [0.9, -18], sp_stomp: [0.85, -23], sp_tiger_roar_end: [0.9, -20],
   sp_smoke_pop: [1, -16.5], sp_clone_hop: [0.7, -25], sp_clone_throw: [0.8, -24], sp_clone_vanish: [0.9, -23],
-  sp_poster_slap: [1, -17], sp_cork_pop: [0.9, -18.5], sp_poster_hole: [1, -16.5], sp_seal_stamp: [0.9, -19],
+  sp_cork_pop: [0.9, -18.5], sp_seal_stamp: [0.9, -19],
   sp_night_hush: [0.9, -23], sp_arrow_whoosh: [0.85, -19.5], sp_star_ping: [0.8, -23],
   sp_cloud_pop: [0.95, -18], sp_thunder_tick: [0.9, -22], sp_cloud_hop: [0.8, -24], sp_cloud_sigh: [0.9, -21],
   sp_glass_tap: [0.9, -19], sp_glass_shatter: [1, -16.5], sp_shard_hit: [1, -23],

@@ -154,7 +154,7 @@ class WantedScene implements SpScene<'wanted'> {
   }
 
   cast(e: SpCastOf<'wanted'>): void {
-    const { stage, battle } = this.env;
+    const { battle } = this.env;
     const d = e.data;
     const big = d.mode === 'bite';
     const s = this.take();
@@ -203,8 +203,7 @@ class WantedScene implements SpScene<'wanted'> {
       s.holdCount = 1;
       this.holds.hold(d.targetUid, d.amount, battle.time);
     }
-    // The poster is slapped on its target.
-    stage.play(stage.rules.skill, 'sp_poster_slap', 1, 1, 0.03, stage.panOf(s.x));
+    // The poster is slapped on its target: seen, not heard (the owner, 2026-11-10: the skill's sound is the shot alone).
   }
 
   /**
@@ -381,8 +380,8 @@ class WantedScene implements SpScene<'wanted'> {
     if (detail > 0 && !calm) stage.fx.ps.burst(SCRAPS, px, py, { scale: Math.max(0.7, scale), count: detail === 1 ? 0.7 : 1 });
     stage.fx.shockwave(px, py, { color: Hue.cream, radius: s.big ? 62 : 36 });
     const pan = stage.panOf(s.aimX);
-    stage.play(stage.rules.skill, 'sp_poster_hole', 1, 1, 0.03, pan);
-    // The case is closed: the stamp comes down a beat after the cork is through.
+    // The cork through the poster is seen, not heard (the shot itself is the sound). The case is closed: the stamp comes down a beat
+    // after the cork is through.
     if (s.closed) stage.play(stage.rules.skill, 'sp_seal_stamp', 0.9, 1, 0.03, pan, 0.09);
     if (s.big && !calm) stage.shake(Trauma.t1, Gate.spShake, 0.3);
   }

@@ -1,5 +1,7 @@
 # Audio module hand-off (`src/audio`)
 
+> 2026-11-10: the six sounds nothing played any more (`shoot_arrow`, `shoot_cannon`, `shoot_ice`, `shoot_lightning`, `shoot_magic`, `enemy_die`) were removed; the tables below still list them as they were measured. New since: `foe_shield_hit` (a hit on a shield) and the `king` stinger (a merge that makes a 대왕), both synthesised until their ElevenLabs recordings land (`docs/handoff/sound_board.md`, last section).
+
 Every sound is synthesised with WebAudio at runtime: no audio files. SFX and stingers are rendered once
 by `OfflineAudioContext` into mono `AudioBuffer`s (on first use, plus idle slices after unlock); music is
 live-synthesised by a look-ahead sequencer. `src/audio/api.ts` is the frozen contract (4 music ids, which grew to 13 on 2026-10-10 (section 11), 6 stingers, 70 SFX ids, which grew to 134 on 2026-10-07: only ids were added, see section 9).

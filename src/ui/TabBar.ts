@@ -206,7 +206,8 @@ export class TabBar extends Container {
     const prevId = this.selected;
     const prev = this.find(prevId);
     this.selected = id;
-    audio.play('ui_tab');
+    // the bottom bar is a big tab: its own page turn (the owner's recording), the sub-tabs keep the plain one
+    audio.play('ui_tab_big');
     if (animate && !motion.reduced) {
       if (prev) this.animateSel(prev, 0, 0.16, Ease.cubicOut);
       this.animateSel(next, 1, 0.34, backOut(2.8));
@@ -333,6 +334,8 @@ export interface SegmentTabsOpts {
   width?: number;
   height?: number;
   selected?: string;
+  /** The page turn a change plays: `ui_tab_big` for a screen's main sections (the codex's), `ui_tab` (default) for sub-tabs. */
+  sound?: 'ui_tab' | 'ui_tab_big';
 }
 
 /** Sub-tabs on a kraft strip with a cream paper piece (and a bit of tape) that slides to the selection. Origin = centre. */
@@ -346,9 +349,11 @@ export class SegmentTabs extends Container {
   private selected: string;
   private hiX = 0;
   private selectFn: ((id: string) => void) | null = null;
+  private readonly sound: 'ui_tab' | 'ui_tab_big';
 
   constructor(opts: SegmentTabsOpts) {
     super();
+    this.sound = opts.sound ?? 'ui_tab';
     const w = opts.width ?? 600;
     const h = opts.height ?? 76;
     this.defs = opts.tabs;
@@ -415,7 +420,7 @@ export class SegmentTabs extends Container {
     }
     const to = this.cellX(this.indexOf(id));
     this.selected = id;
-    if (!silent) audio.play('ui_tab');
+    if (!silent) audio.play(this.sound);
     const from = this.hiX;
     this.bag.killAll();
     if (animate && !motion.reduced) {

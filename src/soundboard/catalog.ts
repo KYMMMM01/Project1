@@ -196,9 +196,7 @@ const SKILL_SINGLES: Row[] = [
   sk('sp_clone_hop', '닌자냥 · 분신 폴짝', '분신이 칸에 내려설 때. 가볍고 옅게.', 'skillTick', { volume: 0.7 }),
   sk('sp_clone_throw', '닌자냥 · 분신 수리검', '분신이 수리검을 따라 던질 때. 공기뿐인 흐릿한 휙.', 'skillTick', { volume: 0.8 }),
   sk('sp_clone_vanish', '닌자냥 · 분신 사라짐', '분신이 네 번째를 던지고 퐁 사라질 때.', 'skillTick', { volume: 0.9 }),
-  sk('sp_poster_slap', '총잡이냥 · 전단 탁', '수배 전단이 보스에게 탁 붙을 때. 쓴 파일: bookClose.', 'big'),
   sk('sp_cork_pop', '총잡이냥 · 코르크 퐁', '코르크 총알이 나갈 때. 병마개 뽑는 퐁.', 'big', { volume: 0.9 }),
-  sk('sp_poster_hole', '총잡이냥 · 전단 구멍', '코르크가 전단 한가운데를 뚫을 때. 양철판이 탱 하고 종이가 찢어져요. 쓴 파일: impactTin_medium_003.', 'big'),
   sk('sp_seal_stamp', '총잡이냥 · 사건 종결 도장', '전단이 닫히며 도장이 쿵 찍힐 때.', 'big', { volume: 0.9 }),
   sk('sp_night_hush', '별빛 사수 · 밤이 내림', '밤이 내려앉을 때. 부드러운 숨소리에 별 하나가 반짝.', 'skillTick', { volume: 0.9 }),
   sk('sp_arrow_whoosh', '별빛 사수 · 화살 휙', '은빛 화살이 길을 달릴 때. 게임에서는 화살 위치를 따라 왼쪽과 오른쪽으로 옮겨 다녀요.', 'skillTick', { volume: 0.85 }),
@@ -273,7 +271,6 @@ const SKILL_ROWS: Row[] = [
     { sfx: 'imp_r_star', volume: 0.45, step: 4, at: 0.92 },
   ]),
   skillRow('cloud', '번개냥 · 졸졸 먹구름', '심통 난 구름이 튀어나와 선두 적을 따라다니며 번개를 떨어뜨려요.', [
-    { sfx: 'shoot_magic', volume: 0.42, pitch: 1.7, at: 0 },
     { sfx: 'zap', volume: 0.36, pitch: 0.95, at: 0.45 },
     { sfx: 'zap', volume: 0.36, pitch: 1.0, at: 0.85 },
     { sfx: 'zap', volume: 0.36, pitch: 1.05, at: 1.25 },
@@ -345,7 +342,8 @@ function build(): Section[] {
       rows: [
         ui('ui_click', '버튼 누름', '버튼을 누를 때마다 나는 짧은 종이 소리.'),
         ui('ui_back', '뒤로 · 닫기', '뒤로 가기와 닫기 버튼, 고양이 선택을 풀 때.'),
-        ui('ui_tab', '탭 넘기기', '아래 탭을 바꿀 때, 챕터를 고를 때, 두 고양이 자리를 바꿀 때. 책장 넘기는 소리.'),
+        ui('ui_tab', '작은 탭 넘기기', '화면 안의 작은 탭(상점의 상자와 오늘, 도감의 챕터와 집사 단계)을 바꿀 때, 챕터를 고를 때, 두 고양이 자리를 바꿀 때. 책장 넘기는 소리.'),
+        ui('ui_tab_big', '큰 탭 넘기기', '아래 탭(상점, 고양이, 출동, 미션, 패스)과 도감의 몬스터, 장난감, 칸을 바꿀 때. 녹음.'),
         ui('ui_toggle', '스위치', '설정 스위치와 슬라이더를 움직일 때. 나무를 톡 두드려요.'),
         ui('ui_popup_open', '창 열림', '팝업 창이 뜰 때. 설명 말풍선이 뜰 때는 작게.'),
         ui('ui_popup_close', '창 닫힘', '팝업 창이 닫힐 때.'),
@@ -406,12 +404,6 @@ function build(): Section[] {
         bt('laser_off', '레이저 꺼짐', '레이저 포인터가 끝날 때.', 'ui', { volume: 0.6 }),
         bt('shoot_poison', '독 보글', '독에 걸린 적에게서 나는 보글보글.', 'status', { volume: 0.9, pitch: 0.9 }),
         bt('shoot_claw', '할퀴는 소리(출혈)', '출혈에 걸린 적에게서 나는 소리. 발톱이 스치고 퍽.', 'status', { volume: 0.8, pitch: 0.8 }),
-        bt('shoot_magic', '옛 소리: 마법 뿅', '지금 게임에서는 쓰지 않아요. 번개냥의 먹구름이 튀어나올 때 쓰던 소리예요(지금은 "번개냥 · 먹구름 퐁").', 'shoot', { volume: 0.42, pitch: 1.7 }),
-        bt('shoot_arrow', '옛 소리: 화살', '지금 게임에서는 쓰지 않아요(고양이마다 따로 소리가 생기기 전의 소리).', 'shoot'),
-        bt('shoot_cannon', '옛 소리: 대포', '지금 게임에서는 쓰지 않아요.', 'shoot'),
-        bt('shoot_ice', '옛 소리: 얼음', '지금 게임에서는 쓰지 않아요.', 'shoot'),
-        bt('shoot_lightning', '옛 소리: 번개', '지금 게임에서는 쓰지 않아요.', 'shoot'),
-        bt('enemy_die', '옛 소리: 적 쓰러짐', '지금 게임에서는 쓰지 않아요. 적마다 따로 소리가 있어요(아래 적 칸).', 'die', { ladder: true }),
       ],
     },
     {
@@ -437,6 +429,7 @@ function build(): Section[] {
         foe('foe_paper_die', '종이 · 쓰러짐', '폭죽이 터질 때. 탁 터지고 색종이가 날려요.', 'die'),
         foe('foe_glass_hit', '유리 · 맞음', '윙윙이, 따끔 선생이 맞을 때. 맑은 땡.', 'hit'),
         foe('foe_cloud_hit', '구름 · 맞음', '우르릉이 맞을 때. 낮은 퉁 하고 우르르 굴러가요.', 'hit'),
+        one('foe_shield_hit', 'foes', '방어막 · 맞음', '방어막을 두른 적이 맞을 때. 테두리가 땡, 몸통이 퉁(방어막이 깨지는 맨 끝 한 방은 "방어막 깨짐"이 대신해요).', 'status', { volume: hitVolume * 0.8 }),
       ],
     },
     {
@@ -552,6 +545,7 @@ export const STINGER_ROWS: readonly StingerRow[] = [
   { id: 'defeat', ko: '패배', when: '전투에서 졌을 때. 부드럽게 내려가는 세 음. 음악이 먹먹해져요.' },
   { id: 'boss_intro', ko: '보스 등장', when: '지금 게임은 쓰지 않아요(보스 경고가 대신해요).' },
   { id: 'mythic', ko: '수호신 후광', when: '각성한 고양이가 수호신이 되는 순간 뒤따라 깔려요.' },
+  { id: 'king', ko: '대왕 탄생', when: '합쳐서 대왕이 태어나는 순간. 머리에 왕관을 얹는 짧은 팡파르예요(각성과 겹치면 각성이 이겨요).' },
   { id: 'level_up', ko: '레벨 업', when: '고양이 특기가 풀리거나 구조할 때.' },
   { id: 'jackpot', ko: '잭팟', when: '전설 상자가 열릴 때. 색종이 대포.' },
 ];

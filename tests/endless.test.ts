@@ -20,7 +20,7 @@ import '@/view/director/strings';
 import '@/view/hud/strings';
 import '@/view/strings';
 import {
-  BOSS_HP, BOSS_LIMITS, CHAPTER_WAVES, ELITE_HP, ELITE_LIMITS, ENDLESS_GROWTH, HP_INDEX, hpIndex, specialHp, specialLimit,
+  BOSS_HP, BOSS_LIMITS, CHAPTER_WAVES, ELITE_HP, ELITE_LIMITS, ENDLESS_GROWTH, ENDLESS_LATE_FROM, ENDLESS_LATE_GROWTH, HP_INDEX, hpIndex, specialHp, specialLimit,
 } from '@/game/data/balance';
 import { topicFull, topicTeach, topicTitle } from '@/guide/text';
 import { ENDLESS_TIERS } from '@/meta/data/schedule';
@@ -56,10 +56,13 @@ describe('endless mode: the name', () => {
 
   it('quotes the growth, the wave it starts after and the tier waves from the data in the guidebook page, in both languages', () => {
     const growth = `${Math.round((ENDLESS_GROWTH - 1) * 100)}%`;
+    const late = `${Math.round((ENDLESS_LATE_GROWTH - 1) * 100)}%`;
     for (const lang of ['ko', 'en'] as const) {
       setLang(lang);
       const page = topicFull('endless').join(' ');
       expect(page, lang).toContain(growth);
+      expect(page, lang).toContain(late);
+      expect(page, lang).toContain(String(ENDLESS_LATE_FROM));
       expect(page, lang).toContain(String(CHAPTER_WAVES));
       for (const tier of ENDLESS_TIERS) expect(page, lang).toContain(String(tier.wave));
       expect(page, lang).not.toMatch(/\{\w+\}|undefined|NaN/);
@@ -81,7 +84,8 @@ describe('endless mode: the curve past wave 24', () => {
   });
 
   it('grows the elites and the bosses at the same rate, eight waves at a time, and keeps their time limits at the last value', () => {
-    for (let k = 3; k < 12; k++) {
+    // Up to the boss of wave 80 and the elite of wave 76, ordinal 9 (the old curve; past them see the last describe block).
+    for (let k = 3; k < 10; k++) {
       expect(specialHp('boss', k) / specialHp('boss', k - 1), `boss ${k}`).toBeCloseTo(1.07 ** 8, 9);
       expect(specialHp('elite', k) / specialHp('elite', k - 1), `elite ${k}`).toBeCloseTo(1.07 ** 8, 9);
     }
@@ -98,5 +102,29 @@ describe('endless mode: the curve past wave 24', () => {
     expect(HP_INDEX[24]).toBe(2183);
     expect([...BOSS_HP]).toEqual([1431, 3658, 12965]);
     expect([...ELITE_HP]).toEqual([1055, 3848, 10080]);
+  });
+});
+
+describe('endless mode: past the last reward wave', () => {
+  it('starts the steeper growth after the last tier wave of the meta layer (the game layer cannot import it, so this test keeps the two equal)', () => {
+    expect(ENDLESS_LATE_FROM).toBe(ENDLESS_TIERS[ENDLESS_TIERS.length - 1]?.wave);
+    expect(ENDLESS_LATE_GROWTH).toBeGreaterThan(ENDLESS_GROWTH);
+  });
+
+  it('leaves every wave up to and including the last reward wave on the old curve, and steps by the new factor after it', () => {
+    const last = HP_INDEX[HP_INDEX.length - 1] as number;
+    expect(hpIndex(ENDLESS_LATE_FROM)).toBeCloseTo(last * ENDLESS_GROWTH ** (ENDLESS_LATE_FROM - (HP_INDEX.length - 1)), 3);
+    expect(hpIndex(ENDLESS_LATE_FROM + 1) / hpIndex(ENDLESS_LATE_FROM)).toBeCloseTo(ENDLESS_LATE_GROWTH, 9);
+    expect(hpIndex(ENDLESS_LATE_FROM + 5) / hpIndex(ENDLESS_LATE_FROM)).toBeCloseTo(ENDLESS_LATE_GROWTH ** 5, 6);
+    expect(hpIndex(ENDLESS_LATE_FROM) / hpIndex(ENDLESS_LATE_FROM - 1)).toBeCloseTo(ENDLESS_GROWTH, 9);
+  });
+
+  it('prices an elite and a boss by the waves they stand on: the same factors as the wave health, the wave 80 boss still on the old curve', () => {
+    // Boss ordinal 9 stands on wave 80 (the last reward wave), ordinal 10 on wave 88; the elite of ordinal 10 is wave 84.
+    expect(specialHp('boss', 9)).toBeCloseTo((BOSS_HP[2] as number) * hpIndex(80) / hpIndex(24), 6);
+    expect(specialHp('boss', 10) / specialHp('boss', 9)).toBeCloseTo(ENDLESS_LATE_GROWTH ** 8, 9);
+    expect(specialHp('elite', 10) / (ELITE_HP[2] as number)).toBeCloseTo(ENDLESS_GROWTH ** 60 * ENDLESS_LATE_GROWTH ** 4, 6);
+    // From the elite of wave 76 (ordinal 9) to the one of wave 84 the waves 77..80 are old steps and 81..84 new ones.
+    expect(specialHp('elite', 10) / specialHp('elite', 9)).toBeCloseTo(ENDLESS_GROWTH ** 4 * ENDLESS_LATE_GROWTH ** 4, 9);
   });
 });

@@ -3,6 +3,7 @@
  * degrades instead of failing: a broken platform SDK or an unreadable save is reported once with a
  * toast and the game starts anyway.
  */
+import { loadBattleImages } from '@/core/assets';
 import { debugEnabled } from '@/core/debug';
 import { loadGameFonts } from '@/core/fonts';
 import { detectLang, setLang, t } from '@/core/i18n';
@@ -96,6 +97,8 @@ export function createApp(): App {
       platform.lifecycle.loadingFinished();
       platform.lifecycle.firstFrameReady();
       platform.lifecycle.gameReady();
+      // The battle-only effect sprites come in behind the home screen, ahead of the first battle (every route into one awaits them).
+      void loadBattleImages();
       afterFirstScene();
     },
   };

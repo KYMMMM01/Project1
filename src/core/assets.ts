@@ -4,6 +4,10 @@ import { Assets, Texture } from 'pixi.js';
  * Every image under src/assets/img is picked up automatically; its key is the file name without
  * extension (`unit_knight.webp` -> "unit_knight"). Dropping a file in is all the art pipeline has
  * to do — no manifest to keep in sync.
+ *
+ * Two loads: `loadImages` (boot) brings in everything the menus draw; the battle-only effect sprites (`fx_*`: shots, bursts, bolts, capsule
+ * shells, the clouds, clones, cuts and meteors, a fifth of the bytes) wait for `loadBattleImages`, which the app starts once the first scene
+ * is up and which every route into a battle awaits before the scene is built (its constructors read these textures).
  */
 const urls = import.meta.glob('../assets/img/**/*.{png,webp,jpg}', {
   eager: true,
@@ -30,9 +34,10 @@ export function imageKeys(): string[] {
   return [...registry.keys()];
 }
 
-/** Load every registered image. Individual failures are logged and skipped, never fatal. */
-export async function loadImages(onProgress?: (p: number) => void): Promise<void> {
-  const entries = [...registry.entries()];
+/** Images only a battle draws: the painted effect sprites. */
+const isBattleImage = (key: string): boolean => key.startsWith('fx_');
+
+async function loadEntries(entries: Array<[string, string]>, onProgress?: (p: number) => void): Promise<void> {
   let done = 0;
   const total = Math.max(1, entries.length);
   const CONCURRENCY = 8;
@@ -52,6 +57,24 @@ export async function loadImages(onProgress?: (p: number) => void): Promise<void
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, entries.length) }, worker));
   onProgress?.(1);
+}
+
+/** Load every registered image the menus draw. Individual failures are logged and skipped, never fatal. */
+export function loadImages(onProgress?: (p: number) => void): Promise<void> {
+  return loadEntries([...registry].filter(([key]) => !isBattleImage(key)), onProgress);
+}
+
+let battleLoad: Promise<void> | null = null;
+/** A battle waits this long at most: a request a slow network never answers must not hold the run that was just paid for. */
+const BATTLE_LOAD_CAP_MS = 8000;
+
+/**
+ * Load the battle-only images, once: every call shares the same load, so a battle entered while they are still coming simply waits for them,
+ * up to BATTLE_LOAD_CAP_MS (then it opens with whatever arrived and the rest keeps loading for the next one).
+ */
+export function loadBattleImages(): Promise<void> {
+  battleLoad ??= loadEntries([...registry].filter(([key]) => isBattleImage(key)));
+  return Promise.race([battleLoad, new Promise<void>((done) => setTimeout(done, BATTLE_LOAD_CAP_MS))]);
 }
 
 /**

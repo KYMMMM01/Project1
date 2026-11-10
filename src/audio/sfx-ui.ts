@@ -5,8 +5,18 @@
  * are relative only; the baker normalises to the family target.
  */
 import type { SfxId } from './api';
-import { bell, kalimba, knock, mallet, paper, pluck, pop, puff, recording, shake, stamp, thump, tick, whoosh, type Recipe } from './recipe';
+import { bell, kalimba, knock, mallet, paper, pluck, pop, puff, recording, shake, stamp, thump, tick, whoosh, type Recipe, type Variant } from './recipe';
+import type { Synth } from './synth';
 import { hz } from './theory';
+
+/** A page turning: one flick rising, a second falling back (a double slide), and the leaf settling with a pat (`ui_tab`, `ui_tab_big`). */
+function pageTurn(s: Synth, v: Variant): void {
+  const p = v.j(0.05);
+  whoosh(s, 1200 * p, 3600 * p, 0, 0.05, 0.8, 0.8, 0.35);
+  whoosh(s, 3200 * p, 1600 * p, 0.03, 0.04, 0.45, 0.8, 0.4);
+  paper(s, 0.058, 2200 * p, 0.6, 0.02);
+  thump(s, 290 * p, 200, 0.058, 0.04, 0.3, 0.02);
+}
 
 export const UI_RECIPES = {
   // ---------------------------------------------------------------- UI
@@ -29,7 +39,10 @@ export const UI_RECIPES = {
     ms: [30, 100],
     variants: 2,
     rate: 0.03,
+    needs: ['elevenlabs/ui_back'],
     build(s, v) {
+      // The owner's pick (2026-11-09): recorded with ElevenLabs.
+      if (recording(s, 'ui_back')) return;
       // The same gesture going back: a lower grain and a slower, deeper pat.
       const p = v.j(0.06);
       paper(s, 0, 1500 * p, 0.9, 0.034);
@@ -42,13 +55,20 @@ export const UI_RECIPES = {
     ms: [50, 125],
     variants: 2,
     rate: 0.03,
+    build: pageTurn,
+  },
+  // The big tabs (the bottom bar, the codex's sections) play the owner's recording; the small ones (a screen's own sub-tabs, the codex's
+  // chapter and butler level) keep `ui_tab` (the owner, 2026-11-10). Its synthesis is the same page turn.
+  ui_tab_big: {
+    cat: 'ui',
+    len: 0.14,
+    ms: [50, 125],
+    variants: 2,
+    rate: 0.03,
+    needs: ['elevenlabs/ui_tab_big'],
     build(s, v) {
-      // A page turning: one flick rising, a second falling back (a double slide), and the leaf settling with a pat.
-      const p = v.j(0.05);
-      whoosh(s, 1200 * p, 3600 * p, 0, 0.05, 0.8, 0.8, 0.35);
-      whoosh(s, 3200 * p, 1600 * p, 0.03, 0.04, 0.45, 0.8, 0.4);
-      paper(s, 0.058, 2200 * p, 0.6, 0.02);
-      thump(s, 290 * p, 200, 0.058, 0.04, 0.3, 0.02);
+      if (recording(s, 'ui_tab_big')) return;
+      pageTurn(s, v);
     },
   },
   ui_toggle: {

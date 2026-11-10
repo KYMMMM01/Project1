@@ -356,7 +356,7 @@ export const KO: Record<string, string> = {
   'guide.endless.title': '무한 모드',
   'guide.endless.teach': '끝이 없는 웨이브를 얼마나 버티는지 겨뤄요.',
   'guide.endless.full':
-    '{chapter}챕터를 깨면 열려요. 웨이브가 끝없이 이어지고, {after}웨이브를 넘으면 적이 웨이브마다 {growth}%씩 단단해져요.\n{w1}, {w2}, {w3}웨이브에 닿으면 보상을 받아요.',
+    '{chapter}챕터를 깨면 열려요. 웨이브가 끝없이 이어지고, {after}웨이브를 넘으면 적이 웨이브마다 {growth}%씩 단단해지고, {late}웨이브를 넘으면 {lateGrowth}%씩 단단해져요.\n{w1}, {w2}, {w3}웨이브에 닿으면 보상을 받아요.',
 
   'guide.backup_code.title': '냥이 코드(백업)',
   'guide.backup_code.teach': '코드 한 줄로 진행 상황을 옮길 수 있어요.',

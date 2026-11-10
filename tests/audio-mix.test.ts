@@ -12,6 +12,9 @@ import { IMPACTS } from '@/audio/families';
 import { SOUNDS, sfxIndexOf } from '@/audio/sounds';
 import type { FilterOpts, NoiseOpts, SampleOpts, Send, Synth, ToneOpts } from '@/audio/synth';
 
+/** The ElevenLabs file of a sound: its own id, except the level_up stinger, which shares its name with the level_up sound. */
+const recordingFile = (d: { key: string; id: string }): string => (d.key === 'stinger:level_up' ? 'level_up_stinger' : d.id);
+
 const recipeOf = (id: SfxId): Recipe => SOUNDS[sfxIndexOf(id)]?.recipe as Recipe;
 const ruleOf = (id: SfxId): (typeof SOUNDS)[number]['rule'] => SOUNDS[sfxIndexOf(id)]?.rule as (typeof SOUNDS)[number]['rule'];
 
@@ -386,7 +389,8 @@ describe('a hit begins with a crack and has a body a phone can play (hitkit.ts)'
       // an ElevenLabs recording the owner picked is the whole sound, played alone when it has been read (`recording`): it is not a layer, and the only one a
       // recipe may ask for is its own
       const layers = (d.recipe.needs ?? []).filter((id) => !id.startsWith('elevenlabs/'));
-      for (const id of d.recipe.needs ?? []) if (id.startsWith('elevenlabs/')) expect(id, d.key).toBe(`elevenlabs/${d.id}`);
+      // (the level_up stinger shares its name with the level_up sound, so its file is level_up_stinger: `recordingFile`)
+      for (const id of d.recipe.needs ?? []) if (id.startsWith('elevenlabs/')) expect(id, d.key).toBe(`elevenlabs/${recordingFile(d)}`);
       expect([...used].sort(), d.key).toEqual([...layers].sort());
       const s = record(d.recipe);
       expect(s.tones.length + s.noises.length, `${d.key} is a whole sound without its files`).toBeGreaterThan(0);

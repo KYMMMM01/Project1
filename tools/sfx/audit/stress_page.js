@@ -9,7 +9,7 @@
   const SR = 48000, SECONDS = 2.5;
   const baked = new Map();
   const get = async (idx) => { if (!baked.has(idx)) { const d = SOUNDS[idx]; baked.set(idx, (await bakeVariant(d.recipe, d.key, 0, SR)).buffer); } return baked.get(idx); };
-  const SKILLS = ['sp_shield_slam', 'sp_cut_clash', 'sp_tiger_roar', 'sp_smoke_pop', 'sp_poster_slap', 'sp_night_hush', 'sp_cloud_pop', 'sp_glass_shatter', 'sp_meteor_boom', 'sp_strum', 'sp_flask_pop', 'sp_capsule_pop'];
+  const SKILLS = ['sp_shield_slam', 'sp_cut_clash', 'sp_tiger_roar', 'sp_smoke_pop', 'sp_night_hush', 'sp_cloud_pop', 'sp_glass_shatter', 'sp_meteor_boom', 'sp_strum', 'sp_flask_pop', 'sp_capsule_pop'];
   const IMPS = SOUNDS.filter((d) => /^imp_/.test(d.id)).map((d) => d.id);
   const RELS = SOUNDS.filter((d) => /^atk_/.test(d.id)).map((d) => d.id);
   const cases = {

@@ -82,6 +82,8 @@ const KIND_INDEX: Record<StatusKind, number> = {
 };
 /** KeyedGate sub-ids beyond the status kinds. */
 const SUB_SHIELD = 8;
+/** The tink of a shield against the enemy's own hit sound it plays beside (`foe_shield_hit`). */
+const SHIELD_HIT_GAIN = 0.8;
 const SUB_PULL = 9;
 const SUB_HEAL = 10;
 const SUB_DOT = 11;
@@ -220,6 +222,9 @@ export function mountCombat(stage: Stage, on: Bus): void {
       if (perEnemy.ready(en.uid, SUB_SHIELD, stage.now, 0.1)) {
         ps.burst(SHIELD_GLANCE, x, y, { colors: [W, SHIELD_COLOR], scale: info.radius / 20 });
         if (stage.detail > 0) ps.burst(SHIELD_SPARK, x, y, { colors: [W, SHIELD_COLOR] });
+        // The ring and the glance get a tink of their own, at the glance's pace (a hit on a shield rings once per tenth of a second at most, and `status` thins a crowd);
+        // the blow that breaks the shield plays `shield_break` instead.
+        if (en.shield > 0) stage.play(stage.rules.status, 'foe_shield_hit', foeHitSfx(en.id).volume * SHIELD_HIT_GAIN, 1, 0.05, stage.panOfField(en.x));
       }
       say(en, info, e.absorbed, 'soak', SHIELD_COLOR);
     }

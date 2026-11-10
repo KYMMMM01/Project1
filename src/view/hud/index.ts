@@ -6,12 +6,14 @@
 import './strings';
 import { Container, Point, Text } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
+import { game } from '@/core/game';
 import { i18nEvents, t } from '@/core/i18n';
 import { closeCodex, openCodex } from '@/codex';
 import { closeGuide, GuideProgress, guideProgress, openGuide, setGuideCell, topicTeach, type TopicId, type TryControl } from '@/guide';
 import { renderOnce, warm, WARM_PRIO } from '@/fx';
 import { CLASS_IDS, isWaveTarget, waveKindOf } from '@/game';
 import { clearToasts, confirmDialog, popups, toast } from '@/ui';
+import { backGesture } from '@/ui/backGesture';
 import type { EnemyId, UnitId } from '@/game';
 import { FIELD_W, LANE_WIDTH, PATH_BOTTOM, PATH_LEFT, PATH_RIGHT, PATH_TOP } from '@/game/geometry';
 import type { BattleContext, BattleLayout, HudAnchor, HudPart } from '../context';
@@ -75,6 +77,13 @@ function shownChain(c: Container): boolean {
 /** Simulated seconds a single frame can never exceed (3x speed, 0.05 s frame cap, hit-stop aside): a bigger step means skipped events. */
 const RESYNC_JUMP = 0.5;
 
+/**
+ * The battle's answer to the system Back gesture, asked after the popups and the pages (their handlers were registered when `@/ui`
+ * loaded): the pause menu opens. It is registered once; the live HUD is the target.
+ */
+let backTarget: Hud | null = null;
+backGesture().onBack(() => backTarget?.handleBack() ?? false);
+
 /** Entry point of the HUD part. */
 export function createHud(ctx: BattleContext): HudPart {
   return new Hud(ctx);
@@ -105,6 +114,10 @@ class Hud implements HudPart {
   private pick: SummonPickPopup | null = null;
   private result: ResultHandle | null = null;
   private offLang: () => void;
+  /** The page or the app went to the background: the battle comes back with the pause menu open. */
+  private offVisibility: () => void;
+  /** The system Back gesture stays on a history entry of its own while the battle lives (see ui/backGesture.ts). */
+  private releaseBack: () => void;
   private readonly onKey = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && !e.repeat && this.env.modalCount === 0) void this.openPause();
   };
@@ -159,6 +172,20 @@ class Hud implements HudPart {
     });
     this.build();
     window.addEventListener('keydown', this.onKey);
+    backTarget = this;
+    // Chrome skips a history entry a page pushed before the player ever touched it, so on a cold start straight into the tutorial the entry
+    // waits for the first touch (else the first Back would leave the app instead of pausing).
+    if (navigator.userActivation?.hasBeenActive ?? true) this.releaseBack = backGesture().hold();
+    else {
+      const first = (): void => {
+        if (!this.destroyed) this.releaseBack = backGesture().hold();
+      };
+      window.addEventListener('pointerdown', first, { once: true, capture: true });
+      this.releaseBack = () => window.removeEventListener('pointerdown', first, { capture: true });
+    }
+    this.offVisibility = game.events.on('visibility', ({ visible }) => {
+      if (!visible && this.env.modalCount === 0) void this.openPause();
+    });
     // What the player has been taught is read from storage a moment after the scene opens; the lessons and the controls that are out
     // depend on it, so a HUD built before it arrived is built once more (nothing has happened yet).
     if (!this.progress.ready) {
@@ -681,6 +708,12 @@ class Hud implements HudPart {
 
   // ───────────────────────── pause ─────────────────────────
 
+  /** Back with nothing else open: the pause menu (the result screen and a staging that has ended leave it shut). True: the battle never lets Back leave the page. */
+  handleBack(): boolean {
+    if (this.env.modalCount === 0) void this.openPause();
+    return true;
+  }
+
   private async openPause(): Promise<void> {
     if (this.pauseOpen || this.destroyed || !canOpenPause(this.ctx.battle.phase, this.ending)) return;
     this.pauseOpen = true;
@@ -716,6 +749,9 @@ class Hud implements HudPart {
     if (action === 'restart') {
       this.ctx.retry();
     } else if (action === 'quit') {
+      // A tutorial quit before its first wave is cleared is not a run (profile.finishRun), so mark it skipped: the next start opens the
+      // lobby, as the skip button does, instead of the tutorial again.
+      if (this.ctx.run.init.mode === 'tutorial' && this.ctx.battle.getStats().wavesCleared === 0) this.progress.markSkipped();
       this.abandoned = true;
       this.ending = true;
       this.ctx.battle.abandon();
@@ -840,6 +876,9 @@ class Hud implements HudPart {
     closeGuide();
     closeCodex();
     window.removeEventListener('keydown', this.onKey);
+    if (backTarget === this) backTarget = null;
+    this.releaseBack();
+    this.offVisibility();
     this.offLang();
     this.teardown();
     this.relic?.destroy();

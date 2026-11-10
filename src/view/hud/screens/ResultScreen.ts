@@ -273,15 +273,16 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       if (i > 0) drawDashedLine(lines, listX, listY + i * ROW_H, listR, listY + i * ROW_H, { color: Color.kraftDark, width: 2, dash: 8, gap: 8, alpha: 0.7 });
     });
     sheet.addChild(lines);
-    const luck = luckLine(stats.summonLuck);
-    const luckT = uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 26, wrap: W - 80, lineHeight: 34 });
-    // The luck line may wrap to two lines in English: it is centred in the gap between the list and the seed line.
-    luckT.position.set(W / 2, listY + cells.length * ROW_H + 42);
+    const luck = luckLine(stats.summonLuck, victory);
+    // The luck line may wrap to two lines in English: it is centred in the gap between the list and the seed line. A win shows none when the luck was bad.
+    const luckT = luck && uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 26, wrap: W - 80, lineHeight: 34 });
+    luckT?.position.set(W / 2, listY + cells.length * ROW_H + 42);
     const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.inkSoft });
     seedT.position.set(W / 2, SHEET_H - 34);
-    sheet.addChild(luckT, seedT);
+    if (luckT) sheet.addChild(luckT);
+    sheet.addChild(seedT);
     rows.forEach((row, i) => lay(row, ROWS_AT + i * ROW_STEP, 22, 0));
-    lay(luckT, ROWS_AT + rows.length * ROW_STEP, 0, 8);
+    if (luckT) lay(luckT, ROWS_AT + rows.length * ROW_STEP, 0, 8);
     lay(seedT, ROWS_AT + rows.length * ROW_STEP + 0.1, 0, 0);
   };
   // The page and its list are hidden until their turn in the laying down, so they cost a frame of building and no drawing: one stage.

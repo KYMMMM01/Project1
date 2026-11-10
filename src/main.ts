@@ -1,6 +1,7 @@
 import { game } from '@/core/game';
 import { scenes, type Scene } from '@/core/scene';
 import { BootScene } from '@/scenes/BootScene';
+import { loadBattleImages } from '@/core/assets';
 import { debugEnabled, debugExpose, installDebug } from '@/core/debug';
 import { setLang } from '@/core/i18n';
 import { createApp } from '@/app/boot';
@@ -80,7 +81,8 @@ async function main(): Promise<void> {
     const name = demo.charAt(0).toUpperCase() + demo.slice(1);
     const loader = demoLoaders[`./demo/${name}Demo.ts`];
     if (loader) {
-      const mod = await loader();
+      // A gallery draws battle effects too, and the boot only brings in the menus' images (core/assets.ts).
+      const [mod] = await Promise.all([loader(), loadBattleImages()]);
       await scenes.goto(() => new BootScene(() => new mod.default()), 'none');
       return;
     }

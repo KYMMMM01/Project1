@@ -51,7 +51,7 @@ export const BOSS_DEATHS = BOSSES.map((m): SfxId => `foe_boss_${m}`);
 const SKILL_FANFARES = ['sp_cutin', 'sp_prize_fish', 'sp_prize_partner', 'sp_prize_more', 'sp_prize_toy', 'sp_prize_guardian'] as const;
 const SKILL_VOICES = ['sp_tiger_roar', 'sp_tiger_roar_end', 'sp_cloud_sigh', 'sp_night_hush', 'sp_meteor_warn', 'sp_strum'] as const;
 const SKILL_BLOWS = [
-  'sp_shield_slam', 'sp_dust_wedge', 'sp_tiger_land', 'sp_stomp', 'sp_clone_hop', 'sp_smoke_pop', 'sp_poster_slap', 'sp_cork_pop', 'sp_poster_hole', 'sp_seal_stamp',
+  'sp_shield_slam', 'sp_dust_wedge', 'sp_tiger_land', 'sp_stomp', 'sp_clone_hop', 'sp_smoke_pop', 'sp_cork_pop', 'sp_seal_stamp',
   'sp_cloud_pop', 'sp_thunder_tick', 'sp_meteor_boom', 'sp_meteor_ring', 'sp_capsule_bounce',
 ] as const;
 const SKILL_RINGS = ['sp_sheath', 'sp_cut_clash', 'sp_star_ping', 'sp_note', 'sp_glass_tap', 'sp_glass_shatter', 'sp_shard_hit', 'sp_flask_pop', 'sp_flask_mini', 'sp_capsule_rattle', 'sp_capsule_pop'] as const;
@@ -59,7 +59,7 @@ const SKILL_AIR = ['sp_dash', 'sp_clone_throw', 'sp_clone_vanish', 'sp_arrow_who
 
 export const FAMILIES: readonly Family[] = [
   { name: 'paper tap', members: ['ui_click', 'ui_back', 'pickup'], maxMs: 90, maxAttackMs: 4, centroid: [300, 1800], maxLow: 0.3, maxHigh: 0.08 },
-  { name: 'paper slide', members: ['ui_tab', 'ui_popup_open', 'ui_popup_close', 'place', 'card_flip'], maxMs: 125, maxAttackMs: 40, centroid: [300, 1800], maxLow: 0.3, maxHigh: 0.1 },
+  { name: 'paper slide', members: ['ui_tab', 'ui_tab_big', 'ui_popup_open', 'ui_popup_close', 'place', 'card_flip'], maxMs: 125, maxAttackMs: 40, centroid: [300, 1800], maxLow: 0.3, maxHigh: 0.1 },
   {
     name: 'wood knock',
     members: ['ui_toggle', 'ui_error', 'reel_tick', 'reel_stop', 'countdown_tick', 'danger_alarm', 'hazard_warn'],
@@ -90,19 +90,19 @@ export const FAMILIES: readonly Family[] = [
   },
   {
     name: 'shot',
-    members: ['shoot_arrow', 'shoot_magic', 'shoot_cannon', 'shoot_ice', 'shoot_lightning', 'shoot_poison', 'shoot_claw'],
+    members: ['shoot_poison', 'shoot_claw'],
     maxMs: 200,
     maxAttackMs: 20,
     centroid: [200, 2000],
     maxLow: 0.3,
     maxHigh: 0.08,
   },
-  { name: 'hit', members: ['hit_light', 'enemy_die', 'zap', 'laser_off'], maxMs: 340, maxAttackMs: 4, centroid: [180, 1500], maxLow: 0.3, maxHigh: 0.05 },
+  { name: 'hit', members: ['hit_light', 'zap', 'laser_off'], maxMs: 340, maxAttackMs: 4, centroid: [180, 1500], maxLow: 0.3, maxHigh: 0.05 },
   // Combat is allowed some bite: up to 6 kHz in the first moments of a contact, and weight under the heavy ones.
   { name: 'weight and crack', members: ['hit_heavy', 'crit'], maxMs: 260, maxAttackMs: 4, centroid: [150, 3200], maxLow: 0.9, maxHigh: 0.2, minSnap: 0.05, minBody: 0.15 },
   { name: 'weapon release', members: RELEASES, maxMs: 340, maxAttackMs: 60, centroid: [150, 3600], maxLow: 0.65, maxHigh: 0.3 },
   { name: 'weapon impact', members: IMPACTS, maxMs: 560, maxAttackMs: 8, centroid: [150, 3600], maxLow: 0.9, maxHigh: 0.3, minSnap: 0.05 },
-  { name: 'enemy hit', members: FOE_HITS, maxMs: 200, maxAttackMs: 12, centroid: [120, 3200], maxLow: 0.75, maxHigh: 0.25 },
+  { name: 'enemy hit', members: [...FOE_HITS, 'foe_shield_hit'], maxMs: 200, maxAttackMs: 12, centroid: [120, 3200], maxLow: 0.75, maxHigh: 0.25 },
   { name: 'enemy death', members: FOE_DEATHS, maxMs: 640, maxAttackMs: 20, centroid: [200, 3200], maxLow: 0.6, maxHigh: 0.25 },
   { name: 'boss death', members: BOSS_DEATHS, maxMs: 1300, maxAttackMs: 60, centroid: [100, 2600], maxLow: 0.9, maxHigh: 0.2 },
   {
@@ -132,6 +132,7 @@ export const FAMILIES: readonly Family[] = [
       'stinger:mythic',
       'stinger:level_up',
       'stinger:jackpot',
+      'stinger:king',
     ],
     maxMs: 1800,
     maxAttackMs: 100,

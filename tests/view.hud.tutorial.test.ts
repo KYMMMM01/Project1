@@ -498,6 +498,33 @@ describe('the tutorial view', () => {
     });
   });
 
+  describe('a two-step lesson (tap the cat, then its button)', () => {
+    it('moves the note to the new target the moment the tap lands, not after the sliding sheet has come to rest', () => {
+      const keep = new TutorialKeep();
+      const taught = new Set<TopicId>(STEP_IDS.slice(0, STEP_IDS.indexOf('molt')));
+      keep.script = new TutorialScript(taught);
+      keep.script.update(world({ wave: 5, purr: 3, cats: 1 }), 0.1, false);
+      expect(keep.script.active?.id).toBe('molt');
+      const r = rig({ keep, taught: [...taught] });
+      r.sim.summon();
+      const cell = r.sim.units.findIndex((u) => u !== null);
+      expect(cell).toBeGreaterThanOrEqual(0);
+      // The lesson points at the cat first: the note is up and has been laid for it.
+      let slide = 0;
+      r.host.rectOf.mockImplementation(() => ({ x: 40, y: 1200 - 20 * Math.min(slide, 12), w: 200, h: 100 }));
+      r.run(1.5);
+      expect(r.note().visible).toBe(true);
+      const laid = r.note().shows;
+      // The tap: the sheet opens and its button is still sliding in (a new rectangle at every measure).
+      r.selected.cell = cell;
+      for (let i = 0; i < 4; i++) {
+        slide++;
+        r.frame();
+      }
+      expect(r.note().shows).toBeGreaterThan(laid);
+    });
+  });
+
   describe('the laser lesson and its guide', () => {
     /** A script that has the laser lesson up, as it is when the elite wave begins. */
     function withLaserLesson(): Rig {

@@ -15,7 +15,7 @@ const cues = [
   ['SKILL ninja: puff', 'molt', 0.4], ['SKILL ninja: clone throw', 'atk_r_ninja', 0.3], ['SKILL ninja: vanish', 'whoosh', 0.22],
   ['SKILL gunner: poster', 'whoosh', 0.4], ['SKILL gunner: cork', 'atk_r_gunner', 0.8], ['SKILL gunner: hole', 'imp_r_gunner', 0.9],
   ['SKILL star: cast', 'atk_r_star', 0.8], ['SKILL star: each star', 'imp_r_star', 0.45],
-  ['SKILL storm: cloud out', 'shoot_magic', 0.42], ['SKILL storm: bolt', 'zap', 0.36],
+  ['SKILL storm: cloud out', 'sp_cloud_pop', 0.42], ['SKILL storm: bolt', 'zap', 0.36],
   ['SKILL frost: tap', 'place', 0.45], ['SKILL frost: glass break', 'shield_break', 0.7], ['SKILL frost: shard', 'imp_m_frost', 0.42],
   ['SKILL meteor: whistle', 'whoosh', 0.34], ['SKILL meteor: cast', 'atk_m_cosmo', 0.7], ['SKILL meteor: boom', 'explosion', 0.85], ['SKILL meteor: ring', 'imp_m_cosmo', 0.55],
   ['SKILL bard: strum', 'atk_t_bard', 0.9], ['SKILL bard: note', 'imp_t_bard', 0.5],

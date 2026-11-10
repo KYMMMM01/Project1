@@ -124,6 +124,10 @@ describe('result screen', () => {
     expect(luckLine(0.5)).toEqual({ kind: 'avg', n: 50 });
     expect(luckLine(0.2)).toEqual({ kind: 'low', n: 20 });
     expect(luckLine(0)).toEqual({ kind: 'low', n: 1 });
+    // A win never says the summons were unlucky; good and average luck still show.
+    expect(luckLine(0.2, true)).toBeNull();
+    expect(luckLine(0.9, true)).toEqual({ kind: 'top', n: 10 });
+    expect(luckLine(0.5, true)).toEqual({ kind: 'avg', n: 50 });
   });
 
   it('says "so close" only for a defeat within three waves of the end', () => {
