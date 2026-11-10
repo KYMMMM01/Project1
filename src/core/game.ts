@@ -88,6 +88,26 @@ export class Game {
     parent.appendChild(app.canvas);
     app.canvas.style.touchAction = 'none';
     app.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Pixi listens for pointerup but not pointercancel. When the system takes a touch away (Android's screenshot swipe, the notification
+    // shade, the edge back gesture) only a cancel comes, and a scroll view or a held button would wait for its finger forever (the
+    // owner's report of 2026-11-11: no scrolling after a screenshot). The cancel is handed to Pixi as a release far off the canvas, so
+    // everything holding that pointer lets go and nothing under it counts a tap.
+    window.addEventListener(
+      'pointercancel',
+      (e) => {
+        window.dispatchEvent(
+          new PointerEvent('pointerup', {
+            pointerId: e.pointerId,
+            pointerType: e.pointerType,
+            isPrimary: e.isPrimary,
+            clientX: -100000,
+            clientY: -100000,
+            bubbles: true,
+          }),
+        );
+      },
+      true,
+    );
     // A lost graphics context empties every baked picture: the game stops, and starts the page again from what is saved (glRecovery.ts).
     watchContext(app.canvas, {
       lost: () => {

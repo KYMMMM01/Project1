@@ -239,7 +239,9 @@ export class ScrollView extends Container implements ScrollHost {
   /* ---------------------------------------------------------------- input */
 
   private onDown = (e: FederatedPointerEvent): void => {
-    if (this.pointerId !== -1) return;
+    if (this.pointerId === e.pointerId) return;
+    // A new finger while an old one is still on record: that one's release never came (a gesture the system took). Let it go.
+    if (this.pointerId !== -1) this.forget();
     if (this.dirty) this.refresh();
     this.pointerId = e.pointerId;
     this.startX = this.lastX = e.global.x / game.scale;
@@ -330,6 +332,18 @@ export class ScrollView extends Container implements ScrollHost {
       },
     });
   };
+
+  /** Drop a gesture whose release was lost, ending a drag where it is. */
+  private forget(): void {
+    this.releaseStage();
+    this.pointerId = -1;
+    this.pending = false;
+    if (!this.dragging) return;
+    this.dragging = false;
+    this.ay.endDrag(0);
+    this.ax.endDrag(0);
+    this.startLoop();
+  }
 
   private releaseStage(): void {
     const stage = game.app?.stage;

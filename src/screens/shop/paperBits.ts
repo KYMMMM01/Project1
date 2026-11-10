@@ -9,7 +9,7 @@ import { haptic } from '@/core/haptics';
 import { mixColor, TAU } from '@/core/math';
 import { Ease } from '@/core/tween';
 import {
-  backOut, bindPress, ButtonPalettes, cacheStatic, Color, drawDashedLine, drawIcon, edgeTone, fitLabel, motion, Panel, paperSeed,
+  backOut, bindPress, ButtonPalettes, cacheStatic, Color, drawDashedLine, drawIcon, edgeTone, fitLabel, MIN_FONT, motion, Panel, paperSeed,
   TweenBag, uiLabel, type ButtonStyleId, type PressBinding, type TapeName,
 } from '@/ui';
 import { stampThud } from '../system/kit/marks';
@@ -219,14 +219,18 @@ export class PriceTag extends Container {
 
     const content = new Container();
     const fs = o.fontSize ?? 32;
-    const gap = 10;
-    const left = -w / 2 + cham + 22;
-    const avail = w / 2 - 14 - left;
+    const gap = 8;
+    // The writing area: right of the hole, with the same margin before the right edge as after the hole.
+    const left = -w / 2 + cham + 20;
+    const avail = w / 2 - 20 - left;
     const parts: Container[] = [];
     let used = 0;
     if (o.amount !== undefined) {
-      const ic = drawIcon(o.currency === 'gold' ? 'coin' : 'gem', Math.round(h * 0.5));
+      const ic = drawIcon(o.currency === 'gold' ? 'coin' : 'gem', Math.round(h * 0.44));
       const num = uiLabel(fmt(o.amount), { size: fs, color: pal.ink });
+      // A long price ("4,000" on a narrow tag) shrinks to fit, never past the readable floor and never cut with an ellipsis.
+      const room = avail - ic.width - gap - (o.label ? 60 + gap : 0);
+      if (num.width > room) num.scale.set(Math.max(MIN_FONT / fs, room / num.width));
       parts.push(ic, num);
       used = ic.width + num.width + gap * 2;
     }
