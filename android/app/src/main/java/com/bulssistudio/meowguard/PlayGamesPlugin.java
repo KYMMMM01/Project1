@@ -12,33 +12,22 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.games.AuthenticationResult;
-import com.google.android.gms.games.GamesClientStatusCodes;
 import com.google.android.gms.games.GamesSignInClient;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.PlayGamesSdk;
-import com.google.android.gms.games.SnapshotsClient;
-import com.google.android.gms.games.snapshot.Snapshot;
-import com.google.android.gms.games.snapshot.SnapshotMetadataChange;
 import com.google.android.gms.tasks.Task;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-
 /**
- * Google Play Games Services v2 for the game (docs: developer.android.com/games/pgs/android/android-signin, leaderboards, saved-games;
- * play-services-games-v2 22.1.0). Platform sign-in only: PGS signs the player in by itself at start; signIn() is the manual retry of the
- * title's and the settings' connect button. The game stays playable without it (Google's guidance: PGS is never the primary identity).
+ * Google Play Games Services v2 for the game (docs: developer.android.com/games/pgs/android/android-signin, achievements;
+ * play-services-games-v2 22.1.0). Achievements only (accounts and the cloud save are Firebase's, the ranking is Cloud Functions'): PGS signs the player in by itself at start; signIn() is the manual retry of the
+ * title's and the settings' connect button. Achievements need a signed-in player. The game stays playable without it (Google's guidance: PGS is never the primary identity).
  *
  * Without a Play Games Services project id in the manifest (gradle property pgsProjectId) the SDK is not initialised and every call
  * answers "not available": a build made before the Play Console setup runs as before.
  */
 @CapacitorPlugin(name = "PlayGames")
 public class PlayGamesPlugin extends Plugin {
-    /** Saved Games refuses more than 3 MB of data per snapshot. */
-    private static final int MAX_SNAPSHOT_BYTES = 3 * 1024 * 1024;
-
     private boolean ready = false;
 
     @Override
@@ -113,127 +102,52 @@ public class PlayGamesPlugin extends Plugin {
         });
     }
 
-    /** A score for a leaderboard (PGS keeps each player's best; the game sends a new record once, at the end of a run). */
+    /** Unlocks an achievement (fire and forget: PGS queues it offline and ignores an already unlocked one). */
     @PluginMethod
-    public void submitScore(PluginCall call) {
+    public void unlockAchievement(PluginCall call) {
         if (refuseIfOff(call)) return;
-        String id = call.getString("leaderboardId");
-        Long score = call.getLong("score");
-        if (id == null || id.isEmpty() || score == null) {
-            call.reject("leaderboardId and score are required");
+        String id = call.getString("id");
+        if (id == null || id.isEmpty()) {
+            call.reject("id is required");
             return;
         }
-        PlayGames.getLeaderboardsClient(getActivity()).submitScoreImmediate(id, score).addOnCompleteListener(t -> {
-            JSObject r = new JSObject();
-            r.put("available", true);
-            r.put("submitted", t.isSuccessful());
-            call.resolve(r);
-        });
+        PlayGames.getAchievementsClient(getActivity()).unlock(id);
+        JSObject r = new JSObject();
+        r.put("available", true);
+        call.resolve(r);
     }
 
-    /** Google's leaderboard screen (daily, weekly and all-time tabs). */
+    /** Adds steps to an incremental achievement (PGS caps it at the achievement's total steps). */
     @PluginMethod
-    public void showLeaderboard(PluginCall call) {
+    public void incrementAchievement(PluginCall call) {
         if (refuseIfOff(call)) return;
-        String id = call.getString("leaderboardId");
-        if (id == null || id.isEmpty()) {
-            call.reject("leaderboardId is required");
+        String id = call.getString("id");
+        Integer steps = call.getInt("steps");
+        if (id == null || id.isEmpty() || steps == null || steps <= 0) {
+            call.reject("id and a positive steps are required");
             return;
         }
-        PlayGames.getLeaderboardsClient(getActivity()).getLeaderboardIntent(id).addOnCompleteListener(t -> {
+        PlayGames.getAchievementsClient(getActivity()).increment(id, steps);
+        JSObject r = new JSObject();
+        r.put("available", true);
+        call.resolve(r);
+    }
+
+    /** Google's achievements screen. Resolves when the player closes it. */
+    @PluginMethod
+    public void showAchievements(PluginCall call) {
+        if (refuseIfOff(call)) return;
+        PlayGames.getAchievementsClient(getActivity()).getAchievementsIntent().addOnCompleteListener(t -> {
             if (!t.isSuccessful() || t.getResult() == null) {
-                call.reject("leaderboard unavailable");
+                call.reject("achievements unavailable");
                 return;
             }
-            startActivityForResult(call, t.getResult(), "leaderboardClosed");
+            startActivityForResult(call, t.getResult(), "achievementsClosed");
         });
     }
 
     @ActivityCallback
-    private void leaderboardClosed(PluginCall call, ActivityResult result) {
+    private void achievementsClosed(PluginCall call, ActivityResult result) {
         if (call != null) call.resolve();
-    }
-
-    /** Writes the cloud save (text, at most 3 MB). The most recently written copy wins when two devices wrote at once. */
-    @PluginMethod
-    public void saveSnapshot(PluginCall call) {
-        if (refuseIfOff(call)) return;
-        String name = call.getString("name");
-        String data = call.getString("data");
-        String description = call.getString("description", "");
-        if (name == null || name.isEmpty() || data == null) {
-            call.reject("name and data are required");
-            return;
-        }
-        byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > MAX_SNAPSHOT_BYTES) {
-            call.reject("snapshot too large");
-            return;
-        }
-        SnapshotsClient client = PlayGames.getSnapshotsClient(getActivity());
-        client
-            .open(name, true, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
-            .addOnCompleteListener(t -> {
-                if (!t.isSuccessful() || t.getResult() == null || t.getResult().isConflict()) {
-                    call.reject("snapshot open failed");
-                    return;
-                }
-                Snapshot snapshot = t.getResult().getData();
-                snapshot.getSnapshotContents().writeBytes(bytes);
-                SnapshotMetadataChange change = new SnapshotMetadataChange.Builder().setDescription(description).build();
-                client.commitAndClose(snapshot, change).addOnCompleteListener(c -> {
-                    JSObject r = new JSObject();
-                    r.put("available", true);
-                    r.put("saved", c.isSuccessful());
-                    call.resolve(r);
-                });
-            });
-    }
-
-    /**
-     * Reads the cloud save: `found` false (and `data` null) only when there is none yet. Any other failure (no network, a conflict left
-     * open, an unreadable file) rejects, so the caller writes nothing over a copy it could not read.
-     */
-    @PluginMethod
-    public void loadSnapshot(PluginCall call) {
-        if (refuseIfOff(call)) return;
-        String name = call.getString("name");
-        if (name == null || name.isEmpty()) {
-            call.reject("name is required");
-            return;
-        }
-        SnapshotsClient client = PlayGames.getSnapshotsClient(getActivity());
-        client
-            .open(name, false, SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED)
-            .addOnCompleteListener(t -> {
-                JSObject r = new JSObject();
-                r.put("available", true);
-                if (!t.isSuccessful()) {
-                    Exception e = t.getException();
-                    if (e instanceof ApiException && ((ApiException) e).getStatusCode() == GamesClientStatusCodes.SNAPSHOT_NOT_FOUND) {
-                        r.put("data", null);
-                        r.put("found", false);
-                        call.resolve(r);
-                    } else {
-                        call.reject("snapshot read failed", e);
-                    }
-                    return;
-                }
-                if (t.getResult() == null || t.getResult().isConflict()) {
-                    call.reject("snapshot conflict left open");
-                    return;
-                }
-                Snapshot snapshot = t.getResult().getData();
-                try {
-                    byte[] bytes = snapshot.getSnapshotContents().readFully();
-                    r.put("data", new String(bytes, StandardCharsets.UTF_8));
-                    r.put("found", true);
-                    call.resolve(r);
-                } catch (IOException e) {
-                    call.reject("snapshot unreadable", e);
-                } finally {
-                    client.discardAndClose(snapshot);
-                }
-            });
     }
 }

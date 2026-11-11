@@ -40,7 +40,7 @@ const DAY_MS = 86_400_000;
 /** Extra gems for a second season pass bought while the first is still active (the premium row is already open). */
 const SEASON_DUPLICATE_GEMS = 600;
 export const CUP_BOARD_ID = 'weekly_cup';
-/** The endless mode's best wave (a Google Play Games leaderboard on the Android app). */
+/** The endless mode's runs: the Firebase rankings (platform/ranking.ts) keep each player's best of all time and of the week. */
 export const ENDLESS_BOARD_ID = 'endless_best';
 /** The most a single test grant hands out. */
 const TEST_GRANT_MAX = 100_000;
@@ -273,9 +273,11 @@ export class Profile extends RoutineProfile {
       if (stats.wavesCleared > d.endless.best) {
         d.endless.best = stats.wavesCleared;
         newBest = true;
-        this.deps.submitScore?.(ENDLESS_BOARD_ID, d.endless.best);
       }
       d.endless.weekBest = Math.max(d.endless.weekBest, stats.wavesCleared);
+      // Every run goes up, not only a new local best: the server keeps the best per board and decides the week by its own clock (a
+      // phone in another time zone starts its week on a different day), and a run sent while signed out is not lost for the week.
+      if (stats.wavesCleared > 0) this.deps.submitScore?.(ENDLESS_BOARD_ID, stats.wavesCleared, { waves: stats.wavesCleared, seconds: stats.duration });
     } else if (stats.mode === 'gold') {
       const best = d.dungeon.best[stats.chapter - 1];
       // The record is the run's whole pay, the chest's share included (a record made before 2026-10-12 had no chest and a longer script: any win now beats it).

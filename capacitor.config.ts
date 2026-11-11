@@ -13,6 +13,8 @@ const config: CapacitorConfig = {
   // The page's cream (manifest background) behind the WebView while it starts.
   backgroundColor: '#fbf3e2',
   plugins: {
+    // Google sign-in (src/platform/account.ts): the native sheet only hands over the Google credential; the web SDK holds the session.
+    FirebaseAuthentication: { skipNativeAuth: true, providers: ['google.com'] },
     // index.html asks for viewport-fit=cover and the game reads env(safe-area-inset-*) (core/game.ts); the hint avoids a jump.
     SystemBars: { initialViewportFitValueHint: 'cover' },
   },

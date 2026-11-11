@@ -1,13 +1,9 @@
-import { Container, Sprite } from 'pixi.js';
-import { hasTex, tex } from '@/core/assets';
+import { Container } from 'pixi.js';
 import { t } from '@/core/i18n';
-import { Button, Color, Panel, PaperLabel, uiLabel } from '@/ui';
+import { Button, Color, drawIcon, Panel, PaperLabel, uiLabel } from '@/ui';
 
-/** What the title shows of the Google Play Games connection. */
-export type PgsView = { state: 'none' } | { state: 'wait' } | { state: 'off' } | { state: 'on'; name: string };
-
-/** The official Play Games controller badge (developer.android.com/games/pgs/branding, green as supplied). */
-const PGS_ICON = 'icon_pgs_controller';
+/** What the title shows of the game account (the Google sign-in, platform/account.ts). */
+export type AccountView = { state: 'none' } | { state: 'wait' } | { state: 'off' } | { state: 'on' };
 const CARD_W = 560;
 const CARD_H = 230;
 const PROMPT_SIZE = 40;
@@ -18,8 +14,9 @@ const BLINK_S = 1.6;
 
 /**
  * The title's foreground (the owner's pick B of 2026-11-11): one taped paper card at the bottom with "tap to start" breathing on it and,
- * under it, the Google Play Games state: "connecting", "signed in as" with the player's name, or a connect button. The version sits in the
- * bottom-right corner. The scene owns the tap that starts the game; a tap on the connect button never starts it (`isOwnTap`).
+ * under it, the game account's state: "checking", "signed in", or the Google sign-in button (2026-11-12: the account moved from Play Games
+ * to a Google sign-in). The version sits in the bottom-right corner. The scene owns the tap that starts the game; a tap on the sign-in
+ * button never starts it (`isOwnTap`).
  */
 export class TitleOverlay extends Container {
   private readonly card = new Panel({ width: CARD_W, height: CARD_H, variant: 'light', tape: 'pink' });
@@ -33,33 +30,33 @@ export class TitleOverlay extends Container {
   private safeBottom = 0;
 
   constructor(
-    pgs: PgsView,
+    view: AccountView,
     private readonly onConnect: () => void,
   ) {
     super();
     this.version.anchor.set(1, 1);
     this.version.alpha = 0.85;
     this.addChild(this.card, this.prompt, this.version);
-    this.setPgs(pgs);
+    this.setAccount(view);
   }
 
-  /** The connection changed (signed in, failed, a manual sign-in finished). */
-  setPgs(view: PgsView): void {
+  /** The account changed (the last session restored, a sign-in finished or was closed). */
+  setAccount(view: AccountView): void {
     this.pgsNode?.destroy({ children: true });
     this.pgsNode = null;
     this.connectButton = null;
-    // No Play Games on this build (the web build, or before the Play Console setup): the card holds the prompt alone.
+    // No account on this build (no Firebase config yet): the card holds the prompt alone.
     if (view.state === 'none') {
       this.layout(this.w, this.h, this.safeBottom);
       return;
     }
     if (view.state === 'off') {
-      const b = new Button({ label: t('shell.title.pgs.connect'), iconImage: PGS_ICON, style: 'neutral', width: PGS_W, height: PGS_H, fontSize: 28 });
+      const b = new Button({ label: t('shell.title.acct.signIn'), icon: 'paw', style: 'neutral', width: PGS_W, height: PGS_H, fontSize: 28 });
       b.onTap(() => this.onConnect());
       this.connectButton = b;
       this.pgsNode = b;
     } else {
-      this.pgsNode = status(view.state === 'on' ? t('shell.title.pgs.on', { name: view.name }) : t('shell.title.pgs.wait'));
+      this.pgsNode = view.state === 'on' ? status(t('shell.title.acct.on'), 'check') : status(t('shell.title.acct.wait'), 'clock');
     }
     this.addChild(this.pgsNode);
     this.layout(this.w, this.h, this.safeBottom);
@@ -90,20 +87,15 @@ export class TitleOverlay extends Container {
   }
 }
 
-/** The quiet line of a connection in progress or made: the controller badge, then the words on a small paper label. Origin = centre. */
-function status(text: string): Container {
+/** The quiet line of a sign-in being checked or made: a small icon, then the words on a small paper label. Origin = centre. */
+function status(text: string, iconName: 'check' | 'clock'): Container {
   const row = new Container();
   const label = new PaperLabel({ text, size: 24, paper: 'neutral', padX: 22, padY: 8, maxWidth: PGS_W });
-  row.addChild(label);
-  if (hasTex(PGS_ICON)) {
-    const icon = new Sprite(tex(PGS_ICON));
-    icon.anchor.set(0.5);
-    icon.scale.set(STATUS_ICON / icon.texture.width);
-    const gap = 10;
-    const total = STATUS_ICON + gap + label.width;
-    icon.position.set(-total / 2 + STATUS_ICON / 2, 0);
-    label.position.set(-total / 2 + STATUS_ICON + gap + label.width / 2, 0);
-    row.addChild(icon);
-  }
+  const icon = drawIcon(iconName, STATUS_ICON, Color.paperLight);
+  const gap = 10;
+  const total = STATUS_ICON + gap + label.width;
+  icon.position.set(-total / 2 + STATUS_ICON / 2, 0);
+  label.position.set(-total / 2 + STATUS_ICON + gap + label.width / 2, 0);
+  row.addChild(label, icon);
   return row;
 }

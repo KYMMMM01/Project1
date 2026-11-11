@@ -7,8 +7,9 @@ import { audio } from '@/audio';
 import { PaperLabel } from '@/ui';
 import { HomeFloor } from '@/screens/shell/HomeFloor';
 import { Logo } from '@/screens/shell/Logo';
-import { TitleOverlay, type PgsView } from '@/screens/shell/TitleOverlay';
-import { playGames, type PlayGamesState } from '@/platform';
+import { TitleOverlay, type AccountView } from '@/screens/shell/TitleOverlay';
+import { account, type AccountState } from '@/platform';
+import { signInFlow } from '@/screens/system/accountFlow';
 import '@/screens/shell/strings';
 
 const LOGO_W = 600;
@@ -32,7 +33,7 @@ export class BootScene extends Scene {
    * @param onShown Fires once the first scene is on screen and the splash is gone.
    * @param titleMs Show the title moment (key art and logo) before `next`; 0 = none. It waits for a tap ("tap to start"), unless `autoMs`.
    * @param autoMs QA only: leave the title by itself after this long (?titlems=N), so automated runs need no tap.
-   * @param pgsDraft QA only: a faked Google Play Games state for the title (?pgs=on|off|wait).
+   * @param pgsDraft QA only: a faked account state for the title (?pgs=on|off|wait).
    */
   constructor(
     private readonly next?: () => Scene,
@@ -40,7 +41,7 @@ export class BootScene extends Scene {
     private readonly onShown?: () => void,
     private readonly titleMs = 0,
     private readonly autoMs = 0,
-    private readonly pgsDraft: PgsView | null = null,
+    private readonly pgsDraft: AccountView | null = null,
   ) {
     super();
   }
@@ -112,9 +113,9 @@ export class BootScene extends Scene {
     }
     this.logo = new Logo(LOGO_W);
     this.addChild(this.logo);
-    this.overlay = new TitleOverlay(this.pgsDraft ?? viewOf(playGames.state()), () => void playGames.connect());
-    // The automatic sign-in answers while the title is up (QA's faked state stays as it is).
-    if (!this.pgsDraft) this.offPgs = playGames.onChange((s) => this.overlay?.setPgs(viewOf(s)));
+    this.overlay = new TitleOverlay(this.pgsDraft ?? viewOf(account.state()), () => void signInFlow());
+    // The last session is restored while the title is up (QA's faked state stays as it is).
+    if (!this.pgsDraft) this.offPgs = account.onChange((s) => this.overlay?.setAccount(viewOf(s)));
     this.addChild(this.overlay);
     this.place();
     this.logo.play(0.1);
@@ -180,7 +181,7 @@ export class BootScene extends Scene {
   }
 }
 
-/** The title's words for the Play Games state. */
-function viewOf(s: PlayGamesState): PgsView {
-  return s.status === 'on' ? { state: 'on', name: s.name } : { state: s.status };
+/** The title's words for the account state. */
+function viewOf(s: AccountState): AccountView {
+  return { state: s.status };
 }

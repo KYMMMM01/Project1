@@ -8,7 +8,7 @@
  */
 import './strings';
 
-export { profile, initMeta, startPlayGames, setCloudChooser, cloud } from './instance';
+export { profile, initMeta, startOnline, setCloudChooser, cloud } from './instance';
 export { Profile, createProfile, systemClock, CUP_BOARD_ID, ENDLESS_BOARD_ID } from './profile';
 export type { CloudChoice } from './cloudSave';
 export type { RunOptions, BackupPreview, SweepResult, DungeonView, DungeonTierRow } from './profile';

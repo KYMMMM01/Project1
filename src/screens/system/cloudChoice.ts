@@ -3,7 +3,7 @@ import type { BackupPreview, CloudChoice } from '@/meta';
 import { choiceDialog } from '@/ui';
 
 /**
- * The question after a Google Play Games sign-in when the cloud holds another device's progress and this device has its own: both side by
+ * The question after a Google sign-in when the cloud holds another device's progress and this device has its own: both side by
  * side. Only a tap on one of the two buttons decides; closing it leaves both copies as they are.
  */
 export async function askCloudChoice(cloud: BackupPreview, local: BackupPreview): Promise<CloudChoice> {

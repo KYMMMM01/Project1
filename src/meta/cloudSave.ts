@@ -1,6 +1,7 @@
 /**
- * The cloud save (Google Play Games Saved Games): the whole profile in one slot, written behind the player once a sign-in has been synced.
- * Pure with respect to the platform: the slot, the device id, the choice dialog and the reload are injected (meta/instance.ts wires them).
+ * The cloud save (the game account's Firestore document, platform/account.ts): the whole profile in one copy, written behind the player
+ * once a sign-in has been synced. Pure with respect to the platform: the storage, the device id, the choice dialog and the reload are
+ * injected (meta/instance.ts wires them).
  *
  * After a sign-in nothing is written before the cloud copy has been read and settled:
  *   no cloud copy (or a broken one)                          => this device's profile goes up;
@@ -17,8 +18,6 @@
  */
 import type { BackupPreview, Profile } from './profile';
 
-/** The Saved Games slot. */
-export const CLOUD_SLOT = 'profile';
 const FORMAT = 1;
 /** Writes behind the player wait this long after the last change (a run end, a purchase), so a burst of changes is one write. */
 export const CLOUD_DEBOUNCE_MS = 20_000;
@@ -39,7 +38,7 @@ export interface CloudDeps {
   /** The slot's text, null when empty; throws when the read failed. */
   load(): Promise<string | null>;
   /** False when not written (not signed in, failed). */
-  save(text: string, description: string): Promise<boolean>;
+  save(text: string): Promise<boolean>;
   /** This install's id (made once, kept with the save). */
   deviceId(): Promise<string>;
   now(): number;
@@ -47,8 +46,6 @@ export interface CloudDeps {
   ask(cloud: BackupPreview, local: BackupPreview): Promise<CloudChoice>;
   /** The profile was replaced: start the game again on it. */
   reload(): void;
-  /** The text shown in Play Games' saved-games list. */
-  describe(p: BackupPreview): string;
 }
 
 /** uploaded / adopted: settled, writes may follow. failed / later: not settled; tried again later. */
@@ -160,7 +157,7 @@ export class CloudSave {
       const key = JSON.stringify(data, (k, v: unknown) => (k === 'lastSeenAt' ? undefined : v));
       if (!force && key === this.lastWritten) return true;
       const payload: CloudPayload = { v: FORMAT, device: await this.deps.deviceId(), savedAt: this.deps.now(), data };
-      const ok = await this.deps.save(JSON.stringify(payload), this.deps.describe(this.profile.localPreview()));
+      const ok = await this.deps.save(JSON.stringify(payload));
       if (ok) this.lastWritten = key;
       return ok;
     };

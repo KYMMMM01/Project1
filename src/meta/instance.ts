@@ -2,20 +2,36 @@
  * The app's one profile, on the default store, the system clock and the platform singletons. This is
  * the only meta module that imports the platform barrel; tests build their own with createProfile().
  */
-import { ads, analytics, iap, platform, playGames, PLATFORM_ID } from '@/platform';
-import { t } from '@/core/i18n';
+import { account, ads, analytics, iap, platform, playGames, ranking, PLATFORM_ID, type RunProof } from '@/platform';
 import { getStorageBackend } from '@/core/save';
 import './strings';
-import { CloudSave, CLOUD_SLOT, type CloudChoice } from './cloudSave';
+import { CloudSave, type CloudChoice } from './cloudSave';
 import { ENDLESS_BOARD_ID, type BackupPreview } from './profile';
 import { attachPlatform } from './platformLink';
 import { createProfile } from './profile';
 
+/**
+ * The best endless run of this session that did not reach the rankings (signed out, offline, refused as too soon): sent on the next
+ * sign-in or the next run. Kept in memory only; the cloud save keeps the record itself for a later backfill.
+ */
+let unsent: RunProof | null = null;
+
+function sendRun(run: RunProof): void {
+  void ranking.submitRun(run).then((ok) => {
+    if (ok) {
+      if (unsent && unsent.waves <= run.waves) unsent = null;
+    } else if (!unsent || run.waves > unsent.waves) unsent = run;
+  });
+}
+
 export const profile = createProfile({
   analytics,
   ads,
-  submitScore: (board, score) => {
+  submitScore: (board, score, run) => {
     platform.leaderboard?.submit(board, score).catch(() => undefined);
+    if (board !== ENDLESS_BOARD_ID || !run) return;
+    // A better run waiting from before goes up with this one's turn (the server takes one run per player every 20 seconds).
+    sendRun(unsent && unsent.waves > run.waves ? unsent : run);
   },
   // The same condition that shows the test ad and the test purchase sheet: the development adapter.
   testGrants: PLATFORM_ID === 'dev',
@@ -39,37 +55,37 @@ export function setCloudChooser(fn: typeof chooser): void {
 }
 
 export const cloud = new CloudSave(profile, {
-  load: () => playGames.load(CLOUD_SLOT),
-  save: (text, description) => playGames.save(CLOUD_SLOT, text, description),
+  load: () => account.loadSave(),
+  save: (text) => account.writeSave(text, profile.data.endless.best),
   deviceId,
   now: () => Date.now(),
   ask: (c, l) => chooser(c, l),
   reload: () => window.location.reload(),
-  describe: (p) => t('meta.cloud.desc', { level: p.accountLevel, chapters: p.chaptersCleared }),
 });
 
 /** A sync that could not settle (offline, a run in progress, the dialog closed) is tried again, at most this often. */
 const RETRY_MS = 60_000;
 let lastTry = 0;
 
-/** Settle the cloud copy of a signed-in session (once), then send the endless record. */
+/** Settle the cloud copy of a signed-in session (once). The rankings need no resend: the server keeps each record it accepted. */
 function syncCloud(): void {
-  if (playGames.state().status !== 'on' || cloud.settled || profile.pendingRun) return;
+  if (account.state().status !== 'on' || cloud.settled || profile.pendingRun) return;
   lastTry = Date.now();
-  void cloud.syncAfterSignIn().then((r) => {
-    if (r === 'uploaded' || r === 'adopted') void playGames.submit(ENDLESS_BOARD_ID, profile.data.endless.best);
-  });
+  void cloud.syncAfterSignIn();
 }
 
 /**
- * Google Play Games (the Android app): read the automatic sign-in, and on every sign-in sync the cloud save and send the endless record.
- * Call once the UI can show the choice dialog. Never throws; nothing happens on builds without Play Games.
+ * The online services, once the UI can show the choice dialog: the game account (restore the last Google sign-in; on every sign-in sync the
+ * cloud save) and Google Play Games for achievements (it signs in by itself on Android). Never throws; builds without them play as guests.
  */
-export function startPlayGames(): void {
-  playGames.onChange((s) => {
-    if (s.status === 'on') syncCloud();
-    else cloud.signedOut();
+export function startOnline(): void {
+  account.onChange((s) => {
+    if (s.status === 'on') {
+      syncCloud();
+      if (unsent) sendRun(unsent);
+    } else cloud.signedOut();
   });
+  void account.start();
   void playGames.start();
 }
 
@@ -91,7 +107,7 @@ export async function initMeta(): Promise<() => void> {
   // Changes go up a little later (a run end, a purchase), once the session is settled; an unsettled one is tried again now and then
   // (a run that held it back has ended, the network is back).
   const offChange = profile.subscribe(() => {
-    if (playGames.state().status !== 'on') return;
+    if (account.state().status !== 'on') return;
     if (cloud.settled) cloud.schedule();
     else if (Date.now() - lastTry > RETRY_MS) syncCloud();
   });

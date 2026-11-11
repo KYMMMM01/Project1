@@ -57,8 +57,9 @@ export interface MetaDeps {
   seed(): number;
   analytics: Pick<Analytics, 'track'>;
   ads: AdsPort;
-  /** Weekly cup score for a platform leaderboard (Toss, YouTube). */
-  submitScore?: (board: string, score: number) => void;
+  /** A record for a ranking: the weekly cup (Toss, YouTube), the endless mode's best of all time and of the week (the game's own
+   * Firebase rankings, judged by the server from `run`: the run's waves and simulated seconds). */
+  submitScore?: (board: string, score: number, run?: { waves: number; seconds: number }) => void;
   /** The development platform only: the settings sheet's test buttons may hand out currencies (`grantTest`). */
   testGrants?: boolean;
 }

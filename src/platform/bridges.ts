@@ -157,15 +157,14 @@ export interface CapPurchases {
   }>;
 }
 
-/** The game's own Play Games Services v2 plugin (android/app/src/main/java/com/bulssistudio/meowguard/PlayGamesPlugin.java). */
+/** The game's own Play Games Services v2 plugin, achievements only (android/app/src/main/java/com/bulssistudio/meowguard/PlayGamesPlugin.java). */
 export interface CapPlayGames {
   isAuthenticated(): Promise<{ available: boolean; authenticated: boolean }>;
   signIn(): Promise<{ available: boolean; authenticated: boolean }>;
   getPlayer(): Promise<{ playerId: string; displayName: string }>;
-  submitScore(options: { leaderboardId: string; score: number }): Promise<{ available: boolean; submitted?: boolean }>;
-  showLeaderboard(options: { leaderboardId: string }): Promise<void>;
-  saveSnapshot(options: { name: string; data: string; description?: string }): Promise<{ available: boolean; saved?: boolean }>;
-  loadSnapshot(options: { name: string }): Promise<{ available: boolean; found?: boolean; data?: string | null }>;
+  unlockAchievement(options: { id: string }): Promise<{ available: boolean }>;
+  incrementAchievement(options: { id: string; steps: number }): Promise<{ available: boolean }>;
+  showAchievements(): Promise<void>;
 }
 
 export interface CapacitorPlugins {

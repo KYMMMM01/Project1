@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cloud save: only the owner, only known keys.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['v', 'device', 'savedAt', 'data', 'bestWave', 'name', 'updatedAt'])
+        && (!('data' in request.resource.data)
+            || (request.resource.data.data is string && request.resource.data.data.size() < 900000))
+        && (!('bestWave' in request.resource.data)
+            || (request.resource.data.bestWave is int && request.resource.data.bestWave >= 0))
+        // A full overwrite must not drop or lower an existing bestWave.
+        && (resource == null || !('bestWave' in resource.data)
+            || ('bestWave' in request.resource.data
+                && request.resource.data.bestWave is int
+                && request.resource.data.bestWave >= resource.data.bestWave))
+        // The ranking name is set only by the setName function (it checks the words); a client write keeps it as it is.
+        && ((resource == null && !('name' in request.resource.data))
+            || (resource != null && request.resource.data.get('name', null) == resource.data.get('name', null)));
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Ranking: public read, written only by Cloud Functions (admin SDK bypasses rules).
+    match /boards/{board} {
+      allow read: if true;
+      allow write: if false;
+      // Read only by the functions: the client reads the folded board above and asks myRank for its own place; a public list
+      // would bill one read per entry to anyone who asks.
+      match /entries/{uid} {
+        allow read, write: if false;
+      }
+    }
+
+    // Everything else (including rate/{uid}) is server-only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
