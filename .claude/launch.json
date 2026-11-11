@@ -6,6 +6,20 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "perf-before",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "preview", "--base", "/Project1/", "--outDir", ".shots/perf/build_before", "--port", "5288", "--strictPort", "--host", "127.0.0.1"],
+      "port": 5288,
+      "url": "http://127.0.0.1:5288"
+    },
+    {
+      "name": "perf-after",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "preview", "--base", "/Project1/", "--outDir", ".shots/perf/build_after", "--port", "5289", "--strictPort", "--host", "127.0.0.1"],
+      "port": 5289,
+      "url": "http://127.0.0.1:5289"
     }
   ]
 }

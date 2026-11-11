@@ -34,7 +34,9 @@ export interface ScrollViewOpts {
  */
 export class ScrollView extends Container implements ScrollHost {
   readonly isScrollHost = true as const;
-  readonly content = new Container();
+  // A render group: scrolling moves the group, which the GPU applies as one matrix, instead of re-packing the vertices of every
+  // row and re-sending the scene's whole vertex buffer each frame (tools/perf/ui_groups.mjs measures it).
+  readonly content = new Container({ isRenderGroup: true });
 
   /** Carries the mask, so measuring `content` is never clipped by it. */
   private readonly clip = new Container();
