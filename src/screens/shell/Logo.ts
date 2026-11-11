@@ -1,13 +1,14 @@
 import { Container, Graphics, type DestroyOptions } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { Ease } from '@/core/tween';
-import { Color, TweenBag, backOut, cacheStatic, drawDashedRect, drawIcon, drawPaper, fitLabel, motion, paperSeed, tapeStrip, uiLabel } from '@/ui';
+import { Color, PaperLabel, TweenBag, backOut, cacheStatic, drawDashedRect, drawIcon, drawPaper, fitLabel, motion, paperSeed, tapeStrip, uiLabel } from '@/ui';
 
 const RATIO = 0.31;
 
 /**
  * The game's logo, drawn in code: the title (by language) on a large cream torn label with a teal cut
- * line, a strip of washi tape on one corner and a paw sticker on the other. Origin = centre.
+ * line, a strip of washi tape on one corner and a paw sticker on the other, and the subtitle ("집사 없는 날",
+ * "Butler's Day Out") on a kraft tag over the lower right corner (the owner's pick C, 2026-11-11). Origin = centre.
  * `play()` drops the label on with a small overshoot and waves the paw once.
  */
 export class Logo extends Container {
@@ -31,18 +32,23 @@ export class Logo extends Container {
     fitLabel(title, w - 150, size, 0.6);
     title.position.set(-14, 2);
 
+    const sub = new PaperLabel({ text: t('shell.logo.sub'), size: Math.round(size * 0.42), paper: 'kraft', padX: 24, padY: 8 });
+    sub.rotation = -0.09;
+    sub.position.set(w / 2 - sub.width / 2 - 30, h / 2 + 6);
+
     const tape = tapeStrip({ name: 'pink', pattern: 'gingham', w: Math.round(w * 0.2), h: 34, angle: -13, seed });
     tape.position.set(-w / 2 + w * 0.11, -h / 2 + 8);
 
-    const pawShadow = drawIcon('paw', Math.round(h * 0.56));
+    const pawSize = Math.round(h * 0.56);
+    const pawShadow = drawIcon('paw', pawSize);
     pawShadow.tint = Color.shadow;
     pawShadow.alpha = 0.22;
     pawShadow.position.set(0, 6);
-    this.paw.addChild(pawShadow, drawIcon('paw', Math.round(h * 0.56)));
+    this.paw.addChild(pawShadow, drawIcon('paw', pawSize));
     this.paw.rotation = 0.24;
-    this.paw.position.set(w / 2 - h * 0.2, -h / 2 + h * 0.08);
+    this.paw.position.set(w / 2 - pawSize * 0.36, -h / 2 + pawSize * 0.14);
 
-    this.plate.addChild(sheet, title, tape);
+    this.plate.addChild(sheet, title, tape, sub);
     this.addChild(this.plate, this.paw);
   }
 

@@ -7,6 +7,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'com.bulssistudio.meowguard',
+  // The home screen label (android res strings app_name): the short name. The game's full name is '냥이 수비대: 집사 없는 날'.
   appName: '냥이 수비대',
   webDir: 'dist-store',
   // The page's cream (manifest background) behind the WebView while it starts.
