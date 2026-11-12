@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "837064889610-2lo2farl81kvep7r64095bm7loh22sal.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bulssistudio.meowguard",
+            "certificate_hash": "d61ba0267452bf06d963f9ef4922e723fd512788"
+          }
+        },
+        {
+          "client_id": "837064889610-4sd84qtk9s7fhr75rg19rcmtt9jhblc3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bulssistudio.meowguard",
+            "certificate_hash": "d0218d8b2fe160c3208b9ab7c676fdefd6a13623"
+          }
+        },
+        {
           "client_id": "837064889610-nrb7mogecicn3ndchbhqvp6q5tei4d0u.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

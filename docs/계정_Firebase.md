@@ -14,7 +14,7 @@
 - 프로젝트 `meowguard-4ce6f`(번호 837064889610), Blaze 요금제(2026-11-12 사용자 전환, 월 1만 원 예산 알림 50, 90, 100%). Aside 로 만들었다(사용자 지시 "너가 만들어봐").
 - 된 것: 구글 로그인 사용 설정과 승인 도메인 `kymmmm01.github.io`, Firestore `(default)` 서울 프로덕션 모드, 안드로이드 앱(디버그 SHA-1 등록), 웹 앱. 웹 설정값은 `.env.store`, 프로젝트 id 는 `.firebaserc`. `android/app/google-services.json` 도 넣었다(디버그 SHA-1 의 안드로이드 클라이언트와 웹 클라이언트가 들어 있고, Gradle 이 `default_web_client_id` 를 만든다). 업로드 키와 앱 서명 키 SHA-1 을 더하면 이 파일을 다시 받아야 한다.
 - 배포(2026-11-12): Firestore 규칙과 색인, 함수 5개(`submitRun`, `setName`, `myRank`, `refreshBoards`, `onUserDeleted`), 모두 `asia-northeast3`. 명령은 `npx firebase-tools deploy --only firestore:rules,firestore:indexes,functions`. 첫 배포 때 1세대 함수 `onUserDeleted` 만 빌드가 실패했고(API 를 막 켠 직후), 그 함수만 다시 올리니 됐다. 함수 이미지 정리 규칙은 1일(`functions:artifacts:setpolicy --days 1`).
-- 남은 것: Play Console 첫 AAB 뒤 업로드 키와 앱 서명 키 SHA-1 추가.
+- 2026-11-12: Android 앱에 앱 서명 키(SHA-1 D6:1B:A0:26:74:52:BF:06:D9:63:F9:EF:49:22:E7:23:FD:51:27:88)와 업로드 키(SHA-1 D0:21:8D:8B:2F:E1:60:C3:20:8B:9A:B7:C6:76:FD:EF:D6:A1:36:23)의 SHA-1, SHA-256 을 `npx.cmd firebase-tools apps:android:sha:create` 로 넣고, `apps:sdkconfig ANDROID` 로 google-services.json 을 다시 받아 바꿨다(Android OAuth 클라이언트 3개, 웹 클라이언트는 그대로).
 
 ## 직접 해야 하는 설정 (사용자)
 
