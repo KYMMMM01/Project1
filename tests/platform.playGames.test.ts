@@ -8,10 +8,9 @@ function fake(over: Partial<{ authenticated: boolean; available: boolean; signIn
     isAuthenticated: vi.fn(async () => ({ available: o.available, authenticated: o.authenticated })),
     signIn: vi.fn(async () => ({ available: o.available, authenticated: o.signInOk })),
     getPlayer: vi.fn(async () => ({ playerId: 'p1', displayName: o.name })),
-    submitScore: vi.fn(async () => ({ available: true, submitted: true })),
-    showLeaderboard: vi.fn(async () => undefined),
-    saveSnapshot: vi.fn(async () => ({ available: true, saved: true })),
-    loadSnapshot: vi.fn(async (): Promise<{ available: boolean; found?: boolean; data?: string | null }> => ({ available: true, found: true, data: '{"v":1}' })),
+    unlockAchievement: vi.fn(async () => ({ available: true })),
+    incrementAchievement: vi.fn(async () => ({ available: true })),
+    showAchievements: vi.fn(async () => undefined),
   } satisfies CapPlayGames;
   registerCapacitorPlugins({ PlayGames: p });
   return p;
@@ -25,11 +24,13 @@ afterEach(() => {
 
 describe('Google Play Games', () => {
   it('without the plugin (web build) it stays "none" and every call is a quiet no', async () => {
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"first_win":"CgkI_a1"}');
     await playGames.start();
     expect(playGames.state()).toEqual({ status: 'none' });
     expect(await playGames.connect()).toBe(false);
-    expect(await playGames.load('profile')).toBeNull();
-    expect(await playGames.save('profile', 'x', '')).toBe(false);
+    playGames.unlock('first_win');
+    playGames.increment('first_win', 2);
+    expect(await playGames.showAchievements()).toBe(false);
   });
 
   it('the automatic sign-in: connecting, then signed in with the Play Games name', async () => {
@@ -60,32 +61,59 @@ describe('Google Play Games', () => {
     expect(playGames.state()).toEqual({ status: 'off' });
   });
 
-  it('scores go to the board id of this build, only when signed in, as whole numbers', async () => {
-    const p = fake({ authenticated: false });
-    vi.stubEnv('VITE_PGS_LEADERBOARD_ENDLESS', 'CgkI_endless');
+  it('unlock maps the game key to the Play Console id, only when signed in', async () => {
+    const p = fake();
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"first_win":"CgkI_a1","wave_10":"CgkI_a2"}');
     await playGames.start();
-    await playGames.submit('endless_best', 41.7);
-    expect(p.submitScore).not.toHaveBeenCalled(); // not signed in
-    await playGames.connect();
-    await playGames.submit('endless_best', 41.7);
-    await playGames.submit('weekly_cup', 10); // no Play Console board for it
-    await playGames.submit('endless_best', 0);
-    expect(p.submitScore.mock.calls).toEqual([[{ leaderboardId: 'CgkI_endless', score: 41 }]]);
-    expect(await playGames.showBoard('endless_best')).toBe(true);
-    expect(p.showLeaderboard).toHaveBeenCalledWith({ leaderboardId: 'CgkI_endless' });
-    vi.stubEnv('VITE_PGS_LEADERBOARD_ENDLESS', '');
-    expect(await playGames.showBoard('endless_best')).toBe(false);
+    playGames.unlock('first_win');
+    expect(p.unlockAchievement.mock.calls).toEqual([[{ id: 'CgkI_a1' }]]);
+    resetPlayGamesForTests();
+    const q = fake({ authenticated: false });
+    await playGames.start();
+    playGames.unlock('wave_10');
+    expect(q.unlockAchievement).not.toHaveBeenCalled();
   });
 
-  it('the cloud save reads and writes through Saved Games when signed in', async () => {
+  it('an unknown key, a missing map and a broken map are silent no-ops', async () => {
     const p = fake();
     await playGames.start();
-    expect(await playGames.load('profile')).toBe('{"v":1}');
-    expect(await playGames.save('profile', 'data', 'Lv 3')).toBe(true);
-    expect(p.saveSnapshot).toHaveBeenCalledWith({ name: 'profile', data: 'data', description: 'Lv 3' });
-    p.loadSnapshot.mockResolvedValueOnce({ available: true, found: false, data: null });
-    expect(await playGames.load('profile')).toBeNull();
-    p.saveSnapshot.mockRejectedValueOnce(new Error('snapshot too large'));
-    expect(await playGames.save('profile', 'big', '')).toBe(false);
+    playGames.unlock('first_win'); // no map yet
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"first_win":"CgkI_a1"}');
+    playGames.unlock('nope');
+    playGames.increment('nope', 1);
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', 'not json');
+    playGames.unlock('first_win');
+    expect(p.unlockAchievement).not.toHaveBeenCalled();
+    expect(p.incrementAchievement).not.toHaveBeenCalled();
+  });
+
+  it('an unlock made before the sign-in finishes is sent once signed in, once', async () => {
+    const p = fake();
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"first_win":"CgkI_a1"}');
+    const started = playGames.start(); // the state is "wait" until the sign-in answers
+    playGames.unlock('first_win');
+    playGames.unlock('first_win');
+    expect(p.unlockAchievement).not.toHaveBeenCalled();
+    await started;
+    expect(p.unlockAchievement.mock.calls).toEqual([[{ id: 'CgkI_a1' }]]);
+  });
+
+  it('increment sends whole steps only when signed in', async () => {
+    const p = fake();
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"kills":"CgkI_k"}');
+    playGames.increment('kills', 3); // not started yet
+    await playGames.start();
+    playGames.increment('kills', 3.9);
+    playGames.increment('kills', 0);
+    expect(p.incrementAchievement.mock.calls).toEqual([[{ id: 'CgkI_k', steps: 3 }]]);
+  });
+
+  it('showAchievements opens the Google screen when signed in and reports a failure as false', async () => {
+    const p = fake();
+    await playGames.start();
+    expect(await playGames.showAchievements()).toBe(true);
+    expect(p.showAchievements).toHaveBeenCalledTimes(1);
+    p.showAchievements.mockRejectedValueOnce(new Error('achievements unavailable'));
+    expect(await playGames.showAchievements()).toBe(false);
   });
 });

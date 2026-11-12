@@ -22,6 +22,11 @@ interface ImportMetaEnv {
   readonly VITE_ADMOB_TESTING?: string;
   /** Capacitor build: RevenueCat's public Google SDK key (goog_...); purchases are unavailable while unset. */
   readonly VITE_REVENUECAT_API_KEY?: string;
-  /** Capacitor build: the Play Console leaderboard id of the endless mode's best wave (Google Play Games); the board is skipped while unset. */
-  readonly VITE_PGS_LEADERBOARD_ENDLESS?: string;
+  /** Capacitor build: JSON object of game achievement key to Play Console achievement id (Google Play Games); no achievements while unset or empty. */
+  readonly VITE_PGS_ACHIEVEMENTS?: string;
+  /** The Firebase web app config (console, project settings, your apps): public values. Without them the game has no account. */
+  readonly VITE_FIREBASE_API_KEY?: string;
+  readonly VITE_FIREBASE_PROJECT_ID?: string;
+  readonly VITE_FIREBASE_APP_ID?: string;
+  readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
 }

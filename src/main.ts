@@ -12,7 +12,7 @@ import { isDiagRoute } from '@/diag/route';
 import { crumb, currentTrail, previousEnds, startCrumbs } from '@/core/crumbs';
 import { LEAN_WINDOW_MS, leanVerdict, startLean } from '@/core/lean';
 import { gpuMemoryStats } from '@/core/gpuMemory';
-import type { PgsView } from '@/screens/shell/TitleOverlay';
+import type { AccountView } from '@/screens/shell/TitleOverlay';
 
 /** A real launch shows the title moment (a positive value turns it on; the title then waits for a tap). */
 const TITLE_MS = 1100;
@@ -28,10 +28,10 @@ function titleAuto(params: URLSearchParams, debug: boolean): number {
   return debug ? Number(params.get('titlems')) || 0 : 0;
 }
 
-/** QA only: a faked Google Play Games state on the title (?pgs=on|off|wait). */
-function titlePgs(params: URLSearchParams, debug: boolean): PgsView | null {
+/** QA only: a faked account state on the title (?pgs=on|off|wait). */
+function titlePgs(params: URLSearchParams, debug: boolean): AccountView | null {
   const p = debug ? params.get('pgs') : null;
-  return p === 'on' ? { state: 'on', name: '냥집사' } : p === 'off' ? { state: 'off' } : p === 'wait' ? { state: 'wait' } : null;
+  return p === 'on' ? { state: 'on' } : p === 'off' ? { state: 'off' } : p === 'wait' ? { state: 'wait' } : null;
 }
 
 // Dev galleries: ?demo=ui loads src/demo/UiDemo.ts, ?demo=fx loads src/demo/FxDemo.ts, and so on.

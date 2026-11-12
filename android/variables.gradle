@@ -13,4 +13,8 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // @capacitor-firebase/authentication: the Google provider through Credential Manager (docs/계정_Firebase.md); the plugin's own
+    // default credentials version is a release candidate.
+    rgcfaIncludeGoogle = true
+    androidxCredentialsVersion = '1.3.0'
 }

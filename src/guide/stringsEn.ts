@@ -355,7 +355,7 @@ export const EN: Record<string, string> = {
     'It opens after you clear chapter {chapter}. The waves never end, and past wave {after} enemies get {growth}% tougher every wave, and past wave {late} {lateGrowth}% tougher.\nReaching waves {w1}, {w2} and {w3} pays rewards.',
 
   'guide.backup_code.title': 'Cloud save',
-  'guide.backup_code.teach': 'Connect Google Play Games to keep your progress in the cloud.',
+  'guide.backup_code.teach': 'Sign in with your Google account to keep your progress in the cloud.',
   'guide.backup_code.full':
-    "Connected to Google Play Games, your progress is saved in your Google account's cloud. Connect with the same account on a new device to carry on.\nYou can connect on the title screen or in Settings. Without it the game still saves on this device, but deleting the app deletes your progress. Purchases come back with Restore purchases in Settings.",
+    "Signed in with your Google account, your progress is saved in the cloud and your endless runs join the ranking. Sign in with the same account on a new device to carry on.\nYou can sign in on the title screen or in Settings. Without it the game still saves on this device, but deleting the app deletes your progress. Purchases come back with Restore purchases in Settings.",
 };

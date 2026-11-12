@@ -1,8 +1,9 @@
 /**
- * Google Play Games Services on the Android app (android/.../PlayGamesPlugin.java): the platform sign-in the title and the settings show,
- * the leaderboards and the cloud save. PGS signs the player in by itself at start; `connect()` is the manual retry of the connect button.
- * Everything here answers "not available" on other builds and before the Play Console setup (no project id in the app): the game never
- * depends on it (Google's guidance: PGS is not the game's identity; guests keep playing on the device's save).
+ * Google Play Games Services on the Android app (android/.../PlayGamesPlugin.java): achievements only, plus the platform sign-in they
+ * need (the title and the settings show its state). Accounts and the cloud save are Firebase's, the ranking is Cloud Functions'.
+ * PGS signs the player in by itself at start; `connect()` is the manual retry of the connect button. Achievement calls are silent no-ops
+ * when signed out or for a key with no id; an unlock made while the sign-in runs is queued. Everything here answers "not available" on
+ * other builds and before the Play Console setup (no project id in the app): the game never depends on it.
  */
 import { getCapacitorPlugins, type CapPlayGames } from './bridges';
 import { errorMessage } from './util';
@@ -10,18 +11,32 @@ import { errorMessage } from './util';
 /** none: no Play Games on this build; wait: asking; on: signed in; off: not signed in (the connect button). */
 export type PlayGamesState = { status: 'none' } | { status: 'wait' } | { status: 'on'; name: string } | { status: 'off' };
 
-/** The game's board ids and the Play Console leaderboard ids they map to (set per build, .env.store; read when asked). */
-const boards = (): Readonly<Record<string, string | undefined>> => ({
-  endless_best: import.meta.env.VITE_PGS_LEADERBOARD_ENDLESS,
-});
+/** Game-side achievement keys and the Play Console ids they map to (a JSON object set per build, .env.store; read when asked). */
+function achievements(): Readonly<Record<string, unknown>> {
+  try {
+    const map: unknown = JSON.parse(import.meta.env.VITE_PGS_ACHIEVEMENTS || '{}');
+    return map !== null && typeof map === 'object' ? (map as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 let state: PlayGamesState = { status: 'none' };
 const listeners = new Set<(s: PlayGamesState) => void>();
+/** Achievement ids unlocked while the sign-in was still running (a set, so a repeat is one call). */
+const pending = new Set<string>();
 
 const plugin = (): CapPlayGames | undefined => getCapacitorPlugins()?.PlayGames;
 
+/** A failed achievement call is only a log line: the game never waits on it. */
+async function send(call: Promise<unknown> | undefined): Promise<void> {
+  await call?.catch((e) => console.warn('[playGames] achievement call failed:', errorMessage(e)));
+}
+
 function set(next: PlayGamesState): void {
   state = next;
+  if (next.status === 'on') for (const id of pending) void send(plugin()?.unlockAchievement({ id }));
+  if (next.status !== 'wait') pending.clear();
   for (const fn of [...listeners]) fn(state);
 }
 
@@ -76,49 +91,35 @@ export const playGames = {
     }
   },
 
-  /** The Play Console id of a game board, when this build has one. */
-  boardId(board: string): string | undefined {
-    const id = boards()[board];
+  /** The Play Console id of a game-side achievement key, when this build has one. */
+  achievementId(key: string): string | undefined {
+    const id = achievements()[key];
     return typeof id === 'string' && id !== '' ? id : undefined;
   },
 
-  /** A record for a board; silently nothing when not signed in or the board has no id. */
-  async submit(board: string, score: number): Promise<void> {
-    const p = plugin();
-    const id = playGames.boardId(board);
-    if (!p || !id || state.status !== 'on' || !Number.isFinite(score) || score <= 0) return;
-    await p.submitScore({ leaderboardId: id, score: Math.trunc(score) }).catch(() => undefined);
+  /** Unlocks an achievement; while the sign-in runs it is queued and sent once signed in. Unknown keys do nothing. */
+  unlock(key: string): void {
+    const id = playGames.achievementId(key);
+    if (!id) return;
+    if (state.status === 'on') void send(plugin()?.unlockAchievement({ id }));
+    else if (state.status === 'wait') pending.add(id);
   },
 
-  /** Google's leaderboard screen for a board. False when it cannot be shown. */
-  async showBoard(board: string): Promise<boolean> {
-    const p = plugin();
-    const id = playGames.boardId(board);
-    if (!p || !id || state.status !== 'on') return false;
-    try {
-      await p.showLeaderboard({ leaderboardId: id });
-      return true;
-    } catch {
-      return false;
-    }
+  /** Adds steps to an incremental achievement; silently nothing when signed out or the key is unknown. */
+  increment(key: string, steps: number): void {
+    const id = playGames.achievementId(key);
+    if (!id || state.status !== 'on' || !Number.isFinite(steps) || steps < 1) return;
+    void send(plugin()?.incrementAchievement({ id, steps: Math.trunc(steps) }));
   },
 
-  /** The cloud save's text, null when there is none (or no Play Games). Throws when the read itself failed. */
-  async load(name: string): Promise<string | null> {
-    const p = plugin();
-    if (!p || state.status !== 'on') return null;
-    const r = await p.loadSnapshot({ name });
-    return r.found && typeof r.data === 'string' ? r.data : null;
-  },
-
-  /** Writes the cloud save. False when not signed in or the write failed. */
-  async save(name: string, data: string, description: string): Promise<boolean> {
+  /** Google's achievements screen. False when it cannot be shown. */
+  async showAchievements(): Promise<boolean> {
     const p = plugin();
     if (!p || state.status !== 'on') return false;
     try {
-      return (await p.saveSnapshot({ name, data, description })).saved === true;
-    } catch (e) {
-      console.warn('[playGames] cloud save failed:', errorMessage(e));
+      await p.showAchievements();
+      return true;
+    } catch {
       return false;
     }
   },
@@ -128,4 +129,5 @@ export const playGames = {
 export function resetPlayGamesForTests(): void {
   state = { status: 'none' };
   listeners.clear();
+  pending.clear();
 }

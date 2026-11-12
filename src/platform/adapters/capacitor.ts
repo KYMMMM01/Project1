@@ -28,7 +28,6 @@ import {
   type CapacitorPlugins,
   type CapPlayGames,
 } from '../bridges';
-import { playGames } from '../playGames';
 import { createLocalStorageBackend, safeStorage } from '../storage';
 import type { AdResult, IapOutcome, OrderRecord, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
 import { errorMessage, safe, Signal } from '../util';
@@ -329,7 +328,7 @@ export function createAdapter(): PlatformAdapter {
       interstitialAds: false,
       iap: true,
       adFreePurchase: true,
-      leaderboard: true,
+      leaderboard: false,
       cloudSave: false,
       usesPageVisibility: true,
       externalLinksAllowed: true,
@@ -391,7 +390,5 @@ export function createAdapter(): PlatformAdapter {
     },
     storage,
     iap,
-    // Google Play Games boards: a board without a Play Console id (or a player not signed in) is skipped.
-    leaderboard: { submit: (boardId, score) => playGames.submit(boardId, score) },
   };
 }

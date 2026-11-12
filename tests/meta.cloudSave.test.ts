@@ -28,7 +28,6 @@ function rig(opts: { cloud?: string | null; device?: string; answer?: CloudChoic
       return opts.answer ?? 'local';
     },
     reload,
-    describe: (p) => `Lv ${p.accountLevel}`,
   };
   return { slot, asked, reload, deps };
 }
@@ -197,10 +196,10 @@ describe('cloud save after a sign-in', () => {
   });
 });
 
-describe('endless record and the leaderboard', () => {
-  it('a new best wave of the endless mode is sent to the endless board, a lower one is not', async () => {
-    const sent: Array<[string, number]> = [];
-    const r = await createTestProfile({ submitScore: (board, score) => sent.push([board, score]) });
+describe('endless record and the rankings', () => {
+  it('every endless run goes up with its run for the server to judge (the server keeps the best per board and knows the week)', async () => {
+    const sent: Array<[string, number, { waves: number; seconds: number } | undefined]> = [];
+    const r = await createTestProfile({ submitScore: (board, score, run) => sent.push([board, score, run]) });
     r.profile.data.cleared[0] = 1;
     r.profile.data.cleared[1] = 1;
     for (const waves of [41, 33, 62]) {
@@ -212,6 +211,11 @@ describe('endless record and the leaderboard', () => {
         summonLuck: 0.5, damageByUnit: {},
       } as Parameters<typeof r.profile.finishRun>[0]);
     }
-    expect(sent.filter(([b]) => b === 'endless_best')).toEqual([['endless_best', 41], ['endless_best', 62]]);
+    expect(sent.filter(([b]) => b === 'endless_best')).toEqual([
+      ['endless_best', 41, { waves: 41, seconds: 400 }],
+      ['endless_best', 33, { waves: 33, seconds: 400 }],
+      ['endless_best', 62, { waves: 62, seconds: 400 }],
+    ]);
+    expect(r.profile.data.endless.best).toBe(62);
   });
 });

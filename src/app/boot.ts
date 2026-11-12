@@ -10,7 +10,7 @@ import { detectLang, setLang, t } from '@/core/i18n';
 import { getStorageBackend } from '@/core/save';
 import type { Scene } from '@/core/scene';
 import { loadFxTier, setFxSettings } from '@/fx';
-import { initMeta, profile, startPlayGames } from '@/meta';
+import { initMeta, profile, startOnline } from '@/meta';
 import { getBootResult, initPlatform, platform } from '@/platform';
 import type { TabId } from '@/screens/contract';
 import { shell } from '@/screens/shell/controller';
@@ -81,7 +81,7 @@ export function createApp(): App {
     installFlow();
     await attempt('system screens', () => installSystemScreens(shell));
     // Not awaited: the title shows "connecting" until the automatic sign-in answers.
-    startPlayGames();
+    startOnline();
     installCheats();
     await attempt('first scene', async () => {
       first = opts.home ? homeScene(opts.home.tab) : await chooseFirstScene();

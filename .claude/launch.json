@@ -8,6 +8,13 @@
       "port": 5173
     },
     {
+      "name": "game-dev-qa-firebase",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set VITE_FIREBASE_API_KEY=qa-placeholder&& set VITE_FIREBASE_PROJECT_ID=qa-placeholder&& set VITE_FIREBASE_APP_ID=1:1:web:1&& npx vite --port 5175 --strictPort --host 127.0.0.1"],
+      "port": 5175,
+      "url": "http://127.0.0.1:5175"
+    },
+    {
       "name": "perf-before",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "preview", "--base", "/Project1/", "--outDir", ".shots/perf/build_before", "--port", "5288", "--strictPort", "--host", "127.0.0.1"],

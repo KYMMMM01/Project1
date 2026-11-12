@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "837064889610",
+    "project_id": "meowguard-4ce6f",
+    "storage_bucket": "meowguard-4ce6f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:837064889610:android:1ffb53d2a3952cd9c096f3",
+        "android_client_info": {
+          "package_name": "com.bulssistudio.meowguard"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "837064889610-2lo2farl81kvep7r64095bm7loh22sal.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bulssistudio.meowguard",
+            "certificate_hash": "d61ba0267452bf06d963f9ef4922e723fd512788"
+          }
+        },
+        {
+          "client_id": "837064889610-4sd84qtk9s7fhr75rg19rcmtt9jhblc3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bulssistudio.meowguard",
+            "certificate_hash": "d0218d8b2fe160c3208b9ab7c676fdefd6a13623"
+          }
+        },
+        {
+          "client_id": "837064889610-nrb7mogecicn3ndchbhqvp6q5tei4d0u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bulssistudio.meowguard",
+            "certificate_hash": "38095a615a944c0d81c2fd8bf958452025649ca6"
+          }
+        },
+        {
+          "client_id": "837064889610-bb1bkoatl680oharuqt4qh19q9uffk1m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAG1Z7irQwSyeu4qpM155Dm2x5SZxxcf1g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "837064889610-bb1bkoatl680oharuqt4qh19q9uffk1m.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
