@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulssi Studio</title>
+<meta name="description" content="Bulssi Studio 는 만들고 싶은 게임을 만드는 1인 게임 스튜디오입니다.">
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+  /* Developer page for Bulssi Studio (kymmmm01.github.io). Colours are the game's paper palette (src/ui/theme.ts). */
+  :root { color-scheme: light; --ink: #4a3222; --soft: #7d5e45; --paper: #fbf3e2; --card: #fffaee; --line: #e4d4b8; --coral: #ef6f5e; --coral-dark: #d25f52; --wood: #c48f50; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.7 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+  a { color: #a8552d; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+  header { padding: 28px 0 12px; }
+  .brand { display: flex; align-items: center; gap: 12px; font-family: "Jua", sans-serif; font-size: 1.6rem; }
+  .brand img { width: 44px; height: 44px; border-radius: 12px; }
+  .intro { color: var(--soft); margin: 6px 0 0; }
+  .game { background: var(--card); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; margin: 20px 0 28px; box-shadow: 0 6px 18px rgba(74, 50, 34, 0.08); }
+  .game > img { display: block; width: 100%; height: auto; aspect-ratio: 1024 / 500; object-fit: cover; }
+  .body { padding: 20px 22px 24px; }
+  h1, h2 { font-family: "Jua", sans-serif; font-weight: 400; line-height: 1.3; }
+  h1 { font-size: 1.9rem; margin: 0; }
+  .sub { color: var(--soft); margin: 2px 0 14px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 6px; }
+  .btn { display: inline-block; padding: 10px 18px; border-radius: 999px; font-weight: 700; text-decoration: none; }
+  .btn.main { background: var(--coral); color: #fffaf0; box-shadow: 0 3px 0 var(--coral-dark); }
+  .btn.soon { background: #edddbb; color: var(--soft); }
+  .shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+  .shots img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+  h2 { font-size: 1.3rem; margin: 28px 0 8px; }
+  ul.links { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  footer { margin: 36px 0 40px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--soft); font-size: 0.9rem; }
+  .en { color: var(--soft); font-size: 0.92rem; }
+  @media (max-width: 520px) { h1 { font-size: 1.55rem; } .shots { gap: 6px; } .body { padding: 16px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><img src="img/icon.webp" alt="" width="44" height="44">Bulssi Studio</div>
+    <p class="intro">만들고 싶은 게임을 만드는 1인 게임 스튜디오입니다.</p>
+  </header>
+
+  <main>
+    <section class="game" aria-labelledby="game-title">
+      <img src="img/feature.webp" alt="냥이 수비대: 집사 없는 날 타이틀 그림" width="1024" height="500">
+      <div class="body">
+        <h1 id="game-title">냥이 수비대: 집사 없는 날</h1>
+        <p class="sub">고양이를 소환하고 합쳐서 집을 지키는 디펜스 게임</p>
+        <p>집사가 집을 비운 날, 적들이 거실로 몰려와요. 5x5 러그에 고양이를 불러 세우고, 같은 고양이 둘을 합쳐 더 강한 고양이로 키우세요. 전사, 사수, 마법, 재주 네 직업, 다섯 개의 방, 무한 모드와 일일 도전이 기다리고 있어요.</p>
+        <div class="actions">
+          <a class="btn main" href="https://kymmmm01.github.io/Project1/">웹에서 바로 해 보기</a>
+          <span class="btn soon">Google Play 출시 준비 중</span>
+        </div>
+        <div class="shots">
+          <img src="img/01_merge.webp" alt="고양이 합치기 전투 화면" width="432" height="768" loading="lazy">
+          <img src="img/03_toys.webp" alt="장난감 고르기 화면" width="432" height="768" loading="lazy">
+          <img src="img/05_collection.webp" alt="직업별 고양이 다섯 단계 화면" width="432" height="768" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <h2>안내</h2>
+    <ul class="links">
+      <li><a href="https://kymmmm01.github.io/Project1/legal/privacy.html">개인정보 처리방침</a></li>
+      <li><a href="https://kymmmm01.github.io/Project1/legal/terms.html">이용약관</a></li>
+      <li><a href="https://kymmmm01.github.io/Project1/legal/delete-account.html">계정 삭제 안내</a></li>
+    </ul>
+
+    <h2>문의</h2>
+    <p>게임 문의, 결제와 환불 문의, 개인정보 관련 요청은 메일로 보내 주세요: <a href="mailto:dbals498@gmail.com">dbals498@gmail.com</a></p>
+
+    <p class="en">Bulssi Studio is a one-person studio making the games it wants to make. Contact: <a href="mailto:dbals498@gmail.com">dbals498@gmail.com</a>. <a href="https://kymmmm01.github.io/Project1/legal/privacy.html">Privacy policy</a> (Korean, with an English summary).</p>
+  </main>
+
+  <footer>© 2026 Bulssi Studio</footer>
+</div>
+</body>
+</html>
