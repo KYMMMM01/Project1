@@ -209,6 +209,8 @@ function buildSnackRow(id: SnackId, w: number, onPick: (via: 'ad' | 'gems') => v
   desc.position.set(textLeft, 24 + 46);
   panel.content.addChild(disc, icon, name, desc);
 
+  // Without rewarded ads on this platform (itch.io) the ad button is left out and the gem button takes the whole row.
+  const withAd = ads.supported(OFFERS.start_snack.ad);
   const bw = (w - 24 * 2 - 16) / 2;
   const offered = adReady();
   const adBtn = new Button({
@@ -223,15 +225,16 @@ function buildSnackRow(id: SnackId, w: number, onPick: (via: 'ad' | 'gems') => v
   });
   adBtn.position.set(24 + bw / 2, h - 24 - 44);
   adBtn.onTap(() => onPick('ad'));
+  adBtn.visible = withAd;
   const gemBtn = new Button({
     label: fmt(OFFERS.start_snack.gems),
     icon: 'gem',
     style: 'info',
-    width: bw,
+    width: withAd ? bw : w - 24 * 2,
     height: 88,
     fontSize: 34,
   });
-  gemBtn.position.set(24 + bw + 16 + bw / 2, h - 24 - 44);
+  gemBtn.position.set(withAd ? 24 + bw + 16 + bw / 2 : w / 2, h - 24 - 44);
   gemBtn.onTap(() => onPick('gems'));
   panel.content.addChild(adBtn, gemBtn);
   return { panel, ad: adBtn, gems: gemBtn };

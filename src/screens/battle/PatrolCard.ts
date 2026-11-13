@@ -54,6 +54,10 @@ export class PatrolCard extends HomeCard {
     this.note.text = v.full ? t('battle.patrol.full') : v.collectable ? t('battle.patrol.cap', { time: fmtDuration(v.capMs / 1000) }) : t('battle.patrol.empty');
     const butler = profile.data.owned.butler;
     const canDouble = v.collectable && v.doublesLeft > 0 && (butler || ads.canOffer('patrol_double'));
+    // Without rewarded ads on this platform (itch.io) the double is left out and collect sits in the middle of the two rows.
+    const doubleShown = butler || ads.supported('patrol_double');
+    this.double.visible = doubleShown;
+    this.collect.y = doubleShown ? this.contentTop + 60 : this.contentTop + 60 + (92 + 12) / 2;
     this.collect.setEnabled(v.collectable);
     this.double.setEnabled(canDouble);
     this.double.setIcon(butler ? 'coin' : 'ad');

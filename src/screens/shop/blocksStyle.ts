@@ -185,7 +185,9 @@ export const ticketsBlock: Block = {
     sub.position.set(PAD + 8, 0);
     inner.addChild(sub);
     const y = sub.height + 16;
-    const h = 276;
+    // Without rewarded ads on this platform (itch.io) the ad row is left out and the coupon ends under the gem price.
+    const withAd = ads.supported('sweep_ticket');
+    const h = withAd ? 276 : 196;
     const c = new Container();
     const g = new Graphics();
     drawCoupon(g, w, h, { axis: 'x', at: 190, r: 14 }, mixColor(Color.paperLight, Color.mustard, 0.2));
@@ -210,6 +212,7 @@ export const ticketsBlock: Block = {
     ad.setEnabled(v.adsLeft > 0 && ads.canOffer('sweep_ticket'));
     ad.onDisabledTap(() => env.actions.ticketAd());
     ad.position.set(x0 + bw / 2, h - 60);
+    ad.visible = withAd;
     c.addChild(buy, ad);
     return { height: mountPage(root, 0, pageW, inner, y + h + 4, { title: t('shop.sec.tickets'), ribbon: 'danger', tape: 'sky' }) + GAP };
   },

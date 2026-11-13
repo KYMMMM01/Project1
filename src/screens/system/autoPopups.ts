@@ -17,6 +17,7 @@ import { drawIcon, type IconName } from '@/ui/icons';
 import { popups } from '@/ui/Popup';
 import { toast } from '@/ui/Toast';
 import { cardsVisible } from '../battle/model';
+import { treatsOffered } from '../battle/TreatsCard';
 import type { Shell } from '../contract';
 import { payout } from './kit/claimFx';
 import { NoticePopup, type NoticeRow } from './kit/noticePopup';
@@ -128,7 +129,8 @@ export class AutoPopups {
       gemPassReady: profile.gemPassView().canClaim,
       level: accountProgress(profile.data.accountXp).level,
       seenLevel: p.seenLevel,
-      unlocked: profile.data.unlocked,
+      // The treats card is left out where it has no ads to offer (itch.io), so its unlock is not announced there either.
+      unlocked: treatsOffered() ? profile.data.unlocked : profile.data.unlocked.filter((f) => f !== 'treat'),
       seenUnlocked: p.seenUnlocked,
       offered,
     };

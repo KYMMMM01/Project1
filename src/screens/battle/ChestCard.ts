@@ -76,8 +76,11 @@ export class ChestCard extends HomeCard {
     const piled = this.pile > 0;
     this.open.visible = v.ready;
     // While a pile waits the skip shortcuts step aside: the chests already in hand come first, and the card has no room for a third row.
-    this.ad.visible = !v.ready && !piled;
+    // Without rewarded ads on this platform (itch.io) the ad skip is left out and the gem skip moves to the middle.
+    const adShown = profile.data.owned.butler || ads.supported('free_chest');
+    this.ad.visible = !v.ready && !piled && adShown;
     this.gems.visible = !v.ready && !piled;
+    this.gems.x = adShown ? this.cardW - this.ad.x : this.cardW / 2;
     this.openAll.visible = piled;
     this.bar.visible = !v.ready;
     this.status.visible = v.ready && !piled;
