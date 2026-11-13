@@ -200,6 +200,14 @@ export class AdService {
     return this.reason(placement, this.now()) === 'ok';
   }
 
+  /**
+   * False when this placement can never be offered here: the platform has no rewarded ads at all (itch.io) and the placement still
+   * needs one. The UI hides such an ad button instead of leaving it greyed out for good.
+   */
+  supported(placement: string): boolean {
+    return this.deps.getAdapter().capabilities.rewardedAds || !this.needsAd(placement);
+  }
+
   /** Rewards left for this placement under its own per-run / daily caps. Infinity = unlimited. */
   remaining(placement: string): number {
     return this.status(placement).remaining;

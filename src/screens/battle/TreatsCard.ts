@@ -24,6 +24,11 @@ interface Slot {
   mark: Container;
 }
 
+/** False on a platform without rewarded ads (itch.io): the card and its unlock notice are left out. The Butler Pass does not skip this ad. */
+export function treatsOffered(): boolean {
+  return ads.supported('daily_treat');
+}
+
 /** Today's treats: three rewards, each behind one rewarded ad. The reward is shown before the ad button. */
 export class TreatsCard extends HomeCard {
   private readonly slots: Slot[] = [];
