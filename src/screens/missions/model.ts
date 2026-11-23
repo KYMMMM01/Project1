@@ -1,24 +1,29 @@
 /** Pure counting and mapping for the missions tab: what is claimable, bar fills and the days of the cup week. */
+import { achievementProgress, claimableAchievements, currentStep } from '@/meta/achievements';
+import { ACHIEVEMENTS, type AchievementDef } from '@/meta/data/achievements';
 import type { Profile } from '@/meta/profile';
 import type { MissionRow, TierRow } from '@/meta/routines';
 import { addDays } from '@/meta/time';
+import type { ProfileData } from '@/meta/types';
 
 export interface MissionBadges {
   daily: number;
   weekly: number;
+  achievement: number;
   total: number;
 }
 
 /** Claimable things per sub-tab. Everything is 0 while the missions feature is locked. */
 export function missionBadges(p: Profile): MissionBadges {
-  if (!p.featureUnlocked('missions')) return { daily: 0, weekly: 0, total: 0 };
+  if (!p.featureUnlocked('missions')) return { daily: 0, weekly: 0, achievement: 0, total: 0 };
   let daily = p.missionsView('daily').filter((m) => m.complete && !m.claimed).length;
   if (p.dailyChestView().ready) daily++;
   let weekly = p.missionsView('weekly').filter((m) => m.complete && !m.claimed).length;
   if (p.weeklyChestReady()) weekly++;
   if (p.featureUnlocked('cup')) weekly += p.cupView().tiers.filter((t) => t.reached && !t.claimed).length;
   if (p.featureUnlocked('endless')) weekly += p.endlessView().tiers.filter((t) => t.reached && !t.claimed).length;
-  return { daily, weekly, total: daily + weekly };
+  const achievement = claimableAchievements(p.data).length;
+  return { daily, weekly, achievement, total: daily + weekly + achievement };
 }
 
 /** "Claim all" opens when this many rewards of one list wait: one is what the row's own button is for. */
@@ -72,4 +77,35 @@ export function weekDays(week: string, days: Readonly<Record<string, number>>, t
     const key = addDays(week, index);
     return { index, key, best: days[key] ?? 0, today: key === today, future: key > today };
   });
+}
+
+export type AchievementRowState = 'claimable' | 'progress' | 'done';
+
+export interface AchievementRow {
+  /** The step on show: the group's first unclaimed step, or its last once all are claimed. */
+  def: AchievementDef;
+  current: number;
+  state: AchievementRowState;
+  /** Every step of the group, in order: taken, waiting to be claimed, or still ahead. */
+  steps: ('claimed' | 'ready' | 'open')[];
+}
+
+const STATE_ORDER: Record<AchievementRowState, number> = { claimable: 0, progress: 1, done: 2 };
+
+/** One row per group: claimable ones first, then those in progress, then the finished ones (table order within each). */
+export function achievementRows(d: ProfileData): AchievementRow[] {
+  const groups = [...new Set(ACHIEVEMENTS.map((a) => a.group))];
+  const rows = groups.map((g): AchievementRow => {
+    const def = currentStep(d, g);
+    const p = achievementProgress(d, def);
+    const done = d.achv.claimed.includes(def.key);
+    return {
+      def,
+      current: done ? def.target : p.current,
+      state: done ? 'done' : p.reached ? 'claimable' : 'progress',
+      steps: ACHIEVEMENTS.filter((a) => a.group === g).map((a) =>
+        d.achv.claimed.includes(a.key) ? 'claimed' : achievementProgress(d, a).reached ? 'ready' : 'open'),
+    };
+  });
+  return rows.sort((a, b) => STATE_ORDER[a.state] - STATE_ORDER[b.state]);
 }

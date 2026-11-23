@@ -14,6 +14,7 @@ import { DUNGEON_AD_PLACEMENT, DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON
 import { PIGGY_PER_RUN, SNACK_FISH, SNACK_PURR, type SnackId } from './data/economy';
 import { cupScore, dailySetup } from './daily';
 import { dungeonCanBuy, dungeonEntriesLeft, dungeonMaxChest, dungeonMaxGold, dungeonTierOpen, dungeonTopTier } from './dungeon';
+import { achievementsAfterRun } from './achievements';
 import type { PayVia } from './economy';
 import { runMissionDelta } from './missions';
 import { addPassXp, seasonOf } from './pass';
@@ -261,6 +262,7 @@ export class Profile extends RoutineProfile {
     // The dungeon's chest is a pay day, not a boss for the lifetime count (nor for the missions, see missions.ts).
     if (stats.mode !== 'gold') d.stats.bosses += stats.bossesKilled;
     if (payout.firstClear) d.cleared[stats.chapter - 1] = stats.stake + 1;
+    d.achv = achievementsAfterRun(d.achv, stats, payout.dailyFirstClear);
 
     if (stats.mode === 'daily') {
       if (payout.dailyFirstClear) d.day.challengeCleared = true;

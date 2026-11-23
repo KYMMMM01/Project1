@@ -127,8 +127,11 @@ from the DOM from outside and had no Escape/Tab handling or recipe timings.
   Storage limit (kept under 1 MB), rewarded ad group id from `VITE_TOSS_REWARDED_AD_GROUP_ID`.
 - capacitor: assumed RevenueCat `restorePurchases()` -> CustomerInfo (confirmed method name only) with
   `nonSubscriptionTransactions[{transactionIdentifier|transactionId, productIdentifier|productId}]` (item fields and whether
-  consumables appear: not documented where I could read it); refunds are not visible there, so `revoke` never fires on that
-  platform. Also assumed: `getProducts`, `purchaseStoreProduct`, `transaction.transactionIdentifier`, `userCancelled`, and that
+  consumables appear: not documented where I could read it); refunds are not visible there. Refunds come from a separate path: the optional `PlatformIap.refundedOrders(ids)` asks the
+  `refundedOrders` Cloud Function (reads `refunds/{orderId}`, filled every 6 hours from the Google Play voided purchases API) about the
+  ledger's granted orders, newest first in chunks of 200, and `revoke` fires for the ones it names. A failed call revokes nothing (`ok:false`).
+  Known gap, unverified: that RevenueCat `transactionIdentifier` equals the Play order id (`GPA.` + digits); the server drops ids of any
+  other shape. Setup steps: docs/계정_Firebase.md. Also assumed: `getProducts`, `purchaseStoreProduct`, `transaction.transactionIdentifier`, `userCancelled`, and that
   `Capacitor.Plugins.<Name>` exposes plugins (else `registerCapacitorPlugins`). EEA consent (UMP) is not handled.
 - Restore re-grants a consumable too when the ledger lacks its order (as specified: "anything missing"); a player who kept the gems
   on another device gets them again. `ctx.source === 'restore'` lets the grant handler decide per product.

@@ -4,6 +4,9 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as v1 from 'firebase-functions/v1';
+import * as logger from 'firebase-functions/logger';
+import { GoogleAuth } from 'google-auth-library';
+import { cleanOrderIds, nextCursor, parseVoidedPage, startTimeFor, type RefundRecord } from './refunds';
 import { boardId, cleanName, defaultName, isBoardKind, NAME_COOLDOWN_MS, validateRun, type BoardKind, type Run } from './rules';
 
 initializeApp();
@@ -31,7 +34,11 @@ export const submitRun = onCall(async (req) => {
     const rate = await tx.get(rateRef);
     const last = (rate.get('at') as number | undefined) ?? null;
     const why = validateRun(run, now, last);
-    if (why) reject(why);
+    if (why) {
+      // Kept in the function log to tune the time floor and the waves cap from real runs (docs/계정_Firebase.md).
+      if (why !== 'too-soon') logger.warn('submitRun rejected', { uid, why, run });
+      reject(why);
+    }
     const s = (run as Run).waves;
 
     const refs = BOARDS.map((kind) => db.doc(`boards/${boardId(kind, now)}/entries/${uid}`));
@@ -43,7 +50,8 @@ export const submitRun = onCall(async (req) => {
     entries.forEach((entry, i) => {
       const prev = entry.exists ? (entry.get('score') as number) : 0;
       best[BOARDS[i] as BoardKind] = Math.max(prev, s);
-      if (s > prev) tx.set(refs[i]!, { score: s, name, at: Timestamp.fromMillis(now) });
+      // The run's simulated seconds stay beside the record, to check the time floor against real runs later.
+      if (s > prev) tx.set(refs[i]!, { score: s, name, at: Timestamp.fromMillis(now), seconds: (run as Run).seconds });
     });
     return { ok: true, best };
   });
@@ -127,4 +135,62 @@ export const onUserDeleted = v1.region(REGION).auth.user().onDelete(async (user)
   batch.delete(db.doc(`rate/${uid}`));
   for (const b of boards) batch.delete(b.collection('entries').doc(uid));
   await batch.commit();
+});
+
+const PACKAGE_NAME = 'com.bulssistudio.meowguard';
+const VOIDED_URL = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE_NAME}/purchases/voidedpurchases`;
+const CURSOR_REF = db.doc('meta/refundCursor');
+
+// Every 6 hours: reads the voided one-time purchases Google Play lists since the saved cursor and writes refunds/{orderId}. The cursor
+// (meta/refundCursor, server-only) moves only after every page was read and written, so any failure is simply retried by the next run.
+// The cursor is the run start minus 1 day, so a void Google lists late is read again by the next runs.
+// Cost: 1 cursor read, 1 write per voided order (batches of 500), 1 cursor write, and one API call per 1000 voided orders.
+// Needs the Play Android Developer API on the Cloud project and the runtime service account added in Play Console (docs/계정_Firebase.md).
+export const pollVoidedPurchases = onSchedule({ schedule: 'every 6 hours', timeZone: 'Asia/Seoul' }, async () => {
+  const now = Date.now();
+  const cursor = ((await CURSOR_REF.get()).get('at') as number | undefined) ?? null;
+  const startTime = startTimeFor(cursor, now);
+  const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/androidpublisher'] });
+  let written = 0;
+  let pageToken: string | null = null;
+  try {
+    do {
+      const url = new URL(VOIDED_URL);
+      url.searchParams.set('startTime', String(startTime));
+      url.searchParams.set('maxResults', '1000');
+      url.searchParams.set('type', '0');
+      if (pageToken) url.searchParams.set('token', pageToken);
+      const res = await (await auth.getClient()).request<unknown>({ url: url.toString() });
+      const page = parseVoidedPage(res.data);
+      for (let i = 0; i < page.records.length; i += 500) {
+        const batch = db.batch();
+        for (const r of page.records.slice(i, i + 500)) batch.set(db.doc(`refunds/${r.orderId}`), refundDoc(r, now));
+        await batch.commit();
+      }
+      written += page.records.length;
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+  } catch (e) {
+    logger.error('pollVoidedPurchases failed; the cursor stays', { startTime, written, error: e instanceof Error ? e.message : String(e) });
+    return;
+  }
+  const next = nextCursor(cursor, now);
+  if (next !== cursor) await CURSOR_REF.set({ at: next, updatedAt: FieldValue.serverTimestamp() });
+  logger.info('pollVoidedPurchases done', { startTime, written, cursor: next });
+});
+
+function refundDoc(r: RefundRecord, seenAt: number) {
+  return { voidedAt: Timestamp.fromMillis(r.voidedTimeMillis), reason: r.reason, source: r.source, seenAt: Timestamp.fromMillis(seenAt) };
+}
+
+// The client asks which of its purchase order ids Google Play has refunded. No sign-in (most players are guests); the answer only
+// reports what pollVoidedPurchases wrote, so a client can never mark anything refunded. Cost: up to 200 document reads per call.
+// TODO: enforce App Check here once the app registers a provider; until then only maxInstances bounds the load.
+export const refundedOrders = onCall(async (req) => {
+  const ids = cleanOrderIds((req.data as { orderIds?: unknown } | undefined)?.orderIds);
+  if (!ids) throw new HttpsError('invalid-argument', 'bad-order-ids');
+  if (ids.length === 0) return { refunded: [] as string[] };
+  const docs = await db.getAll(...ids.map((id) => db.doc(`refunds/${id}`)));
+  const refunded = ids.filter((_, i) => docs[i]!.exists);
+  return { refunded };
 });

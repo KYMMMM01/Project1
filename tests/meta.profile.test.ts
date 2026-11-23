@@ -34,7 +34,7 @@ const REASONS: readonly Reason[] = [
   'chest_overflow', 'chest_skip', 'patrol', 'patrol_double', 'mission', 'mission_chest', 'weekly_mission', 'calendar',
   'comeback', 'treat', 'snack_chest', 'shop_buy', 'shop_refresh', 'ticket_buy', 'ticket_ad', 'ticket_daily', 'pass_free',
   'pass_premium', 'account_level', 'cup', 'endless', 'cosmetic_buy', 'piggy', 'iap', 'iap_revoke', 'gem_pass',
-  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'test',
+  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'achievement', 'test',
 ];
 
 describe('the one money path', () => {
@@ -726,9 +726,9 @@ describe('save and migration', () => {
     expect(store.data).toEqual({ gold: 0, gems: 3, coins: 7 });
   });
 
-  it('has version 1, an empty migration table, and fills missing fields from the defaults on load', async () => {
-    expect(PROFILE_VERSION).toBe(1);
-    expect(Object.keys(MIGRATIONS)).toEqual([]);
+  it('has version 2, one migration step (1 to 2, the achievements), and fills missing fields from the defaults on load', async () => {
+    expect(PROFILE_VERSION).toBe(2);
+    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
     setStorageBackend(createMemoryBackend());
     await getStorageBackend().set(SAVE_KEY, JSON.stringify({ v: 1, t: 0, data: { gold: 999, levels: { w_paw: 4 } } }));
     const rig = await createTestProfile({ keepStorage: true });

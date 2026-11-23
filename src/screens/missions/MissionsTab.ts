@@ -17,13 +17,14 @@ import { services } from '../contract';
 import { payout } from '../system/kit/claimFx';
 import { partsOf } from '../system/kit/parts';
 import { lockedNote } from '../system/kit/sheets';
+import { AchievementSection } from './AchievementSection';
 import { DailySection } from './DailySection';
 import { missionBadges } from './model';
 import type { MissionActions, Section } from './sections';
 import { WeeklySection } from './WeeklySection';
 import './strings';
 
-type Sub = 'daily' | 'weekly';
+type Sub = 'daily' | 'weekly' | 'achievement';
 
 const SIDE = 24;
 const SEG_W = 600;
@@ -61,6 +62,8 @@ export class MissionsTab implements TabScreen {
     claimAllMissions: (scope, from) => this.settle(() => rewardOf(profile.claimAllMissions(scope)), from),
     claimAllCup: (from) => this.settle(() => rewardOf(profile.claimAllCup()), from),
     claimAllEndless: (from) => this.settle(() => rewardOf(profile.claimAllEndless()), from),
+    claimAchievement: (key, from) => this.settle(() => profile.claimAchievement(key), from),
+    claimAllAchievements: (from) => this.settle(() => rewardOf(profile.claimAllAchievements()), from),
     openOdds: (kind) => services.openOdds(kind),
     goBattle: () => this.shell.goTab('battle'),
     goDaily: () => this.select('daily'),
@@ -91,15 +94,16 @@ export class MissionsTab implements TabScreen {
       tabs: [
         { id: 'daily', label: t('rt.mis.tab.daily') },
         { id: 'weekly', label: t('rt.mis.tab.weekly') },
+        { id: 'achievement', label: t('rt.mis.tab.achievement') },
       ],
       width: SEG_W,
       height: SEG_H,
       selected: this.sub,
     });
-    seg.onSelect((id) => this.select(id === 'weekly' ? 'weekly' : 'daily'));
+    seg.onSelect((id) => this.select(id === 'weekly' || id === 'achievement' ? id : 'daily'));
     this.seg = seg;
-    const cellW = (SEG_W - 12) / 2;
-    for (let i = 0; i < 2; i++) {
+    const cellW = (SEG_W - 12) / 3;
+    for (let i = 0; i < 3; i++) {
       const dot = new Badge({ size: 26 });
       dot.position.set(-SEG_W / 2 + 6 + cellW * (i + 0.5) + cellW / 2 - 30, -SEG_H / 2 + 12);
       seg.addChild(dot);
@@ -127,7 +131,7 @@ export class MissionsTab implements TabScreen {
     let s = this.sections[sub];
     if (!s) {
       const w = this.area.w - SIDE * 2;
-      s = sub === 'daily' ? new DailySection(w, this.actions) : new WeeklySection(w, this.actions);
+      s = sub === 'daily' ? new DailySection(w, this.actions) : sub === 'weekly' ? new WeeklySection(w, this.actions) : new AchievementSection(w, this.actions);
       this.sections[sub] = s;
     }
     return s;
@@ -168,6 +172,7 @@ export class MissionsTab implements TabScreen {
     const b = missionBadges(profile);
     this.dots[0]?.set(b.daily);
     this.dots[1]?.set(b.weekly);
+    this.dots[2]?.set(b.achievement);
     this.scroller?.refresh();
   }
 

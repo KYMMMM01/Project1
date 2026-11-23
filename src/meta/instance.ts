@@ -7,6 +7,7 @@ import { getStorageBackend } from '@/core/save';
 import './strings';
 import { CloudSave, type CloudChoice } from './cloudSave';
 import { ENDLESS_BOARD_ID, type BackupPreview } from './profile';
+import { reachedAchievements } from './achievements';
 import { attachPlatform } from './platformLink';
 import { createProfile } from './profile';
 
@@ -63,6 +64,11 @@ export const cloud = new CloudSave(profile, {
   reload: () => window.location.reload(),
 });
 
+/** Mirrors every reached achievement to Play Games (a no-op unless signed in there; the platform remembers what it sent). */
+function syncPlayGames(): void {
+  if (playGames.state().status === 'on') playGames.syncAchievements(reachedAchievements(profile.data));
+}
+
 /** A sync that could not settle (offline, a run in progress, the dialog closed) is tried again, at most this often. */
 const RETRY_MS = 60_000;
 let lastTry = 0;
@@ -86,6 +92,7 @@ export function startOnline(): void {
     } else cloud.signedOut();
   });
   void account.start();
+  playGames.onChange(syncPlayGames);
   void playGames.start();
 }
 
@@ -107,6 +114,7 @@ export async function initMeta(): Promise<() => void> {
   // Changes go up a little later (a run end, a purchase), once the session is settled; an unsettled one is tried again now and then
   // (a run that held it back has ended, the network is back).
   const offChange = profile.subscribe(() => {
+    syncPlayGames();
     if (account.state().status !== 'on') return;
     if (cloud.settled) cloud.schedule();
     else if (Date.now() - lastTry > RETRY_MS) syncCloud();

@@ -13,6 +13,9 @@ export interface MissionActions {
   /** Every reached tier of the weekly cup / of the endless mode in one go. */
   claimAllCup(from: Container): void;
   claimAllEndless(from: Container): void;
+  /** One reached achievement, and every reached one in one go. */
+  claimAchievement(key: string, from: Container): void;
+  claimAllAchievements(from: Container): void;
   openOdds(kind: string): void;
   /** Jump to the home tab (the daily challenge, endless mode and the run button live there). */
   goBattle(): void;

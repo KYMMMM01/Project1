@@ -30,12 +30,14 @@
    - 지문을 다 넣은 뒤 `google-services.json` 을 내려받아 `android/app/` 에 둔다.
 6. **웹 앱 등록**: 앱 추가, 웹. 나오는 `firebaseConfig`(apiKey, authDomain, projectId, appId 등)를 알려 준다. 공개되는 값이라 비밀이 아니다(규칙과 App Check 로 지킨다).
 7. **Firebase CLI 로그인**: 이 PC 의 터미널에서 `npx firebase-tools login` 을 한 번 한다(PowerShell 이 스크립트 실행을 막으면 `npx.cmd firebase-tools login`). 그 뒤 규칙과 함수 배포는 요청할 때 실행한다.
-8. **Play Console 업적**: Play 게임즈 서비스 설정(사용자 인증 정보, OAuth 동의 화면) 뒤 업적을 만든다. 업적 목록은 따로 정한다.
+8. **Play Console 업적**: Play 게임즈 서비스 설정(사용자 인증 정보, OAuth 동의 화면) 뒤 업적을 만든다. 업적 목록은 2026-11-23에 정해졌다(30개, 이름과 설명과 점수는 `docs/업적.md`). 만드는 순서는 `docs/출시_구글플레이.md` 의 Play 게임즈 절을 따른다.
 
 ## 데이터 구조
 
 - `users/{uid}`: `{ v, device, savedAt, data, bestWave, name, updatedAt }`. `data` 는 프로필 JSON 문자열(문서 한도 1 MiB). 본인만 읽고 쓴다. `bestWave` 는 줄어들 수 없다(규칙).
 - `boards/{board}/entries/{uid}`: 랭킹 기록 `{ score, name, at }`. 서버 함수만 읽고 쓴다(공개 목록 읽기는 기록 수만큼 과금되어 막음).
+- `refunds/{orderId}`: Google Play 가 환불(무효 처리)한 일회성 상품 주문 `{ voidedAt, reason, source: 'play-voided', seenAt }`. `pollVoidedPurchases` 만 쓰고 `refundedOrders` 만 읽는다. 클라이언트는 규칙상 접근할 수 없다(맨 끝 전체 거부 규칙).
+- `meta/refundCursor`: 환불 목록을 어디까지 읽었는지 `{ at, updatedAt }`(밀리초). 서버 전용.
 - `boards/endless`, `boards/week`: 상위 100명 묶음 `{ top: [{ uid, name, score }], total, updatedAt, weekId }`. 누구나 읽고, 서버 함수만 쓴다.
 - 랭킹 판: `endless`(무한 모드 최고 웨이브, 영구), `week-YYYY-MM-DD`(그 주 월요일, 서울 시간).
 
@@ -45,12 +47,29 @@
 - `refreshBoards`: 10분마다 상위 100명과 전체 인원을 묶는다.
 - `myRank({ board })`: 내 기록과 순위(더 높은 기록 수 + 1).
 - `onUserDeleted`: 계정이 지워지면 세이브, 랭킹 기록, 제출 시각을 지운다.
+- `pollVoidedPurchases`: 6시간마다(서울 시간 기준 예약) Google Play Developer API 의 `purchases.voidedpurchases.list`(일회성 상품만, 한 번에 1000건, 다음 쪽 토큰을 끝까지)를 읽어 `refunds/{orderId}` 에 쓴다. 시작 시각은 `meta/refundCursor`(첫 실행은 API 가 보는 30일 창의 처음)이고, 모든 쪽을 읽고 쓴 뒤에만 커서를 올린다. 커서는 실행을 시작한 시각보다 하루 뒤처지게 두어, Google 이 환불을 늦게 목록에 올려도 다음 실행들이 다시 읽는다. HTTP 오류나 쓰기 실패는 `firebase-functions/logger` 로 남기고 커서를 그대로 둬 다음 실행이 다시 읽는다. 인증은 함수 실행 서비스 계정의 기본 자격증명(`google-auth-library`).
+- `refundedOrders({ orderIds })`: 로그인 없이 부른다(대부분 게스트). 주문 번호 최대 200개를 `functions/src/refunds.ts` 의 `cleanOrderIds` 로 거른다(Play 주문 번호 모양 `GPA.` 로 시작하는 것만, 중복 제거, 배열이 아니거나 200개를 넘으면 `invalid-argument`). `refunds/{id}` 를 `getAll` 로 읽어 있는 번호만 `{ refunded: [...] }` 로 돌려준다. 클라이언트가 환불 표시를 쓸 방법은 없다. 게임은 켤 때마다(복원과 같은 경로, 첫 화면을 막지 않음) 장부에서 지급 상태인 주문을 200개씩 물어 환불된 것만 회수한다. 호출이 실패하면 아무것도 회수하지 않고 다음에 다시 묻는다. 실패해도 복원 결과(설정 화면의 성공과 실패 안내)는 바뀌지 않고, 분석 이벤트 `refund_check_failed` 만 남는다. App Check 는 아직 켜지 않았다(앱에 제공자를 등록한 뒤 이 함수에 강제한다). 그전에는 인스턴스 수 제한만 부하를 막는다. 없다는 답으로 환불을 짐작하지 않는다.
 - `setName({ name })`: 랭킹 닉네임 바꾸기(설정의 계정 줄, 랭킹 화면의 내 기록). 한글 완성형, 영문, 숫자, 가운데 띄어쓰기로 2자에서 12자, 막는 말 목록(`functions/src/rules.ts` 의 `cleanName`, 게임도 같은 파일로 먼저 검사), 한 사람 30초에 한 번. `users/{uid}.name`, 이번 판의 내 기록 두 개, 묶음 문서 두 개의 내 줄을 함께 고쳐 바로 보인다. 클라이언트는 규칙상 `name` 을 직접 쓸 수 없다. 바꾸기 전에는 게임이 주는 기본 닉네임(`집사 1234`, uid 로 만듦).
 - 닉네임 입력은 캔버스 위에 겹친 진짜 `<input>` 이라 폰 키보드와 한글 조합이 그대로 된다. 키보드가 아래 절반을 덮어도 보이게 창을 화면 위쪽에 둔다.
 
+## 환불 확인을 켜는 순서 (사용자, 배포 전)
+
+1. Google Cloud 콘솔의 프로젝트 `meowguard-4ce6f` 에서 API 및 서비스, 라이브러리, Google Play Android Developer API 를 사용 설정한다.
+2. 함수가 쓰는 실행 서비스 계정(2세대 함수의 기본값은 Compute Engine 기본 서비스 계정 `837064889610-compute@developer.gserviceaccount.com`, 콘솔 Cloud Run 의 함수 정보에서 확인)을 Play Console 의 사용자 및 권한에서 초대하고, 앱 `com.bulssistudio.meowguard` 에 대해 재무 데이터 보기 권한(주문 및 구독 관리 포함)을 준다. 권한 반영에 몇 시간 걸릴 수 있다.
+3. `functions` 폴더에서 `npm install` 을 한 번 해 `package-lock.json` 을 갱신한다(`google-auth-library` 를 의존성에 적었다). 이미 `firebase-admin` 이 들여오는 같은 버전(11.3.4)이다.
+4. 배포한다: `npx firebase-tools deploy --only functions:pollVoidedPurchases,functions:refundedOrders`. 규칙은 바꾸지 않았다.
+5. 첫 실행 뒤 함수 로그에서 `pollVoidedPurchases done` 이 나오는지, 403 이면 위 1, 2 를 다시 본다. 클라이언트(앱)는 새 빌드에서 `refundedOrders` 를 부른다.
+
+확인 못 한 것(실기기와 실제 응답이 필요): 실제 `voidedpurchases` 응답 모양(문서 기준으로 `voidedPurchases[].orderId`, `voidedTimeMillis` 문자열, `voidedReason` 숫자, `tokenPagination.nextPageToken` 으로 짰다), RevenueCat 의 `transactionIdentifier` 가 Play 주문 번호(`GPA.` 로 시작)와 같은지(다르면 `cleanOrderIds` 가 전부 버려 환불이 영영 안 잡힌다), 서비스 계정 권한. 라이선스 테스터 구매를 환불한 뒤 `refunds/` 에 문서가 생기고 앱이 회수하는지 한 번 확인한다.
+
 ## 알려진 한계
 
-- 판 기록은 게임이 보내는 값이라 조작된 앱은 가짜 기록을 보낼 수 있다. 지금은 웨이브당 최소 시간(`MIN_SECONDS_PER_WAVE`, 임시값 3초)과 20초 제한만 본다. 실제 판 기록으로 최소 시간을 맞추고, 나중에 서버에서 판을 다시 돌려 확인하는 검증을 더한다.
+- 판 기록은 게임이 보내는 값이라 조작된 앱은 가짜 기록을 보낼 수 있다. 서버(`functions/src/rules.ts`)는 세 가지를 본다(2026-11-23).
+  - 웨이브 상한 `MAX_WAVES` 150: 봇 480판의 최고가 111웨이브였다. 위조 기록을 실제로 막는 것은 이 상한이고, 실제 플레이어가 가까워지면 올려서 다시 배포한다.
+  - 웨이브 종류별 최소 시뮬레이션 시간 `MIN_WAVE_SECONDS`: 일반 7초, 정예 13초, 보스 16초. 전투 규칙의 바닥(일반 9.6초, 정예 17.5초, 보스 21.5초)보다 약 25% 낮다. 시뮬레이션 시간이라 배속, 일시정지, 광고는 영향이 없고, 무한 모드는 집사 단계 0이라 제한시간이 줄지 않는다. 전투 수치가 바뀌어 바닥이 이 값의 1.25배 아래로 내려가면 `tests/functions.rules.test.ts`가 실패한다.
+  - 시간 상한(웨이브 수 + 1) × 120초, 그리고 20초 제출 간격.
+- 거부된 제출은 함수 로그에 `submitRun rejected`(uid, 이유, 웨이브, 시간)로 남고, 받아들인 기록에는 그 판의 `seconds`가 함께 저장된다. 테스터 기록이 쌓이면 이 값으로 기준을 다시 맞춘다. 조작된 앱이 맞춰 보내는 값까지 막으려면 서버에서 판을 다시 돌려 확인하는 검증이 필요하다(지금은 하지 않음).
+- 환불 확인: Play 가 목록에 올리는 환불만 잡는다(일회성 상품, 환불과 취소와 차지백). 목록은 30일 전까지만 보여 주므로 서버가 30일 넘게 멈추면 그 사이 환불은 놓친다(한 번 쓴 문서는 지우지 않아 이후 영구히 조회된다). 장부는 지급 상태 주문을 최대 1000개(`LEDGER_MAX_ENTRIES`)까지 오래된 것부터 버리며 나이 제한은 없다. 기기가 오프라인이면 다음 켤 때 다시 묻는다. 조회 때 읽기 문서 비용은 주문 수만큼이다.
 - 계정을 지운 직후 1시간 안에 남은 로그인 토큰으로 기록이 다시 생길 수 있다(드문 경우).
 - 막는 말 목록은 짧다. 신고 기능이 없어서, 나쁜 닉네임은 개발자가 콘솔에서 `users/{uid}.name` 과 기록을 고친다.
 - 구글 로그인 버튼은 지금 발바닥 아이콘이다. 구글 브랜드 지침대로 공식 G 로고를 받아 넣어야 한다.

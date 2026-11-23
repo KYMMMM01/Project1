@@ -3,14 +3,42 @@
 
 export type BoardKind = 'endless' | 'week';
 
-export const MAX_SCORE = 10000;
+/**
+ * Most waves a run is believed to reach (the record is the waves). Bots: the best of 480 runs went to 111 and none passed 120, enemy health
+ * growing x1.12 a wave past 80. This cap, not the time floor, is what bounds a forged record; raise it with a redeploy if a player nears it.
+ */
+export const MAX_WAVES = 150;
 export const SUBMIT_COOLDOWN_MS = 20_000;
 
+export type WaveKind = 'normal' | 'elite' | 'boss';
+
 /**
- * Fastest believable time per wave. PLACEHOLDER: must be tuned against real runs
- * (record the shortest honest seconds / waves from playtests, then set this a bit below it).
+ * Fewest simulated seconds a cleared endless wave can take, about 25% under the floor the battle rules set. The run's seconds are simulated
+ * time, so x2 and x3 speed, pauses and ads change nothing, and endless runs at butler level 0, so no stake cuts a limit.
+ *  - normal: "call the next wave" opens only when spawning ends, 0.6 + 9 s => 9.6 s.
+ *  - elite: the target comes out after 1 s and takes at most maxHp / (0.45 x limit) a second plus a 1.5 s burst; the gunner's bounty skips
+ *    that cap for 12% of its health at most. With the shortest limit, 40 s: 1 + 0.88 x 0.45 x 40 - 1.5, plus 2.2 s of clear and next-wave
+ *    delay => 17.5 s.
+ *  - boss: the same with a 50 s limit => 21.5 s.
+ * tests/functions.rules.test.ts derives these floors from src/game/data/balance.ts and fails when the battle rules move under them.
  */
-export const MIN_SECONDS_PER_WAVE = 3;
+export const MIN_WAVE_SECONDS: Readonly<Record<WaveKind, number>> = { normal: 7, elite: 13, boss: 16 };
+
+/** Most simulated seconds per wave a run may claim: a generous bound that only catches nonsense (an honest wave is 15 to 60 s). */
+export const MAX_WAVE_SECONDS = 120;
+
+/** Kind of endless wave `wave` (1-based): an elite every 8 waves from wave 4, a boss every 8th wave (src/game/data/waves.ts scriptFor). */
+export function endlessWaveKind(wave: number): WaveKind {
+  const r = wave % 8;
+  return r === 0 ? 'boss' : r === 4 ? 'elite' : 'normal';
+}
+
+/** Fewest simulated seconds a run that cleared `waves` waves can have taken. */
+export function minRunSeconds(waves: number): number {
+  let s = 0;
+  for (let w = 1; w <= waves; w++) s += MIN_WAVE_SECONDS[endlessWaveKind(w)];
+  return s;
+}
 
 export interface Run {
   waves: number;
@@ -60,9 +88,10 @@ export function isBoardKind(b: unknown): b is BoardKind {
  */
 export function validateRun(run: unknown, nowMs: number, lastAtMs: number | null): RejectReason | null {
   const r = run as Partial<Run> | null;
-  if (!r || typeof r !== 'object' || !isInt(r.waves) || r.waves < 1 || r.waves > MAX_SCORE) return 'bad-run';
+  if (!r || typeof r !== 'object' || !isInt(r.waves) || r.waves < 1 || r.waves > MAX_WAVES) return 'bad-run';
   if (typeof r.seconds !== 'number' || !Number.isFinite(r.seconds) || r.seconds < 0) return 'bad-run';
-  if (r.seconds < r.waves * MIN_SECONDS_PER_WAVE) return 'too-fast';
+  if (r.seconds > (r.waves + 1) * MAX_WAVE_SECONDS) return 'bad-run';
+  if (r.seconds < minRunSeconds(r.waves)) return 'too-fast';
   if (lastAtMs !== null && nowMs - lastAtMs < SUBMIT_COOLDOWN_MS) return 'too-soon';
   return null;
 }

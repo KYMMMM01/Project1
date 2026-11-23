@@ -14,6 +14,7 @@ import {
   PLACEMENTS,
 } from './data/economy';
 import { GEM_PASS_DAILY } from './data/catalog';
+import { ACHIEVEMENTS } from './data/achievements';
 import {
   CALENDAR,
   CUP_TIERS,
@@ -28,6 +29,7 @@ import {
   type MissionDef,
   type MissionMetric,
 } from './data/schedule';
+import { achievementDef, achievementProgress } from './achievements';
 import { calendarNext, canClaimCalendar, claimCalendar } from './calendar';
 import { cupScore, dailySetup, type DailySetup } from './daily';
 import { advanceMissions, allClaimed, claimMission, claimedPoints, missionComplete, type MetricDelta } from './missions';
@@ -310,6 +312,33 @@ export class RoutineProfile extends EconomyProfile {
   claimAllMissions(scope: MissionScope): Result<ClaimedAll> {
     if (!this.featureUnlocked('missions')) return fail('locked');
     return this.takeAll(this.missionDefs(scope).map((_, i) => () => this.takeMission(scope, i)));
+  }
+
+  /** Pay one reached achievement's gems once. Opens with the missions tab. */
+  claimAchievement(key: string): Result<Bundle> {
+    const r = this.takeAchievement(key);
+    if (r.ok) this.commit();
+    return r;
+  }
+
+  private takeAchievement(key: string): Result<Bundle> {
+    if (!this.featureUnlocked('missions')) return fail('locked');
+    const def = achievementDef(key);
+    if (!def) return fail('invalid');
+    const a = this.data.achv;
+    if (a.claimed.includes(key)) return fail('already_claimed');
+    if (!achievementProgress(this.data, def).reached) return fail('not_ready');
+    a.claimed.push(key);
+    const reward: Bundle = { gems: def.gems };
+    this.applyBundle(reward, 'achievement');
+    this.deps.analytics.track('achievement_claim', { scope: 'achievement', id: key });
+    return ok(reward);
+  }
+
+  /** Every reached, unclaimed achievement in one command: the same as claiming them one after another, with one save. */
+  claimAllAchievements(): Result<ClaimedAll> {
+    if (!this.featureUnlocked('missions')) return fail('locked');
+    return this.takeAll(ACHIEVEMENTS.map((a) => () => this.takeAchievement(a.key)));
   }
 
   /** Run the claims that can be taken, merge what they paid, and commit once; `nothing_to_claim` when none could be. */

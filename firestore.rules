@@ -33,7 +33,7 @@ service cloud.firestore {
       }
     }
 
-    // Everything else (including rate/{uid}) is server-only.
+    // Everything else (including rate/{uid}, refunds/{orderId} and meta/refundCursor) is server-only.
     match /{document=**} {
       allow read, write: if false;
     }

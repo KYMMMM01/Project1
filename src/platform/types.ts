@@ -132,6 +132,11 @@ export interface PlatformIap {
    * platforms that list them; it is what makes purchases restorable without a server.
    */
   completedOrders?(): Promise<OrderRecord[]>;
+  /**
+   * Which of these order ids (at most 200) the platform refunded, asked of a server that read the platform's refund list. Rejects when the
+   * answer is unknown: the caller revokes nothing then, and never reads an id's absence as "not refunded".
+   */
+  refundedOrders?(orderIds: string[]): Promise<string[]>;
   /** Tell the platform the grant is done (Toss completeProductGrant). */
   complete(orderId: string): Promise<void>;
 }

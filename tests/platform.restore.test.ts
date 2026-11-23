@@ -274,3 +274,108 @@ describe('IapService: refunds go to the revoke handler', () => {
     expect(params).toContainEqual(expect.objectContaining({ outcome: 'restore', granted: 1, revoked: 1 }));
   });
 });
+
+describe('IapService: refund lookup by order id (Google Play voided purchases)', () => {
+  /** A fake lookup: asks are recorded, answers come from `refundedIds` or a failure. */
+  function lookup(fake: ReturnType<typeof fakeAdapter>) {
+    const st = { asked: [] as string[][], refundedIds: new Set<string>(), fail: null as null | 'reject' | 'hang' };
+    fake.adapter.iap!.refundedOrders = (ids) => {
+      st.asked.push(ids);
+      if (st.fail === 'reject') return Promise.reject(new Error('unavailable'));
+      if (st.fail === 'hang') return new Promise(() => undefined);
+      return Promise.resolve(ids.filter((id) => st.refundedIds.has(id)));
+    };
+    return st;
+  }
+  const ledgerOf = (orders: IapLedger['orders']): ReturnType<typeof diskLedger> => {
+    const d = diskLedger();
+    d.disk = { v: 1, orders };
+    return d;
+  };
+
+  it('revokes a refunded granted order once across two syncs', async () => {
+    const fake = fakeAdapter();
+    const ask = lookup(fake);
+    ask.refundedIds.add('GPA.1');
+    const disk = ledgerOf({ 'GPA.1': { p: 'premium_pass', s: 'granted', t: 1 }, 'GPA.2': { p: 'skin_rug', s: 'granted', t: 2 } });
+    const t = makeIap({ fake, ledger: disk });
+    const g = game();
+    t.iap.setGrantHandler(g.grant);
+    t.iap.setRevokeHandler(g.revoke);
+    expect(await t.iap.restorePurchases()).toMatchObject({ ok: true, revoked: 1 });
+    expect(g.revokes).toEqual([{ productId: 'premium_pass', orderId: 'GPA.1', wasGranted: true }]);
+    expect(disk.disk.orders['GPA.1']?.s).toBe('revoked');
+    expect(await t.iap.restorePurchases()).toMatchObject({ ok: true, revoked: 0 });
+    expect(g.revokes).toHaveLength(1);
+    // the revoked order is no longer asked about, the live one still is
+    expect(ask.asked[0]).toEqual(['GPA.2', 'GPA.1']);
+    expect(ask.asked[1]).toEqual(['GPA.2']);
+  });
+
+  it('a failed or timed-out lookup revokes nothing and does not fail the restore', async () => {
+    for (const fail of ['reject', 'hang'] as const) {
+      const fake = fakeAdapter();
+      const ask = lookup(fake);
+      ask.refundedIds.add('GPA.1');
+      ask.fail = fail;
+      const t = makeIap({ fake, ledger: ledgerOf({ 'GPA.1': { p: 'premium_pass', s: 'granted', t: 1 } }) });
+      const g = game();
+      t.iap.setGrantHandler(g.grant);
+      t.iap.setRevokeHandler(g.revoke);
+      const p = t.iap.restorePurchases();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await p).toMatchObject({ ok: true, revoked: 0 });
+      expect(g.revokes).toEqual([]);
+      expect(t.iap.hasGranted('GPA.1')).toBe(true);
+    }
+  });
+
+  it('ignores ids that are not in the ledger and no-ops on an id the ledger holds as revoked', async () => {
+    const fake = fakeAdapter();
+    // a lookup that names every asked id plus two strangers
+    fake.adapter.iap!.refundedOrders = (ids) => Promise.resolve([...ids, 'GPA.gone', 'GPA.old']);
+    const disk = ledgerOf({ 'GPA.old': { p: 'premium_pass', s: 'revoked', t: 1 }, 'GPA.live': { p: 'skin_rug', s: 'granted', t: 2 } });
+    const t = makeIap({ fake, ledger: disk });
+    const g = game();
+    t.iap.setGrantHandler(g.grant);
+    t.iap.setRevokeHandler(g.revoke);
+    expect(await t.iap.restorePurchases()).toMatchObject({ ok: true, revoked: 1 });
+    expect(g.revokes).toEqual([{ productId: 'skin_rug', orderId: 'GPA.live', wasGranted: true }]);
+    expect(disk.disk.orders['GPA.old']?.s).toBe('revoked');
+    expect(disk.disk.orders['GPA.gone']).toBeUndefined();
+  });
+
+  it('sends nothing when the ledger has no granted orders, and asks in chunks of 200 newest first', async () => {
+    const fake = fakeAdapter();
+    const ask = lookup(fake);
+    const t = makeIap({ fake, ledger: ledgerOf({ 'GPA.r': { p: 'premium_pass', s: 'revoked', t: 1 } }) });
+    const g = game();
+    t.iap.setGrantHandler(g.grant);
+    t.iap.setRevokeHandler(g.revoke);
+    expect(await t.iap.restorePurchases()).toMatchObject({ ok: true, revoked: 0 });
+    expect(ask.asked).toEqual([]);
+
+    const many: IapLedger['orders'] = {};
+    for (let i = 0; i < 450; i++) many[`GPA.${i}`] = { p: 'premium_pass', s: 'granted', t: i };
+    const fake2 = fakeAdapter();
+    const ask2 = lookup(fake2);
+    const t2 = makeIap({ fake: fake2, ledger: ledgerOf(many) });
+    t2.iap.setGrantHandler(g.grant);
+    t2.iap.setRevokeHandler(g.revoke);
+    await t2.iap.restorePurchases();
+    expect(ask2.asked.map((c) => c.length)).toEqual([200, 200, 50]);
+    expect(ask2.asked[0]![0]).toBe('GPA.449');
+  });
+
+  it('a platform with a refund lookup but no completed listing is still checked', async () => {
+    const fake = fakeAdapter();
+    delete fake.adapter.iap!.completedOrders;
+    const ask = lookup(fake);
+    ask.refundedIds.add('GPA.1');
+    const t = makeIap({ fake, ledger: ledgerOf({ 'GPA.1': { p: 'premium_pass', s: 'granted', t: 1 } }) });
+    const g = game();
+    t.iap.setGrantHandler(g.grant);
+    t.iap.setRevokeHandler(g.revoke);
+    expect(await t.iap.restorePurchases()).toMatchObject({ ok: true, revoked: 1 });
+  });
+});

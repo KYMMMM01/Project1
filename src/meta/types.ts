@@ -1,10 +1,10 @@
 /**
  * Shared types of the meta layer: ids, the reward bundle, command results and the persisted profile
- * schema (version 1). Rules live in the sibling modules; this file holds almost no logic.
+ * schema (version 2). Rules live in the sibling modules; this file holds almost no logic.
  */
 import type { AdCounters } from '@/platform/adPolicy';
 import type { IapLedger } from '@/platform/iapService';
-import type { BattleInit, BattleMode, BattleSnapshot } from '@/game/api';
+import type { BattleInit, BattleMode, BattleSnapshot, RelicId } from '@/game/api';
 
 // ───────────────────────────── ids ─────────────────────────────
 
@@ -37,7 +37,7 @@ export type Reason =
   | 'weekly_mission' | 'calendar' | 'comeback' | 'treat' | 'snack_chest' | 'shop_buy' | 'shop_refresh'
   | 'ticket_buy' | 'ticket_ad' | 'ticket_daily' | 'pass_free' | 'pass_premium' | 'account_level' | 'cup'
   | 'endless' | 'cosmetic_buy' | 'piggy' | 'iap' | 'iap_revoke' | 'gem_pass' | 'offer_revive' | 'offer_double'
-  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation' | 'dungeon' | 'offer_dungeon' | 'test';
+  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation' | 'dungeon' | 'offer_dungeon' | 'achievement' | 'test';
 
 // ───────────────────────────── rewards ─────────────────────────────
 
@@ -217,6 +217,21 @@ export interface ProfileData {
   endless: { best: number; week: string; weekBest: number; claimed: number[] };
   dungeon: { best: DungeonBest[] };
   stats: RunStatsTotals;
+  /** The achievements: what was claimed and the counters the other fields cannot tell (the tutorial never counts toward them). */
+  achv: {
+    /** Claimed achievement keys (known keys only, see normalizeProfile). */
+    claimed: string[];
+    /** Won runs; a daily-challenge win counts only as the day's first clear. */
+    wins: number;
+    /** Days the daily challenge was won (the day's first clear). */
+    daily: number;
+    /** Awakenings done in runs. */
+    awaken: number;
+    /** A Guardian-rank cat was made in a run. */
+    mythic: boolean;
+    /** The different toys picked in runs. */
+    relics: RelicId[];
+  };
   time: { lastSeenAt: number; lastActiveDate: string };
   day: DaySlice;
   week: WeekSlice;

@@ -5,6 +5,7 @@
 import { addStrings } from '@/core/i18n';
 // Registers the rarity, unit and chapter names the texts below point at (`rarity.*`, `unit.*.name`, `chapter.*.name`).
 import '@/game/data/strings';
+import { ACHIEVEMENTS } from './data/achievements';
 import { IAP_SPECS } from './data/catalog';
 
 const ko: Record<string, string> = {
@@ -328,6 +329,13 @@ for (const s of IAP_SPECS) {
   en['meta.iap.' + s.id + '.name'] = s.name.en;
   ko['meta.iap.' + s.id + '.desc'] = koDesc[s.id] ?? '';
   en['meta.iap.' + s.id + '.desc'] = enDesc[s.id] ?? '';
+}
+
+for (const a of ACHIEVEMENTS) {
+  ko['meta.ach.' + a.key + '.name'] = a.name.ko;
+  en['meta.ach.' + a.key + '.name'] = a.name.en;
+  ko['meta.ach.' + a.key + '.desc'] = a.desc.ko;
+  en['meta.ach.' + a.key + '.desc'] = a.desc.en;
 }
 
 addStrings('ko', ko);
