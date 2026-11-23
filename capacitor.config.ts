@@ -16,7 +16,8 @@ const config: CapacitorConfig = {
     // Google sign-in (src/platform/account.ts): the native sheet only hands over the Google credential; the web SDK holds the session.
     FirebaseAuthentication: { skipNativeAuth: true, providers: ['google.com'] },
     // index.html asks for viewport-fit=cover and the game reads env(safe-area-inset-*) (core/game.ts); the hint avoids a jump.
-    SystemBars: { initialViewportFitValueHint: 'cover' },
+    // style LIGHT: dark bar icons, since the game is cream paper even in dark mode (MainActivity sets the same).
+    SystemBars: { initialViewportFitValueHint: 'cover', style: 'LIGHT' },
   },
 };
 
