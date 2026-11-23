@@ -12,10 +12,11 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Line numbers in crash stack traces (Play restores the names from the bundle's mapping file); the source file name is hidden.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# @capacitor-firebase/authentication compiles its Facebook handler against the Facebook SDK (compileOnly while
+# rgcfaIncludeFacebook is off). The handler is made only for 'facebook.com' in the plugin's providers, and capacitor.config.ts
+# lists google.com alone, so the SDK is never needed.
+-dontwarn com.facebook.**

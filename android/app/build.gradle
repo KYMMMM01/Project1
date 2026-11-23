@@ -62,8 +62,10 @@ android {
     buildTypes {
         release {
             if (signWithKeystore) signingConfig signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8 shrinks and renames the Java/Kotlin code; the mapping file goes inside the bundle and Play reads it from there
+            // to restore crash stack traces. Capacitor keeps every plugin and its methods by its own rules.
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
