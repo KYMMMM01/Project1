@@ -119,8 +119,10 @@ export function createAdapter(): PlatformAdapter {
   const enabled = (): boolean => adsAllowed && plugins()?.AdMob !== undefined && adUnitId() !== undefined;
 
   // RevenueCat is configured once, on the first purchase call; a failed configure leaves purchases unavailable.
+  // The plugin comes back inside an object: Capacitor's proxy answers every name, `then` too, so a promise that resolved to
+  // it would call Purchases.then() on the native side and never settle.
   let configured: Promise<boolean> | undefined;
-  const purchases = async (): Promise<NonNullable<CapacitorPlugins['Purchases']> | null> => {
+  const purchases = async (): Promise<{ P: NonNullable<CapacitorPlugins['Purchases']> } | null> => {
     const P = plugins()?.Purchases;
     const apiKey = revenueCatKey();
     if (!P || !apiKey) return null;
@@ -128,7 +130,7 @@ export function createAdapter(): PlatformAdapter {
       () => true,
       () => false,
     );
-    return (await configured) ? P : null;
+    return (await configured) ? { P } : null;
   };
 
   const retryLater = (): void => {
@@ -249,7 +251,7 @@ export function createAdapter(): PlatformAdapter {
   const iap: PlatformIap = {
     isAvailable: () => plugins()?.Purchases !== undefined && revenueCatKey() !== undefined,
     async products(ids) {
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return [];
       const { products } = await P.getProducts({ productIdentifiers: [...ids], type: ONE_TIME });
       return products
@@ -257,7 +259,7 @@ export function createAdapter(): PlatformAdapter {
         .map((p) => ({ id: p.identifier, priceText: p.priceString as string }));
     },
     async purchase(productId, onPaid): Promise<IapOutcome> {
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return 'unavailable';
       try {
         const { products } = await P.getProducts({ productIdentifiers: [productId], type: ONE_TIME });
@@ -284,7 +286,7 @@ export function createAdapter(): PlatformAdapter {
     async pendingOrders() {
       const intents = await readIntents();
       if (Object.keys(intents).length === 0) return [];
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return [];
       const info = customerInfo(await (P.getCustomerInfo ? P.getCustomerInfo() : P.restorePurchases()));
       const out: PendingOrder[] = [];
@@ -301,7 +303,7 @@ export function createAdapter(): PlatformAdapter {
       return out;
     },
     async completedOrders(): Promise<OrderRecord[]> {
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return [];
       const info = customerInfo(await P.restorePurchases());
       const out: OrderRecord[] = [];
