@@ -1,7 +1,7 @@
 // Builds two subset webfonts into public/fonts:
 //   game-latin.<hash>.woff2  Lilita One  — digits, Latin, punctuation (chunky display face)
-//   game-kr.<hash>.woff2     Jua         — only the Hangul actually used by the game's strings
-// A full Korean font is several MB; subsetting to the glyphs in use keeps it around 100 KB, which
+//   game-kr.<hash>.woff2     Jua         — every Hangul syllable Jua has (for nicknames) and the other characters the strings use
+// A full Korean font is several MB; subsetting to Jua's Hangul keeps it around 340 KB, which
 // matters for web-portal initial-download budgets. Re-run after adding strings: `npm run font`
 // (it also runs automatically before `dev` and `build`; tests/core.font.test.ts fails when a string has a glyph the subset lacks).
 //
@@ -27,7 +27,11 @@ const all = [...used].join('');
 // Both subsets get every used character: the subsetter keeps what its face carries and drops the rest, and the page's font stack
 // (display face first, Korean face second) then draws each character from the first face that has it.
 const latinText = ascii + EXTRA_LATIN + all;
-const krText = all + EXTRA_LATIN + '가나다라마바사아자차카타파하' + ascii; // never ship an empty subset
+// Every syllable Jua has goes in too, not only those of the strings: nicknames (the home name plate, the ranking) are any Hangul
+// the server allows, and one the strings never use would be drawn in the thin system font. Jua carries 2,367 of the 11,172,
+// all of the 2,350 common ones of KS X 1001; the subsetter keeps those and drops the rest.
+const ALL_HANGUL = Array.from({ length: 0xd7a4 - 0xac00 }, (_, i) => String.fromCharCode(0xac00 + i)).join('');
+const krText = all + EXTRA_LATIN + ALL_HANGUL + ascii;
 
 const jua = readFileSync(join(root, 'node_modules/@expo-google-fonts/jua/400Regular/Jua_400Regular.ttf'));
 const lilita = readFileSync(

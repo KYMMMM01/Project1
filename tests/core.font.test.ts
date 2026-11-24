@@ -82,6 +82,20 @@ describe('the font files of the build', () => {
     expect(kr.has('몬'.codePointAt(0) as number)).toBe(true);
     expect(kr.has('항'.codePointAt(0) as number)).toBe(true);
   });
+
+  it('carry every common Hangul syllable, so a nickname no string uses (츄, 뷔, 꽥) is still drawn in the game face', () => {
+    // The 2,350 syllables of KS X 1001, read off its EUC-KR rows B0..C8.
+    const euc = new TextDecoder('euc-kr');
+    const common: string[] = [];
+    for (let hi = 0xb0; hi <= 0xc8; hi++) {
+      for (let lo = 0xa1; lo <= 0xfe; lo++) {
+        const ch = euc.decode(new Uint8Array([hi, lo]));
+        if (ch.length === 1 && isHangul(ch)) common.push(ch);
+      }
+    }
+    expect(common).toHaveLength(2350);
+    expect(common.filter((ch) => !kr.has(ch.codePointAt(0) as number))).toEqual([]);
+  });
 });
 
 describe('index.html font rules', () => {
