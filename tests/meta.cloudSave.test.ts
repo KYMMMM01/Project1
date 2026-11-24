@@ -207,7 +207,7 @@ describe('endless record and the rankings', () => {
       expect(prep.ok).toBe(true);
       await r.profile.finishRun({
         mode: 'endless', chapter: 2, stake: 0, seed: 4321, victory: false, wavesCleared: waves, totalWaves: 0, kills: 300, bossesKilled: 2,
-        summons: 40, merges: 25, molts: 0, awakenings: 0, relics: [], bestRarity: 'epic', peakEnemies: 20, duration: 400, revived: false,
+        summons: 40, merges: 25, molts: 0, awakenings: 0, relics: [], bestRarity: 'epic', mythics: [], peakEnemies: 20, duration: 400, revived: false,
         summonLuck: 0.5, damageByUnit: {},
       } as Parameters<typeof r.profile.finishRun>[0]);
     }

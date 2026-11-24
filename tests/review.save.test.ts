@@ -9,7 +9,7 @@ function stats(over: Partial<RunStats> = {}): RunStats {
   return {
     mode: 'chapter', chapter: 1, stake: 0, seed: 4321, victory: true, wavesCleared: 24, totalWaves: 24, kills: 300,
     bossesKilled: 5, summons: 40, merges: 25, molts: 0, awakenings: 0, relics: ['yarn_ball'],
-    bestRarity: 'epic', peakEnemies: 20, duration: 400, revived: false, summonLuck: 0.5, damageByUnit: {}, ...over,
+    bestRarity: 'epic', mythics: [], peakEnemies: 20, duration: 400, revived: false, summonLuck: 0.5, damageByUnit: {}, ...over,
   };
 }
 

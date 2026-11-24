@@ -4,7 +4,9 @@
  * strings.ts mirrors them into the i18n tables.
  */
 import type { IapProductDef, IapProductType, LocalizedText } from '@/platform/types';
-import type { Bundle, ChestRarity } from '../types';
+import type { UnitId } from '@/game/api';
+import { UNIT_GRID } from '@/game/data/roster';
+import { BASE_UNITS, type Bundle, type ChestRarity, type ProfileData } from '../types';
 
 // ───────────────────────────── IAP ─────────────────────────────
 
@@ -106,13 +108,14 @@ export function iapProductDefs(): IapProductDef[] {
 
 // ───────────────────────────── cosmetics ─────────────────────────────
 
-export type CosmeticKind = 'rug' | 'fx';
+export type CosmeticKind = 'rug' | 'fx' | 'icon' | 'frame' | 'plate';
 
 export type CosmeticSource =
   | { type: 'default' }
   | { type: 'chapter'; chapter: number }
   | { type: 'gems'; price: number }
-  | { type: 'reward' };
+  | { type: 'reward' }
+  | { type: 'unit'; unit: UnitId };
 
 export interface CosmeticDef {
   id: string;
@@ -142,10 +145,26 @@ export const COSMETICS: readonly CosmeticDef[] = [
   { id: 'fx_gem1', kind: 'fx', source: { type: 'gems', price: FX_GEM_PRICE } },
   { id: 'fx_gem2', kind: 'fx', source: { type: 'gems', price: FX_GEM_PRICE } },
   { id: 'fx_gem3', kind: 'fx', source: { type: 'gems', price: FX_GEM_PRICE } },
+  // The 20 cat icons, in roster order (class, then rarity): 16 base cats and the 4 Guardians.
+  ...Object.values(UNIT_GRID).flat().map((unit): CosmeticDef => ({ id: 'icon_' + unit, kind: 'icon', source: { type: 'unit', unit } })),
+  { id: 'frame_default', kind: 'frame', source: { type: 'default' } },
+  { id: 'plate_default', kind: 'plate', source: { type: 'default' } },
 ];
+
+/** What a slot falls back to: a fresh profile, a refunded item, an item the player cannot use. */
+export const COSMETIC_DEFAULTS: Readonly<Record<CosmeticKind, string>> = {
+  rug: 'rug_default', fx: 'fx_default', icon: 'icon_w_paw', frame: 'frame_default', plate: 'plate_default',
+};
 
 export function cosmetic(id: string): CosmeticDef | undefined {
   return COSMETICS.find((c) => c.id === id);
+}
+
+/** Whether the player can use a cosmetic: a cat icon follows the cat (a base cat always, a Guardian once made in a run), the rest the owned list. */
+export function ownsCosmetic(d: ProfileData, id: string): boolean {
+  const s = cosmetic(id)?.source;
+  if (s?.type === 'unit') return (BASE_UNITS as readonly string[]).includes(s.unit) || d.mythicMet.includes(s.unit);
+  return d.cosmetics.owned.includes(id);
 }
 
 // ───────────────────────────── daily shop ─────────────────────────────

@@ -11,6 +11,18 @@ export const TOP_ROW_GAP = 12;
 export const TOP_PAD_BOTTOM = 12;
 export const TOP_BAR_CONTENT_H = TOP_PAD_TOP + TOP_ROW_H + TOP_ROW_GAP + TOP_PILL_H + TOP_PAD_BOTTOM;
 
+/** The profile circle, in the first row (origin = the row's centre line): icon, the ring around it, the level band over the icon's lower edge. */
+export const ICON_D = 80;
+export const FRAME_D = 104;
+export const BAND_H = 28;
+export const BAND_CY = 38;
+/** The name plate and the thin XP strip under it, in the slot the XP bar had (a 24 px side, a 112 badge slot, the two 88 buttons and a 32 gap leave 352). */
+export const PLATE_W = 352;
+export const PLATE_H = 60;
+export const PLATE_TEXT_W = 300;
+export const STRIP_H = 16;
+export const STRIP_GAP = 6;
+
 export interface ShellRects {
   /** Height of the top bar including the safe-area inset. */
   topBarH: number;

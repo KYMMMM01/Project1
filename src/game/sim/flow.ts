@@ -367,7 +367,7 @@ export function buildStats(s: Sim): RunStats {
     mode: s.mode, chapter: s.chapter, stake: s.stake, seed: s.init.seed, victory: s.phase === 'won',
     wavesCleared: s.wavesCleared, totalWaves: s.totalWaves, kills: s.kills, bossesKilled: s.bossesKilled,
     summons: s.summonedUnits, merges: s.merges, molts: s.molts, awakenings: s.awakenings, relics: s.relics.slice(),
-    bestRarity: RARITIES[s.bestRarity] ?? 'common', peakEnemies: s.peakEnemies, duration: s.time, revived: s.revived,
+    bestRarity: RARITIES[s.bestRarity] ?? 'common', mythics: s.mythics.slice(), peakEnemies: s.peakEnemies, duration: s.time, revived: s.revived,
     summonLuck: luckShare(s.luck), damageByUnit,
   };
 }

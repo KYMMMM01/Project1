@@ -7,7 +7,9 @@ import { i18nEvents, t } from '@/core/i18n';
 import { Scene, scenes } from '@/core/scene';
 import type { Tweener } from '@/core/tween';
 import { profile, featureHint, type FeatureId } from '@/meta';
+import { account } from '@/platform';
 import { TabBar, toast, type TabDef } from '@/ui';
+import { onNameChange, refreshName } from '@/screens/system/profileName';
 import { shell, type HomeSurface } from '@/screens/shell/controller';
 import { HomeFloor } from '@/screens/shell/HomeFloor';
 import { clearPointer, showPointer } from '@/screens/shell/HomePointer';
@@ -56,6 +58,7 @@ export class HomeScene extends Scene implements HomeSurface {
     this.topBar = new HomeTopBar({
       onPlus: (kind) => services.openShop(SHOP_SECTION[kind]),
       onSettings: () => services.openSettings(),
+      onProfile: () => services.openProfile(),
       onCodex: () => void openCodex({}),
     });
     const first = opts.tab ?? shell.takeQueuedTab() ?? 'battle';
@@ -81,7 +84,16 @@ export class HomeScene extends Scene implements HomeSurface {
     this.offs.push(
       profile.subscribe(() => this.refresh()),
       i18nEvents.on('change', () => this.rebuild()),
+      onNameChange((name) => this.topBar.setName(name)),
+      account.onChange(() => void refreshName()),
     );
+    // Back in front after the app was away: the name may have changed on another device.
+    const visible = (): void => {
+      if (document.visibilityState === 'visible') void refreshName();
+    };
+    document.addEventListener('visibilitychange', visible);
+    this.offs.push(() => document.removeEventListener('visibilitychange', visible));
+    void refreshName();
     this.relayout();
     this.host.start();
     this.refresh(false);

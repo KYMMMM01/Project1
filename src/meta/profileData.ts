@@ -9,8 +9,8 @@ import { ACHIEVEMENTS } from './data/achievements';
 import { DAILY_MISSIONS, WEEKLY_MISSIONS } from './data/schedule';
 import { CHAPTER_COUNT, CHEST_BULK_MAX, MAX_LEVEL, TRAINING_MAX, TREAT_SLOTS } from './data/economy';
 import { DUNGEON_TIERS } from './data/dungeon';
-import { SHOP_SLOTS } from './data/catalog';
-import { MAX_STAKE } from '@/game/data/roster';
+import { COSMETIC_DEFAULTS, SHOP_SLOTS, cosmetic, ownsCosmetic } from './data/catalog';
+import { MAX_STAKE, MYTHIC_UNIT_IDS } from '@/game/data/roster';
 import { RELIC_IDS } from '@/game/api';
 import { freshDay, freshWeek } from './missions';
 import { freshPass } from './pass';
@@ -23,6 +23,8 @@ export const SAVE_KEY = 'meowguard.profile';
 const COUNTER_MAX = 2_000_000_000;
 const ORDERS_KEPT = 300;
 const REVEALS_KEPT = CHEST_BULK_MAX;
+const RANK_CLAIMED_KEPT = 52;
+const RANK_CLAIM_FORM = /^[^:]+:week-\d{4}-\d{2}-\d{2}$/;
 
 function zeroed<K extends string>(keys: readonly K[], v = 0): Record<K, number> {
   const out = {} as Record<K, number>;
@@ -66,7 +68,9 @@ export function defaultProfile(now: number, seed: number): ProfileData {
     shop: { date: '', salt: 0, bought: Array.from({ length: SHOP_SLOTS }, () => false) },
     pass: freshPass(-1),
     piggy: { gems: 0, since: 0 },
-    cosmetics: { owned: ['rug_default', 'fx_default'], rug: 'rug_default', fx: 'fx_default' },
+    cosmetics: { owned: ['rug_default', 'fx_default', 'frame_default', 'plate_default'], ...COSMETIC_DEFAULTS },
+    rankClaimed: [],
+    mythicMet: [],
     owned: { butler: false, once: [] },
     gemPass: { until: 0, lastClaimDate: '' },
     cup: { week: '', days: {}, claimed: [] },
@@ -134,10 +138,20 @@ export function normalizeProfile(p: ProfileData): ProfileData {
     ids.sort((a, b) => (p.orders[a]?.t ?? 0) - (p.orders[b]?.t ?? 0));
     for (const id of ids.slice(0, ids.length - ORDERS_KEPT)) delete p.orders[id];
   }
-  if (!p.cosmetics.owned.includes('rug_default')) p.cosmetics.owned.push('rug_default');
-  if (!p.cosmetics.owned.includes('fx_default')) p.cosmetics.owned.push('fx_default');
-  if (!p.cosmetics.owned.includes(p.cosmetics.rug)) p.cosmetics.rug = 'rug_default';
-  if (!p.cosmetics.owned.includes(p.cosmetics.fx)) p.cosmetics.fx = 'fx_default';
+  const c = p.cosmetics;
+  // Unknown ids stay (an older app must not erase what a newer one gave); only non-strings and repeats go.
+  c.owned = [...new Set(c.owned.filter((id) => typeof id === 'string'))];
+  for (const id of Object.values(COSMETIC_DEFAULTS)) {
+    if (cosmetic(id)?.source.type === 'default' && !c.owned.includes(id)) c.owned.push(id);
+  }
+  p.rankClaimed = p.rankClaimed.filter((k) => typeof k === 'string' && RANK_CLAIM_FORM.test(k)).slice(-RANK_CLAIMED_KEPT);
+  p.mythicMet = MYTHIC_UNIT_IDS.filter((id) => p.mythicMet.includes(id));
+  // A save from before the list only knows that a Guardian was made, not which: open all four.
+  if (a.mythic && p.mythicMet.length === 0) p.mythicMet = [...MYTHIC_UNIT_IDS];
+  for (const kind of Object.keys(COSMETIC_DEFAULTS) as (keyof typeof COSMETIC_DEFAULTS)[]) {
+    const def = cosmetic(c[kind]);
+    if (def?.kind !== kind || !ownsCosmetic(p, def.id)) c[kind] = COSMETIC_DEFAULTS[kind];
+  }
   return p;
 }
 

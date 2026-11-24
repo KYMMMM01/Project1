@@ -48,6 +48,8 @@ export interface SnapData {
     wavesCleared: number;
     peak: number;
     bestRarity: number;
+    /** Missing in saves from before the guardian record. */
+    mythics?: UnitId[];
     damage: number[];
     luck: { score: number; mean: number; variance: number };
   };
@@ -85,6 +87,7 @@ export function captureSnapshot(s: Sim, wave: number): BattleSnapshot {
       wavesCleared: s.wavesCleared,
       peak: s.peakEnemies,
       bestRarity: s.bestRarity,
+      mythics: s.mythics.slice(),
       damage: Array.from(s.damageByUnit),
       luck: { score: s.luck.score, mean: s.luck.mean, variance: s.luck.variance },
     },

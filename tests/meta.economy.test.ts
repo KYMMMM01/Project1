@@ -51,7 +51,7 @@ function synthStats(profile: Profile, mode: RunStats['mode'], chapter: number, s
     mode, chapter, stake, seed: rng.int(1, 1e9), victory, wavesCleared: waves, totalWaves: total, kills: waves * 12,
     bossesKilled: Math.floor(waves / WAVES_PER_BOSS_KILL), summons: waves * 2, merges: Math.round(waves * 1.1), molts: 0,
     awakenings: 0, relics: Array.from({ length: Math.min(8, Math.floor(waves / 3) + 1) }, () => 'yarn_ball' as const),
-    bestRarity: 'epic', peakEnemies: 20, duration: waves * 20, revived: false, summonLuck: 0.5, damageByUnit: {},
+    bestRarity: 'epic', mythics: [], peakEnemies: 20, duration: waves * 20, revived: false, summonLuck: 0.5, damageByUnit: {},
   };
 }
 

@@ -46,7 +46,7 @@ function changed(): void {
 function fakeStats(chapter: number, stake: number, victory: boolean): RunStats {
   return {
     mode: 'chapter', chapter, stake, seed: 1, victory, wavesCleared: victory ? 24 : 9, totalWaves: 24, kills: 120,
-    bossesKilled: 2, summons: 30, merges: 12, molts: 1, awakenings: 0, relics: [], bestRarity: 'rare', peakEnemies: 20,
+    bossesKilled: 2, summons: 30, merges: 12, molts: 1, awakenings: 0, relics: [], bestRarity: 'rare', mythics: [], peakEnemies: 20,
     duration: 420, revived: false, summonLuck: 0.5, damageByUnit: {},
   };
 }

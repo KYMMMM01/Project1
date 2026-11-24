@@ -83,6 +83,8 @@ export interface ScreenServices {
   /** Open the odds screen of a chest kind ('wooden' | 'silver' | 'gold'). */
   openOdds(kind: string): void;
   openSettings(): void;
+  /** Open the profile screen: pick the icon, ring and name plate. */
+  openProfile(): void;
   openCalendar(): void;
   /** Jump to the shop tab and scroll to a section ('chests' | 'daily' | 'gems' | 'pass' | 'piggy' | 'cosmetics'). */
   openShop(section?: string): void;
@@ -102,6 +104,7 @@ export const services: ScreenServices = {
   showRewards: (parts, title, held) => registry.showRewards?.(parts, title, held) ?? Promise.resolve(),
   openOdds: (kind) => registry.openOdds?.(kind),
   openSettings: () => registry.openSettings?.(),
+  openProfile: () => registry.openProfile?.(),
   openCalendar: () => registry.openCalendar?.(),
   openShop: (section) => registry.openShop?.(section),
   openUnit: (unitId) => registry.openUnit?.(unitId),

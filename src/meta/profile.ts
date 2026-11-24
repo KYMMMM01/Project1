@@ -4,12 +4,13 @@
  */
 import type { BattleInit, BattleMode, BattleSnapshot, DailyModifierId, RunStats } from '@/game/api';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
+import { MYTHIC_UNIT_IDS } from '@/game/data/roster';
 import { randomSeed } from '@/core/rng';
 import { skillsOn } from '@/core/skillSwitch';
 import { mergeLedgers, normalizeLedger, type GrantSource } from '@/platform/iapService';
 import { encodeBackup, decodeBackup } from './backup';
 import type { MetaDeps } from './core';
-import { GEM_PASS_DAYS, iapSpec } from './data/catalog';
+import { COSMETIC_DEFAULTS, GEM_PASS_DAYS, cosmetic, iapSpec } from './data/catalog';
 import { DUNGEON_AD_PLACEMENT, DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_TIERS } from './data/dungeon';
 import { PIGGY_PER_RUN, SNACK_FISH, SNACK_PURR, type SnackId } from './data/economy';
 import { cupScore, dailySetup } from './daily';
@@ -104,7 +105,7 @@ function interruptedStats(init: BattleInit, wavesCleared: number): RunStats {
   return {
     mode: init.mode, chapter: init.chapter, stake: init.stake, seed: init.seed, victory: false,
     wavesCleared, totalWaves: 0, kills: 0, bossesKilled: 0, summons: 0, merges: 0, molts: 0, awakenings: 0,
-    relics: [], bestRarity: 'common', peakEnemies: 0, duration: 0, revived: false, summonLuck: 0.5, damageByUnit: {},
+    relics: [], bestRarity: 'common', mythics: [], peakEnemies: 0, duration: 0, revived: false, summonLuck: 0.5, damageByUnit: {},
   };
 }
 
@@ -263,6 +264,8 @@ export class Profile extends RoutineProfile {
     if (stats.mode !== 'gold') d.stats.bosses += stats.bossesKilled;
     if (payout.firstClear) d.cleared[stats.chapter - 1] = stats.stake + 1;
     d.achv = achievementsAfterRun(d.achv, stats, payout.dailyFirstClear);
+    // Like the achievement counters, the tutorial run does not count.
+    if (stats.mode !== 'tutorial' && stats.mythics.length > 0) d.mythicMet = MYTHIC_UNIT_IDS.filter((id) => d.mythicMet.includes(id) || stats.mythics.includes(id));
 
     if (stats.mode === 'daily') {
       if (payout.dailyFirstClear) d.day.challengeCleared = true;
@@ -523,7 +526,8 @@ export class Profile extends RoutineProfile {
     }
     for (const id of spec?.bundle.cosmetics ?? []) {
       d.cosmetics.owned = d.cosmetics.owned.filter((c) => c !== id);
-      if (d.cosmetics.rug === id) d.cosmetics.rug = 'rug_default';
+      const kind = cosmetic(id)?.kind;
+      if (kind && d.cosmetics[kind] === id) d.cosmetics[kind] = COSMETIC_DEFAULTS[kind];
     }
   }
 

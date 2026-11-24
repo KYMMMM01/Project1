@@ -89,6 +89,7 @@ function keepGauge(from: SimUnit, to: SimUnit): void {
 
 function noteRarity(s: Sim, unit: SimUnit): void {
   if (unit.rarityIndex > s.bestRarity) s.bestRarity = unit.rarityIndex;
+  if (unit.rarityIndex === RARITIES.length - 1 && !s.mythics.includes(unit.id)) s.mythics.push(unit.id);
 }
 
 function emptyCellCount(s: Sim): number {

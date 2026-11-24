@@ -242,7 +242,11 @@ export interface ProfileData {
   shop: { date: string; salt: number; bought: boolean[] };
   pass: PassSlice;
   piggy: { gems: number; since: number };
-  cosmetics: { owned: string[]; rug: string; fx: string };
+  cosmetics: { owned: string[]; rug: string; fx: string; icon: string; frame: string; plate: string };
+  /** Weekly ranking rewards taken, '<uid>:week-YYYY-MM-DD', the latest 52. */
+  rankClaimed: string[];
+  /** Guardian cats made in a run, by unit id. */
+  mythicMet: string[];
   owned: { butler: boolean; once: string[] };
   gemPass: { until: number; lastClaimDate: string };
   cup: { week: string; days: Record<string, number>; claimed: number[] };

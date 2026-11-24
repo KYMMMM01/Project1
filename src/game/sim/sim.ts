@@ -21,7 +21,7 @@ import { specialCellOf, type SpecialCellSpec } from '../data/cells';
 import { synergyTier } from '../data/classes';
 import { budgetMult } from '../data/enemies';
 import { modifierSpec } from '../data/modifiers';
-import { BASE_UNIT_IDS } from '../data/roster';
+import { BASE_UNIT_IDS, MYTHIC_UNIT_IDS } from '../data/roster';
 import { SP_START_RESTORE } from '../data/spSkills';
 import { stakeRules } from '../data/stakes';
 import { trainingBonus } from '../data/training';
@@ -166,6 +166,7 @@ export class Sim implements BattleApi {
   awakenings = 0;
   summonedUnits = 0;
   bestRarity = 0;
+  readonly mythics: UnitId[] = [];
   kills = 0;
   bossesKilled = 0;
   wavesCleared = 0;
@@ -365,6 +366,9 @@ export class Sim implements BattleApi {
     this.wavesCleared = st.wavesCleared;
     this.peakEnemies = st.peak;
     this.bestRarity = st.bestRarity;
+    // A save from before the list: the Guardians on the restored board are the ones this run made.
+    const met = st.mythics ?? MYTHIC_UNIT_IDS.filter((id) => this.units.some((u) => u?.id === id));
+    this.mythics.splice(0, this.mythics.length, ...met);
     this.damageByUnit.splice(0, this.damageByUnit.length, ...st.damage);
     this.luck.score = st.luck.score;
     this.luck.mean = st.luck.mean;

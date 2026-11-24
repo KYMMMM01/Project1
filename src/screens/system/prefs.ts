@@ -15,12 +15,15 @@ export interface RoutinePrefs {
   seenUnlocked: string[];
   /** Season and days left of the last season-end reminder of the pass tab. */
   passWarned: string;
+  /** The last ranking name read from the server and the account it belongs to (shown when offline). */
+  nick: string;
+  nickUid: string;
 }
 
 const store = new SaveStore<RoutinePrefs>({
   key: 'meowguard.routine',
   version: 1,
-  defaults: () => ({ quality: 'auto', seenLevel: 1, seenUnlocked: [], passWarned: '' }),
+  defaults: () => ({ quality: 'auto', seenLevel: 1, seenUnlocked: [], passWarned: '', nick: '', nickUid: '' }),
 });
 
 let loading: Promise<void> | null = null;

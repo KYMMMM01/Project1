@@ -3,7 +3,7 @@
  * so "the simulation behaves exactly as before" can be a comparison of two short strings.
  *
  * Objects that carry a `uid` (cats, enemies, shots, zones) are written as `uid:id` only: the fingerprint must not change when a new
- * field is added to a public state object (the skills added `UnitState.sp`). Every other number is rounded to six decimals.
+ * field is added to a public state object (the skills added `UnitState.sp`; the run stats' `mythics` list is left out for the same reason). Every other number is rounded to six decimals.
  */
 import type { BattleEvents, BattleInit, BattleSnapshot } from '@/game/api';
 import { TICK } from '@/game/data/balance';
@@ -29,7 +29,7 @@ function write(v: unknown): string {
       if (Array.isArray(v)) return `[${v.map(write).join(',')}]`;
       const o = v as Record<string, unknown>;
       if (typeof o.uid === 'number') return `${o.uid}:${String(o.id)}`;
-      return `{${Object.keys(o).map((k) => `${k}=${write(o[k])}`).join(',')}}`;
+      return `{${Object.keys(o).filter((k) => k !== 'mythics').map((k) => `${k}=${write(o[k])}`).join(',')}}`;
     }
     default: return '?';
   }

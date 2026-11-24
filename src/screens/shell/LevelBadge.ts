@@ -1,122 +1,74 @@
-import { Container, Graphics, type DestroyOptions, type Text } from 'pixi.js';
+import { Container, Graphics, Sprite, type DestroyOptions, type Text } from 'pixi.js';
+import { tex } from '@/core/assets';
 import { t } from '@/core/i18n';
-import { Ease } from '@/core/tween';
-import { Color, TweenBag, cacheStatic, drawPaper, fitWidth, motion, paperSeed, punch, uiLabel } from '@/ui';
-import { xpFraction } from './layoutMath';
+import { COSMETIC_DEFAULTS, cosmetic } from '@/meta/data/catalog';
+import { Color, TweenBag, cacheStatic, drawPaper, paperSeed, punch, uiLabel } from '@/ui';
+import { BAND_CY, BAND_H, FRAME_D, ICON_D } from './layoutMath';
 
-export const BADGE_R = 50;
-const R_RING = 40;
-const RING_W = 9;
-const NUMBER_MAX_W = 2 * R_RING - 22;
+/** The cat a cosmetic icon id shows (the default icon's cat for an id the catalogue does not know). */
+function iconUnit(id: string): string {
+  const s = (cosmetic(id) ?? cosmetic(COSMETIC_DEFAULTS.icon))?.source;
+  return s?.type === 'unit' ? s.unit : 'w_paw';
+}
 
-/**
- * The account level as a round paper sticker; a painted ring around its edge fills with the XP earned
- * toward the next level. Origin = centre.
- */
-export class LevelBadge extends Container {
-  private readonly ring = new Graphics();
-  private readonly numberT: Text;
-  private readonly bag = new TweenBag();
-  private level = -1;
-  private fraction = 0;
-  /** A level-up sequence is running toward this fraction; the same state arriving again must not restart it. */
-  private sequencing = false;
-  private sequenceTarget = -1;
+/** A cat's face in a round window with the paper ring around it (the one border there is for now). Origin = centre. */
+export class Avatar extends Container {
+  private readonly face = new Sprite();
 
   constructor() {
     super();
-    const base = new Graphics();
-    drawPaper(base, -BADGE_R, -BADGE_R, { w: BADGE_R * 2, h: BADGE_R * 2, kind: 'circle', fill: Color.paperLight, edge: Color.kraftDark, grain: false, seed: paperSeed() });
-    base.circle(0, 0, R_RING).stroke({ width: RING_W, color: Color.track });
-    cacheStatic(base);
-    const lv = uiLabel(t('shell.lv'), { size: 20, color: Color.inkSoft });
-    lv.position.set(0, -20);
-    this.numberT = uiLabel('1', { size: 34 });
-    this.numberT.position.set(0, 8);
-    this.addChild(base, this.ring, lv, this.numberT);
+    const ring = new Graphics();
+    drawPaper(ring, -FRAME_D / 2, -FRAME_D / 2, { w: FRAME_D, h: FRAME_D, kind: 'circle', fill: Color.kraft, edge: Color.kraftDark, grain: false, shadow: 3, seed: paperSeed() });
+    ring.circle(0, 0, ICON_D / 2 + 3).fill(Color.paperLight);
+    cacheStatic(ring);
+    const window = new Graphics().circle(0, 0, ICON_D / 2).fill(0xffffff);
+    this.face.anchor.set(0.5);
+    this.face.mask = window;
+    this.addChild(ring, this.face, window);
   }
 
-  /**
-   * Show `level` and the share of the next level already earned. Animates the ring; on a level up it
-   * fills to the brim first, the sticker takes the new number with a punch, and the next ring starts from empty.
-   */
-  set(level: number, into: number, need: number, animate = true): void {
-    const target = xpFraction(into, need);
-    if (this.sequencing && level === this.level && target === this.sequenceTarget) return;
-    const leveled = this.level >= 0 && level > this.level;
+  setIcon(id: string): void {
+    const texture = tex('avatar_' + iconUnit(id));
+    this.face.texture = texture;
+    this.face.scale.set(ICON_D / Math.max(texture.width, texture.height));
+  }
+}
+
+/**
+ * The profile circle: the cat icon with its ring and, stuck over the icon's lower edge, the account level on a small paper band.
+ * Origin = centre of the icon. The level-up sequence is the XP strip's (HomeTopBar); the band only takes the new number with a punch.
+ */
+export class LevelBadge extends Container {
+  private readonly avatar = new Avatar();
+  private readonly band = new Graphics();
+  private readonly lv: Text = uiLabel('', { size: 24 });
+  private readonly bag = new TweenBag();
+  private level = -1;
+
+  constructor() {
+    super();
+    this.lv.position.set(0, BAND_CY);
+    this.band.position.set(0, BAND_CY);
+    this.addChild(this.avatar, this.band, this.lv);
+  }
+
+  setIcon(id: string): void {
+    this.avatar.setIcon(id);
+  }
+
+  setLevel(level: number, animate = false): void {
+    if (level === this.level) return;
+    const first = this.level < 0;
     this.level = level;
-    const from = this.fraction;
-    this.sequencing = false;
-    this.bag.killKeyed(this.ring);
-    if (!animate || motion.reduced) {
-      this.showLevel(level);
-      this.fraction = target;
-      this.drawRing(target);
-      return;
-    }
-    if (leveled) {
-      this.sequencing = true;
-      this.sequenceTarget = target;
-      this.bag.runKeyed(this.ring, {
-        duration: Math.min(0.55, 0.22 + (1 - from) * 0.5),
-        ease: Ease.cubicOut,
-        onUpdate: (k) => {
-          this.fraction = from + (1 - from) * k;
-          this.drawRing(this.fraction);
-        },
-        onComplete: () => {
-          this.showLevel(level);
-          punch(this.bag, this, 0.18, 0.3);
-          this.fillFrom(0, target);
-        },
-      });
-      return;
-    }
-    this.showLevel(level);
-    if (from === target) {
-      this.drawRing(target);
-      return;
-    }
-    this.fillFrom(from, target);
-  }
-
-  private showLevel(level: number): void {
-    this.numberT.text = String(level);
-    fitWidth(this.numberT, NUMBER_MAX_W);
-  }
-
-  private fillFrom(from: number, target: number): void {
-    this.fraction = from;
-    this.drawRing(from);
-    this.bag.runKeyed(this.ring, {
-      duration: 0.5,
-      ease: Ease.cubicOut,
-      onUpdate: (k) => {
-        this.fraction = from + (target - from) * k;
-        this.drawRing(this.fraction);
-      },
-      onComplete: () => {
-        this.fraction = target;
-        this.drawRing(target);
-        this.sequencing = false;
-      },
-    });
+    this.lv.text = `${t('shell.lv')} ${level}`;
+    const w = Math.max(76, Math.ceil(this.lv.width) + 28);
+    this.band.clear();
+    drawPaper(this.band, -w / 2, -BAND_H / 2, { w, h: BAND_H, kind: 'pill', fill: Color.paperLight, edge: Color.kraftDark, grain: false, shadow: 3, seed: paperSeed() });
+    if (animate && !first) punch(this.bag, this, 0.18, 0.3);
   }
 
   override destroy(options?: DestroyOptions): void {
     this.bag.killAll();
     super.destroy(options);
-  }
-
-  private drawRing(fraction: number): void {
-    const g = this.ring;
-    g.clear();
-    if (fraction <= 0.001) return;
-    if (fraction >= 0.999) {
-      g.circle(0, 0, R_RING).stroke({ width: RING_W, color: Color.teal });
-      return;
-    }
-    const start = -Math.PI / 2;
-    g.arc(0, 0, R_RING, start, start + fraction * Math.PI * 2).stroke({ width: RING_W, color: Color.teal, cap: 'round' });
   }
 }

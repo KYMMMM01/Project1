@@ -26,7 +26,7 @@ import {
   TRAINING_MAX,
   type OfferId,
 } from './data/economy';
-import { COSMETICS, cosmetic, type CosmeticDef } from './data/catalog';
+import { COSMETICS, cosmetic, ownsCosmetic, type CosmeticDef } from './data/catalog';
 import { ODDS, oddsView, type OddsView } from './odds';
 import { shopOffers, type ShopOffer } from './shop';
 import { trainCost, quoteLevelUp, trainingEffects, RARITY_OF, type LevelQuote, type TrainingEffects } from './units';
@@ -351,19 +351,29 @@ export class EconomyProfile extends ProfileCore {
     return { rug: this.data.cosmetics.rug, fx: this.data.cosmetics.fx };
   }
 
+  /** What the profile card wears: the icon, the ring around it and the name plate. */
+  get look(): { icon: string; frame: string; plate: string } {
+    const { icon, frame, plate } = this.data.cosmetics;
+    return { icon, frame, plate };
+  }
+
+  owns(id: string): boolean {
+    return ownsCosmetic(this.data, id);
+  }
+
   cosmetics(): CosmeticRow[] {
     const c = this.data.cosmetics;
     return COSMETICS.map((def) => ({
       ...def,
-      owned: c.owned.includes(def.id),
-      equipped: c.rug === def.id || c.fx === def.id,
+      owned: ownsCosmetic(this.data, def.id),
+      equipped: c[def.kind] === def.id,
     }));
   }
 
   buyCosmetic(id: string): Result<void> {
     const def = cosmetic(id);
     if (!def || def.source.type !== 'gems') return fail('invalid');
-    if (this.data.cosmetics.owned.includes(id)) return fail('already_owned');
+    if (ownsCosmetic(this.data, id)) return fail('already_owned');
     if (!this.spend('gems', def.source.price, 'cosmetic_buy')) return fail('not_enough_gems');
     this.data.cosmetics.owned.push(id);
     this.commit();
@@ -374,7 +384,7 @@ export class EconomyProfile extends ProfileCore {
     const def = cosmetic(id);
     if (!def) return fail('invalid');
     const c = this.data.cosmetics;
-    if (!c.owned.includes(id)) return fail('not_owned');
+    if (!ownsCosmetic(this.data, id)) return fail('not_owned');
     c[def.kind] = id;
     this.commit();
     return ok(undefined);
