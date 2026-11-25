@@ -2,6 +2,7 @@
 import { Container, Graphics, type DestroyOptions } from 'pixi.js';
 import { t } from '@/core/i18n';
 import { achievementText } from '@/meta/achievements';
+import { honorCosmetic } from '@/meta/data/catalog';
 import { Button, Color, fitLabel, ProgressBar, uiLabel } from '@/ui';
 import type { Box } from '@/ui/layoutMath';
 import { CheckBox, StampMark } from '../system/kit/marks';
@@ -66,7 +67,11 @@ export class AchievementRowView extends Container {
     // A third line would run into the bar: cut it with an ellipsis.
     const full = desc.text;
     for (let n = full.length - 1; n > 0 && desc.height > DESC_LINE * 2 + 2; n--) desc.text = full.slice(0, n).trimEnd() + '…';
-    const reward = new RewardList(partsOf({ gems: row.def.gems }), { direction: 'row', size: 52, fontSize: 26, layout: 'column', maxWidth: 108 });
+    // A hard achievement also hands out a cosmetic (docs/명세_프로필꾸미기.md 8.4).
+    const honor = honorCosmetic(row.def.key);
+    const reward = new RewardList(partsOf(honor ? { gems: row.def.gems, cosmetics: [honor] } : { gems: row.def.gems }), {
+      direction: 'row', size: 52, fontSize: 26, layout: 'column', maxWidth: 108,
+    });
     reward.position.set(this.chipX, row.steps.length > 1 ? 52 : NOTE_ROW_H / 2 - 4);
     this.body.addChild(name, desc, reward);
     this.addChildAt(this.body, 1);

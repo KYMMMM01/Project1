@@ -34,7 +34,7 @@ const REASONS: readonly Reason[] = [
   'run_reward', 'run_double', 'first_clear', 'daily_clear', 'sweep', 'level_up', 'training', 'chest_buy',
   'chest_overflow', 'chest_skip', 'patrol', 'patrol_double', 'mission', 'mission_chest', 'weekly_mission', 'calendar',
   'comeback', 'treat', 'snack_chest', 'shop_buy', 'shop_refresh', 'ticket_buy', 'ticket_ad', 'ticket_daily', 'pass_free',
-  'pass_premium', 'account_level', 'cup', 'endless', 'cosmetic_buy', 'piggy', 'iap', 'iap_revoke', 'gem_pass',
+  'pass_premium', 'account_level', 'cup', 'endless', 'cosmetic_buy', 'cosmetic_gold', 'piggy', 'iap', 'iap_revoke', 'gem_pass',
   'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'achievement', 'test',
 ];
 
@@ -933,6 +933,63 @@ describe('profile look', () => {
     } finally {
       (COSMETICS as CosmeticDef[]).pop();
       (IAP_SPECS as IapSpec[]).pop();
+    }
+  });
+});
+
+describe('profile frames and plates for sale', () => {
+  it('sells a gold one for gold and a gems one for gems, each once, and records the gold as cosmetic_gold', async () => {
+    const { profile, analytics } = await createTestProfile();
+    profile.data.gold = 7999;
+    expect(profile.buyCosmetic('frame_wood')).toEqual({ ok: false, error: 'not_enough_gold' });
+    profile.data.gold = 9000;
+    expect(profile.buyCosmetic('frame_wood')).toEqual({ ok: true, value: undefined });
+    expect(profile.data.gold).toBe(1000);
+    expect(profile.owns('frame_wood')).toBe(true);
+    expect(profile.buyCosmetic('frame_wood')).toEqual({ ok: false, error: 'already_owned' });
+    const spent = analytics.filter((e) => e.event === 'currency' && e.params.reason === 'cosmetic_gold');
+    expect(spent.length).toBeGreaterThan(0);
+    profile.data.gems = 299;
+    expect(profile.buyCosmetic('plate_night')).toEqual({ ok: false, error: 'not_enough_gems' });
+    profile.data.gems = 300;
+    expect(profile.buyCosmetic('plate_night').ok).toBe(true);
+    expect(profile.data.gems).toBe(0);
+    expect(profile.equip('frame_wood').ok).toBe(true);
+    expect(profile.equip('plate_night').ok).toBe(true);
+    expect(profile.look).toEqual({ icon: 'icon_w_paw', frame: 'frame_wood', plate: 'plate_night' });
+  });
+
+  it('opens an achievement one for gold only once its achievement is claimed', async () => {
+    const { profile } = await createTestProfile();
+    profile.data.gold = 50_000;
+    const row = () => profile.cosmetics().find((r) => r.id === 'plate_wins');
+    expect(row()?.forSale).toBe(false);
+    expect(profile.buyCosmetic('plate_wins')).toEqual({ ok: false, error: 'locked' });
+    profile.data.achv.claimed.push('wins_50');
+    expect(row()?.forSale).toBe(true);
+    expect(profile.buyCosmetic('plate_wins')).toEqual({ ok: true, value: undefined });
+    expect(profile.data.gold).toBe(42_000);
+  });
+
+  it('never sells an honour, a ranking reward, a cat or a default', async () => {
+    const { profile } = await createTestProfile();
+    profile.data.gold = 1_000_000;
+    profile.data.gems = 100_000;
+    for (const id of ['frame_honor_butler', 'plate_honor_relics', 'frame_rank_1', 'plate_rank_10', 'icon_r_ninja', 'frame_default']) {
+      expect(profile.buyCosmetic(id), id).toEqual({ ok: false, error: 'invalid' });
+    }
+    expect(profile.equip('frame_rank_1')).toEqual({ ok: false, error: 'not_owned' });
+  });
+
+  it('lists 18 frames and 16 plates, each with a picture except the defaults, and a name in both languages', async () => {
+    const { readdirSync } = await import('node:fs');
+    const files = new Set(readdirSync('src/assets/img'));
+    const frames = COSMETICS.filter((c) => c.kind === 'frame');
+    const plates = COSMETICS.filter((c) => c.kind === 'plate');
+    expect(frames).toHaveLength(18);
+    expect(plates).toHaveLength(16);
+    for (const c of [...frames, ...plates]) {
+      if (c.source.type !== 'default') expect(files.has(c.id + '.webp'), c.id).toBe(true);
     }
   });
 });

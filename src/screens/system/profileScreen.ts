@@ -6,10 +6,12 @@
 import { Container, Graphics, Rectangle } from 'pixi.js';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
-import { accountProgress, BASE_UNITS, profile, type CosmeticRow } from '@/meta';
+import { accountProgress, BASE_UNITS, featureHint, profile, type CosmeticRow } from '@/meta';
+import { achievementDef, achievementText } from '@/meta/achievements';
 import { account } from '@/platform';
 import { Button, Color, ScreenScaffold, ScrollView, SegmentTabs, Toggle, bindPress, drawIcon, drawPaper, fitLabel, paperSeed, toast, uiLabel } from '@/ui';
-import { FRAME_D, PLATE_H, PLATE_W } from '../shell/layoutMath';
+import { services } from '../contract';
+import { FRAME_BOX_W, PLATE_ART_H, PLATE_ART_W } from '../shell/layoutMath';
 import { Avatar, LevelBadge } from '../shell/LevelBadge';
 import { NamePlate } from '../shell/NamePlate';
 import { changeNameFlow } from './nameDialog';
@@ -20,7 +22,9 @@ type Slot = 'icon' | 'frame' | 'plate';
 const SLOTS: readonly Slot[] = ['icon', 'frame', 'plate'];
 
 const PAD = 24;
-const PREVIEW_H = 208;
+/** The badge and plate on top, and room under a three-line "how to get it" (English can wrap that far) for the "see in shop" button. */
+const PREVIEW_H = 372;
+const SHOP_BTN_H = 64;
 /** The preview badge is the home's, scaled up; the text column starts to its right. */
 const BADGE_SCALE = 1.7;
 const TEXT_X = 216;
@@ -63,11 +67,25 @@ export function openProfile(): void {
   const rowsOf = (): CosmeticRow[] => profile.cosmetics().filter((r) => r.kind === tab);
   const applicable = (): Slot[] => SLOTS.filter((k) => pick[k] !== profile.look[k] && profile.owns(pick[k]));
 
+  const achvName = (key: string): string => {
+    const def = achievementDef(key);
+    return def ? achievementText(def).name : key;
+  };
   const howTo = (row: CosmeticRow): string => {
     const s = row.source;
-    if (s.type === 'default') return t('prof.how.default');
-    if (s.type === 'unit') return (BASE_UNITS as readonly string[]).includes(s.unit) ? t('prof.how.cat') : t(row.owned ? 'prof.how.guardian.got' : 'prof.how.guardian');
-    return t('prof.how.other');
+    let line: string;
+    if (s.type === 'default') line = t('prof.how.default');
+    else if (s.type === 'unit') line = (BASE_UNITS as readonly string[]).includes(s.unit) ? t('prof.how.cat') : t(row.owned ? 'prof.how.guardian.got' : 'prof.how.guardian');
+    else if (row.owned && (s.type === 'gold' || s.type === 'gems' || s.type === 'achievement')) line = t('prof.how.bought');
+    else if (s.type === 'gold' || s.type === 'gems') line = t('prof.how.shop');
+    else if (s.type === 'achievement') line = t(row.forSale ? 'prof.how.achv.open' : 'prof.how.achv', { name: achvName(s.key) });
+    else if (s.type === 'honor') line = t('prof.how.honor', { name: achvName(s.key) });
+    else if (s.type === 'rank') line = t('prof.how.rank.' + s.tier);
+    else line = t('prof.how.other');
+    const shopItem = s.type === 'gold' || s.type === 'gems' || s.type === 'achievement';
+    // The shop's own lock goes on a line of its own.
+    if (shopItem && !row.owned && !profile.featureUnlocked('cosmetics')) line += `\n${t('prof.shopLocked', { hint: featureHint('cosmetics') })}`;
+    return line;
   };
 
   /** The big card on top: the badge and the plate as the home draws them, the picked thing's name and how to get it. */
@@ -76,15 +94,19 @@ export function openProfile(): void {
     const w = scaffold.contentWidth;
     const badge = new LevelBadge();
     badge.setIcon(pick.icon);
+    badge.setFrame(pick.frame);
     badge.setLevel(accountProgress(profile.data.accountXp).level);
     badge.scale.set(BADGE_SCALE);
     badge.position.set((TEXT_X - GAP) / 2, PREVIEW_H / 2 - 10);
     const room = w - TEXT_X;
     const plate = new NamePlate();
     plate.setName(shownName());
-    plate.scale.set(room / PLATE_W);
-    const plateH = (PLATE_H * room) / PLATE_W;
-    plate.position.set(TEXT_X + room / 2, 6 + plateH / 2);
+    plate.setPlate(pick.plate);
+    // Sized by the drawn plate's whole picture, so a plate's ends stay inside the column.
+    const k = room / PLATE_ART_W;
+    plate.scale.set(k);
+    const plateH = PLATE_ART_H * k;
+    plate.position.set(TEXT_X + room / 2, plateH / 2);
     preview.addChild(badge, plate);
     const row = profile.cosmetics().find((r) => r.id === pick[tab]);
     if (!row) return;
@@ -94,6 +116,16 @@ export function openProfile(): void {
     const how = uiLabel(howTo(row), { size: 26, color: Color.inkSoft, wrap: room, anchorX: 0, anchorY: 0, align: 'left' });
     how.position.set(TEXT_X, name.y + 24);
     preview.addChild(name, how);
+    // Not owned and on sale now: the shop's cosmetics block sells it.
+    if (!row.owned && row.forSale && profile.featureUnlocked('cosmetics')) {
+      const toShop = new Button({ label: t('prof.toShop'), style: 'info', width: Math.min(room, 260), height: SHOP_BTN_H, fontSize: 28 });
+      toShop.position.set(TEXT_X + Math.min(room, 260) / 2, how.y + how.height + 10 + SHOP_BTN_H / 2);
+      toShop.onTap(() => {
+        close();
+        services.openShop('cosmetics');
+      });
+      preview.addChild(toShop);
+    }
   };
 
   const syncApply = (): void => {
@@ -113,12 +145,16 @@ export function openProfile(): void {
     drawPaper(face, 0, 0, { w, h, radius: 20, fill: row.owned ? Color.paperLight : Color.track, edge: Color.kraftDark, edgeWidth: 3, edgeAlpha: 0.8, grain: false, shadow: 3, seed: paperSeed() });
     let art: Container;
     if (tab === 'plate') {
-      art = new NamePlate();
-      art.scale.set((w - 24) / PLATE_W);
+      const plate = new NamePlate();
+      plate.setPlate(row.id);
+      plate.scale.set((w - 16) / PLATE_ART_W);
+      art = plate;
     } else {
       const avatar = new Avatar();
       avatar.setIcon(tab === 'frame' ? pick.icon : row.id);
-      avatar.scale.set((h - 20) / FRAME_D);
+      // A frame cell shows the frame's whole picture; an icon cell, the cat in the paper ring.
+      if (tab === 'frame') avatar.setFrame(row.id);
+      avatar.scale.set((h - 20) / FRAME_BOX_W);
       art = avatar;
     }
     art.position.set(w / 2, h / 2);
@@ -152,9 +188,9 @@ export function openProfile(): void {
     return c;
   };
 
-  /** Equipped first, then owned, then locked; the catalogue's order inside each. */
+  /** Equipped first, then owned, then what the shop sells now, then locked; the catalogue's order inside each. */
   const sorted = (rows: CosmeticRow[]): CosmeticRow[] => {
-    const rank = (r: CosmeticRow): number => (r.equipped ? 0 : r.owned ? 1 : 2);
+    const rank = (r: CosmeticRow): number => (r.equipped ? 0 : r.owned ? 1 : r.forSale ? 2 : 3);
     return rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map((x) => x.r);
   };
 

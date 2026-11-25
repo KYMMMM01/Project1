@@ -110,12 +110,23 @@ export function iapProductDefs(): IapProductDef[] {
 
 export type CosmeticKind = 'rug' | 'fx' | 'icon' | 'frame' | 'plate';
 
+/** The weekly ranking bands a reward goes to: 1st, 2nd to 3rd, 4th to 10th, 11th to 100th. */
+export type RankTier = 1 | 3 | 10 | 100;
+
 export type CosmeticSource =
   | { type: 'default' }
   | { type: 'chapter'; chapter: number }
   | { type: 'gems'; price: number }
   | { type: 'reward' }
-  | { type: 'unit'; unit: UnitId };
+  | { type: 'unit'; unit: UnitId }
+  /** Always for sale in the shop, for gold. */
+  | { type: 'gold'; price: number }
+  /** For sale for gold once the achievement `key` is claimed (docs/명세_프로필꾸미기.md 8.4). */
+  | { type: 'achievement'; key: string; price: number }
+  /** Handed out with the gems of the hard achievement `key`. */
+  | { type: 'honor'; key: string }
+  /** The weekly ranking reward of a band (stage 4 hands them out). */
+  | { type: 'rank'; tier: RankTier };
 
 export interface CosmeticDef {
   id: string;
@@ -125,8 +136,21 @@ export interface CosmeticDef {
 
 export const RUG_GEM_PRICE = 400;
 export const FX_GEM_PRICE = 300;
+/** Profile frames and plates (docs/명세_프로필꾸미기.md 8): about a day of gold for a shop one, a little more for an achievement one. */
+export const FRAME_GOLD_PRICE = 8000;
+export const FRAME_GEM_PRICE = 400;
+export const FRAME_ACHIEVEMENT_PRICE = 10000;
+export const PLATE_GOLD_PRICE = 6000;
+export const PLATE_GEM_PRICE = 300;
+export const PLATE_ACHIEVEMENT_PRICE = 8000;
 
-/** 8 skins you can earn or buy (5 by chapter progress, 3 for gems) plus 4 that only come as rewards. */
+const frame = (id: string, source: CosmeticSource): CosmeticDef => ({ id: 'frame_' + id, kind: 'frame', source });
+const plate = (id: string, source: CosmeticSource): CosmeticDef => ({ id: 'plate_' + id, kind: 'plate', source });
+
+/**
+ * Rugs and summon effects: 8 to earn or buy (5 by chapter progress, 3 for gems) plus 4 that only come as rewards. The profile card's
+ * icons, frames and plates (docs/명세_프로필꾸미기.md 8): the 20 cats, then frames and plates for gold, gems, achievements, honours and ranks.
+ */
 export const COSMETICS: readonly CosmeticDef[] = [
   { id: 'rug_default', kind: 'rug', source: { type: 'default' } },
   { id: 'rug_ch1', kind: 'rug', source: { type: 'chapter', chapter: 1 } },
@@ -148,7 +172,31 @@ export const COSMETICS: readonly CosmeticDef[] = [
   // The 20 cat icons, in roster order (class, then rarity): 16 base cats and the 4 Guardians.
   ...Object.values(UNIT_GRID).flat().map((unit): CosmeticDef => ({ id: 'icon_' + unit, kind: 'icon', source: { type: 'unit', unit } })),
   { id: 'frame_default', kind: 'frame', source: { type: 'default' } },
+  ...['wood', 'leaf', 'ribbon', 'yarn'].map((id) => frame(id, { type: 'gold', price: FRAME_GOLD_PRICE })),
+  ...['star', 'sakura'].map((id) => frame(id, { type: 'gems', price: FRAME_GEM_PRICE })),
+  frame('chapter', { type: 'achievement', key: 'chapter_5', price: FRAME_ACHIEVEMENT_PRICE }),
+  frame('butler', { type: 'achievement', key: 'butler_5', price: FRAME_ACHIEVEMENT_PRICE }),
+  frame('dungeon', { type: 'achievement', key: 'dungeon_5', price: FRAME_ACHIEVEMENT_PRICE }),
+  frame('endless', { type: 'achievement', key: 'endless_50', price: FRAME_ACHIEVEMENT_PRICE }),
+  frame('awaken', { type: 'achievement', key: 'awaken_50', price: FRAME_ACHIEVEMENT_PRICE }),
+  frame('honor_butler', { type: 'honor', key: 'butler_all' }),
+  frame('honor_endless', { type: 'honor', key: 'endless_80' }),
+  frame('rank_1', { type: 'rank', tier: 1 }),
+  frame('rank_3', { type: 'rank', tier: 3 }),
+  frame('rank_10', { type: 'rank', tier: 10 }),
+  frame('rank_100', { type: 'rank', tier: 100 }),
   { id: 'plate_default', kind: 'plate', source: { type: 'default' } },
+  ...['dots', 'stripe', 'fish', 'paw'].map((id) => plate(id, { type: 'gold', price: PLATE_GOLD_PRICE })),
+  ...['night', 'garden'].map((id) => plate(id, { type: 'gems', price: PLATE_GEM_PRICE })),
+  plate('wins', { type: 'achievement', key: 'wins_50', price: PLATE_ACHIEVEMENT_PRICE }),
+  plate('merge', { type: 'achievement', key: 'merges_3000', price: PLATE_ACHIEVEMENT_PRICE }),
+  plate('daily', { type: 'achievement', key: 'daily_10', price: PLATE_ACHIEVEMENT_PRICE }),
+  plate('units', { type: 'achievement', key: 'units_16', price: PLATE_ACHIEVEMENT_PRICE }),
+  plate('account', { type: 'achievement', key: 'account_20', price: PLATE_ACHIEVEMENT_PRICE }),
+  plate('honor_relics', { type: 'honor', key: 'relics_25' }),
+  plate('honor_wins', { type: 'honor', key: 'wins_150' }),
+  plate('rank_1', { type: 'rank', tier: 1 }),
+  plate('rank_10', { type: 'rank', tier: 10 }),
 ];
 
 /** What a slot falls back to: a fresh profile, a refunded item, an item the player cannot use. */
@@ -165,6 +213,17 @@ export function ownsCosmetic(d: ProfileData, id: string): boolean {
   const s = cosmetic(id)?.source;
   if (s?.type === 'unit') return (BASE_UNITS as readonly string[]).includes(s.unit) || d.mythicMet.includes(s.unit);
   return d.cosmetics.owned.includes(id);
+}
+
+/** Whether the shop may sell a cosmetic now: a gems or gold one always, an achievement one once its achievement is claimed. */
+export function forSale(d: ProfileData, def: CosmeticDef): boolean {
+  const s = def.source;
+  return s.type === 'gems' || s.type === 'gold' || (s.type === 'achievement' && d.achv.claimed.includes(s.key));
+}
+
+/** The cosmetic a hard achievement hands out with its gems, if any. */
+export function honorCosmetic(key: string): string | undefined {
+  return COSMETICS.find((c) => c.source.type === 'honor' && c.source.key === key)?.id;
 }
 
 // ───────────────────────────── daily shop ─────────────────────────────

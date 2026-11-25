@@ -15,7 +15,7 @@ import {
   bestRarity, flourishOf, gridLayout, mergePile, nameBlockOf, pilesOf, resultsOf, stacksOf, totalCards,
 } from '../src/screens/shop/revealPlan';
 import {
-  bonusCardsIn, CONFIRM_ARM_S, chestAction, chestBuyView, confirmArmed, cosmeticStatus, gemBonusPercent, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, pileSize, shortBy,
+  bonusCardsIn, CONFIRM_ARM_S, chestAction, chestBuyView, confirmArmed, cosmeticStatus, gemBonusPercent, inShop, isBundleParts, isShopSection, listBundleProducts, partAmount, partLabel, pileSize, shortBy,
 } from '../src/screens/shop/shopLogic';
 
 const card = (rarity: ChestCard['rarity'], unit: ChestCard['unit']): ChestCard => ({ rarity, unit });
@@ -108,9 +108,25 @@ describe('shop decisions', () => {
     const rows = profile.cosmetics();
     const by = (id: string) => rows.find((r) => r.id === id) as (typeof rows)[number];
     expect(cosmeticStatus(by('rug_default'))).toEqual({ kind: 'equipped' });
-    expect(cosmeticStatus(by('rug_gem1'))).toEqual({ kind: 'buy', gems: 400 });
+    expect(cosmeticStatus(by('rug_gem1'))).toEqual({ kind: 'buy', currency: 'gems', price: 400 });
     expect(cosmeticStatus(by('rug_ch2'))).toEqual({ kind: 'chapter', chapter: 2 });
     expect(cosmeticStatus(by('rug_baby'))).toEqual({ kind: 'reward' });
+    expect(cosmeticStatus(by('frame_wood'))).toEqual({ kind: 'buy', currency: 'gold', price: 8000 });
+    expect(cosmeticStatus(by('plate_night'))).toEqual({ kind: 'buy', currency: 'gems', price: 300 });
+    expect(cosmeticStatus(by('frame_chapter'))).toEqual({ kind: 'achievement', key: 'chapter_5' });
+    expect(cosmeticStatus(by('frame_honor_butler'))).toEqual({ kind: 'reward' });
+    expect(cosmeticStatus(by('plate_default'))).toEqual({ kind: 'equipped' });
+    profile.data.achv.claimed.push('chapter_5');
+    const opened = profile.cosmetics().find((r) => r.id === 'frame_chapter') as (typeof rows)[number];
+    expect(cosmeticStatus(opened)).toEqual({ kind: 'buy', currency: 'gold', price: 10000 });
+    // The shop lists the rugs and effects and, of the profile kinds, only what it sells.
+    const listed = rows.filter(inShop).map((r) => r.id);
+    expect(listed).toContain('rug_baby');
+    expect(listed).toContain('frame_chapter');
+    expect(listed).not.toContain('frame_honor_butler');
+    expect(listed).not.toContain('plate_rank_1');
+    expect(listed).not.toContain('icon_w_paw');
+    expect(listed).not.toContain('frame_default');
     expect(isShopSection('piggy')).toBe(true);
     expect(isShopSection('nope')).toBe(false);
   });

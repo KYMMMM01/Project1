@@ -101,11 +101,14 @@ export class HomeTopBar extends Container {
     this.plate.setName(name);
   }
 
-  /** Read the profile: currencies roll to the new amounts, the icon, the level band and the XP strip follow. */
+  /** Read the profile: currencies roll to the new amounts, the icon, frame and plate, the level band and the XP strip follow. */
   sync(animate = true): void {
     const d = profile.data;
     for (const k of KINDS) this.pills[k].setAmount(Math.max(0, d[k] - this.deferred[k]), animate);
-    this.badge.setIcon(profile.look.icon);
+    const look = profile.look;
+    this.badge.setIcon(look.icon);
+    this.badge.setFrame(look.frame);
+    this.plate.setPlate(look.plate);
     const p = accountProgress(d.accountXp);
     const fraction = p.need > 0 ? p.into / p.need : 0;
     if (this.rising === fraction && p.level === this.level) return;

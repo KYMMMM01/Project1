@@ -9,7 +9,7 @@ import { ACHIEVEMENTS } from './data/achievements';
 import { DAILY_MISSIONS, WEEKLY_MISSIONS } from './data/schedule';
 import { CHAPTER_COUNT, CHEST_BULK_MAX, MAX_LEVEL, TRAINING_MAX, TREAT_SLOTS } from './data/economy';
 import { DUNGEON_TIERS } from './data/dungeon';
-import { COSMETIC_DEFAULTS, SHOP_SLOTS, cosmetic, ownsCosmetic } from './data/catalog';
+import { COSMETIC_DEFAULTS, SHOP_SLOTS, cosmetic, honorCosmetic, ownsCosmetic } from './data/catalog';
 import { MAX_STAKE, MYTHIC_UNIT_IDS } from '@/game/data/roster';
 import { RELIC_IDS } from '@/game/api';
 import { freshDay, freshWeek } from './missions';
@@ -143,6 +143,11 @@ export function normalizeProfile(p: ProfileData): ProfileData {
   c.owned = [...new Set(c.owned.filter((id) => typeof id === 'string'))];
   for (const id of Object.values(COSMETIC_DEFAULTS)) {
     if (cosmetic(id)?.source.type === 'default' && !c.owned.includes(id)) c.owned.push(id);
+  }
+  // A hard achievement claimed before it came with a cosmetic still gets it.
+  for (const key of a.claimed) {
+    const honor = honorCosmetic(key);
+    if (honor && !c.owned.includes(honor)) c.owned.push(honor);
   }
   p.rankClaimed = p.rankClaimed.filter((k) => typeof k === 'string' && RANK_CLAIM_FORM.test(k)).slice(-RANK_CLAIMED_KEPT);
   p.mythicMet = MYTHIC_UNIT_IDS.filter((id) => p.mythicMet.includes(id));

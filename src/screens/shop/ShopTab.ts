@@ -526,10 +526,12 @@ class ShopTab implements TabScreen {
 
   private async buyCosmetic(id: string): Promise<void> {
     const row = profile.cosmetics().find((c) => c.id === id);
-    if (!row || row.source.type !== 'gems') return;
-    const short = shortBy(row.source.price, profile.data.gems);
+    if (!row || !row.forSale || !('price' in row.source)) return;
+    // A gems cosmetic costs gems; a gold one and an opened achievement one cost gold.
+    const currency = row.source.type === 'gems' ? 'gems' : 'gold';
+    const short = shortBy(row.source.price, profile.data[currency]);
     if (short > 0) {
-      this.explainShort('gems', short);
+      this.explainShort(currency, short);
       return;
     }
     const r = profile.buyCosmetic(id);

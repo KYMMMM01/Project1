@@ -13,7 +13,7 @@ import {
   SNACK_CHESTS_PER_DAY,
   PLACEMENTS,
 } from './data/economy';
-import { GEM_PASS_DAILY } from './data/catalog';
+import { GEM_PASS_DAILY, honorCosmetic } from './data/catalog';
 import { ACHIEVEMENTS } from './data/achievements';
 import {
   CALENDAR,
@@ -329,7 +329,9 @@ export class RoutineProfile extends EconomyProfile {
     if (a.claimed.includes(key)) return fail('already_claimed');
     if (!achievementProgress(this.data, def).reached) return fail('not_ready');
     a.claimed.push(key);
-    const reward: Bundle = { gems: def.gems };
+    // A hard achievement hands out its cosmetic with the gems (docs/명세_프로필꾸미기.md 8.4).
+    const honor = honorCosmetic(key);
+    const reward: Bundle = honor ? { gems: def.gems, cosmetics: [honor] } : { gems: def.gems };
     this.applyBundle(reward, 'achievement');
     this.deps.analytics.track('achievement_claim', { scope: 'achievement', id: key });
     return ok(reward);

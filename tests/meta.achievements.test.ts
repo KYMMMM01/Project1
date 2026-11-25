@@ -185,6 +185,24 @@ describe('claiming', () => {
     return rig;
   }
 
+  it('hands out a hard achievement cosmetic with its gems, and a claim from before the cosmetic still gets it', async () => {
+    const rig = await ready();
+    const { profile } = rig;
+    REACH.wins_150(profile.data);
+    const gems = profile.data.gems;
+    expect(profile.claimAchievement('wins_150')).toEqual({ ok: true, value: { gems: 80, cosmetics: ['plate_honor_wins'] } });
+    expect(profile.data.gems).toBe(gems + 80);
+    expect(profile.owns('plate_honor_wins')).toBe(true);
+    expect(profile.equip('plate_honor_wins').ok).toBe(true);
+    // An old save: the claim is there, the plate is not.
+    const old = structuredClone(profile.data);
+    old.cosmetics.owned = old.cosmetics.owned.filter((id) => id !== 'plate_honor_wins');
+    expect(normalizeProfile(old).cosmetics.owned).toContain('plate_honor_wins');
+    // An achievement without a cosmetic pays gems only.
+    REACH.wins_10(profile.data);
+    expect(profile.claimAchievement('wins_10')).toEqual({ ok: true, value: { gems: 15 } });
+  });
+
   it('pays the gems once, records the claim, saves once and tells analytics', async () => {
     const rig = await ready();
     const { profile } = rig;

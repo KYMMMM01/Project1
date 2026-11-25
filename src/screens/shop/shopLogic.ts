@@ -108,7 +108,9 @@ export function confirmArmed(openedAt: number, now: number): boolean {
 export type CosmeticStatus =
   | { kind: 'equipped' }
   | { kind: 'equip' }
-  | { kind: 'buy'; gems: number }
+  | { kind: 'buy'; currency: 'gems' | 'gold'; price: number }
+  /** For sale for gold once this achievement is claimed. */
+  | { kind: 'achievement'; key: string }
   | { kind: 'chapter'; chapter: number }
   | { kind: 'reward' };
 
@@ -116,9 +118,18 @@ export function cosmeticStatus(row: CosmeticRow): CosmeticStatus {
   if (row.equipped) return { kind: 'equipped' };
   if (row.owned) return { kind: 'equip' };
   const s = row.source;
-  if (s.type === 'gems') return { kind: 'buy', gems: s.price };
+  if (s.type === 'gems') return { kind: 'buy', currency: 'gems', price: s.price };
+  if (s.type === 'gold') return { kind: 'buy', currency: 'gold', price: s.price };
+  if (s.type === 'achievement') return row.forSale ? { kind: 'buy', currency: 'gold', price: s.price } : { kind: 'achievement', key: s.key };
   if (s.type === 'chapter') return { kind: 'chapter', chapter: s.chapter };
   return { kind: 'reward' };
+}
+
+/** What the shop's cosmetics block lists: every rug and effect, and of the profile kinds only what the shop sells (gems, gold, achievement). */
+export function inShop(row: CosmeticRow): boolean {
+  if (row.kind === 'rug' || row.kind === 'fx') return true;
+  const s = row.source.type;
+  return s === 'gems' || s === 'gold' || s === 'achievement';
 }
 
 /** How many more of a currency the player needs for a price, 0 when they can pay. */

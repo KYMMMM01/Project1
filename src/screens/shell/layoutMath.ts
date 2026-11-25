@@ -16,12 +16,18 @@ export const ICON_D = 80;
 export const FRAME_D = 104;
 export const BAND_H = 28;
 export const BAND_CY = 38;
+/** A drawn frame fits this box round the icon's centre: the badge's 112 slot across, and up to the bar's top edge (54 above the row's centre line, as far as the first pill's top is below it). */
+export const FRAME_BOX_W = 112;
+export const FRAME_BOX_H = 2 * (TOP_PAD_TOP + TOP_ROW_H / 2);
 /** The name plate and the thin XP strip under it, in the slot the XP bar had (a 24 px side, a 112 badge slot, the two 88 buttons and a 32 gap leave 352). */
 export const PLATE_W = 352;
 export const PLATE_H = 60;
 export const PLATE_TEXT_W = 300;
 export const STRIP_H = 16;
 export const STRIP_GAP = 6;
+/** A drawn plate (tools/make_cosmetics.py): its 800 x 200 canvas has its 704 x 120 body in the middle, so drawn at this size the body covers the 352 x 60 plate. */
+export const PLATE_ART_W = (PLATE_W * 800) / 704;
+export const PLATE_ART_H = (PLATE_H * 200) / 120;
 
 export interface ShellRects {
   /** Height of the top bar including the safe-area inset. */

@@ -8,10 +8,15 @@ import type { CosmeticRow } from '@/meta/economy';
 import { buildRug, RUG_H, RUG_W } from '@/view/field/rug';
 import { rugSkin } from '@/view/field/rugSkins';
 import { themeOf } from '@/view/director/palette';
-import { cacheStatic, Color, currencyIcon, drawIcon, fitLabel, paperSeed, paperShape, PaperLabel, tapeStrip, uiLabel } from '@/ui';
+import { cacheStatic, Color, currencyIcon, drawIcon, fitLabel, paperSeed, paperShape, tapeStrip, uiLabel } from '@/ui';
 import { actionButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
 import { drawCoupon, PriceTag } from './paperBits';
-import { cosmeticStatus } from './shopLogic';
+import { achievementDef, achievementText } from '@/meta/achievements';
+import { COSMETIC_DEFAULTS } from '@/meta/data/catalog';
+import { Avatar } from '../shell/LevelBadge';
+import { NamePlate } from '../shell/NamePlate';
+import { FRAME_BOX_W, PLATE_ART_W } from '../shell/layoutMath';
+import { cosmeticStatus, inShop } from './shopLogic';
 
 const CARD_H = 336;
 const PREVIEW_H = 170;
@@ -86,9 +91,40 @@ function fxPreview(id: string, w: number, env: BlockEnv): Container {
   return holder;
 }
 
+/** A frame round the starting cat. */
+function framePreview(id: string, w: number): Container {
+  const holder = well(w);
+  const a = new Avatar();
+  a.setIcon(COSMETIC_DEFAULTS.icon);
+  a.setFrame(id);
+  a.scale.set((PREVIEW_H - 16) / FRAME_BOX_W);
+  a.position.set(w / 2, PREVIEW_H / 2);
+  holder.addChild(a);
+  return holder;
+}
+
+/** A name plate with a sample name on it. */
+function platePreview(id: string, w: number): Container {
+  const holder = well(w);
+  const p = new NamePlate();
+  p.setPlate(id);
+  p.setName(t('shop.cos.sampleName'));
+  p.scale.set((w - 16) / PLATE_ART_W);
+  p.position.set(w / 2, PREVIEW_H / 2);
+  holder.addChild(p);
+  return holder;
+}
+
+function previewOf(row: CosmeticRow, w: number, env: BlockEnv): Container {
+  if (row.kind === 'rug') return rugPreview(row.id, w);
+  if (row.kind === 'fx') return fxPreview(row.id, w, env);
+  if (row.kind === 'plate') return platePreview(row.id, w);
+  return framePreview(row.id, w);
+}
+
 function cosmeticCard(inner: Container, x: number, y: number, w: number, row: CosmeticRow, env: BlockEnv): void {
   const c = subCard(inner, x, y, w, CARD_H, row.equipped ? mixColor(Color.paperLight, Color.mustard, 0.22) : Color.paperLight);
-  const pv = row.kind === 'rug' ? rugPreview(row.id, w - 24) : fxPreview(row.id, w - 24, env);
+  const pv = previewOf(row, w - 24, env);
   pv.position.set(12, 12);
   c.addChild(pv);
   if (row.equipped) {
@@ -121,17 +157,25 @@ function cosmeticCard(inner: Container, x: number, y: number, w: number, row: Co
       break;
     }
     case 'buy': {
-      const tag = new PriceTag({ width: bw, style: 'primary', currency: 'gems', amount: st.gems, fontSize: 32 });
+      const tag = new PriceTag({ width: bw, style: 'primary', currency: st.currency, amount: st.price, fontSize: 32 });
       tag.onTap(() => env.actions.buyCosmetic(row.id));
       tag.position.set(w / 2, by);
       c.addChild(tag);
       break;
     }
+    case 'achievement':
     case 'chapter':
     case 'reward': {
       const lock = drawIcon('lock', 34);
       lock.position.set(30, by);
-      const tx = uiLabel(st.kind === 'chapter' ? t('shop.cos.chapter', { n: st.chapter }) : t('shop.cos.reward'), {
+      const def = st.kind === 'achievement' ? achievementDef(st.key) : undefined;
+      const text =
+        st.kind === 'achievement'
+          ? t('shop.cos.achv', { name: def ? achievementText(def).name : st.key })
+          : st.kind === 'chapter'
+            ? t('shop.cos.chapter', { n: st.chapter })
+            : t('shop.cos.reward');
+      const tx = uiLabel(text, {
         size: 24, color: Color.inkSoft, anchorX: 0, wrap: w - 90, lineHeight: 28, align: 'left',
       });
       tx.position.set(56, by);
@@ -146,26 +190,28 @@ export const cosmeticsBlock: Block = {
   visible: () => true,
   signature: () => {
     const c = profile.data.cosmetics;
-    return [profile.featureUnlocked('cosmetics'), c.owned.join(','), c.rug, c.fx].join('|');
+    // Claimed achievements open their cosmetics for sale.
+    return [profile.featureUnlocked('cosmetics'), c.owned.join(','), c.rug, c.fx, c.icon, c.frame, c.plate, profile.data.achv.claimed.join(',')].join('|');
   },
   build(root, env): BlockBuild {
     const pageW = env.w - SIDE * 2;
     const w = pageW - PAD * 2;
-    const inner = new Container();
     const gap = 14;
     const cw = (w - gap * (COLS - 1)) / COLS;
-    const rows = profile.cosmetics();
-    let y = 4;
-    for (const kind of ['rug', 'fx'] as const) {
-      const sub = new PaperLabel({ text: t(kind === 'rug' ? 'shop.cos.rugs' : 'shop.cos.fx'), size: 30, paper: 'kraft', minWidth: 150 });
-      sub.position.set(PAD + sub.uiBox.w / 2, y + 28);
-      inner.addChild(sub);
-      y += 66;
+    const rows = profile.cosmetics().filter(inShop);
+    // One page per kind, the profile kinds first (the shop sells no icons) (docs/명세_프로필꾸미기.md 7): a single page for all of them grew past the
+    // height a page's paper can be drawn at and came out black. A kind with nothing for sale has no page.
+    let top = 0;
+    for (const kind of ['frame', 'plate', 'rug', 'fx'] as const) {
       const list = rows.filter((r) => r.kind === kind);
+      if (list.length === 0) continue;
+      const inner = new Container();
+      const y = 4;
       list.forEach((row, i) => cosmeticCard(inner, PAD + (i % COLS) * (cw + gap), y + Math.floor(i / COLS) * (CARD_H + gap), cw, row, env));
-      y += Math.ceil(list.length / COLS) * (CARD_H + gap) + 6;
+      const h = y + Math.ceil(list.length / COLS) * (CARD_H + gap) + 6;
+      top += mountPage(root, top, pageW, inner, h - gap, { title: t('shop.cos.kind.' + kind), ribbon: 'success', tape: 'green' }) + GAP;
     }
-    return { height: mountPage(root, 0, pageW, inner, y - gap, { title: t('shop.sec.cosmetics'), ribbon: 'success', tape: 'green' }) + GAP };
+    return { height: top };
   },
 };
 
