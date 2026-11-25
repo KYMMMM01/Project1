@@ -4,7 +4,7 @@
  * every 10 minutes the server folds the top 100 of each board into one document, so opening the ranking costs one read. The player's own
  * place is asked for separately (myRank). Two boards: the endless mode's all-time best, and its best of the current week (Seoul time).
  */
-import { readLook, type LookWire } from '../../functions/src/looks';
+import { grantWeeks, readLook, type GrantWeek, type LookWire } from '../../functions/src/looks';
 import { defaultName, type NameReject } from '../../functions/src/rules';
 import { account } from './account';
 import { firebase } from './firebase';
@@ -41,13 +41,21 @@ export interface MyPlace {
 /** How a name change ended (the server's setName). */
 export type NameResult = 'ok' | NameReject | 'too-soon' | 'failed';
 
+/**
+ * How a record upload ended: 'retry' when it may go up later (signed out, offline, the 20 second cooldown), 'refused' when the server
+ * will never take it (no ticket, faster than real time, over the cap, banned), so the app stops holding it back for a resend.
+ */
+export type SubmitResult = 'ok' | 'retry' | 'refused';
+
 /** How a look upload ended (the server's setLook); 'too-soon' is its 30 second cooldown. */
 export type LookResult = 'ok' | 'too-soon' | 'failed';
 
-/** What the server needs to judge a record: the waves of the run and its simulated seconds. */
+/** What the server needs to judge a record: the waves of the run, its simulated seconds and the ticket the run got when it started. */
 export interface RunProof {
   waves: number;
   seconds: number;
+  /** startRun's ticket; a run without one (started offline or signed out) does not reach the rankings. */
+  ticket?: string;
 }
 
 const rows = (v: unknown): BoardRow[] =>
@@ -66,18 +74,34 @@ export function seoulWeek(ms: number): string {
 }
 
 export const ranking = {
-  /** Sends one finished endless run. False when signed out, offline or refused; never throws (not the player's problem mid-game). */
-  async submitRun(run: RunProof): Promise<boolean> {
-    if (account.state().status !== 'on' || !Number.isFinite(run.waves) || run.waves <= 0) return false;
+  /** A ticket for an endless run that starts now (the server's startRun); null signed out, offline or refused. Never throws. */
+  async startRun(): Promise<string | null> {
+    if (account.state().status !== 'on') return null;
     const k = await firebase();
-    if (!k) return false;
+    if (!k) return null;
+    try {
+      const call = k.fnMod.httpsCallable<unknown, { ticket?: unknown }>(k.fns, 'startRun');
+      const r = await settleWithin(call().then((x) => x.data), READ_TIMEOUT_MS, null);
+      return typeof r?.ticket === 'string' ? r.ticket : null;
+    } catch (e) {
+      console.warn('[ranking] run ticket refused:', errorMessage(e));
+      return null;
+    }
+  },
+
+  /** Sends one finished endless run with its ticket; never throws (not the player's problem mid-game). */
+  async submitRun(run: RunProof): Promise<SubmitResult> {
+    if (!run.ticket || !Number.isFinite(run.waves) || run.waves <= 0) return 'refused';
+    if (account.state().status !== 'on') return 'retry';
+    const k = await firebase();
+    if (!k) return 'retry';
     try {
       const call = k.fnMod.httpsCallable(k.fns, 'submitRun');
-      await call({ run: { waves: Math.trunc(run.waves), seconds: Math.round(run.seconds) } });
-      return true;
+      await call({ run: { waves: Math.trunc(run.waves), seconds: Math.round(run.seconds) }, ticket: run.ticket });
+      return 'ok';
     } catch (e) {
       console.warn('[ranking] submit refused:', errorMessage(e));
-      return false;
+      return /no-ticket|too-fast|bad-run|banned/.test(errorMessage(e)) ? 'refused' : 'retry';
     }
   },
 
@@ -130,6 +154,27 @@ export const ranking = {
       return { name: typeof d?.name === 'string' ? d.name : defaultName(s.uid), look: readLook(d?.look) };
     } catch (e) {
       console.warn('[ranking] profile read failed:', errorMessage(e));
+      return null;
+    }
+  },
+
+  /**
+   * The signed-in player's settled weekly rewards (the server's claimGrants, docs/명세_프로필꾸미기.md 5.3): up to 52 weeks, each with the
+   * place and the items, checked again here. The server marks nothing: the caller pays the weeks it has not paid yet. Null signed out,
+   * offline or failed; never throws.
+   */
+  async claimGrants(): Promise<GrantWeek[] | null> {
+    if (account.state().status !== 'on') return null;
+    const k = await firebase();
+    if (!k) return null;
+    try {
+      const call = k.fnMod.httpsCallable<unknown, { weeks?: unknown }>(k.fns, 'claimGrants');
+      const r = await settleWithin(call().then((x) => x.data), READ_TIMEOUT_MS, null);
+      // The answer is a list; grantWeeks reads the form the server stores (keyed by week), so key the list the same way.
+      const list = Array.isArray(r?.weeks) ? (r.weeks as GrantWeek[]) : null;
+      return list && grantWeeks({ weeks: Object.fromEntries(list.map((g) => [g?.week, g])) });
+    } catch (e) {
+      console.warn('[ranking] grants read failed:', errorMessage(e));
       return null;
     }
   },

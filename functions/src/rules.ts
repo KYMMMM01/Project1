@@ -5,9 +5,12 @@ export type BoardKind = 'endless' | 'week';
 
 /**
  * Most waves a run is believed to reach (the record is the waves). Bots: the best of 480 runs went to 111 and none passed 120, enemy health
- * growing x1.12 a wave past 80. This cap, not the time floor, is what bounds a forged record; raise it with a redeploy if a player nears it.
+ * growing x1.12 a wave past 80. This cap, with the run ticket's real time, is what bounds a forged record: lowered from 150 to 130 on
+ * 2026-11-26 (security review); the function log warns past NEAR_MAX_WAVES, raise it with a redeploy if a real player nears it.
  */
-export const MAX_WAVES = 150;
+export const MAX_WAVES = 130;
+/** A record this high is logged, so the cap is raised before an honest player reaches it. */
+export const NEAR_MAX_WAVES = 125;
 export const SUBMIT_COOLDOWN_MS = 20_000;
 
 export type WaveKind = 'normal' | 'elite' | 'boss';
@@ -45,7 +48,26 @@ export interface Run {
   seconds: number;
 }
 
-export type RejectReason = 'bad-board' | 'bad-run' | 'too-fast' | 'too-soon' | NameReject;
+export type RejectReason = 'bad-board' | 'bad-run' | 'too-fast' | 'too-soon' | 'no-ticket' | 'banned' | NameReject;
+
+/**
+ * The run ticket: the server writes down when an endless run starts (startRun) and the run hands the ticket back with its record, so the
+ * real time a run took is known from the server's clock alone. The battle runs at most this many times faster than real time (BattleScene
+ * setSpeed clamps to 3; pauses and frame-time caps only make the real time longer), so a run's simulated seconds can never be more than
+ * this many times the real seconds between its ticket and its record.
+ */
+export const MAX_GAME_SPEED = 3;
+/**
+ * Grace for the ticket arriving after the run began: it is fetched without holding the start back, and asked again 20 and 45 seconds in
+ * when the first try fails (signed in a moment late, a weak signal), each try waiting up to 8 seconds.
+ */
+export const TICKET_SLACK_MS = 60_000;
+/** A ticket older than this is void: a forger cannot keep aged tickets to post at will (a run resumed days later loses its ranking). */
+export const TICKET_MAX_AGE_MS = 48 * 3_600_000;
+/** Tickets a player keeps: a run whose record could not go up (offline, too soon) is sent later with its own ticket. */
+export const TICKETS_KEPT = 5;
+/** Within this long of the last ticket a new run gets that ticket again instead of a new one (a restart right after a start). */
+export const TICKET_COOLDOWN_MS = 5_000;
 
 /** Shortest wait between two name changes of one player. */
 export const NAME_COOLDOWN_MS = 30_000;
@@ -84,16 +106,32 @@ export function isBoardKind(b: unknown): b is BoardKind {
 
 /**
  * Returns null when one finished endless run is acceptable, else why not. The run's waves are its record on both boards (the all-time
- * and the week's), so one call per run feeds both. `lastAtMs` is the previous accepted submit of this uid.
+ * and the week's), so one call per run feeds both. `lastAtMs` is the previous accepted submit of this uid; `ticketAtMs` is when the
+ * run's ticket was given (null: the run brought no ticket this player holds), and the real time since then must cover the simulated
+ * seconds at the fastest game speed.
  */
-export function validateRun(run: unknown, nowMs: number, lastAtMs: number | null): RejectReason | null {
+export function validateRun(run: unknown, nowMs: number, lastAtMs: number | null, ticketAtMs: number | null): RejectReason | null {
   const r = run as Partial<Run> | null;
   if (!r || typeof r !== 'object' || !isInt(r.waves) || r.waves < 1 || r.waves > MAX_WAVES) return 'bad-run';
   if (typeof r.seconds !== 'number' || !Number.isFinite(r.seconds) || r.seconds < 0) return 'bad-run';
   if (r.seconds > (r.waves + 1) * MAX_WAVE_SECONDS) return 'bad-run';
   if (r.seconds < minRunSeconds(r.waves)) return 'too-fast';
+  if (ticketAtMs === null || nowMs - ticketAtMs > TICKET_MAX_AGE_MS) return 'no-ticket';
+  if (nowMs - ticketAtMs + TICKET_SLACK_MS < (r.seconds * 1000) / MAX_GAME_SPEED) return 'too-fast';
   if (lastAtMs !== null && nowMs - lastAtMs < SUBMIT_COOLDOWN_MS) return 'too-soon';
   return null;
+}
+
+/** A player's live tickets, newest first: malformed entries (not a number) and void ones (past TICKET_MAX_AGE_MS) left out. */
+export function liveTickets(tickets: unknown, nowMs: number): [string, number][] {
+  return Object.entries(tickets && typeof tickets === 'object' ? (tickets as Record<string, unknown>) : {})
+    .filter((e): e is [string, number] => typeof e[1] === 'number' && nowMs - e[1] <= TICKET_MAX_AGE_MS)
+    .sort((a, b) => b[1] - a[1]);
+}
+
+/** A player's tickets after a new one is given: `id` at `nowMs` added to the live ones, the oldest dropped past TICKETS_KEPT. */
+export function addTicket(tickets: unknown, id: string, nowMs: number): Record<string, number> {
+  return Object.fromEntries([...liveTickets(tickets, nowMs).slice(0, TICKETS_KEPT - 1), [id, nowMs]]);
 }
 
 /** Monday (YYYY-MM-DD) of the week containing `nowMs`, in Asia/Seoul time; same value as the client's weekKey. */

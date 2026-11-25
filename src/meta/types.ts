@@ -37,7 +37,7 @@ export type Reason =
   | 'weekly_mission' | 'calendar' | 'comeback' | 'treat' | 'snack_chest' | 'shop_buy' | 'shop_refresh'
   | 'ticket_buy' | 'ticket_ad' | 'ticket_daily' | 'pass_free' | 'pass_premium' | 'account_level' | 'cup'
   | 'endless' | 'cosmetic_buy' | 'cosmetic_gold' | 'piggy' | 'iap' | 'iap_revoke' | 'gem_pass' | 'offer_revive' | 'offer_double'
-  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation' | 'dungeon' | 'offer_dungeon' | 'achievement' | 'test';
+  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation' | 'dungeon' | 'offer_dungeon' | 'achievement' | 'rank_reward' | 'test';
 
 // ───────────────────────────── rewards ─────────────────────────────
 
@@ -174,6 +174,8 @@ export interface PendingRun {
   init: BattleInit;
   snapshot: BattleSnapshot | null;
   startedAt: number;
+  /** An endless run's ranking ticket (MetaDeps.runTicket), kept with the run so a run resumed after the app closed still reaches the rankings. */
+  ticket?: string;
 }
 
 /** What a finished run paid, kept until the next run so the result screen can show and double it. */

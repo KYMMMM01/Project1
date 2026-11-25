@@ -12,17 +12,37 @@ import { attachPlatform } from './platformLink';
 import { createProfile } from './profile';
 
 /**
- * The best endless run of this session that did not reach the rankings (signed out, offline, refused as too soon): sent on the next
- * sign-in or the next run. Kept in memory only; the cloud save keeps the record itself for a later backfill.
+ * The best endless run of this session that did not reach the rankings but still may (signed out, offline, refused as too soon): sent on
+ * the next sign-in or the next run. Kept in memory only; the cloud save keeps the record itself for a later backfill.
  */
 let unsent: RunProof | null = null;
 
 function sendRun(run: RunProof): void {
-  void ranking.submitRun(run).then((ok) => {
-    if (ok) {
-      if (unsent && unsent.waves <= run.waves) unsent = null;
-    } else if (!unsent || run.waves > unsent.waves) unsent = run;
+  // A run that started offline or signed out has no ticket and cannot reach the rankings: nothing to keep for later either.
+  if (!run.ticket) return;
+  void ranking.submitRun(run).then((r) => {
+    if (r === 'retry') {
+      if (!unsent || run.waves > unsent.waves) unsent = run;
+      return;
+    }
+    // Sent, or refused for good: either way it must not hold back the runs after it.
+    if (unsent === run || (r === 'ok' && unsent && unsent.waves <= run.waves)) unsent = null;
   });
+}
+
+/** When the first ask for a run's ticket fails (signed in a moment late, a weak signal), ask again this long after the run's start. */
+const TICKET_RETRIES_MS = [20_000, 45_000];
+
+/** A ticket for an endless run that starts now; the server allows for it arriving up to a minute late (TICKET_SLACK_MS). */
+async function runTicket(): Promise<string | null> {
+  const start = Date.now();
+  let ticket = await ranking.startRun();
+  for (const at of TICKET_RETRIES_MS) {
+    if (ticket) break;
+    await new Promise((r) => setTimeout(r, Math.max(0, start + at - Date.now())));
+    ticket = await ranking.startRun();
+  }
+  return ticket;
 }
 
 export const profile = createProfile({
@@ -31,9 +51,12 @@ export const profile = createProfile({
   submitScore: (board, score, run) => {
     platform.leaderboard?.submit(board, score).catch(() => undefined);
     if (board !== ENDLESS_BOARD_ID || !run) return;
-    // A better run waiting from before goes up with this one's turn (the server takes one run per player every 20 seconds).
-    sendRun(unsent && unsent.waves > run.waves ? unsent : run);
+    // A better run waiting from before goes up with this one's turn (the server takes one run per player every 20 seconds); so does a
+    // waiting one when this run has no ticket.
+    const best = run.ticket && !(unsent && unsent.waves > run.waves) ? run : unsent;
+    if (best) sendRun(best);
   },
+  runTicket,
   // The same condition that shows the test ad and the test purchase sheet: the development adapter.
   testGrants: PLATFORM_ID === 'dev',
 });

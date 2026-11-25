@@ -10,6 +10,7 @@ import { profile, featureHint, type FeatureId } from '@/meta';
 import { account } from '@/platform';
 import { TabBar, toast, type TabDef } from '@/ui';
 import { onNameChange, refreshName } from '@/screens/system/profileName';
+import { claimRankGrants } from '@/screens/system/rankGrants';
 import { shell, type HomeSurface } from '@/screens/shell/controller';
 import { HomeFloor } from '@/screens/shell/HomeFloor';
 import { clearPointer, showPointer } from '@/screens/shell/HomePointer';
@@ -81,19 +82,29 @@ export class HomeScene extends Scene implements HomeSurface {
     shell.attach(this);
     audio.music('home');
     profile.refresh();
+    // Weekly rewards pop up only while the home is still the scene when the server answers (exit clears it).
+    let live = true;
+    const here = (): boolean => live;
     this.offs.push(
       profile.subscribe(() => this.refresh()),
       i18nEvents.on('change', () => this.rebuild()),
       onNameChange((name) => this.topBar.setName(name)),
-      account.onChange(() => void refreshName()),
+      account.onChange(() => {
+        void refreshName();
+        void claimRankGrants(here);
+      }),
+      () => (live = false),
     );
     // Back in front after the app was away: the name may have changed on another device.
     const visible = (): void => {
-      if (document.visibilityState === 'visible') void refreshName();
+      if (document.visibilityState !== 'visible') return;
+      void refreshName();
+      void claimRankGrants(here);
     };
     document.addEventListener('visibilitychange', visible);
     this.offs.push(() => document.removeEventListener('visibilitychange', visible));
     void refreshName();
+    void claimRankGrants(here);
     this.relayout();
     this.host.start();
     this.refresh(false);

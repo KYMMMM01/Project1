@@ -35,7 +35,7 @@ const REASONS: readonly Reason[] = [
   'chest_overflow', 'chest_skip', 'patrol', 'patrol_double', 'mission', 'mission_chest', 'weekly_mission', 'calendar',
   'comeback', 'treat', 'snack_chest', 'shop_buy', 'shop_refresh', 'ticket_buy', 'ticket_ad', 'ticket_daily', 'pass_free',
   'pass_premium', 'account_level', 'cup', 'endless', 'cosmetic_buy', 'cosmetic_gold', 'piggy', 'iap', 'iap_revoke', 'gem_pass',
-  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'achievement', 'test',
+  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'achievement', 'rank_reward', 'test',
 ];
 
 describe('the one money path', () => {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
@@ -7,8 +8,8 @@ import * as v1 from 'firebase-functions/v1';
 import * as logger from 'firebase-functions/logger';
 import { GoogleAuth } from 'google-auth-library';
 import { cleanOrderIds, nextCursor, parseVoidedPage, startTimeFor, type RefundRecord } from './refunds';
-import { cleanLook, grantedItems, LOOK_COOLDOWN_MS, type LookWire } from './looks';
-import { boardId, cleanName, defaultName, isBoardKind, NAME_COOLDOWN_MS, validateRun, type BoardKind, type Run } from './rules';
+import { cleanLook, grantedItems, grantWeeks, LOOK_COOLDOWN_MS, rankTier, RANK_REWARDS, weeksToSettle, type LookWire } from './looks';
+import { addTicket, boardId, liveTickets, cleanName, defaultName, isBoardKind, NAME_COOLDOWN_MS, NEAR_MAX_WAVES, seoulWeekKey, TICKET_COOLDOWN_MS, validateRun, type BoardKind, type Run } from './rules';
 
 initializeApp();
 const db = getFirestore();
@@ -22,33 +23,71 @@ function reject(reason: string): never {
   throw new HttpsError(reason === 'too-soon' ? 'resource-exhausted' : 'invalid-argument', reason);
 }
 
+/**
+ * Accounts kept off the rankings (bans/{uid}, made by hand in the Firebase console, see docs/계정_Firebase.md): their records are refused,
+ * and the folded boards and the weekly settlement leave them out. Read whole: a short list, one read per document.
+ */
+async function bannedUids(): Promise<Set<string>> {
+  return new Set((await db.collection('bans').get()).docs.map((d) => d.id));
+}
+
+// An endless run starts: the server writes down when (runs/{uid}.tickets.<id>), so the record it sends at the end can be checked against
+// real time (validateRun). The app asks for it at the run's start without waiting (and again a little later when that fails); a run that
+// gets none does not reach the rankings. Within TICKET_COOLDOWN_MS of the last ticket the newest live one is given again: an older
+// ticket only makes the real-time check stricter. Cost: 1 read + at most 1 write.
+export const startRun = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'unauthenticated');
+  const now = Date.now();
+  const ref = db.doc(`runs/${uid}`);
+  return db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const last = doc.get('at') as number | undefined;
+    const newest = liveTickets(doc.get('tickets'), now)[0];
+    if (newest && last !== undefined && now - last < TICKET_COOLDOWN_MS) return { ticket: newest[0] };
+    const ticket = randomUUID().replace(/-/g, '');
+    tx.set(ref, { at: now, tickets: addTicket(doc.get('tickets'), ticket, now) });
+    return { ticket };
+  });
+});
+
 // One finished endless run: its waves raise the player's record on every board it beats (the all-time one and this week's, the week
-// taken from the server's clock in Seoul time). One call per run, so the per-player cooldown never drops a board.
+// taken from the server's clock in Seoul time). One call per run, so the per-player cooldown never drops a board. The run's ticket
+// (startRun) is used up when the record is accepted, and also when it is refused as too fast, so a forger cannot probe the bound with it.
 export const submitRun = onCall(async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'unauthenticated');
-  const run = (req.data as { run?: unknown } | undefined)?.run;
+  const data = req.data as { run?: unknown; ticket?: unknown } | undefined;
+  const run = data?.run;
+  const ticket = typeof data?.ticket === 'string' && /^[0-9a-f]{32}$/.test(data.ticket) ? data.ticket : null;
   const now = Date.now();
   const rateRef = db.doc(`rate/${uid}`);
+  const runsRef = db.doc(`runs/${uid}`);
 
-  return db.runTransaction(async (tx) => {
-    const rate = await tx.get(rateRef);
+  // A refusal is returned out of the transaction, not thrown in it, so the burnt ticket's delete is kept.
+  const result = await db.runTransaction(async (tx) => {
+    const [rate, runs, ban] = await Promise.all([tx.get(rateRef), tx.get(runsRef), tx.get(db.doc(`bans/${uid}`))]);
+    if (ban.exists) return { why: 'banned' as const };
     const last = (rate.get('at') as number | undefined) ?? null;
-    const why = validateRun(run, now, last);
+    const at = ticket ? (runs.get('tickets') as Record<string, unknown> | undefined)?.[ticket] : undefined;
+    const why = validateRun(run, now, last, typeof at === 'number' ? at : null);
     if (why) {
       // Kept in the function log to tune the time floor and the waves cap from real runs (docs/계정_Firebase.md).
-      if (why !== 'too-soon') logger.warn('submitRun rejected', { uid, why, run });
-      reject(why);
+      if (why !== 'too-soon') logger.warn('submitRun rejected', { uid, why, run, ticketAge: typeof at === 'number' ? now - at : null });
+      if (why === 'too-fast' && typeof at === 'number') tx.update(runsRef, { [`tickets.${ticket}`]: FieldValue.delete() });
+      return { why };
     }
     const s = (run as Run).waves;
+    if (s >= NEAR_MAX_WAVES) logger.warn('submitRun near the waves cap', { uid, run });
 
     const refs = BOARDS.map((kind) => db.doc(`boards/${boardId(kind, now)}/entries/${uid}`));
     const [user, ...entries] = await Promise.all([tx.get(db.doc(`users/${uid}`)), ...refs.map((r) => tx.get(r))]);
     const name = (user.get('name') as string | undefined) ?? defaultName(uid);
     // tx.set replaces the whole entry, so the player's look is carried over here (the field is left out when there is none: admin rejects undefined).
     const look = user.get('look') as LookWire | undefined;
-    // The cooldown counts every accepted call, even one that raises nothing.
+    // The cooldown counts every accepted call, even one that raises nothing; the ticket cannot be sent twice.
     tx.set(rateRef, { at: now }, { merge: true });
+    tx.update(runsRef, { [`tickets.${ticket}`]: FieldValue.delete() });
     const best: Record<string, number> = {};
     entries.forEach((entry, i) => {
       const prev = entry.exists ? (entry.get('score') as number) : 0;
@@ -58,6 +97,8 @@ export const submitRun = onCall(async (req) => {
     });
     return { ok: true, best };
   });
+  if (result.why) reject(result.why);
+  return result;
 });
 
 // The player's ranking name: checked here (the rules keep clients from writing it), then put on the save document, on the player's records
@@ -126,19 +167,20 @@ export const setLook = onCall(async (req) => {
   });
 });
 
-// Runs every 10 minutes: 2 boards x (up to 100 reads + 1 count aggregation) + 2 writes.
+// Runs every 10 minutes: 1 read per ban + 2 boards x (up to 100 reads + 1 per ban + 1 count aggregation) + 2 writes.
 export const refreshBoards = onSchedule('every 10 minutes', async () => {
   const now = Date.now();
+  const banned = await bannedUids();
   for (const kind of BOARDS) {
     const id = boardId(kind, now);
     const entries = db.collection(`boards/${id}/entries`);
     const [top, count] = await Promise.all([
-      entries.orderBy('score', 'desc').orderBy('at', 'asc').limit(100).get(),
+      entries.orderBy('score', 'desc').orderBy('at', 'asc').limit(100 + banned.size).get(),
       entries.count().get(),
     ]);
     const doc: Record<string, unknown> = {
       // An entry written before looks existed has none; the row then leaves the field out (admin rejects undefined).
-      top: top.docs.map((d) => {
+      top: top.docs.filter((d) => !banned.has(d.id)).slice(0, 100).map((d) => {
         const look = d.get('look') as LookWire | undefined;
         return { uid: d.id, name: d.get('name'), score: d.get('score'), ...(look && { look }) };
       }),
@@ -148,6 +190,47 @@ export const refreshBoards = onSchedule('every 10 minutes', async () => {
     if (kind === 'week') doc.weekId = id;
     await db.doc(`boards/${kind}`).set(doc);
   }
+});
+
+// Every hour: settles each finished week board that is not settled yet (meta/weekSettle.last is the newest settled week id) by writing the
+// rank items of its top 100 to grants/{uid}.weeks.<week> (docs/명세_프로필꾸미기.md 5.3). The place is the position in the same query
+// refreshBoards uses, so it needs no new index. The cursor moves only after a week's writes all succeeded; on a failure the run stops
+// and the next hour retries, which is safe because rewriting the same values changes nothing. A merged set keeps the other weeks.
+// Cost when a week is due (about once a week): 1 cursor read + per week 1 read per ban, up to 100 reads (plus 1 per ban) and 100 writes,
+// 1 cursor write. Other hours: 1 read.
+export const settleWeek = onSchedule({ schedule: 'every 1 hours', timeZone: 'Asia/Seoul' }, async () => {
+  const cursorRef = db.doc('meta/weekSettle');
+  const last = ((await cursorRef.get()).get('last') as string | undefined) ?? null;
+  const weeks = weeksToSettle(last, Date.now(), seoulWeekKey);
+  if (weeks.length === 0) return;
+  for (const week of weeks) {
+    try {
+      // Banned accounts give up their places, read fresh for each week so a ban made during a retry counts.
+      const banned = await bannedUids();
+      const top = await db.collection(`boards/${week}/entries`).orderBy('score', 'desc').orderBy('at', 'asc').limit(100 + banned.size).get();
+      const grants = top.docs.filter((d) => !banned.has(d.id)).slice(0, 100).flatMap((d, i) => {
+        const tier = rankTier(i + 1);
+        return tier ? [{ uid: d.id, rank: i + 1, items: RANK_REWARDS[tier] }] : [];
+      });
+      // At most 100 rows, so one batch (limit 500) always holds them.
+      const batch = db.batch();
+      for (const g of grants) batch.set(db.doc(`grants/${g.uid}`), { weeks: { [week]: { rank: g.rank, items: g.items } } }, { merge: true });
+      await batch.commit();
+      await cursorRef.set({ last: week, updatedAt: FieldValue.serverTimestamp() });
+      logger.info('settleWeek done', { week, granted: grants.length });
+    } catch (e) {
+      logger.error('settleWeek failed; the cursor stays', { week, error: e instanceof Error ? e.message : String(e) });
+      return;
+    }
+  }
+});
+
+// The rank rewards the signed-in player has earned, newest GRANT_WEEKS_KEPT weeks, for the app to claim (rules keep clients from writing
+// grants). Cost: 1 read, no writes.
+export const claimGrants = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'unauthenticated');
+  return { weeks: grantWeeks((await db.doc(`grants/${uid}`).get()).data()) };
 });
 
 // Cost: one count() aggregation is billed as roughly 1 document read per 1000 index entries counted
@@ -175,6 +258,8 @@ export const onUserDeleted = v1.region(REGION).auth.user().onDelete(async (user)
   const batch = db.batch();
   batch.delete(db.doc(`users/${uid}`));
   batch.delete(db.doc(`rate/${uid}`));
+  batch.delete(db.doc(`grants/${uid}`));
+  batch.delete(db.doc(`runs/${uid}`));
   for (const b of boards) batch.delete(b.collection('entries').doc(uid));
   await batch.commit();
 });

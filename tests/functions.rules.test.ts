@@ -4,6 +4,12 @@ import {
   MAX_WAVE_SECONDS,
   MIN_WAVE_SECONDS,
   SUBMIT_COOLDOWN_MS,
+  MAX_GAME_SPEED,
+  TICKET_SLACK_MS,
+  TICKETS_KEPT,
+  TICKET_MAX_AGE_MS,
+  addTicket,
+  liveTickets,
   boardId,
   cleanName,
   defaultName,
@@ -29,33 +35,35 @@ import { scriptFor } from '../src/game/data/waves';
 
 const NOW = Date.UTC(2026, 10, 12, 3, 0, 0);
 const okRun = (waves: number) => ({ waves, seconds: minRunSeconds(waves) + 1 });
+/** A ticket given long enough ago for any run: the real-time check is tested on its own below. */
+const TICKET = NOW - 10 * 3_600_000;
 
 describe('validateRun', () => {
   it('accepts a plausible run, the record being its waves', () => {
-    expect(validateRun(okRun(20), NOW, null)).toBeNull();
-    expect(validateRun(okRun(1), NOW, null)).toBeNull();
-    expect(validateRun(okRun(MAX_WAVES), NOW, null)).toBeNull();
+    expect(validateRun(okRun(20), NOW, null, TICKET)).toBeNull();
+    expect(validateRun(okRun(1), NOW, null, TICKET)).toBeNull();
+    expect(validateRun(okRun(MAX_WAVES), NOW, null, TICKET)).toBeNull();
   });
 
   it('rejects malformed runs, a run with no wave cleared and one past the cap', () => {
-    expect(validateRun(null, NOW, null)).toBe('bad-run');
-    expect(validateRun({ waves: 1.5, seconds: 99 }, NOW, null)).toBe('bad-run');
-    expect(validateRun({ waves: 1, seconds: NaN }, NOW, null)).toBe('bad-run');
-    expect(validateRun({ waves: '5', seconds: 99 }, NOW, null)).toBe('bad-run');
-    expect(validateRun(okRun(0), NOW, null)).toBe('bad-run');
-    expect(validateRun(okRun(MAX_WAVES + 1), NOW, null)).toBe('bad-run');
+    expect(validateRun(null, NOW, null, TICKET)).toBe('bad-run');
+    expect(validateRun({ waves: 1.5, seconds: 99 }, NOW, null, TICKET)).toBe('bad-run');
+    expect(validateRun({ waves: 1, seconds: NaN }, NOW, null, TICKET)).toBe('bad-run');
+    expect(validateRun({ waves: '5', seconds: 99 }, NOW, null, TICKET)).toBe('bad-run');
+    expect(validateRun(okRun(0), NOW, null, TICKET)).toBe('bad-run');
+    expect(validateRun(okRun(MAX_WAVES + 1), NOW, null, TICKET)).toBe('bad-run');
     // A forged record with time to match: past the cap it is refused whatever seconds it claims.
-    expect(validateRun({ waves: 10000, seconds: 10_000_000 }, NOW, null)).toBe('bad-run');
+    expect(validateRun({ waves: 10000, seconds: 10_000_000 }, NOW, null, TICKET)).toBe('bad-run');
   });
 
   it('rejects runs faster than the floor of their waves, and ones claiming more time than waves can take', () => {
     // 8 waves: 6 normal, the elite of wave 4 and the boss of wave 8.
     expect(minRunSeconds(8)).toBe(6 * MIN_WAVE_SECONDS.normal + MIN_WAVE_SECONDS.elite + MIN_WAVE_SECONDS.boss);
-    expect(validateRun({ waves: 8, seconds: minRunSeconds(8) }, NOW, null)).toBeNull();
-    expect(validateRun({ waves: 8, seconds: minRunSeconds(8) - 1 }, NOW, null)).toBe('too-fast');
-    expect(validateRun({ waves: 100, seconds: 300 }, NOW, null)).toBe('too-fast');
-    expect(validateRun({ waves: 3, seconds: 4 * MAX_WAVE_SECONDS }, NOW, null)).toBeNull();
-    expect(validateRun({ waves: 3, seconds: 4 * MAX_WAVE_SECONDS + 1 }, NOW, null)).toBe('bad-run');
+    expect(validateRun({ waves: 8, seconds: minRunSeconds(8) }, NOW, null, TICKET)).toBeNull();
+    expect(validateRun({ waves: 8, seconds: minRunSeconds(8) - 1 }, NOW, null, TICKET)).toBe('too-fast');
+    expect(validateRun({ waves: 100, seconds: 300 }, NOW, null, TICKET)).toBe('too-fast');
+    expect(validateRun({ waves: 3, seconds: 4 * MAX_WAVE_SECONDS }, NOW, null, TICKET)).toBeNull();
+    expect(validateRun({ waves: 3, seconds: 4 * MAX_WAVE_SECONDS + 1 }, NOW, null, TICKET)).toBe('bad-run');
   });
 
   it('keeps the elite and boss rhythm of the real wave scripts, in every chapter and past wave 24', () => {
@@ -80,8 +88,8 @@ describe('validateRun', () => {
   });
 
   it('allows one submit per cooldown window', () => {
-    expect(validateRun(okRun(5), NOW, NOW - SUBMIT_COOLDOWN_MS + 1)).toBe('too-soon');
-    expect(validateRun(okRun(5), NOW, NOW - SUBMIT_COOLDOWN_MS)).toBeNull();
+    expect(validateRun(okRun(5), NOW, NOW - SUBMIT_COOLDOWN_MS + 1, TICKET)).toBe('too-soon');
+    expect(validateRun(okRun(5), NOW, NOW - SUBMIT_COOLDOWN_MS, TICKET)).toBeNull();
   });
 });
 
@@ -132,5 +140,39 @@ describe('cleanName', () => {
 
   it('is the same check for decomposed Hangul (normalised before the test)', () => {
     expect(cleanName('냥이'.normalize('NFD'))).toEqual({ name: '냥이' });
+  });
+});
+
+describe('run tickets', () => {
+  it('refuses a run without a ticket this player holds', () => {
+    expect(validateRun(okRun(20), NOW, null, null)).toBe('no-ticket');
+  });
+
+  it('needs the real time since the ticket to cover the simulated seconds at the fastest speed', () => {
+    const run = { waves: 40, seconds: 3_000 };
+    const need = (run.seconds * 1000) / MAX_GAME_SPEED - TICKET_SLACK_MS;
+    expect(validateRun(run, NOW, null, NOW - need)).toBeNull();
+    expect(validateRun(run, NOW, null, NOW - need + 1)).toBe('too-fast');
+    // A forged top record right after taking a ticket.
+    expect(validateRun({ waves: MAX_WAVES, seconds: minRunSeconds(MAX_WAVES) }, NOW, null, NOW - 1_000)).toBe('too-fast');
+  });
+
+  it('checks the ticket before the cooldown, so a refused forgery does not reveal the cooldown', () => {
+    expect(validateRun(okRun(5), NOW, NOW - 1, null)).toBe('no-ticket');
+  });
+
+  it('voids a ticket older than the maximum age, so aged tickets cannot be banked', () => {
+    expect(validateRun(okRun(20), NOW, null, NOW - TICKET_MAX_AGE_MS)).toBeNull();
+    expect(validateRun(okRun(20), NOW, null, NOW - TICKET_MAX_AGE_MS - 1)).toBe('no-ticket');
+  });
+
+  it('keeps the newest live tickets and drops malformed and void ones', () => {
+    let t: Record<string, number> = {};
+    for (let i = 0; i < TICKETS_KEPT + 3; i++) t = addTicket(t, 'k' + i, 1000 + i);
+    expect(Object.keys(t).sort()).toEqual(Array.from({ length: TICKETS_KEPT }, (_, i) => 'k' + (i + 3)).sort());
+    expect(addTicket({ a: 'x', b: 5 }, 'c', 9)).toEqual({ b: 5, c: 9 });
+    expect(addTicket(null, 'c', 9)).toEqual({ c: 9 });
+    expect(addTicket({ old: 0, young: TICKET_MAX_AGE_MS }, 'c', TICKET_MAX_AGE_MS + 1)).toEqual({ young: TICKET_MAX_AGE_MS, c: TICKET_MAX_AGE_MS + 1 });
+    expect(liveTickets({ a: 5, b: 9, c: 'x' }, 10).map(([id]) => id)).toEqual(['b', 'a']);
   });
 });

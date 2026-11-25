@@ -5,6 +5,7 @@
 import type { BattleInit, BattleMode, BattleSnapshot, DailyModifierId, RunStats } from '@/game/api';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
 import { MYTHIC_UNIT_IDS } from '@/game/data/roster';
+import { parseSnapshot } from '@/game/sim/snapshot';
 import { randomSeed } from '@/core/rng';
 import { skillsOn } from '@/core/skillSwitch';
 import { mergeLedgers, normalizeLedger, type GrantSource } from '@/platform/iapService';
@@ -101,11 +102,11 @@ function snackFields(id: SnackId): Pick<BattleInit, 'bonusFish' | 'bonusPurr' | 
 }
 
 /** Stats for a run that ended without the battle reporting (the app was killed): a defeat at that wave. */
-function interruptedStats(init: BattleInit, wavesCleared: number): RunStats {
+function interruptedStats(init: BattleInit, wavesCleared: number, duration: number): RunStats {
   return {
     mode: init.mode, chapter: init.chapter, stake: init.stake, seed: init.seed, victory: false,
     wavesCleared, totalWaves: 0, kills: 0, bossesKilled: 0, summons: 0, merges: 0, molts: 0, awakenings: 0,
-    relics: [], bestRarity: 'common', mythics: [], peakEnemies: 0, duration: 0, revived: false, summonLuck: 0.5, damageByUnit: {},
+    relics: [], bestRarity: 'common', mythics: [], peakEnemies: 0, duration, revived: false, summonLuck: 0.5, damageByUnit: {},
   };
 }
 
@@ -202,10 +203,18 @@ export class Profile extends RoutineProfile {
       ...(modifiers ? { modifiers } : {}),
       ...(o.snack ? snackFields(o.snack.id) : {}),
     };
-    this.data.pending = { init, snapshot: null, startedAt: this.now() };
+    const pending: PendingRun = { init, snapshot: null, startedAt: this.now() };
+    this.data.pending = pending;
     this.deps.analytics.track('run_start', { mode: o.mode, chapter, stake });
     this.commit();
     await this.flush();
+    // Not awaited: the battle starts at once and the ticket joins the run when it comes (the server allows for the delay).
+    if (o.mode === 'endless')
+      void this.deps.runTicket?.().then((ticket) => {
+        if (!ticket || this.data.pending !== pending) return;
+        pending.ticket = ticket;
+        this.commit();
+      });
     return ok(init);
   }
 
@@ -231,7 +240,9 @@ export class Profile extends RoutineProfile {
   async settlePendingRun(): Promise<Result<RunReward>> {
     const p = this.data.pending;
     if (!p) return fail('nothing_to_claim');
-    return this.finishRun(interruptedStats(p.init, Math.max(0, (p.snapshot?.wave ?? 1) - 1)));
+    // The simulated time stored with the last wave start: a record settled with 0 seconds would be refused by the rankings as too fast.
+    const time = p.snapshot ? (parseSnapshot(p.snapshot)?.time ?? 0) : 0;
+    return this.finishRun(interruptedStats(p.init, Math.max(0, (p.snapshot?.wave ?? 1) - 1), time));
   }
 
   /**
@@ -282,7 +293,10 @@ export class Profile extends RoutineProfile {
       d.endless.weekBest = Math.max(d.endless.weekBest, stats.wavesCleared);
       // Every run goes up, not only a new local best: the server keeps the best per board and decides the week by its own clock (a
       // phone in another time zone starts its week on a different day), and a run sent while signed out is not lost for the week.
-      if (stats.wavesCleared > 0) this.deps.submitScore?.(ENDLESS_BOARD_ID, stats.wavesCleared, { waves: stats.wavesCleared, seconds: stats.duration });
+      if (stats.wavesCleared > 0) {
+        const ticket = d.pending?.ticket;
+        this.deps.submitScore?.(ENDLESS_BOARD_ID, stats.wavesCleared, { waves: stats.wavesCleared, seconds: stats.duration, ...(ticket ? { ticket } : {}) });
+      }
     } else if (stats.mode === 'gold') {
       const best = d.dungeon.best[stats.chapter - 1];
       // The record is the run's whole pay, the chest's share included (a record made before 2026-10-12 had no chest and a longer script: any win now beats it).
@@ -631,6 +645,7 @@ export function createProfile(deps: Pick<MetaDeps, 'analytics' | 'ads'> & Partia
     analytics: deps.analytics,
     ads: deps.ads,
     submitScore: deps.submitScore,
+    runTicket: deps.runTicket,
     testGrants: deps.testGrants === true,
   });
 }

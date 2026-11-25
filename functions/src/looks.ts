@@ -49,14 +49,7 @@ export const LOOK_COOLDOWN_MS = 30_000;
 
 /** The rank items grants/{uid} holds: every item of every settled week ({ weeks: { [weekId]: { rank, items } } }). */
 export function grantedItems(grants: unknown): Set<string> {
-  const out = new Set<string>();
-  const weeks = (grants as { weeks?: unknown } | null | undefined)?.weeks;
-  if (!weeks || typeof weeks !== 'object') return out;
-  for (const w of Object.values(weeks as Record<string, unknown>)) {
-    const items = (w as { items?: unknown } | null)?.items;
-    if (Array.isArray(items)) for (const id of items) if (typeof id === 'string') out.add(id);
-  }
-  return out;
+  return new Set(grantWeeks(grants).flatMap((g) => g.items));
 }
 
 /**
@@ -96,4 +89,65 @@ export function readLook(v: unknown): LookWire | null {
 /** Same look, field by field. */
 export function sameLook(a: LookWire | null, b: LookWire | null): boolean {
   return !!a && !!b && a.i === b.i && a.f === b.f && a.p === b.p && a.lv === b.lv;
+}
+
+// --- Weekly ranking rewards (docs/명세_프로필꾸미기.md 5.3) ---
+
+export type RankTier = 1 | 3 | 10 | 100;
+
+/** The tier a place on a settled week falls in (1st, 2nd to 3rd, 4th to 10th, 11th to 100th), or null past 100. */
+export function rankTier(place: number): RankTier | null {
+  if (!Number.isInteger(place) || place < 1) return null;
+  return place === 1 ? 1 : place <= 3 ? 3 : place <= 10 ? 10 : place <= 100 ? 100 : null;
+}
+
+/**
+ * What each tier hands out. Only the tier's own items: a higher tier does not add the lower ones. The 1st place's trophy cat icon
+ * (icon_rank_1) joins when its picture exists; the game's catalogue lists these ids with source { type: 'rank', tier }.
+ */
+export const RANK_REWARDS: Readonly<Record<RankTier, readonly string[]>> = {
+  1: ['frame_rank_1', 'plate_rank_1'],
+  3: ['frame_rank_3'],
+  10: ['frame_rank_10', 'plate_rank_10'],
+  100: ['frame_rank_100'],
+};
+
+/** Weeks of grants a player gets back (the app keeps as many rankClaimed keys). */
+export const GRANT_WEEKS_KEPT = 52;
+
+const WEEK_MS = 7 * 86_400_000;
+const WEEK_ID = /^week-(\d{4}-\d{2}-\d{2})$/;
+
+/**
+ * The week boards settleWeek still has to settle, oldest first: every week after `last` (a board id, 'week-YYYY-MM-DD') up to the week
+ * before the one holding `nowMs`; only last week when nothing was settled yet. At most GRANT_WEEKS_KEPT, the newest ones. `weekKey`
+ * is seoulWeekKey (functions/src/rules.ts), passed in so this file keeps no other import.
+ */
+export function weeksToSettle(last: string | null, nowMs: number, weekKey: (ms: number) => string): string[] {
+  const prev = Date.parse(weekKey(nowMs - WEEK_MS) + 'T00:00:00Z');
+  const m = last ? WEEK_ID.exec(last) : null;
+  const from = m ? Date.parse(m[1] + 'T00:00:00Z') + WEEK_MS : prev;
+  const out: string[] = [];
+  for (let t = from; t <= prev; t += WEEK_MS) out.push('week-' + new Date(t).toISOString().slice(0, 10));
+  return out.slice(-GRANT_WEEKS_KEPT);
+}
+
+/** One settled week of a player's grants: the board id, the place and the items it hands out. */
+export interface GrantWeek {
+  week: string;
+  rank: number;
+  items: string[];
+}
+
+/** The well-formed weeks of a grants/{uid} document, oldest first, the newest GRANT_WEEKS_KEPT of them. */
+export function grantWeeks(grants: unknown): GrantWeek[] {
+  const weeks = (grants as { weeks?: unknown } | null | undefined)?.weeks;
+  if (!weeks || typeof weeks !== 'object') return [];
+  const out: GrantWeek[] = [];
+  for (const [week, v] of Object.entries(weeks as Record<string, unknown>)) {
+    const g = v as { rank?: unknown; items?: unknown } | null;
+    if (!WEEK_ID.test(week) || !g || !Number.isInteger(g.rank) || !Array.isArray(g.items)) continue;
+    out.push({ week, rank: g.rank as number, items: g.items.filter((x): x is string => typeof x === 'string') });
+  }
+  return out.sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0)).slice(-GRANT_WEEKS_KEPT);
 }

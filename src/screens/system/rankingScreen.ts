@@ -14,6 +14,7 @@ import { FRAME_BOX_H, FRAME_BOX_W } from '../shell/layoutMath';
 import { formSheet, LABEL_OVERHANG, type FormRow } from './settingsForm';
 import { signInFlow } from './accountFlow';
 import { changeNameFlow } from './nameDialog';
+import { claimRankGrants } from './rankGrants';
 import { openProfileCard, type CardInfo } from './profileCard';
 import './strings';
 
@@ -227,5 +228,6 @@ export function openRanking(): void {
   };
 
   void load();
+  void claimRankGrants(() => !closed);
   void scaffold.show(true);
 }

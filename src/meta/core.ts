@@ -59,7 +59,9 @@ export interface MetaDeps {
   ads: AdsPort;
   /** A record for a ranking: the weekly cup (Toss, YouTube), the endless mode's best of all time and of the week (the game's own
    * Firebase rankings, judged by the server from `run`: the run's waves and simulated seconds). */
-  submitScore?: (board: string, score: number, run?: { waves: number; seconds: number }) => void;
+  submitScore?: (board: string, score: number, run?: { waves: number; seconds: number; ticket?: string }) => void;
+  /** The server's ticket for an endless run that starts now (the rankings check a record against it); null signed out or offline. */
+  runTicket?: () => Promise<string | null>;
   /** The development platform only: the settings sheet's test buttons may hand out currencies (`grantTest`). */
   testGrants?: boolean;
 }

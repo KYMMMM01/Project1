@@ -23,7 +23,7 @@ export const SAVE_KEY = 'meowguard.profile';
 const COUNTER_MAX = 2_000_000_000;
 const ORDERS_KEPT = 300;
 const REVEALS_KEPT = CHEST_BULK_MAX;
-const RANK_CLAIMED_KEPT = 52;
+export const RANK_CLAIMED_KEPT = 52;
 const RANK_CLAIM_FORM = /^[^:]+:week-\d{4}-\d{2}-\d{2}$/;
 
 function zeroed<K extends string>(keys: readonly K[], v = 0): Record<K, number> {
