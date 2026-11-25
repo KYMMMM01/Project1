@@ -4,6 +4,7 @@
  * every 10 minutes the server folds the top 100 of each board into one document, so opening the ranking costs one read. The player's own
  * place is asked for separately (myRank). Two boards: the endless mode's all-time best, and its best of the current week (Seoul time).
  */
+import { readLook, type LookWire } from '../../functions/src/looks';
 import { defaultName, type NameReject } from '../../functions/src/rules';
 import { account } from './account';
 import { firebase } from './firebase';
@@ -18,6 +19,8 @@ export interface BoardRow {
   uid: string;
   name: string;
   score: number;
+  /** What the player wears and their level (setLook); null on a row folded before looks existed, drawn as the defaults. */
+  look: LookWire | null;
 }
 
 export interface BoardView {
@@ -38,6 +41,9 @@ export interface MyPlace {
 /** How a name change ended (the server's setName). */
 export type NameResult = 'ok' | NameReject | 'too-soon' | 'failed';
 
+/** How a look upload ended (the server's setLook); 'too-soon' is its 30 second cooldown. */
+export type LookResult = 'ok' | 'too-soon' | 'failed';
+
 /** What the server needs to judge a record: the waves of the run and its simulated seconds. */
 export interface RunProof {
   waves: number;
@@ -46,8 +52,8 @@ export interface RunProof {
 
 const rows = (v: unknown): BoardRow[] =>
   Array.isArray(v)
-    ? v.flatMap((r: { uid?: unknown; name?: unknown; score?: unknown }) =>
-        typeof r?.uid === 'string' && typeof r.score === 'number' ? [{ uid: r.uid, name: String(r.name ?? ''), score: r.score }] : [],
+    ? v.flatMap((r: { uid?: unknown; name?: unknown; score?: unknown; look?: unknown }) =>
+        typeof r?.uid === 'string' && typeof r.score === 'number' ? [{ uid: r.uid, name: String(r.name ?? ''), score: r.score, look: readLook(r.look) }] : [],
       )
     : [];
 
@@ -93,8 +99,26 @@ export const ranking = {
     }
   },
 
-  /** The signed-in player's ranking name (the game's default one until they pick one); null signed out or offline. */
-  async myName(): Promise<string | null> {
+  /**
+   * Sets the look other players see on the boards (what the player wears and their level; the server checks it again and puts it on the
+   * boards at once). Never throws.
+   */
+  async setLook(look: { icon: string; frame: string; plate: string; level: number }): Promise<LookResult> {
+    if (account.state().status !== 'on') return 'failed';
+    const k = await firebase();
+    if (!k) return 'failed';
+    try {
+      await k.fnMod.httpsCallable(k.fns, 'setLook', { timeout: 15_000 })(look);
+      return 'ok';
+    } catch (e) {
+      const tooSoon = /too-soon/.test(errorMessage(e));
+      if (!tooSoon) console.warn('[ranking] look refused:', errorMessage(e));
+      return tooSoon ? 'too-soon' : 'failed';
+    }
+  },
+
+  /** The signed-in player's ranking name (the game's default one until they pick one) and the look the server holds; null signed out or offline. One read of users/{uid} for both. */
+  async me(): Promise<{ name: string; look: LookWire | null } | null> {
     const s = account.state();
     if (s.status !== 'on') return null;
     const k = await firebase();
@@ -102,12 +126,17 @@ export const ranking = {
     try {
       const snap = await settleWithin(k.dbMod.getDoc(k.dbMod.doc(k.db, 'users', s.uid)), READ_TIMEOUT_MS, null);
       if (!snap) return null;
-      const name: unknown = snap.data()?.name;
-      return typeof name === 'string' ? name : defaultName(s.uid);
+      const d = snap.data();
+      return { name: typeof d?.name === 'string' ? d.name : defaultName(s.uid), look: readLook(d?.look) };
     } catch (e) {
-      console.warn('[ranking] name read failed:', errorMessage(e));
+      console.warn('[ranking] profile read failed:', errorMessage(e));
       return null;
     }
+  },
+
+  /** Just the name of me(): for the screens that ask for nothing else. */
+  async myName(): Promise<string | null> {
+    return (await ranking.me())?.name ?? null;
   },
 
   /** A board's top 100 as the server last folded it; null when it cannot be read (offline, no Firebase). Readable signed out too. */

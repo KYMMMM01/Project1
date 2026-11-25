@@ -37,7 +37,7 @@ export async function refreshName(): Promise<void> {
   const mine = ++version;
   await loadRoutinePrefs();
   const s = account.state();
-  const name = s.status === 'on' ? await ranking.myName() : null;
+  const name = s.status === 'on' ? ((await ranking.me())?.name ?? null) : null;
   if (mine !== version) return;
   const now = account.state();
   if (name && now.status === 'on' && s.status === 'on' && now.uid === s.uid) patchRoutinePrefs({ nick: name, nickUid: s.uid });

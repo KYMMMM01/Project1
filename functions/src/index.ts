@@ -7,6 +7,7 @@ import * as v1 from 'firebase-functions/v1';
 import * as logger from 'firebase-functions/logger';
 import { GoogleAuth } from 'google-auth-library';
 import { cleanOrderIds, nextCursor, parseVoidedPage, startTimeFor, type RefundRecord } from './refunds';
+import { cleanLook, grantedItems, LOOK_COOLDOWN_MS, type LookWire } from './looks';
 import { boardId, cleanName, defaultName, isBoardKind, NAME_COOLDOWN_MS, validateRun, type BoardKind, type Run } from './rules';
 
 initializeApp();
@@ -44,6 +45,8 @@ export const submitRun = onCall(async (req) => {
     const refs = BOARDS.map((kind) => db.doc(`boards/${boardId(kind, now)}/entries/${uid}`));
     const [user, ...entries] = await Promise.all([tx.get(db.doc(`users/${uid}`)), ...refs.map((r) => tx.get(r))]);
     const name = (user.get('name') as string | undefined) ?? defaultName(uid);
+    // tx.set replaces the whole entry, so the player's look is carried over here (the field is left out when there is none: admin rejects undefined).
+    const look = user.get('look') as LookWire | undefined;
     // The cooldown counts every accepted call, even one that raises nothing.
     tx.set(rateRef, { at: now }, { merge: true });
     const best: Record<string, number> = {};
@@ -51,7 +54,7 @@ export const submitRun = onCall(async (req) => {
       const prev = entry.exists ? (entry.get('score') as number) : 0;
       best[BOARDS[i] as BoardKind] = Math.max(prev, s);
       // The run's simulated seconds stay beside the record, to check the time floor against real runs later.
-      if (s > prev) tx.set(refs[i]!, { score: s, name, at: Timestamp.fromMillis(now), seconds: (run as Run).seconds });
+      if (s > prev) tx.set(refs[i]!, { score: s, name, at: Timestamp.fromMillis(now), seconds: (run as Run).seconds, ...(look && { look }) });
     });
     return { ok: true, best };
   });
@@ -81,10 +84,45 @@ export const setName = onCall(async (req) => {
       if (docs[i]!.exists) tx.update(ref, { name });
     });
     foldRefs.forEach((ref, i) => {
-      const top = docs[BOARDS.length + i]!.get('top') as { uid: string; name: string; score: number }[] | undefined;
+      const top = docs[BOARDS.length + i]!.get('top') as { uid: string; name: string; score: number; look?: LookWire }[] | undefined;
       if (top?.some((row) => row.uid === uid)) tx.update(ref, { top: top.map((row) => (row.uid === uid ? { ...row, name } : row)) });
     });
     return { ok: true, name };
+  });
+});
+
+// The icon, frame, name plate and level the player wears, for the ranking rows other players see (docs/명세_프로필꾸미기.md 5.2). Same
+// places as setName. Only rank items need an owner check (grants/{uid}); every other id just has to be a catalogue id of the right kind.
+// Cost: 1 rate read + 1 grants read + 2 entry reads + 2 fold reads, and up to 6 writes.
+export const setLook = onCall(async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'unauthenticated');
+  const now = Date.now();
+  const rateRef = db.doc(`rate/${uid}`);
+  const entryRefs = BOARDS.map((kind) => db.doc(`boards/${boardId(kind, now)}/entries/${uid}`));
+  const foldRefs = BOARDS.map((kind) => db.doc(`boards/${kind}`));
+
+  return db.runTransaction(async (tx) => {
+    const [rate, grants, ...docs] = await Promise.all([
+      tx.get(rateRef),
+      tx.get(db.doc(`grants/${uid}`)),
+      ...entryRefs.map((r) => tx.get(r)),
+      ...foldRefs.map((r) => tx.get(r)),
+    ]);
+    const last = rate.get('lookAt') as number | undefined;
+    if (last !== undefined && now - last < LOOK_COOLDOWN_MS) reject('too-soon');
+    const look = cleanLook(req.data, grantedItems(grants.data()));
+    if (!look) reject('bad-look');
+    tx.set(rateRef, { lookAt: now }, { merge: true });
+    tx.set(db.doc(`users/${uid}`), { look }, { merge: true });
+    entryRefs.forEach((ref, i) => {
+      if (docs[i]!.exists) tx.update(ref, { look });
+    });
+    foldRefs.forEach((ref, i) => {
+      const top = docs[BOARDS.length + i]!.get('top') as { uid: string; look?: LookWire }[] | undefined;
+      if (top?.some((row) => row.uid === uid)) tx.update(ref, { top: top.map((row) => (row.uid === uid ? { ...row, look } : row)) });
+    });
+    return { ok: true, look };
   });
 });
 
@@ -99,7 +137,11 @@ export const refreshBoards = onSchedule('every 10 minutes', async () => {
       entries.count().get(),
     ]);
     const doc: Record<string, unknown> = {
-      top: top.docs.map((d) => ({ uid: d.id, name: d.get('name'), score: d.get('score') })),
+      // An entry written before looks existed has none; the row then leaves the field out (admin rejects undefined).
+      top: top.docs.map((d) => {
+        const look = d.get('look') as LookWire | undefined;
+        return { uid: d.id, name: d.get('name'), score: d.get('score'), ...(look && { look }) };
+      }),
       total: count.data().count,
       updatedAt: FieldValue.serverTimestamp(),
     };

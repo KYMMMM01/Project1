@@ -6,7 +6,7 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['v', 'device', 'savedAt', 'data', 'bestWave', 'name', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['v', 'device', 'savedAt', 'data', 'bestWave', 'name', 'look', 'updatedAt'])
         && (!('data' in request.resource.data)
             || (request.resource.data.data is string && request.resource.data.data.size() < 900000))
         && (!('bestWave' in request.resource.data)
@@ -18,7 +18,11 @@ service cloud.firestore {
                 && request.resource.data.bestWave >= resource.data.bestWave))
         // The ranking name is set only by the setName function (it checks the words); a client write keeps it as it is.
         && ((resource == null && !('name' in request.resource.data))
-            || (resource != null && request.resource.data.get('name', null) == resource.data.get('name', null)));
+            || (resource != null && request.resource.data.get('name', null) == resource.data.get('name', null)))
+        // The worn look is set only by the setLook function, the same way. Deploy these rules before the functions: the cloud save merges into
+        // this document and the key check sees the merged result, so a look written while the old rules stand would reject every later save.
+        && ((resource == null && !('look' in request.resource.data))
+            || (resource != null && request.resource.data.get('look', null) == resource.data.get('look', null)));
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
