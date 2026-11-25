@@ -29,4 +29,8 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_PROJECT_ID?: string;
   readonly VITE_FIREBASE_APP_ID?: string;
   readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
+  /** '1' makes the Capacitor build use App Check's debug provider: a build installed outside Play, its secret registered in the console. */
+  readonly VITE_APPCHECK_DEBUG?: string;
+  /** Web build: the reCAPTCHA Enterprise site key registered for App Check; without it the web build sends no App Check token. */
+  readonly VITE_APPCHECK_SITE_KEY?: string;
 }

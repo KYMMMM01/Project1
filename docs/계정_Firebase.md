@@ -49,7 +49,7 @@
 - `myRank({ board })`: 내 기록과 순위(더 높은 기록 수 + 1).
 - `onUserDeleted`: 계정이 지워지면 세이브, 랭킹 기록, 제출 시각, 판 시작 표, 주간 보상 기록을 지운다.
 - `pollVoidedPurchases`: 6시간마다(서울 시간 기준 예약) Google Play Developer API 의 `purchases.voidedpurchases.list`(일회성 상품만, 한 번에 1000건, 다음 쪽 토큰을 끝까지)를 읽어 `refunds/{orderId}` 에 쓴다. 시작 시각은 `meta/refundCursor`(첫 실행은 API 가 보는 30일 창의 처음)이고, 모든 쪽을 읽고 쓴 뒤에만 커서를 올린다. 커서는 실행을 시작한 시각보다 하루 뒤처지게 두어, Google 이 환불을 늦게 목록에 올려도 다음 실행들이 다시 읽는다. HTTP 오류나 쓰기 실패는 `firebase-functions/logger` 로 남기고 커서를 그대로 둬 다음 실행이 다시 읽는다. 인증은 함수 실행 서비스 계정의 기본 자격증명(`google-auth-library`).
-- `refundedOrders({ orderIds })`: 로그인 없이 부른다(대부분 게스트). 주문 번호 최대 200개를 `functions/src/refunds.ts` 의 `cleanOrderIds` 로 거른다(Play 주문 번호 모양 `GPA.` 로 시작하는 것만, 중복 제거, 배열이 아니거나 200개를 넘으면 `invalid-argument`). `refunds/{id}` 를 `getAll` 로 읽어 있는 번호만 `{ refunded: [...] }` 로 돌려준다. 클라이언트가 환불 표시를 쓸 방법은 없다. 게임은 켤 때마다(복원과 같은 경로, 첫 화면을 막지 않음) 장부에서 지급 상태인 주문을 200개씩 물어 환불된 것만 회수한다. 호출이 실패하면 아무것도 회수하지 않고 다음에 다시 묻는다. 실패해도 복원 결과(설정 화면의 성공과 실패 안내)는 바뀌지 않고, 분석 이벤트 `refund_check_failed` 만 남는다. App Check 는 아직 켜지 않았다(앱에 제공자를 등록한 뒤 이 함수에 강제한다). 그전에는 인스턴스 수 제한만 부하를 막는다. 없다는 답으로 환불을 짐작하지 않는다.
+- `refundedOrders({ orderIds })`: 로그인 없이 부른다(대부분 게스트). 주문 번호 최대 200개를 `functions/src/refunds.ts` 의 `cleanOrderIds` 로 거른다(Play 주문 번호 모양 `GPA.` 로 시작하는 것만, 중복 제거, 배열이 아니거나 200개를 넘으면 `invalid-argument`). `refunds/{id}` 를 `getAll` 로 읽어 있는 번호만 `{ refunded: [...] }` 로 돌려준다. 클라이언트가 환불 표시를 쓸 방법은 없다. 게임은 켤 때마다(복원과 같은 경로, 첫 화면을 막지 않음) 장부에서 지급 상태인 주문을 200개씩 물어 환불된 것만 회수한다. 호출이 실패하면 아무것도 회수하지 않고 다음에 다시 묻는다. 실패해도 복원 결과(설정 화면의 성공과 실패 안내)는 바뀌지 않고, 분석 이벤트 `refund_check_failed` 만 남는다. 다른 함수처럼 App Check 가 있는 요청만 받고(아래 절), 인스턴스 수 제한이 부하를 막는다. 없다는 답으로 환불을 짐작하지 않는다.
 - `setName({ name })`: 랭킹 닉네임 바꾸기(설정의 계정 줄, 랭킹 화면의 내 기록). 한글 완성형, 영문, 숫자, 가운데 띄어쓰기로 2자에서 12자, 막는 말 목록(`functions/src/rules.ts` 의 `cleanName`, 게임도 같은 파일로 먼저 검사), 한 사람 30초에 한 번. `users/{uid}.name`, 이번 판의 내 기록 두 개, 묶음 문서 두 개의 내 줄을 함께 고쳐 바로 보인다. 클라이언트는 규칙상 `name` 을 직접 쓸 수 없다. 바꾸기 전에는 게임이 주는 기본 닉네임(`집사 1234`, uid 로 만듦).
 - 닉네임 입력은 캔버스 위에 겹친 진짜 `<input>` 이라 폰 키보드와 한글 조합이 그대로 된다. 키보드가 아래 절반을 덮어도 보이게 창을 화면 위쪽에 둔다.
 
@@ -62,6 +62,23 @@
 5. 첫 실행 뒤 함수 로그에서 `pollVoidedPurchases done` 이 나오는지, 403 이면 위 1, 2 를 다시 본다. 클라이언트(앱)는 새 빌드에서 `refundedOrders` 를 부른다.
 
 확인 못 한 것(실기기와 실제 응답이 필요): 실제 `voidedpurchases` 응답 모양(문서 기준으로 `voidedPurchases[].orderId`, `voidedTimeMillis` 문자열, `voidedReason` 숫자, `tokenPagination.nextPageToken` 으로 짰다), RevenueCat 의 `transactionIdentifier` 가 Play 주문 번호(`GPA.` 로 시작)와 같은지(다르면 `cleanOrderIds` 가 전부 버려 환불이 영영 안 잡힌다), 서비스 계정 권한. 라이선스 테스터 구매를 환불한 뒤 `refunds/` 에 문서가 생기고 앱이 회수하는지 한 번 확인한다.
+
+## App Check (2026-11-26, 아직 배포 전)
+
+진짜 우리 앱에서 온 요청인지 Google 이 확인해 주는 표를 모든 요청에 붙인다. 표가 없거나 가짜인 호출은 서버 함수가 거절한다.
+
+- 앱: `src/platform/firebase.ts` 의 `startAppCheck`. 안드로이드 빌드는 네이티브 플러그인 `@capacitor-firebase/app-check` 가 Play Integrity 로 표를 받고, 웹 SDK 가 그 표를 함수, Firestore, 로그인 요청에 붙인다. 표는 요청에 필요할 때만 받는다(Play Integrity 하루 사용량 한도 때문에 미리 갱신하지 않음). 표를 못 받아도 게임은 그대로 되고, 서버 호출만 오프라인일 때처럼 실패한다.
+- 웹 빌드(GitHub Pages 테스트용): `VITE_APPCHECK_SITE_KEY` 에 reCAPTCHA Enterprise 사이트 키를 넣었을 때만 표를 붙인다. 지금은 키가 없어서, 함수를 배포하면 웹 빌드의 랭킹, 닉네임, 주간 보상 호출은 실패한다(로그인과 클라우드 저장은 Firestore 강제를 켜기 전까지 된다).
+- 플레이를 거치지 않고 설치한 빌드(케이블로 넣은 APK 등)는 Play Integrity 를 통과하지 못한다. 이런 빌드는 `.env.store` 에 `VITE_APPCHECK_DEBUG=1` 을 넣어 만들고, 처음 켤 때 기기 로그(logcat 의 `DebugAppCheckProvider`)에 나오는 비밀값을 콘솔의 App Check, 앱, 디버그 토큰 관리에 등록한다. 이 값을 넣은 빌드는 플레이에 올리지 않는다.
+- 서버: `functions/src/index.ts` 의 `setGlobalOptions` 에 `enforceAppCheck: true`. 앱이 부르는 함수 7개(`startRun`, `submitRun`, `setName`, `setLook`, `claimGrants`, `myRank`, `refundedOrders`)에 모두 걸린다. 예약 함수와 계정 삭제 함수는 앱이 부르지 않아 상관없다.
+
+켜는 순서(사용자, 콘솔):
+
+1. Play Console 의 앱 `냥이 수비대`, 테스트 및 출시, 앱 무결성, Play Integrity API 에서 Google Cloud 프로젝트 `meowguard-4ce6f` 를 연결한다.
+2. Firebase 콘솔, App Check, 앱 탭에서 Android 앱에 Play Integrity 를 등록한다. 필요한 SHA-256 지문(앱 서명 키, 업로드 키)은 2026-11-12 에 이미 넣었다.
+3. 새 AAB(versionCode 를 올림)를 테스트 트랙에 올려 테스터가 업데이트하게 한다. App Check 콘솔의 지표에서 확인된 요청이 보이면 된다.
+4. 그다음 함수를 배포한다. 판 시작 표와 마찬가지로 예전 빌드는 표를 보내지 않으니 배포와 새 빌드 출시를 가깝게 맞춘다.
+5. Firestore 와 Authentication 강제는 App Check 콘솔의 API 탭에서 따로 켠다. 지표에서 확인 안 된 요청이 거의 없을 때 켠다(지금은 꺼진 채로 둔다).
 
 ## 알려진 한계
 

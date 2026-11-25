@@ -14,7 +14,9 @@ import { addTicket, boardId, liveTickets, cleanName, defaultName, isBoardKind, N
 initializeApp();
 const db = getFirestore();
 const REGION = 'asia-northeast3';
-setGlobalOptions({ region: REGION, maxInstances: 10 });
+// enforceAppCheck: every callable refuses a request without a valid App Check token from the registered app (Play Integrity on Android,
+// src/platform/firebase.ts); the scheduled and auth-triggered functions are not called by clients and ignore it.
+setGlobalOptions({ region: REGION, maxInstances: 10, enforceAppCheck: true });
 
 const BOARDS: BoardKind[] = ['endless', 'week'];
 
@@ -312,7 +314,7 @@ function refundDoc(r: RefundRecord, seenAt: number) {
 
 // The client asks which of its purchase order ids Google Play has refunded. No sign-in (most players are guests); the answer only
 // reports what pollVoidedPurchases wrote, so a client can never mark anything refunded. Cost: up to 200 document reads per call.
-// TODO: enforce App Check here once the app registers a provider; until then only maxInstances bounds the load.
+// App Check (setGlobalOptions) keeps callers to the app itself; maxInstances bounds the load.
 export const refundedOrders = onCall(async (req) => {
   const ids = cleanOrderIds((req.data as { orderIds?: unknown } | undefined)?.orderIds);
   if (!ids) throw new HttpsError('invalid-argument', 'bad-order-ids');
