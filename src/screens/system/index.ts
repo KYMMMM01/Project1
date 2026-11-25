@@ -9,6 +9,7 @@ import { CalendarPopup } from './calendarPopup';
 import { askCloudChoice } from './cloudChoice';
 import { stopConfetti } from './kit/confetti';
 import { loadRoutinePrefs, markProfileSeen } from './prefs';
+import { closeProfile, openProfile } from './profileScreen';
 import { closeSettingsScreen, openSettingsScreen, scrollSettingsTo } from './settingsScreen';
 import './strings';
 
@@ -41,12 +42,14 @@ export function installSystemScreens(shell: Shell): void {
   };
   const auto = new AutoPopups(shell, openCalendar);
   provide('openSettings', () => void openSettingsScreen(() => shell.refresh()));
+  provide('openProfile', openProfile);
   provide('openCalendar', () => void openCalendar());
 
   const self: Installed = {
     dispose: () => {
       auto.dispose();
       closeSettingsScreen();
+      closeProfile();
       closeCodex();
       calendar?.close();
       stopConfetti();

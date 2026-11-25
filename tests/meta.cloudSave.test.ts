@@ -207,7 +207,7 @@ describe('endless record and the rankings', () => {
       expect(prep.ok).toBe(true);
       await r.profile.finishRun({
         mode: 'endless', chapter: 2, stake: 0, seed: 4321, victory: false, wavesCleared: waves, totalWaves: 0, kills: 300, bossesKilled: 2,
-        summons: 40, merges: 25, molts: 0, awakenings: 0, relics: [], bestRarity: 'epic', peakEnemies: 20, duration: 400, revived: false,
+        summons: 40, merges: 25, molts: 0, awakenings: 0, relics: [], bestRarity: 'epic', mythics: [], peakEnemies: 20, duration: 400, revived: false,
         summonLuck: 0.5, damageByUnit: {},
       } as Parameters<typeof r.profile.finishRun>[0]);
     }
@@ -217,5 +217,62 @@ describe('endless record and the rankings', () => {
       ['endless_best', 62, { waves: 62, seconds: 400 }],
     ]);
     expect(r.profile.data.endless.best).toBe(62);
+  });
+
+  const finish = (r: Awaited<ReturnType<typeof createTestProfile>>, waves: number) =>
+    r.profile.finishRun({
+      mode: 'endless', chapter: 2, stake: 0, seed: 4321, victory: false, wavesCleared: waves, totalWaves: 0, kills: 300, bossesKilled: 2,
+      summons: 40, merges: 25, molts: 0, awakenings: 0, relics: [], bestRarity: 'epic', mythics: [], peakEnemies: 20, duration: 400, revived: false,
+      summonLuck: 0.5, damageByUnit: {},
+    } as Parameters<typeof r.profile.finishRun>[0]);
+
+  it('an endless run asks for a ranking ticket at its start, keeps it with the run and sends it with the record', async () => {
+    const sent: unknown[] = [];
+    const asked: string[] = [];
+    const r = await createTestProfile({
+      submitScore: (board, _score, run) => board === 'endless_best' && sent.push(run),
+      runTicket: async () => (asked.push('t'), 'a'.repeat(32)),
+    });
+    r.profile.data.cleared[0] = 1;
+    r.profile.data.cleared[1] = 1;
+    await r.profile.prepareRun({ mode: 'endless', chapter: 2 });
+    await Promise.resolve();
+    expect(r.profile.pendingRun?.ticket).toBe('a'.repeat(32));
+    await finish(r, 50);
+    expect(asked).toHaveLength(1);
+    expect(sent).toEqual([{ waves: 50, seconds: 400, ticket: 'a'.repeat(32) }]);
+  });
+
+  it('a chapter run asks for no ticket, and an endless run whose ticket never came is sent without one', async () => {
+    const sent: unknown[] = [];
+    const asked: string[] = [];
+    const r = await createTestProfile({
+      submitScore: (board, _score, run) => board === 'endless_best' && sent.push(run),
+      runTicket: async () => (asked.push('t'), null),
+    });
+    r.profile.data.cleared[0] = 1;
+    await r.profile.prepareRun({ mode: 'chapter', chapter: 1 });
+    await r.profile.discardPendingRun();
+    expect(asked).toHaveLength(0);
+    r.profile.data.cleared[1] = 1;
+    await r.profile.prepareRun({ mode: 'endless', chapter: 2 });
+    await Promise.resolve();
+    await finish(r, 12);
+    expect(asked).toHaveLength(1);
+    expect(sent).toEqual([{ waves: 12, seconds: 400 }]);
+  });
+
+  it('a ticket that arrives after its run ended does not land on the next run', async () => {
+    let give: (t: string) => void = () => undefined;
+    const r = await createTestProfile({ runTicket: () => new Promise((res) => (give = res)) });
+    r.profile.data.cleared[0] = 1;
+    r.profile.data.cleared[1] = 1;
+    await r.profile.prepareRun({ mode: 'endless', chapter: 2 });
+    const late = give;
+    await finish(r, 3);
+    await r.profile.prepareRun({ mode: 'endless', chapter: 2 });
+    late('b'.repeat(32));
+    await Promise.resolve();
+    expect(r.profile.pendingRun?.ticket).toBeUndefined();
   });
 });

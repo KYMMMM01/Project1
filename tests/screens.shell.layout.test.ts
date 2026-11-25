@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TAB_BAR_H, TOP_BAR_CONTENT_H, captionRooms, classLineSlots, coverCrop, pillRow, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
+import { BAND_CY, BAND_H, FRAME_BOX_H, FRAME_BOX_W, FRAME_D, ICON_D, PLATE_H, PLATE_TEXT_W, PLATE_W, STRIP_GAP, STRIP_H, TAB_BAR_H, TOP_BAR_CONTENT_H, TOP_PAD_TOP, TOP_PILL_H, TOP_ROW_GAP, TOP_ROW_H, captionRooms, classLineSlots, coverCrop, pillRow, shellLayout, xpFraction } from '@/screens/shell/layoutMath';
 import { planRun } from '@/screens/shell/runPlan';
 
 describe('shell layout', () => {
@@ -42,6 +42,29 @@ describe('shell layout', () => {
     expect(xpFraction(-5, 120)).toBe(0);
     expect(xpFraction(10, 0)).toBe(0);
     expect(xpFraction(Number.NaN, 120)).toBe(0);
+  });
+});
+
+describe('home top row', () => {
+  it('keeps the ring and the level band above the currency pills and the ring inside the top padding', () => {
+    // The first pill's top edge is its half height plus 4 above its centre line.
+    const ROW_TO_PILL_TOP = TOP_ROW_H / 2 + TOP_ROW_GAP + TOP_PILL_H / 2 - (TOP_PILL_H / 2 + 4);
+    expect(BAND_CY + BAND_H / 2).toBeLessThanOrEqual(ROW_TO_PILL_TOP);
+    expect(FRAME_D / 2).toBeLessThanOrEqual(ROW_TO_PILL_TOP);
+    expect(FRAME_D / 2).toBeLessThanOrEqual(TOP_ROW_H / 2 + TOP_PAD_TOP);
+    expect(ICON_D).toBeLessThan(FRAME_D);
+    // A drawn frame's box: no higher than the padding, no lower than the pills, no wider than the badge's 112 slot.
+    expect(FRAME_BOX_H / 2).toBeLessThanOrEqual(ROW_TO_PILL_TOP);
+    expect(FRAME_BOX_H / 2).toBeLessThanOrEqual(TOP_ROW_H / 2 + TOP_PAD_TOP);
+    expect(FRAME_BOX_W).toBeLessThanOrEqual(112);
+    // The band hangs over the icon's lower edge.
+    expect(BAND_CY - BAND_H / 2).toBeLessThan(ICON_D / 2);
+  });
+
+  it('stacks the name plate and the XP strip inside the first row and fits the slot the XP bar had', () => {
+    expect(PLATE_H + STRIP_GAP + STRIP_H).toBeLessThanOrEqual(TOP_ROW_H);
+    expect(24 * 2 + 112 + PLATE_W + 88 + 88 + 32).toBe(720);
+    expect(PLATE_TEXT_W).toBeLessThan(PLATE_W);
   });
 });
 

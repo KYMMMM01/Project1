@@ -66,8 +66,11 @@ export class SweepCard extends HomeCard {
     fitLabel(this.target, this.cardW - CARD_PAD * 2, 26);
     const empty = v.count <= 0;
     this.go.visible = !empty;
-    this.ad.visible = empty;
+    // Without rewarded ads on this platform (itch.io) the ad top-up is left out and the gem top-up moves to the middle.
+    const adShown = ads.supported('sweep_ticket');
+    this.ad.visible = empty && adShown;
     this.gems.visible = empty;
+    this.gems.x = adShown ? this.cardW - this.ad.x : this.cardW / 2;
     this.note.text = can ? '' : t('battle.sweep.need');
     this.go.setEnabled(can && !empty);
     if (empty) {

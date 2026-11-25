@@ -5,6 +5,7 @@
 import { addStrings } from '@/core/i18n';
 // Registers the rarity, unit and chapter names the texts below point at (`rarity.*`, `unit.*.name`, `chapter.*.name`).
 import '@/game/data/strings';
+import { ACHIEVEMENTS } from './data/achievements';
 import { IAP_SPECS } from './data/catalog';
 
 const ko: Record<string, string> = {
@@ -149,6 +150,60 @@ const ko: Record<string, string> = {
   'meta.cos.fx_gem1': '꽃잎 소환',
   'meta.cos.fx_gem2': '별똥별 소환',
   'meta.cos.fx_gem3': '비눗방울 소환',
+  'meta.cos.icon_w_paw': '솜방망이',
+  'meta.cos.icon_w_sword': '검사냥',
+  'meta.cos.icon_w_viking': '바이킹냥',
+  'meta.cos.icon_w_samurai': '사무라이냥',
+  'meta.cos.icon_w_tiger': '호랑이 장군',
+  'meta.cos.icon_r_sling': '새총냥',
+  'meta.cos.icon_r_archer': '궁수냥',
+  'meta.cos.icon_r_ninja': '닌자냥',
+  'meta.cos.icon_r_gunner': '총잡이냥',
+  'meta.cos.icon_r_star': '별빛 사수',
+  'meta.cos.icon_m_snow': '눈덩이냥',
+  'meta.cos.icon_m_fire': '불꽃냥',
+  'meta.cos.icon_m_storm': '번개냥',
+  'meta.cos.icon_m_frost': '얼음 여왕',
+  'meta.cos.icon_m_cosmo': '우주냥',
+  'meta.cos.icon_t_chef': '요리사냥',
+  'meta.cos.icon_t_bell': '방울냥',
+  'meta.cos.icon_t_bard': '악사냥',
+  'meta.cos.icon_t_alch': '연금술사냥',
+  'meta.cos.icon_t_lucky': '복고양이',
+  'meta.cos.frame_default': '종이 동그라미',
+  'meta.cos.frame_wood': '나무',
+  'meta.cos.frame_leaf': '나뭇잎',
+  'meta.cos.frame_ribbon': '리본',
+  'meta.cos.frame_yarn': '털실',
+  'meta.cos.frame_star': '별빛',
+  'meta.cos.frame_sakura': '벚꽃',
+  'meta.cos.frame_chapter': '집사의 집',
+  'meta.cos.frame_butler': '까다로운 집사',
+  'meta.cos.frame_dungeon': '금화',
+  'meta.cos.frame_endless': '끝없는 밤',
+  'meta.cos.frame_awaken': '각성',
+  'meta.cos.frame_honor_butler': '집사의 집사',
+  'meta.cos.frame_honor_endless': '끝이 없는 집사',
+  'meta.cos.frame_rank_1': '왕관',
+  'meta.cos.frame_rank_3': '금 리본',
+  'meta.cos.frame_rank_10': '은 리본',
+  'meta.cos.frame_rank_100': '종이 메달',
+  'meta.cos.plate_default': '크래프트지',
+  'meta.cos.plate_dots': '물방울',
+  'meta.cos.plate_stripe': '줄무늬',
+  'meta.cos.plate_fish': '생선',
+  'meta.cos.plate_paw': '발바닥',
+  'meta.cos.plate_night': '밤하늘',
+  'meta.cos.plate_garden': '꽃밭',
+  'meta.cos.plate_wins': '승리',
+  'meta.cos.plate_merge': '합치기',
+  'meta.cos.plate_daily': '일일 도전',
+  'meta.cos.plate_units': '다섯 살 고양이들',
+  'meta.cos.plate_account': '베테랑',
+  'meta.cos.plate_honor_relics': '장난감 박물관',
+  'meta.cos.plate_honor_wins': '불패의 집사',
+  'meta.cos.plate_rank_1': '1위',
+  'meta.cos.plate_rank_10': '상위 10',
 };
 
 const en: Record<string, string> = {
@@ -293,6 +348,60 @@ const en: Record<string, string> = {
   'meta.cos.fx_gem1': 'Petal summon',
   'meta.cos.fx_gem2': 'Shooting star summon',
   'meta.cos.fx_gem3': 'Bubble summon',
+  'meta.cos.icon_w_paw': 'Paw Puncher',
+  'meta.cos.icon_w_sword': 'Sword Cat',
+  'meta.cos.icon_w_viking': 'Viking Cat',
+  'meta.cos.icon_w_samurai': 'Samurai Cat',
+  'meta.cos.icon_w_tiger': 'General Tiger',
+  'meta.cos.icon_r_sling': 'Sling Kitten',
+  'meta.cos.icon_r_archer': 'Archer Cat',
+  'meta.cos.icon_r_ninja': 'Ninja Cat',
+  'meta.cos.icon_r_gunner': 'Gunslinger Cat',
+  'meta.cos.icon_r_star': 'Starlight Archer',
+  'meta.cos.icon_m_snow': 'Snowball Kitten',
+  'meta.cos.icon_m_fire': 'Fire Mage',
+  'meta.cos.icon_m_storm': 'Storm Mage',
+  'meta.cos.icon_m_frost': 'Frost Queen',
+  'meta.cos.icon_m_cosmo': 'Cosmo Cat',
+  'meta.cos.icon_t_chef': 'Chef Cat',
+  'meta.cos.icon_t_bell': 'Bell Kitten',
+  'meta.cos.icon_t_bard': 'Bard Cat',
+  'meta.cos.icon_t_alch': 'Alchemist Cat',
+  'meta.cos.icon_t_lucky': 'Lucky Cat',
+  'meta.cos.frame_default': 'Paper ring',
+  'meta.cos.frame_wood': 'Wood',
+  'meta.cos.frame_leaf': 'Leaves',
+  'meta.cos.frame_ribbon': 'Ribbon',
+  'meta.cos.frame_yarn': 'Yarn',
+  'meta.cos.frame_star': 'Starlight',
+  'meta.cos.frame_sakura': 'Cherry blossom',
+  'meta.cos.frame_chapter': "Butler's home",
+  'meta.cos.frame_butler': 'Picky butler',
+  'meta.cos.frame_dungeon': 'Gold coins',
+  'meta.cos.frame_endless': 'Endless night',
+  'meta.cos.frame_awaken': 'Awakening',
+  'meta.cos.frame_honor_butler': 'Butler of butlers',
+  'meta.cos.frame_honor_endless': 'The endless butler',
+  'meta.cos.frame_rank_1': 'Crown',
+  'meta.cos.frame_rank_3': 'Gold ribbon',
+  'meta.cos.frame_rank_10': 'Silver ribbon',
+  'meta.cos.frame_rank_100': 'Paper medal',
+  'meta.cos.plate_default': 'Kraft paper',
+  'meta.cos.plate_dots': 'Polka dots',
+  'meta.cos.plate_stripe': 'Stripes',
+  'meta.cos.plate_fish': 'Fish',
+  'meta.cos.plate_paw': 'Paw prints',
+  'meta.cos.plate_night': 'Night sky',
+  'meta.cos.plate_garden': 'Flower garden',
+  'meta.cos.plate_wins': 'Victory',
+  'meta.cos.plate_merge': 'Merging',
+  'meta.cos.plate_daily': 'Daily challenge',
+  'meta.cos.plate_units': 'Grown-up cats',
+  'meta.cos.plate_account': 'Veteran',
+  'meta.cos.plate_honor_relics': 'Toy museum',
+  'meta.cos.plate_honor_wins': 'Undefeated butler',
+  'meta.cos.plate_rank_1': 'Number one',
+  'meta.cos.plate_rank_10': 'Top 10',
 };
 
 const koDesc: Record<string, string> = {
@@ -328,6 +437,13 @@ for (const s of IAP_SPECS) {
   en['meta.iap.' + s.id + '.name'] = s.name.en;
   ko['meta.iap.' + s.id + '.desc'] = koDesc[s.id] ?? '';
   en['meta.iap.' + s.id + '.desc'] = enDesc[s.id] ?? '';
+}
+
+for (const a of ACHIEVEMENTS) {
+  ko['meta.ach.' + a.key + '.name'] = a.name.ko;
+  en['meta.ach.' + a.key + '.name'] = a.name.en;
+  ko['meta.ach.' + a.key + '.desc'] = a.desc.ko;
+  en['meta.ach.' + a.key + '.desc'] = a.desc.en;
 }
 
 addStrings('ko', ko);

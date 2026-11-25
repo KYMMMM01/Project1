@@ -7,13 +7,15 @@ import { EconomyProfile, type PayVia } from './economy';
 import {
   CHEST_SKIPS_PER_DAY,
   DAILY_MISSION_CHEST_POINTS,
+  DUPLICATE_COSMETIC_GEMS,
   FREE_CHEST_MS,
   OFFERS,
   PATROL_DOUBLES_PER_DAY,
   SNACK_CHESTS_PER_DAY,
   PLACEMENTS,
 } from './data/economy';
-import { GEM_PASS_DAILY } from './data/catalog';
+import { GEM_PASS_DAILY, cosmetic, honorCosmetic } from './data/catalog';
+import { ACHIEVEMENTS } from './data/achievements';
 import {
   CALENDAR,
   CUP_TIERS,
@@ -28,12 +30,14 @@ import {
   type MissionDef,
   type MissionMetric,
 } from './data/schedule';
+import { achievementDef, achievementProgress } from './achievements';
 import { calendarNext, canClaimCalendar, claimCalendar } from './calendar';
 import { cupScore, dailySetup, type DailySetup } from './daily';
 import { advanceMissions, allClaimed, claimMission, claimedPoints, missionComplete, type MetricDelta } from './missions';
 import { claimPassTier, claimableTiers, passReward, passTier, seasonDaysLeft, type PassTrack } from './pass';
 import { freeChestReady, freeChestWait, patrolCapMs, patrolRate, patrolStatus, type PatrolStatus } from './patrol';
 import { mergeBundles } from './bundle';
+import { RANK_CLAIMED_KEPT } from './profileData';
 import { chaptersCleared } from './rewards';
 import { fail, ok, type Bundle, type MissionState, type Result } from './types';
 
@@ -310,6 +314,60 @@ export class RoutineProfile extends EconomyProfile {
   claimAllMissions(scope: MissionScope): Result<ClaimedAll> {
     if (!this.featureUnlocked('missions')) return fail('locked');
     return this.takeAll(this.missionDefs(scope).map((_, i) => () => this.takeMission(scope, i)));
+  }
+
+  /** Pay one reached achievement's gems once. Opens with the missions tab. */
+  claimAchievement(key: string): Result<Bundle> {
+    const r = this.takeAchievement(key);
+    if (r.ok) this.commit();
+    return r;
+  }
+
+  private takeAchievement(key: string): Result<Bundle> {
+    if (!this.featureUnlocked('missions')) return fail('locked');
+    const def = achievementDef(key);
+    if (!def) return fail('invalid');
+    const a = this.data.achv;
+    if (a.claimed.includes(key)) return fail('already_claimed');
+    if (!achievementProgress(this.data, def).reached) return fail('not_ready');
+    a.claimed.push(key);
+    // A hard achievement hands out its cosmetic with the gems (docs/명세_프로필꾸미기.md 8.4).
+    const honor = honorCosmetic(key);
+    const reward: Bundle = honor ? { gems: def.gems, cosmetics: [honor] } : { gems: def.gems };
+    this.applyBundle(reward, 'achievement');
+    this.deps.analytics.track('achievement_claim', { scope: 'achievement', id: key });
+    return ok(reward);
+  }
+
+  /**
+   * Pay the weekly ranking rewards (docs/명세_프로필꾸미기.md 5.3) of the settled weeks the server lists for `uid`, once each: a week is
+   * done when '<uid>:<week id>' is in rankClaimed (the uid is in the key so another account on this device is not skipped). A week holding
+   * an item this build does not know (one added after it shipped) is left for an updated build to pay whole. An item already owned pays gems instead, as addCosmetic does, so the
+   * returned bundle is what the popup should show. One save for all weeks; an empty list means nothing was new and nothing was saved.
+   */
+  claimRankGrants(uid: string, weeks: readonly { week: string; rank: number; items: readonly string[] }[]): { week: string; rank: number; bundle: Bundle }[] {
+    const paid: { week: string; rank: number; bundle: Bundle }[] = [];
+    const claimed = this.data.rankClaimed;
+    for (const { week, rank, items } of weeks) {
+      const key = `${uid}:${week}`;
+      if (claimed.includes(key) || !items.every((id) => cosmetic(id))) continue;
+      const fresh = items.filter((id) => !this.data.cosmetics.owned.includes(id));
+      const bundle: Bundle = items.length > fresh.length ? { gems: (items.length - fresh.length) * DUPLICATE_COSMETIC_GEMS } : {};
+      if (fresh.length > 0) bundle.cosmetics = fresh;
+      this.applyBundle(bundle, 'rank_reward');
+      claimed.push(key);
+      paid.push({ week, rank, bundle });
+    }
+    if (paid.length === 0) return paid;
+    this.data.rankClaimed = claimed.slice(-RANK_CLAIMED_KEPT);
+    this.commit();
+    return paid;
+  }
+
+  /** Every reached, unclaimed achievement in one command: the same as claiming them one after another, with one save. */
+  claimAllAchievements(): Result<ClaimedAll> {
+    if (!this.featureUnlocked('missions')) return fail('locked');
+    return this.takeAll(ACHIEVEMENTS.map((a) => () => this.takeAchievement(a.key)));
   }
 
   /** Run the claims that can be taken, merge what they paid, and commit once; `nothing_to_claim` when none could be. */

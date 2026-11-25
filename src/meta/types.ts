@@ -1,10 +1,10 @@
 /**
  * Shared types of the meta layer: ids, the reward bundle, command results and the persisted profile
- * schema (version 1). Rules live in the sibling modules; this file holds almost no logic.
+ * schema (version 2). Rules live in the sibling modules; this file holds almost no logic.
  */
 import type { AdCounters } from '@/platform/adPolicy';
 import type { IapLedger } from '@/platform/iapService';
-import type { BattleInit, BattleMode, BattleSnapshot } from '@/game/api';
+import type { BattleInit, BattleMode, BattleSnapshot, RelicId } from '@/game/api';
 
 // ───────────────────────────── ids ─────────────────────────────
 
@@ -36,8 +36,8 @@ export type Reason =
   | 'chest_buy' | 'chest_overflow' | 'chest_skip' | 'patrol' | 'patrol_double' | 'mission' | 'mission_chest'
   | 'weekly_mission' | 'calendar' | 'comeback' | 'treat' | 'snack_chest' | 'shop_buy' | 'shop_refresh'
   | 'ticket_buy' | 'ticket_ad' | 'ticket_daily' | 'pass_free' | 'pass_premium' | 'account_level' | 'cup'
-  | 'endless' | 'cosmetic_buy' | 'piggy' | 'iap' | 'iap_revoke' | 'gem_pass' | 'offer_revive' | 'offer_double'
-  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation' | 'dungeon' | 'offer_dungeon' | 'test';
+  | 'endless' | 'cosmetic_buy' | 'cosmetic_gold' | 'piggy' | 'iap' | 'iap_revoke' | 'gem_pass' | 'offer_revive' | 'offer_double'
+  | 'offer_snack' | 'offer_relic' | 'free_chest' | 'consolation' | 'dungeon' | 'offer_dungeon' | 'achievement' | 'rank_reward' | 'test';
 
 // ───────────────────────────── rewards ─────────────────────────────
 
@@ -174,6 +174,8 @@ export interface PendingRun {
   init: BattleInit;
   snapshot: BattleSnapshot | null;
   startedAt: number;
+  /** An endless run's ranking ticket (MetaDeps.runTicket), kept with the run so a run resumed after the app closed still reaches the rankings. */
+  ticket?: string;
 }
 
 /** What a finished run paid, kept until the next run so the result screen can show and double it. */
@@ -217,6 +219,21 @@ export interface ProfileData {
   endless: { best: number; week: string; weekBest: number; claimed: number[] };
   dungeon: { best: DungeonBest[] };
   stats: RunStatsTotals;
+  /** The achievements: what was claimed and the counters the other fields cannot tell (the tutorial never counts toward them). */
+  achv: {
+    /** Claimed achievement keys (known keys only, see normalizeProfile). */
+    claimed: string[];
+    /** Won runs; a daily-challenge win counts only as the day's first clear. */
+    wins: number;
+    /** Days the daily challenge was won (the day's first clear). */
+    daily: number;
+    /** Awakenings done in runs. */
+    awaken: number;
+    /** A Guardian-rank cat was made in a run. */
+    mythic: boolean;
+    /** The different toys picked in runs. */
+    relics: RelicId[];
+  };
   time: { lastSeenAt: number; lastActiveDate: string };
   day: DaySlice;
   week: WeekSlice;
@@ -227,7 +244,11 @@ export interface ProfileData {
   shop: { date: string; salt: number; bought: boolean[] };
   pass: PassSlice;
   piggy: { gems: number; since: number };
-  cosmetics: { owned: string[]; rug: string; fx: string };
+  cosmetics: { owned: string[]; rug: string; fx: string; icon: string; frame: string; plate: string };
+  /** Weekly ranking rewards taken, '<uid>:week-YYYY-MM-DD', the latest 52. */
+  rankClaimed: string[];
+  /** Guardian cats made in a run, by unit id. */
+  mythicMet: string[];
   owned: { butler: boolean; once: string[] };
   gemPass: { until: number; lastClaimDate: string };
   cup: { week: string; days: Record<string, number>; claimed: number[] };

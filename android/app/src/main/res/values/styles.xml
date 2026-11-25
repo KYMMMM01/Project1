@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Behind the bars when the WebView is padded inside them (WebView before 140): the game's cream in dark mode too. -->
+        <item name="android:windowBackground">@color/splash_background</item>
     </style>
 
 

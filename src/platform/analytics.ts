@@ -15,6 +15,7 @@ export const ANALYTICS_EVENTS = [
   'chest_open',
   'unit_level',
   'mission_claim',
+  'achievement_claim',
   'feature_unlock',
 ] as const;
 

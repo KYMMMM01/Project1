@@ -74,6 +74,9 @@ export interface IapLedgerStore {
  */
 export const LEDGER_MAX_ENTRIES = 1000;
 
+/** Order ids per refund lookup: the server's cap (functions/src/refunds.ts MAX_LOOKUP_IDS). */
+const REFUND_LOOKUP_CHUNK = 200;
+
 export function emptyLedger(): IapLedger {
   return { v: 1, orders: {} };
 }
@@ -406,37 +409,69 @@ export class IapService {
         this.deps.analytics.track('iap_result', { product: o.productId, outcome: 'recovered', order: o.orderId });
       }
     }
-    if (!full || !iap.completedOrders) return summary;
+    if (!full) return summary;
 
-    const listing = iap.completedOrders.bind(iap);
-    const records = await settleWithin<OrderRecord[] | null>(Promise.resolve().then(listing), this.callTimeoutMs, null);
-    if (records === null) {
-      summary.ok = false;
-      summary.reason = 'failed';
-      return summary;
-    }
-    for (const o of records) {
-      if (!o || typeof o.orderId !== 'string' || typeof o.productId !== 'string') continue;
-      if (o.status === 'completed') {
-        const known = this.hasGranted(o.orderId);
-        if (await this.grantOnce(o.productId, o.orderId, 'restore')) {
-          if (!known) {
-            summary.granted++;
-            this.deps.analytics.track('iap_result', { product: o.productId, outcome: 'restored', order: o.orderId });
+    if (iap.completedOrders) {
+      const listing = iap.completedOrders.bind(iap);
+      const records = await settleWithin<OrderRecord[] | null>(Promise.resolve().then(listing), this.callTimeoutMs, null);
+      if (records === null) {
+        summary.ok = false;
+        summary.reason = 'failed';
+        return summary;
+      }
+      for (const o of records) {
+        if (!o || typeof o.orderId !== 'string' || typeof o.productId !== 'string') continue;
+        if (o.status === 'completed') {
+          const known = this.hasGranted(o.orderId);
+          if (await this.grantOnce(o.productId, o.orderId, 'restore')) {
+            if (!known) {
+              summary.granted++;
+              this.deps.analytics.track('iap_result', { product: o.productId, outcome: 'restored', order: o.orderId });
+            }
+          } else if (this.ledger.orders[o.orderId]?.s !== 'revoked') {
+            summary.ok = false;
           }
-        } else if (this.ledger.orders[o.orderId]?.s !== 'revoked') {
-          summary.ok = false;
+        } else if (o.status === 'refunded') {
+          const r = await this.revokeOnce(o.productId, o.orderId);
+          if (r === 'revoked') summary.revoked++;
+          else if (r === 'deferred') summary.ok = false;
         }
-      } else if (o.status === 'refunded') {
-        const r = await this.revokeOnce(o.productId, o.orderId);
-        if (r === 'revoked') summary.revoked++;
-        else if (r === 'deferred') summary.ok = false;
       }
     }
+    if (iap.refundedOrders) await this.checkRefunds(iap.refundedOrders.bind(iap), summary);
     if (summary.granted > 0 || summary.revoked > 0) {
       this.deps.analytics.track('iap_result', { outcome: 'restore', granted: summary.granted, revoked: summary.revoked });
     }
     return summary;
+  }
+
+  /**
+   * Ask the platform's refund lookup about every order this ledger holds as granted (or granting), newest first, and revoke the ones it
+   * names. Only an answer revokes: a failed or timed-out call leaves everything as it is.
+   * It leaves summary.ok alone (the lookup is not part of getting purchases back, so the settings toast must not depend on it); the
+   * failure goes to analytics and the next sync asks again. Orders stay in the ledger
+   * (and so stay checkable) until prune() drops the oldest beyond LEDGER_MAX_ENTRIES; there is no age limit.
+   */
+  private async checkRefunds(lookup: (ids: string[]) => Promise<string[]>, summary: RestoreSummary): Promise<void> {
+    const ids = Object.entries(this.ledger.orders)
+      .filter(([, e]) => e.s !== 'revoked')
+      .sort((a, b) => b[1].t - a[1].t)
+      .map(([id]) => id);
+    for (let i = 0; i < ids.length; i += REFUND_LOOKUP_CHUNK) {
+      const chunk = ids.slice(i, i + REFUND_LOOKUP_CHUNK);
+      const hit = await settleWithin<string[] | null>(Promise.resolve().then(() => lookup(chunk)), this.callTimeoutMs, null);
+      if (!Array.isArray(hit)) {
+        this.deps.analytics.track('iap_result', { outcome: 'refund_check_failed' });
+        return;
+      }
+      for (const id of new Set(hit)) {
+        const entry = typeof id === 'string' && chunk.includes(id) ? this.ledger.orders[id] : undefined;
+        if (!entry) continue;
+        const r = await this.revokeOnce(entry.p, id);
+        if (r === 'revoked') summary.revoked++;
+        else if (r === 'deferred') summary.ok = false;
+      }
+    }
   }
 
   // ----- the ledger ------------------------------------------------------------------------

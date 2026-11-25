@@ -116,4 +116,37 @@ describe('Google Play Games', () => {
     p.showAchievements.mockRejectedValueOnce(new Error('achievements unavailable'));
     expect(await playGames.showAchievements()).toBe(false);
   });
+
+  it('syncAchievements sends each reached id once while signed in, and all again after a new sign-in', async () => {
+    const p = fake();
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"a":"id_a","b":"id_b"}');
+    playGames.syncAchievements(['a']); // not signed in yet: nothing
+    await playGames.start();
+    playGames.syncAchievements(['a', 'zzz']);
+    playGames.syncAchievements(['a', 'b']);
+    expect(p.unlockAchievement.mock.calls).toEqual([[{ id: 'id_a' }], [{ id: 'id_b' }]]);
+    p.unlockAchievement.mockClear();
+    await playGames.connect(); // wait, then on again
+    playGames.syncAchievements(['a', 'b']);
+    expect(p.unlockAchievement).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncAchievements retries an id whose unlock call failed on the next sync', async () => {
+    const p = fake();
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"a":"id_a"}');
+    await playGames.start();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    p.unlockAchievement.mockRejectedValueOnce(new Error('offline'));
+    playGames.syncAchievements(['a']);
+    await new Promise((r) => setTimeout(r, 0));
+    playGames.syncAchievements(['a']);
+    playGames.syncAchievements(['a']);
+    expect(p.unlockAchievement).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncAchievements is a quiet no on a build without Play Games', async () => {
+    vi.stubEnv('VITE_PGS_ACHIEVEMENTS', '{"a":"id_a"}');
+    await playGames.start();
+    expect(() => playGames.syncAchievements(['a'])).not.toThrow();
+  });
 });

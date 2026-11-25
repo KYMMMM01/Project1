@@ -2,24 +2,60 @@
  * The ranking screen (platform/ranking.ts): the endless mode's top 100, of all time and of this week, as the server last folded them (every
  * 10 minutes), with the player's own place on top. Signed out it still shows the boards, with the sign-in button where the place would be.
  */
-import { Container } from 'pixi.js';
+import { Container, Rectangle, Sprite, type Texture } from 'pixi.js';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
+import { accountProgress, profile } from '@/meta';
 import { account, ranking, type BoardKey, type BoardView, type MyPlace } from '@/platform';
-import { Button, Color, fitLabel, ScreenScaffold, SegmentTabs, uiLabel } from '@/ui';
+import { bakeResolution, bindPress, Button, Color, fitLabel, ScreenScaffold, SegmentTabs, uiLabel } from '@/ui';
+import { LOOK_DEFAULTS, type LookWire } from '../../../functions/src/looks';
+import { Avatar } from '../shell/LevelBadge';
+import { FRAME_BOX_H, FRAME_BOX_W } from '../shell/layoutMath';
 import { formSheet, LABEL_OVERHANG, type FormRow } from './settingsForm';
 import { signInFlow } from './accountFlow';
 import { changeNameFlow } from './nameDialog';
+import { claimRankGrants } from './rankGrants';
+import { openProfileCard, type CardInfo } from './profileCard';
 import './strings';
 
 const SIDE = 28;
 const ROW_H = 76;
 const SEG_H = 80;
 const GAP = 28;
+/** The avatar's box in a line: the 112 x 108 box the home's Avatar is laid out for, at half size. */
+const AVATAR_W = 56;
+const AVATAR_H = (AVATAR_W * FRAME_BOX_H) / FRAME_BOX_W;
 /** The podium: gold, silver, bronze for the first three places. */
 const PODIUM = [Color.mustard, Color.inkSoft, Color.coral] as const;
 
 let current: ScreenScaffold | null = null;
+
+/**
+ * One baked picture per icon and frame pair: up to 100 lines share a handful of them, where a live Avatar per line would be a circular
+ * mask each. Baked at the sharpness the game bakes its other art at, for the 56 px box it is drawn in.
+ */
+const avatars = new Map<string, Texture>();
+
+function avatarTexture(icon: string, frame: string): Texture {
+  const key = icon + '|' + frame;
+  let tx = avatars.get(key);
+  if (tx) return tx;
+  const host = new Container();
+  const avatar = new Avatar();
+  avatar.setIcon(icon);
+  avatar.setFrame(frame);
+  avatar.scale.set(AVATAR_W / FRAME_BOX_W);
+  host.addChild(avatar);
+  tx = game.app.renderer.generateTexture({
+    target: host,
+    frame: new Rectangle(-AVATAR_W / 2, -AVATAR_H / 2, AVATAR_W, AVATAR_H),
+    resolution: bakeResolution(),
+    antialias: true,
+  });
+  host.destroy({ children: true });
+  avatars.set(key, tx);
+  return tx;
+}
 
 export function openRanking(): void {
   if (current) return;
@@ -35,15 +71,34 @@ export function openRanking(): void {
   /** Answers that come back after the player switched boards are dropped. */
   let ask = 0;
 
-  const line = (row: Container, w: number, rank: string, name: string, score: string, tint: number, me = false): void => {
-    const r = uiLabel(rank, { size: 30, color: tint, anchorX: 0.5 });
+  /** A line of either list: rank, avatar, name and best wave. Tapping it opens the player's card (a drag of the list cancels the press). */
+  const line = (row: Container, w: number, info: CardInfo, tint: number, me = false): void => {
+    const r = uiLabel(String(info.rank), { size: 30, color: tint, anchorX: 0.5 });
     r.position.set(SIDE + 34, ROW_H / 2);
-    const s = uiLabel(score, { size: 28, anchorX: 1, align: 'right' });
+    const s = uiLabel(t('rt.sys.rank.waves', { n: info.score }), { size: 28, anchorX: 1, align: 'right' });
     s.position.set(w - SIDE, ROW_H / 2);
-    const n = uiLabel(name, { size: 28, color: me ? Color.teal : Color.ink, anchorX: 0, align: 'left' });
-    fitLabel(n, w - SIDE * 2 - 110 - Math.ceil(s.width) - 24, 28);
-    n.position.set(SIDE + 86, ROW_H / 2);
-    row.addChild(r, n, s);
+    const n = uiLabel(info.name, { size: 28, color: me ? Color.teal : Color.ink, anchorX: 0, align: 'left' });
+    fitLabel(n, w - SIDE * 2 - 174 - Math.ceil(s.width) - 24, 28);
+    n.position.set(SIDE + 150, ROW_H / 2);
+    const a = new Sprite(avatarTexture(info.look?.i ?? LOOK_DEFAULTS.i, info.look?.f ?? LOOK_DEFAULTS.f));
+    a.anchor.set(0.5);
+    a.position.set(SIDE + 106, ROW_H / 2);
+    row.addChild(r, a, n, s);
+    row.hitArea = new Rectangle(0, 0, w, ROW_H);
+    row.eventMode = 'static';
+    bindPress(row, {
+      down: () => (row.alpha = 0.85),
+      up: (fire) => {
+        row.alpha = 1;
+        if (fire) void openProfileCard(info, t(board === 'endless' ? 'rt.sys.rank.all' : 'rt.sys.rank.week'));
+      },
+    });
+  };
+
+  /** The player's own look comes from the device, not from the folded board: the place may be past the top 100, and the device is newer. */
+  const myLook = (): LookWire => {
+    const { icon, frame, plate } = profile.look;
+    return { i: icon, f: frame, p: plate, lv: accountProgress(profile.data.accountXp).level };
   };
 
   const note = (text: string): FormRow => ({
@@ -115,7 +170,7 @@ export function openRanking(): void {
       : view === 'loading'
         ? [note(t('rt.sys.rank.loading'))]
         : mine
-          ? [{ height: ROW_H, draw: (row, rw) => line(row, rw, String(mine!.rank), mine!.name, t('rt.sys.rank.waves', { n: mine!.score }), Color.teal, true) }]
+          ? [{ height: ROW_H, draw: (row, rw) => line(row, rw, { ...mine!, look: myLook() }, Color.teal, true) }]
           : [note(t('rt.sys.rank.none'))];
     const mineRows = status === 'on' ? [nameRow, ...placeRows] : placeRows;
     const top = formSheet(w, t('rt.sys.rank.mine'), mineRows, 'mustard');
@@ -135,7 +190,7 @@ export function openRanking(): void {
             : view.top.map((r, i) => ({
                 height: ROW_H,
                 draw: (row: Container, rw: number) =>
-                  line(row, rw, String(i + 1), r.name, t('rt.sys.rank.waves', { n: r.score }), PODIUM[i] ?? Color.inkSoft, r.uid === uid),
+                  line(row, rw, { rank: i + 1, name: r.name, score: r.score, look: r.look }, PODIUM[i] ?? Color.inkSoft, r.uid === uid),
               }));
     const title = view && view !== 'loading' && view.total > 0 ? t('rt.sys.rank.total', { n: view.total }) : t('rt.sys.rank.top');
     const list = formSheet(w, title, rows);
@@ -173,5 +228,6 @@ export function openRanking(): void {
   };
 
   void load();
+  void claimRankGrants(() => !closed);
   void scaffold.show(true);
 }

@@ -65,7 +65,9 @@ function buildFree(inner: Container, y: number, w: number, env: BlockEnv): numbe
   const owned = profile.data.chests.wooden;
   const pile = pileSize(owned) > 0;
   // The open button, the pile button under it, then what the waiting chest offers: while waiting there are two skip buttons (an ad, gems), one under the other so each label has the whole width.
-  const heights = [...(owned > 0 ? [OPEN_H] : []), ...(pile ? [PILE_H] : []), ...(view.ready ? [OPEN_H] : [OPEN_H, OPEN_H])];
+  // Without rewarded ads on this platform (itch.io) the ad skip is left out.
+  const withAd = ads.supported('free_chest');
+  const heights = [...(owned > 0 ? [OPEN_H] : []), ...(pile ? [PILE_H] : []), ...(view.ready || !withAd ? [OPEN_H] : [OPEN_H, OPEN_H])];
   const h = Math.max(262, 148 + heights.reduce((a, b) => a + b, 0) + (heights.length - 1) * ROW_GAP + 14);
   const card = subCard(inner, PAD, y, w, h);
   chestOnShelf(card, 'wooden', h - 80, owned);
@@ -92,6 +94,10 @@ function buildFree(inner: Container, y: number, w: number, env: BlockEnv): numbe
     const b = actionButton({ label: t('shop.free.take'), width: rw, style: 'success' }, () => env.actions.claimFreeChest());
     b.position.set(COL + rw / 2, ry + OPEN_H / 2);
     card.addChild(b);
+  } else if (!withAd) {
+    const gem = currencyButton(t('shop.free.gems'), view.skipGems, 'gems', rw, () => env.actions.skipFreeChest('gems'), 'neutral');
+    gem.position.set(COL + rw / 2, ry + OPEN_H / 2);
+    card.addChild(gem);
   } else {
     const adOk = view.skipsLeft > 0 && ads.canOffer('free_chest');
     const ad = actionButton(

@@ -5,7 +5,8 @@ import { createMemoryBackend } from '@/platform/storage';
 import { crc32, decodeBackup, encodeBackup, toBase64Url } from '@/meta/backup';
 import { attachPlatform } from '@/meta/platformLink';
 import { MIGRATIONS, PROFILE_VERSION, SAVE_KEY, defaultProfile, migrateProfile, normalizeProfile } from '@/meta/profileData';
-import { IAP_SPECS } from '@/meta/data/catalog';
+import { COSMETICS, IAP_SPECS, type CosmeticDef, type IapSpec } from '@/meta/data/catalog';
+import { MYTHIC_UNIT_IDS } from '@/game/data/roster';
 import { PASS_XP_PER_TIER } from '@/meta/data/schedule';
 import { runGold } from '@/meta/rewards';
 import { at, createTestProfile, type TestRig } from '@/meta/testing';
@@ -19,7 +20,7 @@ function stats(over: Partial<RunStats> = {}): RunStats {
   return {
     mode: 'chapter', chapter: 1, stake: 0, seed: 4321, victory: true, wavesCleared: 24, totalWaves: 24, kills: 300,
     bossesKilled: 5, summons: 40, merges: 25, molts: 0, awakenings: 0, relics: ['yarn_ball', 'mouse_toy', 'bell_collar', 'scratcher', 'fishing_rod'],
-    bestRarity: 'epic', peakEnemies: 20, duration: 400, revived: false, summonLuck: 0.5, damageByUnit: {}, ...over,
+    bestRarity: 'epic', mythics: [], peakEnemies: 20, duration: 400, revived: false, summonLuck: 0.5, damageByUnit: {}, ...over,
   };
 }
 
@@ -33,8 +34,8 @@ const REASONS: readonly Reason[] = [
   'run_reward', 'run_double', 'first_clear', 'daily_clear', 'sweep', 'level_up', 'training', 'chest_buy',
   'chest_overflow', 'chest_skip', 'patrol', 'patrol_double', 'mission', 'mission_chest', 'weekly_mission', 'calendar',
   'comeback', 'treat', 'snack_chest', 'shop_buy', 'shop_refresh', 'ticket_buy', 'ticket_ad', 'ticket_daily', 'pass_free',
-  'pass_premium', 'account_level', 'cup', 'endless', 'cosmetic_buy', 'piggy', 'iap', 'iap_revoke', 'gem_pass',
-  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'test',
+  'pass_premium', 'account_level', 'cup', 'endless', 'cosmetic_buy', 'cosmetic_gold', 'piggy', 'iap', 'iap_revoke', 'gem_pass',
+  'offer_revive', 'offer_double', 'offer_snack', 'offer_relic', 'free_chest', 'consolation', 'dungeon', 'offer_dungeon', 'achievement', 'rank_reward', 'test',
 ];
 
 describe('the one money path', () => {
@@ -574,7 +575,7 @@ describe('backup code', () => {
     expect(done.ok).toBe(true);
     const x = a.profile.data;
     const y = b.profile.data;
-    for (const k of ['gold', 'gems', 'levels', 'cards', 'wild', 'training', 'chests', 'cleared', 'cosmetics', 'owned', 'orders', 'stats', 'accountXp', 'pass', 'piggy', 'goldOpened'] as const) {
+    for (const k of ['gold', 'gems', 'levels', 'cards', 'wild', 'training', 'chests', 'cleared', 'cosmetics', 'owned', 'orders', 'stats', 'accountXp', 'pass', 'piggy', 'goldOpened', 'rankClaimed', 'mythicMet'] as const) {
       expect(y[k], k).toEqual(x[k]);
     }
     expect(b.profile.featureUnlocked('speed3x')).toBe(true);
@@ -726,9 +727,9 @@ describe('save and migration', () => {
     expect(store.data).toEqual({ gold: 0, gems: 3, coins: 7 });
   });
 
-  it('has version 1, an empty migration table, and fills missing fields from the defaults on load', async () => {
-    expect(PROFILE_VERSION).toBe(1);
-    expect(Object.keys(MIGRATIONS)).toEqual([]);
+  it('has version 2, one migration step (1 to 2, the achievements), and fills missing fields from the defaults on load', async () => {
+    expect(PROFILE_VERSION).toBe(2);
+    expect(Object.keys(MIGRATIONS)).toEqual(['1']);
     setStorageBackend(createMemoryBackend());
     await getStorageBackend().set(SAVE_KEY, JSON.stringify({ v: 1, t: 0, data: { gold: 999, levels: { w_paw: 4 } } }));
     const rig = await createTestProfile({ keepStorage: true });
@@ -797,6 +798,202 @@ describe('chest odds screen on the profile', () => {
   });
 });
 
+describe('profile look', () => {
+  it('starts with the paper ring, the kraft plate and the Paw Puncher, and owns the 16 base cats at once', async () => {
+    const { profile } = await createTestProfile();
+    expect(profile.look).toEqual({ icon: 'icon_w_paw', frame: 'frame_default', plate: 'plate_default' });
+    expect(profile.equipped).toEqual({ rug: 'rug_default', fx: 'fx_default' });
+    expect(profile.data.cosmetics.owned).toEqual(['rug_default', 'fx_default', 'frame_default', 'plate_default']);
+    for (const u of BASE_UNITS) expect(profile.owns('icon_' + u), u).toBe(true);
+    for (const u of MYTHIC_UNIT_IDS) expect(profile.owns('icon_' + u), u).toBe(false);
+    expect(profile.owns('rug_gem1')).toBe(false);
+    expect(profile.owns('nope')).toBe(false);
+    const icons = profile.cosmetics().filter((r) => r.kind === 'icon');
+    expect(icons).toHaveLength(20);
+    expect(new Set(icons.map((r) => r.id))).toEqual(new Set([...BASE_UNITS, ...MYTHIC_UNIT_IDS].map((u) => 'icon_' + u)));
+    expect(icons.filter((r) => r.owned)).toHaveLength(16);
+    expect(icons.filter((r) => r.equipped).map((r) => r.id)).toEqual(['icon_w_paw']);
+  });
+
+  it('equips a base cat icon without it being in the owned list, and refuses a Guardian until one was made', async () => {
+    const { profile } = await createTestProfile();
+    expect(profile.equip('icon_r_ninja')).toEqual({ ok: true, value: undefined });
+    expect(profile.look.icon).toBe('icon_r_ninja');
+    expect(profile.data.cosmetics.owned).not.toContain('icon_r_ninja');
+    expect(profile.cosmetics().find((r) => r.id === 'icon_r_ninja')?.equipped).toBe(true);
+    expect(profile.cosmetics().find((r) => r.id === 'icon_w_paw')?.equipped).toBe(false);
+    expect(profile.equip('icon_w_tiger')).toEqual({ ok: false, error: 'not_owned' });
+    expect(profile.buyCosmetic('icon_r_ninja')).toEqual({ ok: false, error: 'invalid' });
+    profile.data.mythicMet = ['w_tiger'];
+    expect(profile.owns('icon_w_tiger')).toBe(true);
+    expect(profile.owns('icon_r_star')).toBe(false);
+    expect(profile.equip('icon_w_tiger').ok).toBe(true);
+    expect(profile.look.icon).toBe('icon_w_tiger');
+    expect(profile.equip('frame_default').ok).toBe(true);
+    expect(profile.equip('plate_default').ok).toBe(true);
+  });
+
+  it('keeps the owned check in one place: buyCosmetic says already_owned for what ownsCosmetic grants', async () => {
+    const { profile } = await createTestProfile();
+    profile.grant('gems', 1000, 'iap');
+    expect(profile.buyCosmetic('rug_gem1').ok).toBe(true);
+    expect(profile.buyCosmetic('rug_gem1')).toEqual({ ok: false, error: 'already_owned' });
+    expect(profile.owns('rug_gem1')).toBe(true);
+  });
+
+  it('normalize fills the new slots, pushes the default ring and plate, and keeps ids it does not know', () => {
+    const p = defaultProfile(0, 1);
+    p.cosmetics.owned = ['rug_default', 'fx_default', 'rug_gem2', 'frame_from_the_future', 'rug_gem2', 7 as unknown as string];
+    p.cosmetics.icon = 'unknown_icon';
+    p.cosmetics.frame = 'unknown_frame';
+    p.cosmetics.plate = 'unknown_plate';
+    normalizeProfile(p);
+    expect(p.cosmetics.owned).toEqual(['rug_default', 'fx_default', 'rug_gem2', 'frame_from_the_future', 'frame_default', 'plate_default']);
+    expect(p.cosmetics).toMatchObject({ icon: 'icon_w_paw', frame: 'frame_default', plate: 'plate_default', rug: 'rug_default', fx: 'fx_default' });
+  });
+
+  it('normalize puts a slot back to its default when the id is of another kind or not usable', () => {
+    const p = defaultProfile(0, 1);
+    p.cosmetics.icon = 'icon_m_cosmo';
+    p.cosmetics.frame = 'rug_gem1';
+    p.cosmetics.rug = 'rug_gem1';
+    normalizeProfile(p);
+    expect(p.cosmetics.icon).toBe('icon_w_paw');
+    expect(p.cosmetics.frame).toBe('frame_default');
+    expect(p.cosmetics.rug).toBe('rug_default');
+    p.mythicMet = ['m_cosmo'];
+    p.cosmetics.icon = 'icon_m_cosmo';
+    normalizeProfile(p);
+    expect(p.cosmetics.icon).toBe('icon_m_cosmo');
+  });
+
+  it('normalize keeps only well-formed ranking claims (the latest 52) and Guardian ids once each', () => {
+    const p = defaultProfile(0, 1);
+    p.rankClaimed = ['ab12:week-2026-11-23', 'bad', 5 as unknown as string, 'ab12:week-2026-11-23', 'x:week-2026-1-1'];
+    p.mythicMet = ['r_star', 'w_paw', 'r_star', 'nope', 't_lucky'];
+    normalizeProfile(p);
+    expect(p.rankClaimed).toEqual(['ab12:week-2026-11-23', 'ab12:week-2026-11-23']);
+    expect(p.mythicMet).toEqual(['r_star', 't_lucky']);
+    p.rankClaimed = Array.from({ length: 60 }, (_, i) => `u:week-2026-01-${String(i + 1).padStart(2, '0')}`);
+    normalizeProfile(p);
+    expect(p.rankClaimed).toHaveLength(52);
+    expect(p.rankClaimed[51]).toBe('u:week-2026-01-60');
+  });
+
+  it('opens all four Guardian icons for a save that only knew that a Guardian was made', () => {
+    const p = defaultProfile(0, 1);
+    p.achv.mythic = true;
+    expect(normalizeProfile(p).mythicMet).toEqual(['w_tiger', 'r_star', 'm_cosmo', 't_lucky']);
+    const q = defaultProfile(0, 1);
+    q.achv.mythic = true;
+    q.mythicMet = ['r_star'];
+    expect(normalizeProfile(q).mythicMet).toEqual(['r_star']);
+    expect(normalizeProfile(defaultProfile(0, 1)).mythicMet).toEqual([]);
+  });
+
+  it('fills the new fields of a save from before, through the store', async () => {
+    setStorageBackend(createMemoryBackend());
+    await getStorageBackend().set(
+      SAVE_KEY,
+      JSON.stringify({
+        v: PROFILE_VERSION, t: 0,
+        data: {
+          gold: 5, gems: 5, levels: { w_paw: 3 },
+          achv: { claimed: [], wins: 0, daily: 0, awaken: 0, mythic: true, relics: [] },
+          cosmetics: { owned: ['rug_default', 'fx_default', 'rug_gem1'], rug: 'rug_gem1', fx: 'fx_default' },
+        },
+      }),
+    );
+    const { profile } = await createTestProfile({ keepStorage: true });
+    expect(profile.look).toEqual({ icon: 'icon_w_paw', frame: 'frame_default', plate: 'plate_default' });
+    expect(profile.data.cosmetics.owned).toEqual(['rug_default', 'fx_default', 'rug_gem1', 'frame_default', 'plate_default']);
+    expect(profile.data.rankClaimed).toEqual([]);
+    expect(profile.data.mythicMet).toHaveLength(4);
+    expect(profile.equipped.rug).toBe('rug_gem1');
+  });
+
+  it('puts the slot back to its default on a refund, whatever the kind of the cosmetic', async () => {
+    const { profile } = await createTestProfile();
+    const def: CosmeticDef = { id: 'frame_refund_test', kind: 'frame', source: { type: 'reward' } };
+    const spec: IapSpec = {
+      id: 'frame_pack_test', type: 'consumable', krw: 1100, once: true, grant: 'bundle',
+      name: { ko: 'x', en: 'x' }, bundle: { cosmetics: [def.id] },
+    };
+    (COSMETICS as CosmeticDef[]).push(def);
+    (IAP_SPECS as IapSpec[]).push(spec);
+    try {
+      await profile.grantOrder(spec.id, 'fr-1');
+      expect(profile.owns(def.id)).toBe(true);
+      expect(profile.equip(def.id).ok).toBe(true);
+      expect(profile.look.frame).toBe(def.id);
+      await profile.revokeOrder('fr-1');
+      expect(profile.owns(def.id)).toBe(false);
+      expect(profile.look.frame).toBe('frame_default');
+      expect(profile.data.cosmetics.owned).toContain('frame_default');
+    } finally {
+      (COSMETICS as CosmeticDef[]).pop();
+      (IAP_SPECS as IapSpec[]).pop();
+    }
+  });
+});
+
+describe('profile frames and plates for sale', () => {
+  it('sells a gold one for gold and a gems one for gems, each once, and records the gold as cosmetic_gold', async () => {
+    const { profile, analytics } = await createTestProfile();
+    profile.data.gold = 7999;
+    expect(profile.buyCosmetic('frame_wood')).toEqual({ ok: false, error: 'not_enough_gold' });
+    profile.data.gold = 9000;
+    expect(profile.buyCosmetic('frame_wood')).toEqual({ ok: true, value: undefined });
+    expect(profile.data.gold).toBe(1000);
+    expect(profile.owns('frame_wood')).toBe(true);
+    expect(profile.buyCosmetic('frame_wood')).toEqual({ ok: false, error: 'already_owned' });
+    const spent = analytics.filter((e) => e.event === 'currency' && e.params.reason === 'cosmetic_gold');
+    expect(spent.length).toBeGreaterThan(0);
+    profile.data.gems = 299;
+    expect(profile.buyCosmetic('plate_night')).toEqual({ ok: false, error: 'not_enough_gems' });
+    profile.data.gems = 300;
+    expect(profile.buyCosmetic('plate_night').ok).toBe(true);
+    expect(profile.data.gems).toBe(0);
+    expect(profile.equip('frame_wood').ok).toBe(true);
+    expect(profile.equip('plate_night').ok).toBe(true);
+    expect(profile.look).toEqual({ icon: 'icon_w_paw', frame: 'frame_wood', plate: 'plate_night' });
+  });
+
+  it('opens an achievement one for gold only once its achievement is claimed', async () => {
+    const { profile } = await createTestProfile();
+    profile.data.gold = 50_000;
+    const row = () => profile.cosmetics().find((r) => r.id === 'plate_wins');
+    expect(row()?.forSale).toBe(false);
+    expect(profile.buyCosmetic('plate_wins')).toEqual({ ok: false, error: 'locked' });
+    profile.data.achv.claimed.push('wins_50');
+    expect(row()?.forSale).toBe(true);
+    expect(profile.buyCosmetic('plate_wins')).toEqual({ ok: true, value: undefined });
+    expect(profile.data.gold).toBe(42_000);
+  });
+
+  it('never sells an honour, a ranking reward, a cat or a default', async () => {
+    const { profile } = await createTestProfile();
+    profile.data.gold = 1_000_000;
+    profile.data.gems = 100_000;
+    for (const id of ['frame_honor_butler', 'plate_honor_relics', 'frame_rank_1', 'plate_rank_10', 'icon_r_ninja', 'frame_default']) {
+      expect(profile.buyCosmetic(id), id).toEqual({ ok: false, error: 'invalid' });
+    }
+    expect(profile.equip('frame_rank_1')).toEqual({ ok: false, error: 'not_owned' });
+  });
+
+  it('lists 18 frames and 16 plates, each with a picture except the defaults, and a name in both languages', async () => {
+    const { readdirSync } = await import('node:fs');
+    const files = new Set(readdirSync('src/assets/img'));
+    const frames = COSMETICS.filter((c) => c.kind === 'frame');
+    const plates = COSMETICS.filter((c) => c.kind === 'plate');
+    expect(frames).toHaveLength(18);
+    expect(plates).toHaveLength(16);
+    for (const c of [...frames, ...plates]) {
+      if (c.source.type !== 'default') expect(files.has(c.id + '.webp'), c.id).toBe(true);
+    }
+  });
+});
+
 describe('the singleton', () => {
   it('imports the platform barrel in node and builds the app profile without side effects', async () => {
     setStorageBackend(createMemoryBackend());
@@ -809,5 +1006,17 @@ describe('the singleton', () => {
     } finally {
       debug.mockRestore();
     }
+  });
+});
+
+describe('the guardians a run made', () => {
+  it('joins mythicMet in roster order without repeats, and a tutorial run does not count', async () => {
+    const rig = await createTestProfile();
+    await playRun(rig, { mode: 'tutorial', mythics: ['w_tiger'] });
+    expect(rig.profile.data.mythicMet).toEqual([]);
+    await playRun(rig, { mythics: ['t_lucky', 'w_tiger'] });
+    expect(rig.profile.data.mythicMet).toEqual(['w_tiger', 't_lucky']);
+    await playRun(rig, { mythics: ['w_tiger', 'r_star'] });
+    expect(rig.profile.data.mythicMet).toEqual(['w_tiger', 'r_star', 't_lucky']);
   });
 });

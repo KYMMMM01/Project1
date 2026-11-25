@@ -3,6 +3,7 @@ import '@/screens/missions/strings';
 import '@/screens/pass/strings';
 import { fmtDuration } from '@/core/format';
 import { at, createTestProfile, type TestRig } from '@/meta/testing';
+import { claimableAchievements } from '@/meta/achievements';
 import { CLAIM_ALL_MIN, claimAllReading, missionBadges, tierFill, tierMarks, waitingMissions, waitingTiers, weekDays } from '@/screens/missions/model';
 import { tn } from '@/meta/plural';
 import { getLang, setLang, t } from '@/core/i18n';
@@ -88,9 +89,12 @@ describe('reward parts', () => {
 describe('missions model', () => {
   it('counts claimable things per sub-tab and is zero while locked', async () => {
     const fresh = await createTestProfile();
-    expect(missionBadges(fresh.profile)).toEqual({ daily: 0, weekly: 0, total: 0 });
+    expect(missionBadges(fresh.profile)).toEqual({ daily: 0, weekly: 0, achievement: 0, total: 0 });
 
     const { profile } = await advanced();
+    // The advanced profile has cleared chapters, so its first achievements wait: they count in the total until claimed.
+    expect(missionBadges(profile)).toMatchObject({ daily: 0, weekly: 0, achievement: claimableAchievements(profile.data).length });
+    expect(profile.claimAllAchievements().ok).toBe(true);
     expect(missionBadges(profile).total).toBe(0);
     profile.data.day.missions.progress = [3, 20, 0, 0, 1];
     expect(missionBadges(profile)).toMatchObject({ daily: 3, weekly: 0 });

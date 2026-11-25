@@ -35,7 +35,10 @@ describe('the game account without a Firebase config', () => {
 
 describe('the rankings signed out', () => {
   it('sends nothing and has no place to show', async () => {
-    expect(await ranking.submitRun({ waves: 40, seconds: 900 })).toBe(false);
+    // Signed out it may go up later; without a ticket it never can.
+    expect(await ranking.submitRun({ waves: 40, seconds: 900, ticket: 'a'.repeat(32) })).toBe('retry');
+    expect(await ranking.submitRun({ waves: 40, seconds: 900 })).toBe('refused');
+    expect(await ranking.startRun()).toBeNull();
     expect(await ranking.mine('week')).toBeNull();
   });
 });

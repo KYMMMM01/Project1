@@ -28,6 +28,7 @@ import {
   type CapacitorPlugins,
   type CapPlayGames,
 } from '../bridges';
+import { firebase } from '../firebase';
 import { createLocalStorageBackend, safeStorage } from '../storage';
 import type { AdResult, IapOutcome, OrderRecord, PendingOrder, PlatformAdapter, PlatformIap } from '../types';
 import { errorMessage, safe, Signal } from '../util';
@@ -119,8 +120,10 @@ export function createAdapter(): PlatformAdapter {
   const enabled = (): boolean => adsAllowed && plugins()?.AdMob !== undefined && adUnitId() !== undefined;
 
   // RevenueCat is configured once, on the first purchase call; a failed configure leaves purchases unavailable.
+  // The plugin comes back inside an object: Capacitor's proxy answers every name, `then` too, so a promise that resolved to
+  // it would call Purchases.then() on the native side and never settle.
   let configured: Promise<boolean> | undefined;
-  const purchases = async (): Promise<NonNullable<CapacitorPlugins['Purchases']> | null> => {
+  const purchases = async (): Promise<{ P: NonNullable<CapacitorPlugins['Purchases']> } | null> => {
     const P = plugins()?.Purchases;
     const apiKey = revenueCatKey();
     if (!P || !apiKey) return null;
@@ -128,7 +131,7 @@ export function createAdapter(): PlatformAdapter {
       () => true,
       () => false,
     );
-    return (await configured) ? P : null;
+    return (await configured) ? { P } : null;
   };
 
   const retryLater = (): void => {
@@ -249,7 +252,7 @@ export function createAdapter(): PlatformAdapter {
   const iap: PlatformIap = {
     isAvailable: () => plugins()?.Purchases !== undefined && revenueCatKey() !== undefined,
     async products(ids) {
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return [];
       const { products } = await P.getProducts({ productIdentifiers: [...ids], type: ONE_TIME });
       return products
@@ -257,7 +260,7 @@ export function createAdapter(): PlatformAdapter {
         .map((p) => ({ id: p.identifier, priceText: p.priceString as string }));
     },
     async purchase(productId, onPaid): Promise<IapOutcome> {
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return 'unavailable';
       try {
         const { products } = await P.getProducts({ productIdentifiers: [productId], type: ONE_TIME });
@@ -284,7 +287,7 @@ export function createAdapter(): PlatformAdapter {
     async pendingOrders() {
       const intents = await readIntents();
       if (Object.keys(intents).length === 0) return [];
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return [];
       const info = customerInfo(await (P.getCustomerInfo ? P.getCustomerInfo() : P.restorePurchases()));
       const out: PendingOrder[] = [];
@@ -301,7 +304,7 @@ export function createAdapter(): PlatformAdapter {
       return out;
     },
     async completedOrders(): Promise<OrderRecord[]> {
-      const P = await purchases();
+      const P = (await purchases())?.P;
       if (!P) return [];
       const info = customerInfo(await P.restorePurchases());
       const out: OrderRecord[] = [];
@@ -311,6 +314,15 @@ export function createAdapter(): PlatformAdapter {
         if (orderId && productId) out.push({ orderId, productId, status: 'completed' });
       }
       return out;
+    },
+    // Asks the refundedOrders function (functions/src/index.ts), which only reports refunds it read from Google Play. No sign-in needed.
+    async refundedOrders(orderIds) {
+      const k = await firebase();
+      if (!k || orderIds.length === 0) return [];
+      const res = await k.fnMod.httpsCallable<{ orderIds: string[] }, { refunded?: unknown }>(k.fns, 'refundedOrders', { timeout: 8_000 })({ orderIds });
+      const refunded = res.data?.refunded;
+      if (!Array.isArray(refunded)) throw new Error('refundedOrders: bad answer');
+      return refunded.filter((id): id is string => typeof id === 'string');
     },
     async complete(orderId) {
       const productId = pendingProduct.get(orderId);

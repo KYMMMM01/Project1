@@ -98,6 +98,8 @@ export const dailyBlock: Block = {
     refresh.setEnabled(view.refreshesLeft > 0 && ads.canOffer('shop_refresh'));
     refresh.onDisabledTap(() => env.actions.refreshDaily());
     refresh.position.set(pageW - PAD - 135, 52);
+    // The refresh is a rewarded ad: on a platform without them (itch.io) it is left out.
+    refresh.visible = ads.supported('shop_refresh');
     inner.addChild(sub, refresh);
 
     const gap = 12;

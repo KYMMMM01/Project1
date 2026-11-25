@@ -34,6 +34,7 @@ describe('Analytics', () => {
       'chest_open',
       'unit_level',
       'mission_claim',
+      'achievement_claim',
       'feature_unlock',
     ]);
   });

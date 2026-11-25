@@ -25,18 +25,24 @@ let state: PlayGamesState = { status: 'none' };
 const listeners = new Set<(s: PlayGamesState) => void>();
 /** Achievement ids unlocked while the sign-in was still running (a set, so a repeat is one call). */
 const pending = new Set<string>();
+/** Achievement ids `syncAchievements` already sent while signed in (kept in memory; a sign-out forgets them so the next sign-in sends all). */
+const sent = new Set<string>();
 
 const plugin = (): CapPlayGames | undefined => getCapacitorPlugins()?.PlayGames;
 
 /** A failed achievement call is only a log line: the game never waits on it. */
-async function send(call: Promise<unknown> | undefined): Promise<void> {
-  await call?.catch((e) => console.warn('[playGames] achievement call failed:', errorMessage(e)));
+async function send(call: Promise<unknown> | undefined, onFail?: () => void): Promise<void> {
+  await call?.catch((e) => {
+    console.warn('[playGames] achievement call failed:', errorMessage(e));
+    onFail?.();
+  });
 }
 
 function set(next: PlayGamesState): void {
   state = next;
   if (next.status === 'on') for (const id of pending) void send(plugin()?.unlockAchievement({ id }));
   if (next.status !== 'wait') pending.clear();
+  if (next.status !== 'on') sent.clear();
   for (const fn of [...listeners]) fn(state);
 }
 
@@ -105,6 +111,19 @@ export const playGames = {
     else if (state.status === 'wait') pending.add(id);
   },
 
+  /** Unlocks every reached key not sent yet this sign-in (Google ignores a repeat, but the set keeps repeat calls free). Does nothing unless signed in. */
+  syncAchievements(keys: readonly string[]): void {
+    if (state.status !== 'on') return;
+    for (const key of keys) {
+      const id = playGames.achievementId(key);
+      if (id && !sent.has(id)) {
+        sent.add(id);
+        // A failed call is forgotten so the next profile change retries it.
+        void send(plugin()?.unlockAchievement({ id }), () => sent.delete(id));
+      }
+    }
+  },
+
   /** Adds steps to an incremental achievement; silently nothing when signed out or the key is unknown. */
   increment(key: string, steps: number): void {
     const id = playGames.achievementId(key);
@@ -130,4 +149,5 @@ export function resetPlayGamesForTests(): void {
   state = { status: 'none' };
   listeners.clear();
   pending.clear();
+  sent.clear();
 }

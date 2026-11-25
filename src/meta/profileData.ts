@@ -1,31 +1,40 @@
 /**
  * The persisted profile: defaults, clamping, migration and the SaveStore that holds it. The schema
- * type is in types.ts. Version 1; add a step to MIGRATIONS (version n -> n + 1) when it changes.
+ * type is in types.ts. Version 2; add a step to MIGRATIONS (version n -> n + 1) when it changes.
  */
 import { SaveStore, deepFill } from '@/core/save';
 import { emptyCounters } from '@/platform/adPolicy';
 import { emptyLedger } from '@/platform/iapService';
+import { ACHIEVEMENTS } from './data/achievements';
 import { DAILY_MISSIONS, WEEKLY_MISSIONS } from './data/schedule';
 import { CHAPTER_COUNT, CHEST_BULK_MAX, MAX_LEVEL, TRAINING_MAX, TREAT_SLOTS } from './data/economy';
 import { DUNGEON_TIERS } from './data/dungeon';
-import { SHOP_SLOTS } from './data/catalog';
-import { MAX_STAKE } from '@/game/data/roster';
+import { COSMETIC_DEFAULTS, SHOP_SLOTS, cosmetic, honorCosmetic, ownsCosmetic } from './data/catalog';
+import { MAX_STAKE, MYTHIC_UNIT_IDS } from '@/game/data/roster';
+import { RELIC_IDS } from '@/game/api';
 import { freshDay, freshWeek } from './missions';
 import { freshPass } from './pass';
 import { BASE_UNITS, CHEST_KINDS, CHEST_RARITIES, TRAINING_IDS, type ProfileData } from './types';
 
-export const PROFILE_VERSION = 1;
+export const PROFILE_VERSION = 2;
 export const SAVE_KEY = 'meowguard.profile';
 
 /** Upper bound for any counter: keeps a damaged or hand-edited save from overflowing the UI. */
 const COUNTER_MAX = 2_000_000_000;
 const ORDERS_KEPT = 300;
 const REVEALS_KEPT = CHEST_BULK_MAX;
+export const RANK_CLAIMED_KEPT = 52;
+const RANK_CLAIM_FORM = /^[^:]+:week-\d{4}-\d{2}-\d{2}$/;
 
 function zeroed<K extends string>(keys: readonly K[], v = 0): Record<K, number> {
   const out = {} as Record<K, number>;
   for (const k of keys) out[k] = v;
   return out;
+}
+
+/** The achievement slice of a profile with nothing done; `wins` seeds the migration of a save that had none. */
+function freshAchv(wins = 0): ProfileData['achv'] {
+  return { claimed: [], wins, daily: 0, awaken: 0, mythic: false, relics: [] };
 }
 
 export function defaultProfile(now: number, seed: number): ProfileData {
@@ -48,6 +57,7 @@ export function defaultProfile(now: number, seed: number): ProfileData {
     endless: { best: 0, week: '', weekBest: 0, claimed: [] },
     dungeon: { best: Array.from({ length: DUNGEON_TIERS }, () => ({ waves: 0, kills: 0, gold: 0 })) },
     stats: { runs: 0, wins: 0, merges: 0, kills: 0, bosses: 0, sweeps: 0 },
+    achv: freshAchv(),
     time: { lastSeenAt: 0, lastActiveDate: '' },
     day: freshDay(''),
     week: freshWeek(''),
@@ -58,7 +68,9 @@ export function defaultProfile(now: number, seed: number): ProfileData {
     shop: { date: '', salt: 0, bought: Array.from({ length: SHOP_SLOTS }, () => false) },
     pass: freshPass(-1),
     piggy: { gems: 0, since: 0 },
-    cosmetics: { owned: ['rug_default', 'fx_default'], rug: 'rug_default', fx: 'fx_default' },
+    cosmetics: { owned: ['rug_default', 'fx_default', 'frame_default', 'plate_default'], ...COSMETIC_DEFAULTS },
+    rankClaimed: [],
+    mythicMet: [],
     owned: { butler: false, once: [] },
     gemPass: { until: 0, lastClaimDate: '' },
     cup: { week: '', days: {}, claimed: [] },
@@ -109,6 +121,14 @@ export function normalizeProfile(p: ProfileData): ProfileData {
   });
   p.day.treat = Array.from({ length: TREAT_SLOTS }, (_, i) => p.day.treat[i] === true);
   p.shop.bought = Array.from({ length: SHOP_SLOTS }, (_, i) => p.shop.bought[i] === true);
+  const a = p.achv;
+  // Known keys only, each once, in table order: a damaged or hand-edited save cannot invent a claim.
+  a.claimed = ACHIEVEMENTS.map((d) => d.key).filter((k) => a.claimed.includes(k));
+  a.wins = clampInt(a.wins, 0, COUNTER_MAX);
+  a.daily = clampInt(a.daily, 0, COUNTER_MAX);
+  a.awaken = clampInt(a.awaken, 0, COUNTER_MAX);
+  a.mythic = a.mythic === true;
+  a.relics = RELIC_IDS.filter((id) => a.relics.includes(id));
   p.piggy.gems = clampInt(p.piggy.gems, 0, COUNTER_MAX);
   p.calendar.stamp = clampInt(p.calendar.stamp, 0, 27);
   p.pass.xp = clampInt(p.pass.xp, 0, COUNTER_MAX);
@@ -118,17 +138,42 @@ export function normalizeProfile(p: ProfileData): ProfileData {
     ids.sort((a, b) => (p.orders[a]?.t ?? 0) - (p.orders[b]?.t ?? 0));
     for (const id of ids.slice(0, ids.length - ORDERS_KEPT)) delete p.orders[id];
   }
-  if (!p.cosmetics.owned.includes('rug_default')) p.cosmetics.owned.push('rug_default');
-  if (!p.cosmetics.owned.includes('fx_default')) p.cosmetics.owned.push('fx_default');
-  if (!p.cosmetics.owned.includes(p.cosmetics.rug)) p.cosmetics.rug = 'rug_default';
-  if (!p.cosmetics.owned.includes(p.cosmetics.fx)) p.cosmetics.fx = 'fx_default';
+  const c = p.cosmetics;
+  // Unknown ids stay (an older app must not erase what a newer one gave); only non-strings and repeats go.
+  c.owned = [...new Set(c.owned.filter((id) => typeof id === 'string'))];
+  for (const id of Object.values(COSMETIC_DEFAULTS)) {
+    if (cosmetic(id)?.source.type === 'default' && !c.owned.includes(id)) c.owned.push(id);
+  }
+  // A hard achievement claimed before it came with a cosmetic still gets it.
+  for (const key of a.claimed) {
+    const honor = honorCosmetic(key);
+    if (honor && !c.owned.includes(honor)) c.owned.push(honor);
+  }
+  p.rankClaimed = p.rankClaimed.filter((k) => typeof k === 'string' && RANK_CLAIM_FORM.test(k)).slice(-RANK_CLAIMED_KEPT);
+  p.mythicMet = MYTHIC_UNIT_IDS.filter((id) => p.mythicMet.includes(id));
+  // A save from before the list only knows that a Guardian was made, not which: open all four.
+  if (a.mythic && p.mythicMet.length === 0) p.mythicMet = [...MYTHIC_UNIT_IDS];
+  for (const kind of Object.keys(COSMETIC_DEFAULTS) as (keyof typeof COSMETIC_DEFAULTS)[]) {
+    const def = cosmetic(c[kind]);
+    if (def?.kind !== kind || !ownsCosmetic(p, def.id)) c[kind] = COSMETIC_DEFAULTS[kind];
+  }
   return p;
 }
 
 type Step = (raw: Record<string, unknown>) => Record<string, unknown>;
 
-/** MIGRATIONS[n] upgrades a version-n profile to version n + 1. Empty while version 1 is the newest. */
-export const MIGRATIONS: Readonly<Record<number, Step>> = {};
+/**
+ * MIGRATIONS[n] upgrades a version-n profile to version n + 1.
+ * 1 -> 2: the achievement slice, with the win count taken from the lifetime wins. A save that already has the slice (version 2 data
+ * that an older app re-saved as version 1, keeping fields it does not know) is left as it is.
+ */
+export const MIGRATIONS: Readonly<Record<number, Step>> = {
+  1: (raw) => {
+    if (raw.achv && typeof raw.achv === 'object') return raw;
+    const wins = (raw.stats as { wins?: unknown } | undefined)?.wins;
+    return { ...raw, achv: freshAchv(typeof wins === 'number' ? wins : 0) };
+  },
+};
 
 /** Walk `raw` from version `from` up to `target`; a missing step leaves the data as it is. */
 export function migrateProfile(
@@ -153,7 +198,8 @@ export function sanitizeProfile(raw: unknown, now: number, seed: number): Profil
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
   if (typeof r.gold !== 'number' || typeof r.gems !== 'number' || !r.levels || typeof r.levels !== 'object') return null;
-  const filled = deepFill(raw, defaultProfile(now, seed)) as ProfileData;
+  // A copy without the achievement slice (a cloud copy from an older app) gets its win count from the lifetime wins; a present slice is kept.
+  const filled = deepFill(MIGRATIONS[1](r), defaultProfile(now, seed)) as ProfileData;
   return normalizeProfile(filled);
 }
 

@@ -4,16 +4,19 @@
  */
 import type { BattleInit, BattleMode, BattleSnapshot, DailyModifierId, RunStats } from '@/game/api';
 import { GOLD_DUNGEON_WAVES } from '@/game/data/goldDungeon';
+import { MYTHIC_UNIT_IDS } from '@/game/data/roster';
+import { parseSnapshot } from '@/game/sim/snapshot';
 import { randomSeed } from '@/core/rng';
 import { skillsOn } from '@/core/skillSwitch';
 import { mergeLedgers, normalizeLedger, type GrantSource } from '@/platform/iapService';
 import { encodeBackup, decodeBackup } from './backup';
 import type { MetaDeps } from './core';
-import { GEM_PASS_DAYS, iapSpec } from './data/catalog';
+import { COSMETIC_DEFAULTS, GEM_PASS_DAYS, cosmetic, iapSpec } from './data/catalog';
 import { DUNGEON_AD_PLACEMENT, DUNGEON_ENTRY_GEMS, DUNGEON_FREE_ENTRIES, DUNGEON_TIERS } from './data/dungeon';
 import { PIGGY_PER_RUN, SNACK_FISH, SNACK_PURR, type SnackId } from './data/economy';
 import { cupScore, dailySetup } from './daily';
 import { dungeonCanBuy, dungeonEntriesLeft, dungeonMaxChest, dungeonMaxGold, dungeonTierOpen, dungeonTopTier } from './dungeon';
+import { achievementsAfterRun } from './achievements';
 import type { PayVia } from './economy';
 import { runMissionDelta } from './missions';
 import { addPassXp, seasonOf } from './pass';
@@ -99,11 +102,11 @@ function snackFields(id: SnackId): Pick<BattleInit, 'bonusFish' | 'bonusPurr' | 
 }
 
 /** Stats for a run that ended without the battle reporting (the app was killed): a defeat at that wave. */
-function interruptedStats(init: BattleInit, wavesCleared: number): RunStats {
+function interruptedStats(init: BattleInit, wavesCleared: number, duration: number): RunStats {
   return {
     mode: init.mode, chapter: init.chapter, stake: init.stake, seed: init.seed, victory: false,
     wavesCleared, totalWaves: 0, kills: 0, bossesKilled: 0, summons: 0, merges: 0, molts: 0, awakenings: 0,
-    relics: [], bestRarity: 'common', peakEnemies: 0, duration: 0, revived: false, summonLuck: 0.5, damageByUnit: {},
+    relics: [], bestRarity: 'common', mythics: [], peakEnemies: 0, duration, revived: false, summonLuck: 0.5, damageByUnit: {},
   };
 }
 
@@ -200,10 +203,18 @@ export class Profile extends RoutineProfile {
       ...(modifiers ? { modifiers } : {}),
       ...(o.snack ? snackFields(o.snack.id) : {}),
     };
-    this.data.pending = { init, snapshot: null, startedAt: this.now() };
+    const pending: PendingRun = { init, snapshot: null, startedAt: this.now() };
+    this.data.pending = pending;
     this.deps.analytics.track('run_start', { mode: o.mode, chapter, stake });
     this.commit();
     await this.flush();
+    // Not awaited: the battle starts at once and the ticket joins the run when it comes (the server allows for the delay).
+    if (o.mode === 'endless')
+      void this.deps.runTicket?.().then((ticket) => {
+        if (!ticket || this.data.pending !== pending) return;
+        pending.ticket = ticket;
+        this.commit();
+      });
     return ok(init);
   }
 
@@ -229,7 +240,9 @@ export class Profile extends RoutineProfile {
   async settlePendingRun(): Promise<Result<RunReward>> {
     const p = this.data.pending;
     if (!p) return fail('nothing_to_claim');
-    return this.finishRun(interruptedStats(p.init, Math.max(0, (p.snapshot?.wave ?? 1) - 1)));
+    // The simulated time stored with the last wave start: a record settled with 0 seconds would be refused by the rankings as too fast.
+    const time = p.snapshot ? (parseSnapshot(p.snapshot)?.time ?? 0) : 0;
+    return this.finishRun(interruptedStats(p.init, Math.max(0, (p.snapshot?.wave ?? 1) - 1), time));
   }
 
   /**
@@ -261,6 +274,9 @@ export class Profile extends RoutineProfile {
     // The dungeon's chest is a pay day, not a boss for the lifetime count (nor for the missions, see missions.ts).
     if (stats.mode !== 'gold') d.stats.bosses += stats.bossesKilled;
     if (payout.firstClear) d.cleared[stats.chapter - 1] = stats.stake + 1;
+    d.achv = achievementsAfterRun(d.achv, stats, payout.dailyFirstClear);
+    // Like the achievement counters, the tutorial run does not count.
+    if (stats.mode !== 'tutorial' && stats.mythics.length > 0) d.mythicMet = MYTHIC_UNIT_IDS.filter((id) => d.mythicMet.includes(id) || stats.mythics.includes(id));
 
     if (stats.mode === 'daily') {
       if (payout.dailyFirstClear) d.day.challengeCleared = true;
@@ -277,7 +293,10 @@ export class Profile extends RoutineProfile {
       d.endless.weekBest = Math.max(d.endless.weekBest, stats.wavesCleared);
       // Every run goes up, not only a new local best: the server keeps the best per board and decides the week by its own clock (a
       // phone in another time zone starts its week on a different day), and a run sent while signed out is not lost for the week.
-      if (stats.wavesCleared > 0) this.deps.submitScore?.(ENDLESS_BOARD_ID, stats.wavesCleared, { waves: stats.wavesCleared, seconds: stats.duration });
+      if (stats.wavesCleared > 0) {
+        const ticket = d.pending?.ticket;
+        this.deps.submitScore?.(ENDLESS_BOARD_ID, stats.wavesCleared, { waves: stats.wavesCleared, seconds: stats.duration, ...(ticket ? { ticket } : {}) });
+      }
     } else if (stats.mode === 'gold') {
       const best = d.dungeon.best[stats.chapter - 1];
       // The record is the run's whole pay, the chest's share included (a record made before 2026-10-12 had no chest and a longer script: any win now beats it).
@@ -521,7 +540,8 @@ export class Profile extends RoutineProfile {
     }
     for (const id of spec?.bundle.cosmetics ?? []) {
       d.cosmetics.owned = d.cosmetics.owned.filter((c) => c !== id);
-      if (d.cosmetics.rug === id) d.cosmetics.rug = 'rug_default';
+      const kind = cosmetic(id)?.kind;
+      if (kind && d.cosmetics[kind] === id) d.cosmetics[kind] = COSMETIC_DEFAULTS[kind];
     }
   }
 
@@ -625,6 +645,7 @@ export function createProfile(deps: Pick<MetaDeps, 'analytics' | 'ads'> & Partia
     analytics: deps.analytics,
     ads: deps.ads,
     submitScore: deps.submitScore,
+    runTicket: deps.runTicket,
     testGrants: deps.testGrants === true,
   });
 }

@@ -997,6 +997,43 @@ describe('Capacitor (plugins)', () => {
     expect(purchases.getCustomerInfo).toHaveBeenCalledTimes(1);
   });
 
+  it('works through the plugin proxy, which answers `then` too, so no promise resolves to the plugin itself', async () => {
+    vi.stubEnv('VITE_REVENUECAT_API_KEY', 'goog_test');
+    const purchases = {
+      configure: vi.fn(async () => undefined),
+      getProducts: vi.fn(async (o: { productIdentifiers: string[] }) => ({
+        products: o.productIdentifiers.map((id) => ({ identifier: id, priceString: '₩1,500' })),
+      })),
+      purchaseStoreProduct: vi.fn(async () => ({ transaction: { transactionIdentifier: 'tx-7' } })),
+      getCustomerInfo: vi.fn(async () => ({ customerInfo: { nonSubscriptionTransactions: [] } })),
+      restorePurchases: vi.fn(async () => ({
+        customerInfo: { nonSubscriptionTransactions: [{ transactionIdentifier: 'tx-7', productIdentifier: 'gems_80' }] },
+      })),
+    };
+    // --- @capacitor/core registerPlugin: any name the proxy does not know is a native method whose promise rejects, `then`
+    // included, so `await` on the proxy never settles (Android: "Purchases.then()" is not implemented on android).
+    const unknown: string[] = [];
+    const proxy = new Proxy(purchases, {
+      get: (o, k) =>
+        k in o
+          ? Reflect.get(o, k)
+          : () => {
+              unknown.push(String(k));
+              return Promise.reject(new Error(`"Purchases.${String(k)}()" is not implemented on android`));
+            },
+    });
+    const { a } = await ready((x) => (x.p.Purchases = proxy));
+    expect(await a.iap!.products!(['gems_80'])).toEqual([{ id: 'gems_80', priceText: '₩1,500' }]);
+    expect(await a.iap!.purchase('gems_80', async () => true)).toBe('purchased');
+    expect(await a.iap!.completedOrders!()).toEqual([{ orderId: 'tx-7', productId: 'gems_80', status: 'completed' }]);
+    // a grant that failed keeps the record, so the pending check asks the store through the proxy as well
+    expect(await a.iap!.purchase('gems_80', async () => false)).toBe('failed');
+    expect(await a.iap!.pendingOrders()).toEqual([]);
+    expect(purchases.getCustomerInfo).toHaveBeenCalledTimes(1);
+    expect(unknown).toEqual([]);
+    expect(purchases.configure).toHaveBeenCalledTimes(1);
+  });
+
   it('a consent request that fails (offline start) is asked again later, and ads follow its answer', async () => {
     const consent = vi
       .fn<() => Promise<{ status: string; isConsentFormAvailable: boolean; canRequestAds: boolean }>>()

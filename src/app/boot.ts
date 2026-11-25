@@ -16,6 +16,7 @@ import type { TabId } from '@/screens/contract';
 import { shell } from '@/screens/shell/controller';
 import '@/screens/shell/strings';
 import { installSystemScreens } from '@/screens/system';
+import { startLookSync } from '@/screens/system/lookSync';
 import { toast } from '@/ui';
 import { currentSettings, ensureSettings } from '@/view/hud/settings';
 import { installCheats, installClockShift } from './cheats';
@@ -82,6 +83,7 @@ export function createApp(): App {
     await attempt('system screens', () => installSystemScreens(shell));
     // Not awaited: the title shows "connecting" until the automatic sign-in answers.
     startOnline();
+    startLookSync();
     installCheats();
     await attempt('first scene', async () => {
       first = opts.home ? homeScene(opts.home.tab) : await chooseFirstScene();

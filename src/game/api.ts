@@ -423,6 +423,8 @@ export interface RunStats {
   relics: RelicId[];
   /** Highest rarity the player owned at any point. */
   bestRarity: RarityId;
+  /** The guardians (mythic cats) the run made by awakening, each once, in the order they appeared. */
+  mythics: UnitId[];
   peakEnemies: number;
   /** Simulated seconds played. */
   duration: number;

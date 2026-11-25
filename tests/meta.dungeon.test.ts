@@ -21,7 +21,7 @@ const ALL = goldDungeonSpawns();
 function stats(over: Partial<RunStats> = {}): RunStats {
   return {
     mode: 'gold', chapter: 1, stake: 0, seed: 99, victory: true, wavesCleared: GOLD_DUNGEON_WAVES, totalWaves: GOLD_DUNGEON_WAVES, kills: ALL,
-    bossesKilled: 1, summons: 20, merges: 12, molts: 0, awakenings: 0, relics: ['yarn_ball'], bestRarity: 'rare', peakEnemies: 30,
+    bossesKilled: 1, summons: 20, merges: 12, molts: 0, awakenings: 0, relics: ['yarn_ball'], bestRarity: 'rare', mythics: [], peakEnemies: 30,
     duration: 140, revived: false, summonLuck: 0.5, damageByUnit: {}, ...over,
   };
 }

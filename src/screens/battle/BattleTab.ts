@@ -15,7 +15,7 @@ import type { HomeCard } from './HomeCard';
 import { PatrolCard } from './PatrolCard';
 import { PromoCard } from './PromoCard';
 import { SweepCard } from './SweepCard';
-import { TreatsCard } from './TreatsCard';
+import { treatsOffered, TreatsCard } from './TreatsCard';
 import { badgeCount, cardsVisible, chapterUnlocked, clampSelection, frontier, selectionAfterRun, type Selection } from './model';
 import { loadPromo, promoActive } from './promo';
 import './strings';
@@ -116,7 +116,8 @@ export class BattleTab implements TabScreen {
       { card: this.patrol, feature: 'patrol' },
       { card: this.chest, feature: null, half: true },
       { card: this.sweep, feature: 'sweep', half: true },
-      { card: new TreatsCard(CARD_W, shell), feature: 'treat' },
+      // Every treat is behind a rewarded ad: on a platform without them (itch.io) the card is left out.
+      ...(treatsOffered() ? [{ card: new TreatsCard(CARD_W, shell), feature: 'treat' as const }] : []),
       { card: this.daily, feature: 'daily' },
       { card: this.dungeon, feature: 'dungeon' },
       { card: this.endless, feature: 'endless' },

@@ -26,7 +26,7 @@ import {
   TRAINING_MAX,
   type OfferId,
 } from './data/economy';
-import { COSMETICS, cosmetic, type CosmeticDef } from './data/catalog';
+import { COSMETICS, cosmetic, forSale, ownsCosmetic, type CosmeticDef } from './data/catalog';
 import { ODDS, oddsView, type OddsView } from './odds';
 import { shopOffers, type ShopOffer } from './shop';
 import { trainCost, quoteLevelUp, trainingEffects, RARITY_OF, type LevelQuote, type TrainingEffects } from './units';
@@ -84,6 +84,8 @@ export interface TicketView {
 export interface CosmeticRow extends CosmeticDef {
   owned: boolean;
   equipped: boolean;
+  /** The shop sells it now (gems, gold, or an achievement one whose achievement is claimed); false for what is owned only as a reward. */
+  forSale: boolean;
 }
 
 export interface PiggyView {
@@ -351,20 +353,36 @@ export class EconomyProfile extends ProfileCore {
     return { rug: this.data.cosmetics.rug, fx: this.data.cosmetics.fx };
   }
 
+  /** What the profile card wears: the icon, the ring around it and the name plate. */
+  get look(): { icon: string; frame: string; plate: string } {
+    const { icon, frame, plate } = this.data.cosmetics;
+    return { icon, frame, plate };
+  }
+
+  owns(id: string): boolean {
+    return ownsCosmetic(this.data, id);
+  }
+
   cosmetics(): CosmeticRow[] {
     const c = this.data.cosmetics;
     return COSMETICS.map((def) => ({
       ...def,
-      owned: c.owned.includes(def.id),
-      equipped: c.rug === def.id || c.fx === def.id,
+      owned: ownsCosmetic(this.data, def.id),
+      equipped: c[def.kind] === def.id,
+      forSale: forSale(this.data, def),
     }));
   }
 
+  /** Buy a shop cosmetic: a gems one for gems, a gold one for gold, an achievement one for gold once its achievement is claimed. */
   buyCosmetic(id: string): Result<void> {
     const def = cosmetic(id);
-    if (!def || def.source.type !== 'gems') return fail('invalid');
-    if (this.data.cosmetics.owned.includes(id)) return fail('already_owned');
-    if (!this.spend('gems', def.source.price, 'cosmetic_buy')) return fail('not_enough_gems');
+    const s = def?.source;
+    if (!def || !s || (s.type !== 'gems' && s.type !== 'gold' && s.type !== 'achievement')) return fail('invalid');
+    if (ownsCosmetic(this.data, id)) return fail('already_owned');
+    if (!forSale(this.data, def)) return fail('locked');
+    if (s.type === 'gems') {
+      if (!this.spend('gems', s.price, 'cosmetic_buy')) return fail('not_enough_gems');
+    } else if (!this.spend('gold', s.price, 'cosmetic_gold')) return fail('not_enough_gold');
     this.data.cosmetics.owned.push(id);
     this.commit();
     return ok(undefined);
@@ -374,7 +392,7 @@ export class EconomyProfile extends ProfileCore {
     const def = cosmetic(id);
     if (!def) return fail('invalid');
     const c = this.data.cosmetics;
-    if (!c.owned.includes(id)) return fail('not_owned');
+    if (!ownsCosmetic(this.data, id)) return fail('not_owned');
     c[def.kind] = id;
     this.commit();
     return ok(undefined);

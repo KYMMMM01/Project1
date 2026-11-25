@@ -11,7 +11,7 @@ export { ads, iap, analytics, platform, modal, submitScore } from './registry';
 export { PLATFORM_ID } from './resolve';
 export { playGames, type PlayGamesState } from './playGames';
 export { account, type AccountState } from './account';
-export { ranking, type BoardKey, type BoardRow, type BoardView, type MyPlace, type NameResult, type RunProof } from './ranking';
+export { ranking, seoulWeek, type BoardKey, type BoardRow, type BoardView, type LookResult, type MyPlace, type NameResult, type RunProof } from './ranking';
 export { preparePlatformRuntime } from './runtime';
 
 export { AdService, AD_WATCHDOG_MS } from './adService';

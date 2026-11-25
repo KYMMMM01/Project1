@@ -5,6 +5,8 @@ import '../system/strings';
 addStrings('ko', {
   'rt.mis.tab.daily': '일일',
   'rt.mis.tab.weekly': '주간',
+  'rt.mis.tab.achievement': '업적',
+  'rt.mis.ach.title': '업적',
   'rt.mis.daily.title': '오늘의 상자',
   'rt.mis.daily.list': '오늘 할 일',
   'rt.mis.go': '가기',
@@ -38,6 +40,8 @@ addStrings('ko', {
 addStrings('en', {
   'rt.mis.tab.daily': 'Daily',
   'rt.mis.tab.weekly': 'Weekly',
+  'rt.mis.tab.achievement': 'Goals',
+  'rt.mis.ach.title': 'Achievements',
   'rt.mis.daily.title': 'Daily chest',
   'rt.mis.daily.list': 'To do today',
   'rt.mis.go': 'Go',

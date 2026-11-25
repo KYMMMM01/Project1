@@ -9,6 +9,7 @@ import { t } from '@/core/i18n';
 import { cleanName, NAME_MAX, NAME_MIN } from '../../../functions/src/rules';
 import { ranking, type NameResult } from '@/platform';
 import { balanceWrap, Button, Color, FONT_FAMILY, Panel, Popup, popups, toast, uiLabel } from '@/ui';
+import { nameChanged } from './profileName';
 import './strings';
 
 const W = 620;
@@ -154,5 +155,7 @@ class NamePopup extends Popup<string | null> {
 /** The name change sheet; resolves to the new name, or null when the player closed it. `current` defaults to the name on the server. */
 export async function changeNameFlow(current?: string): Promise<string | null> {
   const now = current ?? (await ranking.myName()) ?? '';
-  return popups.open(new NamePopup(now));
+  const name = await popups.open(new NamePopup(now));
+  if (name) nameChanged(name);
+  return name;
 }

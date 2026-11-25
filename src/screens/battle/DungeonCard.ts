@@ -139,8 +139,11 @@ export class DungeonCard extends HomeCard {
     this.note.text = offer === 'buy' ? t('battle.dungeon.buy') : t('battle.dungeon.spent');
 
     this.play.visible = offer !== 'buy';
-    this.ad.visible = offer === 'buy';
+    // Without rewarded ads on this platform (itch.io) only the gem entry is offered, where the play button stands.
+    const adShown = ads.supported(DUNGEON_AD_PLACEMENT);
+    this.ad.visible = offer === 'buy' && adShown;
     this.gems.visible = offer === 'buy';
+    this.gems.y = adShown ? this.ad.y + 96 + 12 : this.play.y;
     if (offer === 'buy') {
       this.ad.setEnabled(ads.canOffer(DUNGEON_AD_PLACEMENT));
       this.gems.setLabel(fmt(v.entryGems));

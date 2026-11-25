@@ -36,7 +36,7 @@ import {
 function stats(over: Partial<RunStats>): RunStats {
   return {
     mode: 'chapter', chapter: 1, stake: 0, seed: 1234, victory: true, wavesCleared: 24, totalWaves: 24, kills: 0,
-    bossesKilled: 0, summons: 0, merges: 0, molts: 0, awakenings: 0, relics: [], bestRarity: 'common',
+    bossesKilled: 0, summons: 0, merges: 0, molts: 0, awakenings: 0, relics: [], bestRarity: 'common', mythics: [],
     peakEnemies: 0, duration: 0, revived: false, summonLuck: 0.5, damageByUnit: {}, ...over,
   };
 }
