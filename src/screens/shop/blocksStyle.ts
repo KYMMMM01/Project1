@@ -12,7 +12,6 @@ import { cacheStatic, Color, currencyIcon, drawIcon, fitLabel, paperSeed, paperS
 import { actionButton, GAP, mountPage, PAD, SIDE, subCard, type Block, type BlockBuild, type BlockEnv } from './blockKit';
 import { drawCoupon, PriceTag } from './paperBits';
 import { achievementDef, achievementText } from '@/meta/achievements';
-import { COSMETIC_DEFAULTS } from '@/meta/data/catalog';
 import { Avatar } from '../shell/LevelBadge';
 import { NamePlate } from '../shell/NamePlate';
 import { FRAME_BOX_W, PLATE_ART_W } from '../shell/layoutMath';
@@ -91,24 +90,23 @@ function fxPreview(id: string, w: number, env: BlockEnv): Container {
   return holder;
 }
 
-/** A frame round the starting cat. */
+/** The frame on its own, with an empty hole. */
 function framePreview(id: string, w: number): Container {
   const holder = well(w);
   const a = new Avatar();
-  a.setIcon(COSMETIC_DEFAULTS.icon);
   a.setFrame(id);
+  a.hideFace();
   a.scale.set((PREVIEW_H - 16) / FRAME_BOX_W);
   a.position.set(w / 2, PREVIEW_H / 2);
   holder.addChild(a);
   return holder;
 }
 
-/** A name plate with a sample name on it. */
+/** The name plate on its own, with no name on it. */
 function platePreview(id: string, w: number): Container {
   const holder = well(w);
   const p = new NamePlate();
   p.setPlate(id);
-  p.setName(t('shop.cos.sampleName'));
   p.scale.set((w - 16) / PLATE_ART_W);
   p.position.set(w / 2, PREVIEW_H / 2);
   holder.addChild(p);

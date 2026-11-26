@@ -68,6 +68,12 @@ export class Avatar extends Container {
     this.fit();
   }
 
+  /** Leave the hole empty, so only the frame shows (the shop's frame previews). */
+  hideFace(): void {
+    this.backdrop.visible = false;
+    this.face.visible = false;
+  }
+
   /** Size the window, the disc behind the cat and the cat to the current hole. */
   private fit(): void {
     const r = this.iconD / 2;
