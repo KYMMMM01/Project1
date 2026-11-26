@@ -71,7 +71,7 @@
 진짜 우리 앱에서 온 요청인지 Google 이 확인해 주는 표를 모든 요청에 붙인다. 표가 없거나 가짜인 호출은 서버 함수가 거절한다.
 
 - 앱: `src/platform/firebase.ts` 의 `startAppCheck`. 안드로이드 빌드는 네이티브 플러그인 `@capacitor-firebase/app-check` 가 Play Integrity 로 표를 받고, 웹 SDK 가 그 표를 함수, Firestore, 로그인 요청에 붙인다. 표는 요청에 필요할 때만 받는다(Play Integrity 하루 사용량 한도 때문에 미리 갱신하지 않음). 표를 못 받아도 게임은 그대로 되고, 서버 호출만 오프라인일 때처럼 실패한다.
-- 웹 빌드(GitHub Pages 테스트용): `VITE_APPCHECK_SITE_KEY` 에 reCAPTCHA Enterprise 사이트 키를 넣었을 때만 표를 붙인다. 지금은 키가 없어서, 함수를 배포하면 웹 빌드의 랭킹, 닉네임, 주간 보상 호출은 실패한다(로그인과 클라우드 저장은 Firestore 강제를 켜기 전까지 된다).
+- 웹 빌드(GitHub Pages 테스트용): Firebase 설정값(`VITE_FIREBASE_*`)이 `.env.store` 에만 있어서 웹 빌드는 Firebase 없이 게스트로만 돈다(로그인, 클라우드 저장, 랭킹 메뉴가 없음). 2026-11-26 사용자 결정으로 웹은 플레이만 되게 둔다. 웹은 테스트용이고 결제가 없으며, 같은 구글 계정이면 웹에서 쌓은 저장이 안드로이드 계정으로 넘어갈 수 있어서다. 켜야 하면 랭킹과 저장을 모두 웹 전용으로 나눈다(서버는 App Check 표의 앱 ID 로 웹과 안드로이드를 가린다). 그때 쓸 reCAPTCHA Enterprise 사이트 키 `meowguard-web`(도메인 `kymmmm01.github.io`, 체크박스 문제 없음)은 만들어 App Check 의 웹 앱에 등록했고(표 수명 1시간), `.env.production` 의 `VITE_APPCHECK_SITE_KEY` 에 있다. Firebase 가 꺼져 있는 동안은 쓰이지 않아 요금도 없다(평가 월 1만 회까지 무료, 넘으면 그달 약 8달러).
 - 플레이를 거치지 않고 설치한 빌드(케이블로 넣은 APK 등)는 Play Integrity 를 통과하지 못한다. 이런 빌드는 `.env.store` 에 `VITE_APPCHECK_DEBUG=1` 을 넣어 만들고, 처음 켤 때 기기 로그(logcat 의 `DebugAppCheckProvider`)에 나오는 비밀값을 콘솔의 App Check, 앱, 디버그 토큰 관리에 등록한다. 이 값을 넣은 빌드는 플레이에 올리지 않는다.
 - 서버: `functions/src/index.ts` 의 `setGlobalOptions` 에 `enforceAppCheck: true`. 앱이 부르는 함수 7개(`startRun`, `submitRun`, `setName`, `setLook`, `claimGrants`, `myRank`, `refundedOrders`)에 모두 걸린다. 예약 함수와 계정 삭제 함수는 앱이 부르지 않아 상관없다.
 
