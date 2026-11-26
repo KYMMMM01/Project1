@@ -108,6 +108,7 @@ addStrings('ko', {
   'hud.relic.free': '무료 {n}번',
   'hud.relic.test': '테스트',
   'hud.relic.noMore': '다시 뽑기는 이미 썼어요.',
+  'hud.relic.purrNote': '골골: 털갈이와 각성에 쓰는 재료',
 
   // pause and settings
   'hud.pause.title': '일시정지',
@@ -344,6 +345,7 @@ addStrings('en', {
   'hud.relic.free': '{n} free',
   'hud.relic.test': 'Test',
   'hud.relic.noMore': 'You already used the reroll.',
+  'hud.relic.purrNote': 'Purr: for molting and awakening',
 
   'hud.pause.title': 'Paused',
   'hud.pause.where': 'Stage {act} · Wave {wave}/{total}',

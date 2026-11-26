@@ -25,6 +25,7 @@ import {
   Color,
   drawDashedInset,
   drawPaper,
+  drawIcon,
   drawPaperFace,
   fitLabel,
   motion,
@@ -305,9 +306,20 @@ export class RelicScreen {
     drawPaper(tagBg, -tagW / 2, -17, { w: tagW, h: 34, kind: 'pill', fill: rar.color, edge: rar.dark, shadow: 3, grain: false, seed: this.seed + 20 + i });
     tag.addChild(tagBg, tagLabel);
     tag.position.set(CARD_W / 2 - 34 - tagW / 2, -52);
-    const desc = uiLabel(def.descText(), { size: 27, wrap: CARD_W / 2 - 30 - textX, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left' });
+    const text = def.descText();
+    const desc = uiLabel(text, { size: 27, wrap: CARD_W / 2 - 30 - textX, lineHeight: 34, anchorX: 0, anchorY: 0, align: 'left' });
     desc.position.set(textX, -22);
     card.addChild(icon, name, tag, desc);
+    // "Purr +2" means nothing to a new player (tester feedback): a toy that pays in purr shows its picture and what it is for under the text.
+    if (text.toLowerCase().includes(t('guide.purr.title').toLowerCase())) {
+      const purr = drawIcon('purr', 34);
+      const note = uiLabel(t('hud.relic.purrNote'), { size: 22, color: Color.inkSoft, anchorX: 0, align: 'left' });
+      fitLabel(note, CARD_W / 2 - 30 - textX - 42, 22, 0.8);
+      const y = Math.min(CARD_H / 2 - 30, desc.y + desc.height + 26);
+      purr.position.set(textX + 17, y);
+      note.position.set(textX + 42, y);
+      card.addChild(purr, note);
+    }
     if (this.env.tutorial && i === best) {
       const rec = new Tag({ text: t('hud.recommend'), style: 'mustard', shape: 'flag', fontSize: 24, tilt: 0.1 });
       rec.position.set(CARD_W / 2 - 90, CARD_H / 2 - 20);

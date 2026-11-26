@@ -60,12 +60,17 @@ export interface ResultHandlers {
 const W = 672;
 const TILE = 150;
 const TILE_GAP = 24;
-const ROW_H = 54;
-const SHEET_H = 480;
-const COUPON_H = 120;
+const ROW_H = 46;
+const SHEET_H = 404;
+const COUPON_H = 104;
 /** Top of the page under the title and its line, and of the rewards under the page. */
-const SHEET_Y = 236;
-const REWARDS_Y = SHEET_Y + SHEET_H + 32;
+const SHEET_Y = 198;
+const REWARDS_Y = SHEET_Y + SHEET_H + 20;
+/**
+ * The page shrinks (down to this scale) to fit the body, so the rewards and the coupons are on screen without scrolling (tester feedback: nobody
+ * guessed the page went on under the buttons). A page that still does not fit scrolls, and a bobbing arrow over the bottom of the body says so.
+ */
+const FIT_MIN = 0.8;
 
 /** Seconds after the page opens before the home track starts under it: the director's stinger has rung out by then. */
 const MUSIC_DELAY = 1.4;
@@ -88,7 +93,9 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   const scaffold = new ScreenScaffold({ title: t('hud.res.title'), scroll: true, actionBarHeight: wantsNext ? BAR_H_NEXT : BAR_H_PLAIN });
   game.popupLayer.addChild(scaffold);
   const bag = new TweenBag();
-  const c = scaffold.content;
+  // The whole page in one container, so it can be scaled to fit the body (fitPage).
+  const c = new Container();
+  scaffold.content.addChild(c);
   const release = env.holdPause();
   const seed = paperSeed();
   let alive = true;
@@ -139,15 +146,15 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   const buildHead = (): void => {
     const title = new PaperLabel({
       text: t(victory ? 'hud.res.win' : 'hud.res.lose'),
-      size: victory ? 88 : 76,
+      size: victory ? 80 : 70,
       paper: victory ? 'mustard' : 'kraft',
       padX: 70,
-      padY: 20,
+      padY: 18,
       maxWidth: W - 20,
       tape: 'sky',
       seed,
     });
-    title.position.set(W / 2, 82);
+    title.position.set(W / 2, 70);
     const near = soCloseWaves(stats.wavesCleared, stats.totalWaves, victory);
     const battle = env.battle;
     const left = unspentFish(victory, abandoned, battle.fish, battle.summonCost(), battle.units.filter((u) => !u).length);
@@ -161,7 +168,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       maxWidth: W - 20,
       seed: seed + 1,
     });
-    sub.position.set(W / 2, 180);
+    sub.position.set(W / 2, 160);
     c.addChild(title, sub);
     if (!motion.reduced) popIn(bag, title, { from: 0.2, duration: 0.4, overshoot: 2.5 });
   };
@@ -178,14 +185,14 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const parts: Container[] = [];
     if (cat) {
       const def = unitDef(cat);
-      const photo = unitPhoto({ size: 196, rarity: def.rarity, unit: cat, tape: CLASS_TAPE[def.classId], seed });
-      photo.position.set(136, 148);
+      const photo = unitPhoto({ size: 172, rarity: def.rarity, unit: cat, tape: CLASS_TAPE[def.classId], seed });
+      photo.position.set(136, 130);
       photo.rotation = -0.03;
       const name = uiLabel(t(def.nameKey), { size: 30 });
       fitLabel(name, 220, 30, 0.7);
-      name.position.set(136, 282);
+      name.position.set(136, 250);
       const rank = uiLabel(rarityName(def.rarity), { size: 24, color: Color.inkSoft });
-      rank.position.set(136, 316);
+      rank.position.set(136, 282);
       sheet.addChild(photo, name, rank);
       parts.push(photo, name, rank);
     }
@@ -254,7 +261,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     ];
     const listX = cat ? 276 : 40;
     const listR = W - 40;
-    const listY = 32;
+    const listY = 24;
     const lines = new Graphics();
     const rows: Container[] = [];
     cells.forEach((cell, i) => {
@@ -275,10 +282,11 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     sheet.addChild(lines);
     const luck = luckLine(stats.summonLuck, victory);
     // The luck line may wrap to two lines in English: it is centred in the gap between the list and the seed line. A win shows none when the luck was bad.
-    const luckT = luck && uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 26, wrap: W - 80, lineHeight: 34 });
-    luckT?.position.set(W / 2, listY + cells.length * ROW_H + 42);
-    const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 24, color: Color.inkSoft });
-    seedT.position.set(W / 2, SHEET_H - 34);
+    const seedY = SHEET_H - 32;
+    const luckT = luck && uiLabel(t(`hud.res.luck.${luck.kind}`, { n: luck.n }), { size: 24, wrap: W - 80, lineHeight: 30 });
+    luckT?.position.set(W / 2, (listY + cells.length * ROW_H + seedY - 12) / 2);
+    const seedT = uiLabel(t('hud.res.seed', { seed: stats.seed }), { size: 22, color: Color.inkSoft });
+    seedT.position.set(W / 2, seedY);
     if (luckT) sheet.addChild(luckT);
     sheet.addChild(seedT);
     rows.forEach((row, i) => lay(row, ROWS_AT + i * ROW_STEP, 22, 0));
@@ -304,6 +312,70 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   spinner.position.set(W / 2, 60);
   const showStatsOnly = env.sandbox;
   if (!showStatsOnly) rewardLayer.addChild(spinner);
+
+  // ── fitting the page to the body ──
+  const scroller = scaffold.scroller;
+  /** The page's height at full size: the spinner's room until the rewards are in, then down to the last coupon. */
+  let pageH = REWARDS_Y + (showStatsOnly ? -20 : 120);
+  let pageScale = 1;
+  /** The scale that lets a page `h` tall fit the body: 1 when it fits, never under FIT_MIN. */
+  const fitFor = (h: number): number => {
+    if (!scroller) return 1;
+    scroller.setContentSize(undefined, h);
+    const over = scroller.maxScrollY;
+    return over > 0 ? Math.max(FIT_MIN, (h - over) / h) : 1;
+  };
+  const setScale = (s: number): void => {
+    pageScale = s;
+    c.scale.set(s);
+    c.x = (W * (1 - s)) / 2;
+    scroller?.setContentSize(undefined, Math.ceil(pageH * s));
+    syncHint();
+  };
+  /** Fit the page again (its height changed, or the screen did); a new scale glides in unless motion is reduced. */
+  const fitPage = (animate: boolean): void => {
+    if (!alive) return;
+    // A glide still on its way was aiming at the old body: this fit replaces it.
+    bag.killKeyed(c);
+    const from = pageScale;
+    const to = fitFor(pageH);
+    if (!animate || motion.reduced || Math.abs(to - from) < 0.005) {
+      setScale(to);
+      return;
+    }
+    bag.runKeyed(c, { duration: 0.35, ease: Ease.cubicOut, onUpdate: (k) => setScale(from + (to - from) * k), onComplete: () => setScale(to) });
+  };
+
+  /** The bobbing arrow at the bottom of the body while there is more page under it; a tap scrolls to the end. */
+  const hint = new Container();
+  const hintDisc = new Graphics().circle(0, 0, 34).fill(Color.teal).stroke({ width: 4, color: Color.tealDark });
+  const hintArrow = drawIcon('arrow_up', 36, Color.white);
+  hintArrow.rotation = Math.PI;
+  hint.addChild(hintDisc, hintArrow);
+  hint.eventMode = 'static';
+  hint.cursor = 'pointer';
+  hint.visible = false;
+  hint.on('pointertap', () => scroller?.scrollTo(scroller.maxScrollY));
+  scaffold.addChild(hint);
+  /** The arrow waits for the page to be complete (the rewards in, or the run settled without them) and on screen (it is not part of the sliding page). */
+  let hintOn = false;
+  let landed = false;
+  function syncHint(): void {
+    const body = scaffold.bodyRect;
+    hint.position.set(game.w / 2, body.y + body.h - 50);
+    hint.visible = hintOn && landed && !!scroller && scroller.maxScrollY - scroller.scrollY > 12;
+  }
+  const offScroll = scroller?.onScroll(() => syncHint());
+  const offResize = game.events.on('resize', () => fitPage(false));
+  if (!motion.reduced) {
+    const bob = (): void => {
+      bag.run({ duration: 1, ease: Ease.linear, onUpdate: (k) => (hintArrow.y = 5 * Math.sin(k * Math.PI * 2)), onComplete: () => alive && bob() });
+    };
+    bob();
+  }
+  // A sandbox run's page is complete now (the statistics only); any other waits for the meta layer's answer.
+  hintOn = showStatsOnly;
+  fitPage(false);
 
   let goldT: BitmapText | null = null;
   let xpT: BitmapText | null = null;
@@ -385,13 +457,13 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     spinner.destroy();
     Object.assign(paid, paidBy(reward.gold, reward.bundle));
     let ry = 0;
-    const head = new PaperLabel({ text: t('hud.res.rewards'), size: 34, paper: 'kraft', padX: 34, padY: 8, seed: seed + 3 });
-    head.position.set(head.uiBox.w / 2 + 6, 26);
+    const head = new PaperLabel({ text: t('hud.res.rewards'), size: 32, paper: 'kraft', padX: 30, padY: 6, seed: seed + 3 });
+    head.position.set(head.uiBox.w / 2 + 6, 22);
     rewardLayer.addChild(head);
-    ry += 76;
+    ry += 62;
 
-    const gold = counter('gold', W * 0.25, ry + 40);
-    const xp = counter('xp', W * 0.75, ry + 40);
+    const gold = counter('gold', W * 0.25, ry + 38);
+    const xp = counter('xp', W * 0.75, ry + 38);
     goldT = gold.text;
     xpT = xp.text;
     goldTile = gold.box;
@@ -399,7 +471,7 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     countTo(goldT, reward.gold);
     countTo(xpT, reward.xp);
     audio.play('coin_many');
-    ry += 100;
+    ry += 88;
 
     /** A line on its own label, hidden until its moment. */
     const callout = (text: string, paper: 'mustard' | 'success' | 'primary', delay: number | null): void => {
@@ -441,7 +513,9 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     ry += Math.ceil(tiles.length / perRow) * (TILE + TILE_GAP);
 
     ry = buildOffers(reward, ry + 8, tiles.length * 0.14 + 0.9);
-    scaffold.refresh();
+    pageH = REWARDS_Y + ry;
+    hintOn = true;
+    fitPage(true);
   };
 
   // ── offers ──
@@ -531,6 +605,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
     const box = resultBar(next !== null, scaffold.contentWidth);
     // The bar was reserved tall for three buttons; a win with nothing to go on to (a daily run, the last butler level) needs only the row of two.
     scaffold.setActionBarHeight(box.height);
+    // The body grew or shrank with the bar: the page fits it again.
+    fitPage(false);
     const home = new Button({ label: t('hud.res.home'), icon: 'home', style: 'neutral', width: box.home.w, height: box.home.h, fontSize: next ? 34 : 36 });
     home.position.set(box.home.x, box.home.y);
     home.onTap(() => {
@@ -586,7 +662,10 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
   else if (motion.reduced) buildBar(null);
   else bag.call(0.2, () => buildBar(null));
 
-  void scaffold.show(true);
+  void scaffold.show(true, () => {
+    landed = true;
+    syncHint();
+  });
   if (victory) haptic('success');
   // The stinger is the director's (it rang when the run ended, a second one here would repeat it). The page only brings
   // the result track (a warm one for a win, a soft one for a loss) in quietly once that has died away, and hands the volume back when it is left.
@@ -609,6 +688,9 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       if (!r.ok) {
         spinner.destroy();
         toast(t(errorKey(r.error)), 'warning');
+        pageH = REWARDS_Y - 20;
+        hintOn = true;
+        fitPage(true);
         buildBar(null);
         return;
       }
@@ -622,6 +704,8 @@ export function openResult(env: HudEnv, victory: boolean, abandoned: boolean, ha
       if (!alive) return;
       alive = false;
       release();
+      offScroll?.();
+      offResize();
       staged.destroy();
       bag.killAll();
       if (musicOn) {
