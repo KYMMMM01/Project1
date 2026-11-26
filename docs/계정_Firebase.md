@@ -14,6 +14,7 @@
 - 프로젝트 `meowguard-4ce6f`(번호 837064889610), Blaze 요금제(2026-11-12 사용자 전환, 월 1만 원 예산 알림 50, 90, 100%). Aside 로 만들었다(사용자 지시 "너가 만들어봐").
 - 된 것: 구글 로그인 사용 설정과 승인 도메인 `kymmmm01.github.io`, Firestore `(default)` 서울 프로덕션 모드, 안드로이드 앱(디버그 SHA-1 등록), 웹 앱. 웹 설정값은 `.env.store`, 프로젝트 id 는 `.firebaserc`. `android/app/google-services.json` 도 넣었다(디버그 SHA-1 의 안드로이드 클라이언트와 웹 클라이언트가 들어 있고, Gradle 이 `default_web_client_id` 를 만든다). 업로드 키와 앱 서명 키 SHA-1 을 더하면 이 파일을 다시 받아야 한다.
 - 배포(2026-11-12): Firestore 규칙과 색인, 함수 5개(`submitRun`, `setName`, `myRank`, `refreshBoards`, `onUserDeleted`), 모두 `asia-northeast3`. 명령은 `npx firebase-tools deploy --only firestore:rules,firestore:indexes,functions`. 첫 배포 때 1세대 함수 `onUserDeleted` 만 빌드가 실패했고(API 를 막 켠 직후), 그 함수만 다시 올리니 됐다. 함수 이미지 정리 규칙은 1일(`functions:artifacts:setpolicy --days 1`).
+- 배포(2026-11-26): 규칙과 색인, 그다음 함수 11개(호출 7개, 예약 3개 `refreshBoards`, `settleWeek`, `pollVoidedPurchases`, 계정 삭제 1개). 호출 함수는 모두 App Check 를 요구한다(아래 App Check 절).
 - 2026-11-12: Android 앱에 앱 서명 키(SHA-1 D6:1B:A0:26:74:52:BF:06:D9:63:F9:EF:49:22:E7:23:FD:51:27:88)와 업로드 키(SHA-1 D0:21:8D:8B:2F:E1:60:C3:20:8B:9A:B7:C6:76:FD:EF:D6:A1:36:23)의 SHA-1, SHA-256 을 `npx.cmd firebase-tools apps:android:sha:create` 로 넣고, `apps:sdkconfig ANDROID` 로 google-services.json 을 다시 받아 바꿨다(Android OAuth 클라이언트 3개, 웹 클라이언트는 그대로).
 
 ## 직접 해야 하는 설정 (사용자)
@@ -63,7 +64,9 @@
 
 확인 못 한 것(실기기와 실제 응답이 필요): 실제 `voidedpurchases` 응답 모양(문서 기준으로 `voidedPurchases[].orderId`, `voidedTimeMillis` 문자열, `voidedReason` 숫자, `tokenPagination.nextPageToken` 으로 짰다), RevenueCat 의 `transactionIdentifier` 가 Play 주문 번호(`GPA.` 로 시작)와 같은지(다르면 `cleanOrderIds` 가 전부 버려 환불이 영영 안 잡힌다), 서비스 계정 권한. 라이선스 테스터 구매를 환불한 뒤 `refunds/` 에 문서가 생기고 앱이 회수하는지 한 번 확인한다.
 
-## App Check (2026-11-26, 아직 배포 전)
+## App Check (2026-11-26 배포)
+
+2026-11-26 에 아래 켜는 순서 1번에서 4번까지 했다. Play Integrity API 를 Cloud 프로젝트 meowguard(837064889610)에 연결했고, App Check 에서 Android 앱이 Play Integrity 로 등록됨, versionCode 3 AAB 를 내부 테스트에 출시하고 비공개 테스트(Alpha)는 검토에 제출, Firestore 규칙과 색인, 함수 11개를 배포했다(새로 만든 것 `startRun`, `setLook`, `claimGrants`, `settleWeek`). 배포 뒤 표 없이 `myRank`, `refundedOrders` 를 부르면 401 `UNAUTHENTICATED` 가 온다. Firestore 와 Authentication 강제는 꺼진 채다. 확인 못 한 것: 실기기에서 Play Integrity 표를 받아 호출이 통과하는지(App Check 콘솔 지표의 확인된 요청으로 본다).
 
 진짜 우리 앱에서 온 요청인지 Google 이 확인해 주는 표를 모든 요청에 붙인다. 표가 없거나 가짜인 호출은 서버 함수가 거절한다.
 
