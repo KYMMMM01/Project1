@@ -107,6 +107,24 @@ export function openProfile(): void {
     plate.scale.set(k);
     const plateH = PLATE_ART_H * k;
     plate.position.set(TEXT_X + room / 2, plateH / 2);
+    // The nickname is the server's ranking name: a tap renames when signed in and says how otherwise (no Firebase in this build: not tappable).
+    if (account.state().status !== 'none') {
+      plate.hitArea = new Rectangle(-PLATE_ART_W / 2, -PLATE_ART_H / 2, PLATE_ART_W, PLATE_ART_H);
+      plate.eventMode = 'static';
+      plate.cursor = 'pointer';
+      bindPress(plate, {
+        down: () => plate.scale.set(k * 0.96),
+        up: (fire) => {
+          // The preview is rebuilt on every pick and rename: a press still held on the old plate ends here once it is gone.
+          if (plate.destroyed) return;
+          plate.scale.set(k);
+          if (!fire) return;
+          const s = account.state().status;
+          if (s === 'on') void changeNameFlow();
+          else toast(t(s === 'wait' ? 'rt.sys.acct.wait' : 'prof.rename.signIn'));
+        },
+      });
+    }
     preview.addChild(badge, plate);
     const row = profile.cosmetics().find((r) => r.id === pick[tab]);
     if (!row) return;
