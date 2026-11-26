@@ -199,7 +199,7 @@ export function sanitizeProfile(raw: unknown, now: number, seed: number): Profil
   const r = raw as Record<string, unknown>;
   if (typeof r.gold !== 'number' || typeof r.gems !== 'number' || !r.levels || typeof r.levels !== 'object') return null;
   // A copy without the achievement slice (a cloud copy from an older app) gets its win count from the lifetime wins; a present slice is kept.
-  const filled = deepFill(MIGRATIONS[1](r), defaultProfile(now, seed)) as ProfileData;
+  const filled = deepFill((MIGRATIONS[1] as Step)(r), defaultProfile(now, seed)) as ProfileData;
   return normalizeProfile(filled);
 }
 

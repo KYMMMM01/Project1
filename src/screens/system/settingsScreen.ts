@@ -2,6 +2,7 @@
 import { Container, type Text } from 'pixi.js';
 import { legalLinks, openLegalLink, type LegalLink, type LegalLinkId } from '@/app/legalLinks';
 import { audio } from '@/audio';
+import { onSettled } from '@/core/events';
 import { game } from '@/core/game';
 import { getLang, i18nEvents, t, type Lang } from '@/core/i18n';
 import { isStorageVolatile, onStorageVolatile } from '@/core/save';
@@ -416,27 +417,16 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     onChanged();
   };
 
-  // The language segment lives inside the content that is rebuilt: rebuild after its handler has returned.
-  const rebuild = (): void => {
-    if (!closed) build(true);
-  };
-  const offLang = i18nEvents.on('change', () => queueMicrotask(rebuild));
-  // Signing in or out (the account, Play Games) while the sheet is open changes its rows.
-  const offPgs = playGames.onChange(() => queueMicrotask(rebuild));
-  const offAccount = account.onChange(() => queueMicrotask(rebuild));
-
-  // The notice at the top appears the moment the first write is lost, even with this screen already open.
-  const offVolatile = onStorageVolatile(() => queueMicrotask(rebuild));
+  // Rebuilt when the language changes (its segment lives inside the content), when the player signs in or out (the account, Play
+  // Games) and the moment the first write is lost (the notice at the top), even with this screen already open.
+  const offChanges = onSettled(() => build(true), (f) => i18nEvents.on('change', f), playGames.onChange, account.onChange, onStorageVolatile);
 
   const close = (): void => {
     if (closed) return;
     closed = true;
     clearPointer();
     bag.killAll();
-    offLang();
-    offPgs();
-    offAccount();
-    offVolatile();
+    offChanges();
     current = null;
     dispose = null;
     void scaffold.hide(true).then(() => scaffold.destroy({ children: true }));
@@ -446,10 +436,7 @@ export async function openSettingsScreen(onChanged: () => void): Promise<void> {
     closed = true;
     clearPointer();
     bag.killAll();
-    offLang();
-    offPgs();
-    offAccount();
-    offVolatile();
+    offChanges();
     current = null;
     dispose = null;
     scaffold.destroy({ children: true });

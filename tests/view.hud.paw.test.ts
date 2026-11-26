@@ -94,7 +94,7 @@ describe('where the paw comes in', () => {
     expect(dragPrefer({ x: 100, y: 500 }, { x: 400, y: 500 })[0]).toBe('lowerLeft');
     expect(dragPrefer({ x: 400, y: 500 }, { x: 100, y: 500 })[0]).toBe('lowerRight');
     expect(dragPrefer({ x: 300, y: 800 }, { x: 300, y: 500 })[0]).toBe('lowerRight');
-    expect(dragPrefer({ x: 300, y: 500 }, { x: 300, y: 800 })[0].startsWith('upper')).toBe(true);
+    expect(dragPrefer({ x: 300, y: 500 }, { x: 300, y: 800 })[0]!.startsWith('upper')).toBe(true);
   });
 
   it('what the HUD lists to keep readable counts for less than a label does', () => {

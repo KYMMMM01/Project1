@@ -53,7 +53,7 @@ const MAX_LEVEL = 10;
 
 /** The chapter whose special cell `id` is (each chapter has its own kind). */
 function chapterOf(id: SpecialCellId): number {
-  return (CHAPTERS.find((c) => c.cell === id) ?? CHAPTERS[0]).id;
+  return (CHAPTERS.find((c) => c.cell === id) ?? CHAPTERS[0]!).id;
 }
 
 /** The numbers of one kind's text, with the names of the things it mentions in the current language. */

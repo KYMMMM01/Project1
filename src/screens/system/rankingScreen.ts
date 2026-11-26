@@ -3,6 +3,7 @@
  * 10 minutes), with the player's own place on top. Signed out it still shows the boards, with the sign-in button where the place would be.
  */
 import { Container, Rectangle, Sprite, type Texture } from 'pixi.js';
+import { onSettled } from '@/core/events';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { accountProgress, profile } from '@/meta';
@@ -217,7 +218,7 @@ export function openRanking(): void {
     build();
   };
 
-  const offAccount = account.onChange(() => queueMicrotask(() => void load()));
+  const offAccount = onSettled(() => void load(), account.onChange);
 
   const close = (): void => {
     if (closed) return;

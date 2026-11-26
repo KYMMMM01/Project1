@@ -4,6 +4,7 @@
  * It opens from the settings sheet, the pause menu and the "more" link of every lesson card.
  */
 import { Container, Graphics } from 'pixi.js';
+import { onSettled } from '@/core/events';
 import { game } from '@/core/game';
 import { i18nEvents, t } from '@/core/i18n';
 import { mixColor } from '@/core/math';
@@ -285,13 +286,9 @@ export function openGuide(opts: GuideOpts = {}): ScreenScaffold | null {
     });
   }
 
-  // Rebuilt after the handler that changed the language has returned.
-  const off = i18nEvents.on('change', () =>
-    queueMicrotask(() => {
-      if (closed) return;
-      if (page) showPage(page);
-      else showList();
-    }),
+  const off = onSettled(
+    () => (page ? showPage(page) : showList()),
+    (f) => i18nEvents.on('change', f),
   );
 
   current = {

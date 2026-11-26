@@ -69,7 +69,7 @@ describe('which carriers of an aura wear a ring', () => {
     for (let i = 0; i < p.count; i++) {
       for (let j = 0; j < i; j++) {
         if (p.show[i] === NO_RING || p.show[j] === NO_RING || p.kind[i] !== p.kind[j]) continue;
-        expect(Math.hypot(p.x[i] - p.x[j], p.y[i] - p.y[j])).toBeGreaterThanOrEqual(D * 0.5);
+        expect(Math.hypot(p.x[i]! - p.x[j]!, p.y[i]! - p.y[j]!)).toBeGreaterThanOrEqual(D * 0.5);
       }
     }
   });

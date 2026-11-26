@@ -82,7 +82,7 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
     stage.play(stage.rules.eliteDie, death.id, death.volume * 1.25, death.pitch * 0.84, 0.02);
     currency.claimBig(0.3);
     banners.push('caption', 'eliteDown', 2, { title: t('director.eliteDefeated'), color: SHIELD_COLOR }, 0.9, 0.15, 0.2);
-    music.duck(DUCK_BY_TIER[2].depth, 0.4);
+    music.duck(DUCK_BY_TIER[2]!.depth, 0.4);
   }
 
   /**

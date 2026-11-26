@@ -5,6 +5,7 @@
  * bubble and boss strip (straight onto that enemy's page).
  */
 import { Container, Graphics } from 'pixi.js';
+import { onSettled } from '@/core/events';
 import { game } from '@/core/game';
 import { i18nEvents, t } from '@/core/i18n';
 import type { EnemyId } from '@/game/api';
@@ -255,8 +256,7 @@ export function openCodex(opts: CodexOpts = {}): ScreenScaffold | null {
     });
   }
 
-  // Rebuilt after the handler that changed the language has returned.
-  const off = i18nEvents.on('change', () => queueMicrotask(render));
+  const off = onSettled(render, (f) => i18nEvents.on('change', f));
 
   current = {
     section: () => section,

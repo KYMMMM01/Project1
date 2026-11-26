@@ -4,6 +4,7 @@
  * it still shows it on the preview and says how to get it. "Apply" wears what was picked (what the player does not own is left out).
  */
 import { Container, Graphics, Rectangle } from 'pixi.js';
+import { onSettled } from '@/core/events';
 import { game } from '@/core/game';
 import { t } from '@/core/i18n';
 import { accountProgress, BASE_UNITS, featureHint, profile, type CosmeticRow } from '@/meta';
@@ -295,7 +296,7 @@ export function openProfile(): void {
 
   const offs = [
     onNameChange(() => drawPreview()),
-    account.onChange(() => queueMicrotask(() => buildBar())),
+    onSettled(buildBar, account.onChange),
     game.events.on('resize', () => build()),
   ];
 

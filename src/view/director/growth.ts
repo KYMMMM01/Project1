@@ -169,7 +169,7 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
         fx.summonReveal(x, y, 4, { quick: true });
         themeBurst(x, y, 4);
         audio.stinger('mythic');
-        music.duck(DUCK_BY_TIER[4].depth, DUCK_BY_TIER[4].seconds);
+        music.duck(DUCK_BY_TIER[4]!.depth, DUCK_BY_TIER[4]!.seconds);
       },
     });
   });

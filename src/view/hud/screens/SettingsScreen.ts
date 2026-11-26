@@ -1,6 +1,7 @@
 /** Settings as a full screen: volumes, screen shake, flashes, haptics, damage numbers and language. */
 import { Container, Graphics } from 'pixi.js';
 import { audio } from '@/audio';
+import { onSettled } from '@/core/events';
 import { game } from '@/core/game';
 import { i18nEvents, t, getLang, type Lang } from '@/core/i18n';
 import type { NumbersMode } from '@/fx';
@@ -110,12 +111,7 @@ export function openSettings(onClose: () => void): ScreenScaffold {
     scaffold.refresh();
   };
 
-  // Rebuilt after the handler that changed the language has returned: that handler lives inside a widget being replaced.
-  const off = i18nEvents.on('change', () => {
-    queueMicrotask(() => {
-      if (!closed) build();
-    });
-  });
+  const off = onSettled(build, (f) => i18nEvents.on('change', f));
   const close = (): void => {
     if (closed) return;
     closed = true;

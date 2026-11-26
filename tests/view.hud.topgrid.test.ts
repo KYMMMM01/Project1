@@ -91,9 +91,9 @@ describe('the top block sits on one grid', () => {
       it('keeps every row of cards inside its rect with the same gap between neighbours, for one to four cards', () => {
         for (let n = 1; n <= PREVIEW_MAX; n++) {
           const xs = Array.from({ length: n }, (_, i) => cardCentre(r, i));
-          expect(xs[0] - CARD_W / 2).toBe(r.preview.x);
-          expect(xs[n - 1] + CARD_W / 2).toBeLessThanOrEqual(r.preview.x + r.preview.w);
-          for (let i = 1; i < n; i++) expect(xs[i] - xs[i - 1] - CARD_W).toBe(6);
+          expect(xs[0]! - CARD_W / 2).toBe(r.preview.x);
+          expect(xs[n - 1]! + CARD_W / 2).toBeLessThanOrEqual(r.preview.x + r.preview.w);
+          for (let i = 1; i < n; i++) expect(xs[i]! - xs[i - 1]! - CARD_W).toBe(6);
         }
         expect(cardCentre(r, PREVIEW_MAX - 1) + CARD_W / 2).toBe(r.preview.x + r.preview.w);
       });
