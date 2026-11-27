@@ -317,14 +317,15 @@ describe('the director, left alone', () => {
   });
 
   it('gives a higher rank a longer wobble with more ticks that come closer together', () => {
-    const wobbleOf = (r: ChestRarity): { dur: number; ticks: number[] } => {
+    type Wobble = { dur: number; ticks: number[] };
+    const wobbleOf = (r: ChestRarity): Wobble => {
       const { flow, log, clock } = make([stack('k', r)]);
       play(flow, 12, clock);
       const start = times(log, 'wobble')[0] as number;
       const flipAt = times(log, 'flip')[0] as number;
       return { dur: flipAt - start, ticks: times(log, 'tick').map((t) => t - start) };
     };
-    const [c, r, e, l] = RARITIES.map(wobbleOf) as { dur: number; ticks: number[] }[];
+    const [c, r, e, l] = RARITIES.map(wobbleOf) as [Wobble, Wobble, Wobble, Wobble];
     expect(c.ticks).toHaveLength(0);
     expect([r.ticks.length, e.ticks.length, l.ticks.length]).toEqual([2, 3, 5]);
     expect(r.dur).toBeGreaterThan(c.dur);

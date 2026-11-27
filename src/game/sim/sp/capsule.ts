@@ -363,7 +363,7 @@ function inTheAir(s: Sim): boolean {
 function shareGauge(s: Sim, caster: SimUnit): void {
   for (let c = 0; c < CELL_COUNT; c++) {
     const other = s.units[c];
-    if (other === null || other === caster || other.id !== caster.id) continue;
+    if (!other || other === caster || other.id !== caster.id) continue;
     other.sp = caster.sp;
   }
 }

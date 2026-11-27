@@ -50,7 +50,7 @@ describe('claimRankGrants', () => {
     expect(profile.data.rankClaimed).toEqual([]);
     expect(saves()).toBe(0);
     // The same week once the build knows every item: paid in full.
-    expect(profile.claimRankGrants('u1', [{ week: w1.week, rank: 1, items: ['frame_rank_1', 'plate_rank_1'] }])[0].bundle).toEqual({ cosmetics: ['frame_rank_1', 'plate_rank_1'] });
+    expect(profile.claimRankGrants('u1', [{ week: w1.week, rank: 1, items: ['frame_rank_1', 'plate_rank_1'] }])[0]!.bundle).toEqual({ cosmetics: ['frame_rank_1', 'plate_rank_1'] });
     expect(profile.data.rankClaimed).toEqual(['u1:' + w1.week]);
   });
 
@@ -59,7 +59,7 @@ describe('claimRankGrants', () => {
     profile.data.cosmetics.owned.push('plate_rank_1');
     const gems = profile.data.gems;
     const paid = profile.claimRankGrants('u1', [w1]);
-    expect(paid[0].bundle).toEqual({ gems: 100, cosmetics: ['frame_rank_1'] });
+    expect(paid[0]!.bundle).toEqual({ gems: 100, cosmetics: ['frame_rank_1'] });
     expect(profile.data.gems).toBe(gems + 100);
     expect(profile.data.cosmetics.owned.filter((id) => id === 'plate_rank_1')).toHaveLength(1);
   });
@@ -74,6 +74,6 @@ describe('claimRankGrants', () => {
     profile.claimRankGrants('u1', weeks);
     expect(profile.data.rankClaimed).toHaveLength(RANK_CLAIMED_KEPT);
     expect(profile.data.rankClaimed.at(-1)).toBe('u1:' + weeks.at(-1)!.week);
-    expect(profile.data.rankClaimed[0]).toBe('u1:' + weeks[3].week);
+    expect(profile.data.rankClaimed[0]).toBe('u1:' + weeks[3]!.week);
   });
 });

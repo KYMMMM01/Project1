@@ -1,10 +1,11 @@
 import { closeCodex } from '@/codex';
 import { debugExpose } from '@/core/debug';
+import { guideProgress, TOPIC_IDS, type GuideProgress } from '@/guide';
 import { profile, setCloudChooser } from '@/meta';
 import { popups } from '@/ui/Popup';
 import { ensureSettings } from '@/view/hud/settings';
 import { provide, services, type Shell } from '../contract';
-import { AutoPopups, markCalendarOffered } from './autoPopups';
+import { AutoPopups, markOffered } from './autoPopups';
 import { CalendarPopup } from './calendarPopup';
 import { askCloudChoice } from './cloudChoice';
 import { stopConfetti } from './kit/confetti';
@@ -61,10 +62,20 @@ export function installSystemScreens(shell: Shell): void {
     openCalendar: () => services.openCalendar(),
     popups,
     scrollSettingsTo,
-    /** QA: count every level and unlock as announced and today's attendance as offered, so no automatic popup interrupts a screenshot. */
-    markSeen: () => {
+    /**
+     * QA: count every announcement as made (levels, unlocks, today's attendance, welcome back, gem pass) and every guidebook topic as
+     * read (no first-encounter card; a sandbox battle keeps its own record, made new with each battle, so call it again once that
+     * battle is open), then close the popups that are up. Resolves with how many are still open or queued. Call it again after a
+     * cheat that unlocks or levels up (`meta.unlockAll`, `finishRuns`, `advance`).
+     */
+    markSeen: async (): Promise<number> => {
+      await Promise.all([loadRoutinePrefs(), guideProgress.load()]);
       markProfileSeen();
-      markCalendarOffered(profile.today());
+      markOffered(profile.today());
+      const live = (window.__dbg?.lessons as { progress?: GuideProgress } | null | undefined)?.progress;
+      for (const book of new Set([guideProgress, live])) for (const id of TOPIC_IDS) book?.markRead(id);
+      popups.closeAll();
+      return popups.count + popups.queued;
     },
   });
 }

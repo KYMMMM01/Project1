@@ -40,3 +40,29 @@ export class Emitter<E extends object> {
     this.map.clear();
   }
 }
+
+/** A change notice to listen to: an emitter's on with its event bound, or an onChange. Returns the unsubscribe. */
+type Subscribe = (fn: () => void) => () => void;
+
+/**
+ * Listen to `sources` and run `fn` after the code that made the change has returned. A screen rebuilt at once from inside its own
+ * button's handler would destroy that button in the middle of the call. Changes from several sources in one turn run `fn` once, and
+ * the returned unsubscribe also drops a run that is still waiting, so `fn` never runs on a closed screen.
+ */
+export function onSettled(fn: () => void, ...sources: Subscribe[]): () => void {
+  let live = true;
+  let pending = false;
+  const later = (): void => {
+    if (pending) return;
+    pending = true;
+    queueMicrotask(() => {
+      pending = false;
+      if (live) fn();
+    });
+  };
+  const offs = sources.map((on) => on(later));
+  return () => {
+    live = false;
+    for (const off of offs) off();
+  };
+}

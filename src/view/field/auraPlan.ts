@@ -55,15 +55,18 @@ export class AuraPlan {
   decide(): void {
     let rings = 0;
     for (let i = 0; i < this.count; i++) {
-      const gap = this.diameter[i] * (this.worn[i] ? KEEP : GIVE);
+      const gap = (this.diameter[i] as number) * (this.worn[i] ? KEEP : GIVE);
+      const xi = this.x[i] as number;
+      const yi = this.y[i] as number;
+      const reach = this.reach[i] as number;
       let shown = rings < MAX_RINGS;
       let reachSeen = false;
       for (let j = 0; j < i && shown; j++) {
         if (this.kind[j] !== this.kind[i] || this.show[j] === NO_RING) continue;
-        const dx = this.x[j] - this.x[i];
-        const dy = this.y[j] - this.y[i];
+        const dx = (this.x[j] as number) - xi;
+        const dy = (this.y[j] as number) - yi;
         if (dx * dx + dy * dy < gap * gap) shown = false;
-        else if (dx * dx + dy * dy < this.reach[i] * this.reach[i]) reachSeen = true;
+        else if (dx * dx + dy * dy < reach * reach) reachSeen = true;
       }
       if (!shown) {
         this.show[i] = NO_RING;

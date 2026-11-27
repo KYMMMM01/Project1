@@ -6,6 +6,7 @@
 import './strings';
 import { Container, Point, Text } from 'pixi.js';
 import { debugExpose } from '@/core/debug';
+import { onSettled } from '@/core/events';
 import { game } from '@/core/game';
 import { i18nEvents, t } from '@/core/i18n';
 import { closeCodex, openCodex } from '@/codex';
@@ -194,13 +195,8 @@ class Hud implements HudPart {
         this.rebuild(false);
       });
     }
-    // A language switch rebuilds every label; the handler that changed it must finish first.
-    this.offLang = i18nEvents.on('change', () =>
-      queueMicrotask(() => {
-        if (this.destroyed) return;
-        this.rebuild(true);
-      }),
-    );
+    // A language switch rebuilds every label.
+    this.offLang = onSettled(() => this.rebuild(true), (f) => i18nEvents.on('change', f));
   }
 
   /**

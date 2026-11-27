@@ -315,7 +315,7 @@ export function dealDamage(
   const killed = e.hp <= 0;
   if (src) {
     src.damageDealt += dealt;
-    s.damageByUnit[src.unitIndex] += dealt;
+    s.damageByUnit[src.unitIndex] = (s.damageByUnit[src.unitIndex] as number) + dealt;
   }
   if (announce && s.ev.has('hit')) {
     s.ev.emit('hit', { enemy: e, amount, crit, type, unitId: dot ? null : src ? src.id : null, dot, absorbed, killed });

@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "verify": "tsc --noEmit && vitest run",
     "font": "node scripts/build-font.mjs",
     "sim": "vitest run --config vitest.sim.config.ts",
     "predev": "node scripts/build-font.mjs",

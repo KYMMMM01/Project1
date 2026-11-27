@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Build the web version and publish dist/ to the gh-pages branch of origin (GitHub Pages).
-#   tools/deploy_pages.sh            build, then publish
+#   tools/deploy_pages.sh            run the tests, build, then publish
 #   tools/deploy_pages.sh --no-build publish the dist/ that is already there
 # The site is served at https://<user>.github.io/<repo>/ ; vite's base is './' so the build is path-agnostic.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ "${1:-}" != "--no-build" ]; then
+  npm test
   npm run build
 fi
 [ -f dist/index.html ] || { echo "dist/index.html missing: build first" >&2; exit 1; }

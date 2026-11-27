@@ -57,9 +57,11 @@ const offered = new Set<'comeback' | 'gemPass'>();
  */
 let calendarOfferedOn = '';
 
-/** QA: count today's attendance popup as offered, so it does not interrupt a screenshot. */
-export function markCalendarOffered(day: string): void {
+/** QA: count today's attendance, the welcome back and the gem pass as offered in this session, so none interrupts a screenshot. */
+export function markOffered(day: string): void {
   calendarOfferedOn = day;
+  offered.add('comeback');
+  offered.add('gemPass');
 }
 
 export class AutoPopups {

@@ -27,7 +27,7 @@ const RANK: Readonly<Record<ChestRarity, number>> = { common: 0, rare: 1, epic: 
 /** One card's rarity, straight from the table. */
 export function rollRarity(table: OddsTable, rng: Rng): ChestRarity {
   const i = rng.weighted(table.rows.map((r) => r.p));
-  return (table.rows[i] ?? table.rows[0]).key;
+  return (table.rows[i] ?? table.rows[0]!).key;
 }
 
 /** The raw rarities of a whole chest before guarantees (what the chi-square test checks). */
@@ -51,7 +51,7 @@ export function applyGuarantees(rarities: ChestRarity[], table: OddsTable, rng: 
       let lowest = min;
       for (const r of rarities) if (RANK[r] < lowest) lowest = RANK[r];
       const idx: number[] = [];
-      for (let i = 0; i < rarities.length; i++) if (RANK[rarities[i]] === lowest) idx.push(i);
+      for (let i = 0; i < rarities.length; i++) if (RANK[rarities[i] as ChestRarity] === lowest) idx.push(i);
       rarities[rng.pick(idx)] = g.atLeast;
       have++;
       changed++;
@@ -62,7 +62,7 @@ export function applyGuarantees(rarities: ChestRarity[], table: OddsTable, rng: 
 
 /** The legendary with the lowest level; ties go to the one with fewer cards, then to class order. */
 export function pityTarget(state: Pick<DrawState, 'levels' | 'cards'>, rarity: ChestRarity = 'legendary'): BaseUnitId {
-  let best = UNITS_BY_RARITY[rarity][0];
+  let best = UNITS_BY_RARITY[rarity][0] as BaseUnitId;
   for (const u of UNITS_BY_RARITY[rarity]) {
     const a = state.levels[u] ?? 1;
     const b = state.levels[best] ?? 1;

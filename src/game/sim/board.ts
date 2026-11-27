@@ -260,7 +260,7 @@ export function recomputeStats(s: Sim): void {
     const onCell = s.sunCell[c] === 1;
     if (onCell) dmg += cellDamage;
 
-    let speed = trick.speed + party + lucky + bellSpeed[c] + u.perk.speed;
+    let speed = trick.speed + party + lucky + (bellSpeed[c] as number) + u.perk.speed;
     if (onCell) speed += cellSpeed;
     if (ci === 0 || ci === 1) speed += fx.speedWarriorRanger ?? 0;
     if (isEdgeCell(c)) speed += fx.edgeSpeed ?? 0;

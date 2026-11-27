@@ -29,7 +29,7 @@ export class DamageWindow {
       this.ids[slot] = id;
       this.sums[slot] = 0;
     }
-    this.sums[slot] += amount;
+    this.sums[slot] = (this.sums[slot] as number) + amount;
   }
 
   /** Damage per second over the window, or -1 while there is not enough observation yet. */

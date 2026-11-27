@@ -554,7 +554,7 @@ describe('the toy capsule in the other modes', () => {
       return `${log.join('|')}#${sim.relics.join(',')}/${sim.rng.states().join(',')}`;
     };
     const x1 = play(TICK);
-    expect(x1.split('#')[0].length).toBeGreaterThan(0);
+    expect(x1.split('#')[0]!.length).toBeGreaterThan(0);
     expect(play(2 * TICK)).toBe(x1);
     expect(play(3 * TICK)).toBe(x1);
   });
