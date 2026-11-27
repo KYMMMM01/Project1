@@ -56,8 +56,10 @@ export async function openGame(query, { base = `http://127.0.0.1:${process.env.G
   try {
     const q = /[?&]debug\b/.test(query) ? query : query + (query.includes('?') ? '&' : '?') + 'debug=1';
     await b.goto(`${base}/${q}`);
-    // A ?demo= gallery boots no app, so it has no meta or system hooks to wait for.
-    const booted = `!!(window.__dbg && window.__dbg.game && (window.__dbg.routine || /[?&]demo=/.test(location.search))) && (${ready})`;
+    // A ?demo= gallery boots no app, so it has no meta or system hooks to wait for. The hooks come before the first scene is in place
+    // (on a slow network long before), and the boot splash is taken away only once it is: until then nothing has popped up to settle.
+    const splashUp = `(() => { const s = document.getElementById('boot'); return !!s && !s.classList.contains('hide') && !s.classList.contains('gone'); })()`;
+    const booted = `!!(window.__dbg && window.__dbg.game && (window.__dbg.routine || /[?&]demo=/.test(location.search))) && !${splashUp} && (${ready})`;
     let up = false;
     for (let i = 0; i < 80 && !up; i++) {
       await b.sleep(500);
