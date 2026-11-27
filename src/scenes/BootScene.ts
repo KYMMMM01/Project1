@@ -4,11 +4,11 @@ import { game } from '@/core/game';
 import { hasTex, loadImages, tex } from '@/core/assets';
 import { t } from '@/core/i18n';
 import { audio } from '@/audio';
-import { PaperLabel } from '@/ui';
+import { choiceDialog, PaperLabel } from '@/ui';
 import { HomeFloor } from '@/screens/shell/HomeFloor';
 import { Logo } from '@/screens/shell/Logo';
 import { TitleOverlay, type AccountView } from '@/screens/shell/TitleOverlay';
-import { account, type AccountState } from '@/platform';
+import { account, appUpdate, type AccountState } from '@/platform';
 import { signInFlow } from '@/screens/system/accountFlow';
 import '@/screens/shell/strings';
 
@@ -65,13 +65,18 @@ export class BootScene extends Scene {
     await services;
     setBar(1);
     if (next && this.titleMs > 0) {
+      // Asked once the services are up: the store build registers its plugins while they start.
+      const update = appUpdate.ready();
       // Built only now: the saved language is known once the services are up, and the logo is drawn in it.
       // The splash goes at once (a fading card would ghost its "Loading" over the art) and the title fades in from the page's cream.
       document.getElementById('boot')?.classList.add('gone');
       this.showTitle();
       this.alpha = 0;
       this.tweens.to(this as Container, { alpha: 1 }, { duration: 0.35 });
+      // An app with a newer version in the store stops at the title (a tap made before Play answered waits for the answer).
+      const stop = update.then((ready) => (ready ? this.askUpdate() : undefined));
       await this.hold();
+      await stop;
     }
 
     if (next) {
@@ -155,6 +160,20 @@ export class BootScene extends Scene {
       this.on('pointerdown', down);
       this.on('pointertap', finish);
     });
+  }
+
+  /** The notice of a newer version in the store. It comes back each time it closes, until the app quits or is updated. */
+  private async askUpdate(): Promise<never> {
+    for (;;) {
+      const go = await choiceDialog({
+        title: t('shell.update.title'),
+        message: t('shell.update.msg'),
+        confirmLabel: t('shell.update.go'),
+        cancelLabel: t('shell.update.quit'),
+      });
+      if (go) appUpdate.openStore();
+      else appUpdate.quit();
+    }
   }
 
   /** The card shown when no scene follows: the logo on the floor. */

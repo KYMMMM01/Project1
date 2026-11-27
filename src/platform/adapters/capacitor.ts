@@ -22,6 +22,7 @@ import {
   getCapacitorPlugins,
   registerCapacitorPlugins,
   type CapAdMobEvents,
+  type CapAppUpdate,
   type CapCustomerInfo,
   type CapListenerHandle,
   type CapRestoreResult,
@@ -79,10 +80,11 @@ async function loadPlugins(): Promise<void> {
     import('@revenuecat/purchases-capacitor'),
     import('@capacitor/core'),
   ]);
-  // The game's own native plugin (PlayGamesPlugin.java) has no npm package: registerPlugin gives its proxy by name.
+  // The game's own native plugins (PlayGamesPlugin.java, AppUpdatePlugin.java) have no npm package: registerPlugin gives their proxies by name.
   const PlayGames = registerPlugin<CapPlayGames>('PlayGames');
+  const AppUpdate = registerPlugin<CapAppUpdate>('AppUpdate');
   // The packages' own types are wider than the slices in bridges.ts (overloaded addListener, enums for strings).
-  registerCapacitorPlugins({ AdMob, Preferences, App, Purchases, PlayGames } as unknown as CapacitorPlugins);
+  registerCapacitorPlugins({ AdMob, Preferences, App, Purchases, PlayGames, AppUpdate } as unknown as CapacitorPlugins);
 }
 
 async function listen(

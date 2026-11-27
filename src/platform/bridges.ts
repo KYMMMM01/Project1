@@ -124,6 +124,7 @@ export interface CapApp {
     event: 'appStateChange',
     cb: (state: { isActive: boolean }) => void,
   ): Promise<CapListenerHandle> | CapListenerHandle;
+  exitApp?(): Promise<void>;
 }
 
 /** RevenueCat's CustomerInfo: only `nonSubscriptionTransactions` is used (14.x: transactionIdentifier, productIdentifier). */
@@ -167,9 +168,16 @@ export interface CapPlayGames {
   showAchievements(): Promise<void>;
 }
 
+/** The game's own Play update check (android/app/src/main/java/com/bulssistudio/meowguard/AppUpdatePlugin.java). */
+export interface CapAppUpdate {
+  check(): Promise<{ available: boolean }>;
+  openStore(): Promise<void>;
+}
+
 export interface CapacitorPlugins {
   AdMob?: CapAdMob;
   PlayGames?: CapPlayGames;
+  AppUpdate?: CapAppUpdate;
   Preferences?: CapPreferences;
   App?: CapApp;
   Purchases?: CapPurchases;
