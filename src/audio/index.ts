@@ -3,6 +3,7 @@ import { AudioEngine } from './engine';
 
 export * from './api';
 export * from './combat';
+export { soundPass } from './pass';
 export { battleMusic } from './playlist';
 export { audioRandom, audioSpread, seedAudio } from './random';
 

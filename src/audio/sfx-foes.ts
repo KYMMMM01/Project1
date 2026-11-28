@@ -8,7 +8,7 @@
 import type { SfxId } from './api';
 import { air, body, boing, bubble, clack, crackle, dust, grain, rap, rattle, snap, squelch, swish, tink, whistle } from './foley';
 import { crack, tap, thud } from './hitkit';
-import { bell, knock, recording, type Recipe } from './recipe';
+import { backed, bell, knock, recording, type Recipe } from './recipe';
 import { hz } from './theory';
 
 interface Spec {
@@ -58,7 +58,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_juicy_hit'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_juicy_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_juicy_hit')) return;
+      if (recording(s, 'foe_juicy_hit', v)) return;
       // A cucumber is hit: a wet squish (noise sliding down through 800 to 450 Hz), a plop and the crunch of its skin on top (250 to 700 Hz, wet).
       const p = v.j(0.06);
       air(s, { dur: 0.05, v: 1, a: 0.003, d: 0.04, s: 0.01, filter: { t: 'bandpass', f: 800 * p, f2: 450 * p, sw: 0.04, q: 1 } });
@@ -93,25 +93,29 @@ export const FOE_RECIPES = {
     len: 0.14,
     ms: [30, 140],
     trim: 3,
-    needs: ['elevenlabs/foe_rubber_hit'],
+    variants: 4,
+    needs: ['elevenlabs/foe_rubber_hit', 'elevenlabs/foe_rubber_hit_2', 'elevenlabs/foe_rubber_hit_3', 'elevenlabs/foe_rubber_hit_4'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_rubber_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_rubber_hit')) return;
-      // A balloon is hit: a boing (a sine climbing 300 to 560 Hz under a wobble) and the squeak of stretched rubber, high up (2.4 to 3.6 kHz).
-      const p = v.j(0.06);
-      boing(s, 0, 300 * p, 560 * p, 0.09, 0.8, 18, 60);
-      s.tone({ w: 'triangle', f: 2400 * p, f2: 3600 * p, sw: 0.05, at: 0.005, dur: 0.07, v: 0.8, a: 0.006, trem: { rate: 40, depth: 0.8 }, filter: { t: 'lowpass', f: 4500 } });
-      crack(s, 0, 0.9, 3000, 0.012);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'foe_rubber_hit', v, 0.35, () => {
+        // A balloon is hit: a boing (a sine climbing 300 to 560 Hz under a wobble) and the squeak of stretched rubber, high up (2.4 to 3.6 kHz).
+        const p = v.j(0.06);
+        boing(s, 0, 300 * p, 560 * p, 0.09, 0.8, 18, 60);
+        s.tone({ w: 'triangle', f: 2400 * p, f2: 3600 * p, sw: 0.05, at: 0.005, dur: 0.07, v: 0.8, a: 0.006, trem: { rate: 40, depth: 0.8 }, filter: { t: 'lowpass', f: 4500 } });
+        crack(s, 0, 0.9, 3000, 0.012);
+      });
     },
   }),
   foe_plastic_hit: foe({
     len: 0.12,
     ms: [25, 110],
     trim: 5.5,
-    needs: ['elevenlabs/foe_plastic_hit'],
+    variants: 6,
+    needs: ['elevenlabs/foe_plastic_hit', 'elevenlabs/foe_plastic_hit_2', 'elevenlabs/foe_plastic_hit_3', 'elevenlabs/foe_plastic_hit_4', 'elevenlabs/foe_plastic_hit_5', 'elevenlabs/foe_plastic_hit_6'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_plastic_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_plastic_hit')) return;
+      if (recording(s, 'foe_plastic_hit', v)) return;
       // Hard plastic: a hollow tok at 1.6 kHz, a second mode a little over an octave above it that dies in 25 ms, a pat under it and a dry tick.
       const p = v.j(0.06);
       s.tone({ f: 1580 * p, dur: 0.05, v: 1, a: 0.002, d: 0.045, s: 0.01 });
@@ -124,10 +128,11 @@ export const FOE_RECIPES = {
     len: 0.15,
     ms: [40, 150],
     trim: 6,
-    needs: ['elevenlabs/foe_tin_hit'],
+    variants: 4,
+    needs: ['elevenlabs/foe_tin_hit', 'elevenlabs/foe_tin_hit_2', 'elevenlabs/foe_tin_hit_3', 'elevenlabs/foe_tin_hit_4'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_tin_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_tin_hit')) return;
+      if (recording(s, 'foe_tin_hit', v)) return;
       // A clock face tapped: a tink of thin metal (1.1 kHz), a small spring answering with a wobble and a tick of the tin.
       const p = v.j(0.06);
       tink(s, 0, 1100 * p, 0.09, 0.8);
@@ -142,12 +147,14 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_motor_hit'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_motor_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_motor_hit')) return;
-      // A robot vacuum is hit: a dull bonk on its shell (500 Hz) and a hiccup of the motor (a low triangle shuddering) with a tick.
-      const p = v.j(0.06);
-      knock(s, 500 * p, 0, 0.8, 0.05);
-      s.tone({ w: 'triangle', f: 260 * p, f2: 190 * p, sw: 0.07, dur: 0.1, v: 0.35, a: 0.004, trem: { rate: 40, depth: 0.5 }, filter: { t: 'lowpass', f: 900 } });
-      crack(s, 0, 0.8, 2600, 0.012);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'foe_motor_hit', v, 1.4, () => {
+        // A robot vacuum is hit: a dull bonk on its shell (500 Hz) and a hiccup of the motor (a low triangle shuddering) with a tick.
+        const p = v.j(0.06);
+        knock(s, 500 * p, 0, 0.8, 0.05);
+        s.tone({ w: 'triangle', f: 260 * p, f2: 190 * p, sw: 0.07, dur: 0.1, v: 0.35, a: 0.004, trem: { rate: 40, depth: 0.5 }, filter: { t: 'lowpass', f: 900 } });
+        crack(s, 0, 0.8, 2600, 0.012);
+      });
     },
   }),
   foe_paper_hit: foe({
@@ -157,7 +164,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_paper_hit'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_paper_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_paper_hit')) return;
+      if (recording(s, 'foe_paper_hit', v)) return;
       // A firecracker: a dry slap on a paper tube (a band around 2 kHz), its hollow knock and the crack of the paper.
       const p = v.j(0.06);
       grain(s, 0, 2300 * p, 0.7, 0.03);
@@ -173,7 +180,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_glass_hit'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_glass_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_glass_hit')) return;
+      if (recording(s, 'foe_glass_hit', v)) return;
       // Glass tapped: a clean high tink (1.9 kHz) with one partial that dies first, a second tink a fifth above it and the tick of the glass.
       const p = v.j(0.05);
       tink(s, 0, 1900 * p, 0.09, 1);
@@ -188,7 +195,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_cloud_hit'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_cloud_hit.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_cloud_hit')) return;
+      if (recording(s, 'foe_cloud_hit', v)) return;
       // A storm cloud is hit: a soft low thud whose harmonics reach a phone, a brown rumble that rolls away and a faint low tone.
       const p = v.j(0.06);
       thud(s, 0, 330 * p, 140, 0.1, 1, 0.6, 120);
@@ -205,7 +212,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_shield_hit'],
     build(s, v) {
       // The owner's recording, when it ships (ElevenLabs, `src/assets/sfx/elevenlabs/foe_shield_hit.wav`); until then this synthesis.
-      if (recording(s, 'foe_shield_hit')) return;
+      if (recording(s, 'foe_shield_hit', v)) return;
       // A blow lands on a hard shield: a short tink of the rim (1.5 kHz), a dull pat of the body under it that falls 380 to 220 Hz and a dry tick.
       const p = v.j(0.06);
       tink(s, 0, 1500 * p, 0.08, 0.8);
@@ -224,7 +231,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_juicy_die'],
     build(s, v) {
       // The owner's pick (2026-11-09, round 2): a juicy squish and pop, recorded with ElevenLabs.
-      if (recording(s, 'foe_juicy_die')) return;
+      if (recording(s, 'foe_juicy_die', v)) return;
       // A cucumber snaps and squelches: a crack and a short "tok", a wet squelch sliding down through 1.5 kHz to 300 Hz, bubbles and a plop.
       const p = v.j(0.07);
       snap(s, 0, 0.9, 2800, 0.012);
@@ -244,7 +251,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_fluff_die'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_fluff_die.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_fluff_die')) return;
+      if (recording(s, 'foe_fluff_die', v)) return;
       // A dust bunny poofs: a cloud of dust sinking from 1.8 kHz to 400 Hz, a flutter of fluff settling, a soft thud and a tiny squeak.
       const p = v.j(0.07);
       dust(s, 0, 0.25, 1, 1800 * p, 400);
@@ -277,7 +284,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_rubber_die'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_rubber_die.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_rubber_die')) return;
+      if (recording(s, 'foe_rubber_die', v)) return;
       // A balloon pops: a bang (noise through a low-pass closing from 5.2 kHz to 1.5 kHz), a hard snap, a burst of air, and the scraps flapping and sinking.
       const p = v.j(0.07);
       air(s, { dur: 0.03, v: 1.2, a: 0.001, d: 0.025, s: 0.01, filter: { t: 'lowpass', f: 5200, f2: 1500, sw: 0.025 } });
@@ -296,7 +303,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_plastic_die'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_plastic_die.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_plastic_die')) return;
+      if (recording(s, 'foe_plastic_die', v)) return;
       // A cone knocked flat: four hollow toks hopping away (880, 760, 680 and 620 Hz, each softer) and a rattle where it settles.
       const p = v.j(0.07);
       for (const [f, level, at] of [[880, 1, 0], [760, 0.6, 0.07], [680, 0.35, 0.125], [620, 0.2, 0.165]] as const) knock(s, f * p, at, level, 0.045, 0.9);
@@ -313,7 +320,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_tin_die'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_tin_die.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_tin_die')) return;
+      if (recording(s, 'foe_tin_die', v)) return;
       // A clock springs apart: three springs boinging away, the ticking of loose gears, and one last ding (A6) as the bell lets go.
       const p = v.j(0.07);
       snap(s, 0, 0.5, 3000, 0.01);
@@ -333,7 +340,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_motor_die'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_motor_die.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_motor_die')) return;
+      if (recording(s, 'foe_motor_die', v)) return;
       // A vacuum powers down: the motor's note falls from 330 to 70 Hz while its low-pass closes, a whine of air sinks with it, and the shell clunks.
       const p = v.j(0.07);
       s.tone({ w: 'triangle', f: 330 * p, f2: 70 * p, sw: 0.4, dur: 0.46, v: 0.8, a: 0.01, d: 0.4, s: 0.05, sat: 0.3, filter: { t: 'lowpass', f: 1500, f2: 250, sw: 0.4, q: 0.7 } });
@@ -351,7 +358,7 @@ export const FOE_RECIPES = {
     needs: ['elevenlabs/foe_paper_die'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_paper_die.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_paper_die')) return;
+      if (recording(s, 'foe_paper_die', v)) return;
       // A firecracker goes off: a crack and a thump, two smaller pops behind it, a cloud of powder and confetti fluttering down.
       const p = v.j(0.07);
       snap(s, 0, 1, 3400, 0.014);
@@ -373,9 +380,9 @@ export const FOE_RECIPES = {
     prio: 3,
     rule: FINALE,
     needs: ['elevenlabs/foe_boss_cucumber'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_boss_cucumber.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_boss_cucumber')) return;
+      if (recording(s, 'foe_boss_cucumber', v)) return;
       // The giant cucumber: a huge crack and "tok", a long squelch sinking from 1.4 kHz to 200 Hz, a run of bubbles that slows, and a last heavy plop.
       snap(s, 0, 1, 2600, 0.02);
       s.tone({ f: 700, f2: 300, sw: 0.04, dur: 0.07, v: 0.6, a: 0.002, d: 0.06, s: 0.01 });
@@ -393,9 +400,9 @@ export const FOE_RECIPES = {
     prio: 3,
     rule: FINALE,
     needs: ['elevenlabs/foe_boss_vacuum'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_boss_vacuum.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_boss_vacuum')) return;
+      if (recording(s, 'foe_boss_vacuum', v)) return;
       // The big vacuum powers down: its note sinks from 420 to 45 Hz over most of a second while the low-pass closes, the suction
       // whines away, the shell shudders three times on its way down and the last clunk is a low drum.
       s.tone({ w: 'triangle', f: 420, f2: 45, sw: 0.8, dur: 0.9, v: 0.8, a: 0.01, d: 0.8, s: 0.05, sat: 0.35, filter: { t: 'lowpass', f: 1800, f2: 200, sw: 0.8, q: 0.7 } });
@@ -414,9 +421,9 @@ export const FOE_RECIPES = {
     prio: 3,
     rule: FINALE,
     needs: ['elevenlabs/foe_boss_blender'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_boss_blender.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_boss_blender')) return;
+      if (recording(s, 'foe_boss_blender', v)) return;
       // The blender winds down: a chopped whirr that slows and sinks (a triangle falling 260 to 90 Hz chopped at 22 Hz), the blades rattling
       // in the jar, and the jar cracking at the end in a scatter of glass pings.
       s.tone({ w: 'triangle', f: 260, f2: 90, sw: 0.7, dur: 0.8, v: 0.7, a: 0.01, d: 0.7, s: 0.05, trem: { rate: 22, depth: 0.7 }, sat: 0.25, filter: { t: 'lowpass', f: 1400, f2: 300, sw: 0.7 } });
@@ -434,9 +441,9 @@ export const FOE_RECIPES = {
     prio: 3,
     rule: FINALE,
     needs: ['elevenlabs/foe_boss_bath'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_boss_bath.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_boss_bath')) return;
+      if (recording(s, 'foe_boss_bath', v)) return;
       // The bathtub gives way: a swell of water that bursts, a long slosh (brown noise rolling at 6 Hz), a run of bubbles and a big plop.
       air(s, { dur: 0.35, v: 1, a: 0.06, d: 0.25, s: 0.1, filter: { t: 'bandpass', f: 900, f2: 1700, sw: 0.1, q: 0.7 } });
       air(s, { kind: 'brown', at: 0.1, dur: 0.9, v: 0.9, a: 0.05, d: 0.8, s: 0.03, trem: { rate: 6, depth: 0.6 }, filter: { t: 'lowpass', f: 600, f2: 180, sw: 0.8 } });
@@ -453,16 +460,18 @@ export const FOE_RECIPES = {
     prio: 3,
     rule: FINALE,
     needs: ['elevenlabs/foe_boss_cloud'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_boss_cloud.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_boss_cloud')) return;
-      // The storm cloud: a soft crack of thunder, a long rumble of brown noise rolling at 7 Hz and sinking from 300 to 90 Hz, a low
-      // body under it, and a patter of rain on paper that thins out at the end.
-      snap(s, 0, 0.5, 2400, 0.02);
-      air(s, { kind: 'brown', dur: 1.1, v: 1, a: 0.04, d: 1, s: 0.03, trem: { rate: 7, depth: 0.5 }, filter: { t: 'lowpass', f: 300, f2: 90, sw: 1 } });
-      body(s, 0.02, 100, 45, 0.5, 0.9, 0.3);
-      crackle(s, 0.3, 0.8, 2800, 0.12, 24, 1400);
-      swish(s, 400, 900, 0.1, 0.5, 0.2, 0.6, 0.3);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'foe_boss_cloud', v, 1.15, () => {
+        // The storm cloud: a soft crack of thunder, a long rumble of brown noise rolling at 7 Hz and sinking from 300 to 90 Hz, a low
+        // body under it, and a patter of rain on paper that thins out at the end.
+        snap(s, 0, 0.5, 2400, 0.02);
+        air(s, { kind: 'brown', dur: 1.1, v: 1, a: 0.04, d: 1, s: 0.03, trem: { rate: 7, depth: 0.5 }, filter: { t: 'lowpass', f: 300, f2: 90, sw: 1 } });
+        body(s, 0.02, 100, 45, 0.5, 0.9, 0.3);
+        crackle(s, 0.3, 0.8, 2800, 0.12, 24, 1400);
+        swish(s, 400, 900, 0.1, 0.5, 0.2, 0.6, 0.3);
+      });
     },
   }),
   foe_boss_needle: foe({
@@ -473,9 +482,9 @@ export const FOE_RECIPES = {
     prio: 3,
     rule: FINALE,
     needs: ['elevenlabs/foe_boss_needle'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/foe_boss_needle.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'foe_boss_needle')) return;
+      if (recording(s, 'foe_boss_needle', v)) return;
       // The syringe: a glass crack, a shower of glass pings falling through 3.2 to 1.4 kHz, the plunger popping out (a hollow pop and a squirt), a low settling thud.
       const e = s.echo(0.05, 0.25, 0.25, 4500);
       snap(s, 0, 1, 3600, 0.016);

@@ -6,6 +6,7 @@
 import { Rng } from '@/core/rng';
 import { analyse, audibleEnd, normalisationGain, type SoundStats } from './analysis';
 import { dbToGain, gainToDb } from './envelopes';
+import { soundPass } from './pass';
 import { CAT_TARGET, type Recipe } from './recipe';
 import { sampleStore } from './samples';
 import { Synth } from './synth';
@@ -80,7 +81,7 @@ export async function bakeVariant(
 
   const rng = new Rng(hashKey(recipe.seed ?? key) + variant * 7919 + 1);
   const synth = new Synth(ctx, master, 0, () => rng.next(), false);
-  recipe.build(synth, { i: variant, j: (amount) => (variant === 0 ? 1 : 1 + (rng.next() * 2 - 1) * amount) });
+  recipe.build(synth, { i: variant, j: (amount) => (variant === 0 ? 1 : 1 + (rng.next() * 2 - 1) * amount), plain: recipe.plain === true || soundPass.old });
   const rendered = await ctx.startRendering();
 
   const pcm = rendered.getChannelData(0);

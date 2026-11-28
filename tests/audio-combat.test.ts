@@ -194,10 +194,11 @@ describe('the weapon and enemy catalogue', () => {
     }
   });
 
-  it('repeating sounds are baked in three variants with pitch jitter, band-limited to 7.5 kHz', () => {
+  it('repeating sounds are baked in three variants (or one per take) with pitch jitter, band-limited to 7.5 kHz', () => {
     for (const id of [...RELEASES, ...IMPACTS, ...FOE_HITS, ...FOE_DEATHS]) {
       const r = recipeOf(id);
-      expect(r.variants, id).toBe(3);
+      // (three, or one per take for a sound that has more than three takes since 2026-11-27: the paw, the weight of a kill, the plastic, rubber and tin enemies)
+      expect(r.variants, id).toBe(Math.max(3, (r.needs ?? []).filter((n) => n.startsWith('elevenlabs/')).length));
       expect(r.rate ?? 0, id).toBeGreaterThan(0);
       expect(r.lp, id).toBeLessThanOrEqual(7500);
     }

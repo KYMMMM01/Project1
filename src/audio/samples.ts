@@ -87,6 +87,22 @@ export class SampleStore {
     return [...this.urls.keys()];
   }
 
+  /**
+   * Put a decoded sample in by hand, or take one out (`null`): dev tooling, so that a candidate take that is not a file of the build can be heard in the game
+   * (`window.__dbg.audio.candidate`). Nothing in the game calls it.
+   */
+  put(id: SampleId, pcm: Pcm | null): void {
+    if (pcm) this.pcm.set(id, pcm);
+    else this.pcm.delete(id);
+    this.failed.delete(id);
+  }
+
+  /** Mark a sample as unreadable (dev tooling: a recipe then plays its synthesis, so a synthesis that has a take over it can be heard alone). */
+  block(id: SampleId): void {
+    this.pcm.delete(id);
+    this.failed.add(id);
+  }
+
   /** Whether the build carries this sample at all (loaded or not). */
   known(id: SampleId): boolean {
     return this.urls.has(id);

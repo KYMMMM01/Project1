@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { GAME_SFX_IDS, LEGACY_SFX_IDS, SFX_IDS } from '@/audio/api';
+import { GAME_SFX_IDS, LEGACY_SFX_IDS, SFX_IDS, WAS_SFX_IDS } from '@/audio/api';
 import { busOf } from '@/audio/graph';
 import { FAMILIES, familyOf } from '@/audio/families';
 import { SOUNDS, sfxIndexOf, stingerIndexOf } from '@/audio/sounds';
@@ -26,7 +26,9 @@ describe('the six old sounds nothing plays (shoot_arrow, shoot_cannon, shoot_ice
   it('leave the "old_" versions of the board as they were: LEGACY_SFX_IDS is still the 54 ids and none of them is a game sound', () => {
     expect(LEGACY_SFX_IDS).toHaveLength(54);
     for (const id of LEGACY_SFX_IDS) expect(GAME_SFX_IDS as readonly string[], id).not.toContain(id);
-    expect(GAME_SFX_IDS.length + LEGACY_SFX_IDS.length).toBe(SFX_IDS.length);
+    // (the hit-feel pass of 2026-11-27 keeps its own old versions, `was_`, next to these: board only too)
+    expect(GAME_SFX_IDS.length + LEGACY_SFX_IDS.length + WAS_SFX_IDS.length).toBe(SFX_IDS.length);
+    for (const id of WAS_SFX_IDS) expect(GAME_SFX_IDS as readonly string[], id).not.toContain(id);
   });
 });
 
@@ -49,7 +51,7 @@ describe('foe_shield_hit: what a hit on a shielded enemy sounds like', () => {
 
   it('plays an ElevenLabs file alone when one ships, like the ten the owner recorded: it asks for the file and its recipe begins with the hook', () => {
     expect(def?.recipe.needs).toEqual(['elevenlabs/foe_shield_hit']);
-    expect(SRC('sfx-foes.ts')).toMatch(/foe_shield_hit: foe\(\{[\s\S]*?build\(s, v\) \{\s*\/\/[^\n]*\n\s*if \(recording\(s, 'foe_shield_hit'\)\) return;/);
+    expect(SRC('sfx-foes.ts')).toMatch(/foe_shield_hit: foe\(\{[\s\S]*?build\(s, v\) \{\s*\/\/[^\n]*\n\s*if \(recording\(s, 'foe_shield_hit', v\)\) return;/);
   });
 });
 

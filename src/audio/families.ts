@@ -69,7 +69,7 @@ export const FAMILIES: readonly Family[] = [
     maxLow: 0.6,
     maxHigh: 0.05,
   },
-  { name: 'sticker and tine', members: ['ui_confirm', 'coin', 'gem', 'star', 'sell'], maxMs: 420, maxAttackMs: 8, centroid: [400, 1800], maxLow: 0.05, maxHigh: 0.05 },
+  { name: 'sticker and tine', members: ['ui_confirm', 'coin', 'gem', 'star', 'sell', 'kill_pop'], maxMs: 420, maxAttackMs: 8, centroid: [400, 1800], maxLow: 0.05, maxHigh: 0.05 },
   {
     name: 'stamp and claim',
     members: ['reward_claim', 'level_up', 'purchase', 'upgrade', 'merge', 'merge_big', 'coin_many', 'relic_pick', 'wave_clear'],
@@ -99,6 +99,8 @@ export const FAMILIES: readonly Family[] = [
   },
   { name: 'hit', members: ['hit_light', 'zap', 'laser_off'], maxMs: 340, maxAttackMs: 4, centroid: [180, 1500], maxLow: 0.3, maxHigh: 0.05 },
   // Combat is allowed some bite: up to 6 kHz in the first moments of a contact, and weight under the heavy ones.
+  // the cats' own voices (2026-11-27): recordings, with a small synthesised mew behind each
+  { name: 'cat voice', members: ['cat_no', 'cat_king_w', 'cat_king_r', 'cat_king_m', 'cat_king_t', 'cat_battlecry', 'cat_guard_w', 'cat_guard_r', 'cat_guard_m', 'cat_guard_t'], maxMs: 2000, maxAttackMs: 150, centroid: [300, 2600], maxLow: 0.3, maxHigh: 0.1 },
   { name: 'weight and crack', members: ['hit_heavy', 'crit'], maxMs: 260, maxAttackMs: 4, centroid: [150, 3200], maxLow: 0.9, maxHigh: 0.2, minSnap: 0.05, minBody: 0.15 },
   { name: 'weapon release', members: RELEASES, maxMs: 340, maxAttackMs: 60, centroid: [150, 3600], maxLow: 0.65, maxHigh: 0.3 },
   { name: 'weapon impact', members: IMPACTS, maxMs: 560, maxAttackMs: 8, centroid: [150, 3600], maxLow: 0.9, maxHigh: 0.3, minSnap: 0.05 },

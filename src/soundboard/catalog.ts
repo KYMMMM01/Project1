@@ -7,6 +7,7 @@
  * Text is Korean on purpose: the page is the owner's tool. `ko` is what the sound is called, `when` says in plain words when the game plays it.
  */
 import type { SfxId, StingerId, MusicId } from '@/audio/api';
+import { WAS_SFX_IDS } from '@/audio/api';
 import { attackSfx, critSfx, foeDieSfx, foeHitSfx, impactSfx } from '@/audio/combat';
 import type { UnitId } from '@/game/api';
 
@@ -25,21 +26,22 @@ export interface Cue {
   step?: number;
 }
 
-export type SectionId = 'ui' | 'board' | 'warrior' | 'ranger' | 'mage' | 'trickster' | 'battle' | 'foes' | 'bosses' | 'skills' | 'skillsingle' | 'flow' | 'rewards';
+export type SectionId = 'feel' | 'ui' | 'board' | 'warrior' | 'ranger' | 'mage' | 'trickster' | 'battle' | 'foes' | 'bosses' | 'skills' | 'skillsingle' | 'flow' | 'rewards';
 
 /**
  * How close together the director lets two sounds of one kind start, in real seconds: the `SoundRule` gaps of `createRules()` in
  * `src/view/director/stage.ts` (a test reads them from there). The busiest a 3x board gets is one sound per gap, so "x5 at 3x" plays five
  * in a row at exactly that spacing.
  */
-export type Gap = 'ui' | 'shoot' | 'hit' | 'heavyHit' | 'crit' | 'die' | 'eliteDie' | 'coinTick' | 'status' | 'strike' | 'zone' | 'weaken' | 'summon' | 'merge' | 'big' | 'heal' | 'skill' | 'skillTick';
+export type Gap = 'ui' | 'shoot' | 'hit' | 'heavyHit' | 'crit' | 'die' | 'killPop' | 'eliteDie' | 'coinTick' | 'status' | 'strike' | 'zone' | 'weaken' | 'summon' | 'merge' | 'big' | 'heal' | 'skill' | 'skillTick';
 
 export const GAP_SECONDS: Record<Gap, number> = {
   shoot: 0.1,
-  hit: 0.06,
-  heavyHit: 0.14,
+  hit: 0.045,
+  heavyHit: 0.1,
   crit: 0.15,
   die: 0.05,
+  killPop: 0.07,
   eliteDie: 0.2,
   coinTick: 0.04,
   status: 0.12,
@@ -392,6 +394,17 @@ function build(): Section[] {
         bt('hit_heavy', '묵직한 타격', '한 방이 크거나 보스, 정예를 맞힐 때 깔리는 쿵. 폰 스피커에도 들리게 중간 소리를 더했어요.', 'heavyHit', { volume: 0.8 }),
         bt('crit', '치명타', '치명타 때 무기 소리 위에 얹는 맑은 딱. 더 크고 높아요.', 'crit', { volume: 0.65 }),
         bt('explosion', '폭발', '보스가 쓰러질 때 연달아 터지는 소리의 큰 쪽.', 'big', { volume: 0.8, pitch: 0.7 }),
+        bt('kill_pop', '처치 확인', '적을 처치하면 터지는 소리 위에 「뽁」. 연달아 처치하면 음이 올라가요(11월 27일에 새로 넣음).', 'killPop', { volume: 0.6, ladder: true }),
+        bt('cat_no', '고양이: 싫어 「므으」', '안 되는 조작을 하면 고양이가 고개를 저으며 투덜거려요. 네 가지 울음이 돌아가며 나요.', 'ui', { volume: 0.8 }),
+        bt('cat_king_w', '대왕의 울음: 전사', '전사 대왕이 태어날 때, 대왕 팡파르와 함께.', 'big', { volume: 0.9 }),
+        bt('cat_king_r', '대왕의 울음: 사수', '사수 대왕이 태어날 때.', 'big', { volume: 0.9 }),
+        bt('cat_king_m', '대왕의 울음: 마법사', '마법사 대왕이 태어날 때.', 'big', { volume: 0.9 }),
+        bt('cat_king_t', '대왕의 울음: 재주꾼', '재주꾼 대왕이 태어날 때.', 'big', { volume: 0.9 }),
+        bt('cat_battlecry', '고양이의 기합', '5등급 고양이가 한 판에서 처음 스킬을 쓸 때, 컷인과 함께.', 'big', { volume: 0.9 }),
+        bt('cat_guard_w', '수호신의 울음: 호랑이 장군', '호랑이 장군이 수호신으로 각성할 때.', 'big', { volume: 0.9 }),
+        bt('cat_guard_r', '수호신의 울음: 별빛 사수', '별빛 사수가 수호신으로 각성할 때.', 'big', { volume: 0.9 }),
+        bt('cat_guard_m', '수호신의 울음: 우주냥', '우주냥이 수호신으로 각성할 때.', 'big', { volume: 0.9 }),
+        bt('cat_guard_t', '수호신의 울음: 복고양이', '복고양이가 수호신으로 각성할 때. 끝에 방울이 짤랑거려요.', 'big', { volume: 0.9 }),
         bt('zap', '지글', '화상에 걸린 적, 번개 장판, 우주냥의 구역 효과. 셀로판 지직.', 'status', { volume: 0.6 }),
         bt('freeze', '얼어붙음', '적이 얼어붙을 때. 낮게 떨어지는 맑은 세 음.', 'status', { volume: 0.7 }),
         bt('stun', '기절', '적이 기절할 때. 나무 통 하고 어지러운 세 음.', 'status', { volume: 0.6 }),
@@ -499,7 +512,44 @@ function build(): Section[] {
       ],
     },
   ];
-  return sections;
+  return [feelSection(sections), ...sections];
+}
+
+/** Prefix of the rows of the hit-feel pass (2026-11-27): `feel:<id>` is the row of `<id>` again, with "지금" (the take alone, `was_<id>`) next to it. */
+export const FEEL = 'feel:';
+/** The row that plays a whole kill: the blow, its weight, the death and the confirm. */
+export const FEEL_KILL = 'feel:kill';
+
+/**
+ * Everything the hit-feel pass of 2026-11-27 changed, in one place at the top of the page, so the owner can hear each one both ways: the takes that got the layer a
+ * phone's speaker needs (the rows of those sounds, made again from the rows themselves), and a kill as the director plays it now.
+ */
+function feelSection(sections: readonly Section[]): Section {
+  const rows = sections.flatMap((s) => s.rows);
+  const again: Row[] = [];
+  for (const was of WAS_SFX_IDS) {
+    const row = rows.find((r) => r.id === was.slice(4));
+    if (!row) continue;
+    const { id: _id, ...rest } = row;
+    again.push({ ...rest, key: FEEL + row.key, section: 'feel', when: `${row.when} 폰 스피커가 낼 수 있는 층을 녹음 밑에 깔았어요. 「지금」은 녹음만 나요.` });
+  }
+  const blow = impactSfx('w_sword');
+  const death = foeDieSfx('cucumber');
+  const kill: Row = {
+    key: FEEL_KILL,
+    section: 'feel',
+    ko: '처치 한 번 (검사냥이 오이를)',
+    when: '적을 처치할 때 나는 소리 묶음. 맞는 소리, 묵직한 층, 적이 터지는 소리에 「뽁」 하는 처치 확인음을 더하고 터지는 소리를 키웠어요. x5는 연속 처치라 음이 올라가요.',
+    gap: 'die',
+    ladder: true,
+    now: [
+      { sfx: blow.id, volume: blow.volume * 1.25, pitch: blow.pitch, at: 0 },
+      { sfx: 'hit_heavy', volume: 0.6, pitch: 1.15, at: 0.011 },
+      { sfx: death.id, volume: death.volume * 1.25, pitch: death.pitch, at: 0 },
+      { sfx: 'kill_pop', volume: 0.6, at: 0.03 },
+    ],
+  };
+  return { id: 'feel', ko: '타격감 패스 (11월 27일)', hint: '「지금」은 고치기 전, 「새것」은 고친 뒤. 폰 스피커로 들어 보세요', rows: [kill, ...again] };
 }
 
 export const SECTIONS: readonly Section[] = build();
@@ -605,12 +655,24 @@ export const GROUP_KO: Readonly<Record<string, string>> = {
   select: '선택',
   switch: '스위치',
   toggle: '토글',
+  back: '뒤로',
+  bong: '봉',
+  close: '닫기',
+  confirmation: '확인음',
+  drop: '물방울',
+  error: '오류',
+  glass: '유리 톡',
+  maximize: '커지기',
+  minimize: '작아지기',
+  open: '열기',
+  pluck: '퉁기기',
+  question: '물음',
 };
 
 export const PACK_KO: Readonly<Record<string, { ko: string; blurb: string }>> = {
   'impact-sounds': { ko: '임팩트 소리', blurb: '때리고 부딪치는 소리 130개: 금속, 나무, 유리, 주먹, 푹신한 것, 발소리. "챙" 하는 소리는 금속과 금속판에서 찾아보세요.' },
   'rpg-audio': { ko: 'RPG 소리', blurb: '칼, 문, 책, 천, 동전, 냄비 같은 옛날 모험 소리 51개.' },
-  'interface-sounds': { ko: '인터페이스 클릭', blurb: '클릭, 틱, 선택, 스위치, 토글 27개(이 팩의 나머지는 후보에서 뺐어요).' },
+  'interface-sounds': { ko: '인터페이스 소리', blurb: '클릭, 틱, 선택, 스위치, 토글에 뒤로, 닫기, 열기, 확인음, 물방울, 퉁기기, 유리 톡 같은 화면 소리까지 86개(스크롤, 글리치, 긁는 소리만 뺐어요).' },
 };
 
 /** The group of a candidate: its name without the number at the end (`impactMetal_heavy_002` and `bookFlip2` give `impactMetal_heavy`, `bookFlip`). */

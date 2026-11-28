@@ -3,7 +3,7 @@
  * kill, the full boss death set piece, and the fish / purr that fly to the HUD afterwards.
  */
 import { Sprite } from 'pixi.js';
-import { audio, foeDieSfx } from '@/audio';
+import { audio, foeDieSfx, soundPass } from '@/audio';
 import { t } from '@/core/i18n';
 import { clamp } from '@/core/math';
 import { Trauma } from '@/fx';
@@ -14,10 +14,16 @@ import { fishHoldsOf } from './sp/fishHold';
 import { DUCK_BY_TIER, FrameBudget } from './policy';
 import type { MusicService } from './music';
 import { SHIELD_COLOR } from './palette';
-import { Gate, enemyInfo, type Bus, type EnemyInfo, type Stage } from './stage';
+import { enemyInfo, Gate, winPurr, type Bus, type EnemyInfo, type Stage } from './stage';
 import { Hue } from '@/fx/palette';
 import { Color } from '@/ui/theme';
 import { holdStage } from '@/view/staging';
+
+/** A death is this much louder than it was before the hit-feel pass of 2026-11-27 (about 2 dB): it used to sit under the blow that made it. */
+export const KILL_GAIN = 1.25;
+/** The confirm of a kill (`kill_pop`): its level, and how long after the death it starts, so that the blow, the death and the pop are a quick three and not one lump. */
+export const KILL_POP_VOLUME = 0.6;
+export const KILL_POP_DELAY = 0.03;
 
 /** Explosion colour of a boss's mini blasts and final blast. */
 const BOSS_BLAST = Hue.fire;
@@ -67,7 +73,11 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
     }
     const step = stage.killLadder.next(stage.now);
     const death = foeDieSfx(en.id);
-    stage.playStep(stage.rules.die, death.id, step, death.volume, death.pitch, stage.panOfField(e.x));
+    const pan = stage.panOfField(e.x);
+    // The hit-feel pass of 2026-11-27: a death was quieter than the blow that made it, so a kill read as one more hit. It is a step louder now, and a small pitched
+    // pop confirms it and climbs with the streak (the death itself, a noise, stops climbing after a fifth).
+    stage.playStep(stage.rules.die, death.id, step, death.volume * (soundPass.old ? 1 : KILL_GAIN), death.pitch, pan);
+    if (!soundPass.old) stage.playStep(stage.rules.killPop, 'kill_pop', step, KILL_POP_VOLUME, 1, pan, KILL_POP_DELAY);
   });
 
   function eliteDeath(en: EnemyState, info: EnemyInfo, x: number, y: number): void {
@@ -123,6 +133,7 @@ export function mountDeaths(stage: Stage, on: Bus, currency: CurrencyService, ba
         // The run is won: the music cuts and the victory fanfare takes the moment.
         music.silence(0.1);
         audio.stinger('victory');
+        winPurr();
         stage.victorySounded = true;
       } else {
         music.duck(0.8, 1.2);

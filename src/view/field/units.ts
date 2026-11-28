@@ -1,5 +1,5 @@
 import type { Container } from 'pixi.js';
-import { audio } from '@/audio';
+import { audio, soundPass } from '@/audio';
 import { Pool } from '@/core/pool';
 import { Ease } from '@/core/tween';
 import { Color, motion } from '@/ui';
@@ -322,6 +322,8 @@ export class UnitViews {
     shakeObject(tweens, v.body, 6, 180);
     hitFlash(tweens, v.sprite, { ms: 120, color: Color.berry, peak: 0.55 });
     audio.play('ui_error', { volume: 0.5 });
+    // the cat says so too (2026-11-27)
+    if (!soundPass.old) audio.play('cat_no', { volume: 0.8, delay: 0.03 });
   }
 
   beginDrag(v: UnitView, px: number, py: number): void {

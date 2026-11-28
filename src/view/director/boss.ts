@@ -4,6 +4,7 @@
  * laser dot) belong to the field; this part adds the cues around them.
  */
 import { Sprite } from 'pixi.js';
+import { soundPass } from '@/audio';
 import { t } from '@/core/i18n';
 import { rand } from '@/core/math';
 import { Ease } from '@/core/tween';
@@ -116,7 +117,8 @@ export function mountBoss(stage: Stage, on: Bus, banners: BannerService, music: 
       // The boss drops for BOSS_DROP seconds (the field's view): the dust, the ring, the hit-stop and the roar are its landing.
       stage.laterReal(BOSS_DROP, () => {
         fx.bossLanding(en.x, en.y, { scale: 1.1 });
-        stage.direct('boss_roar', 0.75);
+        // (0.75 until 2026-11-27: the owner asked for the old cry, a little louder)
+        stage.direct('boss_roar', soundPass.old ? 0.75 : 0.95);
       });
     } else {
       fx.dustPuff(en.x, en.y, { scale: 1.3 });

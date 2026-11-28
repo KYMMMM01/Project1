@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GAME_SFX_IDS, SFX_IDS } from '@/audio/api';
+import { GAME_SFX_IDS, SFX_IDS, WAS_SFX_IDS } from '@/audio/api';
 import { FAMILIES, familyOf, type SoundKey } from '@/audio/families';
 import { CAT_TARGET, type Recipe } from '@/audio/recipe';
 import { BATTLE_RECIPES } from '@/audio/sfx-battle';
@@ -91,8 +91,10 @@ describe('sound catalogue', () => {
     // this proves no id is defined twice, which a spread would silently resolve in favour of the last file.
     const lists = [Object.keys(UI_RECIPES), Object.keys(COMBAT_RECIPES), Object.keys(BATTLE_RECIPES), Object.keys(CAT_RECIPES), Object.keys(IMPACT_RECIPES), Object.keys(FOE_RECIPES), Object.keys(SKILL_RECIPES), Object.keys(BEFORE_RECIPES)];
     const all = lists.flat();
-    expect(all.length).toBe(SFX_IDS.length);
-    expect(new Set(all).size).toBe(SFX_IDS.length);
+    // (the `was_` ids of the hit-feel pass of 2026-11-27 have no recipe file: `sounds.ts` makes each from the recipe it is the old version of)
+    expect(all.length).toBe(SFX_IDS.length - WAS_SFX_IDS.length);
+    expect(new Set(all).size).toBe(SFX_IDS.length - WAS_SFX_IDS.length);
+    for (const id of WAS_SFX_IDS) expect(all, id).toContain(id.slice(4));
     expect(Object.keys(BATTLE_RECIPES).sort()).toEqual(
       ['awaken', 'call_wave', 'hazard_warn', 'laser_off', 'laser_on', 'molt', 'purr', 'shield_break', 'splash', 'sunbeam', 'weaken', 'zap'],
     );

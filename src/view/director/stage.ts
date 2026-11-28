@@ -2,7 +2,7 @@
  * Shared services every staging handler uses: the director clock, sound with admission rules and pitch
  * ladders, rationed shake / hit-stop / slow motion / haptics, and tracked timers that die with the part.
  */
-import { audio, audioRandom, type PlayOpts, type SfxId } from '@/audio';
+import { audio, audioRandom, soundPass, type PlayOpts, type SfxId } from '@/audio';
 import { haptic, type HapticId } from '@/core/haptics';
 import type { Tween } from '@/core/tween';
 import { fxShake, fxSettings, type Fx } from '@/fx';
@@ -18,12 +18,18 @@ export function createRules() {
   // Everything a crowded fight repeats shares one budget (about 9 starts in any 0.3 s): the audio engine
   // has 24 voices in all, and a boss or a merge must always find one free.
   const chatter = new WindowLimiter(9, 0.3);
+  // The hit-feel pass of 2026-11-27: a landing is what the player's sense of impact hangs on, and the rules below let only about two in three of them start in a wave of
+  // twelve cats (and half of the heavy ones). The landings get closer together (0.06 to 0.045 s, four in a tenth of a second instead of three; a heavy one 0.14 to 0.1 s);
+  // the releases, the lighter half of a pair, stay as thin as they were. `?oldsound=1` keeps the old spacing (`soundPass`).
+  const old = soundPass.old;
   return {
     shoot: new SoundRule(0.1, 2, 0.12, chatter),
-    hit: new SoundRule(0.06, 3, 0.1, chatter),
-    heavyHit: new SoundRule(0.14, 2, 0.2, chatter),
+    hit: new SoundRule(old ? 0.06 : 0.045, old ? 3 : 4, 0.1, chatter),
+    heavyHit: new SoundRule(old ? 0.14 : 0.1, 2, 0.2, chatter),
     crit: new SoundRule(0.15),
     die: new SoundRule(0.05, 4, 0.15, chatter),
+    // The confirm of a kill (`kill_pop`): a budget of its own, outside the shared pool, so a kill is never the sound that a crowd swallows.
+    killPop: new SoundRule(0.07),
     eliteDie: new SoundRule(0.2),
     coinTick: new SoundRule(0.04, 6, 0.2),
     status: new SoundRule(0.12, 2, 0.2, chatter),
@@ -47,6 +53,13 @@ export function createRules() {
 }
 
 export type Rules = ReturnType<typeof createRules>;
+
+/** A win: the cats purr over the victory jingle, twice, the second a little higher (the owner's idea, 2026-11-27, instead of a cheer). */
+export function winPurr(): void {
+  if (soundPass.old) return;
+  audio.play('purr', { volume: 0.9, delay: 0.35 });
+  audio.play('purr', { volume: 0.8, pitch: 1.08, delay: 1.25 });
+}
 
 /** Slots of the shake / haptic gates. */
 export const Gate = {

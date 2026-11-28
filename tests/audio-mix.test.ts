@@ -390,7 +390,8 @@ describe('a hit begins with a crack and has a body a phone can play (hitkit.ts)'
       // recipe may ask for is its own
       const layers = (d.recipe.needs ?? []).filter((id) => !id.startsWith('elevenlabs/'));
       // (the level_up stinger shares its name with the level_up sound, so its file is level_up_stinger: `recordingFile`)
-      for (const id of d.recipe.needs ?? []) if (id.startsWith('elevenlabs/')) expect(id, d.key).toBe(`elevenlabs/${recordingFile(d)}`);
+      // (and, since 2026-11-27, the further takes of that same sound: `<file>_2` to `<file>_8`, one per baked variant)
+      for (const id of d.recipe.needs ?? []) if (id.startsWith('elevenlabs/')) expect(id.replace(/_[2-8]$/, ''), d.key).toBe(`elevenlabs/${recordingFile(d)}`);
       expect([...used].sort(), d.key).toEqual([...layers].sort());
       const s = record(d.recipe);
       expect(s.tones.length + s.noises.length, `${d.key} is a whole sound without its files`).toBeGreaterThan(0);

@@ -61,14 +61,15 @@ describe('sound board candidates: the manifest', () => {
     expect(MANIFEST.files.length).toBeGreaterThan(200);
   });
 
-  it('has the impact pack, the rpg pack and the interface pack’s clicks, nothing else', () => {
+  it('has the impact pack, the rpg pack and the interface pack (without its scroll loops, glitches and scratches), nothing else', () => {
     const by = new Map<string, number>();
     for (const c of MANIFEST.files) by.set(c.pack, (by.get(c.pack) ?? 0) + 1);
     expect([...by.keys()].sort()).toEqual(Object.keys(PACKS).sort());
     expect(by.get('impact-sounds')).toBe(130);
     expect(by.get('rpg-audio')).toBe(51);
-    expect(by.get('interface-sounds')).toBe(27);
-    for (const c of MANIFEST.files.filter((f) => f.pack === 'interface-sounds')) expect(c.name).toMatch(/^(click|tick|select|switch|toggle)_/);
+    // (2026-11-27: the rest of the interface pack joined its clicks for the cute pass, all but the scroll loops, the glitches and the scratches)
+    expect(by.get('interface-sounds')).toBe(86);
+    for (const c of MANIFEST.files.filter((f) => f.pack === 'interface-sounds')) expect(c.name).not.toMatch(/^(scroll|glitch|scratch)_/);
   });
 
   it('every file is a WAV that plays everywhere (16-bit mono 44.1 kHz PCM), as long and as big as the manifest says, and not clipped', () => {

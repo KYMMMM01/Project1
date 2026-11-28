@@ -13,6 +13,8 @@ vi.mock('@/audio', () => ({
   foeHitSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   foeDieSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
+  // (the switch of the hit-feel pass of 2026-11-27: the tests run the game as it sounds now)
+  soundPass: { old: false },
   audio: { play: () => undefined, playStep: () => undefined },
 }));
 vi.mock('@/core/assets', async (original) => ({ ...(await original<typeof import('@/core/assets')>()), hasTex: () => true, tex: () => Texture.WHITE }));

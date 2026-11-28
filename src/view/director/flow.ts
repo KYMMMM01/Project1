@@ -14,7 +14,7 @@ import { Color } from '@/ui/theme';
 import type { BannerService } from './banners';
 import type { MusicService } from './music';
 import { dangerStrength, heartbeatInterval, overflowSeconds } from './policy';
-import { Gate, type Bus, type Stage } from './stage';
+import { Gate, winPurr, type Bus, type Stage } from './stage';
 import { Hue } from '@/fx/palette';
 
 const GOLD = Color.mustard;
@@ -305,6 +305,7 @@ export function mountFlow(stage: Stage, on: Bus, banners: BannerService, music: 
     if (!stage.victorySounded) {
       music.silence(0.2);
       audio.stinger('victory');
+      winPurr();
       stage.slow(0.35, 400);
     }
     fx.confettiRain({ count: 90, y: -ctx.layout.fieldY - 30 });

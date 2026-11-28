@@ -21,9 +21,9 @@
  * sequences in `catalog.ts`), "새것" is what the game plays now. The cues are the scenes' own calls in `src/view/director/sp/`: the same ids, volumes,
  * pitches and (rounded) times, so the board is the game. Remove an entry when the owner has chosen and `catalog.ts` is brought up to date.
  */
-import { LEGACY_SFX_IDS, type SfxId } from '@/audio/api';
+import { LEGACY_SFX_IDS, WAS_SFX_IDS, type SfxId } from '@/audio/api';
 import { UNIT_IDS } from '@/game/api';
-import { ROW_BY_KEY, type Cue } from './catalog';
+import { FEEL, FEEL_KILL, ROWS, ROW_BY_KEY, type Cue } from './catalog';
 
 /** The tiger's hoofbeats, one every quarter second along the run (`sp_stomp`, a stomp on every enemy the tiger passes). */
 const stomps: Cue[] = [0.55, 0.8, 1.05, 1.3].map((at) => ({ sfx: 'sp_stomp', volume: 0.85, at }));
@@ -152,11 +152,56 @@ for (const key of HIT_PASS_ROWS) {
 /** The rows that have an old and a new version. */
 export const HIT_PASS_KEYS: readonly string[] = Object.keys(HIT_NEW);
 
+// ───────────────────────────── the hit-feel pass (2026-11-27) ─────────────────────────────
+
+const WAS_IDS: ReadonlySet<string> = new Set(WAS_SFX_IDS);
+/** The sound as it was before the hit-feel pass (the take alone), or the sound itself when the pass did not touch it. */
+export function was(id: SfxId): SfxId {
+  return WAS_IDS.has(`was_${id}`) ? (`was_${id}` as SfxId) : id;
+}
+
+const FEEL_NEW: Record<string, readonly Cue[]> = {};
+const FEEL_OLD: Record<string, readonly Cue[]> = {};
+for (const row of ROWS) {
+  if (!row.key.startsWith(FEEL)) continue;
+  FEEL_NEW[row.key] = row.now;
+  // a kill before the pass: no confirm, the death at its old level (the row plays it 1.25 times louder, `KILL_GAIN`), the weight as it was
+  FEEL_OLD[row.key] = row.now
+    .filter((c) => c.sfx !== 'kill_pop')
+    .map((c) => {
+      const old: Cue = c.sfx ? { ...c, sfx: was(c.sfx) } : { ...c };
+      if (row.key === FEEL_KILL && c.sfx?.endsWith('_die') && old.volume !== undefined) old.volume /= 1.25;
+      return old;
+    });
+}
+
+// ───────────────────────────── the cute pass: candidates of the CC0 packs for the interface (2026-11-27) ─────────────────────────────
+
+/**
+ * One candidate of Kenney's packs per interface sound, as "새것" next to the game's own synthesis (a tester asked for cuter sounds). Picked by name and by measurement
+ * only (length, where the energy sits: `public/soundboard/kenney/manifest.json`), nobody has heard them: they are here to be heard, and the tab "후보 (CC0)" has the
+ * rest. Nothing in the game uses one until the owner picks it (a file that ships is copied to `src/assets/sfx` and gets its row in docs/licenses/sounds.md).
+ */
+const UI_NEW: Readonly<Record<string, readonly Cue[]>> = {
+  ui_click: [{ file: 'interface-sounds/pluck_001' }],
+  ui_back: [{ file: 'interface-sounds/back_002' }],
+  ui_tab: [{ file: 'interface-sounds/switch_007' }],
+  ui_toggle: [{ file: 'interface-sounds/switch_004' }],
+  ui_popup_open: [{ file: 'interface-sounds/drop_002' }],
+  ui_popup_close: [{ file: 'interface-sounds/drop_003' }],
+  ui_confirm: [{ file: 'interface-sounds/glass_003' }],
+  place: [{ file: 'impact-sounds/footstep_carpet_000' }],
+  pickup: [{ file: 'interface-sounds/drop_001' }],
+  card_flip: [{ file: 'rpg-audio/bookFlip3' }],
+  reel_tick: [{ file: 'interface-sounds/tick_002' }],
+  countdown_tick: [{ file: 'interface-sounds/tick_004' }],
+};
+
 /** "새것": the version being proposed, by row key. */
-export const NEW_VERSIONS: Readonly<Record<string, readonly Cue[]>> = { ...SKILL_NEW, ...HIT_NEW };
+export const NEW_VERSIONS: Readonly<Record<string, readonly Cue[]>> = { ...SKILL_NEW, ...HIT_NEW, ...FEEL_NEW, ...UI_NEW };
 
 /** "지금" pinned to something other than the row's own cues: the old recipes of the hit pass (the rows themselves play the new ones now). */
-export const OLD_VERSIONS: Readonly<Record<string, readonly Cue[]>> = HIT_OLD;
+export const OLD_VERSIONS: Readonly<Record<string, readonly Cue[]>> = { ...HIT_OLD, ...FEEL_OLD };
 
 /** SFX ids that exist only as somebody's "새것" and so have no row of their own (the coverage test exempts them). */
 export const NEW_ONLY_IDS: readonly SfxId[] = [];

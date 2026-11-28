@@ -9,8 +9,36 @@
 import type { SfxId } from './api';
 import { body, clack, snap } from './foley';
 import { crack, thud } from './hitkit';
-import { bell, kalimba, knock, mallet, paper, pluck, puff, recording, shake, stamp, thump, whoosh, type Recipe } from './recipe';
+import { backed, bell, kalimba, knock, mallet, paper, pluck, pop, puff, recording, shake, stamp, thump, whoosh, type Recipe } from './recipe';
+import type { Synth } from './synth';
 import { hz } from './theory';
+
+/**
+ * A small cat's cry as a synthesis: what a recorded voice falls back to on a device that cannot read its file. A sine that glides from `f0` to `f1`
+ * with a little vibrato, and its octave: a mew, not a cat, but a whole sound.
+ */
+function mew(s: Synth, f0: number, f1: number, dur: number, v = 1): void {
+  s.tone({ f: f0, f2: f1, sw: dur * 0.8, dur, v, a: 0.03, d: dur * 0.5, s: 0.5, r: dur * 0.3, vib: { rate: 7, cents: 30, delay: 0.05 } });
+  s.tone({ f: f0 * 2, f2: f1 * 2, sw: dur * 0.8, dur: dur * 0.8, v: v * 0.25, a: 0.03, s: 0.3 });
+}
+
+/** The cry of a 대왕 as it is born, one voice per class (the owner, 2026-11-27: one take of the set for each class's 대왕), and of a guardian as it awakens, each in its own character. */
+function kingCry(id: string, len: number, f0: number): Recipe {
+  return {
+    cat: 'reward',
+    len,
+    ms: [300, Math.round(len * 1000)],
+    trim: -2,
+    rule: { maxVoices: 1, minGap: 0.6 },
+    needs: [`elevenlabs/${id}`],
+    build(s, v) {
+      // The owner's pick (ElevenLabs, round 10); the mew below is the fallback.
+      if (recording(s, id, v)) return;
+      mew(s, f0, f0 * 1.25, 0.2, 0.8);
+      mew(s, f0 * 1.25, f0 * 0.9, 0.45, 0.9);
+    },
+  };
+}
 
 export const COMBAT_RECIPES = {
   // ---------------------------------------------------------------- what an ailment sounds like on the enemy (poison, bleed)
@@ -69,22 +97,24 @@ export const COMBAT_RECIPES = {
     len: 0.2,
     ms: [60, 220],
     lp: 6500,
-    variants: 3,
+    variants: 4,
     rate: 0.05,
     prio: 1,
     rule: { maxVoices: 2, minGap: 0.09, falloff: 0.15 },
-    needs: ['elevenlabs/hit_heavy'],
+    needs: ['elevenlabs/hit_heavy', 'elevenlabs/hit_heavy_2', 'elevenlabs/hit_heavy_3', 'elevenlabs/hit_heavy_4'],
     build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'hit_heavy')) return;
-      // The weight under a heavy blow, a killing blow or a hit on a boss. It rides on the weapon's own impact and never replaces it: a drop through 320 to 120 Hz driven so
-      // that its harmonics sit where a phone plays (300 to 1200 Hz), the low body under it (150 to 70 Hz), a closing low-passed slap, a woody knock and the crack on top.
-      const p = v.j(0.06);
-      thud(s, 0, 320 * p, 120, 0.14, 1, 0.7, 150);
-      body(s, 0, 150 * p, 70, 0.12, 0.6, 0.3);
-      s.noise({ dur: 0.06, v: 0.6, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200, f2: 600, sw: 0.05 } });
-      clack(s, 0, 420 * p, 0.35, 0.04);
-      crack(s, 0, 2.6, 3000);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'hit_heavy', v, 0.8, () => {
+        // The weight under a heavy blow, a killing blow or a hit on a boss. It rides on the weapon's own impact and never replaces it: a drop through 320 to 120 Hz driven so
+        // that its harmonics sit where a phone plays (300 to 1200 Hz), the low body under it (150 to 70 Hz), a closing low-passed slap, a woody knock and the crack on top.
+        const p = v.j(0.06);
+        thud(s, 0, 320 * p, 120, 0.14, 1, 0.7, 150);
+        body(s, 0, 150 * p, 70, 0.12, 0.6, 0.3);
+        s.noise({ dur: 0.06, v: 0.6, a: 0.002, s: 0.005, filter: { t: 'lowpass', f: 2200, f2: 600, sw: 0.05 } });
+        clack(s, 0, 420 * p, 0.35, 0.04);
+        crack(s, 0, 2.6, 3000);
+      });
     },
   },
   crit: {
@@ -100,7 +130,7 @@ export const COMBAT_RECIPES = {
     needs: ['elevenlabs/crit'],
     build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'crit')) return;
+      if (recording(s, 'crit', v)) return;
       // The crit layer, always played together with the weapon's own impact (never in place of it, so a crit is the same weapon with more): a bright crack at 4.3 kHz, a ping
       // (a sine at 2.4 kHz with 3.6 and 4.8 kHz above it, gone in 70 ms) and a body underneath that a phone plays.
       const p = v.j(0.03);
@@ -122,16 +152,18 @@ export const COMBAT_RECIPES = {
     needs: ['elevenlabs/explosion'],
     build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'explosion')) return;
-      // A paper bag popped: a noise burst through a closing low-pass (the bang), a brown whump, a drop whose harmonics reach a phone for the weight (380 to 110 Hz), the crack of
-      // the paper and a flutter of confetti settling after it. No fireball, nothing above 4 kHz that matters.
-      const p = v.j(0.08);
-      s.noise({ dur: 0.3, v: 1.1, a: 0.003, s: 0.01, filter: { t: 'lowpass', f: 3600 * p, f2: 500, sw: 0.18, q: 0.7 } });
-      s.noise({ kind: 'brown', dur: 0.3, v: 0.15, a: 0.005, s: 0.01, filter: { t: 'lowpass', f: 700, f2: 250, sw: 0.25 } });
-      thud(s, 0, 380 * p, 110, 0.22, 0.9, 0.8, 140);
-      body(s, 0, 170 * p, 60, 0.22, 0.6, 0.3);
-      crack(s, 0, 1.4, 2800, 0.02);
-      s.noise({ at: 0.04, dur: 0.3, v: 0.18, a: 0.02, s: 0.05, trem: { rate: 30, depth: 0.9 }, filter: { t: 'bandpass', f: 3600, q: 0.7 } });
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'explosion', v, 0.55, () => {
+        // A paper bag popped: a noise burst through a closing low-pass (the bang), a brown whump, a drop whose harmonics reach a phone for the weight (380 to 110 Hz), the crack of
+        // the paper and a flutter of confetti settling after it. No fireball, nothing above 4 kHz that matters.
+        const p = v.j(0.08);
+        s.noise({ dur: 0.3, v: 1.1, a: 0.003, s: 0.01, filter: { t: 'lowpass', f: 3600 * p, f2: 500, sw: 0.18, q: 0.7 } });
+        s.noise({ kind: 'brown', dur: 0.3, v: 0.15, a: 0.005, s: 0.01, filter: { t: 'lowpass', f: 700, f2: 250, sw: 0.25 } });
+        thud(s, 0, 380 * p, 110, 0.22, 0.9, 0.8, 140);
+        body(s, 0, 170 * p, 60, 0.22, 0.6, 0.3);
+        crack(s, 0, 1.4, 2800, 0.02);
+        s.noise({ at: 0.04, dur: 0.3, v: 0.18, a: 0.02, s: 0.05, trem: { rate: 30, depth: 0.9 }, filter: { t: 'bandpass', f: 3600, q: 0.7 } });
+      });
     },
   },
   freeze: {
@@ -140,9 +172,9 @@ export const COMBAT_RECIPES = {
     len: 0.5,
     ms: [200, 520],
     needs: ['elevenlabs/freeze'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'freeze')) return;
+      if (recording(s, 'freeze', v)) return;
       // Frost on a window: three kalimba tines falling (D6 A5 E5) and a hush of high noise on top.
       const e = s.echo(0.055, 0.2, 0.22, 4500);
       ['D6', 'A5', 'E5'].forEach((n, k) => kalimba(s, hz(n), k * 0.06, 0.22, 0.8, { bus: e, amt: 0.3 }));
@@ -180,9 +212,9 @@ export const COMBAT_RECIPES = {
     len: 0.65,
     ms: [250, 650],
     needs: ['elevenlabs/heal'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'heal')) return;
+      if (recording(s, 'heal', v)) return;
       // Warm and gentle: a slow-vibrato sine glides up a fifth under a quick kalimba trill (G5 A5 C6 E6 G6).
       const e = s.echo(0.07, 0.2, 0.22, 4500);
       s.tone({ f: 523, f2: 784, sw: 0.25, dur: 0.36, v: 0.4, a: 0.03, vib: { rate: 6, cents: 20 } });
@@ -235,9 +267,9 @@ export const COMBAT_RECIPES = {
     duck: { depth: 0.35, seconds: 0.9 },
     hush: { db: 3, seconds: 0.6 },
     needs: ['elevenlabs/boss_roar'],
-    build(s) {
+    build(s, v) {
       // The owner's pick (2026-11-09): a deep rumbling entrance roar over a heavy low boom, recorded with ElevenLabs.
-      if (recording(s, 'boss_roar')) return;
+      if (recording(s, 'boss_roar', v)) return;
       // A big drum hit and a low upright-bass note that sags a fourth (262 to 196 Hz) with a slow vibrato, over a rumble of
       // brown noise and a rustle of paper. It is a heavy footstep, not a growl.
       thump(s, 140, 60, 0, 0.6, 0.9, 0.35, 0.4);
@@ -255,9 +287,9 @@ export const COMBAT_RECIPES = {
     duck: { depth: 0.4, seconds: 1 },
     hush: { db: 3, seconds: 0.8 },
     needs: ['elevenlabs/boss_die'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'boss_die')) return;
+      if (recording(s, 'boss_die', v)) return;
       // A tower of cardboard collapsing: a big felt thud, a crumple of crackling noise that closes down, a cascade of
       // wooden knocks falling in pitch and a last soft thump when the last box lands.
       thump(s, 150, 60, 0, 0.6, 0.9, 0.3, 0.4);
@@ -268,15 +300,69 @@ export const COMBAT_RECIPES = {
   },
 
   // ---------------------------------------------------------------- flow
+  kill_pop: {
+    cat: 'tick',
+    len: 0.16,
+    ms: [40, 150],
+    variants: 2,
+    trim: 3,
+    rate: 0.01,
+    climb: 12,
+    rule: { maxVoices: 3, minGap: 0.05, falloff: 0.1 },
+    build(s, v) {
+      // The confirm of a kill (2026-11-27): the enemy's own death is a noise of what it was made of, quieter than the blow that made it, so a kill sounded like one more hit.
+      // This is the reward on top of it, in another voice than any hit: a sticker pop on A5 with a kalimba tine an octave above, short enough for several a second, and
+      // it climbs the pentatonic ladder with a streak (`playStep`, up to an octave). It rides the interface bus, so a skill's hush does not swallow it.
+      const p = v.j(0.01);
+      pop(s, hz('A5') * p, 0, 0.9, 0.1);
+      kalimba(s, hz('A6') * p, 0.004, 0.12, 0.45);
+    },
+  },
+  // ---------------------------------------------------------------- the cats' voices (2026-11-27)
+  cat_no: {
+    cat: 'tick',
+    len: 0.74,
+    ms: [150, 740],
+    variants: 4,
+    trim: 3,
+    rate: 0.03,
+    rule: { maxVoices: 1, minGap: 0.25 },
+    needs: ['elevenlabs/cat_no', 'elevenlabs/cat_no_2', 'elevenlabs/cat_no_3', 'elevenlabs/cat_no_4'],
+    build(s, v) {
+      // A cat that cannot do what it was asked grumbles as it shakes its head: the four takes of the set the owner picked (ElevenLabs, round 10), one per variant.
+      if (recording(s, 'cat_no', v)) return;
+      mew(s, 420 * v.j(0.04), 330, 0.28, 0.9);
+    },
+  },
+  cat_king_w: kingCry('cat_king_w', 0.93, 560),
+  cat_king_r: kingCry('cat_king_r', 1.0, 640),
+  cat_king_m: kingCry('cat_king_m', 0.93, 720),
+  cat_king_t: kingCry('cat_king_t', 0.93, 680),
+  cat_guard_w: kingCry('cat_guard_w', 0.94, 420),
+  cat_guard_r: kingCry('cat_guard_r', 1.06, 820),
+  cat_guard_m: kingCry('cat_guard_m', 0.91, 480),
+  cat_guard_t: kingCry('cat_guard_t', 1.45, 700),
+  cat_battlecry: {
+    cat: 'combat',
+    len: 0.74,
+    ms: [200, 740],
+    rule: { maxVoices: 1, minGap: 0.8 },
+    needs: ['elevenlabs/cat_battlecry'],
+    build(s, v) {
+      // The cry of a rank 5 cat at the first cast of its skill in a run, with the cut-in (the owner's pick, ElevenLabs, round 10).
+      if (recording(s, 'cat_battlecry', v)) return;
+      mew(s, 520, 760, 0.3, 1);
+    },
+  },
   wave_start: {
     cat: 'combat',
     trim: -2,
     len: 0.83,
     ms: [250, 830],
     needs: ['elevenlabs/wave_start'],
-    build(s) {
+    build(s, v) {
       // The owner's pick (2026-11-09): two cheerful marimba notes, recorded with ElevenLabs.
-      if (recording(s, 'wave_start')) return;
+      if (recording(s, 'wave_start', v)) return;
       // The next wave is coming: two marimba notes (G4 then D5, a fifth up), a low thump under the first and a brush of paper.
       mallet(s, hz('G4'), 0, 0.22, 0.9);
       mallet(s, hz('D5'), 0.1, 0.3, 1);
@@ -352,9 +438,9 @@ export const COMBAT_RECIPES = {
     len: 0.5,
     ms: [200, 520],
     needs: ['elevenlabs/chest_shake'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'chest_shake')) return;
+      if (recording(s, 'chest_shake', v)) return;
       // A wooden box rattling: five knocks, alternating between two pitches, and a loose rattle of pebbles inside it.
       [0, 0.07, 0.15, 0.22, 0.3].forEach((t, k) => knock(s, k % 2 ? 280 : 340, t, 0.8 - k * 0.04, 0.06));
       s.noise({ at: 0.05, dur: 0.3, v: 0.12, a: 0.04, s: 0.1, trem: { rate: 24, depth: 1 }, filter: { t: 'bandpass', f: 2200, q: 1.2 } });
@@ -405,9 +491,9 @@ export const COMBAT_RECIPES = {
     len: 0.16,
     ms: [50, 150],
     needs: ['elevenlabs/reel_stop'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'reel_stop')) return;
+      if (recording(s, 'reel_stop', v)) return;
       // A thunk: a felt pat, a wooden knock on top and a dull lowpassed slap.
       thump(s, 260, 150, 0, 0.1, 0.8, 0.05, 0.3);
       knock(s, 400, 0, 0.6, 0.05);
@@ -439,9 +525,9 @@ export const COMBAT_RECIPES = {
     len: 0.7,
     ms: [250, 620],
     needs: ['elevenlabs/gamble_fail'],
-    build(s) {
+    build(s, v) {
       // The owner's recording (ElevenLabs), when it ships; until then this synthesis.
-      if (recording(s, 'gamble_fail')) return;
+      if (recording(s, 'gamble_fail', v)) return;
       // "Oh no", kindly: two plucked notes sagging (E5 then C5), the second one slower, over a quiet low thump.
       pluck(s, hz('E5'), 0, 0.25, 0.9);
       s.tone({ w: 'triangle', f: hz('C5'), f2: hz('B4'), sw: 0.3, at: 0.22, dur: 0.4, v: 0.8, a: 0.004, d: 0.35, s: 0.02, filter: { t: 'lowpass', f: 2000, f2: 900, sw: 0.3 } });
