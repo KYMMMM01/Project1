@@ -15,6 +15,10 @@ addStrings('ko', {
   'shell.title.acct.signIn': '구글 계정으로 로그인',
   'shell.title.acct.wait': '로그인 확인 중…',
   'shell.title.acct.on': '구글 계정으로 로그인됨',
+  'shell.update.title': '새 버전이 나왔어요',
+  'shell.update.msg': '업데이트하면 계속 플레이할 수 있어요.',
+  'shell.update.quit': '종료하기',
+  'shell.update.go': '업데이트 하러가기',
 
   'shell.pre.title': '출동 준비',
   'shell.pre.chapter': '챕터 {n}',
@@ -76,6 +80,10 @@ addStrings('en', {
   'shell.title.acct.signIn': 'Sign in with Google',
   'shell.title.acct.wait': 'Checking your sign-in…',
   'shell.title.acct.on': 'Signed in with Google',
+  'shell.update.title': 'A new version is out',
+  'shell.update.msg': 'Update the game to keep playing.',
+  'shell.update.quit': 'Quit',
+  'shell.update.go': 'Update',
 
   'shell.pre.title': 'Get ready',
   'shell.pre.chapter': 'Chapter {n}',

@@ -18,8 +18,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // The game's own plugin (Play Games Services v2); npm plugins register themselves.
+        // The game's own plugins (Play Games Services v2, the Play update check); npm plugins register themselves.
         registerPlugin(PlayGamesPlugin.class);
+        registerPlugin(AppUpdatePlugin.class);
         super.onCreate(savedInstanceState);
         // Draw under the status and navigation bars on every version, as Android 15 does by itself. The game is cream paper in
         // light and dark mode alike, so the bar icons stay dark. The page asks for viewport-fit=cover and keeps its buttons out
