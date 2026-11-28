@@ -11,6 +11,9 @@
  *   wave(key, variant, half) baked samples of one sound ("sfx:coin")  -> {sampleRate, channels}
  *                     `half` mixes to mono at half the rate: small enough to dump a whole family
  *   stats() / resetStats()  live voice counters and unlock state
+ *   candidate(key, wav) put a take that is not a file of the build in the sample store ("elevenlabs/atk_w_paw_2"; null takes it out) and bake the sounds
+ *                     that play it again: a candidate is heard in the game exactly as a shipped take would be -> the keys of the sounds baked again
+ *   synthOnly(id)     mark the takes of a sound unreadable and bake it again: the game then plays the sound's own synthesis -> whether it will be baked again
  *   api               the engine itself, so scripts can drive play / music / duck directly
  */
 import { debugExpose } from '@/core/debug';
@@ -18,6 +21,8 @@ import type { MusicId } from './api';
 import type { AudioEngine } from './engine';
 import { spectrogram } from './analysis';
 import { bakeVariant } from './bake';
+import { MAX_TAKES, takesOf } from './recipe';
+import { parseWav, sampleStore } from './samples';
 import { renderMix, renderMusic, renderSeam, runCombatReport, runMusicReport, runReport } from './report';
 import { crowd } from './crowd';
 import { SOUNDS } from './sounds';
@@ -27,6 +32,25 @@ export function installAudioDebug(engine: AudioEngine): void {
   debugExpose('audio', {
     api: engine,
     stats: () => engine.stats(),
+    synthOnly: (id: string): boolean => {
+      for (let n = 1; n <= MAX_TAKES; n++) sampleStore.block(`elevenlabs/${id}${n === 1 ? '' : `_${n}`}`);
+      const def = SOUNDS.find((d) => d.id === id && !d.stinger);
+      return def ? engine.rebake(def.index) : false;
+    },
+    candidate: (key: string, wav: ArrayBuffer | null): string[] => {
+      const pcm = wav ? parseWav(wav) : null;
+      if (wav && !pcm) throw new Error(`candidate ${key}: not a 16-bit PCM WAV`);
+      sampleStore.put(key, pcm);
+      // the sound whose take this is (`elevenlabs/<id>` or `elevenlabs/<id>_<n>`) gets as many variants as it now has takes, and is baked again
+      const id = key.replace(/^elevenlabs\//, '').replace(/_[2-9]$/, '');
+      const again: string[] = [];
+      for (const def of SOUNDS) {
+        if (def.id !== id && !(def.recipe.needs ?? []).includes(key)) continue;
+        def.recipe.variants = Math.min(MAX_TAKES, Math.max(def.recipe.variants ?? 1, takesOf(id).length));
+        if (engine.rebake(def.index)) again.push(def.key);
+      }
+      return again;
+    },
     resetStats: () => engine.resetStats(),
     report: () => runReport(engine.sampleRate),
     combat: () => runCombatReport(engine.sampleRate),

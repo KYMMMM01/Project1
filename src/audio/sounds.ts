@@ -2,7 +2,7 @@
  * The sound catalogue: every SFX id and stinger as a numbered SoundDef with its recipe and voice
  * rule. Numeric indices (not strings) key the bank and the limiter so playing a sound allocates nothing.
  */
-import { SFX_IDS, type LegacySfxId, type SfxId, type StingerId } from './api';
+import { SFX_IDS, WAS_SFX_IDS, type LegacySfxId, type SfxId, type StingerId, type WasSfxId } from './api';
 import type { Cat, Recipe } from './recipe';
 import { BEFORE_RECIPES } from './sfx-before';
 import { BATTLE_RECIPES } from './sfx-battle';
@@ -66,7 +66,17 @@ const BUCKET: Partial<Record<Cat, number>> = {
 const WITH_BOARD = import.meta.env.VITE_SOUNDBOARD !== 'off';
 const OLD_VERSIONS: Partial<Record<LegacySfxId, Recipe>> = WITH_BOARD ? BEFORE_RECIPES : {};
 // (the type still proves that every sound of the game has a recipe)
-const ALL: Record<Exclude<SfxId, LegacySfxId>, Recipe> & Partial<Record<LegacySfxId, Recipe>> = { ...UI_RECIPES, ...COMBAT_RECIPES, ...BATTLE_RECIPES, ...CAT_RECIPES, ...IMPACT_RECIPES, ...FOE_RECIPES, ...SKILL_RECIPES, ...OLD_VERSIONS };
+const GAME: Record<Exclude<SfxId, LegacySfxId | WasSfxId>, Recipe> & Partial<Record<LegacySfxId, Recipe>> = { ...UI_RECIPES, ...COMBAT_RECIPES, ...BATTLE_RECIPES, ...CAT_RECIPES, ...IMPACT_RECIPES, ...FOE_RECIPES, ...SKILL_RECIPES, ...OLD_VERSIONS };
+// The sounds the hit-feel pass of 2026-11-27 changed, as they were: the same recipe with its take played alone (`plain`), one variant (three would be the same buffer),
+// baked with the seed of the sound it is the old version of. Board only, like the old versions above.
+const WAS_VERSIONS: Partial<Record<WasSfxId, Recipe>> = {};
+if (WITH_BOARD) {
+  for (const id of WAS_SFX_IDS) {
+    const of = id.slice(4) as Exclude<SfxId, LegacySfxId | WasSfxId>;
+    WAS_VERSIONS[id] = { ...GAME[of], variants: 1, legacy: true, plain: true, seed: `sfx:${of}` };
+  }
+}
+const ALL: Partial<Record<SfxId, Recipe>> = { ...GAME, ...WAS_VERSIONS };
 
 export const SOUNDS: SoundDef[] = [];
 const sfxIndex = new Map<string, number>();

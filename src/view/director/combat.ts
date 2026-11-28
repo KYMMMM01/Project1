@@ -3,7 +3,7 @@
  * source, projectile impacts and zone sounds. Everything here fires many times a second, so it only
  * reads pooled fx, preallocated colour tables and the rate gates.
  */
-import { attackSfx, critSfx, foeHitSfx, impactSfx } from '@/audio';
+import { attackSfx, critSfx, foeHitSfx, impactSfx, soundPass } from '@/audio';
 import { lighten } from '@/core/math';
 import type { BattleEvents, EnemyState, StatusKind, UnitId, UnitState } from '@/game';
 import { UNIT_IDS, unitSpec } from '@/game';
@@ -188,13 +188,22 @@ export function mountCombat(stage: Stage, on: Bus): void {
       const strong = info.big && stage.gates.ready(Gate.critShake, stage.now, 0.4);
       fx.critBurst(x, y, { strong, scale: info.big ? 1.2 : 1 });
       if (dealt > 0) say(en, info, dealt, 'crit');
-      // A crit is the weapon's own impact with a bright crack on top (never a different weapon), and the enemy answers as usual.
+      // A crit is the weapon's own impact (never a different weapon), and the enemy answers as usual.
       const hitCue = impactSfx(e.unitId);
       const pan = stage.panOfField(en.x);
       const share = stage.volley.next(e.unitId ? UNIT_INDEX[e.unitId] : RELIC_SLOT, stage.now, VOLLEY_GAP, true);
-      if (stage.playSpread(stage.rules.hit, hitCue.id, hitCue.volume * share, hitCue.pitch, 0.03, pan, 'imp', SPREAD_GAP)) answerHit(en, e.killed, pan, share);
-      const critCue = critSfx(e.unitId);
-      stage.playSpread(stage.rules.crit, critCue.id, critCue.volume, critCue.pitch, 0.03, pan, 'crit', SPREAD_GAP, 2);
+      if (stage.playSpread(stage.rules.hit, hitCue.id, hitCue.volume * share, hitCue.pitch, 0.03, pan, 'imp', SPREAD_GAP)) {
+        answerHit(en, e.killed, pan, share);
+        // A crit that kills had the bright layer and no weight at all, so the strongest blow of the game landed lighter than a plain kill (2026-11-27). Like the
+        // weight of a plain kill, it rides on the impact: no impact (the crowd's rule refused it), no weight.
+        if (e.killed && !soundPass.old) stage.direct('hit_heavy', 0.6, 1.15, pan, stage.stagger('heavy', SPREAD_GAP, 2));
+      }
+      // The bright layer of a crit is gone (the owner, 2026-11-27: neither the recording nor the synthesis is good, a crit is told by its burst and its number).
+      // It still plays when the game is asked to sound as it did before the pass.
+      if (soundPass.old) {
+        const critCue = critSfx(e.unitId);
+        stage.playSpread(stage.rules.crit, critCue.id, critCue.volume, critCue.pitch, 0.03, pan, 'crit', SPREAD_GAP, 2);
+      }
       stage.buzz('tap', Gate.critBuzz, 0.2);
       // A crit stops the frame for a moment: a little longer when it lands on a boss or an elite.
       stage.stop(info.big ? 36 : 26);

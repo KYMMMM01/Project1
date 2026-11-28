@@ -5,6 +5,8 @@ vi.mock('@/audio', () => ({
   critSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   foeHitSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
   impactSfx: () => ({ id: 'x', volume: 1, pitch: 1 }),
+  // (the switch of the hit-feel pass of 2026-11-27: the tests run the game as it sounds now)
+  soundPass: { old: false },
 }));
 
 import type { Bodies } from '@/fx/numberPlan';

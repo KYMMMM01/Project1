@@ -381,6 +381,11 @@ export class AudioEngine implements AudioApi {
       });
   }
 
+  /** Bake a sound again at its next use (dev tooling, see `SoundBank.forget`). */
+  rebake(index: number): boolean {
+    return this.bank?.forget(index) ?? false;
+  }
+
   private onRunning(): void {
     const ctx = this.ctx;
     if (!ctx) return;

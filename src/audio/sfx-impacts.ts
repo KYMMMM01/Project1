@@ -14,7 +14,7 @@
 import type { SfxId } from './api';
 import { air, body, clack, crackle, dust, snap, tink } from './foley';
 import { IMPACT_FILE, RPG_FILE, crack, rec, tap, thud } from './hitkit';
-import { bell, knock, pluck, recording, type Recipe } from './recipe';
+import { backed, bell, knock, pluck, recording, type Recipe } from './recipe';
 import { impact } from './sfx-cats';
 import { hz } from './theory';
 
@@ -25,16 +25,19 @@ export const IMPACT_RECIPES = {
     db: 2.6,
     len: 0.28,
     ms: [30, 280],
-    needs: ['elevenlabs/imp_w_paw'],
+    variants: 7,
+    needs: ['elevenlabs/imp_w_paw', 'elevenlabs/imp_w_paw_2', 'elevenlabs/imp_w_paw_3', 'elevenlabs/imp_w_paw_4', 'elevenlabs/imp_w_paw_5', 'elevenlabs/imp_w_paw_6', 'elevenlabs/imp_w_paw_7'],
     build(s, v) {
       // The owner's pick (2026-11-09): a soft slap on a rubber toy with a little boing, recorded with ElevenLabs; the file keeps its first 0.27 s so that
       // ten hits a second stay a rhythm.
-      if (recording(s, 'imp_w_paw')) return;
-      // A glove on a cushion: the slap of the leather (a band around 1.2 kHz with its crack on top) and the pat under it, high enough for a phone to play.
-      const p = v.j(0.06);
-      tap(s, 0, 1250 * p, 0.9, 0.035, 0.9);
-      crack(s, 0, 0.9, 3400);
-      thud(s, 0, 380 * p, 190, 0.07, 0.9, 0.5, 150);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'imp_w_paw', v, 0.3, () => {
+        // A glove on a cushion: the slap of the leather (a band around 1.2 kHz with its crack on top) and the pat under it, high enough for a phone to play.
+        const p = v.j(0.06);
+        tap(s, 0, 1250 * p, 0.9, 0.035, 0.9);
+        crack(s, 0, 0.9, 3400);
+        thud(s, 0, 380 * p, 190, 0.07, 0.9, 0.5, 150);
+      });
     },
   }),
   imp_w_sword: impact({
@@ -45,13 +48,15 @@ export const IMPACT_RECIPES = {
     needs: [IMPACT_FILE('impactWood_light_002'), 'elevenlabs/imp_w_sword'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_w_sword.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_w_sword')) return;
-      // Wood on wood: the bar rings once (a recorded wooden knock under a clack), the grain cracks and a short pat sits under it.
-      const p = v.j(0.06);
-      rec(s, IMPACT_FILE('impactWood_light_002'), { v: 0.7, dur: 0.07, rate: p });
-      clack(s, 0, 820 * p, 0.7, 0.07);
-      crack(s, 0, 0.9, 3600);
-      thud(s, 0, 300 * p, 160, 0.05, 0.3, 0.5, 160);
+      // The take, and under it the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'imp_w_sword', v, 0.7, () => {
+        // Wood on wood: the bar rings once (a recorded wooden knock under a clack), the grain cracks and a short pat sits under it.
+        const p = v.j(0.06);
+        rec(s, IMPACT_FILE('impactWood_light_002'), { v: 0.7, dur: 0.07, rate: p });
+        clack(s, 0, 820 * p, 0.7, 0.07);
+        crack(s, 0, 0.9, 3600);
+        thud(s, 0, 300 * p, 160, 0.05, 0.3, 0.5, 160);
+      }, 160);
     },
   }),
   imp_w_viking: impact({
@@ -63,13 +68,15 @@ export const IMPACT_RECIPES = {
     needs: [RPG_FILE('chop'), 'elevenlabs/imp_w_viking'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_w_viking.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_w_viking')) return;
-      // The axe bites into wood: a recorded chop, the weight of the head (a drop through 220 to 90 Hz that a phone hears by its harmonics), a burst of splinters and the crack.
-      const p = v.j(0.06);
-      rec(s, RPG_FILE('chop'), { v: 0.8, dur: 0.06, rate: p });
-      thud(s, 0, 220 * p, 90, 0.1, 0.7, 0.7, 140);
-      air(s, { dur: 0.04, v: 0.55, a: 0.002, d: 0.03, s: 0.01, filter: { t: 'lowpass', f: 2200 * p, f2: 600, sw: 0.035 } });
-      crack(s, 0, 1.1, 3000);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'imp_w_viking', v, 1.3, () => {
+        // The axe bites into wood: a recorded chop, the weight of the head (a drop through 220 to 90 Hz that a phone hears by its harmonics), a burst of splinters and the crack.
+        const p = v.j(0.06);
+        rec(s, RPG_FILE('chop'), { v: 0.8, dur: 0.06, rate: p });
+        thud(s, 0, 220 * p, 90, 0.1, 0.7, 0.7, 140);
+        air(s, { dur: 0.04, v: 0.55, a: 0.002, d: 0.03, s: 0.01, filter: { t: 'lowpass', f: 2200 * p, f2: 600, sw: 0.035 } });
+        crack(s, 0, 1.1, 3000);
+      });
     },
   }),
   imp_w_samurai: impact({
@@ -82,7 +89,7 @@ export const IMPACT_RECIPES = {
     needs: [IMPACT_FILE('impactMetal_medium_004'), 'elevenlabs/imp_w_samurai'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_w_samurai.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_w_samurai')) return;
+      if (recording(s, 'imp_w_samurai', v)) return;
       // A clean cut: a crisp snap, a falling "tsk" of the edge with a short recorded ring of steel, a light cut-through and a thin ring that does not linger
       // (the long "chaeng" belongs to the skill, `sp_cut_clash`).
       const p = v.j(0.05);
@@ -102,14 +109,16 @@ export const IMPACT_RECIPES = {
     needs: [IMPACT_FILE('impactWood_medium_000'), 'elevenlabs/imp_w_tiger'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_w_tiger.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_w_tiger')) return;
-      // The polearm lands: a heavy whack, the shaft (a recorded wooden thud), the weight as a saturated drop whose harmonics reach a phone, a crack of broken wood, a puff of dust.
-      const p = v.j(0.06);
-      rec(s, IMPACT_FILE('impactWood_medium_000'), { v: 0.9, dur: 0.12, rate: p, hp: 200 });
-      thud(s, 0, 360 * p, 130, 0.14, 0.8, 0.7, 200);
-      clack(s, 0, 520 * p, 0.6, 0.06);
-      crack(s, 0, 2, 2800);
-      dust(s, 0.03, 0.14, 0.25, 1200, 500);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'imp_w_tiger', v, 0.5, () => {
+        // The polearm lands: a heavy whack, the shaft (a recorded wooden thud), the weight as a saturated drop whose harmonics reach a phone, a crack of broken wood, a puff of dust.
+        const p = v.j(0.06);
+        rec(s, IMPACT_FILE('impactWood_medium_000'), { v: 0.9, dur: 0.12, rate: p, hp: 200 });
+        thud(s, 0, 360 * p, 130, 0.14, 0.8, 0.7, 200);
+        clack(s, 0, 520 * p, 0.6, 0.06);
+        crack(s, 0, 2, 2800);
+        dust(s, 0.03, 0.14, 0.25, 1200, 500);
+      });
     },
   }),
 
@@ -119,10 +128,10 @@ export const IMPACT_RECIPES = {
     db: 1.9,
     len: 0.1,
     ms: [25, 90],
-    needs: ['elevenlabs/imp_r_sling'],
+    needs: ['elevenlabs/imp_r_sling', 'elevenlabs/imp_r_sling_2', 'elevenlabs/imp_r_sling_3'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_r_sling.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_r_sling')) return;
+      if (recording(s, 'imp_r_sling', v)) return;
       // A pebble on cardboard: one dry tok, a tick of the paper and the crack.
       const p = v.j(0.06);
       knock(s, 560 * p, 0, 0.9, 0.04, 0.8);
@@ -154,7 +163,7 @@ export const IMPACT_RECIPES = {
     needs: [IMPACT_FILE('impactMetal_medium_000'), 'elevenlabs/imp_r_ninja'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_r_ninja.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_r_ninja')) return;
+      if (recording(s, 'imp_r_ninja', v)) return;
       // A throwing star into a tin sign: the clang (a recorded knock of thin steel), the thunk of the point, a hard tink, and a smaller tink as the star bounces.
       const p = v.j(0.05);
       rec(s, IMPACT_FILE('impactMetal_medium_000'), { v: 0.5, dur: 0.1, rate: p });
@@ -173,7 +182,7 @@ export const IMPACT_RECIPES = {
     needs: [IMPACT_FILE('impactTin_medium_003'), 'elevenlabs/imp_r_gunner'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_r_gunner.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_r_gunner')) return;
+      if (recording(s, 'imp_r_gunner', v)) return;
       // A cork on a tin plate: a dry tok, the plate (a recorded ring of tin and a ring of its own, 1.1 kHz) and a longer pat behind it, with the crack on top.
       const p = v.j(0.05);
       rec(s, IMPACT_FILE('impactTin_medium_003'), { v: 0.55, dur: 0.1, rate: p });
@@ -213,7 +222,7 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_m_snow'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_m_snow.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_m_snow')) return;
+      if (recording(s, 'imp_m_snow', v)) return;
       // "Pof": a burst of powder through a closing low-pass (higher than the fire's, so it is a puff and not a whump), a light pat that reaches a phone, and the crunch of packed
       // snow: fine and quick (a granular 95 Hz), where the fire's embers are slow pops. The landing review measured snow and fire as the nearest pair of the new hits.
       const p = v.j(0.06);
@@ -232,13 +241,15 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_m_fire'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_m_fire.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_m_fire')) return;
-      // A flame catching: a burst of low-passed noise, a whump with harmonics, a short crackle of embers after it and a crack.
-      const p = v.j(0.06);
-      air(s, { dur: 0.09, v: 0.9, a: 0.003, d: 0.07, s: 0.01, filter: { t: 'lowpass', f: 1400 * p, f2: 350, sw: 0.08 } });
-      thud(s, 0, 300 * p, 120, 0.12, 0.9, 0.6, 140);
-      crackle(s, 0.02, 0.1, 2200 * p, 0.6, 55);
-      crack(s, 0, 1.6, 3000);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'imp_m_fire', v, 0.6, () => {
+        // A flame catching: a burst of low-passed noise, a whump with harmonics, a short crackle of embers after it and a crack.
+        const p = v.j(0.06);
+        air(s, { dur: 0.09, v: 0.9, a: 0.003, d: 0.07, s: 0.01, filter: { t: 'lowpass', f: 1400 * p, f2: 350, sw: 0.08 } });
+        thud(s, 0, 300 * p, 120, 0.12, 0.9, 0.6, 140);
+        crackle(s, 0.02, 0.1, 2200 * p, 0.6, 55);
+        crack(s, 0, 1.6, 3000);
+      });
     },
   }),
   imp_m_storm: impact({
@@ -251,7 +262,7 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_m_storm'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_m_storm.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_m_storm')) return;
+      if (recording(s, 'imp_m_storm', v)) return;
       // The bolt lands: a hard crack, a triangle falling from 1 kHz to 230 Hz (the charge draining), a whump of air and a short crackle.
       const p = v.j(0.05);
       snap(s, 0, 1.4, 3300 * p, 0.014);
@@ -273,7 +284,7 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_m_frost'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_m_frost.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_m_frost')) return;
+      if (recording(s, 'imp_m_frost', v)) return;
       // A crystal shatters: a bright snap, three pings in a cluster, the crunch of ice (noise chopped at 65 Hz) and a small low body.
       // (unchanged: it already had the crack, the bright start and a short fall)
       const p = v.j(0.05);
@@ -294,14 +305,16 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_m_cosmo'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_m_cosmo.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_m_cosmo')) return;
-      // The vacuum lets go: a big drop whose harmonics reach a phone (420 to 120 Hz), the weight under it kept smaller, a rumble that sinks away, a "plop" and the crack.
-      const p = v.j(0.05);
-      thud(s, 0, 420 * p, 120, 0.2, 1, 0.8, 130);
-      thud(s, 0, 200 * p, 60, 0.16, 0.45, 0.4);
-      air(s, { kind: 'brown', dur: 0.16, v: 0.5, a: 0.003, d: 0.12, s: 0.01, filter: { t: 'lowpass', f: 900, f2: 200, sw: 0.14 } });
-      s.tone({ f: 380 * p, f2: 140, sw: 0.05, dur: 0.07, v: 0.35, a: 0.003, d: 0.06, s: 0.01 });
-      crack(s, 0, 1.8, 2800);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'imp_m_cosmo', v, 0.6, () => {
+        // The vacuum lets go: a big drop whose harmonics reach a phone (420 to 120 Hz), the weight under it kept smaller, a rumble that sinks away, a "plop" and the crack.
+        const p = v.j(0.05);
+        thud(s, 0, 420 * p, 120, 0.2, 1, 0.8, 130);
+        thud(s, 0, 200 * p, 60, 0.16, 0.45, 0.4);
+        air(s, { kind: 'brown', dur: 0.16, v: 0.5, a: 0.003, d: 0.12, s: 0.01, filter: { t: 'lowpass', f: 900, f2: 200, sw: 0.14 } });
+        s.tone({ f: 380 * p, f2: 140, sw: 0.05, dur: 0.07, v: 0.35, a: 0.003, d: 0.06, s: 0.01 });
+        crack(s, 0, 1.8, 2800);
+      });
     },
   }),
 
@@ -311,10 +324,10 @@ export const IMPACT_RECIPES = {
     db: 3,
     len: 0.14,
     ms: [30, 120],
-    needs: ['elevenlabs/imp_t_bell'],
+    needs: ['elevenlabs/imp_t_bell', 'elevenlabs/imp_t_bell_2'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_t_bell.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_t_bell')) return;
+      if (recording(s, 'imp_t_bell', v)) return;
       // A small bell tapped: a bright tink (E6) that dies fast with the inharmonic partials of a bell, and the crack of the clapper.
       const p = v.j(0.04);
       bell(s, hz('E6') * p, 0, 0.14, 1.1);
@@ -330,7 +343,7 @@ export const IMPACT_RECIPES = {
     needs: [RPG_FILE('metalPot2'), 'elevenlabs/imp_t_chef'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_t_chef.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_t_chef')) return;
+      if (recording(s, 'imp_t_chef', v)) return;
       // The frying pan clangs: the first moments of a recorded pot, the inharmonic partials of a thin pan (640, 1390, 2160 and 3100 Hz) dying at different speeds, a thud and the crack.
       const p = v.j(0.05);
       rec(s, RPG_FILE('metalPot2'), { v: 0.5, dur: 0.09, rate: p });
@@ -346,14 +359,16 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_t_bard'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_t_bard.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_t_bard')) return;
-      // One plink: two plucked strings a fourth apart (D5 and G5), the slap of the string, the knock of the lute's belly.
-      const p = v.j(0.04);
-      pluck(s, hz('D5') * p, 0, 0.1, 1);
-      pluck(s, hz('G5') * p, 0.004, 0.09, 0.7);
-      crack(s, 0, 1.5, 3200);
-      thud(s, 0, 330 * p, 200, 0.05, 0.5, 0.4, 170);
-      tap(s, 0, 900, 0.2, 0.02);
+      // The take, and under it (2026-11-27) the synthesis that was built for a phone's speaker: see `backed`. Without the file the synthesis is the whole sound.
+      backed(s, 'imp_t_bard', v, 1.2, () => {
+        // One plink: two plucked strings a fourth apart (D5 and G5), the slap of the string, the knock of the lute's belly.
+        const p = v.j(0.04);
+        pluck(s, hz('D5') * p, 0, 0.1, 1);
+        pluck(s, hz('G5') * p, 0.004, 0.09, 0.7);
+        crack(s, 0, 1.5, 3200);
+        thud(s, 0, 330 * p, 200, 0.05, 0.5, 0.4, 170);
+        tap(s, 0, 900, 0.2, 0.02);
+      });
     },
   }),
   imp_t_alch: impact({
@@ -366,7 +381,7 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_t_alch'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_t_alch.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_t_alch')) return;
+      if (recording(s, 'imp_t_alch', v)) return;
       // A flask bursts and fizzes: a burst of wet noise, three bubbles, a short fizz, a plop of the liquid and a last shard of glass.
       const p = v.j(0.05);
       air(s, { dur: 0.07, v: 0.8, a: 0.003, d: 0.055, s: 0.02, filter: { t: 'bandpass', f: 1800 * p, f2: 900 * p, sw: 0.06, q: 0.8 } });
@@ -387,7 +402,7 @@ export const IMPACT_RECIPES = {
     needs: ['elevenlabs/imp_t_lucky'],
     build(s, v) {
       // The owner's recording (ElevenLabs, `src/assets/sfx/elevenlabs/imp_t_lucky.wav`); the synthesis below is the fallback for a device that cannot read it.
-      if (recording(s, 'imp_t_lucky')) return;
+      if (recording(s, 'imp_t_lucky', v)) return;
       // Coins landing: four metallic clinks (1.4, 1.85, 1.25 and 2.2 kHz) one after another, 22 ms apart and short, a last coin that settles very quietly, the crack of the first, and a soft thud of the pile.
       const p = v.j(0.05);
       crack(s, 0, 0.9, 3200);

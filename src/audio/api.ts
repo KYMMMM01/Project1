@@ -63,6 +63,30 @@ export const LEGACY_SFX_IDS = [
   'old_foe_cloud_hit',
 ] as const;
 
+/**
+ * The sounds the hit-feel pass of 2026-11-27 changed, as they were before it (the owner's take alone, see `backed` in recipe.ts): kept only for the sound board's
+ * "지금" next to "새것" (`sounds.ts` makes them from the recipes themselves). The game never plays them and they belong to no family.
+ */
+export const WAS_SFX_IDS = [
+  'was_atk_w_paw',
+  'was_atk_m_cosmo',
+  'was_atk_r_gunner',
+  'was_imp_w_paw',
+  'was_imp_w_viking',
+  'was_imp_w_tiger',
+  'was_imp_m_fire',
+  'was_imp_m_cosmo',
+  'was_imp_t_bard',
+  'was_hit_heavy',
+  'was_explosion',
+  'was_foe_motor_hit',
+  'was_foe_rubber_hit',
+  'was_foe_boss_cloud',
+  'was_atk_w_viking',
+  'was_atk_w_tiger',
+  'was_imp_w_sword',
+] as const;
+
 export const SFX_IDS = [
   // UI
   'ui_click',
@@ -108,6 +132,20 @@ export const SFX_IDS = [
   'boss_warning',
   'boss_roar',
   'boss_die',
+  // a kill is confirmed by a small pitched pop that climbs with a streak (2026-11-27)
+  'kill_pop',
+  // the cats' own voices (2026-11-27, the testers asked for them): a grumble at a move that cannot be made, the cry of a 대왕 by class, a battle cry with a cut-in
+  'cat_no',
+  'cat_king_w',
+  'cat_king_r',
+  'cat_king_m',
+  'cat_king_t',
+  'cat_battlecry',
+  // the cry of a guardian as it awakens, by class: the tiger general, the starlight archer, the space cat, the lucky cat
+  'cat_guard_w',
+  'cat_guard_r',
+  'cat_guard_m',
+  'cat_guard_t',
   // flow
   'wave_start',
   'wave_clear',
@@ -251,6 +289,7 @@ export const SFX_IDS = [
   'sp_prize_toy',
   'sp_prize_guardian',
   ...LEGACY_SFX_IDS,
+  ...WAS_SFX_IDS,
 ] as const;
 
 export type SfxId = (typeof SFX_IDS)[number];
@@ -258,15 +297,19 @@ export type SfxId = (typeof SFX_IDS)[number];
 /** The ids of the old versions (`LEGACY_SFX_IDS`). */
 export type LegacySfxId = (typeof LEGACY_SFX_IDS)[number];
 
+/** The ids of the sounds as they were before the hit-feel pass (`WAS_SFX_IDS`). */
+export type WasSfxId = (typeof WAS_SFX_IDS)[number];
+
 const LEGACY = new Set<string>(LEGACY_SFX_IDS);
+const WAS = new Set<string>(WAS_SFX_IDS);
 
 /** Whether an id is an old version kept for the sound board (the game never plays it). */
 export function isLegacySfx(id: string): boolean {
   return LEGACY.has(id);
 }
 
-/** The ids the game can play: every id but the old versions. */
-export const GAME_SFX_IDS: readonly SfxId[] = SFX_IDS.filter((id) => !LEGACY.has(id));
+/** The ids the game can play: every id but the old versions (`old_`, `was_`). */
+export const GAME_SFX_IDS: readonly SfxId[] = SFX_IDS.filter((id) => !LEGACY.has(id) && !WAS.has(id));
 
 /**
  * Background tracks. `battle` is the living room (chapter 1); `kitchen`, `bath`, `garden` and `clinic` are chapters 2 to 5 (`battleMusic` picks one).

@@ -9,7 +9,7 @@ import { enemySpec, isWaveTarget, type EnemyId, type UnitId, type WavePreviewEnt
 /** Heard in the first minute of any battle, in the order they are first needed: menus, the summon ladder, a merge, plain hits, a new wave. */
 export const START_SOUNDS: readonly SfxId[] = [
   'ui_click', 'summon_common', 'pickup', 'place', 'merge', 'hit_light', 'wave_start', 'ui_popup_open', 'ui_popup_close', 'ui_back', 'ui_tab', 'ui_tab_big',
-  'ui_error', 'summon_rare', 'summon_epic', 'hit_heavy', 'crit', 'coin', 'merge_big', 'summon_legendary', 'relic_pick', 'wave_clear', 'whoosh',
+  'ui_error', 'summon_rare', 'summon_epic', 'hit_heavy', 'crit', 'coin', 'merge_big', 'summon_legendary', 'relic_pick', 'wave_clear', 'whoosh', 'kill_pop',
 ];
 
 /**
@@ -19,7 +19,7 @@ export const START_SOUNDS: readonly SfxId[] = [
 export const LATER_SOUNDS: readonly SfxId[] = [
   'sell', 'upgrade', 'level_up', 'star', 'gem', 'coin_many', 'card_flip', 'reward_claim', 'chest_open', 'chest_shake', 'molt', 'awaken', 'purr',
   'call_wave', 'sunbeam', 'danger_alarm', 'countdown_tick', 'laser_on', 'laser_off', 'freeze', 'stun', 'zap', 'heal', 'shield_break', 'weaken',
-  'hazard_warn', 'splash', 'buff', 'explosion', 'summon_mythic',
+  'hazard_warn', 'splash', 'buff', 'explosion', 'summon_mythic', 'cat_no', 'cat_king_w', 'cat_king_r', 'cat_king_m', 'cat_king_t', 'cat_battlecry', 'cat_guard_w', 'cat_guard_r', 'cat_guard_m', 'cat_guard_t',
 ];
 
 /** The stingers a run can play: the two ends of it, the awakening's halo and a crowning (a merge that makes a 대왕). The director never plays `boss_intro` (the warning and the boss track do that job). */

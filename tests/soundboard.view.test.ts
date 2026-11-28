@@ -209,7 +209,8 @@ describe('sound board page: buttons play through the engine', () => {
     await settle();
     const delays = r.audio.calls('play').map((p) => (p.args[1] as { delay: number }).delay);
     expect(delays).toHaveLength(5);
-    expect(delays[4]).toBeCloseTo(4 * 0.14, 6);
+    // (the heavy hit's gap: 0.14 s until the hit-feel pass of 2026-11-27, 0.1 s since)
+    expect(delays[4]).toBeCloseTo(4 * 0.1, 6);
   });
 
   it('a cat’s shot plays the release, then the landing and the enemy’s answer (what the game plays: "새것"), and the old versions of the three on "지금"', async () => {
@@ -353,8 +354,9 @@ describe('sound board page: buttons play through the engine', () => {
 describe('sound board page: before / after', () => {
   it('a row has only "재생" until a new version is set', () => {
     const r = mount();
-    expect(rowEl(r, 'ui_click').where({ 'data-act': 'new' })).toEqual([]);
-    expect(rowEl(r, 'ui_click').where({ 'data-act': 'both' })).toEqual([]);
+    // (ui_click has a candidate of the CC0 packs as "새것" since the cute pass of 2026-11-27; the gentle "no" has none)
+    expect(rowEl(r, 'ui_error').where({ 'data-act': 'new' })).toEqual([]);
+    expect(rowEl(r, 'ui_error').where({ 'data-act': 'both' })).toEqual([]);
   });
 
   it('shows "지금" and "새것" side by side, each playable alone and stacked, and both in turn', async () => {

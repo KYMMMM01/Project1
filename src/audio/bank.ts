@@ -175,6 +175,20 @@ export class SoundBank {
     return new Promise((resolve) => this.waiters.push({ index, all, resolve }));
   }
 
+  /**
+   * Drop what is baked of a sound, so that its next use bakes it again (dev tooling: the recording it plays was changed by hand). Refused while a bake of it
+   * is on its way.
+   */
+  forget(index: number): boolean {
+    if ((this.flying[index] ?? 0) > 0) return false;
+    const set = this.sets[index];
+    if (set && !isLegacy(index)) for (const b of set) this.held -= b.length * b.numberOfChannels * 4;
+    this.sets[index] = undefined;
+    this.claimed[index] = 0;
+    this.failed.delete(index);
+    return true;
+  }
+
   /** Queue indices for background baking, one sound per idle slice. */
   enqueue(indices: readonly number[]): void {
     for (const i of indices) if (!this.complete(i) && !this.queue.includes(i)) this.queue.push(i);

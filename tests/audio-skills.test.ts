@@ -189,8 +189,10 @@ describe('the sample files the game carries (docs/licenses/sounds.md)', () => {
       let peak = 0;
       for (const v of pcm?.data ?? []) peak = Math.max(peak, Math.abs(v));
       expect(peak, `${f} peak`).toBeLessThanOrEqual(0.98 + 1e-3);
-      const id = f.slice('elevenlabs/'.length, -4);
-      const owner = SOUNDS.filter((d) => (d.recipe.needs ?? []).includes(`elevenlabs/${id}`));
+      // (`<id>_2` to `<id>_8` are further takes of the sound `<id>`, since 2026-11-27)
+      const id = f.slice('elevenlabs/'.length, -4).replace(/_[2-8]$/, '');
+      // (a `was_` version of the sound, kept for the sound board, is the same recipe again: not a second owner)
+      const owner = SOUNDS.filter((d) => !d.recipe.legacy && (d.recipe.needs ?? []).includes(f.slice(0, -4)));
       expect(owner.map((d) => recordingFile(d)), f).toEqual([id]);
       // the recipe renders long enough to hold the whole file
       expect(owner[0]?.recipe.len ?? 0, f).toBeGreaterThanOrEqual(seconds);

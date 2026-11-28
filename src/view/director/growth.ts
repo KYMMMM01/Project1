@@ -5,7 +5,7 @@
  */
 import { tex } from '@/core/assets';
 import { t } from '@/core/i18n';
-import { audio } from '@/audio';
+import { audio, soundPass } from '@/audio';
 import { CELL_ARRIVE_GAP, CELL_LOOKS, CELL_TOUCHDOWN, awakeningCutIn, type EmitDef } from '@/fx';
 import type { ClassId, SummonSource } from '@/game';
 import { classDef, relicDef, unitClass, unitRarityIndex } from '@/game';
@@ -24,6 +24,11 @@ import { Hue } from '@/fx/palette';
 import { MERGE_SECONDS, MOLT_SECONDS, REVEAL_DELAY, SLIDE_SECONDS } from '@/view/timing';
 import { tossFor } from '@/view/toss';
 import { motion } from '@/ui/motion';
+
+/** The cry of a newborn 대왕, by the first letter of the unit's id (its class: warrior, ranger, mage, trickster). */
+const KING_CRY: Readonly<Record<string, SfxId>> = { w: 'cat_king_w', r: 'cat_king_r', m: 'cat_king_m', t: 'cat_king_t' };
+/** The cry of a cat that awakens into a guardian, the same way. */
+const GUARD_CRY: Readonly<Record<string, SfxId>> = { w: 'cat_guard_w', r: 'cat_guard_r', m: 'cat_guard_m', t: 'cat_guard_t' };
 
 const W = Hue.cream;
 const GOLD = Color.mustard;
@@ -125,7 +130,11 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     // The merge that makes the top rank (대왕, 'legendary': a guardian comes only by awakening) gets its own stinger, unless an awakening is under way (its `mythic` rings then).
     if (RARITY_ORDER[tier] === 'legendary' && stage.now - lastAwaken > KING_CLEAR && stage.now - lastKing > KING_CLEAR) {
       lastKing = stage.now;
-      stage.laterReal(MERGE_SECONDS, () => audio.stinger('king'));
+      stage.laterReal(MERGE_SECONDS, () => {
+        audio.stinger('king');
+        // the new 대왕 cries out in the voice of its class (2026-11-27)
+        if (!soundPass.old) audio.play(KING_CRY[r.id.charAt(0)] ?? 'cat_king_w', { volume: 0.9, delay: 0.15 });
+      });
     }
     themeBurst(x, y, tier);
     if (e.jumped) {
@@ -158,6 +167,8 @@ export function mountGrowth(stage: Stage, on: Bus, banners: BannerService, music
     const short = e.free === true || awakenCount > 1;
     if (!short) stage.slow(0.25, 400);
     stage.direct('awaken', 0.9);
+    // the new guardian cries out in its own voice (2026-11-27)
+    if (!soundPass.old) audio.play(GUARD_CRY[id.charAt(0)] ?? 'cat_guard_w', { volume: 0.9, delay: 0.45 });
     fx.awakening(tex(`unit_${id}`), t(`unit.${id}.name`), {
       short,
       // A free awakening arrives uninvited, in the middle of whatever the player is doing, like a skill's own banner: it takes no taps, so the

@@ -196,7 +196,8 @@ function shaperCurve(drive: number): Float32Array<ArrayBuffer> {
 
 export class Synth {
   readonly ctx: BaseAudioContext;
-  readonly out: AudioNode;
+  /** Where the voices go. `group()` swaps it for the time of its callback. */
+  out: AudioNode;
   readonly t0: number;
   readonly rand: () => number;
   /** Latest time (context seconds) at which any voice or echo tail is still sounding. */
@@ -393,6 +394,33 @@ export class Synth {
       this.lastSource = src;
     }
     if (stop > this.end) this.end = stop;
+  }
+
+  /**
+   * Everything `fn` writes goes through one gain (and, with `hp`, one high-pass) on its way out: a set of layers laid under something else at `level`,
+   * without touching the level of each voice. `hp` keeps only what sits above it, so a layer that is there for a phone's speaker adds no second bass.
+   */
+  group(level: number, fn: () => void, hp = 0): void {
+    const ctx = this.ctx;
+    const g = this.keep(ctx.createGain());
+    g.gain.value = level;
+    let head: AudioNode = g;
+    if (hp > 0) {
+      const f = this.keep(ctx.createBiquadFilter());
+      f.type = 'highpass';
+      f.frequency.value = hp;
+      f.Q.value = 0.6;
+      f.connect(g);
+      head = f;
+    }
+    const out = this.out;
+    g.connect(out);
+    this.out = head;
+    try {
+      fn();
+    } finally {
+      this.out = out;
+    }
   }
 
   /**

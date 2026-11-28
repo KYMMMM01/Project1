@@ -41,6 +41,8 @@ export interface Variant {
   i?: number;
   /** Multiplicative jitter around 1 (1 +/- amount) for variants 1+, exactly 1 for variant 0 (the nominal design). */
   j(amount: number): number;
+  /** A recording is played alone, without the layers `backed()` lays under it: the sound as it was before the hit-feel pass of 2026-11-27 (`Recipe.plain`, `soundPass.old`). */
+  plain?: boolean;
 }
 
 export interface Recipe {
@@ -71,6 +73,8 @@ export interface Recipe {
    * in the bank's budget, not part of any family or check, and nothing in the game plays it.
    */
   legacy?: true;
+  /** Bake the recording alone (`Variant.plain`): the "지금" of a sound that `backed()` changed, kept for the sound board (`sfx-was.ts`). */
+  plain?: true;
   /**
    * The text the variant noise is seeded from, when it is not the sound's own key: an old version kept for the sound board (`legacy`) bakes with the seed of the sound
    * it was, so that "지금" is the very sound the game played, grain for grain, and not another roll of the same recipe.
@@ -143,11 +147,43 @@ export function stamp(s: Synth, at: number, v = 1, f = 150): void {
 /**
  * The recording the owner picked for a sound (ElevenLabs, `src/assets/sfx/elevenlabs/<id>.wav`, listed in docs/licenses/sounds.md), played alone. False while
  * the file has not been read (or never will be): the recipe then plays its own synthesis, which stays a whole sound. The recipe lists `elevenlabs/<id>` in
- * `needs` so that the bake waits for the file.
+ * `needs` so that the bake waits for the file (and `elevenlabs/<id>_2` ... for the further takes it ships with).
  */
-export function recording(s: Synth, id: string): boolean {
-  const key = `elevenlabs/${id}`;
-  return sampleStore.get(key) !== undefined && s.sample(key);
+/** A sound may have this many takes: `<id>.wav`, `<id>_2.wav` ... `<id>_8.wav` (the first is the owner's first pick, the others are its variants). */
+export const MAX_TAKES = 8;
+
+/** The takes of a sound that have been read, the first one first. */
+export function takesOf(id: string): string[] {
+  const first = `elevenlabs/${id}`;
+  if (sampleStore.get(first) === undefined) return [];
+  const takes = [first];
+  for (let n = 2; n <= MAX_TAKES; n++) if (sampleStore.get(`${first}_${n}`) !== undefined) takes.push(`${first}_${n}`);
+  return takes;
+}
+
+export function recording(s: Synth, id: string, v?: Variant): boolean {
+  const takes = takesOf(id);
+  if (takes.length === 0) return false;
+  // A sound that repeats has more than one take (2026-11-27): every baked variant plays another one, so two blows in a row are two recordings and not
+  // one. `plain` (the sound as it was before that day) knows only the first.
+  const i = v?.plain ? 0 : (v?.i ?? 0);
+  return s.sample(takes[i % takes.length] as string);
+}
+
+/**
+ * A recording with the layers a phone needs under it (the hit-feel pass of 2026-11-27). Many of the takes the owner picked keep nearly all their energy under 250 Hz,
+ * where a phone's speaker plays almost nothing: on a phone the blow has no weight and no start. The recipe's own synthesis was built for that speaker (a crack in the
+ * first 10 ms, a body whose harmonics sit at 300 to 1200 Hz), so it goes UNDER the take: at `level`, and above `hp` only, so that it adds what the phone can play and no
+ * second bass. Every variant of the synthesis is another grain, so two blows of one weapon are no longer the same waveform.
+ * Without the file the synthesis is the whole sound, as before. `v.plain` gives the take alone (the sound as it was).
+ */
+export function backed(s: Synth, id: string, v: Variant, level: number, synthesis: () => void, hp = 240): void {
+  if (!recording(s, id, v)) {
+    synthesis();
+    return;
+  }
+  if (v.plain || level <= 0) return;
+  s.group(level, synthesis, hp);
 }
 
 /** Sticker pop: a sine that glides up a minor third in 22 ms (the peel) and rings down, with a faint octave and a peel tick. */

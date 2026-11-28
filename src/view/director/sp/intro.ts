@@ -17,6 +17,7 @@
  * faster. An awakening's own banner is never cut short: a skill's banner that finds one playing waits its turn (at most `CUTIN_QUEUE` wait,
  * none longer than `CUTIN_WAIT` real seconds), so two skills that cast for the first time a moment apart both show theirs.
  */
+import { soundPass } from '@/audio';
 import { Container, Graphics } from 'pixi.js';
 import { tex } from '@/core/assets';
 import { t } from '@/core/i18n';
@@ -174,6 +175,8 @@ export class SpIntro {
     const { stage } = this.env;
     // The banner's own short fanfare (`sp_cutin`, half a second: the skill's sound follows at once and is not buried under the awakening's 1.2 s).
     stage.direct('sp_cutin', 0.9);
+    // and the cat's own cry over it (2026-11-27)
+    if (!soundPass.old) stage.direct('cat_battlecry', 0.9, 1, 0, 0.12);
     const name = t(`sp.${skill}.name`);
     stage.fx.awakening(tex(`unit_${unitId}`), name, {
       short: true,

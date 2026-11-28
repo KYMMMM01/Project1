@@ -29,11 +29,11 @@ const PORT = Number(process.env.SFX_PORT || 5252);
 const CDP = Number(process.env.SFX_CDP || 9352);
 const PROFILE = process.env.SFX_PROFILE || path.join(os.tmpdir(), 'sfx-convert-edge');
 
-/** The packs the owner approved. `keep` limits a pack to part of it (the interface pack: its click-like family only). */
+/** The packs the owner approved. `keep` limits a pack to part of it (the interface pack: everything but its scroll loops, glitches and scratches, added 2026-11-27 for the cute pass). */
 const PACKS = {
   'impact-sounds': { dir: 'kenney_impact-sounds/Audio' },
   'rpg-audio': { dir: 'kenney_rpg-audio/Audio' },
-  'interface-sounds': { dir: 'kenney_interface-sounds/Audio', keep: /^(click|tick|select|switch|toggle)_/ },
+  'interface-sounds': { dir: 'kenney_interface-sounds/Audio', keep: /^(?!scroll_|glitch_|scratch_)/ },
 };
 
 const arg = (name) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; };
@@ -118,7 +118,12 @@ for (const m of bad) console.log('FAILED', m.name, m.error);
 // ── the license ledger: the table between the markers is rewritten from the manifest ──
 const URLS = { 'impact-sounds': 'https://kenney.nl/assets/impact-sounds', 'rpg-audio': 'https://kenney.nl/assets/rpg-audio', 'interface-sounds': 'https://kenney.nl/assets/interface-sounds' };
 const today = new Date().toISOString().slice(0, 10);
-const rows = all.map((m) => `| public/soundboard/kenney/${m.file} | ${m.pack} / ${m.name}.ogg | ${URLS[m.pack]} | CC0 | ${today} | sound board candidate only (not in the game) |`);
+// A row keeps the date it was first written with (the day the file was converted): only a file that is new to the table gets today's.
+const dated = new Map();
+if (fs.existsSync(LEDGER)) {
+  for (const m of fs.readFileSync(LEDGER, 'utf8').matchAll(/^\| public\/soundboard\/kenney\/(\S+) \|.*\| (\d{4}-\d{2}-\d{2}) \|/gm)) dated.set(m[1], m[2]);
+}
+const rows = all.map((m) => `| public/soundboard/kenney/${m.file} | ${m.pack} / ${m.name}.ogg | ${URLS[m.pack]} | CC0 | ${dated.get(m.file) ?? today} | sound board candidate only (not in the game) |`);
 const table = ['| file served | source pack / file | source URL | license | date | where it is used |', '|---|---|---|---|---|---|', ...rows].join('\n');
 if (fs.existsSync(LEDGER)) {
   const text = fs.readFileSync(LEDGER, 'utf8');
